@@ -1,0 +1,18 @@
+﻿# MSBuild project files
+[*]
+spelling_exclusion_path = exclusion.dic
+
+[*.{csproj,vbproj,vcxproj,vcxproj.filters,proj,projitems,shproj,msbuildproj,props,targets}]
+indent_size = 2
+indent_style = space
+
+[*.json]
+indent_size = 2
+indent_style = space
+
+[*.cs]
+
+# 縮排和間距
+indent_size = 4
+indent_style = space
+tab_width = 4
