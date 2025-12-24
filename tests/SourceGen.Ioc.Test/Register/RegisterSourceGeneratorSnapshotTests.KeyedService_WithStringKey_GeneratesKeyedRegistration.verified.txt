@@ -17,6 +17,10 @@ public static class TestAssemblyServiceCollectionExtensions
     {
         services.AddKeyedSingleton<global::TestNamespace.KeyedService, global::TestNamespace.KeyedService>("myKey");
         services.AddKeyedSingleton<global::TestNamespace.IKeyedService, global::TestNamespace.KeyedService>("myKey");
+        services.AddKeyedSingleton<global::TestNamespace.KeyedService2, global::TestNamespace.KeyedService2>(global::TestNamespace.MyEnum.Key1);
+        services.AddKeyedSingleton<global::TestNamespace.IKeyedService, global::TestNamespace.KeyedService2>(global::TestNamespace.MyEnum.Key1);
+        services.AddKeyedSingleton<global::TestNamespace.KeyedService3, global::TestNamespace.KeyedService3>(42);
+        services.AddKeyedSingleton<global::TestNamespace.IKeyedService, global::TestNamespace.KeyedService3>(42);
 
         return services;
     }

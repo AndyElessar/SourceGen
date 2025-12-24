@@ -43,7 +43,7 @@ partial class RegisterSourceGenerator
                 // Check generic matches
                 if(candidateTypeData.IsOpenGeneric || candidateTypeData.Name != candidateTypeData.NameWithoutGeneric)
                 {
-                    if(defaultSettings.TryGetGenericMatches(candidateTypeData.NameWithoutGeneric, out var gIndex))
+                    if(defaultSettings.TryGetGenericMatches(candidateTypeData.NameWithoutGeneric, candidateTypeData.GenericArity, out var gIndex))
                     {
                         if(matchedDefaultIndices.Add(gIndex))
                         {
@@ -141,9 +141,30 @@ partial class RegisterSourceGenerator
                     continue;
                 }
 
+                // Skip nested open generic types (e.g., IGeneric<IGeneric2<T>>)
+                // as they cannot be properly registered with DI container
+                if(serviceTypeData.IsNestedOpenGeneric || registration.ImplementationType.IsNestedOpenGeneric)
+                {
+                    continue;
+                }
+
+                // For open generic service types (excluding the implementation type itself),
+                // verify the implementation actually implements it correctly.
+                // Skip if the implementation only implements a nested variant (e.g., IRepository<IGeneric<T>> instead of IRepository<T>)
+                if(isOpenGenericService && serviceTypeData.Name != registration.ImplementationType.Name)
+                {
+                    var serviceTypeKey = $"{serviceTypeData.NameWithoutGeneric}`{serviceTypeData.GenericArity}";
+                    if(!registration.ValidOpenGenericServiceTypes.Contains(serviceTypeKey))
+                    {
+                        continue;
+                    }
+                }
+
                 result.Add(new ServiceRegistrationModel(
                     serviceType,
+                    serviceTypeData.GenericArity,
                     registration.ImplementationType.Name,
+                    registration.ImplementationType.GenericArity,
                     lifetime,
                     registration.Key,
                     registration.KeyType,

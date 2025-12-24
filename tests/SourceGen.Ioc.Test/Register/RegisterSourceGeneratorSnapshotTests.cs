@@ -105,6 +105,21 @@ public class RegisterSourceGeneratorSnapshotTests
 
             [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = "myKey")]
             public class KeyedService : IKeyedService { }
+
+            public enum MyEnum
+            {
+                Key1 = 0,
+                Key2 = 1
+            }
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = MyEnum.Key1)]
+            public class KeyedService2 : IKeyedService { }
+
+            public static class KeyHolder
+            {
+                public const int IntKey = 42;
+            }
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = KeyHolder.IntKey)]
+            public class KeyedService3 : IKeyedService { }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
@@ -124,8 +139,16 @@ public class RegisterSourceGeneratorSnapshotTests
 
             public interface IKeyedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = "nameof(KeyedService)")]
+            public class KeyHolder
+            {
+                public static readonly Guid Key = Guid.NewGuid();
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = "KeyHolder.Key")]
             public class KeyedService : IKeyedService { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = nameof(KeyHolder.Key))]
+            public class KeyedService2 : IKeyedService { }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
@@ -147,6 +170,52 @@ public class RegisterSourceGeneratorSnapshotTests
 
             [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<T> { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task OpenGenericService_DoNotGenerateNestedOpenGeneric()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { }
+
+            public interface IGeneric<T> { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<IGeneric<T>> { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task OpenGenericService_DoNotGenerateNestedOpenGeneric_WithRegisterAllInterfaces()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { }
+
+            public interface IGeneric<T> { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped, RegisterAllInterfaces = true)]
+            public class Repository<T> : IRepository<IGeneric<T>> { }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
@@ -303,6 +372,38 @@ public class RegisterSourceGeneratorSnapshotTests
                 [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INestedService)])]
                 public class NestedService : INestedService { }
             }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_GenericArity_ShouldNotMatchDifferentArity()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IoCRegisterDefaultSettings(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped, ServiceTypes = [typeof(TestNamespace.IBaseService)])]
+
+            namespace TestNamespace;
+
+            public interface IBaseService { }
+            public interface IOtherService { }
+            public interface IGenericService<T> : IBaseService { }
+            public interface IGenericService<T1, T2> : IOtherService { }
+
+            // This should match IGenericService<> default settings (arity 1)
+            [IoCRegister]
+            public class SingleArityService<T> : IGenericService<T> { }
+
+            // This should NOT match IGenericService<> default settings (arity 2 != 1)
+            // Should use default lifetime (Singleton) instead
+            [IoCRegister]
+            public class DoubleArityService<T1, T2> : IGenericService<T1, T2> { }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);

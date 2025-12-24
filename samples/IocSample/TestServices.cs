@@ -33,20 +33,40 @@ internal sealed class TestKeyEnum : ITest2;
 
 public static class TestExtensions
 {
-    public const string Key = "TestKey";
+    public static readonly Guid Key = Guid.NewGuid();
 }
 [IoCRegister(Key = "TestExtensions.Key", KeyType = KeyType.Csharp)]
 internal sealed class TestKeyTypeCsharp : ITest2;
+
+[IoCRegister(Key = nameof(TestExtensions.Key), KeyType = KeyType.Csharp)]
+internal sealed class TestKeyTypeCsharp2 : ITest2;
+
 
 public interface IGenericTest<T> : ITest1, ITest2;
 
 [IoCRegister]
 public sealed class GenericTest<T> : IGenericTest<T>;
 
+public interface IGenericTest<T1, T2> : ITest1, ITest2;
+
+[IoCRegister]
+public sealed class GenericTest<T1, T2> : IGenericTest<T1, T2>;
+
 [IoCRegister]
 public sealed class ClosedGenericTest : IGenericTest<int>;
+
+[IoCRegister]
+public sealed class ClosedGenericTest2 : IGenericTest<int, string>;
 
 public sealed class TestFor : IGenericTest<string>, ITest2;
 
 [IoCRegister]
 public sealed class TestInterfaces : IGenericTest<decimal>, ITest2;
+
+public interface IGenericTest2<T>;
+
+[IoCRegister]
+public sealed class TestClosed2 : IGenericTest<IGenericTest2<int>>;
+
+[IoCRegister]
+public sealed class TestOpenGeneric2<T> : IGenericTest<IGenericTest2<T>>;

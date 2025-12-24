@@ -32,9 +32,9 @@ partial class RegisterSourceGenerator
     private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData)
     {
         var implementationType = typeSymbol.GetTypeData();
-        var lifetime = attributeData.GetNamedArgument<int>("Lifetime", 0);
-        var registerAllInterfaces = attributeData.GetNamedArgument<bool>("RegisterAllInterfaces", false);
-        var registerAllBaseClasses = attributeData.GetNamedArgument<bool>("RegisterAllBaseClasses", false);
+        var (hasExplicitLifetime, lifetime) = attributeData.TryGetNamedArgument<int>("Lifetime", 0);
+        var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetNamedArgument<bool>("RegisterAllInterfaces", false);
+        var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetNamedArgument<bool>("RegisterAllBaseClasses", false);
         var serviceTypes = attributeData.GetTypeArrayArgument("ServiceTypes");
 
         var keyType = attributeData.GetNamedArgument<int>("KeyType", 0);
@@ -51,7 +51,9 @@ partial class RegisterSourceGenerator
                 {
                     if(keyType == 1) // KeyType.Csharp
                     {
-                        key = namedArg.Value.Value?.ToString();
+                        // Try to get original syntax for nameof() expressions
+                        key = TryGetOriginalKeySyntax(attributeData, "Key")
+                            ?? namedArg.Value.Value?.ToString();
                     }
                     else
                     {
@@ -63,12 +65,11 @@ partial class RegisterSourceGenerator
             }
         }
 
-        var hasExplicitLifetime = attributeData.HasNamedArgument("Lifetime");
-        var hasExplicitRegisterAllInterfaces = attributeData.HasNamedArgument("RegisterAllInterfaces");
-        var hasExplicitRegisterAllBaseClasses = attributeData.HasNamedArgument("RegisterAllBaseClasses");
-
         var allInterfaces = typeSymbol.GetAllInterfaces();
         var allBaseClasses = typeSymbol.GetAllBaseClasses();
+
+        // Build set of valid open generic service types (non-nested) for quick lookup
+        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(allInterfaces, allBaseClasses);
 
         return new RegistrationData(
             implementationType,
@@ -82,6 +83,80 @@ partial class RegisterSourceGenerator
             allBaseClasses,
             hasExplicitLifetime,
             hasExplicitRegisterAllInterfaces,
-            hasExplicitRegisterAllBaseClasses);
+            hasExplicitRegisterAllBaseClasses,
+            validOpenGenericServiceTypes);
+    }
+
+    /// <summary>
+    /// Tries to get the original syntax for a named argument, especially for nameof() expressions.
+    /// </summary>
+    /// <param name="attributeData">The attribute data.</param>
+    /// <param name="argumentName">The name of the argument to find.</param>
+    /// <returns>The original syntax string if it's a nameof() expression; otherwise, null.</returns>
+    private static string? TryGetOriginalKeySyntax(AttributeData attributeData, string argumentName)
+    {
+        var syntaxReference = attributeData.ApplicationSyntaxReference;
+        if(syntaxReference is null)
+            return null;
+
+        var syntax = syntaxReference.GetSyntax();
+        if(syntax is not AttributeSyntax attributeSyntax)
+            return null;
+
+        var argumentList = attributeSyntax.ArgumentList;
+        if(argumentList is null)
+            return null;
+
+        foreach(var argument in argumentList.Arguments)
+        {
+            // Check if this is a named argument with the correct name
+            if(argument.NameEquals?.Name.Identifier.Text == argumentName)
+            {
+                // Check if the expression is a nameof() invocation
+                if(argument.Expression is InvocationExpressionSyntax invocation &&
+                   invocation.Expression is IdentifierNameSyntax identifierName &&
+                   identifierName.Identifier.Text == "nameof")
+                {
+                    // Extract the argument inside nameof() and return just that expression
+                    if(invocation.ArgumentList.Arguments.Count == 1)
+                    {
+                        var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
+                        return nameofArgument.ToFullString().Trim();
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds a set of valid open generic service type names (NameWithoutGeneric + Arity) that can be properly registered.
+    /// This includes only interfaces/base classes that are open generic but not nested open generic.
+    /// </summary>
+    private static ImmutableEquatableSet<string> BuildValidOpenGenericServiceTypes(
+        ImmutableEquatableArray<TypeData> allInterfaces,
+        ImmutableEquatableArray<TypeData> allBaseClasses)
+    {
+        var result = new HashSet<string>();
+
+        foreach(var iface in allInterfaces)
+        {
+            if(iface.IsOpenGeneric && !iface.IsNestedOpenGeneric)
+            {
+                // Use NameWithoutGeneric + Arity as key to handle different arities
+                result.Add($"{iface.NameWithoutGeneric}`{iface.GenericArity}");
+            }
+        }
+
+        foreach(var baseClass in allBaseClasses)
+        {
+            if(baseClass.IsOpenGeneric && !baseClass.IsNestedOpenGeneric)
+            {
+                result.Add($"{baseClass.NameWithoutGeneric}`{baseClass.GenericArity}");
+            }
+        }
+
+        return result.ToImmutableEquatableSet();
     }
 }

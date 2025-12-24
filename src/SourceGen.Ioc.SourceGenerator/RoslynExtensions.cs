@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text;
 
 namespace SourceGen.Ioc.SourceGenerator;
 
@@ -86,7 +87,9 @@ internal static class RoslynExtensions
         public TypeData GetTypeData()
         {
             var typeName = typeSymbol.FullyQualifiedName;
-            return new TypeData(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters);
+            int arity = (typeSymbol as INamedTypeSymbol)?.Arity ?? 0;
+            bool isNestedOpenGeneric = typeSymbol.IsNestedOpenGeneric;
+            return new TypeData(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters, arity, isNestedOpenGeneric);
         }
 
         /// <summary>
@@ -98,7 +101,8 @@ internal static class RoslynExtensions
             foreach(var iface in typeSymbol.AllInterfaces)
             {
                 var typeName = iface.FullyQualifiedName;
-                result.Add(new(typeName, GetNameWithoutGeneric(typeName), iface.ContainsGenericParameters));
+                bool isNestedOpenGeneric = iface.IsNestedOpenGeneric;
+                result.Add(new(typeName, GetNameWithoutGeneric(typeName), iface.ContainsGenericParameters, iface.Arity, isNestedOpenGeneric));
             }
             return result.ToImmutableEquatableArray();
         }
@@ -113,10 +117,41 @@ internal static class RoslynExtensions
             while(baseType != null && baseType.SpecialType != SpecialType.System_Object)
             {
                 var typeName = baseType.FullyQualifiedName;
-                result.Add(new(typeName, GetNameWithoutGeneric(typeName), baseType.ContainsGenericParameters));
+                bool isNestedOpenGeneric = baseType.IsNestedOpenGeneric;
+                result.Add(new(typeName, GetNameWithoutGeneric(typeName), baseType.ContainsGenericParameters, baseType.Arity, isNestedOpenGeneric));
                 baseType = baseType.BaseType;
             }
             return result.ToImmutableEquatableArray();
+        }
+
+        /// <summary>
+        /// Determines whether the type is a nested open generic type.
+        /// A nested open generic is a generic type where any type argument itself contains generic parameters.
+        /// For example: IGeneric&lt;IGeneric2&lt;T&gt;&gt; is a nested open generic.
+        /// But IGeneric&lt;T&gt; or IGeneric&lt;int&gt; are not.
+        /// </summary>
+        public bool IsNestedOpenGeneric
+        {
+            get
+            {
+                if(typeSymbol is not INamedTypeSymbol namedType || !namedType.IsGenericType)
+                {
+                    return false;
+                }
+
+                // Check if any type argument contains generic parameters
+                foreach(var typeArg in namedType.TypeArguments)
+                {
+                    // If the type argument is not a simple type parameter (T, T1, etc.)
+                    // but contains generic parameters, it's a nested open generic
+                    if(typeArg.TypeKind != TypeKind.TypeParameter && typeArg.ContainsGenericParameters)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
         }
     }
 
@@ -141,6 +176,28 @@ internal static class RoslynExtensions
             }
 
             return defaultValue;
+        }
+
+        /// <summary>
+        /// Tries to get a named argument value from an attribute data.<br/>
+        /// If the argument is not found, returns HasArg = false.
+        /// </summary>
+        public (bool HasArg, T? Value) TryGetNamedArgument<T>(string name, T? defaultValue = default)
+        {
+            foreach(var namedArg in attributeData.NamedArguments)
+            {
+                if(namedArg.Key == name)
+                {
+                    if(namedArg.Value.IsNull)
+                    {
+                        return (true, defaultValue);
+                    }
+
+                    return (true, (T?)namedArg.Value.Value);
+                }
+            }
+
+            return (false, defaultValue);
         }
 
         /// <summary>
@@ -174,7 +231,8 @@ internal static class RoslynExtensions
                         if(value.Value is ITypeSymbol typeSymbol)
                         {
                             var typeName = typeSymbol.FullyQualifiedName;
-                            result.Add(new(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters));
+                            int arity = (typeSymbol as INamedTypeSymbol)?.Arity ?? 0;
+                            result.Add(new(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters, arity));
                         }
                     }
                     return result.ToImmutableEquatableArray();
@@ -322,5 +380,33 @@ internal static class RoslynExtensions
                 };
             }
         }
+    }
+
+    public static string GetSafeNamespace(string name) => string.IsNullOrWhiteSpace(name) ? "Generated" : name;
+
+    public static string GetSafeMethodName(string name)
+    {
+        if(string.IsNullOrWhiteSpace(name))
+            return "Generated";
+
+        StringBuilder builder = new(name.Length + 1);
+        for(int i = 0; i < name.Length; i++)
+        {
+            char ch = name[i];
+            if(i == 0 && char.IsDigit(ch))
+            {
+                builder.Append('_');
+            }
+
+            if(char.IsLetterOrDigit(ch) || ch == '_')
+            {
+                builder.Append(ch);
+            }
+            else
+            {
+                builder.Append('_');
+            }
+        }
+        return builder.ToString();
     }
 }

@@ -15,7 +15,7 @@
 /// <param name="HasExplicitLifetime">Whether the lifetime was explicitly set.</param>
 /// <param name="HasExplicitRegisterAllInterfaces">Whether RegisterAllInterfaces was explicitly set.</param>
 /// <param name="HasExplicitRegisterAllBaseClasses">Whether RegisterAllBaseClasses was explicitly set.</param>
-/// <param name="IsOpenGenericImplementation">Whether the implementation type is an open generic type.</param>
+/// <param name="ValidOpenGenericServiceTypes">Set of valid open generic service type names (without generic parameters) that can be properly registered.</param>
 internal sealed record class RegistrationData(
     TypeData ImplementationType,
     int Lifetime,
@@ -28,4 +28,5 @@ internal sealed record class RegistrationData(
     ImmutableEquatableArray<TypeData> AllBaseClasses,
     bool HasExplicitLifetime,
     bool HasExplicitRegisterAllInterfaces,
-    bool HasExplicitRegisterAllBaseClasses);
+    bool HasExplicitRegisterAllBaseClasses,
+    ImmutableEquatableSet<string> ValidOpenGenericServiceTypes);

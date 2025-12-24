@@ -7,7 +7,7 @@ internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, 
     public ImmutableArray<DefaultSettingsModel> Settings { get; }
 
     private readonly Dictionary<string, int> _exactMatches;
-    private readonly Dictionary<string, int> _genericMatches;
+    private readonly Dictionary<(string NameWithoutGeneric, int GenericArity), int> _genericMatches;
 
     public DefaultSettingsMap(ImmutableArray<DefaultSettingsModel> settings)
     {
@@ -27,9 +27,10 @@ internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, 
 
             if(targetType != targetTypeData.NameWithoutGeneric)
             {
-                if(!_genericMatches.ContainsKey(targetTypeData.NameWithoutGeneric))
+                var genericKey = (targetTypeData.NameWithoutGeneric, targetTypeData.GenericArity);
+                if(!_genericMatches.ContainsKey(genericKey))
                 {
-                    _genericMatches[targetTypeData.NameWithoutGeneric] = i;
+                    _genericMatches[genericKey] = i;
                 }
             }
         }
@@ -37,7 +38,8 @@ internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, 
 
     public bool IsEmpty => Settings.IsDefaultOrEmpty;
     public bool TryGetExactMatches(string key, out int index) => _exactMatches.TryGetValue(key, out index);
-    public bool TryGetGenericMatches(string key, out int index) => _genericMatches.TryGetValue(key, out index);
+    public bool TryGetGenericMatches(string nameWithoutGeneric, int genericArity, out int index) =>
+        _genericMatches.TryGetValue((nameWithoutGeneric, genericArity), out index);
 
     public bool Equals(DefaultSettingsMap other)
     {

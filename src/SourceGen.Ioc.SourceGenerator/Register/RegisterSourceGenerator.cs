@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace SourceGen.Ioc.SourceGenerator.Register;
+﻿namespace SourceGen.Ioc.SourceGenerator.Register;
 
 /// <summary>
 /// Generates code to register types marked with SourceGen.Ioc.IoCRegisterAttribute/SourceGen.Ioc.IoCRegisterForAttribute
@@ -108,7 +106,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         writer.WriteLine($"namespace {GetSafeNamespace(rootNamespace)};");
         writer.WriteLine();
 
-        var safeMethodName = GetSafeAssemblyName(assemblyName);
+        var safeMethodName = GetSafeMethodName(assemblyName);
         writer.WriteLine("/// <summary>");
         writer.WriteLine($"/// Extension methods for registering services from {assemblyName}.");
         writer.WriteLine("/// </summary>");
@@ -153,8 +151,8 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         if(registration.IsOpenGeneric)
         {
             // Open generic registration requires typeof() syntax
-            var serviceTypeOf = ConvertToTypeOf(registration.ServiceType);
-            var implTypeOf = ConvertToTypeOf(registration.ImplementationType);
+            var serviceTypeOf = ConvertToTypeOf(registration.ServiceType, registration.ServiceTypeArity);
+            var implTypeOf = ConvertToTypeOf(registration.ImplementationType, registration.ImplementationTypeArity);
 
             if(registration.Key != null)
             {
@@ -181,7 +179,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
     /// Converts a fully qualified generic type name to typeof() syntax.
     /// For example: "global::Namespace.GenericTest&lt;T&gt;" becomes "typeof(global::Namespace.GenericTest&lt;&gt;)"
     /// </summary>
-    private static string ConvertToTypeOf(string typeName)
+    private static string ConvertToTypeOf(string typeName, int arity)
     {
         // Find the generic part and replace type parameters with empty
         var startIndex = typeName.IndexOf('<');
@@ -190,57 +188,9 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             return $"typeof({typeName})";
         }
 
-        var endIndex = typeName.LastIndexOf('>');
-        if(endIndex < 0)
-        {
-            return $"typeof({typeName})";
-        }
-
-        // Count the number of type parameters
-        var genericPart = typeName.Substring(startIndex + 1, endIndex - startIndex - 1);
-        var paramCount = 1;
-        var depth = 0;
-        foreach(var ch in genericPart)
-        {
-            if(ch == '<')
-                depth++;
-            else if(ch == '>')
-                depth--;
-            else if(ch == ',' && depth == 0)
-                paramCount++;
-        }
-
         // Build the open generic typeof
         var baseName = typeName[..startIndex];
-        var commas = paramCount > 1 ? new string(',', paramCount - 1) : "";
+        var commas = arity > 1 ? new string(',', arity - 1) : "";
         return $"typeof({baseName}<{commas}>)";
-    }
-
-    private static string GetSafeNamespace(string name) => string.IsNullOrWhiteSpace(name) ? "Generated" : name;
-
-    private static string GetSafeAssemblyName(string name)
-    {
-        if(string.IsNullOrWhiteSpace(name))
-            return "Generated";
-
-        StringBuilder builder = new();
-        for(int i = 0; i < name.Length; i++)
-        {
-            char ch = name[i];
-            if(i == 0 && char.IsDigit(ch))
-            {
-                builder.Append('_');
-            }
-
-            if(char.IsLetterOrDigit(ch) || ch == '_')
-            {
-                builder.Append(ch);
-            }
-            else
-            {
-                builder.Append('_');
-            }
-        }
-        return builder.ToString();
     }
 }

@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Disable AOT since Verify library requires dynamic code generation -->
-    <PublishAot>false</PublishAot>
     <UseCurrentRuntimeIdentifier>true</UseCurrentRuntimeIdentifier>
   </PropertyGroup>
 
