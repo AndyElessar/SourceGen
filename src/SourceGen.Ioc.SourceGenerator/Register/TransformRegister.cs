@@ -32,9 +32,9 @@ partial class RegisterSourceGenerator
     private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData)
     {
         var implementationType = typeSymbol.GetTypeData();
-        var (hasExplicitLifetime, lifetime) = attributeData.TryGetNamedArgument<int>("Lifetime", 0);
-        var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetNamedArgument<bool>("RegisterAllInterfaces", false);
-        var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetNamedArgument<bool>("RegisterAllBaseClasses", false);
+        var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
+        var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
+        var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
         var serviceTypes = attributeData.GetTypeArrayArgument("ServiceTypes");
 
         var keyType = attributeData.GetNamedArgument<int>("KeyType", 0);

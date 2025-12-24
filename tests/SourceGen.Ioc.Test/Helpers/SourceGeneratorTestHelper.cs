@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SourceGen.Ioc.Test.Helpers;
 
@@ -106,5 +108,45 @@ public static class SourceGeneratorTestHelper
         return result.GeneratedSources
             .FirstOrDefault(s => s.HintName.Contains(hintNameContains))
             .SourceText?.ToString();
+    }
+
+    /// <summary>
+    /// Runs the analyzer and returns the diagnostics.
+    /// </summary>
+    public static async Task<ImmutableArray<Diagnostic>> RunAnalyzerAsync<TAnalyzer>(string source, string assemblyName = "TestAssembly")
+        where TAnalyzer : DiagnosticAnalyzer, new()
+    {
+        var userSyntaxTree = CSharpSyntaxTree.ParseText(source);
+        var attributeSyntaxTree = CSharpSyntaxTree.ParseText(AttributeSource);
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+            .Select(a => MetadataReference.CreateFromFile(a.Location))
+            .Cast<MetadataReference>()
+            .ToList();
+
+        // Add reference to Microsoft.Extensions.DependencyInjection.Abstractions
+        var diAbstractionsAssembly = typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly;
+        references.Add(MetadataReference.CreateFromFile(diAbstractionsAssembly.Location));
+
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [userSyntaxTree, attributeSyntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var analyzer = new TAnalyzer();
+        var compilationWithAnalyzers = compilation.WithAnalyzers([analyzer]);
+
+        var diagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
+        return diagnostics;
+    }
+
+    /// <summary>
+    /// Gets diagnostics with a specific ID.
+    /// </summary>
+    public static IEnumerable<Diagnostic> GetDiagnosticsById(ImmutableArray<Diagnostic> diagnostics, string diagnosticId)
+    {
+        return diagnostics.Where(d => d.Id == diagnosticId);
     }
 }

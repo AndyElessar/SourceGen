@@ -16,7 +16,7 @@ internal sealed record class ServiceRegistrationModel(
     int ServiceTypeArity,
     string ImplementationType,
     int ImplementationTypeArity,
-    int Lifetime,
+    ServiceLifetime Lifetime,
     string? Key,
     int KeyType,
     bool IsOpenGeneric);

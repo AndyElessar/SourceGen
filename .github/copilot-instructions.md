@@ -138,7 +138,7 @@ When generating or modifying code, **always use the latest C# 14 features** wher
 1. **Report Diagnostics Properly**
    ```csharp
    private static readonly DiagnosticDescriptor InvalidUsageError = new(
-       id: "SG001",
+       id: "SGIOC001",
        title: "Invalid Usage",
        messageFormat: "The type '{0}' cannot be used with this attribute",
        category: "SourceGen",

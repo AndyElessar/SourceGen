@@ -10,7 +10,7 @@
 /// <param name="ServiceTypes">Additional service types to register by default.</param>
 internal sealed record class DefaultSettingsModel(
     TypeData TargetServiceType,
-    int Lifetime,
+    ServiceLifetime Lifetime,
     bool RegisterAllInterfaces,
     bool RegisterAllBaseClasses,
     ImmutableEquatableArray<TypeData> ServiceTypes);

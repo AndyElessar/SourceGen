@@ -22,14 +22,14 @@ partial class RegisterSourceGenerator
         if(attributeData.ConstructorArguments[1].Value is not int lifetime)
             return null;
 
-        var registerAllInterfaces = attributeData.GetNamedArgument<bool>("RegisterAllInterfaces", false);
-        var registerAllBaseClasses = attributeData.GetNamedArgument<bool>("RegisterAllBaseClasses", false);
+        var (_, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
+        var (_, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
         var serviceTypes = attributeData.GetTypeArrayArgument("ServiceTypes");
         var typeData = targetServiceType.GetTypeData();
 
         return new DefaultSettingsModel(
             typeData,
-            lifetime,
+            (ServiceLifetime)lifetime,
             registerAllInterfaces,
             registerAllBaseClasses,
             serviceTypes);

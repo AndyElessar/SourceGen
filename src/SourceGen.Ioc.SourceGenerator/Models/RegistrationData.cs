@@ -18,7 +18,7 @@
 /// <param name="ValidOpenGenericServiceTypes">Set of valid open generic service type names (without generic parameters) that can be properly registered.</param>
 internal sealed record class RegistrationData(
     TypeData ImplementationType,
-    int Lifetime,
+    ServiceLifetime Lifetime,
     bool RegisterAllInterfaces,
     bool RegisterAllBaseClasses,
     ImmutableEquatableArray<TypeData> ServiceTypes,

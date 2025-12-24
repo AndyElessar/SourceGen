@@ -7,16 +7,12 @@
 [Generator(LanguageNames.CSharp)]
 public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 {
-    private const string IoCRegisterAttributeFullName = "SourceGen.Ioc.IoCRegisterAttribute";
-    private const string IoCRegisterForAttributeFullName = "SourceGen.Ioc.IoCRegisterForAttribute";
-    private const string IoCRegisterDefaultSettingsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultSettingsAttribute";
-
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // IoCRegisterAttribute
         var registerProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                IoCRegisterAttributeFullName,
+                Constants.IoCRegisterAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegister(ctx, ct))
             .Where(static m => m is not null)
@@ -26,7 +22,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // IoCRegisterForAttribute
         var registerForProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                IoCRegisterForAttributeFullName,
+                Constants.IoCRegisterForAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterFor(ctx, ct))
             .SelectMany(static (m, _) => m)
@@ -44,7 +40,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // Default settings
         var defaultSettingsProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                IoCRegisterDefaultSettingsAttributeFullName,
+                Constants.IoCRegisterDefaultSettingsAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct))
             .SelectMany(static (m, _) => m)
@@ -140,13 +136,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
     private static void WriteRegistration(SourceWriter writer, ServiceRegistrationModel registration)
     {
-        var lifetimeMethod = registration.Lifetime switch
-        {
-            0 => "Singleton",
-            1 => "Scoped",
-            2 => "Transient",
-            _ => "Singleton"
-        };
+        var lifetime = registration.Lifetime.Name;
 
         if(registration.IsOpenGeneric)
         {
@@ -156,22 +146,22 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
             if(registration.Key != null)
             {
-                writer.WriteLine($"services.AddKeyed{lifetimeMethod}({serviceTypeOf}, {registration.Key}, {implTypeOf});");
+                writer.WriteLine($"services.AddKeyed{lifetime}({serviceTypeOf}, {registration.Key}, {implTypeOf});");
             }
             else
             {
-                writer.WriteLine($"services.Add{lifetimeMethod}({serviceTypeOf}, {implTypeOf});");
+                writer.WriteLine($"services.Add{lifetime}({serviceTypeOf}, {implTypeOf});");
             }
         }
         else if(registration.Key != null)
         {
             // Keyed registration
-            writer.WriteLine($"services.AddKeyed{lifetimeMethod}<{registration.ServiceType}, {registration.ImplementationType}>({registration.Key});");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{registration.ServiceType}, {registration.ImplementationType}>({registration.Key});");
         }
         else
         {
             // Non-keyed registration
-            writer.WriteLine($"services.Add{lifetimeMethod}<{registration.ServiceType}, {registration.ImplementationType}>();");
+            writer.WriteLine($"services.Add{lifetime}<{registration.ServiceType}, {registration.ImplementationType}>();");
         }
     }
 

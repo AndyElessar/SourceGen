@@ -181,14 +181,6 @@ predicate: static (node, _) => node is ClassDeclarationSyntax { AttributeLists.C
 - `SGIOC100` - `SGIOC199`: Warnings
 - `SGIOC200` - `SGIOC299`: Info/Suggestions
 
-### Standard Diagnostics
-
-| ID | Category | Description |
-|----|----------|-------------|
-| SGIOC001 | Usage | Invalid attribute usage |
-| SGIOC002 | Design | Circular dependency detected |
-| SGIOC003 | Design | Service lifetime conflict detected |
-
 ### Diagnostic Template
 
 ```csharp
