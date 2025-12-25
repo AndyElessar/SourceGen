@@ -15,7 +15,7 @@ internal static class RoslynExtensions
         /// </summary>
         public string FullyQualifiedName => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        public bool IsGenericTypeDefinition => typeSymbol is INamedTypeSymbol { IsGenericType: true, IsDefinition: true };
+        public bool IsNullable => !typeSymbol.IsValueType || typeSymbol.OriginalDefinition.SpecialType is SpecialType.System_Nullable_T;
 
         public bool ContainsGenericParameters
         {
@@ -45,8 +45,6 @@ internal static class RoslynExtensions
                 return false;
             }
         }
-
-        public bool IsNullable => !typeSymbol.IsValueType || typeSymbol.OriginalDefinition.SpecialType is SpecialType.System_Nullable_T;
 
         public INamedTypeSymbol? GetCompatibleGenericBaseType([NotNullWhen(true)] INamedTypeSymbol? genericType)
         {
@@ -83,11 +81,16 @@ internal static class RoslynExtensions
                 return candidate.IsGenericType && SymbolEqualityComparer.Default.Equals(candidate.ConstructedFrom, baseType);
             }
         }
+    }
+
+    extension(INamedTypeSymbol typeSymbol)
+    {
+        public bool IsGenericTypeDefinition => typeSymbol is { IsGenericType: true, IsDefinition: true };
 
         public TypeData GetTypeData()
         {
             var typeName = typeSymbol.FullyQualifiedName;
-            int arity = (typeSymbol as INamedTypeSymbol)?.Arity ?? 0;
+            int arity = typeSymbol.Arity;
             bool isNestedOpenGeneric = typeSymbol.IsNestedOpenGeneric;
             return new TypeData(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters, arity, isNestedOpenGeneric);
         }
@@ -134,13 +137,13 @@ internal static class RoslynExtensions
         {
             get
             {
-                if(typeSymbol is not INamedTypeSymbol namedType || !namedType.IsGenericType)
+                if(!typeSymbol.IsGenericType)
                 {
                     return false;
                 }
 
                 // Check if any type argument contains generic parameters
-                foreach(var typeArg in namedType.TypeArguments)
+                foreach(var typeArg in typeSymbol.TypeArguments)
                 {
                     // If the type argument is not a simple type parameter (T, T1, etc.)
                     // but contains generic parameters, it's a nested open generic
@@ -153,6 +156,31 @@ internal static class RoslynExtensions
                 return false;
             }
         }
+
+        public IMethodSymbol? PrimaryConstructor
+        {
+            get
+            {
+                foreach(var constructor in typeSymbol.Constructors)
+                {
+                    if(constructor.IsImplicitlyDeclared)
+                        continue;
+
+                    var syntaxRef = constructor.DeclaringSyntaxReferences.FirstOrDefault();
+                    if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
+                        return constructor;
+                }
+
+                return null;
+            }
+        }
+
+        public IMethodSymbol? PrimaryOrMostParametersConstructor =>
+            typeSymbol.PrimaryConstructor
+            ?? typeSymbol.Constructors
+                .Where(ctor => !ctor.IsImplicitlyDeclared)
+                .OrderByDescending(ctor => ctor.Parameters.Length)
+                .FirstOrDefault();
     }
 
     extension(AttributeData attributeData)
@@ -408,5 +436,29 @@ internal static class RoslynExtensions
             }
         }
         return builder.ToString();
+    }
+
+    extension<T>(IEnumerable<T> source)
+    {
+        public IEnumerable<(int Index, T Item)> Index()
+        {
+            int index = 0;
+            foreach(var item in source)
+            {
+                yield return (index, item);
+                checked { index++; }
+            }
+        }
+    }
+
+    extension<T>(IReadOnlyList<T> source)
+    {
+        public IEnumerable<(int Index, T Item)> Index()
+        {
+            for(int i = 0; i < source.Count; i++)
+            {
+                yield return (i, source[i]);
+            }
+        }
     }
 }

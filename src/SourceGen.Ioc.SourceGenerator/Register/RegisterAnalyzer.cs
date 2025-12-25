@@ -530,7 +530,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     {
         // Stack is LIFO, so we need to reverse for correct order
         StringBuilder sb = new(pathStack.Count * 2 - 1);
-        foreach(var (i, item) in pathStack.Reverse().Select((it, i) => (i, it)))
+        foreach(var (i, item) in pathStack.Reverse().Index())
         {
             if(i > 0)
                 sb.Append(" -> ");
