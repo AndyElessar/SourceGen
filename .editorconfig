@@ -16,3 +16,9 @@ indent_style = space
 indent_size = 4
 indent_style = space
 tab_width = 4
+
+# SA1200: Using directives should be placed correctly
+dotnet_diagnostic.SA1200.severity = silent
+
+# SA1633: File should have header
+dotnet_diagnostic.SA1633.severity = silent

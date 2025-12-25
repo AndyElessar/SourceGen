@@ -9,8 +9,9 @@ public enum KeyType
     /// Treat Key as its value.
     /// </summary>
     Value = 0,
+
     /// <summary>
     /// Treat Key as C# code string.
     /// </summary>
-    Csharp = 1
+    Csharp = 1,
 }

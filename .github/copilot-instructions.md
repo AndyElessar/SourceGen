@@ -191,3 +191,9 @@ src/
 - Keep Source Generator dependencies minimal
 - Target .NET Standard 2.0 for maximum compatibility
 - Only reference stable Roslyn packages
+
+## References
+
+- [Incremental Generators](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.md)
+- [Incremental Generators Cookbook](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.cookbook.md)
+- [Analyzer Actions Semantics](https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md)

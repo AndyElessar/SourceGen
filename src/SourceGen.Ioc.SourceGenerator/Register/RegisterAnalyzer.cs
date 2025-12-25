@@ -93,29 +93,58 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Get attribute type symbols for faster lookup
         var iocRegisterAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName);
         var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName);
+        var iocRegisterDefaultSettingsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultSettingsAttributeFullName);
 
         if(iocRegisterAttribute is null && iocRegisterForAttribute is null)
             return;
 
         // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis
         var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
+        // Index for service type -> implementation lookup (interfaces/base classes)
+        var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
+        // Collect default settings from IoCRegisterDefaultSettingsAttribute
+        var defaultSettings = CollectDefaultSettings(context.Compilation, iocRegisterDefaultSettingsAttribute, context.CancellationToken);
 
-        var analyzerContext = new AnalyzerContext(iocRegisterAttribute, iocRegisterForAttribute, registeredServices);
+        var analyzerContext = new AnalyzerContext(iocRegisterAttribute, iocRegisterForAttribute, registeredServices, serviceTypeIndex, defaultSettings);
 
-        // Collect assembly-level IoCRegisterFor attributes first
-        var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext);
+        // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
+        var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
 
-        // First pass: collect all registered services from type-level attributes
-        context.RegisterSymbolAction(ctx => CollectRegisteredService(ctx, analyzerContext), SymbolKind.NamedType);
+        // First pass: collect services and do immediate validation (SGIOC001, SGIOC004)
+        context.RegisterSymbolAction(ctx => CollectAndValidateNamedType(ctx, analyzerContext), SymbolKind.NamedType);
 
         // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
         context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
 
-        // Second pass: analyze dependencies (runs after first pass due to symbol action ordering)
-        context.RegisterSymbolAction(ctx => AnalyzeNamedType(ctx, analyzerContext), SymbolKind.NamedType);
+        // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003, SGIOC101)
+        context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
     }
 
-    private static ImmutableHashSet<SyntaxTree> CollectAssemblyLevelRegistrations(Compilation compilation, AnalyzerContext analyzerContext)
+    /// <summary>
+    /// Analyzes all dependencies after all services have been collected.
+    /// This ensures we have a complete picture of all registered services before checking dependencies.
+    /// </summary>
+    private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
+    {
+        foreach(var kvp in analyzerContext.RegisteredServices)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var serviceInfo = kvp.Value;
+            AnalyzeDependencies(
+                context.ReportDiagnostic,
+                analyzerContext,
+                serviceInfo.Type,
+                serviceInfo.Lifetime,
+                serviceInfo.Location,
+                context.CancellationToken);
+        }
+    }
+
+    private static ImmutableHashSet<SyntaxTree> CollectAssemblyLevelRegistrations(
+        Compilation compilation,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
     {
         var syntaxTreesBuilder = ImmutableHashSet.CreateBuilder<SyntaxTree>();
 
@@ -124,6 +153,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         foreach(var attribute in compilation.Assembly.GetAttributes())
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var attributeClass = attribute.AttributeClass;
             if(attributeClass is null)
                 continue;
@@ -148,11 +179,12 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(targetType.DeclaredAccessibility is Accessibility.Private)
                 continue;
 
-            var location = syntaxReference?.GetSyntax().GetLocation();
+            var location = syntaxReference?.GetSyntax(cancellationToken).GetLocation();
 
-            var (_, lifetime) = attribute.TryGetLifetime();
+            var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
+            var lifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
 
-            analyzerContext.RegisteredServices.TryAdd(targetType, new ServiceInfo(targetType, lifetime, location));
+            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location);
         }
 
         return syntaxTreesBuilder.ToImmutable();
@@ -202,35 +234,25 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
 
-            // Skip further analysis if type is invalid
-            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
-                continue;
-            if(targetType.DeclaredAccessibility is Accessibility.Private)
-                continue;
-
-            // Get lifetime of current service
-            var (_, currentLifetime) = attribute.TryGetLifetime();
-
-            // SGIOC002, SGIOC003 & SGIOC101: Analyze dependencies
-            AnalyzeDependencies(context, analyzerContext, targetType, currentLifetime, location);
+            // Note: Dependency analysis (SGIOC002, SGIOC003, SGIOC101) is done in CompilationEnd
+            // after all services have been collected
         }
     }
 
-    private static void CollectRegisteredService(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
+    /// <summary>
+    /// First pass: collect services and do immediate validation (SGIOC001, SGIOC004).
+    /// Dependency analysis (SGIOC002, SGIOC003, SGIOC101) is deferred to CompilationEnd.
+    /// </summary>
+    private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
         if(context.Symbol is not INamedTypeSymbol typeSymbol)
             return;
 
         foreach(var attribute in typeSymbol.GetAttributes())
         {
-            var attributeClass = attribute.AttributeClass;
-            if(attributeClass is null)
-                continue;
+            context.CancellationToken.ThrowIfCancellationRequested();
 
-            bool isIoCRegister = SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterAttribute);
-            bool isIoCRegisterFor = SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute);
-
-            if(!isIoCRegister && !isIoCRegisterFor)
+            if(!TryGetIoCAttribute(attribute, analyzerContext, out var isIoCRegisterFor))
                 continue;
 
             INamedTypeSymbol targetType;
@@ -245,55 +267,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             }
             else
             {
-                targetType = typeSymbol;
-            }
-
-            // Skip invalid types
-            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
-                continue;
-            if(targetType.DeclaredAccessibility is Accessibility.Private)
-                continue;
-
-            var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
-                ?? typeSymbol.Locations.FirstOrDefault();
-
-            var (_, lifetime) = attribute.TryGetLifetime();
-
-            analyzerContext.RegisteredServices.TryAdd(targetType, new ServiceInfo(targetType, lifetime, location));
-        }
-    }
-
-    private static void AnalyzeNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
-    {
-        if(context.Symbol is not INamedTypeSymbol typeSymbol)
-            return;
-
-        foreach(var attribute in typeSymbol.GetAttributes())
-        {
-            var attributeClass = attribute.AttributeClass;
-            if(attributeClass is null)
-                continue;
-
-            bool isIoCRegister = SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterAttribute);
-            bool isIoCRegisterFor = SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute);
-
-            if(!isIoCRegister && !isIoCRegisterFor)
-                continue;
-
-            INamedTypeSymbol targetType;
-
-            if(isIoCRegisterFor)
-            {
-                // For IoCRegisterForAttribute, check the target type
-                if(attribute.ConstructorArguments.Length == 0 ||
-                   attribute.ConstructorArguments[0].Value is not INamedTypeSymbol target)
-                    continue;
-
-                targetType = target;
-            }
-            else
-            {
-                // For IoCRegisterAttribute, the type itself is the target
                 targetType = typeSymbol;
             }
 
@@ -310,17 +283,71 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
 
-            // Skip further analysis if type is invalid
+            // Skip registration if type is invalid
             if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
                 continue;
             if(targetType.DeclaredAccessibility is Accessibility.Private)
                 continue;
 
-            // Get lifetime of current service
-            var (_, currentLifetime) = attribute.TryGetLifetime();
+            // Get lifetime of current service (considering default settings)
+            var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
+            var currentLifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
 
-            // SGIOC002, SGIOC003 & SGIOC101: Analyze dependencies
-            AnalyzeDependencies(context, analyzerContext, targetType, currentLifetime, location);
+            // Register service with index for faster lookup
+            // Dependency analysis will be done in CompilationEnd after all services are collected
+            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location);
+        }
+    }
+
+    /// <summary>
+    /// Checks if the attribute is an IoC registration attribute and returns which type.
+    /// </summary>
+    private static bool TryGetIoCAttribute(AttributeData attribute, AnalyzerContext analyzerContext, out bool isIoCRegisterFor)
+    {
+        isIoCRegisterFor = false;
+        var attributeClass = attribute.AttributeClass;
+        if(attributeClass is null)
+            return false;
+
+        var comparer = SymbolEqualityComparer.Default;
+        if(comparer.Equals(attributeClass, analyzerContext.IoCRegisterAttribute))
+            return true;
+
+        if(comparer.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+        {
+            isIoCRegisterFor = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Registers a service and builds the service type index for fast lookups.
+    /// </summary>
+    private static void RegisterServiceWithIndex(
+        AnalyzerContext analyzerContext,
+        INamedTypeSymbol targetType,
+        ServiceLifetime lifetime,
+        Location? location)
+    {
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location);
+
+        if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
+            return; // Already registered
+
+        // Build index for interfaces
+        foreach(var iface in targetType.AllInterfaces)
+        {
+            analyzerContext.ServiceTypeIndex.TryAdd(iface, serviceInfo);
+        }
+
+        // Build index for base classes
+        var baseType = targetType.BaseType;
+        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
+        {
+            analyzerContext.ServiceTypeIndex.TryAdd(baseType, serviceInfo);
+            baseType = baseType.BaseType;
         }
     }
 
@@ -451,16 +478,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         Location? location,
         CancellationToken cancellationToken)
     {
-        // Get constructor dependencies
-        var constructors = targetType.Constructors
-            .Where(c => !c.IsStatic && c.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal)
-            .ToArray();
-
-        if(constructors.Length == 0)
+        // Get primary constructor using loop instead of LINQ to avoid allocations
+        var constructor = GetPrimaryConstructor(targetType);
+        if(constructor is null)
             return;
 
-        // Use the constructor with most parameters (DI typically uses this)
-        var constructor = constructors.OrderByDescending(c => c.Parameters.Length).First();
+        // Reuse visited set for circular dependency detection
+        HashSet<INamedTypeSymbol>? visited = null;
 
         foreach(var parameter in constructor.Parameters)
         {
@@ -469,16 +493,18 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(parameter.Type is not INamedTypeSymbol parameterType)
                 continue;
 
-            // Find the dependency's implementation type and lifetime
+            // Find the dependency's implementation type and lifetime using index
             var dependencyInfo = FindRegisteredDependency(analyzerContext, parameterType);
             if(dependencyInfo is null)
                 continue;
 
-            // SGIOC002: Check for circular dependency
-            var cyclePath = DetectCircularDependency(analyzerContext, targetType, dependencyInfo.Type, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
+            // SGIOC002: Check for circular dependency (reuse visited set)
+            visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            visited.Clear();
+            var cyclePath = DetectCircularDependency(analyzerContext, targetType, dependencyInfo.Type, visited);
             if(cyclePath is not null)
             {
-                var cycleString = string.Join(" -> ", cyclePath.Select(t => t.Name));
+                var cycleString = string.Join(" -> ", cyclePath.Select(static t => t.Name));
                 reportDiagnostic(Diagnostic.Create(
                     CircularDependency,
                     location,
@@ -510,30 +536,101 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    /// <summary>
+    /// Gets the primary constructor (with most parameters) without LINQ allocations.
+    /// </summary>
+    private static IMethodSymbol? GetPrimaryConstructor(INamedTypeSymbol targetType)
+    {
+        IMethodSymbol? bestConstructor = null;
+        int maxParameters = -1;
+
+        foreach(var constructor in targetType.Constructors)
+        {
+            if(constructor.IsStatic)
+                continue;
+            if(constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+                continue;
+
+            if(constructor.Parameters.Length > maxParameters)
+            {
+                maxParameters = constructor.Parameters.Length;
+                bestConstructor = constructor;
+            }
+        }
+
+        return bestConstructor;
+    }
+
     private static ServiceInfo? FindRegisteredDependency(
         AnalyzerContext analyzerContext,
         INamedTypeSymbol parameterType)
     {
-        // Direct match
+        // Direct match - O(1)
         if(analyzerContext.RegisteredServices.TryGetValue(parameterType, out var directMatch))
             return directMatch;
 
-        // Check if any registered service implements this interface or inherits from this base class
+        // Try open generic match for direct type (e.g., TestOpenGeneric2<int> -> TestOpenGeneric2<T>)
+        if(parameterType.IsGenericType && !parameterType.IsUnboundGenericType)
+        {
+            var originalDefinition = parameterType.OriginalDefinition;
+            if(analyzerContext.RegisteredServices.TryGetValue(originalDefinition, out var genericMatch))
+                return genericMatch;
+        }
+
+        // Use index for interface/base class lookup - O(1)
+        if(analyzerContext.ServiceTypeIndex.TryGetValue(parameterType, out var indexedMatch))
+            return indexedMatch;
+
+        // Try open generic match for indexed lookup
+        if(parameterType.IsGenericType && !parameterType.IsUnboundGenericType)
+        {
+            var originalDefinition = parameterType.OriginalDefinition;
+            if(analyzerContext.ServiceTypeIndex.TryGetValue(originalDefinition, out var genericIndexMatch))
+                return genericIndexMatch;
+        }
+
+        // Fallback to linear search for cases where index is not yet populated
+        // This handles race conditions during concurrent symbol analysis
         foreach(var kvp in analyzerContext.RegisteredServices)
         {
             var implType = kvp.Key;
             var serviceInfo = kvp.Value;
 
+            // Check if implType is an open generic that matches parameterType's definition
+            if(implType.IsGenericType && parameterType.IsGenericType)
+            {
+                if(SymbolEqualityComparer.Default.Equals(implType.OriginalDefinition, parameterType.OriginalDefinition))
+                    return serviceInfo;
+            }
+
             // Check interfaces
-            if(implType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, parameterType)))
-                return serviceInfo;
+            foreach(var iface in implType.AllInterfaces)
+            {
+                if(SymbolEqualityComparer.Default.Equals(iface, parameterType))
+                    return serviceInfo;
+
+                // Check open generic interface match
+                if(iface.IsGenericType && parameterType.IsGenericType)
+                {
+                    if(SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, parameterType.OriginalDefinition))
+                        return serviceInfo;
+                }
+            }
 
             // Check base classes
             var baseType = implType.BaseType;
-            while(baseType is not null)
+            while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
             {
                 if(SymbolEqualityComparer.Default.Equals(baseType, parameterType))
                     return serviceInfo;
+
+                // Check open generic base class match
+                if(baseType.IsGenericType && parameterType.IsGenericType)
+                {
+                    if(SymbolEqualityComparer.Default.Equals(baseType.OriginalDefinition, parameterType.OriginalDefinition))
+                        return serviceInfo;
+                }
+
                 baseType = baseType.BaseType;
             }
         }
@@ -557,14 +654,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         if(!analyzerContext.RegisteredServices.ContainsKey(currentType))
             return null;
 
-        var constructors = currentType.Constructors
-            .Where(c => !c.IsStatic && c.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal)
-            .ToArray();
-
-        if(constructors.Length == 0)
+        // Use GetPrimaryConstructor to avoid LINQ allocations
+        var constructor = GetPrimaryConstructor(currentType);
+        if(constructor is null)
             return null;
-
-        var constructor = constructors.OrderByDescending(c => c.Parameters.Length).First();
 
         foreach(var parameter in constructor.Parameters)
         {
@@ -612,15 +705,128 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         Error
     }
 
+    /// <summary>
+    /// Collects default settings from IoCRegisterDefaultSettingsAttribute on the assembly.
+    /// </summary>
+    private static ImmutableDictionary<INamedTypeSymbol, DefaultSettingsInfo> CollectDefaultSettings(
+        Compilation compilation,
+        INamedTypeSymbol? iocRegisterDefaultSettingsAttribute,
+        CancellationToken cancellationToken)
+    {
+        var builder = ImmutableDictionary.CreateBuilder<INamedTypeSymbol, DefaultSettingsInfo>(SymbolEqualityComparer.Default);
+
+        if(iocRegisterDefaultSettingsAttribute is null)
+            return builder.ToImmutable();
+
+        foreach(var attribute in compilation.Assembly.GetAttributes())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var attributeClass = attribute.AttributeClass;
+            if(attributeClass is null)
+                continue;
+
+            if(!SymbolEqualityComparer.Default.Equals(attributeClass, iocRegisterDefaultSettingsAttribute))
+                continue;
+
+            if(attribute.ConstructorArguments.Length < 2)
+                continue;
+
+            if(attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetServiceType)
+                continue;
+
+            if(attribute.ConstructorArguments[1].Value is not int lifetime)
+                continue;
+
+            // Store the type as-is (including unbound generic types like IGenericTest2<>)
+            // GetEffectiveLifetime will use ConstructUnboundGenericType() for comparison
+            var defaultSettingsInfo = new DefaultSettingsInfo((ServiceLifetime)lifetime);
+
+            // Keep the first definition (in case of duplicates)
+            if(!builder.ContainsKey(targetServiceType))
+            {
+                builder.Add(targetServiceType, defaultSettingsInfo);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// Gets the effective lifetime for a type, considering default settings.
+    /// </summary>
+    private static ServiceLifetime GetEffectiveLifetime(
+        AnalyzerContext analyzerContext,
+        INamedTypeSymbol targetType,
+        bool hasExplicitLifetime,
+        ServiceLifetime explicitLifetime)
+    {
+        // If lifetime is explicitly set, use it
+        if(hasExplicitLifetime)
+            return explicitLifetime;
+
+        // Check default settings for matching interfaces
+        foreach(var iface in targetType.AllInterfaces)
+        {
+            // Try exact match first
+            if(analyzerContext.DefaultSettings.TryGetValue(iface, out var exactMatch))
+                return exactMatch.Lifetime;
+
+            // Try unbound generic match (e.g., IGenericTest<> matches IGenericTest<T>)
+            // DefaultSettings stores unbound generic types like IGenericTest2<>
+            // We need to construct the unbound generic from the interface to match
+            if(iface.IsGenericType)
+            {
+                var unboundGeneric = iface.ConstructUnboundGenericType();
+                if(analyzerContext.DefaultSettings.TryGetValue(unboundGeneric, out var genericMatch))
+                    return genericMatch.Lifetime;
+            }
+        }
+
+        // Check default settings for matching base classes
+        var baseType = targetType.BaseType;
+        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
+        {
+            if(analyzerContext.DefaultSettings.TryGetValue(baseType, out var baseMatch))
+                return baseMatch.Lifetime;
+
+            // Try unbound generic match for base classes
+            if(baseType.IsGenericType)
+            {
+                var unboundGeneric = baseType.ConstructUnboundGenericType();
+                if(analyzerContext.DefaultSettings.TryGetValue(unboundGeneric, out var genericMatch))
+                    return genericMatch.Lifetime;
+            }
+
+            baseType = baseType.BaseType;
+        }
+
+        // Default lifetime is Singleton (as defined in TryGetLifetime)
+        return explicitLifetime;
+    }
+
     private sealed class AnalyzerContext(
         INamedTypeSymbol? iocRegisterAttribute,
         INamedTypeSymbol? iocRegisterForAttribute,
-        ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices)
+        ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
+        ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
+        ImmutableDictionary<INamedTypeSymbol, DefaultSettingsInfo> defaultSettings)
     {
         public INamedTypeSymbol? IoCRegisterAttribute { get; } = iocRegisterAttribute;
         public INamedTypeSymbol? IoCRegisterForAttribute { get; } = iocRegisterForAttribute;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
+        /// <summary>
+        /// Index mapping service types (interfaces/base classes) to their implementations.
+        /// Enables O(1) lookup instead of O(n) linear search.
+        /// </summary>
+        public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> ServiceTypeIndex { get; } = serviceTypeIndex;
+        /// <summary>
+        /// Default settings from IoCRegisterDefaultSettingsAttribute, keyed by target service type.
+        /// </summary>
+        public ImmutableDictionary<INamedTypeSymbol, DefaultSettingsInfo> DefaultSettings { get; } = defaultSettings;
     }
 
     private sealed record ServiceInfo(INamedTypeSymbol Type, ServiceLifetime Lifetime, Location? Location);
+
+    private sealed record DefaultSettingsInfo(ServiceLifetime Lifetime);
 }

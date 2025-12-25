@@ -68,14 +68,17 @@ public sealed class TestInterfaces/*(TestClosed2 testClosed2)*/ : IGenericTest<d
 
 public interface IGenericTest2<T>;
 
-[IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+//[IoCRegister(Lifetime = ServiceLifetime.Singleton)]
 public sealed class TestClosed2(TestInterfaces testInterfaces) : IGenericTest<IGenericTest2<int>>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;
 }
 
 [IoCRegister]
-public sealed class TestOpenGeneric2<T> : IGenericTest2<IGenericTest2<T>>;
+public sealed class TestOpenGeneric2<T>(TestInterfaces testInterfaces) : IGenericTest2<T>
+{
+    private readonly TestInterfaces _testInterfaces = testInterfaces;
+}
 
 internal abstract class GenericTest3<T>;
 
