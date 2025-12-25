@@ -61,14 +61,14 @@ public sealed class ClosedGenericTest2 : IGenericTest<int, string>;
 public sealed class TestFor : IGenericTest<string>, ITest2;
 
 //[IoCRegister(Lifetime = ServiceLifetime.Transient)]
-public sealed class TestInterfaces/*(TestClosed2 testClosed2)*/ : IGenericTest<decimal>, ITest2
+public sealed class TestInterfaces(TestClosed2 testClosed2) : IGenericTest<decimal>, ITest2
 {
-    //private readonly TestClosed2 _testClosed2 = testClosed2;
+    private readonly TestClosed2 _testClosed2 = testClosed2;
 }
 
 public interface IGenericTest2<T>;
 
-//[IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+[IoCRegister(Lifetime = ServiceLifetime.Singleton)]
 public sealed class TestClosed2(TestInterfaces testInterfaces) : IGenericTest<IGenericTest2<int>>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;

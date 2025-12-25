@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Text;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SourceGen.Ioc.SourceGenerator.Register;
@@ -126,6 +127,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     /// </summary>
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
     {
+        // Reuse these collections across all services to reduce allocations
+        var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var pathStack = new Stack<INamedTypeSymbol>();
+
         foreach(var kvp in analyzerContext.RegisteredServices)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -137,6 +142,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 serviceInfo.Type,
                 serviceInfo.Lifetime,
                 serviceInfo.Location,
+                visited,
+                pathStack,
                 context.CancellationToken);
         }
     }
@@ -233,9 +240,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             {
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
-
-            // Note: Dependency analysis (SGIOC002, SGIOC003, SGIOC101) is done in CompilationEnd
-            // after all services have been collected
         }
     }
 
@@ -455,36 +459,19 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     private static void AnalyzeDependencies(
-        SymbolAnalysisContext context,
-        AnalyzerContext analyzerContext,
-        INamedTypeSymbol targetType,
-        ServiceLifetime currentLifetime,
-        Location? location)
-        => AnalyzeDependencies(context.ReportDiagnostic, analyzerContext, targetType, currentLifetime, location, context.CancellationToken);
-
-    private static void AnalyzeDependencies(
-        SemanticModelAnalysisContext context,
-        AnalyzerContext analyzerContext,
-        INamedTypeSymbol targetType,
-        ServiceLifetime currentLifetime,
-        Location? location)
-        => AnalyzeDependencies(context.ReportDiagnostic, analyzerContext, targetType, currentLifetime, location, context.CancellationToken);
-
-    private static void AnalyzeDependencies(
         Action<Diagnostic> reportDiagnostic,
         AnalyzerContext analyzerContext,
         INamedTypeSymbol targetType,
         ServiceLifetime currentLifetime,
         Location? location,
+        HashSet<INamedTypeSymbol> visited,
+        Stack<INamedTypeSymbol> pathStack,
         CancellationToken cancellationToken)
     {
         // Get primary constructor using loop instead of LINQ to avoid allocations
         var constructor = GetPrimaryConstructor(targetType);
         if(constructor is null)
             return;
-
-        // Reuse visited set for circular dependency detection
-        HashSet<INamedTypeSymbol>? visited = null;
 
         foreach(var parameter in constructor.Parameters)
         {
@@ -498,13 +485,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(dependencyInfo is null)
                 continue;
 
-            // SGIOC002: Check for circular dependency (reuse visited set)
-            visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            // SGIOC002: Check for circular dependency (reuse visited set and path stack)
             visited.Clear();
-            var cyclePath = DetectCircularDependency(analyzerContext, targetType, dependencyInfo.Type, visited);
-            if(cyclePath is not null)
+            pathStack.Clear();
+            if(DetectCircularDependency(analyzerContext, targetType, dependencyInfo.Type, visited, pathStack))
             {
-                var cycleString = string.Join(" -> ", cyclePath.Select(static t => t.Name));
+                // Build cycle string from stack (already in correct order: current -> ... -> start)
+                var cycleString = BuildCycleString(pathStack);
                 reportDiagnostic(Diagnostic.Create(
                     CircularDependency,
                     location,
@@ -537,7 +524,23 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Gets the primary constructor (with most parameters) without LINQ allocations.
+    /// Builds the cycle string from the path stack without allocating intermediate collections.
+    /// </summary>
+    private static string BuildCycleString(Stack<INamedTypeSymbol> pathStack)
+    {
+        // Stack is LIFO, so we need to reverse for correct order
+        StringBuilder sb = new(pathStack.Count * 2 - 1);
+        foreach(var (i, item) in pathStack.Reverse().Select((it, i) => (i, it)))
+        {
+            if(i > 0)
+                sb.Append(" -> ");
+            sb.Append(item.Name);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Gets the primary constructor (with most parameters).
     /// </summary>
     private static IMethodSymbol? GetPrimaryConstructor(INamedTypeSymbol targetType)
     {
@@ -561,6 +564,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         return bestConstructor;
     }
 
+    /// <summary>
+    /// Finds a registered dependency by parameter type using O(1) index lookups.
+    /// This method is called during CompilationEnd when all services are fully indexed.
+    /// </summary>
     private static ServiceInfo? FindRegisteredDependency(
         AnalyzerContext analyzerContext,
         INamedTypeSymbol parameterType)
@@ -589,75 +596,38 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 return genericIndexMatch;
         }
 
-        // Fallback to linear search for cases where index is not yet populated
-        // This handles race conditions during concurrent symbol analysis
-        foreach(var kvp in analyzerContext.RegisteredServices)
-        {
-            var implType = kvp.Key;
-            var serviceInfo = kvp.Value;
-
-            // Check if implType is an open generic that matches parameterType's definition
-            if(implType.IsGenericType && parameterType.IsGenericType)
-            {
-                if(SymbolEqualityComparer.Default.Equals(implType.OriginalDefinition, parameterType.OriginalDefinition))
-                    return serviceInfo;
-            }
-
-            // Check interfaces
-            foreach(var iface in implType.AllInterfaces)
-            {
-                if(SymbolEqualityComparer.Default.Equals(iface, parameterType))
-                    return serviceInfo;
-
-                // Check open generic interface match
-                if(iface.IsGenericType && parameterType.IsGenericType)
-                {
-                    if(SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, parameterType.OriginalDefinition))
-                        return serviceInfo;
-                }
-            }
-
-            // Check base classes
-            var baseType = implType.BaseType;
-            while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
-            {
-                if(SymbolEqualityComparer.Default.Equals(baseType, parameterType))
-                    return serviceInfo;
-
-                // Check open generic base class match
-                if(baseType.IsGenericType && parameterType.IsGenericType)
-                {
-                    if(SymbolEqualityComparer.Default.Equals(baseType.OriginalDefinition, parameterType.OriginalDefinition))
-                        return serviceInfo;
-                }
-
-                baseType = baseType.BaseType;
-            }
-        }
-
+        // No fallback needed - this runs during CompilationEnd when index is complete
         return null;
     }
 
-    private static List<INamedTypeSymbol>? DetectCircularDependency(
+    /// <summary>
+    /// Detects circular dependencies using a stack-based approach to avoid List.Insert(0,...) allocations.
+    /// Returns true if a cycle is detected, with the path stored in pathStack.
+    /// </summary>
+    private static bool DetectCircularDependency(
         AnalyzerContext analyzerContext,
         INamedTypeSymbol startType,
         INamedTypeSymbol currentType,
-        HashSet<INamedTypeSymbol> visited)
+        HashSet<INamedTypeSymbol> visited,
+        Stack<INamedTypeSymbol> pathStack)
     {
         if(SymbolEqualityComparer.Default.Equals(startType, currentType))
-            return [startType];
+        {
+            pathStack.Push(startType);
+            return true;
+        }
 
         if(!visited.Add(currentType))
-            return null;
+            return false;
 
         // Check if current type is registered
         if(!analyzerContext.RegisteredServices.ContainsKey(currentType))
-            return null;
+            return false;
 
         // Use GetPrimaryConstructor to avoid LINQ allocations
         var constructor = GetPrimaryConstructor(currentType);
         if(constructor is null)
-            return null;
+            return false;
 
         foreach(var parameter in constructor.Parameters)
         {
@@ -668,15 +638,14 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(dependency is null)
                 continue;
 
-            var cyclePath = DetectCircularDependency(analyzerContext, startType, dependency.Type, visited);
-            if(cyclePath is not null)
+            if(DetectCircularDependency(analyzerContext, startType, dependency.Type, visited, pathStack))
             {
-                cyclePath.Insert(0, currentType);
-                return cyclePath;
+                pathStack.Push(currentType);
+                return true;
             }
         }
 
-        return null;
+        return false;
     }
 
     private static LifetimeConflictLevel GetLifetimeConflictLevel(ServiceLifetime consumerLifetime, ServiceLifetime dependencyLifetime)
