@@ -415,7 +415,7 @@ public class RegisterAnalyzerTests
             public interface IHandler<T> { }
             public class Wrapper<T> { }
 
-            [IoCRegister]
+            [IoCRegister(RegisterAllInterfaces = true)]
             public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
             """;
 
@@ -439,7 +439,7 @@ public class RegisterAnalyzerTests
             public class Outer<T> { }
             public class Inner<T> { }
 
-            [IoCRegister]
+            [IoCRegister(RegisterAllInterfaces = true)]
             public class DeeplyNestedHandler<T> : IProcessor<Outer<Inner<T>>> { }
             """;
 
@@ -461,7 +461,7 @@ public class RegisterAnalyzerTests
             public class BaseHandler<T> { }
             public class Wrapper<T> { }
 
-            [IoCRegister]
+            [IoCRegister(RegisterAllBaseClasses = true)]
             public class NestedGenericHandler<T> : BaseHandler<Wrapper<T>> { }
             """;
 
@@ -548,7 +548,7 @@ public class RegisterAnalyzerTests
             public interface IProcessor<T> { }
             public class Wrapper<T> { }
 
-            [IoCRegister]
+            [IoCRegister(RegisterAllInterfaces = true)]
             public class MultiNestedHandler<T> : IHandler<Wrapper<T>>, IProcessor<Wrapper<T>> { }
             """;
 
@@ -556,6 +556,145 @@ public class RegisterAnalyzerTests
         var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
 
         await Assert.That(sgioc004).Count().IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task SGIOC004_NestedOpenGenericWithSelfRegistrationOnly_NoDiagnostic()
+    {
+        // When an open generic only registers itself (no ServiceTypes, no RegisterAllInterfaces, no RegisterAllBaseClasses),
+        // it should not report SGIOC004 because the nested open generic interface won't be registered.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+            public class Wrapper<T> { }
+
+            [IoCRegister]
+            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC004_NestedOpenGenericWithServiceTypes_ReportsDiagnostic()
+    {
+        // When ServiceTypes is specified, it will try to register the interface, so SGIOC004 should be reported.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+            public class Wrapper<T> { }
+
+            [IoCRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC004_NestedOpenGenericWithRegisterAllInterfaces_ReportsDiagnostic()
+    {
+        // When RegisterAllInterfaces is true, SGIOC004 should be reported for nested open generics.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+            public class Wrapper<T> { }
+
+            [IoCRegister(RegisterAllInterfaces = true)]
+            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC004_NestedOpenGenericWithRegisterAllBaseClasses_ReportsDiagnostic()
+    {
+        // When RegisterAllBaseClasses is true, SGIOC004 should be reported for nested open generics in base classes.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class BaseHandler<T> { }
+            public class Wrapper<T> { }
+
+            [IoCRegister(RegisterAllBaseClasses = true)]
+            public class NestedGenericHandler<T> : BaseHandler<Wrapper<T>> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC004_NestedOpenGenericBaseClassWithSelfRegistrationOnly_NoDiagnostic()
+    {
+        // When only registering self (no RegisterAllBaseClasses), nested open generic base class should not cause SGIOC004.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class BaseHandler<T> { }
+            public class Wrapper<T> { }
+
+            [IoCRegister]
+            public class NestedGenericHandler<T> : BaseHandler<Wrapper<T>> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC004_IoCRegisterForAttribute_NestedOpenGeneric_ReportsDiagnostic()
+    {
+        // IoCRegisterForAttribute always registers for service types, so SGIOC004 should be reported.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+            public class Wrapper<T> { }
+
+            [IoCRegisterFor(typeof(NestedGenericHandler<>), RegisterAllInterfaces = true)]
+            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
     }
 
     #endregion

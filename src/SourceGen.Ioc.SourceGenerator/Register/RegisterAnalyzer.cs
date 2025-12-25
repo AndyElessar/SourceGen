@@ -102,11 +102,118 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         var analyzerContext = new AnalyzerContext(iocRegisterAttribute, iocRegisterForAttribute, registeredServices);
 
-        // First pass: collect all registered services
+        // Collect assembly-level IoCRegisterFor attributes first
+        var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext);
+
+        // First pass: collect all registered services from type-level attributes
         context.RegisterSymbolAction(ctx => CollectRegisteredService(ctx, analyzerContext), SymbolKind.NamedType);
+
+        // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
+        context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
 
         // Second pass: analyze dependencies (runs after first pass due to symbol action ordering)
         context.RegisterSymbolAction(ctx => AnalyzeNamedType(ctx, analyzerContext), SymbolKind.NamedType);
+    }
+
+    private static ImmutableHashSet<SyntaxTree> CollectAssemblyLevelRegistrations(Compilation compilation, AnalyzerContext analyzerContext)
+    {
+        var syntaxTreesBuilder = ImmutableHashSet.CreateBuilder<SyntaxTree>();
+
+        if(analyzerContext.IoCRegisterForAttribute is null)
+            return syntaxTreesBuilder.ToImmutable();
+
+        foreach(var attribute in compilation.Assembly.GetAttributes())
+        {
+            var attributeClass = attribute.AttributeClass;
+            if(attributeClass is null)
+                continue;
+
+            if(!SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+                continue;
+
+            // Track which syntax tree contains this attribute
+            var syntaxReference = attribute.ApplicationSyntaxReference;
+            if(syntaxReference?.SyntaxTree is { } syntaxTree)
+            {
+                syntaxTreesBuilder.Add(syntaxTree);
+            }
+
+            if(attribute.ConstructorArguments.Length == 0 ||
+               attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
+                continue;
+
+            // Skip invalid types
+            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
+                continue;
+            if(targetType.DeclaredAccessibility is Accessibility.Private)
+                continue;
+
+            var location = syntaxReference?.GetSyntax().GetLocation();
+
+            var (_, lifetime) = attribute.TryGetLifetime();
+
+            analyzerContext.RegisteredServices.TryAdd(targetType, new ServiceInfo(targetType, lifetime, location));
+        }
+
+        return syntaxTreesBuilder.ToImmutable();
+    }
+
+    private static void AnalyzeAssemblyLevelRegistrations(
+        SemanticModelAnalysisContext context,
+        AnalyzerContext analyzerContext,
+        ImmutableHashSet<SyntaxTree> assemblyAttributeSyntaxTrees)
+    {
+        if(analyzerContext.IoCRegisterForAttribute is null)
+            return;
+
+        // Only analyze if this syntax tree contains assembly-level attributes
+        if(!assemblyAttributeSyntaxTrees.Contains(context.SemanticModel.SyntaxTree))
+            return;
+
+        foreach(var attribute in context.SemanticModel.Compilation.Assembly.GetAttributes())
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            // Only process attributes from the current syntax tree
+            var syntaxReference = attribute.ApplicationSyntaxReference;
+            if(syntaxReference?.SyntaxTree != context.SemanticModel.SyntaxTree)
+                continue;
+
+            var attributeClass = attribute.AttributeClass;
+            if(attributeClass is null)
+                continue;
+
+            if(!SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+                continue;
+
+            if(attribute.ConstructorArguments.Length == 0 ||
+               attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
+                continue;
+
+            var location = syntaxReference.GetSyntax(context.CancellationToken).GetLocation();
+
+            // SGIOC001: Check if target type is private or abstract
+            AnalyzeInvalidAttributeUsage(context, targetType, location);
+
+            // SGIOC004: Check for nested open generic (only when registering interfaces/base classes)
+            bool willRegisterInterfacesOrBaseClasses = WillRegisterInterfacesOrBaseClasses(attribute);
+            if(willRegisterInterfacesOrBaseClasses)
+            {
+                AnalyzeNestedOpenGeneric(context, targetType, location);
+            }
+
+            // Skip further analysis if type is invalid
+            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
+                continue;
+            if(targetType.DeclaredAccessibility is Accessibility.Private)
+                continue;
+
+            // Get lifetime of current service
+            var (_, currentLifetime) = attribute.TryGetLifetime();
+
+            // SGIOC002, SGIOC003 & SGIOC101: Analyze dependencies
+            AnalyzeDependencies(context, analyzerContext, targetType, currentLifetime, location);
+        }
     }
 
     private static void CollectRegisteredService(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
@@ -196,8 +303,12 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
 
-            // SGIOC004: Check for nested open generic
-            AnalyzeNestedOpenGeneric(context, targetType, location);
+            // SGIOC004: Check for nested open generic (only when registering interfaces/base classes)
+            bool willRegisterInterfacesOrBaseClasses = WillRegisterInterfacesOrBaseClasses(attribute);
+            if(willRegisterInterfacesOrBaseClasses)
+            {
+                AnalyzeNestedOpenGeneric(context, targetType, location);
+            }
 
             // Skip further analysis if type is invalid
             if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
@@ -213,7 +324,38 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    /// <summary>
+    /// Determines if the attribute will cause registration of interfaces or base classes.
+    /// For open generic types, nested open generics are only a problem when registering interfaces/base classes.
+    /// </summary>
+    private static bool WillRegisterInterfacesOrBaseClasses(AttributeData attribute)
+    {
+        // Check if ServiceTypes is specified
+        var serviceTypes = attribute.GetTypeArrayArgument("ServiceTypes");
+        if(serviceTypes.Length > 0)
+            return true;
+
+        // Check if RegisterAllInterfaces is true
+        var (hasRegisterAllInterfaces, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
+        if(hasRegisterAllInterfaces && registerAllInterfaces)
+            return true;
+
+        // Check if RegisterAllBaseClasses is true
+        var (hasRegisterAllBaseClasses, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
+        if(hasRegisterAllBaseClasses && registerAllBaseClasses)
+            return true;
+
+        // Only registering self, no interfaces/base classes
+        return false;
+    }
+
     private static void AnalyzeInvalidAttributeUsage(SymbolAnalysisContext context, INamedTypeSymbol targetType, Location? location)
+        => AnalyzeInvalidAttributeUsage(context.ReportDiagnostic, targetType, location);
+
+    private static void AnalyzeInvalidAttributeUsage(SemanticModelAnalysisContext context, INamedTypeSymbol targetType, Location? location)
+        => AnalyzeInvalidAttributeUsage(context.ReportDiagnostic, targetType, location);
+
+    private static void AnalyzeInvalidAttributeUsage(Action<Diagnostic> reportDiagnostic, INamedTypeSymbol targetType, Location? location)
     {
         // Check if target type is private
         if(targetType.DeclaredAccessibility is Accessibility.Private)
@@ -223,7 +365,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 location,
                 targetType.Name,
                 "private");
-            context.ReportDiagnostic(diagnostic);
+            reportDiagnostic(diagnostic);
         }
 
         // Check if target type is abstract
@@ -234,88 +376,55 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 location,
                 targetType.Name,
                 "abstract");
-            context.ReportDiagnostic(diagnostic);
+            reportDiagnostic(diagnostic);
         }
     }
 
     private static void AnalyzeNestedOpenGeneric(SymbolAnalysisContext context, INamedTypeSymbol targetType, Location? location)
+        => AnalyzeNestedOpenGeneric(context.ReportDiagnostic, targetType, location);
+
+    private static void AnalyzeNestedOpenGeneric(SemanticModelAnalysisContext context, INamedTypeSymbol targetType, Location? location)
+        => AnalyzeNestedOpenGeneric(context.ReportDiagnostic, targetType, location);
+
+    private static void AnalyzeNestedOpenGeneric(Action<Diagnostic> reportDiagnostic, INamedTypeSymbol targetType, Location? location)
     {
         // Only check open generic types
         if(!targetType.IsGenericType)
             return;
 
+        // For unbound generic types (e.g., from typeof(MyClass<>)), we need to use OriginalDefinition
+        // to properly check interfaces and base classes
+        var typeToCheck = targetType.IsUnboundGenericType ? targetType.OriginalDefinition : targetType;
+
         // Check all interfaces for nested open generics
-        foreach(var iface in targetType.AllInterfaces)
+        foreach(var iface in typeToCheck.AllInterfaces)
         {
-            if(HasNestedOpenGeneric(iface))
+            if(iface.IsNestedOpenGeneric)
             {
                 var diagnostic = Diagnostic.Create(
                     NestedOpenGeneric,
                     location,
                     targetType.Name,
                     iface.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
-                context.ReportDiagnostic(diagnostic);
+                reportDiagnostic(diagnostic);
             }
         }
 
         // Check base classes for nested open generics
-        var baseType = targetType.BaseType;
+        var baseType = typeToCheck.BaseType;
         while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
         {
-            if(HasNestedOpenGeneric(baseType))
+            if(baseType.IsNestedOpenGeneric)
             {
                 var diagnostic = Diagnostic.Create(
                     NestedOpenGeneric,
                     location,
                     targetType.Name,
                     baseType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
-                context.ReportDiagnostic(diagnostic);
+                reportDiagnostic(diagnostic);
             }
             baseType = baseType.BaseType;
         }
-    }
-
-    /// <summary>
-    /// Checks if a type has nested open generic type arguments.
-    /// For example: IHandler&lt;Wrapper&lt;T&gt;&gt; is a nested open generic.
-    /// </summary>
-    private static bool HasNestedOpenGeneric(INamedTypeSymbol type)
-    {
-        if(!type.IsGenericType)
-            return false;
-
-        foreach(var typeArg in type.TypeArguments)
-        {
-            // If the type argument itself is an open generic type (has type parameters)
-            if(typeArg is INamedTypeSymbol namedTypeArg)
-            {
-                // Check if it's a constructed generic type with unbound type parameters
-                if(namedTypeArg.IsGenericType && HasTypeParameterInArguments(namedTypeArg))
-                    return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Recursively checks if a type or its type arguments contain unbound type parameters.
-    /// </summary>
-    private static bool HasTypeParameterInArguments(INamedTypeSymbol type)
-    {
-        foreach(var typeArg in type.TypeArguments)
-        {
-            if(typeArg is ITypeParameterSymbol)
-                return true;
-
-            if(typeArg is INamedTypeSymbol nestedType && nestedType.IsGenericType)
-            {
-                if(HasTypeParameterInArguments(nestedType))
-                    return true;
-            }
-        }
-
-        return false;
     }
 
     private static void AnalyzeDependencies(
@@ -324,6 +433,23 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol targetType,
         ServiceLifetime currentLifetime,
         Location? location)
+        => AnalyzeDependencies(context.ReportDiagnostic, analyzerContext, targetType, currentLifetime, location, context.CancellationToken);
+
+    private static void AnalyzeDependencies(
+        SemanticModelAnalysisContext context,
+        AnalyzerContext analyzerContext,
+        INamedTypeSymbol targetType,
+        ServiceLifetime currentLifetime,
+        Location? location)
+        => AnalyzeDependencies(context.ReportDiagnostic, analyzerContext, targetType, currentLifetime, location, context.CancellationToken);
+
+    private static void AnalyzeDependencies(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        INamedTypeSymbol targetType,
+        ServiceLifetime currentLifetime,
+        Location? location,
+        CancellationToken cancellationToken)
     {
         // Get constructor dependencies
         var constructors = targetType.Constructors
@@ -338,7 +464,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         foreach(var parameter in constructor.Parameters)
         {
-            context.CancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
             if(parameter.Type is not INamedTypeSymbol parameterType)
                 continue;
@@ -353,7 +479,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(cyclePath is not null)
             {
                 var cycleString = string.Join(" -> ", cyclePath.Select(t => t.Name));
-                context.ReportDiagnostic(Diagnostic.Create(
+                reportDiagnostic(Diagnostic.Create(
                     CircularDependency,
                     location,
                     cycleString));
@@ -380,7 +506,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 _ => null
             };
             if(diagnostic is not null)
-                context.ReportDiagnostic(diagnostic);
+                reportDiagnostic(diagnostic);
         }
     }
 
