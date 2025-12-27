@@ -10,10 +10,13 @@ Format: ID - Level - Category - Description
     - Report when circular dependencies are detected among registered services.
 
 3. SGIOC003 - Error - Design - Service Lifetime Conflict Detected
-    - Report when there are conflicting service lifetimes among registered services, like singleton depending on scoped.
+    - Report when there are singleton service depending on scoped service.
 
-4. SGIOC004 - Error - Design - Nested OpenGeneric Detected
+4. SGIOC004 - Error - Design - Dangerous Service Lifetime Dependency Detected
+    - Report when there are singleton service depending on transient service.
+
+5. SGIOC005 - Error - Design - Dangerous Service Lifetime Dependency Detected
+    - Report when there are scoped service depending on transient service.
+
+6. SGIOC006 - Error - Design - Nested OpenGeneric Detected
     - Report when there are service is implementing nested open generic interfaces/class, which is not allow to register.
-
-5. SGIOC101 - Warnings - Design - Service Lifetime Conflict Detected
-    - Report when there are conflicting service lifetimes among registered services, like scoped depending on transient.

@@ -85,7 +85,7 @@ public sealed class TestClosed2(TestInterfaces testInterfaces) : IGenericTest<IG
     private readonly TestInterfaces _testInterfaces = testInterfaces;
 }
 
-[IoCRegister]
+[IoCRegister(Lifetime = ServiceLifetime.Transient)]
 public sealed class TestOpenGeneric2<T>(TestInterfaces testInterfaces) : IGenericTest2<T>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;

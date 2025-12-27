@@ -36,22 +36,46 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "Circular dependencies among registered services will cause runtime errors.");
 
     /// <summary>
-    /// SGIOC003: Service Lifetime Conflict Detected - Conflicting service lifetimes among registered services.
+    /// SGIOC003: Service Lifetime Conflict Detected - Singleton service depending on Scoped service.
     /// </summary>
-    public static readonly DiagnosticDescriptor LifetimeConflict = new(
+    public static readonly DiagnosticDescriptor SingletonDependsOnScoped = new(
         id: "SGIOC003",
         title: "Service Lifetime Conflict Detected",
-        messageFormat: "Lifetime conflict: {1} service '{0}' depends on {3} service '{2}'",
+        messageFormat: "Lifetime conflict: Singleton service '{0}' depends on Scoped service '{1}'",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A service with a longer lifetime (e.g., Singleton) should not depend on a service with a shorter lifetime (e.g., Scoped or Transient).");
+        description: "A Singleton service should not depend on a Scoped service.");
 
     /// <summary>
-    /// SGIOC004: Nested Open Generic Detected - Service is implementing nested open generic interfaces/class.
+    /// SGIOC004: Dangerous Service Lifetime Dependency - Singleton service depending on Transient service.
+    /// </summary>
+    public static readonly DiagnosticDescriptor SingletonDependsOnTransient = new(
+        id: "SGIOC004",
+        title: "Dangerous Service Lifetime Dependency Detected",
+        messageFormat: "Dangerous lifetime dependency: Singleton service '{0}' depends on Transient service '{1}'",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A Singleton service should not depend on a Transient service. The Transient instance will be captured and live for the application lifetime.");
+
+    /// <summary>
+    /// SGIOC005: Dangerous Service Lifetime Dependency - Scoped service depending on Transient service.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ScopedDependsOnTransient = new(
+        id: "SGIOC005",
+        title: "Dangerous Service Lifetime Dependency Detected",
+        messageFormat: "Dangerous lifetime dependency: Scoped service '{0}' depends on Transient service '{1}'",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A Scoped service should not depend on a Transient service. The Transient instance will be captured for the scope lifetime.");
+
+    /// <summary>
+    /// SGIOC006: Nested Open Generic Detected - Service is implementing nested open generic interfaces/class.
     /// </summary>
     public static readonly DiagnosticDescriptor NestedOpenGeneric = new(
-        id: "SGIOC004",
+        id: "SGIOC006",
         title: "Nested Open Generic Detected",
         messageFormat: "The type '{0}' implements nested open generic '{1}', which cannot be registered",
         category: Constants.Category_Design,
@@ -59,25 +83,14 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Services implementing nested open generic interfaces or classes cannot be registered with the dependency injection container.");
 
-    /// <summary>
-    /// SGIOC101: Service Lifetime Conflict Warning - Potential lifetime conflict among registered services.
-    /// </summary>
-    public static readonly DiagnosticDescriptor LifetimeConflictWarning = new(
-        id: "SGIOC101",
-        title: "Service Lifetime Conflict Detected",
-        messageFormat: "Potential lifetime conflict: {1} service '{0}' depends on {3} service '{2}'",
-        category: Constants.Category_Design,
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "A Scoped service depending on a Transient service may cause unexpected behavior.");
-
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
         CircularDependency,
-        LifetimeConflict,
-        NestedOpenGeneric,
-        LifetimeConflictWarning
+        SingletonDependsOnScoped,
+        SingletonDependsOnTransient,
+        ScopedDependsOnTransient,
+        NestedOpenGeneric
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -103,7 +116,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
         // Index for service type -> implementation lookup (interfaces/base classes)
         var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
-        // Collect default settings from IoCRegisterDefaultSettingsAttribute
+        // Collect default settings from IoCRegisterDefaultSettingsAttribute using shared method
         var defaultSettings = CollectDefaultSettings(context.Compilation, iocRegisterDefaultSettingsAttribute, context.CancellationToken);
 
         var analyzerContext = new AnalyzerContext(iocRegisterAttribute, iocRegisterForAttribute, registeredServices, serviceTypeIndex, defaultSettings);
@@ -111,13 +124,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
 
-        // First pass: collect services and do immediate validation (SGIOC001, SGIOC004)
+        // First pass: collect services and do immediate validation (SGIOC001, SGIOC006)
         context.RegisterSymbolAction(ctx => CollectAndValidateNamedType(ctx, analyzerContext), SymbolKind.NamedType);
 
         // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
         context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
 
-        // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003, SGIOC101)
+        // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003-005)
         context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
     }
 
@@ -234,9 +247,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
 
-            // SGIOC004: Check for nested open generic (only when registering interfaces/base classes)
-            bool willRegisterInterfacesOrBaseClasses = WillRegisterInterfacesOrBaseClasses(attribute);
-            if(willRegisterInterfacesOrBaseClasses)
+            // SGIOC006: Check for nested open generic (only when registering interfaces/base classes)
+            if(attribute.WillRegisterInterfacesOrBaseClasses())
             {
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
@@ -244,8 +256,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// First pass: collect services and do immediate validation (SGIOC001, SGIOC004).
-    /// Dependency analysis (SGIOC002, SGIOC003, SGIOC101) is deferred to CompilationEnd.
+    /// First pass: collect services and do immediate validation (SGIOC001, SGIOC006).
+    /// Dependency analysis (SGIOC002, SGIOC003-005) is deferred to CompilationEnd.
     /// </summary>
     private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
@@ -280,9 +292,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
 
-            // SGIOC004: Check for nested open generic (only when registering interfaces/base classes)
-            bool willRegisterInterfacesOrBaseClasses = WillRegisterInterfacesOrBaseClasses(attribute);
-            if(willRegisterInterfacesOrBaseClasses)
+            // SGIOC006: Check for nested open generic (only when registering interfaces/base classes)
+            if(attribute.WillRegisterInterfacesOrBaseClasses())
             {
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
@@ -353,31 +364,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             analyzerContext.ServiceTypeIndex.TryAdd(baseType, serviceInfo);
             baseType = baseType.BaseType;
         }
-    }
-
-    /// <summary>
-    /// Determines if the attribute will cause registration of interfaces or base classes.
-    /// For open generic types, nested open generics are only a problem when registering interfaces/base classes.
-    /// </summary>
-    private static bool WillRegisterInterfacesOrBaseClasses(AttributeData attribute)
-    {
-        // Check if ServiceTypes is specified
-        var serviceTypes = attribute.GetServiceTypes();
-        if(serviceTypes.Length > 0)
-            return true;
-
-        // Check if RegisterAllInterfaces is true
-        var (hasRegisterAllInterfaces, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
-        if(hasRegisterAllInterfaces && registerAllInterfaces)
-            return true;
-
-        // Check if RegisterAllBaseClasses is true
-        var (hasRegisterAllBaseClasses, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
-        if(hasRegisterAllBaseClasses && registerAllBaseClasses)
-            return true;
-
-        // Only registering self, no interfaces/base classes
-        return false;
     }
 
     private static void AnalyzeInvalidAttributeUsage(SymbolAnalysisContext context, INamedTypeSymbol targetType, Location? location)
@@ -497,28 +483,16 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                     cycleString));
             }
 
-            // SGIOC003 & SGIOC101: Check for lifetime conflict
-            var conflictLevel = GetLifetimeConflictLevel(currentLifetime, dependencyInfo.Lifetime);
-            Diagnostic? diagnostic = conflictLevel switch
+            // SGIOC003-005: Check for lifetime conflict
+            var lifetimeConflictDescriptor = GetLifetimeConflictDescriptor(currentLifetime, dependencyInfo.Lifetime);
+            if(lifetimeConflictDescriptor is not null)
             {
-                LifetimeConflictLevel.Error => Diagnostic.Create(
-                    LifetimeConflict,
+                reportDiagnostic(Diagnostic.Create(
+                    lifetimeConflictDescriptor,
                     location,
                     targetType.Name,
-                    currentLifetime.Name,
-                    dependencyInfo.Type.Name,
-                    dependencyInfo.Lifetime.Name),
-                LifetimeConflictLevel.Warning => Diagnostic.Create(
-                    LifetimeConflictWarning,
-                    location,
-                    targetType.Name,
-                    currentLifetime.Name,
-                    dependencyInfo.Type.Name,
-                    dependencyInfo.Lifetime.Name),
-                _ => null
-            };
-            if(diagnostic is not null)
-                reportDiagnostic(diagnostic);
+                    dependencyInfo.Type.Name));
+            }
         }
     }
 
@@ -621,44 +595,38 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    private static LifetimeConflictLevel GetLifetimeConflictLevel(ServiceLifetime consumerLifetime, ServiceLifetime dependencyLifetime)
+    private static DiagnosticDescriptor? GetLifetimeConflictDescriptor(ServiceLifetime consumerLifetime, ServiceLifetime dependencyLifetime)
     {
-        // Singleton depending on Scoped is a conflict (captive dependency) - Error
+        // SGIOC003: Singleton depending on Scoped is a conflict (captive dependency)
         if(consumerLifetime is ServiceLifetime.Singleton && dependencyLifetime is ServiceLifetime.Scoped)
-            return LifetimeConflictLevel.Error;
+            return SingletonDependsOnScoped;
 
-        // Singleton depending on Transient is a captive dependency issue - Error
+        // SGIOC004: Singleton depending on Transient is a captive dependency issue
         // The Transient instance will be captured and live for the application lifetime
         if(consumerLifetime is ServiceLifetime.Singleton && dependencyLifetime is ServiceLifetime.Transient)
-            return LifetimeConflictLevel.Error;
+            return SingletonDependsOnTransient;
 
-        // Scoped depending on Transient is a potential issue - Warning
+        // SGIOC005: Scoped depending on Transient is a captive dependency issue
         // The Transient instance will be captured for the scope lifetime
         if(consumerLifetime is ServiceLifetime.Scoped && dependencyLifetime is ServiceLifetime.Transient)
-            return LifetimeConflictLevel.Warning;
+            return ScopedDependsOnTransient;
 
-        return LifetimeConflictLevel.None;
-    }
-
-    private enum LifetimeConflictLevel
-    {
-        None,
-        Warning,
-        Error
+        return null;
     }
 
     /// <summary>
     /// Collects default settings from IoCRegisterDefaultSettingsAttribute on the assembly.
+    /// Uses the shared ExtractDefaultSettings method from Constants.
     /// </summary>
-    private static ImmutableDictionary<INamedTypeSymbol, DefaultSettingsInfo> CollectDefaultSettings(
+    private static DefaultSettingsMap CollectDefaultSettings(
         Compilation compilation,
         INamedTypeSymbol? iocRegisterDefaultSettingsAttribute,
         CancellationToken cancellationToken)
     {
-        var builder = ImmutableDictionary.CreateBuilder<INamedTypeSymbol, DefaultSettingsInfo>(SymbolEqualityComparer.Default);
-
         if(iocRegisterDefaultSettingsAttribute is null)
-            return builder.ToImmutable();
+            return new DefaultSettingsMap([]);
+
+        var settingsBuilder = ImmutableArray.CreateBuilder<DefaultSettingsModel>();
 
         foreach(var attribute in compilation.Assembly.GetAttributes())
         {
@@ -671,31 +639,20 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(!SymbolEqualityComparer.Default.Equals(attributeClass, iocRegisterDefaultSettingsAttribute))
                 continue;
 
-            if(attribute.ConstructorArguments.Length < 2)
-                continue;
-
-            if(attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetServiceType)
-                continue;
-
-            if(attribute.ConstructorArguments[1].Value is not int lifetime)
-                continue;
-
-            // Store the type as-is (including unbound generic types like IGenericTest2<>)
-            // GetEffectiveLifetime will use ConstructUnboundGenericType() for comparison
-            var defaultSettingsInfo = new DefaultSettingsInfo((ServiceLifetime)lifetime);
-
-            // Keep the first definition (in case of duplicates)
-            if(!builder.ContainsKey(targetServiceType))
+            // Use shared method to extract default settings
+            var settings = attribute.ExtractDefaultSettings();
+            if(settings is not null)
             {
-                builder.Add(targetServiceType, defaultSettingsInfo);
+                settingsBuilder.Add(settings);
             }
         }
 
-        return builder.ToImmutable();
+        return new DefaultSettingsMap(settingsBuilder.ToImmutable());
     }
 
     /// <summary>
     /// Gets the effective lifetime for a type, considering default settings.
+    /// Uses DefaultSettingsMap for efficient lookups, consistent with RegisterSourceGenerator.
     /// </summary>
     private static ServiceLifetime GetEffectiveLifetime(
         AnalyzerContext analyzerContext,
@@ -707,38 +664,37 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         if(hasExplicitLifetime)
             return explicitLifetime;
 
+        var defaultSettings = analyzerContext.DefaultSettings;
+        if(defaultSettings.IsEmpty)
+            return explicitLifetime;
+
         // Check default settings for matching interfaces
         foreach(var iface in targetType.AllInterfaces)
         {
-            // Try exact match first
-            if(analyzerContext.DefaultSettings.TryGetValue(iface, out var exactMatch))
-                return exactMatch.Lifetime;
+            var ifaceTypeData = iface.GetTypeData();
 
-            // Try unbound generic match (e.g., IGenericTest<> matches IGenericTest<T>)
-            // DefaultSettings stores unbound generic types like IGenericTest2<>
-            // We need to construct the unbound generic from the interface to match
-            if(iface.IsGenericType)
-            {
-                var unboundGeneric = iface.ConstructUnboundGenericType();
-                if(analyzerContext.DefaultSettings.TryGetValue(unboundGeneric, out var genericMatch))
-                    return genericMatch.Lifetime;
-            }
+            // Try exact match first
+            if(defaultSettings.TryGetExactMatches(ifaceTypeData.Name, out var exactIndex))
+                return defaultSettings[exactIndex].Lifetime;
+
+            // Try generic match (e.g., IGenericTest<> matches IGenericTest<T>)
+            if(iface.IsGenericType && defaultSettings.TryGetGenericMatches(ifaceTypeData.NameWithoutGeneric, ifaceTypeData.GenericArity, out var genericIndex))
+                return defaultSettings[genericIndex].Lifetime;
         }
 
         // Check default settings for matching base classes
         var baseType = targetType.BaseType;
         while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
         {
-            if(analyzerContext.DefaultSettings.TryGetValue(baseType, out var baseMatch))
-                return baseMatch.Lifetime;
+            var baseTypeData = baseType.GetTypeData();
 
-            // Try unbound generic match for base classes
-            if(baseType.IsGenericType)
-            {
-                var unboundGeneric = baseType.ConstructUnboundGenericType();
-                if(analyzerContext.DefaultSettings.TryGetValue(unboundGeneric, out var genericMatch))
-                    return genericMatch.Lifetime;
-            }
+            // Try exact match first
+            if(defaultSettings.TryGetExactMatches(baseTypeData.Name, out var exactIndex))
+                return defaultSettings[exactIndex].Lifetime;
+
+            // Try generic match for base classes
+            if(baseType.IsGenericType && defaultSettings.TryGetGenericMatches(baseTypeData.NameWithoutGeneric, baseTypeData.GenericArity, out var genericIndex))
+                return defaultSettings[genericIndex].Lifetime;
 
             baseType = baseType.BaseType;
         }
@@ -752,7 +708,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? iocRegisterForAttribute,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
-        ImmutableDictionary<INamedTypeSymbol, DefaultSettingsInfo> defaultSettings)
+        DefaultSettingsMap defaultSettings)
     {
         public INamedTypeSymbol? IoCRegisterAttribute { get; } = iocRegisterAttribute;
         public INamedTypeSymbol? IoCRegisterForAttribute { get; } = iocRegisterForAttribute;
@@ -763,12 +719,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         /// </summary>
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> ServiceTypeIndex { get; } = serviceTypeIndex;
         /// <summary>
-        /// Default settings from IoCRegisterDefaultSettingsAttribute, keyed by target service type.
+        /// Default settings from IoCRegisterDefaultSettingsAttribute, using DefaultSettingsMap for efficient lookups.
         /// </summary>
-        public ImmutableDictionary<INamedTypeSymbol, DefaultSettingsInfo> DefaultSettings { get; } = defaultSettings;
+        public DefaultSettingsMap DefaultSettings { get; } = defaultSettings;
     }
 
     private sealed record ServiceInfo(INamedTypeSymbol Type, ServiceLifetime Lifetime, Location? Location);
-
-    private sealed record DefaultSettingsInfo(ServiceLifetime Lifetime);
 }
