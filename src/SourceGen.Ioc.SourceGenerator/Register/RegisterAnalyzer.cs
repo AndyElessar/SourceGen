@@ -362,7 +362,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     private static bool WillRegisterInterfacesOrBaseClasses(AttributeData attribute)
     {
         // Check if ServiceTypes is specified
-        var serviceTypes = attribute.GetTypeArrayArgument("ServiceTypes");
+        var serviceTypes = attribute.GetServiceTypes();
         if(serviceTypes.Length > 0)
             return true;
 
@@ -468,8 +468,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         Stack<INamedTypeSymbol> pathStack,
         CancellationToken cancellationToken)
     {
-        // Get primary constructor using loop instead of LINQ to avoid allocations
-        var constructor = GetPrimaryConstructor(targetType);
+        var constructor = targetType.PrimaryOrMostParametersConstructor;
         if(constructor is null)
             return;
 
@@ -540,31 +539,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Gets the primary constructor (with most parameters).
-    /// </summary>
-    private static IMethodSymbol? GetPrimaryConstructor(INamedTypeSymbol targetType)
-    {
-        IMethodSymbol? bestConstructor = null;
-        int maxParameters = -1;
-
-        foreach(var constructor in targetType.Constructors)
-        {
-            if(constructor.IsStatic)
-                continue;
-            if(constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
-                continue;
-
-            if(constructor.Parameters.Length > maxParameters)
-            {
-                maxParameters = constructor.Parameters.Length;
-                bestConstructor = constructor;
-            }
-        }
-
-        return bestConstructor;
-    }
-
-    /// <summary>
     /// Finds a registered dependency by parameter type using O(1) index lookups.
     /// This method is called during CompilationEnd when all services are fully indexed.
     /// </summary>
@@ -624,8 +598,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         if(!analyzerContext.RegisteredServices.ContainsKey(currentType))
             return false;
 
-        // Use GetPrimaryConstructor to avoid LINQ allocations
-        var constructor = GetPrimaryConstructor(currentType);
+        var constructor = currentType.PrimaryOrMostParametersConstructor;
         if(constructor is null)
             return false;
 

@@ -125,8 +125,16 @@ partial class RegisterSourceGenerator
                 }
             }
 
+            // Merge decorators - use registration's decorators if present, otherwise use default settings'
+            var decorators = registration.Decorators.Length > 0
+                ? registration.Decorators
+                : (matchingDefault?.Decorators ?? registration.Decorators);
+
             // Check if implementation is open generic
             var isOpenGenericImplementation = registration.ImplementationType.IsOpenGeneric;
+
+            // Build all service types that the implementation can be assigned to
+            var allServiceTypeNames = BuildAllServiceTypeNames(registration);
 
             // Create registrations for each service type
             foreach(var serviceTypeData in serviceTypesToRegister)
@@ -168,9 +176,37 @@ partial class RegisterSourceGenerator
                     lifetime,
                     registration.Key,
                     registration.KeyType,
-                    isOpenGenericImplementation));
+                    isOpenGenericImplementation,
+                    decorators,
+                    allServiceTypeNames));
             }
         }
+        return result.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Builds an array of all service type names that the implementation can be assigned to.
+    /// This includes the implementation type itself, all interfaces, and all base classes.
+    /// </summary>
+    private static ImmutableEquatableArray<string> BuildAllServiceTypeNames(RegistrationData registration)
+    {
+        var result = new List<string>(1 + registration.AllInterfaces.Length + registration.AllBaseClasses.Length);
+
+        // Add implementation type
+        result.Add(registration.ImplementationType.Name);
+
+        // Add all interfaces
+        foreach(var iface in registration.AllInterfaces)
+        {
+            result.Add(iface.Name);
+        }
+
+        // Add all base classes
+        foreach(var baseClass in registration.AllBaseClasses)
+        {
+            result.Add(baseClass.Name);
+        }
+
         return result.ToImmutableEquatableArray();
     }
 }

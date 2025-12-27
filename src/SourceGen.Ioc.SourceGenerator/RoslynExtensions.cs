@@ -81,34 +81,99 @@ internal static class RoslynExtensions
                 return candidate.IsGenericType && SymbolEqualityComparer.Default.Equals(candidate.ConstructedFrom, baseType);
             }
         }
+
+        public TypeData GetTypeData(
+            bool extractConstructorParams = false,
+            HashSet<INamedTypeSymbol>? visited = null)
+        {
+            if(typeSymbol is INamedTypeSymbol namedTypeSymbol)
+                return namedTypeSymbol.GetTypeData(extractConstructorParams, visited);
+
+            var typeName = typeSymbol.FullyQualifiedName;
+            return new TypeData(
+                typeName,
+                GetNameWithoutGeneric(typeName),
+                typeSymbol.ContainsGenericParameters,
+                0,
+                false);
+        }
     }
 
     extension(INamedTypeSymbol typeSymbol)
     {
         public bool IsGenericTypeDefinition => typeSymbol is { IsGenericType: true, IsDefinition: true };
 
-        public TypeData GetTypeData()
+        /// <summary>
+        /// Gets the type data for this type symbol.
+        /// </summary>
+        /// <param name="extractConstructorParams">Whether to extract constructor parameters recursively.</param>
+        public TypeData GetTypeData(
+            bool extractConstructorParams = false,
+            HashSet<INamedTypeSymbol>? visited = null)
         {
-            var typeName = typeSymbol.FullyQualifiedName;
+            visited = extractConstructorParams ? new(SymbolEqualityComparer.Default) : null;
+
+            // For unbound generic types (e.g., typeof(Handler<,>)), we need to get the 
+            // type parameter names from TypeParameters, not from FullyQualifiedName
+            // FullyQualifiedName returns "global::Ns.Handler<,>" but we need "global::Ns.Handler<TRequest, TResponse>"
+            // Note: This is different from constructed generic types (e.g., IRepository<T>) which already have proper names.
+            string typeName;
+            ImmutableEquatableArray<string>? typeParamNamesArray = null;
+
+            // Get the type parameters from the original definition for unbound generics
+            var typeParamsSource = typeSymbol.IsUnboundGenericType
+                ? typeSymbol.OriginalDefinition?.TypeParameters ?? typeSymbol.TypeParameters
+                : typeSymbol.TypeParameters;
+
+            if(typeSymbol.IsUnboundGenericType && typeParamsSource.Length > 0)
+            {
+                // Build the type name with actual type parameter names for unbound generics
+                var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
+                var typeParamNames = typeParamsSource.Select(tp => tp.Name).ToArray();
+                typeParamNamesArray = typeParamNames.ToImmutableEquatableArray();
+                typeName = $"{nameWithoutGeneric}<{string.Join(", ", typeParamNames)}>";
+            }
+            else
+            {
+                typeName = typeSymbol.FullyQualifiedName;
+                // For open generic types that contain type parameters, extract the type parameter names
+                if(typeSymbol.ContainsGenericParameters && typeSymbol.IsGenericType)
+                {
+                    var typeParams = typeSymbol.TypeArguments
+                        .OfType<ITypeParameterSymbol>()
+                        .Select(tp => tp.Name)
+                        .ToArray();
+                    if(typeParams.Length > 0)
+                    {
+                        typeParamNamesArray = typeParams.ToImmutableEquatableArray();
+                    }
+                }
+            }
+
             int arity = typeSymbol.Arity;
             bool isNestedOpenGeneric = typeSymbol.IsNestedOpenGeneric;
-            return new TypeData(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters, arity, isNestedOpenGeneric);
+
+            ImmutableEquatableArray<ConstructorParameterData>? constructorParams = null;
+            if(extractConstructorParams && visited != null)
+            {
+                constructorParams = typeSymbol.ExtractConstructorParameters(visited);
+            }
+
+            return new TypeData(
+                typeName,
+                GetNameWithoutGeneric(typeName),
+                typeSymbol.ContainsGenericParameters,
+                arity,
+                isNestedOpenGeneric,
+                typeParamNamesArray,
+                constructorParams);
         }
 
         /// <summary>
         /// Gets all interfaces implemented by a type.
         /// </summary>
-        public ImmutableEquatableArray<TypeData> GetAllInterfaces()
-        {
-            List<TypeData> result = [];
-            foreach(var iface in typeSymbol.AllInterfaces)
-            {
-                var typeName = iface.FullyQualifiedName;
-                bool isNestedOpenGeneric = iface.IsNestedOpenGeneric;
-                result.Add(new(typeName, GetNameWithoutGeneric(typeName), iface.ContainsGenericParameters, iface.Arity, isNestedOpenGeneric));
-            }
-            return result.ToImmutableEquatableArray();
-        }
+        public ImmutableEquatableArray<TypeData> GetAllInterfaces() =>
+            typeSymbol.AllInterfaces.Select(i => i.GetTypeData()).ToImmutableEquatableArray();
 
         /// <summary>
         /// Gets all base classes of a type, excluding System.Object.
@@ -119,9 +184,7 @@ internal static class RoslynExtensions
             var baseType = typeSymbol.BaseType;
             while(baseType != null && baseType.SpecialType != SpecialType.System_Object)
             {
-                var typeName = baseType.FullyQualifiedName;
-                bool isNestedOpenGeneric = baseType.IsNestedOpenGeneric;
-                result.Add(new(typeName, GetNameWithoutGeneric(typeName), baseType.ContainsGenericParameters, baseType.Arity, isNestedOpenGeneric));
+                result.Add(baseType.GetTypeData());
                 baseType = baseType.BaseType;
             }
             return result.ToImmutableEquatableArray();
@@ -138,6 +201,13 @@ internal static class RoslynExtensions
             get
             {
                 if(!typeSymbol.IsGenericType)
+                {
+                    return false;
+                }
+
+                // For unbound generic types (e.g., IRepository<>), TypeArguments contains error types
+                // which should not be considered as nested open generics
+                if(typeSymbol.IsUnboundGenericType)
                 {
                     return false;
                 }
@@ -175,12 +245,77 @@ internal static class RoslynExtensions
             }
         }
 
-        public IMethodSymbol? PrimaryOrMostParametersConstructor =>
-            typeSymbol.PrimaryConstructor
-            ?? typeSymbol.Constructors
-                .Where(ctor => !ctor.IsImplicitlyDeclared)
-                .OrderByDescending(ctor => ctor.Parameters.Length)
-                .FirstOrDefault();
+        public IMethodSymbol? PrimaryOrMostParametersConstructor
+        {
+            get
+            {
+                IMethodSymbol? bestCtor = null;
+                int maxParameters = -1;
+                foreach(var ctor in typeSymbol.Constructors)
+                {
+                    if(ctor.IsImplicitlyDeclared)
+                        continue;
+
+                    if(ctor.IsStatic)
+                        continue;
+
+                    if(ctor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+                        continue;
+
+                    var syntaxRef = ctor.DeclaringSyntaxReferences.FirstOrDefault();
+                    if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
+                        return ctor;
+
+                    if(ctor.Parameters.Length > maxParameters)
+                    {
+                        maxParameters = ctor.Parameters.Length;
+                        bestCtor = ctor;
+                    }
+                }
+                return bestCtor;
+            }
+        }
+
+        /// <summary>
+        /// Extracts constructor parameters from a type.
+        /// </summary>
+        public ImmutableEquatableArray<ConstructorParameterData> ExtractConstructorParameters(
+            HashSet<INamedTypeSymbol>? visited = null)
+        {
+            // Check if we've already visited this type to prevent infinite recursion
+            if(visited is not null && !visited.Add(typeSymbol))
+            {
+                return [];
+            }
+
+            // Get the original definition for open generic types to access constructors
+            var typeToInspect = typeSymbol.IsGenericType && typeSymbol.IsDefinition
+                ? typeSymbol
+                : typeSymbol.OriginalDefinition ?? typeSymbol;
+
+            // Get the primary constructor or the constructor with most parameters
+            var constructor = typeToInspect.PrimaryOrMostParametersConstructor;
+            if(constructor is null)
+            {
+                return [];
+            }
+
+            visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            List<ConstructorParameterData> parameters = [];
+            foreach(var param in constructor.Parameters)
+            {
+                var paramType = param.Type;
+
+                // Get TypeData using the unified method with recursive constructor extraction
+                var paramTypeData = paramType is INamedTypeSymbol namedParamType
+                    ? namedParamType.GetTypeData(true, visited)
+                    : paramType.GetTypeData();
+
+                parameters.Add(new ConstructorParameterData(param.Name, paramTypeData));
+            }
+
+            return parameters.ToImmutableEquatableArray();
+        }
     }
 
     extension(AttributeData attributeData)
@@ -251,16 +386,39 @@ internal static class RoslynExtensions
         {
             foreach(var namedArg in attributeData.NamedArguments)
             {
-                if(namedArg.Key == name && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
+                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
                 {
                     List<TypeData> result = [];
                     foreach(var value in namedArg.Value.Values)
                     {
                         if(value.Value is ITypeSymbol typeSymbol)
                         {
-                            var typeName = typeSymbol.FullyQualifiedName;
-                            int arity = (typeSymbol as INamedTypeSymbol)?.Arity ?? 0;
-                            result.Add(new(typeName, GetNameWithoutGeneric(typeName), typeSymbol.ContainsGenericParameters, arity));
+                            result.Add(typeSymbol.GetTypeData());
+                        }
+                    }
+                    return result.ToImmutableEquatableArray();
+                }
+            }
+
+            return [];
+        }
+
+        /// <summary>
+        /// Gets an array of decorator type data from a named argument, including constructor parameters.
+        /// </summary>
+        /// <param name="name">The name of the argument.</param>
+        public ImmutableEquatableArray<TypeData> GetDecoratorTypeArrayArgument(string name)
+        {
+            foreach(var namedArg in attributeData.NamedArguments)
+            {
+                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
+                {
+                    List<TypeData> result = [];
+                    foreach(var value in namedArg.Value.Values)
+                    {
+                        if(value.Value is INamedTypeSymbol typeSymbol)
+                        {
+                            result.Add(typeSymbol.GetTypeData(true));
                         }
                     }
                     return result.ToImmutableEquatableArray();

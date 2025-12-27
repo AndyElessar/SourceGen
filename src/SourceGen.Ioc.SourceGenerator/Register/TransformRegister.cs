@@ -35,7 +35,8 @@ partial class RegisterSourceGenerator
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
-        var serviceTypes = attributeData.GetTypeArrayArgument("ServiceTypes");
+        var serviceTypes = attributeData.GetServiceTypes();
+        var decorators = attributeData.GetDecorators();
 
         var keyType = attributeData.GetNamedArgument<int>("KeyType", 0);
         string? key = null;
@@ -84,7 +85,8 @@ partial class RegisterSourceGenerator
             hasExplicitLifetime,
             hasExplicitRegisterAllInterfaces,
             hasExplicitRegisterAllBaseClasses,
-            validOpenGenericServiceTypes);
+            validOpenGenericServiceTypes,
+            decorators);
     }
 
     /// <summary>

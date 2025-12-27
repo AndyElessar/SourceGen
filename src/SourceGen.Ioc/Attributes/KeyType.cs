@@ -11,7 +11,7 @@ public enum KeyType
     Value = 0,
 
     /// <summary>
-    /// Treat Key as C# code string.
+    /// Treat Key as C# code snippet.
     /// </summary>
     Csharp = 1,
 }

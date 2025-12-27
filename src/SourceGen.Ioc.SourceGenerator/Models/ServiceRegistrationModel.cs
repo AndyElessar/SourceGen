@@ -11,6 +11,8 @@
 /// <param name="Key">The key for keyed registration, or null for non-keyed.</param>
 /// <param name="KeyType">How to interpret the key (Value or Csharp code).</param>
 /// <param name="IsOpenGeneric">Whether this is an open generic registration.</param>
+/// <param name="Decorators">The decorator types to apply, in order from outermost to innermost.</param>
+/// <param name="AllServiceTypes">All service types (interfaces and base classes) that the implementation type can be assigned to. Used to determine which decorator constructor parameters should receive the decorated instance.</param>
 internal sealed record class ServiceRegistrationModel(
     string ServiceType,
     int ServiceTypeArity,
@@ -19,4 +21,6 @@ internal sealed record class ServiceRegistrationModel(
     ServiceLifetime Lifetime,
     string? Key,
     int KeyType,
-    bool IsOpenGeneric);
+    bool IsOpenGeneric,
+    ImmutableEquatableArray<TypeData> Decorators,
+    ImmutableEquatableArray<string> AllServiceTypes);

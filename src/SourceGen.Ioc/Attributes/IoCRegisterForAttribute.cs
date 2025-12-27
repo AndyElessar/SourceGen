@@ -7,12 +7,12 @@ namespace SourceGen.Ioc;
 /// Specifies <paramref name="targetType"/> should be registered in the dependency injection container.
 /// </summary>
 /// <param name="targetType">Specifies which type should be registered in the dependency injection container.</param>
-[AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
 [Conditional("NEVER")]
 public sealed class IoCRegisterForAttribute(Type targetType) : Attribute
 {
     /// <summary>
-    /// Specifies which type should be registered in the dependency injection container.
+    /// Gets the type that should be registered in the dependency injection container.
     /// </summary>
     public Type TargetType { get; } = targetType;
 
@@ -33,4 +33,7 @@ public sealed class IoCRegisterForAttribute(Type targetType) : Attribute
 
     /// <inheritdoc cref="IoCRegisterAttribute.Key"/>
     public object? Key { get; init; }
+
+    /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
+    public Type[] Decorators { get; init; } = [];
 }

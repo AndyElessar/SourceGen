@@ -24,14 +24,16 @@ partial class RegisterSourceGenerator
 
         var (_, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (_, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
-        var serviceTypes = attributeData.GetTypeArrayArgument("ServiceTypes");
+        var serviceTypes = attributeData.GetServiceTypes();
         var typeData = targetServiceType.GetTypeData();
+        var decorators = attributeData.GetDecorators();
 
         return new DefaultSettingsModel(
             typeData,
             (ServiceLifetime)lifetime,
             registerAllInterfaces,
             registerAllBaseClasses,
-            serviceTypes);
+            serviceTypes,
+            decorators);
     }
 }

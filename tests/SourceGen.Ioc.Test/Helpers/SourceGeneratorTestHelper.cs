@@ -32,6 +32,7 @@ public static class SourceGeneratorTestHelper
             public Type[] ServiceTypes { get; init; } = [];
             public KeyType KeyType { get; init; } = KeyType.Value;
             public object? Key { get; init; }
+            public Type[] Decorators { get; init; } = [];
         }
 
         [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
@@ -44,6 +45,7 @@ public static class SourceGeneratorTestHelper
             public Type[] ServiceTypes { get; init; } = [];
             public KeyType KeyType { get; init; } = KeyType.Value;
             public object? Key { get; init; }
+            public Type[] Decorators { get; init; } = [];
         }
 
         [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
@@ -54,6 +56,7 @@ public static class SourceGeneratorTestHelper
             public bool RegisterAllInterfaces { get; init; }
             public bool RegisterAllBaseClasses { get; init; }
             public Type[] ServiceTypes { get; init; } = [];
+            public Type[] Decorators { get; init; } = [];
         }
         """;
 

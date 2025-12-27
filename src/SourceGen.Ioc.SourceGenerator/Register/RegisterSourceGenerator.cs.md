@@ -17,12 +17,16 @@ This source generator automatically generates extension methods for registering 
    - Project name (from compilation options)
 
 4. When `KeyType` is `KeyType.Value`, take `Key` as value, when `KeyType` is `KeyType.Csharp`, take `Key` as C# code snippet.
-   - primitive types (int, string, bool, etc.) should be represented as itself (e.g., `42`, `"myString"`, `true`)
-   - enum types should be represented as `EnumType.EnumValue`
+   - `KeyType.Value`:
+      - Primitive types (int, string, bool, etc.) should be represented as itself (e.g., `42`, `"myString"`, `true`)
+      - Enum types should be represented as `EnumType.EnumValue`
+   - `KeyType.Csharp`:
+      - String should be represented literal (e.g. `"MyClass.MyStaticField"` => `Add*Key(MyClass.MyStaticField)`)
+      - Can use `nameof()` for compile safety (e.g. `nameof(MyClass.MyStaticField)` => `Add*Key(MyClass.MyStaticField)`)
 
 5. When Service type is generic type and Implementation type is closed type, make sure to register with closed generic type.
 
-6. When multiple default settings are found on an implementation type, use settings:
+6. When multiple default settings are found on an implementation type, use first setting by order:
     1. The one directly on the implementation type
     2. The one on the closest base class
     3. The one on the first interface in `RegistrationData.AllInterfaces`
@@ -46,3 +50,125 @@ public static class ServiceCollectionExtensions
 	}
 }
 ```
+
+7. When `Decorators` is not empty, generate register code to handle decortor pattern:
+   ```csharp
+   #region Define:
+   public interface IMyService;
+
+   [IocRegister(
+      Lifetime = ServiceLifetime.Singleton,
+      ServiceTypes = [typeof(IMyService)],
+      Decorators = [typeof(MyServiceDecorator), typeof(MyServiceDecorator2)])]
+   public class MyService(ILogger<MyService> logger) : IMyService;
+
+   // IocRegister attribute on decorator is optional
+   [IocRegister]
+   public class MyServiceDecorator(ILogger<MyServiceDecorator> logger, IMyService myservice) : IMyService
+   {
+      private readonly IMyService myservice = myservice;
+      private readonly ILogger<MyServiceDecorator> logger = logger;
+   }
+
+   public class MyServiceDecorator2(ILogger<MyServiceDecorator2> logger, IMyService myservice) : IMyService
+   {
+      private readonly IMyService myservice = myservice;
+      private readonly ILogger<MyServiceDecorator2> logger = logger;
+   }
+   #endregion
+
+   #region Generate:
+   service.AddSingleton<MyService>();
+   service.AddSingleton<IMyService>((IServiceProvider sp) =>
+   {
+      var s0 = sp.GetRequiredService<MyService>();
+      var s1_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator2>>();
+      var s1 = new MyServiceDecorator2(s1_p1, s0);
+      var s2_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator>>();
+      var s2 = new MyServiceDecorator(s2_p1, s1);
+      return s2;
+   });
+   #endregion
+
+   #region Define:
+   public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+   [IoCRegisterDefaultSettings(
+      typeof(IRequestHandler<,>),
+      ServiceLifetime.Singleton,
+      ServiceTypes = [typeof(IGenericTest<,>)],
+      Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
+      )]
+   public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+   {
+      TResponse Handle(TRequest request);
+   }
+
+   public sealed record TestRequest(int Key) : IRequest<TestRequest, List<string>>;
+
+   [IoCRegister]
+   internal sealed class TestHandler : IRequestHandler<TestRequest, List<string>>
+   {
+      public List<string> Handle(TestRequest request)
+      {
+         return [.. Enumerable.Range(1, request.Key).Select(i => $"Value {i}")];
+      }
+   }
+
+   public interface ILogger<T>
+   {
+      public void Log(string msg);
+   }
+   [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+   public sealed class Logger<T> : ILogger<T>
+   {
+      public void Log(string msg)
+      {
+         Console.WriteLine(msg);
+      }
+   }
+
+   internal sealed class HandlerDecorator1<TRequest, TResponse>(
+      IRequestHandler<TRequest, TResponse> inner,
+      ILogger<HandlerDecorator1<TRequest, TResponse>> logger
+   ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+   {
+      private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
+
+      public TResponse Handle(TRequest request)
+      {
+         logger.Log(request.ToString() ?? string.Empty);
+         Console.WriteLine("HandlerDecorator1: Before handling request");
+         var response = inner.Handle(request);
+         Console.WriteLine("HandlerDecorator1: After handling request");
+         return response;
+      }
+   }
+
+   internal sealed class HandlerDecorator2<TRequest, TResponse>(
+      IRequestHandler<TRequest, TResponse> inner
+   ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+   {
+      public TResponse Handle(TRequest request)
+      {
+         Console.WriteLine("HandlerDecorator2: Before handling request");
+         var response = inner.Handle(request);
+         Console.WriteLine("HandlerDecorator2: After handling request");
+         return response;
+      }
+   }
+   #endregion
+
+   #region Generate:
+   services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) =>
+   {
+      var s0 = sp.GetRequiredService<TestHandler>();
+
+      var s1 = new HandlerDecorator2<TestRequest, List<string>>(s0);
+
+      var s2_p1 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest, List<string>>>>();
+      var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p1);
+      return s2;
+   });
+   #endregion
+   ```

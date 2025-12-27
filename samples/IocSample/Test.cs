@@ -1,4 +1,15 @@
-﻿namespace IocSample;
+﻿[assembly: IoCRegisterDefaultSettings(typeof(ITest2), ServiceLifetime.Singleton)]
+
+[assembly: IoCRegisterDefaultSettings(typeof(IGenericTest<>), ServiceLifetime.Scoped)]
+
+[assembly: IoCRegisterFor(typeof(TestFor), Lifetime = ServiceLifetime.Transient, RegisterAllInterfaces = true)]
+
+[assembly: IoCRegisterDefaultSettings(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+
+[assembly: IoCRegisterFor(typeof(TestInterfaces), Lifetime = ServiceLifetime.Transient)]
+//[assembly: IoCRegisterFor(typeof(TestClosed2), Lifetime = ServiceLifetime.Singleton)]
+
+namespace IocSample;
 
 public interface ITest1;
 
@@ -42,17 +53,17 @@ internal sealed class TestKeyTypeCsharp : ITest2;
 internal sealed class TestKeyTypeCsharp2 : ITest2;
 
 
-public interface IGenericTest<T> : ITest1, ITest2;
+public interface IGenericTest<T>;
 
 [IoCRegister]
 public sealed class GenericTest<T> : IGenericTest<T>;
 
-public interface IGenericTest<T1, T2> : ITest1, ITest2;
+public interface IGenericTest<T1, T2>;
 
 [IoCRegister]
 public sealed class GenericTest<T1, T2> : IGenericTest<T1, T2>;
 
-[IoCRegister]
+[IoCRegister/*(ServiceTypes = [typeof(ITest2)])*/]
 public sealed class ClosedGenericTest : IGenericTest<int>;
 
 [IoCRegister]
@@ -61,14 +72,14 @@ public sealed class ClosedGenericTest2 : IGenericTest<int, string>;
 public sealed class TestFor : IGenericTest<string>, ITest2;
 
 //[IoCRegister(Lifetime = ServiceLifetime.Transient)]
-public sealed class TestInterfaces(TestClosed2 testClosed2) : IGenericTest<decimal>, ITest2
+public sealed class TestInterfaces/*(TestClosed2 testClosed2)*/ : IGenericTest<decimal>, ITest2
 {
-    private readonly TestClosed2 _testClosed2 = testClosed2;
+    //private readonly TestClosed2 _testClosed2 = testClosed2;
 }
 
 public interface IGenericTest2<T>;
 
-[IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+[IoCRegister(Lifetime = ServiceLifetime.Transient)]
 public sealed class TestClosed2(TestInterfaces testInterfaces) : IGenericTest<IGenericTest2<int>>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;

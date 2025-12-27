@@ -1,4 +1,6 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Register;
+﻿using System.Text;
+
+namespace SourceGen.Ioc.SourceGenerator.Register;
 
 /// <summary>
 /// Generates code to register types marked with SourceGen.Ioc.IoCRegisterAttribute/SourceGen.Ioc.IoCRegisterForAttribute
@@ -138,7 +140,15 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
     {
         var lifetime = registration.Lifetime.Name;
 
-        if(registration.IsOpenGeneric)
+        // Check if this registration has decorators and is not the implementation type itself
+        bool hasDecorators = registration.Decorators.Length > 0
+            && registration.ServiceType != registration.ImplementationType;
+
+        if(hasDecorators)
+        {
+            WriteDecoratorRegistration(writer, registration, lifetime);
+        }
+        else if(registration.IsOpenGeneric)
         {
             // Open generic registration requires typeof() syntax
             var serviceTypeOf = ConvertToTypeOf(registration.ServiceType, registration.ServiceTypeArity);
@@ -182,5 +192,314 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         var baseName = typeName[..startIndex];
         var commas = arity > 1 ? new string(',', arity - 1) : "";
         return $"typeof({baseName}<{commas}>)";
+    }
+
+    /// <summary>
+    /// Writes decorator pattern registration code.
+    /// </summary>
+    /// <remarks>
+    /// Generates code like:
+    /// <code>
+    /// services.AddSingleton&lt;IMyService&gt;((IServiceProvider sp) =>
+    /// {
+    ///     var s0 = sp.GetRequiredService&lt;MyService&gt;();
+    ///     var s1_p0 = sp.GetRequiredService&lt;ILogger&lt;MyServiceDecorator2&gt;&gt;();
+    ///     var s1 = new MyServiceDecorator2(s1_p0, s0);
+    ///     var s2_p0 = sp.GetRequiredService&lt;ILogger&lt;MyServiceDecorator&gt;&gt;();
+    ///     var s2 = new MyServiceDecorator(s2_p0, s1);
+    ///     return s2;
+    /// });
+    /// </code>
+    /// For open generic decorators, falls back to ActivatorUtilities.CreateInstance.
+    /// </remarks>
+    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    {
+        var decorators = registration.Decorators;
+        // Decorators array is in order from outermost to innermost,
+        // so we need to reverse it for building the chain from inner to outer
+        var reversedDecorators = decorators.Reverse().ToArray();
+
+        // Extract generic arguments from the service type if present (for generic decorators)
+        string? serviceTypeGenericArgs = ExtractGenericArguments(registration.ServiceType);
+
+        // Build the factory lambda
+        if(registration.Key is not null)
+        {
+            // Keyed registration with decorators
+            writer.WriteLine($"services.AddKeyed{lifetime}<{registration.ServiceType}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
+        }
+        else
+        {
+            // Non-keyed registration with decorators
+            writer.WriteLine($"services.Add{lifetime}<{registration.ServiceType}>((global::System.IServiceProvider sp) =>");
+        }
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // s0 = implementation instance
+        if(registration.Key is not null)
+        {
+            writer.WriteLine($"var s0 = sp.GetRequiredKeyedService<{registration.ImplementationType}>(key);");
+        }
+        else
+        {
+            writer.WriteLine($"var s0 = sp.GetRequiredService<{registration.ImplementationType}>();");
+        }
+
+        // Build decorator chain
+        for(int i = 0; i < reversedDecorators.Length; i++)
+        {
+            var decorator = reversedDecorators[i];
+            var prevVar = $"s{i}";
+            var currentVar = $"s{i + 1}";
+
+            // If the decorator is an open generic, substitute with the service type's generic arguments
+            var decoratorTypeName = GetClosedDecoratorTypeName(decorator, serviceTypeGenericArgs);
+
+            // Get constructor parameters and generate service resolution for each
+            var constructorParams = decorator.ConstructorParameters ?? [];
+            if(constructorParams.Length == 0)
+            {
+                // No constructor info available, use ActivatorUtilities as fallback
+                writer.WriteLine($"var {currentVar} = global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{decoratorTypeName}>(sp, {prevVar});");
+            }
+            else
+            {
+                // Resolve each non-service parameter from IServiceProvider
+                var paramVars = new List<string>(constructorParams.Length);
+                int paramIndex = 0;
+                foreach(var param in constructorParams)
+                {
+                    // Check if this parameter is the service type being decorated
+                    if(IsServiceTypeParameter(param.Type, registration.AllServiceTypes))
+                    {
+                        // This is the decorated service, use the previous variable
+                        paramVars.Add(prevVar);
+                    }
+                    else
+                    {
+                        // This is a dependency, resolve it from service provider
+                        // For open generic decorators, substitute type parameters with actual generic arguments
+                        var paramTypeName = decorator.IsOpenGeneric && serviceTypeGenericArgs != null
+                            ? SubstituteGenericArguments(param.Type, decorator, serviceTypeGenericArgs)
+                            : param.Type.Name;
+                        var paramVar = $"{currentVar}_p{paramIndex}";
+                        writer.WriteLine($"var {paramVar} = sp.GetRequiredService<{paramTypeName}>();");
+                        paramVars.Add(paramVar);
+                        paramIndex++;
+                    }
+                }
+
+                // Create the decorator instance with resolved parameters
+                var paramList = string.Join(", ", paramVars);
+                writer.WriteLine($"var {currentVar} = new {decoratorTypeName}({paramList});");
+            }
+        }
+
+        // Return the outermost decorator
+        writer.WriteLine($"return s{reversedDecorators.Length};");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
+    }
+
+    /// <summary>
+    /// Extracts generic type arguments from a closed generic type name.
+    /// </summary>
+    /// <param name="typeName">The fully qualified type name, e.g., "global::Namespace.IHandler&lt;TRequest, TResponse&gt;"</param>
+    /// <returns>The generic arguments string (e.g., "TRequest, TResponse"), or null if not generic.</returns>
+    private static string? ExtractGenericArguments(string typeName)
+    {
+        var startIndex = typeName.IndexOf('<');
+        if(startIndex < 0)
+        {
+            return null;
+        }
+
+        var endIndex = typeName.LastIndexOf('>');
+        if(endIndex <= startIndex)
+        {
+            return null;
+        }
+
+        return typeName[(startIndex + 1)..endIndex];
+    }
+
+    /// <summary>
+    /// Gets the closed decorator type name by substituting generic arguments if the decorator is an open generic.
+    /// </summary>
+    /// <param name="decorator">The decorator type data.</param>
+    /// <param name="genericArgs">The generic arguments from the service type.</param>
+    /// <returns>The closed decorator type name.</returns>
+    private static string GetClosedDecoratorTypeName(TypeData decorator, string? genericArgs)
+    {
+        // If decorator is not open generic, return as-is
+        if(!decorator.IsOpenGeneric)
+        {
+            return decorator.Name;
+        }
+
+        // If no generic arguments available from service type, return as-is (this shouldn't happen in valid scenarios)
+        if(genericArgs is null)
+        {
+            return decorator.Name;
+        }
+
+        // Replace the open generic parameters with the service type's generic arguments
+        // e.g., "global::Namespace.Decorator<,>" -> "global::Namespace.Decorator<TRequest, TResponse>"
+        return $"{decorator.NameWithoutGeneric}<{genericArgs}>";
+    }
+
+    /// <summary>
+    /// Substitutes generic type parameters in a parameter type with actual generic arguments.
+    /// </summary>
+    /// <param name="paramType">The parameter type data that may contain type parameters.</param>
+    /// <param name="decorator">The decorator type data containing type parameter information.</param>
+    /// <param name="genericArgs">The actual generic arguments to substitute.</param>
+    /// <returns>The type name with substituted generic arguments.</returns>
+    private static string SubstituteGenericArguments(TypeData paramType, TypeData decorator, string genericArgs)
+    {
+        // Use pre-extracted type parameter names from TypeData
+        var typeParams = decorator.TypeParameterNames;
+        if(typeParams is null || typeParams.Length == 0)
+        {
+            return paramType.Name;
+        }
+
+        // Parse the actual generic arguments (e.g., "TestRequest, List<string>")
+        var actualArgs = ParseGenericArguments(genericArgs);
+
+        if(actualArgs.Count != typeParams.Length)
+        {
+            // Mismatch in arity, return original
+            return paramType.Name;
+        }
+
+        // Build replacement map and apply substitutions
+        var result = paramType.Name;
+        for(int i = 0; i < typeParams.Length; i++)
+        {
+            // Replace type parameter with actual argument
+            // Need to be careful to replace whole type names, not partial matches
+            result = ReplaceTypeParameter(result, typeParams[i], actualArgs[i]);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Parses a comma-separated list of generic arguments, handling nested generics.
+    /// </summary>
+    private static List<string> ParseGenericArguments(string genericArgs)
+    {
+        var result = new List<string>();
+        int depth = 0;
+        int start = 0;
+
+        for(int i = 0; i < genericArgs.Length; i++)
+        {
+            char c = genericArgs[i];
+            if(c == '<')
+            {
+                depth++;
+            }
+            else if(c == '>')
+            {
+                depth--;
+            }
+            else if(c == ',' && depth == 0)
+            {
+                result.Add(genericArgs[start..i].Trim());
+                start = i + 1;
+            }
+        }
+
+        // Add the last argument
+        if(start < genericArgs.Length)
+        {
+            result.Add(genericArgs[start..].Trim());
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Replaces a type parameter with an actual type argument in a type name.
+    /// </summary>
+    private static string ReplaceTypeParameter(string typeName, string typeParam, string actualArg)
+    {
+        // We need to replace the type parameter as a whole word, not as a substring
+        // For example, replacing "T" should not affect "TResponse"
+
+        StringBuilder result = new(typeName.Length);
+        int i = 0;
+        while(i < typeName.Length)
+        {
+            // Check if we found the type parameter at this position
+            if(i + typeParam.Length <= typeName.Length &&
+               typeName.Substring(i, typeParam.Length) == typeParam)
+            {
+                // Check if it's a whole word (not part of a larger identifier)
+                // Identifiers can contain letters, digits, and underscores
+                bool isStart = i == 0 || !IsIdentifierChar(typeName[i - 1]);
+                bool isEnd = i + typeParam.Length == typeName.Length ||
+                             !IsIdentifierChar(typeName[i + typeParam.Length]);
+
+                if(isStart && isEnd)
+                {
+                    result.Append(actualArg);
+                    i += typeParam.Length;
+                    continue;
+                }
+            }
+
+            result.Append(typeName[i]);
+            i++;
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Checks if a character can be part of an identifier.
+    /// </summary>
+    private static bool IsIdentifierChar(in char c)
+    {
+        return char.IsLetterOrDigit(c) || c == '_';
+    }
+
+    /// <summary>
+    /// Checks if a parameter type matches any of the service types that the implementation can be assigned to.
+    /// This is used to determine if a decorator constructor parameter should receive the decorated instance.
+    /// </summary>
+    /// <param name="paramType">The parameter type data.</param>
+    /// <param name="allServiceTypes">All service type names that the implementation can be assigned to.</param>
+    /// <returns>True if the parameter is one of the service types.</returns>
+    private static bool IsServiceTypeParameter(TypeData paramType, ImmutableEquatableArray<string> allServiceTypes)
+    {
+        foreach(var serviceTypeName in allServiceTypes)
+        {
+            // Direct match
+            if(paramType.Name.Equals(serviceTypeName, StringComparison.Ordinal)
+                || paramType.NameWithoutGeneric.Equals(serviceTypeName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            // For open generic service types, extract the base name for comparison
+            // e.g., "global::Ns.IHandler<TRequest, TResponse>" should match parameter "global::Ns.IHandler<TRequest, TResponse>"
+            int serviceAngleIndex = serviceTypeName.IndexOf('<');
+            if(serviceAngleIndex > 0)
+            {
+                var serviceNameWithoutGeneric = serviceTypeName.AsSpan()[..serviceAngleIndex];
+                if(paramType.NameWithoutGeneric.AsSpan().Equals(serviceNameWithoutGeneric, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

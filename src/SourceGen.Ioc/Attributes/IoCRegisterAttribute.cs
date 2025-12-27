@@ -16,33 +16,44 @@ namespace SourceGen.Ioc;
 public sealed class IoCRegisterAttribute : Attribute
 {
     /// <summary>
-    /// The lifetime with which the service should be registered in the dependency injection container.
+    /// Gets the lifetime with which the service should be registered in the dependency injection container.
     /// Determines the scope of the service instance.
     /// </summary>
     public ServiceLifetime Lifetime { get; init; }
 
     /// <summary>
-    /// Specifies whether to register all interfaces implemented.
+    /// Gets a value indicating whether to register all interfaces implemented.
     /// </summary>
     public bool RegisterAllInterfaces { get; init; }
 
     /// <summary>
-    /// Specifies whether to register all base classes inherited.
+    /// Gets a value indicating whether to register all base classes inherited.
     /// </summary>
     public bool RegisterAllBaseClasses { get; init; }
 
     /// <summary>
-    /// Service types to register the class as. If none are specified, the class will be registered as itself.
+    /// Gets the collection of service types to register the class as.
     /// </summary>
     public Type[] ServiceTypes { get; init; } = [];
 
     /// <summary>
-    /// Specifies how to interpret <see cref="Key"/>.
+    /// Gets a value specifying how to interpret <see cref="Key"/>.
     /// </summary>
     public KeyType KeyType { get; init; } = KeyType.Value;
 
     /// <summary>
-    /// Specifies a key for keyed registrations. The interpretation of the key depends on the <see cref="KeyType"/>.
+    /// Gets a key for keyed registrations. The interpretation of the key depends on the <see cref="KeyType"/>.<br/>
+    /// When <see cref="KeyType"/> is <see cref="KeyType.Value"/>, this should be a primitive value, like <see cref="int"/>, <see cref="string"/> or <see langword="enum"/>.<br/>
+    /// When <see cref="KeyType"/> is <see cref="KeyType.Csharp"/>, this should be a C# code snippet. You can use <see langword="nameof"/> for compile time safety.
     /// </summary>
     public object? Key { get; init; }
+
+    /// <summary>
+    /// Gets the collection of decorator types to apply to the target type.
+    /// </summary>
+    /// <remarks>
+    /// Each type in the collection should represent a decorator that implements service types.<br/>
+    /// The order of decorators in the array determines the order of execute (which means the first decorator in the array is the outermost).
+    /// </remarks>
+    public Type[] Decorators { get; init; } = [];
 }

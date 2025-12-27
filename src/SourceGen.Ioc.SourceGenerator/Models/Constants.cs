@@ -34,5 +34,11 @@ internal static class Constants
 
         public (bool HasArg, bool Value) TryGetRegisterAllBaseClasses() =>
             attribute.TryGetNamedArgument<bool>("RegisterAllBaseClasses", false);
+
+        public ImmutableEquatableArray<TypeData> GetServiceTypes() =>
+            attribute.GetTypeArrayArgument("ServiceTypes");
+
+        public ImmutableEquatableArray<TypeData> GetDecorators() =>
+            attribute.GetDecoratorTypeArrayArgument("Decorators");
     }
 }
