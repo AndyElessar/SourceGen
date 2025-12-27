@@ -84,10 +84,11 @@ internal static class RoslynExtensions
 
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
+            bool extractHierarchy = false,
             HashSet<INamedTypeSymbol>? visited = null)
         {
             if(typeSymbol is INamedTypeSymbol namedTypeSymbol)
-                return namedTypeSymbol.GetTypeData(extractConstructorParams, visited);
+                return namedTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
 
             var typeName = typeSymbol.FullyQualifiedName;
             return new TypeData(
@@ -107,8 +108,10 @@ internal static class RoslynExtensions
         /// Gets the type data for this type symbol.
         /// </summary>
         /// <param name="extractConstructorParams">Whether to extract constructor parameters recursively.</param>
+        /// <param name="extractHierarchy">Whether to extract all interfaces and base classes.</param>
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
+            bool extractHierarchy = false,
             HashSet<INamedTypeSymbol>? visited = null)
         {
             visited = extractConstructorParams ? new(SymbolEqualityComparer.Default) : null;
@@ -153,10 +156,28 @@ internal static class RoslynExtensions
             int arity = typeSymbol.Arity;
             bool isNestedOpenGeneric = typeSymbol.IsNestedOpenGeneric;
 
+            // Extract generic arguments for closed generic types
+            ImmutableEquatableArray<string>? genericArguments = null;
+            if(typeSymbol.IsGenericType && !typeSymbol.ContainsGenericParameters && typeSymbol.TypeArguments.Length > 0)
+            {
+                genericArguments = typeSymbol.TypeArguments
+                    .Select(arg => arg.FullyQualifiedName)
+                    .ToImmutableEquatableArray();
+            }
+
             ImmutableEquatableArray<ConstructorParameterData>? constructorParams = null;
             if(extractConstructorParams && visited != null)
             {
                 constructorParams = typeSymbol.ExtractConstructorParameters(visited);
+            }
+
+            // Extract hierarchy (interfaces and base classes) if requested
+            ImmutableEquatableArray<TypeData>? allInterfaces = null;
+            ImmutableEquatableArray<TypeData>? allBaseClasses = null;
+            if(extractHierarchy)
+            {
+                allInterfaces = typeSymbol.GetAllInterfaces();
+                allBaseClasses = typeSymbol.GetAllBaseClasses();
             }
 
             return new TypeData(
@@ -166,7 +187,10 @@ internal static class RoslynExtensions
                 arity,
                 isNestedOpenGeneric,
                 typeParamNamesArray,
-                constructorParams);
+                genericArguments,
+                constructorParams,
+                allInterfaces,
+                allBaseClasses);
         }
 
         /// <summary>
@@ -308,7 +332,7 @@ internal static class RoslynExtensions
 
                 // Get TypeData using the unified method with recursive constructor extraction
                 var paramTypeData = paramType is INamedTypeSymbol namedParamType
-                    ? namedParamType.GetTypeData(true, visited)
+                    ? namedParamType.GetTypeData(extractConstructorParams: true, visited: visited)
                     : paramType.GetTypeData();
 
                 parameters.Add(new ConstructorParameterData(param.Name, paramTypeData));
@@ -382,7 +406,7 @@ internal static class RoslynExtensions
         /// <summary>
         /// Gets an array of type symbols from a named argument.
         /// </summary>
-        public ImmutableEquatableArray<TypeData> GetTypeArrayArgument(string name)
+        public ImmutableEquatableArray<TypeData> GetTypeArrayArgument(string name, bool extractConstructorParams = false)
         {
             foreach(var namedArg in attributeData.NamedArguments)
             {
@@ -393,32 +417,7 @@ internal static class RoslynExtensions
                     {
                         if(value.Value is ITypeSymbol typeSymbol)
                         {
-                            result.Add(typeSymbol.GetTypeData());
-                        }
-                    }
-                    return result.ToImmutableEquatableArray();
-                }
-            }
-
-            return [];
-        }
-
-        /// <summary>
-        /// Gets an array of decorator type data from a named argument, including constructor parameters.
-        /// </summary>
-        /// <param name="name">The name of the argument.</param>
-        public ImmutableEquatableArray<TypeData> GetDecoratorTypeArrayArgument(string name)
-        {
-            foreach(var namedArg in attributeData.NamedArguments)
-            {
-                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
-                {
-                    List<TypeData> result = [];
-                    foreach(var value in namedArg.Value.Values)
-                    {
-                        if(value.Value is INamedTypeSymbol typeSymbol)
-                        {
-                            result.Add(typeSymbol.GetTypeData(true));
+                            result.Add(typeSymbol.GetTypeData(extractConstructorParams));
                         }
                     }
                     return result.ToImmutableEquatableArray();

@@ -24,6 +24,20 @@ internal sealed class TestHandler : IRequestHandler<TestRequest, List<string>>
     }
 }
 
+public sealed record TestRequest2(string Msg) : IRequest<TestRequest2, List<string>>;
+
+[IoCRegister]
+internal sealed class TestRequest2Handler(ILogger<TestRequest2Handler> logger) : IRequestHandler<TestRequest2, List<string>>
+{
+    private readonly ILogger<TestRequest2Handler> logger = logger;
+
+    public List<string> Handle(TestRequest2 request)
+    {
+        logger.Log(nameof(TestRequest2Handler));
+        return [request.Msg, request.Msg, request.Msg];
+    }
+}
+
 public interface ILogger<T>
 {
     public void Log(string msg);

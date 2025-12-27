@@ -31,7 +31,7 @@ partial class RegisterSourceGenerator
 
     private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData)
     {
-        var implementationType = typeSymbol.GetTypeData();
+        var implementationType = typeSymbol.GetTypeData(extractHierarchy: true);
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
@@ -66,11 +66,10 @@ partial class RegisterSourceGenerator
             }
         }
 
-        var allInterfaces = typeSymbol.GetAllInterfaces();
-        var allBaseClasses = typeSymbol.GetAllBaseClasses();
-
         // Build set of valid open generic service types (non-nested) for quick lookup
-        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(allInterfaces, allBaseClasses);
+        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
+            implementationType.AllInterfaces ?? [],
+            implementationType.AllBaseClasses ?? []);
 
         return new RegistrationData(
             implementationType,
@@ -80,8 +79,6 @@ partial class RegisterSourceGenerator
             serviceTypes,
             key,
             keyType,
-            allInterfaces,
-            allBaseClasses,
             hasExplicitLifetime,
             hasExplicitRegisterAllInterfaces,
             hasExplicitRegisterAllBaseClasses,

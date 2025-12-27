@@ -39,6 +39,6 @@ internal static class Constants
             attribute.GetTypeArrayArgument("ServiceTypes");
 
         public ImmutableEquatableArray<TypeData> GetDecorators() =>
-            attribute.GetDecoratorTypeArrayArgument("Decorators");
+            attribute.GetTypeArrayArgument("Decorators", true);
     }
 }
