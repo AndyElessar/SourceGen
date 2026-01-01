@@ -2,12 +2,21 @@
 
 partial class RegisterSourceGenerator
 {
-    private static ImmutableEquatableArray<ServiceRegistrationModel> GenerateServiceRegistrations(
+    /// <summary>
+    /// Key for the default registration method (services not excluded from default).
+    /// </summary>
+    private const string DefaultMethodKey = "";
+
+    /// <summary>
+    /// Generates service registrations grouped by method name.
+    /// The dictionary key is the tag name (empty string for default method).
+    /// </summary>
+    private static ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> GenerateServiceRegistrations(
         in ImmutableArray<RegistrationData> registrations,
         DefaultSettingsMap defaultSettings,
         CancellationToken ct)
     {
-        var result = new List<ServiceRegistrationModel>((int)(registrations.Length * 1.5));
+        var methodGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
 
         // Reusable buffers to reduce allocations
         var matchedDefaultIndices = new HashSet<int>();
@@ -44,21 +53,36 @@ partial class RegisterSourceGenerator
                 registerAllBaseClasses,
                 serviceTypesToRegister);
 
-            // Determine decorators (registration's if present, otherwise default's)
             var decorators = registration.Decorators.Length > 0
                 ? registration.Decorators
                 : (matchingDefault?.Decorators ?? registration.Decorators);
 
-            // Create registrations for each valid service type
-            CreateRegistrations(
+            var tags = MergeTags(registration.Tags, matchingDefault?.Tags);
+
+            var excludeFromDefault = registration.Tags.Length > 0 || registration.ExcludeFromDefault
+                ? registration.ExcludeFromDefault
+                : (matchingDefault?.ExcludeFromDefault ?? false);
+
+            // Build service type names once per registration
+            var serviceTypeNames = BuildServiceTypeNameSet(registration.ImplementationType);
+
+            // Create registrations for each valid service type and add to appropriate groups
+            CreateRegistrationsGrouped(
                 registration,
                 serviceTypesToRegister,
                 lifetime,
                 decorators,
-                result);
+                tags,
+                excludeFromDefault,
+                serviceTypeNames,
+                methodGroups);
         }
 
-        return result.ToImmutableEquatableArray();
+        return methodGroups
+            .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
+            .ToImmutableEquatableDictionary(
+                static kvp => kvp.Key,
+                static kvp => kvp.Value.ToImmutableEquatableArray());
     }
 
     /// <summary>
@@ -74,7 +98,6 @@ partial class RegisterSourceGenerator
     {
         int bestDefaultIndex = -1;
 
-        // Process base classes first, then interfaces
         foreach(var candidate in baseClasses)
         {
             TryMatchDefaultSettings(candidate, defaultSettings, matchedDefaultIndices, matchedServiceTypes, ref bestDefaultIndex);
@@ -140,6 +163,22 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
+    /// Merges tags from registration with tags from default settings.
+    /// Registration tags take precedence; if empty, uses default's tags.
+    /// </summary>
+    private static ImmutableEquatableArray<string> MergeTags(
+        ImmutableEquatableArray<string> registrationTags,
+        ImmutableEquatableArray<string>? defaultTags)
+    {
+        if(registrationTags.Length > 0)
+        {
+            return registrationTags;
+        }
+
+        return defaultTags ?? registrationTags;
+    }
+
+    /// <summary>
     /// Collects all service types to register based on settings.
     /// </summary>
     private static void CollectServiceTypes(
@@ -194,14 +233,17 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Creates service registrations for each valid service type.
+    /// Creates service registrations for each valid service type and groups them by method.
     /// </summary>
-    private static void CreateRegistrations(
+    private static void CreateRegistrationsGrouped(
         RegistrationData registration,
         HashSet<TypeData> serviceTypesToRegister,
         ServiceLifetime lifetime,
         ImmutableEquatableArray<TypeData> decorators,
-        List<ServiceRegistrationModel> result)
+        ImmutableEquatableArray<string> tags,
+        bool excludeFromDefault,
+        HashSet<string> serviceTypeNames,
+        Dictionary<string, List<ServiceRegistrationModel>> methodGroups)
     {
         var implementationType = registration.ImplementationType;
         var isOpenGenericImplementation = implementationType.IsOpenGeneric;
@@ -212,6 +254,13 @@ partial class RegisterSourceGenerator
             return;
         }
 
+        // key = serviceType's NameWithoutGeneric for generic, Name for non-generic
+        Dictionary<string, ImmutableEquatableArray<TypeData>>? decoratorFilterCache = null;
+        if(decorators.Length > 0)
+        {
+            decoratorFilterCache = new Dictionary<string, ImmutableEquatableArray<TypeData>>(StringComparer.Ordinal);
+        }
+
         foreach(var serviceType in serviceTypesToRegister)
         {
             if(!IsValidServiceType(serviceType, implementationType, isOpenGenericImplementation, registration.ValidOpenGenericServiceTypes))
@@ -219,67 +268,141 @@ partial class RegisterSourceGenerator
                 continue;
             }
 
-            // Filter decorators based on type parameter constraints for this specific service type
-            var filteredDecorators = FilterDecorators(decorators, serviceType);
+            // Filter decorators based on type parameter constraints for this specific service type (with caching)
+            var filteredDecorators = FilterDecorators(decorators, serviceType, decoratorFilterCache);
 
             // Process decorators (mark which constructor parameters are service parameters)
-            var processedDecorators = ProcessDecorators(filteredDecorators, implementationType);
+            var processedDecorators = ProcessDecorators(filteredDecorators, serviceTypeNames);
 
-            result.Add(new ServiceRegistrationModel(
+            var model = new ServiceRegistrationModel(
                 serviceType,
                 implementationType,
                 lifetime,
                 registration.Key,
                 registration.KeyType,
                 isOpenGenericImplementation,
-                processedDecorators));
+                processedDecorators);
+
+            // Add to default method if not excluded
+            if(!excludeFromDefault)
+            {
+                AddToMethodGroup(methodGroups, DefaultMethodKey, model);
+            }
+
+            // Add to each tag's method
+            foreach(var tag in tags)
+            {
+                AddToMethodGroup(methodGroups, tag, model);
+            }
         }
     }
 
     /// <summary>
-    /// Filters decorators based on their type parameter constraints.
-    /// Only decorators whose constraints are satisfied by the service type's generic arguments will be included.
+    /// Adds a registration model to the specified method group.
+    /// </summary>
+    private static void AddToMethodGroup(
+        Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
+        string methodKey,
+        ServiceRegistrationModel model)
+    {
+        if(!methodGroups.TryGetValue(methodKey, out var list))
+        {
+            list = [];
+            methodGroups[methodKey] = list;
+        }
+        list.Add(model);
+    }
+
+    /// <summary>
+    /// Filters decorators.
+    /// Uses the service type's generic base name as cache key for similar types.
     /// </summary>
     private static ImmutableEquatableArray<TypeData> FilterDecorators(
         ImmutableEquatableArray<TypeData> decorators,
-        TypeData serviceType)
+        TypeData serviceType,
+        Dictionary<string, ImmutableEquatableArray<TypeData>>? cache)
     {
         if(decorators.Length == 0)
         {
             return decorators;
         }
 
-        // If service type has no generic arguments, we can't validate constraints
-        // For non-generic service types, all decorators should pass through
+        // If service type has no generic arguments, all decorators pass through
         var serviceTypeParams = serviceType.TypeParameters;
         if(serviceTypeParams is null || serviceTypeParams.Length == 0)
         {
             return decorators;
         }
 
-        List<TypeData>? filteredList = null;
-        for(int i = 0; i < decorators.Length; i++)
+        // Use NameWithoutGeneric + arity as cache key for similar generic types
+        var cacheKey = $"{serviceType.NameWithoutGeneric}`{serviceType.GenericArity}";
+
+        // Check cache first
+        if(cache is not null && cache.TryGetValue(cacheKey, out var cached))
         {
-            var decorator = decorators[i];
-            if(SatisfiesConstraints(decorator, serviceTypeParams))
+            return cached;
+        }
+
+        var interfaceNameSet = BuildInterfaceNameSet(serviceTypeParams);
+
+        var result = FilterDecoratorsCore(decorators, serviceTypeParams, interfaceNameSet);
+
+        // Store in cache
+        cache?.Add(cacheKey, result);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a HashSet of interface names from all service type parameters for fast lookup.
+    /// </summary>
+    private static HashSet<string>? BuildInterfaceNameSet(ImmutableEquatableArray<TypeParameter> serviceTypeParams)
+    {
+        HashSet<string>? result = null;
+
+        foreach(var param in serviceTypeParams)
+        {
+            var interfaces = param.Type.AllInterfaces;
+            if(interfaces is null || interfaces.Length == 0)
             {
-                filteredList?.Add(decorator);
+                continue;
             }
-            else
+
+            result ??= new HashSet<string>(StringComparer.Ordinal);
+            foreach(var iface in interfaces)
             {
-                // First decorator that doesn't satisfy constraints - create filtered list
-                if(filteredList is null)
+                result.Add(iface.Name);
+                if(iface.Name != iface.NameWithoutGeneric)
                 {
-                    filteredList = new List<TypeData>(decorators.Length);
-                    for(int j = 0; j < i; j++)
-                    {
-                        filteredList.Add(decorators[j]);
-                    }
+                    result.Add(iface.NameWithoutGeneric);
                 }
             }
         }
 
-        return filteredList?.ToImmutableEquatableArray() ?? decorators;
+        return result;
+    }
+
+    /// <summary>
+    /// Core decorator filtering logic.
+    /// </summary>
+    private static ImmutableEquatableArray<TypeData> FilterDecoratorsCore(
+        ImmutableEquatableArray<TypeData> decorators,
+        ImmutableEquatableArray<TypeParameter> serviceTypeParams,
+        HashSet<string>? interfaceNameSet)
+    {
+        var filteredList = new List<TypeData>(decorators.Length);
+        foreach(var decorator in decorators)
+        {
+            if(SatisfiesConstraints(decorator, serviceTypeParams, interfaceNameSet))
+            {
+                filteredList.Add(decorator);
+            }
+        }
+
+        // Return original if no filtering occurred
+        return filteredList.Count == decorators.Length
+            ? decorators
+            : filteredList.ToImmutableEquatableArray();
     }
 
     /// <summary>
@@ -287,7 +410,8 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static bool SatisfiesConstraints(
         TypeData decorator,
-        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
+        ImmutableEquatableArray<TypeParameter> serviceTypeParams,
+        HashSet<string>? interfaceNameSet)
     {
         var decoratorTypeParams = decorator.TypeParameters;
         if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
@@ -316,7 +440,7 @@ partial class RegisterSourceGenerator
 
             foreach(var constraintType in constraintTypes)
             {
-                if(!SatisfiesTypeConstraint(serviceParam, constraintType))
+                if(!SatisfiesTypeConstraintCore(serviceParam, constraintType, interfaceNameSet))
                 {
                     return false;
                 }
@@ -327,7 +451,7 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Checks if an actual type parameter satisfies a type constraint.
+    /// Type constraint check.
     /// </summary>
     /// <remarks>
     /// For a constraint like <c>where TRequest : IQuery&lt;TRequest, TResponse&gt;</c>:
@@ -336,10 +460,12 @@ partial class RegisterSourceGenerator
     /// - serviceParam is the actual type assigned to TRequest (e.g., TestCommand or TestQuery)
     /// 
     /// We need to check if the actual type's interfaces include IQuery with matching type parameters.
+    /// Uses HashSet for O(1) lookup instead of O(n) iteration.
     /// </remarks>
-    private static bool SatisfiesTypeConstraint(
+    private static bool SatisfiesTypeConstraintCore(
         TypeParameter serviceParam,
-        TypeData constraintType)
+        TypeData constraintType,
+        HashSet<string>? interfaceNameSet)
     {
         var actualType = serviceParam.Type;
 
@@ -349,40 +475,23 @@ partial class RegisterSourceGenerator
             return true;
         }
 
-        // Check if the actual type implements the constraint interface
-        var implementedInterfaces = actualType.AllInterfaces;
-        if(implementedInterfaces is null || implementedInterfaces.Length == 0)
+        // No interface set means no interfaces to check
+        if(interfaceNameSet is null)
         {
             // No interface information available, assume constraint is not satisfied
             // for open generic constraints
             return !constraintType.IsOpenGeneric;
         }
 
-        // For open generic constraints (like IQuery<TRequest, TResponse>), check if
-        // the actual type implements an interface with the same base name
         if(constraintType.IsOpenGeneric)
         {
-            // Check if any implemented interface matches the constraint's base type
-            foreach(var iface in implementedInterfaces)
-            {
-                if(iface.NameWithoutGeneric == constraintType.NameWithoutGeneric)
-                {
-                    return true;
-                }
-            }
-            return false;
+            // For open generic constraints, check NameWithoutGeneric
+            return interfaceNameSet.Contains(constraintType.NameWithoutGeneric);
         }
         else
         {
-            // For closed generic or non-generic constraints, check for exact match
-            foreach(var iface in implementedInterfaces)
-            {
-                if(iface.Name == constraintType.Name)
-                {
-                    return true;
-                }
-            }
-            return false;
+            // For closed generic or non-generic constraints, check exact name
+            return interfaceNameSet.Contains(constraintType.Name);
         }
     }
 
@@ -426,15 +535,12 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<TypeData> ProcessDecorators(
         ImmutableEquatableArray<TypeData> decorators,
-        TypeData implementationType)
+        HashSet<string> serviceTypeNames)
     {
         if(decorators.Length == 0)
         {
             return decorators;
         }
-
-        // Build set of all assignable type names (with their non-generic variants for matching)
-        var serviceTypeNames = BuildServiceTypeNameSet(implementationType);
 
         var processedDecorators = new List<TypeData>(decorators.Length);
         foreach(var decorator in decorators)

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Frozen;
-using System.Text;
+﻿using System.Text;
 
 namespace SourceGen.Ioc.SourceGenerator.Register;
 
@@ -78,20 +76,20 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
     private static void GenerateOutput(
         in SourceProductionContext ctx,
-        ImmutableEquatableArray<ServiceRegistrationModel> registrations,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> registrationsByMethod,
         string rootNamespace,
         string assemblyName)
     {
-        if(registrations.Length == 0)
+        if(registrationsByMethod.Count == 0)
             return;
 
         // Generate source
-        var source = GenerateExtensionMethodSource(registrations, rootNamespace, assemblyName);
+        var source = GenerateExtensionMethodSource(registrationsByMethod, rootNamespace, assemblyName);
         ctx.AddSource($"{assemblyName}.ServiceRegistration.g.cs", source);
     }
 
     private static string GenerateExtensionMethodSource(
-        ImmutableEquatableArray<ServiceRegistrationModel> registrations,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> registrationsByMethod,
         string rootNamespace,
         string assemblyName)
     {
@@ -114,10 +112,58 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
+        bool isFirst = true;
+        foreach(var kvp in registrationsByMethod)
+        {
+            var methodKey = kvp.Key;
+            var registrations = kvp.Value;
+
+            if(!isFirst)
+            {
+                writer.WriteLine();
+            }
+            isFirst = false;
+
+            if(string.IsNullOrEmpty(methodKey))
+            {
+                // Default method
+                GenerateRegistrationMethod(writer, registrations, safeMethodName, "Registers all default services.");
+            }
+            else
+            {
+                // Tag-specific method
+                var safeTagName = GetSafeMethodName(methodKey);
+                GenerateRegistrationMethod(
+                    writer,
+                    registrations,
+                    $"{safeMethodName}Services_{safeTagName}",
+                    $"Registers all services tagged with '{methodKey}'.",
+                    skipServicesSuffix: true);
+            }
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        return writer.ToString();
+    }
+
+    /// <summary>
+    /// Generates a single registration method.
+    /// </summary>
+    private static void GenerateRegistrationMethod(
+        SourceWriter writer,
+        ImmutableEquatableArray<ServiceRegistrationModel> registrations,
+        string methodName,
+        string summary,
+        bool skipServicesSuffix = false)
+    {
+        var fullMethodName = skipServicesSuffix ? methodName : $"{methodName}Services";
+
         writer.WriteLine("/// <summary>");
-        writer.WriteLine($"/// Registers all services from {assemblyName}.");
+        writer.WriteLine($"/// {summary}");
         writer.WriteLine("/// </summary>");
-        writer.WriteLine($"public static IServiceCollection Add{safeMethodName}Services(this IServiceCollection services)");
+        writer.WriteLine($"public static IServiceCollection Add{fullMethodName}(this IServiceCollection services)");
         writer.WriteLine("{");
         writer.Indentation++;
 
@@ -131,11 +177,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
         writer.Indentation--;
         writer.WriteLine("}");
-
-        writer.Indentation--;
-        writer.WriteLine("}");
-
-        return writer.ToString();
     }
 
     private static void WriteRegistration(SourceWriter writer, ServiceRegistrationModel registration)

@@ -37,6 +37,8 @@ partial class RegisterSourceGenerator
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
         var serviceTypes = attributeData.GetServiceTypes();
         var decorators = attributeData.GetDecorators();
+        var tags = attributeData.GetTags();
+        var excludeFromDefault = attributeData.GetExcludeFromDefault();
 
         var keyType = attributeData.GetNamedArgument<int>("KeyType", 0);
         string? key = null;
@@ -83,7 +85,9 @@ partial class RegisterSourceGenerator
             hasExplicitRegisterAllInterfaces,
             hasExplicitRegisterAllBaseClasses,
             validOpenGenericServiceTypes,
-            decorators);
+            decorators,
+            tags,
+            excludeFromDefault);
     }
 
     /// <summary>

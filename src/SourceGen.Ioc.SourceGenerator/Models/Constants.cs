@@ -42,6 +42,36 @@ internal static class Constants
             attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true);
 
         /// <summary>
+        /// Gets the Tags array from the attribute.
+        /// </summary>
+        public ImmutableEquatableArray<string> GetTags()
+        {
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key.Equals("Tags", StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
+                {
+                    List<string> result = [];
+                    foreach(var value in namedArg.Value.Values)
+                    {
+                        if(value.Value is string tag)
+                        {
+                            result.Add(tag);
+                        }
+                    }
+                    return result.ToImmutableEquatableArray();
+                }
+            }
+
+            return [];
+        }
+
+        /// <summary>
+        /// Gets the ExcludeFromDefault value from the attribute.
+        /// </summary>
+        public bool GetExcludeFromDefault() =>
+            attribute.GetNamedArgument<bool>("ExcludeFromDefault", false);
+
+        /// <summary>
         /// Determines if the attribute will cause registration of interfaces or base classes.
         /// For open generic types, nested open generics are only a problem when registering interfaces/base classes.
         /// </summary>
@@ -84,6 +114,8 @@ internal static class Constants
             var serviceTypes = attribute.GetServiceTypes();
             var typeData = targetServiceType.GetTypeData();
             var decorators = attribute.GetDecorators();
+            var tags = attribute.GetTags();
+            var excludeFromDefault = attribute.GetExcludeFromDefault();
 
             return new DefaultSettingsModel(
                 typeData,
@@ -91,7 +123,9 @@ internal static class Constants
                 registerAllInterfaces,
                 registerAllBaseClasses,
                 serviceTypes,
-                decorators);
+                decorators,
+                tags,
+                excludeFromDefault);
         }
     }
 }

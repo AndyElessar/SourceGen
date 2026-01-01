@@ -15,6 +15,8 @@
 /// <param name="HasExplicitRegisterAllBaseClasses">Whether RegisterAllBaseClasses was explicitly set.</param>
 /// <param name="ValidOpenGenericServiceTypes">Set of valid open generic service type names (without generic parameters) that can be properly registered.</param>
 /// <param name="Decorators">The decorator types to apply, in order from outermost to innermost.</param>
+/// <param name="Tags">The collection of tags associated with this registration.</param>
+/// <param name="ExcludeFromDefault">Whether to exclude this registration from the default registration method.</param>
 internal sealed record class RegistrationData(
     TypeData ImplementationType,
     ServiceLifetime Lifetime,
@@ -27,7 +29,9 @@ internal sealed record class RegistrationData(
     bool HasExplicitRegisterAllInterfaces,
     bool HasExplicitRegisterAllBaseClasses,
     ImmutableEquatableSet<string> ValidOpenGenericServiceTypes,
-    ImmutableEquatableArray<TypeData> Decorators)
+    ImmutableEquatableArray<TypeData> Decorators,
+    ImmutableEquatableArray<string> Tags,
+    bool ExcludeFromDefault)
 {
     /// <summary>
     /// Gets all interfaces implemented by the type. Shortcut for ImplementationType.AllInterfaces.

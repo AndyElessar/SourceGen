@@ -9,10 +9,14 @@
 /// <param name="RegisterAllBaseClasses">Whether to register all base classes by default.</param>
 /// <param name="ServiceTypes">Additional service types to register by default.</param>
 /// <param name="Decorators">The decorator types to apply by default.</param>
+/// <param name="Tags">The collection of tags associated with this default setting.</param>
+/// <param name="ExcludeFromDefault">Whether to exclude registrations from the default registration method.</param>
 internal sealed record class DefaultSettingsModel(
     TypeData TargetServiceType,
     ServiceLifetime Lifetime,
     bool RegisterAllInterfaces,
     bool RegisterAllBaseClasses,
     ImmutableEquatableArray<TypeData> ServiceTypes,
-    ImmutableEquatableArray<TypeData> Decorators);
+    ImmutableEquatableArray<TypeData> Decorators,
+    ImmutableEquatableArray<string> Tags,
+    bool ExcludeFromDefault);

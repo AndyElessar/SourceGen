@@ -12,7 +12,7 @@ namespace SourceGen.Ioc;
 /// You can specify one or more service types to register the class as, and optionally provide a key for keyed registrations.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-[Conditional("NEVER")]
+[Conditional("DEBUG")]
 public sealed class IoCRegisterAttribute : Attribute
 {
     /// <summary>
