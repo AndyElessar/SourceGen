@@ -121,7 +121,6 @@ internal static class RoslynExtensions
             // FullyQualifiedName returns "global::Ns.Handler<,>" but we need "global::Ns.Handler<TRequest, TResponse>"
             // Note: This is different from constructed generic types (e.g., IRepository<T>) which already have proper names.
             string typeName;
-            ImmutableEquatableArray<string>? typeParamNamesArray = null;
 
             // Get the type parameters from the original definition for unbound generics
             var typeParamsSource = typeSymbol.IsUnboundGenericType
@@ -133,36 +132,21 @@ internal static class RoslynExtensions
                 // Build the type name with actual type parameter names for unbound generics
                 var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
                 var typeParamNames = typeParamsSource.Select(tp => tp.Name).ToArray();
-                typeParamNamesArray = typeParamNames.ToImmutableEquatableArray();
                 typeName = $"{nameWithoutGeneric}<{string.Join(", ", typeParamNames)}>";
             }
             else
             {
                 typeName = typeSymbol.FullyQualifiedName;
-                // For open generic types that contain type parameters, extract the type parameter names
-                if(typeSymbol.ContainsGenericParameters && typeSymbol.IsGenericType)
-                {
-                    var typeParams = typeSymbol.TypeArguments
-                        .OfType<ITypeParameterSymbol>()
-                        .Select(tp => tp.Name)
-                        .ToArray();
-                    if(typeParams.Length > 0)
-                    {
-                        typeParamNamesArray = typeParams.ToImmutableEquatableArray();
-                    }
-                }
             }
 
             int arity = typeSymbol.Arity;
             bool isNestedOpenGeneric = typeSymbol.IsNestedOpenGeneric;
 
-            // Extract generic arguments for closed generic types
-            ImmutableEquatableArray<string>? genericArguments = null;
-            if(typeSymbol.IsGenericType && !typeSymbol.ContainsGenericParameters && typeSymbol.TypeArguments.Length > 0)
+            // Extract type parameters (unified type arguments and constraints)
+            ImmutableEquatableArray<TypeParameter>? typeParameters = null;
+            if(typeSymbol.IsGenericType && typeSymbol.TypeArguments.Length > 0)
             {
-                genericArguments = typeSymbol.TypeArguments
-                    .Select(arg => arg.FullyQualifiedName)
-                    .ToImmutableEquatableArray();
+                typeParameters = typeSymbol.ExtractTypeParameters();
             }
 
             ImmutableEquatableArray<ConstructorParameterData>? constructorParams = null;
@@ -186,21 +170,105 @@ internal static class RoslynExtensions
                 typeSymbol.ContainsGenericParameters,
                 arity,
                 isNestedOpenGeneric,
-                typeParamNamesArray,
-                genericArguments,
+                typeParameters,
                 constructorParams,
                 allInterfaces,
                 allBaseClasses);
         }
 
         /// <summary>
+        /// Extracts type parameters with their resolved types and constraints.
+        /// </summary>
+        public ImmutableEquatableArray<TypeParameter> ExtractTypeParameters()
+        {
+            // Get type parameters from original definition for unbound generic types
+            var typeParams = typeSymbol.IsUnboundGenericType
+                ? typeSymbol.OriginalDefinition?.TypeParameters ?? typeSymbol.TypeParameters
+                : typeSymbol.TypeParameters;
+
+            if(typeParams.Length == 0)
+            {
+                return [];
+            }
+
+            var typeArgs = typeSymbol.TypeArguments;
+            List<TypeParameter> parameters = new(typeParams.Length);
+
+            for(int i = 0; i < typeParams.Length; i++)
+            {
+                var typeParam = typeParams[i];
+                var typeArg = i < typeArgs.Length ? typeArgs[i] : null;
+
+                // Get type data - don't use extractHierarchy to avoid circular dependency
+                // Instead, directly get AllInterfaces for constraint checking
+                TypeData typeData;
+                ImmutableEquatableArray<TypeData>? allInterfaces = null;
+
+                if(typeArg is INamedTypeSymbol namedArg && typeArg.TypeKind != TypeKind.TypeParameter)
+                {
+                    // For concrete types, get basic type data and all interfaces separately
+                    typeData = typeArg.GetTypeData();
+                    allInterfaces = namedArg.AllInterfaces
+                        .Select(iface => new TypeData(
+                            iface.FullyQualifiedName,
+                            GetNameWithoutGeneric(iface.FullyQualifiedName),
+                            iface.ContainsGenericParameters,
+                            iface.Arity,
+                            false))
+                        .ToImmutableEquatableArray();
+                }
+                else if(typeArg is INamedTypeSymbol namedType)
+                {
+                    // Use CreateBasicTypeData to avoid circular dependency via ExtractTypeParameters
+                    typeData = namedType.CreateBasicTypeData();
+                }
+                else if(typeArg is not null)
+                {
+                    var argName = typeArg.FullyQualifiedName;
+                    typeData = new TypeData(argName, GetNameWithoutGeneric(argName), typeArg.ContainsGenericParameters, 0, false);
+                }
+                else
+                {
+                    typeData = new TypeData(typeParam.Name, typeParam.Name, true, 0, false);
+                }
+
+                // If we extracted interfaces, create a new TypeData with them
+                if(allInterfaces is not null && allInterfaces.Length > 0)
+                {
+                    typeData = typeData with { AllInterfaces = allInterfaces };
+                }
+
+                // Extract constraints - use basic type data to avoid circular dependencies
+                var constraintTypes = typeParam.ConstraintTypes
+                    .Select(ct => ct is INamedTypeSymbol namedCt
+                        ? namedCt.CreateBasicTypeData()
+                        : new TypeData(ct.FullyQualifiedName, GetNameWithoutGeneric(ct.FullyQualifiedName), ct.ContainsGenericParameters, 0, false))
+                    .ToImmutableEquatableArray();
+
+                parameters.Add(new TypeParameter(
+                    typeParam.Name,
+                    typeData,
+                    constraintTypes,
+                    typeParam.HasValueTypeConstraint,
+                    typeParam.HasReferenceTypeConstraint,
+                    typeParam.HasUnmanagedTypeConstraint,
+                    typeParam.HasNotNullConstraint,
+                    typeParam.HasConstructorConstraint));
+            }
+
+            return parameters.ToImmutableEquatableArray();
+        }
+
+        /// <summary>
         /// Gets all interfaces implemented by a type.
+        /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetAllInterfaces() =>
-            typeSymbol.AllInterfaces.Select(i => i.GetTypeData()).ToImmutableEquatableArray();
+            typeSymbol.AllInterfaces.Select(CreateBasicTypeData).ToImmutableEquatableArray();
 
         /// <summary>
         /// Gets all base classes of a type, excluding System.Object.
+        /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetAllBaseClasses()
         {
@@ -208,10 +276,103 @@ internal static class RoslynExtensions
             var baseType = typeSymbol.BaseType;
             while(baseType != null && baseType.SpecialType != SpecialType.System_Object)
             {
-                result.Add(baseType.GetTypeData());
+                result.Add(baseType.CreateBasicTypeData());
                 baseType = baseType.BaseType;
             }
             return result.ToImmutableEquatableArray();
+        }
+
+        /// <summary>
+        /// Creates a basic TypeData with type parameters extracted but without recursive extraction
+        /// of interfaces/base classes to avoid circular dependencies.
+        /// </summary>
+        public TypeData CreateBasicTypeData()
+        {
+            var typeName = typeSymbol.FullyQualifiedName;
+
+            // Extract type parameters but use simple TypeData for type arguments to avoid recursion
+            ImmutableEquatableArray<TypeParameter>? typeParameters = null;
+            if(typeSymbol.IsGenericType && typeSymbol.TypeArguments.Length > 0)
+            {
+                var typeParams = typeSymbol.IsUnboundGenericType
+                    ? typeSymbol.OriginalDefinition?.TypeParameters ?? typeSymbol.TypeParameters
+                    : typeSymbol.TypeParameters;
+
+                var typeArgs = typeSymbol.TypeArguments;
+                List<TypeParameter> parameters = new(typeParams.Length);
+
+                for(int i = 0; i < typeParams.Length; i++)
+                {
+                    var typeParam = typeParams[i];
+                    var typeArg = i < typeArgs.Length ? typeArgs[i] : null;
+
+                    // Create TypeData for the type argument, including interfaces for constraint checking
+                    TypeData typeData;
+                    ImmutableEquatableArray<TypeData>? allInterfaces = null;
+
+                    if(typeArg is INamedTypeSymbol argNamed && typeArg.TypeKind != TypeKind.TypeParameter)
+                    {
+                        var argName = argNamed.FullyQualifiedName;
+
+                        // Extract interfaces for concrete types (needed for constraint checking)
+                        if(argNamed.AllInterfaces.Length > 0)
+                        {
+                            allInterfaces = argNamed.AllInterfaces
+                                .Select(iface => new TypeData(
+                                    iface.FullyQualifiedName,
+                                    GetNameWithoutGeneric(iface.FullyQualifiedName),
+                                    iface.ContainsGenericParameters,
+                                    iface.Arity,
+                                    false))
+                                .ToImmutableEquatableArray();
+                        }
+
+                        typeData = new TypeData(
+                            argName,
+                            GetNameWithoutGeneric(argName),
+                            argNamed.ContainsGenericParameters,
+                            argNamed.Arity,
+                            argNamed.IsNestedOpenGeneric,
+                            null,
+                            null,
+                            allInterfaces);
+                    }
+                    else if(typeArg is not null)
+                    {
+                        var argName = typeArg.FullyQualifiedName;
+                        typeData = new TypeData(
+                            argName,
+                            GetNameWithoutGeneric(argName),
+                            typeArg.ContainsGenericParameters,
+                            0,
+                            false);
+                    }
+                    else
+                    {
+                        typeData = new TypeData(typeParam.Name, typeParam.Name, true, 0, false);
+                    }
+
+                    parameters.Add(new TypeParameter(
+                        typeParam.Name,
+                        typeData,
+                        null,  // Skip constraint types to avoid recursion
+                        typeParam.HasValueTypeConstraint,
+                        typeParam.HasReferenceTypeConstraint,
+                        typeParam.HasUnmanagedTypeConstraint,
+                        typeParam.HasNotNullConstraint,
+                        typeParam.HasConstructorConstraint));
+                }
+
+                typeParameters = parameters.ToImmutableEquatableArray();
+            }
+
+            return new TypeData(
+                typeName,
+                GetNameWithoutGeneric(typeName),
+                typeSymbol.ContainsGenericParameters,
+                typeSymbol.Arity,
+                typeSymbol.IsNestedOpenGeneric,
+                typeParameters);
         }
 
         /// <summary>
@@ -335,7 +496,10 @@ internal static class RoslynExtensions
                     ? namedParamType.GetTypeData(extractConstructorParams: true, visited: visited)
                     : paramType.GetTypeData();
 
-                parameters.Add(new ConstructorParameterData(param.Name, paramTypeData));
+                // Check if parameter is optional (has default value or is nullable)
+                var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
+
+                parameters.Add(new ConstructorParameterData(param.Name, paramTypeData, IsOptional: isOptional));
             }
 
             return parameters.ToImmutableEquatableArray();

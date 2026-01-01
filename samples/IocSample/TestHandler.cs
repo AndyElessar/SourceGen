@@ -1,12 +1,13 @@
 ﻿namespace IocSample;
 
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
 [IoCRegisterDefaults(
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     ServiceTypes = [typeof(IGenericTest<,>)],
-    Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
+    Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>), typeof(HandlerDecorator3<,>)]
 )]
 public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
@@ -24,7 +25,7 @@ internal sealed class TestHandler : IRequestHandler<TestRequest, List<string>>
     }
 }
 
-public sealed record TestRequest2(string Msg) : IRequest<TestRequest2, List<string>>;
+public sealed record TestRequest2(string Msg) : IQuery<TestRequest2, List<string>>;
 
 [IoCRegister]
 internal sealed class TestRequest2Handler(ILogger<TestRequest2Handler> logger) : IRequestHandler<TestRequest2, List<string>>
@@ -67,11 +68,11 @@ public sealed class Logger<T> : ILogger<T>
 internal sealed class HandlerDecorator1<TRequest, TResponse>(
     IRequestHandler<TRequest, TResponse> inner,
     ILogger<HandlerDecorator1<TRequest, TResponse>> logger,
-    ITest1 test1
+    ITest1? test1 = null
 ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
     private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
-    private readonly ITest1 test1 = test1;
+    private readonly ITest1? test1 = test1;
 
     public TResponse Handle(TRequest request)
     {
@@ -92,6 +93,19 @@ internal sealed class HandlerDecorator2<TRequest, TResponse>(
         Console.WriteLine("HandlerDecorator2: Before handling request");
         var response = inner.Handle(request);
         Console.WriteLine("HandlerDecorator2: After handling request");
+        return response;
+    }
+}
+
+internal sealed class HandlerDecorator3<TRequest, TResponse>(
+    IRequestHandler<TRequest, TResponse> inner
+) : IRequestHandler<TRequest, TResponse> where TRequest : IQuery<TRequest, TResponse>
+{
+    public TResponse Handle(TRequest request)
+    {
+        Console.WriteLine("HandlerDecorator3: Before handling request");
+        var response = inner.Handle(request);
+        Console.WriteLine("HandlerDecorator3: After handling request");
         return response;
     }
 }

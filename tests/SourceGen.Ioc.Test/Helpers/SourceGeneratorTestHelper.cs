@@ -10,7 +10,7 @@ namespace SourceGen.Ioc.Test.Helpers;
 /// </summary>
 public static class SourceGeneratorTestHelper
 {
-    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Preview);
+    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
 
     /// <summary>
     /// Gets the metadata reference for the SourceGen.Ioc assembly containing attribute definitions.
@@ -48,7 +48,7 @@ public static class SourceGeneratorTestHelper
         // Check for compilation errors before running generator
         var compilationDiagnostics = compilation.GetDiagnostics();
         var errors = compilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        if (errors.Count > 0)
+        if(errors.Count > 0)
         {
             var errorMessages = string.Join(Environment.NewLine, errors.Select(e => e.ToString()));
             throw new InvalidOperationException($"Compilation has errors:{Environment.NewLine}{errorMessages}");

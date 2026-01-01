@@ -212,9 +212,6 @@ partial class RegisterSourceGenerator
             return;
         }
 
-        // Process decorators once (lazy - only if we have valid registrations)
-        ImmutableEquatableArray<TypeData>? processedDecorators = null;
-
         foreach(var serviceType in serviceTypesToRegister)
         {
             if(!IsValidServiceType(serviceType, implementationType, isOpenGenericImplementation, registration.ValidOpenGenericServiceTypes))
@@ -222,8 +219,11 @@ partial class RegisterSourceGenerator
                 continue;
             }
 
-            // Process decorators lazily on first valid registration
-            processedDecorators ??= ProcessDecorators(decorators, implementationType);
+            // Filter decorators based on type parameter constraints for this specific service type
+            var filteredDecorators = FilterDecorators(decorators, serviceType);
+
+            // Process decorators (mark which constructor parameters are service parameters)
+            var processedDecorators = ProcessDecorators(filteredDecorators, implementationType);
 
             result.Add(new ServiceRegistrationModel(
                 serviceType,
@@ -233,6 +233,156 @@ partial class RegisterSourceGenerator
                 registration.KeyType,
                 isOpenGenericImplementation,
                 processedDecorators));
+        }
+    }
+
+    /// <summary>
+    /// Filters decorators based on their type parameter constraints.
+    /// Only decorators whose constraints are satisfied by the service type's generic arguments will be included.
+    /// </summary>
+    private static ImmutableEquatableArray<TypeData> FilterDecorators(
+        ImmutableEquatableArray<TypeData> decorators,
+        TypeData serviceType)
+    {
+        if(decorators.Length == 0)
+        {
+            return decorators;
+        }
+
+        // If service type has no generic arguments, we can't validate constraints
+        // For non-generic service types, all decorators should pass through
+        var serviceTypeParams = serviceType.TypeParameters;
+        if(serviceTypeParams is null || serviceTypeParams.Length == 0)
+        {
+            return decorators;
+        }
+
+        List<TypeData>? filteredList = null;
+        for(int i = 0; i < decorators.Length; i++)
+        {
+            var decorator = decorators[i];
+            if(SatisfiesConstraints(decorator, serviceTypeParams))
+            {
+                filteredList?.Add(decorator);
+            }
+            else
+            {
+                // First decorator that doesn't satisfy constraints - create filtered list
+                if(filteredList is null)
+                {
+                    filteredList = new List<TypeData>(decorators.Length);
+                    for(int j = 0; j < i; j++)
+                    {
+                        filteredList.Add(decorators[j]);
+                    }
+                }
+            }
+        }
+
+        return filteredList?.ToImmutableEquatableArray() ?? decorators;
+    }
+
+    /// <summary>
+    /// Checks if a decorator satisfies its type parameter constraints with the given service type parameters.
+    /// </summary>
+    private static bool SatisfiesConstraints(
+        TypeData decorator,
+        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
+    {
+        var decoratorTypeParams = decorator.TypeParameters;
+        if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
+        {
+            return true;
+        }
+
+        // Arity mismatch - cannot apply decorator
+        if(decoratorTypeParams.Length != serviceTypeParams.Length)
+        {
+            return true; // Let it pass, runtime will handle this
+        }
+
+        // Check each decorator type parameter's constraints
+        for(int i = 0; i < decoratorTypeParams.Length; i++)
+        {
+            var decoratorParam = decoratorTypeParams[i];
+            var serviceParam = serviceTypeParams[i];
+
+            // Check type constraints
+            var constraintTypes = decoratorParam.ConstraintTypes;
+            if(constraintTypes is null || constraintTypes.Length == 0)
+            {
+                continue;
+            }
+
+            foreach(var constraintType in constraintTypes)
+            {
+                if(!SatisfiesTypeConstraint(serviceParam, constraintType))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Checks if an actual type parameter satisfies a type constraint.
+    /// </summary>
+    /// <remarks>
+    /// For a constraint like <c>where TRequest : IQuery&lt;TRequest, TResponse&gt;</c>:
+    /// - constraintType.Name = "global::Ns.IQuery&lt;TRequest, TResponse&gt;"
+    /// - constraintType.TypeParameters = [(TRequest, TRequest), (TResponse, TResponse)]
+    /// - serviceParam is the actual type assigned to TRequest (e.g., TestCommand or TestQuery)
+    /// 
+    /// We need to check if the actual type's interfaces include IQuery with matching type parameters.
+    /// </remarks>
+    private static bool SatisfiesTypeConstraint(
+        TypeParameter serviceParam,
+        TypeData constraintType)
+    {
+        var actualType = serviceParam.Type;
+
+        // Direct match (for non-generic constraints)
+        if(actualType.Name == constraintType.Name)
+        {
+            return true;
+        }
+
+        // Check if the actual type implements the constraint interface
+        var implementedInterfaces = actualType.AllInterfaces;
+        if(implementedInterfaces is null || implementedInterfaces.Length == 0)
+        {
+            // No interface information available, assume constraint is not satisfied
+            // for open generic constraints
+            return !constraintType.IsOpenGeneric;
+        }
+
+        // For open generic constraints (like IQuery<TRequest, TResponse>), check if
+        // the actual type implements an interface with the same base name
+        if(constraintType.IsOpenGeneric)
+        {
+            // Check if any implemented interface matches the constraint's base type
+            foreach(var iface in implementedInterfaces)
+            {
+                if(iface.NameWithoutGeneric == constraintType.NameWithoutGeneric)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        else
+        {
+            // For closed generic or non-generic constraints, check for exact match
+            foreach(var iface in implementedInterfaces)
+            {
+                if(iface.Name == constraintType.Name)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

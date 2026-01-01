@@ -8,8 +8,7 @@
 /// <param name="IsOpenGeneric">Whether the type is an open generic type.</param>
 /// <param name="GenericArity">The number of generic type parameters.</param>
 /// <param name="IsNestedOpenGeneric">Whether the type contains nested open generic type arguments (e.g., IGeneric&lt;IGeneric2&lt;T&gt;&gt;).</param>
-/// <param name="TypeParameterNames">The names of the generic type parameters (e.g., ["TRequest", "TResponse"]). Only populated for open generic types.</param>
-/// <param name="GenericArguments">The fully qualified names of actual generic arguments for closed generic types (e.g., ["global::MyNs.TestRequest", "global::System.String"]). Null for non-generic or open generic types.</param>
+/// <param name="TypeParameters">The generic type parameters with their names, resolved types, implemented interfaces, and constraints.</param>
 /// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
 /// <param name="AllInterfaces">All interfaces implemented by the type. Only populated when extractHierarchy is true.</param>
 /// <param name="AllBaseClasses">All base classes of the type (excluding System.Object). Only populated when extractHierarchy is true.</param>
@@ -19,8 +18,7 @@ internal sealed record class TypeData(
     bool IsOpenGeneric,
     int GenericArity,
     bool IsNestedOpenGeneric = false,
-    ImmutableEquatableArray<string>? TypeParameterNames = null,
-    ImmutableEquatableArray<string>? GenericArguments = null,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ConstructorParameterData>? ConstructorParameters = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null);

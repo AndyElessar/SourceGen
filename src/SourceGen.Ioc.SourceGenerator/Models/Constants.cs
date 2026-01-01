@@ -39,7 +39,7 @@ internal static class Constants
             attribute.GetTypeArrayArgument("ServiceTypes");
 
         public ImmutableEquatableArray<TypeData> GetDecorators() =>
-            attribute.GetTypeArrayArgument("Decorators", true);
+            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true);
 
         /// <summary>
         /// Determines if the attribute will cause registration of interfaces or base classes.

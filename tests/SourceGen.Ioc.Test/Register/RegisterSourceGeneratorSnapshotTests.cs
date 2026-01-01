@@ -764,6 +764,134 @@ public class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
+    public async Task Decorator_WithTypeConstraints_OnlyAppliesMatchingDecorators()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+            public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            // A decorator without constraints - should apply to all handlers
+            internal sealed class LoggingDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request) => inner.Handle(request);
+            }
+
+            // A decorator with IQuery constraint - should only apply to query handlers
+            internal sealed class QueryDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IQuery<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request) => inner.Handle(request);
+            }
+
+            // Regular request (not IQuery)
+            public sealed record TestCommand(int Key) : IRequest<TestCommand, string>;
+
+            // Query request (implements IQuery)
+            public sealed record TestQuery(string Filter) : IQuery<TestQuery, int>;
+
+            // Command handler - should only get LoggingDecorator (TestCommand doesn't implement IQuery)
+            [IoCRegister(
+                Lifetime = ServiceLifetime.Scoped,
+                ServiceTypes = [typeof(IRequestHandler<TestCommand, string>)],
+                Decorators = [typeof(LoggingDecorator<,>), typeof(QueryDecorator<,>)])]
+            internal sealed class TestCommandHandler : IRequestHandler<TestCommand, string>
+            {
+                public string Handle(TestCommand request) => $"Command: {request.Key}";
+            }
+
+            // Query handler - should get both LoggingDecorator and QueryDecorator (TestQuery implements IQuery)
+            [IoCRegister(
+                Lifetime = ServiceLifetime.Scoped,
+                ServiceTypes = [typeof(IRequestHandler<TestQuery, int>)],
+                Decorators = [typeof(LoggingDecorator<,>), typeof(QueryDecorator<,>)])]
+            internal sealed class TestQueryHandler : IRequestHandler<TestQuery, int>
+            {
+                public int Handle(TestQuery request) => request.Filter.Length;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Decorator_WithTypeConstraints_DefaultSettingsAppliesOnlyMatchingDecorators()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IoCRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.BaseDecorator<,>), typeof(TestNamespace.QueryOnlyDecorator<,>)])]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+            public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            // Base decorator without constraint
+            internal sealed class BaseDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request) => inner.Handle(request);
+            }
+
+            // Query-only decorator with IQuery constraint
+            internal sealed class QueryOnlyDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IQuery<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request) => inner.Handle(request);
+            }
+
+            public sealed record MyCommand(int Id) : IRequest<MyCommand, bool>;
+            public sealed record MyQuery(string Search) : IQuery<MyQuery, string>;
+
+            // Command handler - should only get BaseDecorator
+            [IoCRegister]
+            internal sealed class MyCommandHandler : IRequestHandler<MyCommand, bool>
+            {
+                public bool Handle(MyCommand request) => request.Id > 0;
+            }
+
+            // Query handler - should get both decorators
+            [IoCRegister]
+            internal sealed class MyQueryHandler : IRequestHandler<MyQuery, string>
+            {
+                public string Handle(MyQuery request) => $"Result: {request.Search}";
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Decorator_OpenGenericWithExtraParameters_SubstitutesTypeParameters()
     {
         const string source = """
