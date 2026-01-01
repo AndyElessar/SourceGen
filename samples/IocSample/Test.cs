@@ -1,15 +1,12 @@
-﻿[assembly: IoCRegisterDefaultSettings(typeof(ITest2), ServiceLifetime.Singleton)]
+﻿namespace IocSample;
 
-[assembly: IoCRegisterDefaultSettings(typeof(IGenericTest<>), ServiceLifetime.Scoped)]
-
-[assembly: IoCRegisterFor(typeof(TestFor), Lifetime = ServiceLifetime.Transient, RegisterAllInterfaces = true)]
-
-[assembly: IoCRegisterDefaultSettings(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
-
-[assembly: IoCRegisterFor(typeof(TestInterfaces), Lifetime = ServiceLifetime.Transient)]
-//[assembly: IoCRegisterFor(typeof(TestClosed2), Lifetime = ServiceLifetime.Singleton)]
-
-namespace IocSample;
+[IoCRegisterDefaults(typeof(ITest2), ServiceLifetime.Singleton)]
+[IoCRegisterDefaults(typeof(IGenericTest<>), ServiceLifetime.Scoped)]
+[IoCRegisterFor(typeof(TestFor), Lifetime = ServiceLifetime.Transient, RegisterAllInterfaces = true)]
+[IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+[IoCRegisterFor(typeof(TestInterfaces), Lifetime = ServiceLifetime.Transient)]
+//[IoCRegisterFor(typeof(TestClosed2), Lifetime = ServiceLifetime.Singleton)]
+public sealed class Module;
 
 public interface ITest1;
 

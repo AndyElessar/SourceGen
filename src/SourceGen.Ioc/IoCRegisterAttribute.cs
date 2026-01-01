@@ -7,10 +7,10 @@ namespace SourceGen.Ioc;
 /// Specifies that a class should be registered with a dependency injection container, using the provided service
 /// lifetime and optional service types or key.
 /// </summary>
-/// <remarks>Apply this attribute to a class to indicate that it should be registered for dependency injection.
-/// You can specify one or more service types to register the class as, and optionally provide a key for keyed
-/// registrations. This attribute is intended for use with code generation or tooling that processes IoC registrations;
-/// it is not evaluated at runtime.</remarks>
+/// <remarks>
+/// Apply this attribute to a class to indicate that it should be registered for dependency injection.<br/>
+/// You can specify one or more service types to register the class as, and optionally provide a key for keyed registrations.
+/// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 [Conditional("NEVER")]
 public sealed class IoCRegisterAttribute : Attribute
@@ -56,4 +56,15 @@ public sealed class IoCRegisterAttribute : Attribute
     /// The order of decorators in the array determines the order of execute (which means the first decorator in the array is the outermost).
     /// </remarks>
     public Type[] Decorators { get; init; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether to exclude this class from default registrations.
+    /// </summary>
+    public bool ExcludeFromDefault { get; init; }
+
+    /// <summary>
+    /// Gets the collection of tags associated with this registration.<br/>
+    /// Will generate registrations for each tag specified.
+    /// </summary>
+    public string[] Tags { get; init; } = [];
 }

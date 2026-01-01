@@ -4,7 +4,7 @@ internal static class Constants
 {
     public const string IoCRegisterAttributeFullName = "SourceGen.Ioc.IoCRegisterAttribute";
     public const string IoCRegisterForAttributeFullName = "SourceGen.Ioc.IoCRegisterForAttribute";
-    public const string IoCRegisterDefaultSettingsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultSettingsAttribute";
+    public const string IoCRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultsAttribute";
 
     public const string Category_Usage = "Usage";
     public const string Category_Design = "Design";

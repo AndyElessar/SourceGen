@@ -2,12 +2,12 @@
 
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-[IoCRegisterDefaultSettings(
+[IoCRegisterDefaults(
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     ServiceTypes = [typeof(IGenericTest<,>)],
     Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
-    )]
+)]
 public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
     TResponse Handle(TRequest request);
@@ -38,6 +38,19 @@ internal sealed class TestRequest2Handler(ILogger<TestRequest2Handler> logger) :
     }
 }
 
+public sealed record TestRequest3(string Msg) : IRequest<TestRequest3, int>;
+[IoCRegister(Decorators = [typeof(HandlerDecorator2<,>), typeof(HandlerDecorator1<,>)])]
+internal sealed class TestRequest3Handler(ILogger<TestRequest3Handler> logger) : IRequestHandler<TestRequest3, int>
+{
+    private readonly ILogger<TestRequest3Handler> logger = logger;
+
+    public int Handle(TestRequest3 request)
+    {
+        logger.Log(nameof(TestRequest3Handler));
+        return request.Msg.Length;
+    }
+}
+
 public interface ILogger<T>
 {
     public void Log(string msg);
@@ -53,10 +66,12 @@ public sealed class Logger<T> : ILogger<T>
 
 internal sealed class HandlerDecorator1<TRequest, TResponse>(
     IRequestHandler<TRequest, TResponse> inner,
-    ILogger<HandlerDecorator1<TRequest, TResponse>> logger
+    ILogger<HandlerDecorator1<TRequest, TResponse>> logger,
+    ITest1 test1
 ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
     private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
+    private readonly ITest1 test1 = test1;
 
     public TResponse Handle(TRequest request)
     {

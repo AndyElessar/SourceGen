@@ -107,7 +107,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Get attribute type symbols for faster lookup
         var iocRegisterAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName);
         var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName);
-        var iocRegisterDefaultSettingsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultSettingsAttributeFullName);
+        var iocRegisterDefaultSettingsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName);
 
         if(iocRegisterAttribute is null && iocRegisterForAttribute is null)
             return;

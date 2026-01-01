@@ -10,9 +10,11 @@ This source generator automatically generates extension methods for registering 
 
 3. Service registration settings to collect:
    - Service type (from `TargetServiceType`, `ServiceTypes` or follow settings: `RegisterAllInterfaces`, `RegisterAllBaseClasses`; always register Implementation type itself)
-   - Implementation type (from `IoCRegisterForAttribute.TargetType` or the class marked with `IoCRegisterAttribute`)
+   - Implementation type (from `IoCRegisterForAttribute.TargetType` or the class marked with `IoCRegisterAttribute`) and its constructor's parameters
    - Lifetime (from `IoCRegisterAttribute` or default settings)
    - Key (from `IoCRegisterAttribute.Key`, `IoCRegisterForAttribute.Key` or default settings)
+   - Decorators type (from `IoCRegisterAttribute.Decorators`, `IoCRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
+   - Tags (from `IoCRegisterAttribute.Tags`, `IoCRegisterForAttribute.Tags` or default settings)
    - Project root namespace (from compilation options)
    - Project name (from compilation options)
 
@@ -98,7 +100,7 @@ public static class ServiceCollectionExtensions
       ServiceLifetime.Singleton,
       ServiceTypes = [typeof(IGenericTest<,>)],
       Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
-      )]
+   )]
    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
    {
       TResponse Handle(TRequest request);
@@ -166,9 +168,95 @@ public static class ServiceCollectionExtensions
 
       var s1 = new HandlerDecorator2<TestRequest, List<string>>(s0);
 
-      var s2_p1 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest, List<string>>>>();
-      var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p1);
+      var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest, List<string>>>>();
+      var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p0);
       return s2;
    });
    #endregion
    ```
+   Only generate decorator when all type arguments constraints are satisfied.
+
+8. When Tags is not empty, generate register extension methods to handle tags:
+   ```csharp
+   #region Define:
+   public interface IMyTaggedService;
+
+   [IocRegister(
+      Lifetime = ServiceLifetime.Singleton,
+      ServiceTypes = [typeof(IMyTaggedService)],
+      Tags = ["Tag1", "Tag2"])]
+   public class MyTaggedServiceImplementation : IMyTaggedService;
+
+   public interface IMyTaggedService2;
+
+   [IocRegister(
+      Lifetime = ServiceLifetime.Singleton,
+      ServiceTypes = [typeof(IMyTaggedService2)],
+      Tags = ["Tag1"],
+      ExcludeFromDefault = true)] // Exclude from default registration
+   public class MyTaggedServiceImplementation2 : IMyTaggedService2;
+   #endregion
+
+   #region Generate:
+   public static class ServiceCollectionExtensions
+   {
+      public static IServiceCollection Add{ProjectName}(this IServiceCollection services)
+      {
+         services.AddSingleton<IMyTaggedService, MyTaggedServiceImplementation>();
+         return services;
+      }
+      public static IServiceCollection Add{ProjectName}_{Tag1}(this IServiceCollection services)
+      {
+         services.AddSingleton<IMyTaggedService, MyTaggedServiceImplementation>();
+         services.AddSingleton<IMyTaggedService2, MyTaggedServiceImplementation2>();
+         return services;
+      }
+      public static IServiceCollection Add{ProjectName}_{Tag2}(this IServiceCollection services)
+      {
+         services.AddSingleton<IMyTaggedService, MyTaggedServiceImplementation>();
+         return services;
+      }
+   }
+   #endregion
+   ```
+
+9. When a class marked with `IocRegisterAttribute` and its members marked with `InjectAttribute`, generate the necessary code to handle the injection:
+   ```csharp
+   #region Define:
+   [IoCRegister]
+   public class MyService(IMayServiceDependency1 sd)
+   {
+       private readonly IMayServiceDependency1 sd = sd;
+
+       [Inject]
+       public IMayServiceDependency2 Dependency { get; init; }
+
+       [Inject]
+       public void Initialize(IMayServiceDependency3 sd3)
+       {
+           // Initialization code
+       }
+   }
+   #endregion
+
+   #region Generate:
+   public static class ServiceCollectionExtensions
+   {
+      public static IServiceCollection Add{ProjectName}(this IServiceCollection services)
+      {
+         services.AddSingleton<MyService>((IServiceProvider sp) =>
+         {
+             var s0_p0 = sp.GetRequiredService<IMayServiceDependency1>();
+             var s0_p1 = sp.GetRequiredService<IMayServiceDependency2>();
+             var s0_p2 = sp.GetRequiredService<IMayServiceDependency3>();
+             var s0 = new MyService(s0_p0) { Dependency = s0_p1 };
+             s0.Initialize(s0_p2);
+             return s0;
+         });
+         return services;
+      }
+   }
+   #endregion
+   ```
+
+10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s `IoCRegisterDefaultSettingsAttribute` as default settings for current assembly.

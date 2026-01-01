@@ -1,4 +1,4 @@
-using SourceGen.Ioc.Test.Helpers;
+﻿using SourceGen.Ioc.Test.Helpers;
 
 namespace SourceGen.Ioc.Test.Register;
 
@@ -132,6 +132,7 @@ public class RegisterSourceGeneratorSnapshotTests
     public async Task KeyedService_WithCsharpKey_GeneratesKeyedRegistration()
     {
         const string source = """
+            using System;
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
@@ -339,7 +340,7 @@ public class RegisterSourceGeneratorSnapshotTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(TestNamespace.IBaseService), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IBaseService), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -387,7 +388,7 @@ public class RegisterSourceGeneratorSnapshotTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped, ServiceTypes = [typeof(TestNamespace.IBaseService)])]
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped, ServiceTypes = [typeof(TestNamespace.IBaseService)])]
 
             namespace TestNamespace;
 
@@ -572,7 +573,7 @@ public class RegisterSourceGeneratorSnapshotTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaultSettings(
+            [assembly: IoCRegisterDefaults(
                 typeof(TestNamespace.IMyService),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.MyServiceDecorator)])]
@@ -604,7 +605,7 @@ public class RegisterSourceGeneratorSnapshotTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaultSettings(
+            [assembly: IoCRegisterDefaults(
                 typeof(TestNamespace.IMyService),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.DefaultDecorator)])]
@@ -645,7 +646,7 @@ public class RegisterSourceGeneratorSnapshotTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaultSettings(
+            [IoCRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(HandlerDecorator<,>)])]

@@ -44,7 +44,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // Default settings
         var defaultSettingsProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterDefaultSettingsAttributeFullName,
+                Constants.IoCRegisterDefaultsAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct))
             .SelectMany(static (m, _) => m)

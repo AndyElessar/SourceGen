@@ -12,7 +12,7 @@ namespace SourceGen.Ioc;
 /// Determines the scope of the service instance.</param>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
 [Conditional("NEVER")]
-public sealed class IoCRegisterDefaultSettingsAttribute(Type targetServiceType, ServiceLifetime lifetime) : Attribute
+public sealed class IoCRegisterDefaultsAttribute(Type targetServiceType, ServiceLifetime lifetime) : Attribute
 {
     /// <summary>
     /// Gets the target service type. Types marked with <see cref="IoCRegisterAttribute"/> that implement/inherit this type
@@ -34,4 +34,10 @@ public sealed class IoCRegisterDefaultSettingsAttribute(Type targetServiceType, 
 
     /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
+
+    /// <inheritdoc cref="IoCRegisterAttribute.ExcludeFromDefault"/>
+    public bool ExcludeFromDefault { get; init; }
+
+    /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
+    public string[] Tags { get; init; } = [];
 }

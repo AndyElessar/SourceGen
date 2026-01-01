@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -10,55 +10,13 @@ namespace SourceGen.Ioc.Test.Helpers;
 /// </summary>
 public static class SourceGeneratorTestHelper
 {
-    private const string AttributeSource = """
-        using System;
-        using System.Diagnostics;
-        using Microsoft.Extensions.DependencyInjection;
+    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Preview);
 
-        namespace SourceGen.Ioc;
-
-        public enum KeyType
-        {
-            Value = 0,
-            Csharp = 1
-        }
-
-        [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-        public sealed class IoCRegisterAttribute : Attribute
-        {
-            public ServiceLifetime Lifetime { get; init; }
-            public bool RegisterAllInterfaces { get; init; }
-            public bool RegisterAllBaseClasses { get; init; }
-            public Type[] ServiceTypes { get; init; } = [];
-            public KeyType KeyType { get; init; } = KeyType.Value;
-            public object? Key { get; init; }
-            public Type[] Decorators { get; init; } = [];
-        }
-
-        [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
-        public sealed class IoCRegisterForAttribute(Type targetType) : Attribute
-        {
-            public Type TargetType { get; } = targetType;
-            public ServiceLifetime Lifetime { get; init; }
-            public bool RegisterAllInterfaces { get; init; }
-            public bool RegisterAllBaseClasses { get; init; }
-            public Type[] ServiceTypes { get; init; } = [];
-            public KeyType KeyType { get; init; } = KeyType.Value;
-            public object? Key { get; init; }
-            public Type[] Decorators { get; init; } = [];
-        }
-
-        [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
-        public sealed class IoCRegisterDefaultSettingsAttribute(Type targetServiceType, ServiceLifetime lifetime) : Attribute
-        {
-            public Type TargetServiceType { get; } = targetServiceType;
-            public ServiceLifetime Lifetime { get; } = lifetime;
-            public bool RegisterAllInterfaces { get; init; }
-            public bool RegisterAllBaseClasses { get; init; }
-            public Type[] ServiceTypes { get; init; } = [];
-            public Type[] Decorators { get; init; } = [];
-        }
-        """;
+    /// <summary>
+    /// Gets the metadata reference for the SourceGen.Ioc assembly containing attribute definitions.
+    /// </summary>
+    private static readonly MetadataReference IocAttributeReference =
+        MetadataReference.CreateFromFile(typeof(IoCRegisterAttribute).Assembly.Location);
 
     /// <summary>
     /// Runs the source generator and returns the generated source texts.
@@ -66,8 +24,7 @@ public static class SourceGeneratorTestHelper
     public static GeneratorRunResult RunGenerator<TGenerator>(string source, string assemblyName = "TestAssembly")
         where TGenerator : IIncrementalGenerator, new()
     {
-        var userSyntaxTree = CSharpSyntaxTree.ParseText(source);
-        var attributeSyntaxTree = CSharpSyntaxTree.ParseText(AttributeSource);
+        var userSyntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
 
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
@@ -75,19 +32,31 @@ public static class SourceGeneratorTestHelper
             .Cast<MetadataReference>()
             .ToList();
 
+        // Add reference to SourceGen.Ioc assembly containing attribute definitions
+        references.Add(IocAttributeReference);
+
         // Add reference to Microsoft.Extensions.DependencyInjection.Abstractions
         var diAbstractionsAssembly = typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly;
         references.Add(MetadataReference.CreateFromFile(diAbstractionsAssembly.Location));
 
         var compilation = CSharpCompilation.Create(
             assemblyName,
-            [userSyntaxTree, attributeSyntaxTree],
+            [userSyntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
+        // Check for compilation errors before running generator
+        var compilationDiagnostics = compilation.GetDiagnostics();
+        var errors = compilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        if (errors.Count > 0)
+        {
+            var errorMessages = string.Join(Environment.NewLine, errors.Select(e => e.ToString()));
+            throw new InvalidOperationException($"Compilation has errors:{Environment.NewLine}{errorMessages}");
+        }
+
         var generator = new TGenerator();
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
 
         var runResult = driver.GetRunResult();
@@ -119,8 +88,7 @@ public static class SourceGeneratorTestHelper
     public static async Task<ImmutableArray<Diagnostic>> RunAnalyzerAsync<TAnalyzer>(string source, string assemblyName = "TestAssembly")
         where TAnalyzer : DiagnosticAnalyzer, new()
     {
-        var userSyntaxTree = CSharpSyntaxTree.ParseText(source);
-        var attributeSyntaxTree = CSharpSyntaxTree.ParseText(AttributeSource);
+        var userSyntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
 
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
@@ -128,13 +96,16 @@ public static class SourceGeneratorTestHelper
             .Cast<MetadataReference>()
             .ToList();
 
+        // Add reference to SourceGen.Ioc assembly containing attribute definitions
+        references.Add(IocAttributeReference);
+
         // Add reference to Microsoft.Extensions.DependencyInjection.Abstractions
         var diAbstractionsAssembly = typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly;
         references.Add(MetadataReference.CreateFromFile(diAbstractionsAssembly.Location));
 
         var compilation = CSharpCompilation.Create(
             assemblyName,
-            [userSyntaxTree, attributeSyntaxTree],
+            [userSyntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 

@@ -957,20 +957,20 @@ public class RegisterAnalyzerTests
 
     #endregion
 
-    #region IoCRegisterDefaultSettingsAttribute - Default Lifetime
+    #region IoCRegisterDefaultsAttribute - Default Lifetime
 
     [Test]
     public async Task DefaultSettings_OpenGenericInterface_AppliesLifetimeFromDefaultSettings()
     {
         // TestOpenGeneric2<T> implements IGenericTest2<T>
-        // IoCRegisterDefaultSettings specifies Scoped for IGenericTest2<>
+        // IoCRegisterDefaults specifies Scoped for IGenericTest2<>
         // So TestOpenGeneric2<T> should be treated as Scoped (from default settings), not Singleton
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -1004,7 +1004,7 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -1037,7 +1037,7 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -1070,7 +1070,7 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -1103,7 +1103,7 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IMyService), ServiceLifetime.Transient)]
+            [assembly: IoCRegisterDefaults(typeof(IMyService), ServiceLifetime.Transient)]
 
             namespace TestNamespace;
 
@@ -1136,7 +1136,7 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(BaseService), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(BaseService), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -1169,8 +1169,8 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IFirst), ServiceLifetime.Scoped)]
-            [assembly: IoCRegisterDefaultSettings(typeof(ISecond), ServiceLifetime.Transient)]
+            [assembly: IoCRegisterDefaults(typeof(IFirst), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(ISecond), ServiceLifetime.Transient)]
 
             namespace TestNamespace;
 
@@ -1204,7 +1204,7 @@ public class RegisterAnalyzerTests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaultSettings(typeof(IOtherInterface), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(IOtherInterface), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
