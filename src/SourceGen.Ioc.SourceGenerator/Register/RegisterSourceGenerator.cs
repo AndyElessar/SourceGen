@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace SourceGen.Ioc.SourceGenerator.Register;
+﻿namespace SourceGen.Ioc.SourceGenerator.Register;
 
 /// <summary>
 /// Generates code to register types marked with SourceGen.Ioc.IoCRegisterAttribute/SourceGen.Ioc.IoCRegisterForAttribute
@@ -189,7 +187,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         string methodName,
         string summary)
     {
-
         writer.WriteLine("/// <summary>");
         writer.WriteLine($"/// {summary}");
         writer.WriteLine("/// </summary>");
@@ -339,13 +336,9 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        // Separate injection members by type
-        var propertyAndFieldMembers = injectionMembers.Where(m => m.MemberType is InjectionMemberType.Property or InjectionMemberType.Field).ToList();
-        var methodMembers = injectionMembers.Where(m => m.MemberType == InjectionMemberType.Method).ToList();
-
         // Resolve constructor parameters
         var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
-        var constructorParamVars = new List<string>(constructorParams.Length);
+        var constructorParamVars = new string[constructorParams.Length];
         int paramIndex = 0;
 
         foreach(var param in constructorParams)
@@ -353,15 +346,33 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             var paramVar = $"s0_ctor{paramIndex}";
             var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
             writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
-            constructorParamVars.Add(paramVar);
+            constructorParamVars[paramIndex] = paramVar;
             paramIndex++;
         }
 
-        // Resolve property/field injection parameters
-        var propertyInitializers = new List<string>();
-        int memberParamIndex = 0;
-        foreach(var member in propertyAndFieldMembers)
+        // Count property/field and method members for pre-allocation
+        int propertyFieldCount = 0;
+        int methodCount = 0;
+        foreach(var member in injectionMembers)
         {
+            if(member.MemberType is InjectionMemberType.Property or InjectionMemberType.Field)
+                propertyFieldCount++;
+            else if(member.MemberType == InjectionMemberType.Method)
+                methodCount++;
+        }
+
+        // Pre-allocate arrays based on counts
+        var propertyInitializers = propertyFieldCount > 0 ? new string[propertyFieldCount] : [];
+        var methodCalls = methodCount > 0 ? new (string MethodName, string[] ParamVars)[methodCount] : [];
+
+        // Process property/field injection parameters
+        int propertyIndex = 0;
+        int memberParamIndex = 0;
+        foreach(var member in injectionMembers)
+        {
+            if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                continue;
+
             var paramVar = $"s0_p{memberParamIndex}";
             var memberTypeName = member.Type?.Name ?? "object";
 
@@ -374,16 +385,20 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 writer.WriteLine($"var {paramVar} = sp.GetRequiredService<{memberTypeName}>();");
             }
 
-            propertyInitializers.Add($"{member.Name} = {paramVar}");
+            propertyInitializers[propertyIndex++] = $"{member.Name} = {paramVar}";
             memberParamIndex++;
         }
 
-        // Resolve method injection parameters
-        var methodCalls = new List<(string MethodName, List<string> ParamVars)>();
-        foreach(var method in methodMembers)
+        // Process method injection parameters
+        int methodIndex = 0;
+        foreach(var method in injectionMembers)
         {
+            if(method.MemberType != InjectionMemberType.Method)
+                continue;
+
             var methodParams = method.Parameters ?? [];
-            var methodParamVars = new List<string>(methodParams.Length);
+            var methodParamVars = new string[methodParams.Length];
+            int methodParamIdx = 0;
 
             foreach(var param in methodParams)
             {
@@ -399,17 +414,17 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                     writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
                 }
 
-                methodParamVars.Add(paramVar);
+                methodParamVars[methodParamIdx++] = paramVar;
                 memberParamIndex++;
             }
 
-            methodCalls.Add((method.Name, methodParamVars));
+            methodCalls[methodIndex++] = (method.Name, methodParamVars);
         }
 
         // Create the instance with constructor and property initializers
         var constructorArgs = string.Join(", ", constructorParamVars);
 
-        if(propertyInitializers.Count > 0)
+        if(propertyInitializers.Length > 0)
         {
             var initializerList = string.Join(", ", propertyInitializers);
             writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs}) {{ {initializerList} }};");
@@ -470,7 +485,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
         // Resolve constructor parameters
         var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
-        var constructorParamVars = new List<string>(constructorParams.Length);
+        var constructorParamVars = new string[constructorParams.Length];
         int paramIndex = 0;
 
         foreach(var param in constructorParams)
@@ -478,13 +493,13 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             var paramVar = $"p{paramIndex}";
             var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
             writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
-            constructorParamVars.Add(paramVar);
+            constructorParamVars[paramIndex] = paramVar;
             paramIndex++;
         }
 
         // Create the instance
         var constructorArgs = string.Join(", ", constructorParamVars);
-        writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
+        writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});"); ;
 
         // Return the instance
         writer.WriteLine("return s0;");
@@ -508,20 +523,24 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         return $"typeof({typeData.NameWithoutGeneric}{GetGenericString(typeData.GenericArity)})";
     }
 
-    private static string GetGenericString(in int arity) =>
-        arity switch
-        {
-            1 => "<>",
-            2 => "<,>",
-            3 => "<,,>",
-            4 => "<,,,>",
-            5 => "<,,,,>",
-            6 => "<,,,,,>",
-            7 => "<,,,,,,>",
-            8 => "<,,,,,,,>",
-            9 => "<,,,,,,,,>",
-            _ => '<' + new string(',', arity - 1) + '>'
-        };
+    /// <summary>
+    /// Cached generic arity strings to avoid repeated allocations.
+    /// Index 0 = arity 1 ("<>"), Index 1 = arity 2 ("<,>"), etc.
+    /// </summary>
+    private static readonly string[] s_genericArityStrings =
+    [
+        "<>",
+        "<,>",
+        "<,,>",
+        "<,,,>",
+        "<,,,,>",
+        "<,,,,,>",
+        "<,,,,,,>",
+        "<,,,,,,,>",
+        "<,,,,,,,,>"
+    ];
+    private static string GetGenericString(int arity) =>
+        arity <= 9 ? s_genericArityStrings[arity - 1] : '<' + new string(',', arity - 1) + '>';
 
     /// <summary>
     /// Writes decorator pattern registration code.
@@ -545,12 +564,15 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
     {
         var decorators = registration.Decorators;
         // Decorators array is in order from outermost to innermost,
-        // so we need to reverse it for building the chain from inner to outer
-        var reversedDecorators = decorators.Reverse().ToArray();
+        // we iterate in reverse order for building the chain from inner to outer
+        var decoratorCount = decorators.Length;
 
         // Get generic arguments from the service type (for closed generic service types)
         var serviceTypeParams = registration.ServiceType.TypeParameters;
         var serviceTypeName = registration.ServiceType.Name;
+
+        // Build service type names set for IsServiceParameter check
+        var serviceTypeNames = BuildServiceTypeNames(registration);
 
         // Build the factory lambda
         if(registration.Key is not null)
@@ -577,10 +599,11 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             writer.WriteLine($"var s0 = sp.GetRequiredService<{registration.ImplementationType.Name}>();");
         }
 
-        // Build decorator chain
-        for(int i = 0; i < reversedDecorators.Length; i++)
+        // Build decorator chain (iterate in reverse order: from innermost to outermost)
+        for(int i = 0; i < decoratorCount; i++)
         {
-            var decorator = reversedDecorators[i];
+            // Access decorators in reverse order
+            var decorator = decorators[decoratorCount - 1 - i];
             var prevVar = $"s{i}";
             var currentVar = $"s{i + 1}";
 
@@ -597,28 +620,30 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             else
             {
                 // Resolve each non-service parameter from IServiceProvider
-                var paramVars = new List<string>(constructorParams.Length);
+                var paramVars = new string[constructorParams.Length];
                 int paramIndex = 0;
+                int paramVarIndex = 0;
                 foreach(var param in constructorParams)
                 {
-                    // Check if this parameter is the service type being decorated (pre-computed)
-                    if(param.IsServiceParameter)
+                    // Check if this parameter is the service type being decorated
+                    // For open generic decorators, substitute type parameters first
+                    var paramTypeName = decorator.IsOpenGeneric && serviceTypeParams is not null
+                        ? SubstituteGenericArguments(param.Type, decorator, serviceTypeParams)
+                        : param.Type.Name;
+
+                    if(IsServiceTypeParameter(param.Type, paramTypeName, serviceTypeNames))
                     {
                         // This is the decorated service, use the previous variable
-                        paramVars.Add(prevVar);
+                        paramVars[paramVarIndex++] = prevVar;
                     }
                     else
                     {
                         // This is a dependency, resolve it from service provider
-                        // For open generic decorators, substitute type parameters with actual generic arguments
-                        var paramTypeName = decorator.IsOpenGeneric && serviceTypeParams is not null
-                            ? SubstituteGenericArguments(param.Type, decorator, serviceTypeParams)
-                            : param.Type.Name;
                         var paramVar = $"{currentVar}_p{paramIndex}";
                         // Use GetService for optional parameters (nullable or has default value), GetRequiredService otherwise
                         var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
                         writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
-                        paramVars.Add(paramVar);
+                        paramVars[paramVarIndex++] = paramVar;
                         paramIndex++;
                     }
                 }
@@ -630,7 +655,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         }
 
         // Return the outermost decorator
-        writer.WriteLine($"return s{reversedDecorators.Length};");
+        writer.WriteLine($"return s{decoratorCount};");
 
         writer.Indentation--;
         writer.WriteLine("});");
@@ -696,48 +721,66 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Replaces a type parameter with an actual type argument in a type name.
+    /// Builds a set of service type names for IsServiceParameter check.
+    /// Includes the service type, implementation type, all base classes, and all interfaces.
+    /// This ensures decorator parameters that reference any service type are correctly identified.
     /// </summary>
-    private static string ReplaceTypeParameter(string typeName, string typeParam, string actualArg)
+    private static HashSet<string> BuildServiceTypeNames(ServiceRegistrationModel registration)
     {
-        // We need to replace the type parameter as a whole word, not as a substring
-        // For example, replacing "T" should not affect "TResponse"
+        var serviceTypeNames = new HashSet<string>(StringComparer.Ordinal);
 
-        var typeNameSpan = typeName.AsSpan();
-        var typeParamSpan = typeParam.AsSpan();
-        StringBuilder result = new(typeNameSpan.Length);
-        int i = 0;
-        while(i < typeNameSpan.Length)
+        // Add service type variants
+        AddTypeNameVariants(serviceTypeNames, registration.ServiceType);
+
+        // Add implementation type variants
+        AddTypeNameVariants(serviceTypeNames, registration.ImplementationType);
+
+        // Add all base classes (important for decorator parameter matching)
+        if(registration.ImplementationType.AllBaseClasses is not null)
         {
-            // Check if we found the type parameter at this position
-            if(i + typeParamSpan.Length <= typeNameSpan.Length &&
-               typeNameSpan.Slice(i, typeParamSpan.Length).Equals(typeParamSpan, StringComparison.Ordinal))
+            foreach(var baseClass in registration.ImplementationType.AllBaseClasses)
             {
-                // Check if it's a whole word (not part of a larger identifier)
-                // Identifiers can contain letters, digits, and underscores
-                bool isStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
-                bool isEnd = i + typeParamSpan.Length == typeNameSpan.Length || !IsIdentifierChar(typeNameSpan[i + typeParamSpan.Length]);
-
-                if(isStart && isEnd)
-                {
-                    result.Append(actualArg);
-                    i += typeParamSpan.Length;
-                    continue;
-                }
+                AddTypeNameVariants(serviceTypeNames, baseClass);
             }
-
-            result.Append(typeNameSpan[i]);
-            i++;
         }
 
-        return result.ToString();
+        // Add all interfaces (important when multiple service types exist)
+        if(registration.ImplementationType.AllInterfaces is not null)
+        {
+            foreach(var iface in registration.ImplementationType.AllInterfaces)
+            {
+                AddTypeNameVariants(serviceTypeNames, iface);
+            }
+        }
+
+        return serviceTypeNames;
     }
 
     /// <summary>
-    /// Checks if a character can be part of an identifier.
+    /// Adds both the full name and non-generic name variants to the set.
     /// </summary>
-    private static bool IsIdentifierChar(in char c)
+    private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
     {
-        return char.IsLetterOrDigit(c) || c == '_';
+        set.Add(type.Name);
+        if(type.Name != type.NameWithoutGeneric)
+        {
+            set.Add(type.NameWithoutGeneric);
+        }
+    }
+
+    /// <summary>
+    /// Checks if a parameter type matches any of the service types.
+    /// </summary>
+    private static bool IsServiceTypeParameter(TypeData paramType, string substitutedTypeName, HashSet<string> serviceTypeNames)
+    {
+        // Check substituted type name first (for open generic decorators)
+        if(serviceTypeNames.Contains(substitutedTypeName))
+        {
+            return true;
+        }
+
+        // Direct match on full name or non-generic name
+        return serviceTypeNames.Contains(paramType.Name)
+            || serviceTypeNames.Contains(paramType.NameWithoutGeneric);
     }
 }

@@ -240,9 +240,6 @@ partial class RegisterSourceGenerator
             decoratorFilterCache = new Dictionary<string, ImmutableEquatableArray<TypeData>>(StringComparer.Ordinal);
         }
 
-        // Build service type names for decorator processing
-        var serviceTypeNames = BuildServiceTypeNameSet(implementationType);
-
         var registrations = new List<ServiceRegistrationModel>();
 
         foreach(var serviceType in serviceTypesToRegister)
@@ -255,9 +252,6 @@ partial class RegisterSourceGenerator
             // Filter decorators based on type parameter constraints
             var filteredDecorators = FilterDecorators(decorators, serviceType, decoratorFilterCache);
 
-            // Process decorators (mark service parameters)
-            var processedDecorators = ProcessDecorators(filteredDecorators, serviceTypeNames);
-
             var model = new ServiceRegistrationModel(
                 serviceType,
                 implementationType,
@@ -265,53 +259,13 @@ partial class RegisterSourceGenerator
                 registration.Key,
                 registration.KeyType,
                 isOpenGenericImplementation,
-                processedDecorators,
+                filteredDecorators,
                 registration.InjectionMembers);
 
             registrations.Add(model);
         }
 
         return registrations.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
-    /// Builds a set of service type names (both full and non-generic variants) for parameter matching.
-    /// </summary>
-    private static HashSet<string> BuildServiceTypeNameSet(TypeData implementationType)
-    {
-        var result = new HashSet<string>(StringComparer.Ordinal);
-
-        AddTypeNameVariants(result, implementationType);
-
-        if(implementationType.AllBaseClasses is not null)
-        {
-            foreach(var baseClass in implementationType.AllBaseClasses)
-            {
-                AddTypeNameVariants(result, baseClass);
-            }
-        }
-
-        if(implementationType.AllInterfaces is not null)
-        {
-            foreach(var iface in implementationType.AllInterfaces)
-            {
-                AddTypeNameVariants(result, iface);
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Adds both the full name and non-generic name variants to the set.
-    /// </summary>
-    private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
-    {
-        set.Add(type.Name);
-        if(type.Name != type.NameWithoutGeneric)
-        {
-            set.Add(type.NameWithoutGeneric);
-        }
     }
 
     /// <summary>
@@ -529,61 +483,6 @@ partial class RegisterSourceGenerator
             // For closed generic or non-generic constraints, check exact name
             return interfaceNameSet.Contains(constraintType.Name);
         }
-    }
-
-    /// <summary>
-    /// Pre-processes decorators to mark which constructor parameters are service parameters.
-    /// </summary>
-    private static ImmutableEquatableArray<TypeData> ProcessDecorators(
-        ImmutableEquatableArray<TypeData> decorators,
-        HashSet<string> serviceTypeNames)
-    {
-        if(decorators.Length == 0)
-        {
-            return decorators;
-        }
-
-        var processedDecorators = new List<TypeData>(decorators.Length);
-        foreach(var decorator in decorators)
-        {
-            processedDecorators.Add(ProcessDecoratorParameters(decorator, serviceTypeNames));
-        }
-
-        return processedDecorators.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
-    /// Processes a single decorator's constructor parameters to mark service parameters.
-    /// </summary>
-    private static TypeData ProcessDecoratorParameters(TypeData decorator, HashSet<string> serviceTypeNames)
-    {
-        var constructorParams = decorator.ConstructorParameters;
-        if(constructorParams is null || constructorParams.Length == 0)
-        {
-            return decorator;
-        }
-
-        var processedParams = new List<ConstructorParameterData>(constructorParams.Length);
-        foreach(var param in constructorParams)
-        {
-            var isServiceParam = IsServiceTypeParameter(param.Type, serviceTypeNames);
-            processedParams.Add(param with { IsServiceParameter = isServiceParam });
-        }
-
-        return decorator with
-        {
-            ConstructorParameters = processedParams.ToImmutableEquatableArray()
-        };
-    }
-
-    /// <summary>
-    /// Checks if a parameter type matches any of the service types.
-    /// </summary>
-    private static bool IsServiceTypeParameter(TypeData paramType, HashSet<string> serviceTypeNames)
-    {
-        // Direct match on full name or non-generic name
-        return serviceTypeNames.Contains(paramType.Name)
-            || serviceTypeNames.Contains(paramType.NameWithoutGeneric);
     }
 
     /// <summary>

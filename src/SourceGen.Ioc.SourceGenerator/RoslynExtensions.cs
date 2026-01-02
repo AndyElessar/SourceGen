@@ -826,4 +826,164 @@ internal static class RoslynExtensions
             }
         }
     }
+
+    #region Type Parameter Substitution
+
+    /// <summary>
+    /// Substitutes multiple type parameters in a type name with actual type arguments.
+    /// Uses Span-based processing to minimize string allocations.
+    /// </summary>
+    /// <param name="typeName">The type name containing type parameters to substitute.</param>
+    /// <param name="typeArgMap">A dictionary mapping type parameter names to their actual type arguments.</param>
+    /// <returns>The type name with all type parameters substituted.</returns>
+    public static string SubstituteTypeArguments(string typeName, Dictionary<string, string> typeArgMap)
+    {
+        if(typeArgMap.Count == 0)
+        {
+            return typeName;
+        }
+
+        // Fast path: check if any substitution is needed
+        var typeNameSpan = typeName.AsSpan();
+        bool needsSubstitution = false;
+        foreach(var kvp in typeArgMap)
+        {
+            if(ContainsTypeParameter(typeNameSpan, kvp.Key.AsSpan()))
+            {
+                needsSubstitution = true;
+                break;
+            }
+        }
+
+        if(!needsSubstitution)
+        {
+            return typeName;
+        }
+
+        // Perform all substitutions in a single pass using StringBuilder
+        var result = new StringBuilder(typeName.Length + 32);
+        int i = 0;
+
+        while(i < typeNameSpan.Length)
+        {
+            bool replaced = false;
+
+            // Try to match any type parameter at current position
+            foreach(var kvp in typeArgMap)
+            {
+                var typeParamSpan = kvp.Key.AsSpan();
+                if(i + typeParamSpan.Length <= typeNameSpan.Length &&
+                   typeNameSpan.Slice(i, typeParamSpan.Length).Equals(typeParamSpan, StringComparison.Ordinal))
+                {
+                    // Check if it's a whole word
+                    bool isStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
+                    bool isEnd = i + typeParamSpan.Length == typeNameSpan.Length ||
+                                 !IsIdentifierChar(typeNameSpan[i + typeParamSpan.Length]);
+
+                    if(isStart && isEnd)
+                    {
+                        result.Append(kvp.Value);
+                        i += typeParamSpan.Length;
+                        replaced = true;
+                        break;
+                    }
+                }
+            }
+
+            if(!replaced)
+            {
+                result.Append(typeNameSpan[i]);
+                i++;
+            }
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Replaces a single type parameter with an actual type argument in a type name.
+    /// </summary>
+    /// <param name="typeName">The type name containing the type parameter.</param>
+    /// <param name="typeParam">The type parameter name to replace (e.g., "T").</param>
+    /// <param name="actualArg">The actual type argument to substitute (e.g., "string").</param>
+    /// <returns>The type name with the type parameter replaced.</returns>
+    public static string ReplaceTypeParameter(string typeName, string typeParam, string actualArg)
+    {
+        // We need to replace the type parameter as a whole word, not as a substring
+        // For example, replacing "T" should not affect "TResponse"
+
+        var typeNameSpan = typeName.AsSpan();
+        var typeParamSpan = typeParam.AsSpan();
+
+        // Fast path: check if substitution is needed
+        if(!ContainsTypeParameter(typeNameSpan, typeParamSpan))
+        {
+            return typeName;
+        }
+
+        var result = new StringBuilder(typeNameSpan.Length + actualArg.Length);
+        int i = 0;
+
+        while(i < typeNameSpan.Length)
+        {
+            // Check if we found the type parameter at this position
+            if(i + typeParamSpan.Length <= typeNameSpan.Length &&
+               typeNameSpan.Slice(i, typeParamSpan.Length).Equals(typeParamSpan, StringComparison.Ordinal))
+            {
+                // Check if it's a whole word (not part of a larger identifier)
+                bool isStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
+                bool isEnd = i + typeParamSpan.Length == typeNameSpan.Length ||
+                             !IsIdentifierChar(typeNameSpan[i + typeParamSpan.Length]);
+
+                if(isStart && isEnd)
+                {
+                    result.Append(actualArg);
+                    i += typeParamSpan.Length;
+                    continue;
+                }
+            }
+
+            result.Append(typeNameSpan[i]);
+            i++;
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Checks if the type name contains the type parameter as a whole word.
+    /// </summary>
+    private static bool ContainsTypeParameter(ReadOnlySpan<char> typeName, ReadOnlySpan<char> typeParam)
+    {
+        int index = 0;
+        while(index <= typeName.Length - typeParam.Length)
+        {
+            var slice = typeName.Slice(index);
+            int pos = slice.IndexOf(typeParam, StringComparison.Ordinal);
+            if(pos < 0)
+            {
+                return false;
+            }
+
+            int absolutePos = index + pos;
+            bool isStart = absolutePos == 0 || !IsIdentifierChar(typeName[absolutePos - 1]);
+            bool isEnd = absolutePos + typeParam.Length == typeName.Length ||
+                         !IsIdentifierChar(typeName[absolutePos + typeParam.Length]);
+
+            if(isStart && isEnd)
+            {
+                return true;
+            }
+
+            index = absolutePos + 1;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a character can be part of an identifier.
+    /// </summary>
+    private static bool IsIdentifierChar(in char c) => char.IsLetterOrDigit(c) || c == '_';
+
+    #endregion
 }

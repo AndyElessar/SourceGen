@@ -217,20 +217,11 @@ partial class RegisterSourceGenerator
             openImplType,
             implTypeArgMap);
 
-        // Build the set of service type names for decorator processing
-        var serviceTypeNames = new HashSet<string>(StringComparer.Ordinal);
-        AddTypeNameVariants(serviceTypeNames, closedImplType);
-        AddTypeNameVariants(serviceTypeNames, closedServiceType);
-
         // Build all closed service types from the open generic's service types
         var closedServiceTypes = BuildClosedServiceTypesFromServiceTypeMap(
             openGenericInfo.ServiceTypes,
             serviceTypeArgMap,
             implTypeArgMap);
-        foreach(var svcType in closedServiceTypes)
-        {
-            AddTypeNameVariants(serviceTypeNames, svcType);
-        }
 
         // Create registration for the implementation type itself
         var implModel = new ServiceRegistrationModel(
@@ -278,8 +269,7 @@ partial class RegisterSourceGenerator
             // Use service type's type parameters for decorator substitution
             var serviceTypeDecorators = ProcessDecoratorsForServiceType(
                 openGenericInfo.Decorators,
-                closedSvcType,
-                serviceTypeNames);
+                closedSvcType);
 
             var serviceModel = new ServiceRegistrationModel(
                 closedSvcType,
@@ -563,19 +553,6 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Substitutes type parameters in a type name with actual type arguments.
-    /// </summary>
-    private static string SubstituteTypeArguments(string typeName, Dictionary<string, string> typeArgMap)
-    {
-        var result = typeName;
-        foreach(var kvp in typeArgMap)
-        {
-            result = ReplaceTypeParameter(result, kvp.Key, kvp.Value);
-        }
-        return result;
-    }
-
-    /// <summary>
     /// Substitutes type parameters in TypeParameter array with actual types.
     /// </summary>
     private static ImmutableEquatableArray<TypeParameter>? SubstituteTypeParameters(
@@ -605,8 +582,7 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<TypeData> ProcessDecoratorsForServiceType(
         ImmutableEquatableArray<TypeData> decorators,
-        TypeData serviceType,
-        HashSet<string> serviceTypeNames)
+        TypeData serviceType)
     {
         if(decorators.Length == 0)
         {
@@ -616,7 +592,8 @@ partial class RegisterSourceGenerator
         var serviceTypeParams = serviceType.TypeParameters;
         if(serviceTypeParams is null || serviceTypeParams.Length == 0)
         {
-            return ProcessDecorators(decorators, serviceTypeNames);
+            // No type parameters, return decorators as-is
+            return decorators;
         }
 
         // Filter decorators based on type constraints
@@ -631,7 +608,7 @@ partial class RegisterSourceGenerator
         var processedDecorators = new List<TypeData>(filteredDecorators.Length);
         foreach(var decorator in filteredDecorators)
         {
-            var processedDecorator = SubstituteDecoratorTypeParams(decorator, serviceTypeParams, serviceTypeNames);
+            var processedDecorator = SubstituteDecoratorTypeParams(decorator, serviceTypeParams);
             processedDecorators.Add(processedDecorator);
         }
 
@@ -643,19 +620,19 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static TypeData SubstituteDecoratorTypeParams(
         TypeData decorator,
-        ImmutableEquatableArray<TypeParameter> closedTypeParams,
-        HashSet<string> serviceTypeNames)
+        ImmutableEquatableArray<TypeParameter> closedTypeParams)
     {
         if(!decorator.IsOpenGeneric)
         {
-            return ProcessDecoratorParameters(decorator, serviceTypeNames);
+            // No longer need to process decorator parameters for IsServiceParameter
+            return decorator;
         }
 
         // Build type argument map from decorator type params to closed type args
         var decoratorTypeParams = decorator.TypeParameters;
         if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
         {
-            return ProcessDecoratorParameters(decorator, serviceTypeNames);
+            return decorator;
         }
 
         // Build substitution map: decorator param name -> closed type arg name
@@ -683,8 +660,7 @@ partial class RegisterSourceGenerator
                     Name = newParamTypeName,
                     IsOpenGeneric = false
                 };
-                var isServiceParam = IsServiceTypeParameter(newParamType, serviceTypeNames);
-                newParams.Add(param with { Type = newParamType, IsServiceParameter = isServiceParam });
+                newParams.Add(param with { Type = newParamType });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
