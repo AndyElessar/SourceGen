@@ -156,6 +156,28 @@ When generating or modifying code, **always use the latest C# 14 features** wher
 
 1. **Unit Test Generators**
    - Use `TUnit` as test framework
+      - [Filter syntax reference](https://tunit.dev/docs/troubleshooting/#test-filtering-and-grouping-issues)
+      - Tree-Node Filter Syntax: `/Assembly/Namespace/Class/Method[Property=Value]`
+      - Examples:
+         ```
+         # Run all tests in a specific class
+         dotnet run -- --treenode-filter "/*/*/MyTestClass/*"
+
+         # Run a specific test method
+         dotnet run -- --treenode-filter "/*/*/MyTestClass/MyTestMethod"
+
+         # Run tests with a specific category
+         dotnet run -- --treenode-filter "/*/*/*/*[Category=Integration]"
+
+         # Run tests NOT in a category
+         dotnet run -- --treenode-filter "/*/*/*/*[Category!=Performance]"
+
+         # Multiple filters (OR)
+         dotnet run -- --treenode-filter "/*/*/ClassA/*|/*/*/ClassB/*"
+
+         # Combine filters (AND)
+         dotnet run -- --treenode-filter "/*/*/*/*[Category=Integration][Priority=High]"
+         ```
    - Use `Microsoft.CodeAnalysis.CSharp.Testing` for testing
    - Test both positive and negative cases
    - Verify diagnostic output
