@@ -83,6 +83,18 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Services implementing nested open generic interfaces or classes cannot be registered with the dependency injection container.");
 
+    /// <summary>
+    /// SGIOC007: Invalid Attribute Usage - InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidInjectAttributeUsage = new(
+        id: "SGIOC007",
+        title: "Invalid Attribute Usage",
+        messageFormat: "InjectAttribute cannot be applied to '{0}' because {1}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "InjectAttribute cannot be applied to static members, members that cannot be assigned/invoked, or methods that do not return void.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -90,7 +102,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         SingletonDependsOnScoped,
         SingletonDependsOnTransient,
         ScopedDependsOnTransient,
-        NestedOpenGeneric
+        NestedOpenGeneric,
+        InvalidInjectAttributeUsage
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -127,11 +140,109 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // First pass: collect services and do immediate validation (SGIOC001, SGIOC006)
         context.RegisterSymbolAction(ctx => CollectAndValidateNamedType(ctx, analyzerContext), SymbolKind.NamedType);
 
+        // SGIOC007: Analyze InjectAttribute on members
+        context.RegisterSymbolAction(AnalyzeInjectAttribute, SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
+
         // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
         context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
 
         // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003-005)
         context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
+    }
+
+    /// <summary>
+    /// SGIOC007: Analyzes InjectAttribute usage on members.
+    /// Reports error when InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
+    /// </summary>
+    private static void AnalyzeInjectAttribute(SymbolAnalysisContext context)
+    {
+        var member = context.Symbol;
+
+        // Check if the member has InjectAttribute (by name only, matching TransformRegister behavior)
+        var injectAttribute = member.GetAttributes()
+            .FirstOrDefault(static attr => attr.AttributeClass?.Name == "InjectAttribute");
+
+        if(injectAttribute is null)
+            return;
+
+        var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
+            ?? member.Locations.FirstOrDefault();
+
+        // Check if member is static
+        if(member.IsStatic)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidInjectAttributeUsage,
+                location,
+                member.Name,
+                "it is static"));
+            return;
+        }
+
+        switch(member)
+        {
+            case IPropertySymbol property:
+                // Check if property has no setter or setter is private
+                if(property.SetMethod is null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidInjectAttributeUsage,
+                        location,
+                        member.Name,
+                        "property has no setter"));
+                }
+                else if(property.SetMethod.DeclaredAccessibility is Accessibility.Private)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidInjectAttributeUsage,
+                        location,
+                        member.Name,
+                        "property setter is private"));
+                }
+                break;
+
+            case IFieldSymbol field:
+                // Check if field is readonly
+                if(field.IsReadOnly)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidInjectAttributeUsage,
+                        location,
+                        member.Name,
+                        "field is readonly"));
+                }
+                // Check if field is private
+                else if(field.DeclaredAccessibility is Accessibility.Private)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidInjectAttributeUsage,
+                        location,
+                        member.Name,
+                        "field is private"));
+                }
+                break;
+
+            case IMethodSymbol method:
+                // Check if method is private
+                if(method.DeclaredAccessibility is Accessibility.Private)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidInjectAttributeUsage,
+                        location,
+                        member.Name,
+                        "method is private"));
+                }
+                // Check if method does not return void
+                else if(!method.ReturnsVoid)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidInjectAttributeUsage,
+                        location,
+                        member.Name,
+                        "method must return void"));
+                }
+                break;
+        }
     }
 
     /// <summary>

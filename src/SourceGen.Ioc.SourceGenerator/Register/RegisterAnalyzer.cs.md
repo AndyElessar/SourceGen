@@ -20,3 +20,6 @@ Format: ID - Level - Category - Description
 
 6. SGIOC006 - Error - Design - Nested OpenGeneric Detected
     - Report when there are service is implementing nested open generic interfaces/class, which is not allow to register.
+
+7. SGIOC007 - Error - Usage - Invalid Attribute Usage
+    - Report when InjectAttribute is mark on static member, or member can not assign/invoke (private setter, setter not exists, private field, readonly field, private method), or mark on method and it is not return void.
