@@ -8,81 +8,80 @@ partial class RegisterSourceGenerator
     private const string DefaultMethodKey = "";
 
     /// <summary>
-    /// Generates service registrations grouped by method name.
-    /// The dictionary key is the tag name (empty string for default method).
+    /// Pipeline 1: Processes a single registration with default settings.
+    /// This method can be cached per registration - only re-runs when the registration or default settings change.
     /// </summary>
-    private static ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> GenerateServiceRegistrations(
-        in ImmutableArray<RegistrationData> registrations,
-        DefaultSettingsMap defaultSettings,
-        CancellationToken ct)
+    /// <param name="registration">The registration data to process.</param>
+    /// <param name="defaultSettings">The default settings map.</param>
+    /// <returns>The processed registration result with all resolved settings.</returns>
+    private static BasicRegistrationResult ProcessSingleRegistration(
+        RegistrationData registration,
+        DefaultSettingsMap defaultSettings)
     {
-        var methodGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
-
-        // Reusable buffers to reduce allocations
+        // Reusable buffers
         var matchedDefaultIndices = new HashSet<int>();
         var matchedServiceTypes = new List<TypeData>();
         var serviceTypesToRegister = new HashSet<TypeData>();
 
-        foreach(var registration in registrations)
-        {
-            ct.ThrowIfCancellationRequested();
+        // Find matching default settings from base classes and interfaces
+        int bestDefaultIndex = FindMatchingDefaults(
+            registration.AllBaseClasses,
+            registration.AllInterfaces,
+            defaultSettings,
+            matchedDefaultIndices,
+            matchedServiceTypes);
 
-            matchedDefaultIndices.Clear();
-            matchedServiceTypes.Clear();
-            serviceTypesToRegister.Clear();
+        DefaultSettingsModel? matchingDefault = bestDefaultIndex >= 0 ? defaultSettings[bestDefaultIndex] : null;
 
-            // Find matching default settings from base classes and interfaces
-            int bestDefaultIndex = FindMatchingDefaults(
-                registration.AllBaseClasses,
-                registration.AllInterfaces,
-                defaultSettings,
-                matchedDefaultIndices,
-                matchedServiceTypes);
+        // Merge settings (explicit > default > registration default)
+        var (lifetime, registerAllInterfaces, registerAllBaseClasses) = MergeSettings(registration, matchingDefault);
 
-            DefaultSettingsModel? matchingDefault = bestDefaultIndex >= 0 ? defaultSettings[bestDefaultIndex] : null;
+        // Collect all service types to register
+        CollectServiceTypes(
+            registration,
+            matchingDefault,
+            matchedServiceTypes,
+            registerAllInterfaces,
+            registerAllBaseClasses,
+            serviceTypesToRegister);
 
-            // Merge settings (explicit > default > registration default)
-            var (lifetime, registerAllInterfaces, registerAllBaseClasses) = MergeSettings(registration, matchingDefault);
+        var decorators = registration.Decorators.Length > 0
+            ? registration.Decorators
+            : (matchingDefault?.Decorators ?? registration.Decorators);
 
-            // Collect all service types to register
-            CollectServiceTypes(
-                registration,
-                matchingDefault,
-                matchedServiceTypes,
-                registerAllInterfaces,
-                registerAllBaseClasses,
-                serviceTypesToRegister);
+        var tags = registration.Tags.Length > 0
+            ? registration.Tags
+            : (matchingDefault?.Tags ?? registration.Tags);
 
-            var decorators = registration.Decorators.Length > 0
-                ? registration.Decorators
-                : (matchingDefault?.Decorators ?? registration.Decorators);
+        var excludeFromDefault = registration.Tags.Length > 0 || registration.ExcludeFromDefault
+            ? registration.ExcludeFromDefault
+            : (matchingDefault?.ExcludeFromDefault ?? false);
 
-            var tags = MergeTags(registration.Tags, matchingDefault?.Tags);
+        // Create service registration models
+        var serviceRegistrations = CreateServiceRegistrations(
+            registration,
+            serviceTypesToRegister,
+            lifetime,
+            decorators);
 
-            var excludeFromDefault = registration.Tags.Length > 0 || registration.ExcludeFromDefault
-                ? registration.ExcludeFromDefault
-                : (matchingDefault?.ExcludeFromDefault ?? false);
+        // Create open generic entries for indexing (if applicable)
+        var openGenericEntries = CreateOpenGenericEntries(
+            registration,
+            serviceTypesToRegister,
+            lifetime,
+            decorators,
+            tags,
+            excludeFromDefault);
 
-            // Build service type names once per registration
-            var serviceTypeNames = BuildServiceTypeNameSet(registration.ImplementationType);
+        // Collect closed generic dependencies
+        var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration);
 
-            // Create registrations for each valid service type and add to appropriate groups
-            CreateRegistrationsGrouped(
-                registration,
-                serviceTypesToRegister,
-                lifetime,
-                decorators,
-                tags,
-                excludeFromDefault,
-                serviceTypeNames,
-                methodGroups);
-        }
-
-        return methodGroups
-            .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
-            .ToImmutableEquatableDictionary(
-                static kvp => kvp.Key,
-                static kvp => kvp.Value.ToImmutableEquatableArray());
+        return new BasicRegistrationResult(
+            serviceRegistrations,
+            tags,
+            excludeFromDefault,
+            openGenericEntries,
+            closedGenericDependencies);
     }
 
     /// <summary>
@@ -163,22 +162,6 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Merges tags from registration with tags from default settings.
-    /// Registration tags take precedence; if empty, uses default's tags.
-    /// </summary>
-    private static ImmutableEquatableArray<string> MergeTags(
-        ImmutableEquatableArray<string> registrationTags,
-        ImmutableEquatableArray<string>? defaultTags)
-    {
-        if(registrationTags.Length > 0)
-        {
-            return registrationTags;
-        }
-
-        return defaultTags ?? registrationTags;
-    }
-
-    /// <summary>
     /// Collects all service types to register based on settings.
     /// </summary>
     private static void CollectServiceTypes(
@@ -233,17 +216,13 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Creates service registrations for each valid service type and groups them by method.
+    /// Creates service registration models for each valid service type.
     /// </summary>
-    private static void CreateRegistrationsGrouped(
+    private static ImmutableEquatableArray<ServiceRegistrationModel> CreateServiceRegistrations(
         RegistrationData registration,
         HashSet<TypeData> serviceTypesToRegister,
         ServiceLifetime lifetime,
-        ImmutableEquatableArray<TypeData> decorators,
-        ImmutableEquatableArray<string> tags,
-        bool excludeFromDefault,
-        HashSet<string> serviceTypeNames,
-        Dictionary<string, List<ServiceRegistrationModel>> methodGroups)
+        ImmutableEquatableArray<TypeData> decorators)
     {
         var implementationType = registration.ImplementationType;
         var isOpenGenericImplementation = implementationType.IsOpenGeneric;
@@ -251,15 +230,20 @@ partial class RegisterSourceGenerator
         // Skip if implementation has nested open generic (cannot be registered)
         if(implementationType.IsNestedOpenGeneric)
         {
-            return;
+            return [];
         }
 
-        // key = serviceType's NameWithoutGeneric for generic, Name for non-generic
+        // Decorator filter cache
         Dictionary<string, ImmutableEquatableArray<TypeData>>? decoratorFilterCache = null;
         if(decorators.Length > 0)
         {
             decoratorFilterCache = new Dictionary<string, ImmutableEquatableArray<TypeData>>(StringComparer.Ordinal);
         }
+
+        // Build service type names for decorator processing
+        var serviceTypeNames = BuildServiceTypeNameSet(implementationType);
+
+        var registrations = new List<ServiceRegistrationModel>();
 
         foreach(var serviceType in serviceTypesToRegister)
         {
@@ -268,10 +252,10 @@ partial class RegisterSourceGenerator
                 continue;
             }
 
-            // Filter decorators based on type parameter constraints for this specific service type (with caching)
+            // Filter decorators based on type parameter constraints
             var filteredDecorators = FilterDecorators(decorators, serviceType, decoratorFilterCache);
 
-            // Process decorators (mark which constructor parameters are service parameters)
+            // Process decorators (mark service parameters)
             var processedDecorators = ProcessDecorators(filteredDecorators, serviceTypeNames);
 
             var model = new ServiceRegistrationModel(
@@ -284,34 +268,85 @@ partial class RegisterSourceGenerator
                 processedDecorators,
                 registration.InjectionMembers);
 
-            // Add to default method if not excluded
-            if(!excludeFromDefault)
-            {
-                AddToMethodGroup(methodGroups, DefaultMethodKey, model);
-            }
+            registrations.Add(model);
+        }
 
-            // Add to each tag's method
-            foreach(var tag in tags)
+        return registrations.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Builds a set of service type names (both full and non-generic variants) for parameter matching.
+    /// </summary>
+    private static HashSet<string> BuildServiceTypeNameSet(TypeData implementationType)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+
+        AddTypeNameVariants(result, implementationType);
+
+        if(implementationType.AllBaseClasses is not null)
+        {
+            foreach(var baseClass in implementationType.AllBaseClasses)
             {
-                AddToMethodGroup(methodGroups, tag, model);
+                AddTypeNameVariants(result, baseClass);
             }
+        }
+
+        if(implementationType.AllInterfaces is not null)
+        {
+            foreach(var iface in implementationType.AllInterfaces)
+            {
+                AddTypeNameVariants(result, iface);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Adds both the full name and non-generic name variants to the set.
+    /// </summary>
+    private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
+    {
+        set.Add(type.Name);
+        if(type.Name != type.NameWithoutGeneric)
+        {
+            set.Add(type.NameWithoutGeneric);
         }
     }
 
     /// <summary>
-    /// Adds a registration model to the specified method group.
+    /// Validates if a service type can be registered with the given implementation.
     /// </summary>
-    private static void AddToMethodGroup(
-        Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
-        string methodKey,
-        ServiceRegistrationModel model)
+    private static bool IsValidServiceType(
+        TypeData serviceType,
+        TypeData implementationType,
+        bool isOpenGenericImplementation,
+        ImmutableEquatableSet<string> validOpenGenericServiceTypes)
     {
-        if(!methodGroups.TryGetValue(methodKey, out var list))
+        // Open generic implementation requires open generic service type (and vice versa)
+        if(isOpenGenericImplementation != serviceType.IsOpenGeneric)
         {
-            list = [];
-            methodGroups[methodKey] = list;
+            return false;
         }
-        list.Add(model);
+
+        // Skip nested open generic types (cannot be properly registered with DI container)
+        if(serviceType.IsNestedOpenGeneric)
+        {
+            return false;
+        }
+
+        // For open generic service types (excluding the implementation type itself),
+        // verify the implementation actually implements it correctly
+        if(serviceType.IsOpenGeneric && serviceType.Name != implementationType.Name)
+        {
+            var serviceTypeKey = $"{serviceType.NameWithoutGeneric}`{serviceType.GenericArity}";
+            if(!validOpenGenericServiceTypes.Contains(serviceTypeKey))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -497,41 +532,6 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Validates if a service type can be registered with the given implementation.
-    /// </summary>
-    private static bool IsValidServiceType(
-        TypeData serviceType,
-        TypeData implementationType,
-        bool isOpenGenericImplementation,
-        ImmutableEquatableSet<string> validOpenGenericServiceTypes)
-    {
-        // Open generic implementation requires open generic service type (and vice versa)
-        if(isOpenGenericImplementation != serviceType.IsOpenGeneric)
-        {
-            return false;
-        }
-
-        // Skip nested open generic types (cannot be properly registered with DI container)
-        if(serviceType.IsNestedOpenGeneric)
-        {
-            return false;
-        }
-
-        // For open generic service types (excluding the implementation type itself),
-        // verify the implementation actually implements it correctly
-        if(serviceType.IsOpenGeneric && serviceType.Name != implementationType.Name)
-        {
-            var serviceTypeKey = $"{serviceType.NameWithoutGeneric}`{serviceType.GenericArity}";
-            if(!validOpenGenericServiceTypes.Contains(serviceTypeKey))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Pre-processes decorators to mark which constructor parameters are service parameters.
     /// </summary>
     private static ImmutableEquatableArray<TypeData> ProcessDecorators(
@@ -550,46 +550,6 @@ partial class RegisterSourceGenerator
         }
 
         return processedDecorators.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
-    /// Builds a set of service type names (both full and non-generic variants) for parameter matching.
-    /// </summary>
-    private static HashSet<string> BuildServiceTypeNameSet(TypeData implementationType)
-    {
-        var result = new HashSet<string>(StringComparer.Ordinal);
-
-        AddTypeNameVariants(result, implementationType);
-
-        if(implementationType.AllBaseClasses is not null)
-        {
-            foreach(var baseClass in implementationType.AllBaseClasses)
-            {
-                AddTypeNameVariants(result, baseClass);
-            }
-        }
-
-        if(implementationType.AllInterfaces is not null)
-        {
-            foreach(var iface in implementationType.AllInterfaces)
-            {
-                AddTypeNameVariants(result, iface);
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Adds both the full name and non-generic name variants to the set.
-    /// </summary>
-    private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
-    {
-        set.Add(type.Name);
-        if(type.Name != type.NameWithoutGeneric)
-        {
-            set.Add(type.NameWithoutGeneric);
-        }
     }
 
     /// <summary>
@@ -624,5 +584,102 @@ partial class RegisterSourceGenerator
         // Direct match on full name or non-generic name
         return serviceTypeNames.Contains(paramType.Name)
             || serviceTypeNames.Contains(paramType.NameWithoutGeneric);
+    }
+
+    /// <summary>
+    /// Creates open generic entries for indexing during closed generic resolution.
+    /// </summary>
+    private static ImmutableEquatableArray<OpenGenericEntry> CreateOpenGenericEntries(
+        RegistrationData registration,
+        HashSet<TypeData> serviceTypesToRegister,
+        ServiceLifetime lifetime,
+        ImmutableEquatableArray<TypeData> decorators,
+        ImmutableEquatableArray<string> tags,
+        bool excludeFromDefault)
+    {
+        var implementationType = registration.ImplementationType;
+
+        // Only for open generic implementations (not nested)
+        if(!implementationType.IsOpenGeneric || implementationType.IsNestedOpenGeneric)
+        {
+            return [];
+        }
+
+        var info = new OpenGenericRegistrationInfo(
+            implementationType,
+            serviceTypesToRegister.ToImmutableEquatableArray(),
+            registration.AllInterfaces,
+            lifetime,
+            registration.Key,
+            registration.KeyType,
+            decorators,
+            tags,
+            excludeFromDefault,
+            registration.InjectionMembers);
+
+        var entries = new List<OpenGenericEntry>();
+        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        // Index by each open generic service type
+        foreach(var serviceType in serviceTypesToRegister)
+        {
+            if(!serviceType.IsOpenGeneric)
+            {
+                continue;
+            }
+
+            var key = serviceType.NameWithoutGeneric;
+            if(addedKeys.Add(key))
+            {
+                entries.Add(new OpenGenericEntry(key, info));
+            }
+        }
+
+        // Also index by all interfaces that are open generics
+        foreach(var iface in registration.AllInterfaces)
+        {
+            if(!iface.IsOpenGeneric)
+            {
+                continue;
+            }
+
+            var key = iface.NameWithoutGeneric;
+            if(addedKeys.Add(key))
+            {
+                entries.Add(new OpenGenericEntry(key, info));
+            }
+        }
+
+        return entries.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Collects closed generic dependencies from a registration's constructor parameters.
+    /// </summary>
+    private static ImmutableEquatableArray<ClosedGenericDependency> CollectClosedGenericDependenciesFromRegistration(
+        RegistrationData registration)
+    {
+        var constructorParams = registration.ImplementationType.ConstructorParameters;
+        if(constructorParams is null || constructorParams.Length == 0)
+        {
+            return [];
+        }
+
+        var dependencies = new List<ClosedGenericDependency>();
+
+        foreach(var param in constructorParams)
+        {
+            var paramType = param.Type;
+            // Check if this is a closed generic type (has generic arguments but is not open generic)
+            if(paramType.GenericArity > 0 && !paramType.IsOpenGeneric && !paramType.IsNestedOpenGeneric)
+            {
+                dependencies.Add(new ClosedGenericDependency(
+                    paramType.Name,
+                    paramType,
+                    paramType.NameWithoutGeneric));
+            }
+        }
+
+        return dependencies.ToImmutableEquatableArray();
     }
 }

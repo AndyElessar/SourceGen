@@ -93,12 +93,24 @@ public static class ServiceCollectionExtensions
    #endregion
 
    #region Define:
+   public interface ILogger<T>
+   {
+      public void Log(string msg);
+   }
+   [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+   public sealed class Logger<T> : ILogger<T>
+   {
+      public void Log(string msg)
+      {
+         Console.WriteLine(msg);
+      }
+   }
+
    public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
    [IoCRegisterDefaultSettings(
       typeof(IRequestHandler<,>),
       ServiceLifetime.Singleton,
-      ServiceTypes = [typeof(IGenericTest<,>)],
       Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
    )]
    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
@@ -114,19 +126,6 @@ public static class ServiceCollectionExtensions
       public List<string> Handle(TestRequest request)
       {
          return [.. Enumerable.Range(1, request.Key).Select(i => $"Value {i}")];
-      }
-   }
-
-   public interface ILogger<T>
-   {
-      public void Log(string msg);
-   }
-   [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
-   public sealed class Logger<T> : ILogger<T>
-   {
-      public void Log(string msg)
-      {
-         Console.WriteLine(msg);
       }
    }
 
@@ -262,4 +261,114 @@ public static class ServiceCollectionExtensions
    #endregion
    ```
 
-10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s assembly's `IoCRegisterDefaultSettingsAttribute` as default settings for current assembly.
+10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s and assembly's `IoCRegisterDefaultSettingsAttribute` as default settings for current assembly.
+
+11. When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate factory to register class.
+   ```csharp
+   #region Define:
+   public interface ILogger<T>
+   {
+      public void Log(string msg);
+   }
+   [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+   public sealed class Logger<T> : ILogger<T>
+   {
+      public void Log(string msg)
+      {
+         Console.WriteLine(msg);
+      }
+   }
+
+   public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+   [IoCRegisterDefaultSettings(
+      typeof(IRequestHandler<,>),
+      ServiceLifetime.Singleton,
+      Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
+   )]
+   public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+   {
+      TResponse Handle(TRequest request);
+   }
+
+   public sealed record TestRequest<T>(Guid PK) : IRequest<TestRequest<T>, List<T>>;
+
+   [IoCRegister]
+   internal sealed class TestHandler<T>(
+      ILogger<TestHandler<T>> logger,
+      IUnitOfWorkFactory factory 
+   ) : IRequestHandler<TestRequest<T>, List<T>>
+   {
+      private readonly ILogger<TestHandler<T>> logger = logger;
+      private readonly IUnitOfWorkFactory factory = factory;
+
+      public List<T> Handle(TestRequest<T> request)
+      {
+         return factory.Query<T>(request.PK);
+      }
+   }
+
+   internal sealed class HandlerDecorator1<TRequest, TResponse>(
+      IRequestHandler<TRequest, TResponse> inner,
+      ILogger<HandlerDecorator1<TRequest, TResponse>> logger
+   ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+   {
+      private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
+
+      public TResponse Handle(TRequest request)
+      {
+         logger.Log(request.ToString() ?? string.Empty);
+         Console.WriteLine("HandlerDecorator1: Before handling request");
+         var response = inner.Handle(request);
+         Console.WriteLine("HandlerDecorator1: After handling request");
+         return response;
+      }
+   }
+
+   internal sealed class HandlerDecorator2<TRequest, TResponse>(
+      IRequestHandler<TRequest, TResponse> inner
+   ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+   {
+      public TResponse Handle(TRequest request)
+      {
+         Console.WriteLine("HandlerDecorator2: Before handling request");
+         var response = inner.Handle(request);
+         Console.WriteLine("HandlerDecorator2: After handling request");
+         return response;
+      }
+   }
+
+   public class TestEntity;
+
+   [IoCRegister]
+   internal sealed class ViewModel(IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler)
+   {
+      private readonly IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler = handler;
+
+      public List<TestEntity> Query(Guid pk)
+      {
+         return handler.Handle(new TestRequest<TestEntity>(pk));
+      }
+   } 
+   #endregion
+
+   #region Generate:
+   services.AddSingleton<TestHandler<TestEntity>>((IServiceProvider sp) =>
+   {
+      var p0 = sp.GetRequiredService<ILogger<TestHandler<TestEntity>>>();
+      var p1 = sp.GetRequiredService<IUnitOfWorkFactory>();
+      var s0 = new TestHandler<TestEntity>(p0, p1);
+      return s0;
+   })
+   services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
+   {
+      var s0 = sp.GetRequiredService<TestHandler<TestEntity>>();
+
+      var s1 = new HandlerDecorator2<TestRequest<TestEntity>, List<TestEntity>>(s0);
+
+      var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
+      var s2 = new HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
+      return s2;
+   });
+   #endregion
+   ```

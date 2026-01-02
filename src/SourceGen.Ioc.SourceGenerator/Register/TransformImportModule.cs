@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Register;
+﻿namespace SourceGen.Ioc.SourceGenerator.Register;
 
 partial class RegisterSourceGenerator
 {
@@ -80,7 +80,7 @@ partial class RegisterSourceGenerator
 
         // Remove "global::" prefix if present
         if(fullName.StartsWith("global::", StringComparison.Ordinal))
-            fullName = fullName.Substring(8);
+            fullName = fullName[8..];
 
         return fullName == Constants.IoCRegisterDefaultsAttributeFullName;
     }

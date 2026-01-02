@@ -18,8 +18,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegister(ctx, ct))
             .Where(static m => m is not null)
-            .Select(static (m, _) => m!)
-            .Collect();
+            .Select(static (m, _) => m!);
 
         // IoCRegisterForAttribute
         var registerForProvider = context.SyntaxProvider
@@ -27,17 +26,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 Constants.IoCRegisterForAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterFor(ctx, ct))
-            .SelectMany(static (m, _) => m)
-            .Collect();
-
-        // Combine all registration data
-        var allRegistrations = registerProvider
-            .Combine(registerForProvider)
-            .Select(static (combined, _) =>
-            {
-                var (register, registerFor) = combined;
-                return register.AddRange(registerFor);
-            });
+            .SelectMany(static (m, _) => m);
 
         // Default settings from current assembly
         var defaultSettingsProvider = context.SyntaxProvider
@@ -78,10 +67,29 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 return (RootNamespace: rootNamespace, AssemblyName: compilation.AssemblyName ?? "Generated");
             });
 
-        // Combine registrations with default settings, generate service registrations
-        var serviceRegistrations = allRegistrations
+        // ========== Pipeline 1: Process individual registrations (cacheable per registration) ==========
+        // Each registration is processed independently with default settings.
+        // This allows caching at the individual registration level.
+
+        var basicRegistrationResults1 = registerProvider
             .Combine(combinedDefaultSettings)
-            .Select(static (source, ct) => GenerateServiceRegistrations(source.Left, source.Right, ct));
+            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+
+        var basicRegistrationResults2 = registerForProvider
+            .Combine(combinedDefaultSettings)
+            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+
+        // Collect all basic registration results
+        var allBasicResults = basicRegistrationResults1
+            .Collect()
+            .Combine(basicRegistrationResults2.Collect())
+            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+
+        // ========== Pipeline 2: Combine results and resolve closed generics ==========
+        // This pipeline only re-runs when any BasicRegistrationResult changes.
+
+        var serviceRegistrations = allBasicResults
+            .Select(static (results, ct) => CombineAndResolveClosedGenerics(in results, ct));
 
         // Combine service registrations with compilation info
         var combined = serviceRegistrations
@@ -210,8 +218,9 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         bool hasDecorators = registration.Decorators.Length > 0 && isServiceTypeRegistration;
 
         // Check if this registration has injection members or constructor parameters
-        bool needsFactoryConstruction = registration.InjectionMembers.Length > 0
-            || (registration.ImplementationType.ConstructorParameters?.Length > 0);
+        bool hasInjectionMembers = registration.InjectionMembers.Length > 0;
+        bool hasConstructorParams = registration.ImplementationType.ConstructorParameters?.Length > 0;
+        bool needsFactoryConstruction = hasInjectionMembers || hasConstructorParams;
 
         if(hasDecorators)
         {
@@ -223,10 +232,16 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             // Just resolve the implementation from the service provider
             WriteServiceTypeForwardingRegistration(writer, registration, lifetime);
         }
-        else if(registration.InjectionMembers.Length > 0 && !registration.IsOpenGeneric)
+        else if(hasInjectionMembers && !registration.IsOpenGeneric)
         {
             // Self registration with injection members - generate factory method
             WriteInjectionRegistration(writer, registration, lifetime);
+        }
+        else if(hasConstructorParams && !registration.IsOpenGeneric && !isServiceTypeRegistration)
+        {
+            // Self registration (service type = implementation type) with constructor parameters
+            // This is for closed generic types generated from open generic registrations
+            WriteFactoryRegistration(writer, registration, lifetime);
         }
         else if(registration.IsOpenGeneric)
         {
@@ -406,6 +421,66 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             var methodArgs = string.Join(", ", methodParamVars);
             writer.WriteLine($"s0.{methodName}({methodArgs});");
         }
+
+        // Return the instance
+        writer.WriteLine("return s0;");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
+    }
+
+    /// <summary>
+    /// Writes factory registration code for closed generic types with constructor parameters.
+    /// This is used when an open generic type needs to be registered as a closed generic because
+    /// another registration depends on it.
+    /// </summary>
+    /// <remarks>
+    /// Generates code like:
+    /// <code>
+    /// services.AddSingleton&lt;TestHandler&lt;TestEntity&gt;&gt;((IServiceProvider sp) =>
+    /// {
+    ///     var p0 = sp.GetRequiredService&lt;ILogger&lt;TestHandler&lt;TestEntity&gt;&gt;&gt;();
+    ///     var p1 = sp.GetRequiredService&lt;IUnitOfWorkFactory&gt;();
+    ///     var s0 = new TestHandler&lt;TestEntity&gt;(p0, p1);
+    ///     return s0;
+    /// });
+    /// </code>
+    /// </remarks>
+    private static void WriteFactoryRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        var implTypeName = registration.ImplementationType.Name;
+
+        // Build the factory lambda
+        if(registration.Key is not null)
+        {
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
+        }
+        else
+        {
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
+        }
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // Resolve constructor parameters
+        var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
+        var constructorParamVars = new List<string>(constructorParams.Length);
+        int paramIndex = 0;
+
+        foreach(var param in constructorParams)
+        {
+            var paramVar = $"p{paramIndex}";
+            var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
+            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
+            constructorParamVars.Add(paramVar);
+            paramIndex++;
+        }
+
+        // Create the instance
+        var constructorArgs = string.Join(", ", constructorParamVars);
+        writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
 
         // Return the instance
         writer.WriteLine("return s0;");
