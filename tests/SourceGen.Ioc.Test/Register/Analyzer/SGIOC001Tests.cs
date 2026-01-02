@@ -1,9 +1,13 @@
 ﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
 
-partial class RegisterAnalyzerTests
+/// <summary>
+/// Tests for SGIOC001: Invalid type for IoC registration (private/abstract).
+/// </summary>
+[Category(Constants.Analyzer)]
+[Category(Constants.SGIOC001)]
+public class SGIOC001Tests
 {
     [Test]
-    [Category(Constants.SGIOC001)]
     public async Task SGIOC001_PrivateClass_ReportsDiagnostic()
     {
         const string source = """
@@ -27,7 +31,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC001)]
     public async Task SGIOC001_AbstractClass_ReportsDiagnostic()
     {
         const string source = """
@@ -48,7 +51,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC001)]
     public async Task SGIOC001_IoCRegisterForAttribute_PrivateTargetType_ReportsDiagnostic()
     {
         // Note: When using IoCRegisterForAttribute with typeof(), the type must be accessible
@@ -74,7 +76,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC001)]
     public async Task SGIOC001_IoCRegisterForAttribute_AbstractTargetType_ReportsDiagnostic()
     {
         const string source = """
@@ -97,7 +98,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC001)]
     public async Task SGIOC001_PublicConcreteClass_NoDiagnostic()
     {
         const string source = """
@@ -117,7 +117,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC001)]
     public async Task SGIOC001_InternalConcreteClass_NoDiagnostic()
     {
         const string source = """

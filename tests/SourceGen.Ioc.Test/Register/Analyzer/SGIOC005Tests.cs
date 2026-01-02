@@ -1,9 +1,13 @@
 ﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
 
-partial class RegisterAnalyzerTests
+/// <summary>
+/// Tests for SGIOC005: Scoped depends on Transient service.
+/// </summary>
+[Category(Constants.Analyzer)]
+[Category(Constants.SGIOC005)]
+public class SGIOC005Tests
 {
     [Test]
-    [Category(Constants.SGIOC005)]
     public async Task SGIOC005_ScopedDependsOnTransient_ReportsDiagnostic()
     {
         const string source = """
@@ -30,7 +34,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC005)]
     public async Task SGIOC005_ScopedDependsOnTransientViaInterface_ReportsDiagnostic()
     {
         const string source = """
@@ -58,7 +61,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC005)]
     public async Task SGIOC005_TransientDependsOnTransient_NoDiagnostic()
     {
         const string source = """
@@ -84,7 +86,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC005)]
     public async Task SGIOC005_ScopedDependsOnScoped_NoDiagnostic()
     {
         const string source = """

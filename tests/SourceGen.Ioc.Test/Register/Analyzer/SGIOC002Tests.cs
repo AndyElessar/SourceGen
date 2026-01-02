@@ -1,9 +1,13 @@
 ﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
 
-partial class RegisterAnalyzerTests
+/// <summary>
+/// Tests for SGIOC002: Circular dependency detected.
+/// </summary>
+[Category(Constants.Analyzer)]
+[Category(Constants.SGIOC002)]
+public class SGIOC002Tests
 {
     [Test]
-    [Category(Constants.SGIOC002)]
     public async Task SGIOC002_DirectCircularDependency_ReportsDiagnostic()
     {
         const string source = """
@@ -32,7 +36,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC002)]
     public async Task SGIOC002_IndirectCircularDependency_ReportsDiagnostic()
     {
         const string source = """
@@ -67,7 +70,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC002)]
     public async Task SGIOC002_NoCircularDependency_NoDiagnostic()
     {
         const string source = """
@@ -99,7 +101,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC002)]
     public async Task SGIOC002_CircularDependencyViaInterface_ReportsDiagnostic()
     {
         const string source = """
@@ -128,5 +129,38 @@ partial class RegisterAnalyzerTests
         var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002").ToList();
 
         await Assert.That(sgioc002).Count().IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    [Category(Constants.SGIOC003)]
+    public async Task SGIOC002_Combined_CircularDependencyAndLifetimeConflict_ReportsBothDiagnostics()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedService
+            {
+                public ScopedService(SingletonService singleton) { }
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(ScopedService scoped) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002").ToList();
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // Should report circular dependency
+        await Assert.That(sgioc002).Count().IsGreaterThanOrEqualTo(1);
+        // Should report lifetime conflict (Singleton depending on Scoped)
+        await Assert.That(sgioc003).Count().IsGreaterThanOrEqualTo(1);
     }
 }

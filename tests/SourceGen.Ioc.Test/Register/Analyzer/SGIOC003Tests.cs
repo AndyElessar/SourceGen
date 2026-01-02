@@ -1,9 +1,13 @@
 ﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
 
-partial class RegisterAnalyzerTests
+/// <summary>
+/// Tests for SGIOC003: Singleton depends on Scoped service.
+/// </summary>
+[Category(Constants.Analyzer)]
+[Category(Constants.SGIOC003)]
+public class SGIOC003Tests
 {
     [Test]
-    [Category(Constants.SGIOC003)]
     public async Task SGIOC003_SingletonDependsOnScoped_ReportsDiagnostic()
     {
         const string source = """
@@ -30,7 +34,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC003)]
     public async Task SGIOC003_SingletonDependsOnSingleton_NoDiagnostic()
     {
         const string source = """
@@ -56,7 +59,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC003)]
     public async Task SGIOC003_ScopedDependsOnTransient_ShouldReportSGIOC005NotSGIOC003()
     {
         const string source = """
@@ -85,7 +87,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC003)]
     public async Task SGIOC003_ScopedDependsOnSingleton_NoDiagnostic()
     {
         const string source = """
@@ -111,7 +112,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC003)]
     public async Task SGIOC003_SingletonDependsOnScopedViaInterface_ReportsDiagnostic()
     {
         const string source = """
@@ -136,5 +136,250 @@ partial class RegisterAnalyzerTests
         var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
 
         await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_OpenGenericInterface_AppliesLifetimeFromDefaultSettings()
+    {
+        // TestOpenGeneric2<T> implements IGenericTest2<T>
+        // IoCRegisterDefaults specifies Scoped for IGenericTest2<>
+        // So TestOpenGeneric2<T> should be treated as Scoped (from default settings), not Singleton
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IGenericTest2<T> { }
+
+            // This service should be Scoped (from default settings), not Singleton
+            [IoCRegister]
+            public class TestOpenGeneric2<T> : IGenericTest2<T> { }
+
+            // Singleton service depending on Scoped service should report error
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(TestOpenGeneric2<int> scoped) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // Should report lifetime conflict: Singleton depends on Scoped
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+        await Assert.That(sgioc003[0].GetMessage()).Contains("Singleton").And.Contains("Scoped");
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_OpenGenericInterface_NoConflictWhenLifetimesMatch()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IGenericTest2<T> { }
+
+            // This service should be Scoped (from default settings)
+            [IoCRegister]
+            public class TestOpenGeneric2<T> : IGenericTest2<T> { }
+
+            // Scoped service depending on Scoped service should NOT report error
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class AnotherScopedService
+            {
+                public AnotherScopedService(TestOpenGeneric2<int> scoped) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // No lifetime conflict when both are Scoped
+        await Assert.That(sgioc003).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_ExplicitLifetime_OverridesDefaultSettings()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IGenericTest2<T> { }
+
+            // Explicit Singleton should override default Scoped
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class TestOpenGeneric2<T> : IGenericTest2<T> { }
+
+            // Singleton service depending on Singleton service should NOT report error
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(TestOpenGeneric2<int> singleton) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // No lifetime conflict when both are Singleton
+        await Assert.That(sgioc003).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_ClosedGenericImplementation_AppliesLifetimeFromDefaultSettings()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IGenericTest2<T> { }
+
+            // Closed generic implementing IGenericTest2<int> should also get Scoped lifetime
+            [IoCRegister]
+            public class ClosedGenericService : IGenericTest2<int> { }
+
+            // Singleton service depending on Scoped service should report error
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(ClosedGenericService scoped) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // Should report lifetime conflict: Singleton depends on Scoped
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_BaseClass_AppliesLifetimeFromDefaultSettings()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(BaseService), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public abstract class BaseService { }
+
+            // Should get Scoped lifetime from base class default settings
+            [IoCRegister]
+            public class DerivedService : BaseService { }
+
+            // Singleton service depending on Scoped service should report error
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(DerivedService scoped) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // Should report lifetime conflict: Singleton depends on Scoped
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_MultipleDefaultSettings_FirstMatchWins()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(IFirst), ServiceLifetime.Scoped)]
+            [assembly: IoCRegisterDefaults(typeof(ISecond), ServiceLifetime.Transient)]
+
+            namespace TestNamespace;
+
+            public interface IFirst { }
+            public interface ISecond { }
+
+            // Implements both interfaces, should get Scoped from IFirst (first in AllInterfaces)
+            [IoCRegister]
+            public class MultiInterfaceService : IFirst, ISecond { }
+
+            // Singleton service depending on Scoped service should report error
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(MultiInterfaceService service) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // Should report lifetime conflict based on first matching default settings
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC003_DefaultSettings_NoMatchingDefaultSettings_UsesSingletonDefault()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IoCRegisterDefaults(typeof(IOtherInterface), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IOtherInterface { }
+            public interface IMyInterface { }
+
+            // No matching default settings, should use Singleton default
+            [IoCRegister]
+            public class MyService : IMyInterface { }
+
+            // Singleton service depending on Singleton service should NOT report error
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(MyService singleton) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        // No lifetime conflict when both are Singleton
+        await Assert.That(sgioc003).Count().IsEqualTo(0);
     }
 }

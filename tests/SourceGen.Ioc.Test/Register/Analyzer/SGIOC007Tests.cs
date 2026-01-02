@@ -1,9 +1,13 @@
 namespace SourceGen.Ioc.Test.Register.Analyzer;
 
-partial class RegisterAnalyzerTests
+/// <summary>
+/// Tests for SGIOC007: Invalid usage of InjectAttribute.
+/// </summary>
+[Category(Constants.Analyzer)]
+[Category(Constants.SGIOC007)]
+public class SGIOC007Tests
 {
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnStaticProperty_ReportsDiagnostic()
     {
         const string source = """
@@ -30,7 +34,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnStaticField_ReportsDiagnostic()
     {
         const string source = """
@@ -57,7 +60,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnStaticMethod_ReportsDiagnostic()
     {
         const string source = """
@@ -84,7 +86,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnNonVoidMethod_ReportsDiagnostic()
     {
         const string source = """
@@ -111,7 +112,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnPrivateMethod_ReportsDiagnostic()
     {
         const string source = """
@@ -138,7 +138,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnPropertyWithPrivateSetter_ReportsDiagnostic()
     {
         const string source = """
@@ -165,7 +164,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnPropertyWithNoSetter_ReportsDiagnostic()
     {
         const string source = """
@@ -192,7 +190,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnReadonlyField_ReportsDiagnostic()
     {
         const string source = """
@@ -219,7 +216,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnPrivateField_ReportsDiagnostic()
     {
         const string source = """
@@ -246,7 +242,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnVoidMethod_NoDiagnostic()
     {
         const string source = """
@@ -272,7 +267,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnInternalMethod_NoDiagnostic()
     {
         const string source = """
@@ -298,7 +292,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnInstanceProperty_NoDiagnostic()
     {
         const string source = """
@@ -324,7 +317,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnPropertyWithInternalSetter_NoDiagnostic()
     {
         const string source = """
@@ -350,7 +342,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnInstanceField_NoDiagnostic()
     {
         const string source = """
@@ -376,7 +367,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnInternalField_NoDiagnostic()
     {
         const string source = """
@@ -402,7 +392,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnAsyncMethod_ReportsDiagnostic()
     {
         const string source = """
@@ -430,7 +419,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_MultipleViolations_ReportsMultipleDiagnostics()
     {
         const string source = """
@@ -468,7 +456,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_InjectAttribute_OnTypeWithoutIoCRegister_StillReportsDiagnostic()
     {
         // SGIOC007 should report diagnostic even if the type doesn't have IoCRegister attribute
@@ -495,7 +482,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC007)]
     public async Task SGIOC007_ThirdPartyInjectAttribute_OnStaticMember_ReportsDiagnostic()
     {
         // Test that InjectAttribute from other libraries (by name only) also triggers diagnostic

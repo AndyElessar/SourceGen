@@ -1,9 +1,13 @@
 ﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
 
-partial class RegisterAnalyzerTests
+/// <summary>
+/// Tests for SGIOC006: Nested open generic registration is not supported.
+/// </summary>
+[Category(Constants.Analyzer)]
+[Category(Constants.SGIOC006)]
+public class SGIOC006Tests
 {
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericInterface_ReportsDiagnostic()
     {
         const string source = """
@@ -27,7 +31,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_DeeplyNestedOpenGenericInterface_ReportsDiagnostic()
     {
         const string source = """
@@ -51,7 +54,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericBaseClass_ReportsDiagnostic()
     {
         const string source = """
@@ -74,7 +76,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_SimpleOpenGeneric_NoDiagnostic()
     {
         const string source = """
@@ -96,7 +97,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_ClosedGeneric_NoDiagnostic()
     {
         const string source = """
@@ -119,7 +119,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NonGenericClass_NoDiagnostic()
     {
         const string source = """
@@ -141,7 +140,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_MultipleNestedOpenGenerics_ReportsMultipleDiagnostics()
     {
         const string source = """
@@ -165,7 +163,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericWithSelfRegistrationOnly_NoDiagnostic()
     {
         // When an open generic only registers itself (no ServiceTypes, no RegisterAllInterfaces, no RegisterAllBaseClasses),
@@ -190,7 +187,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericWithServiceTypes_ReportsDiagnostic()
     {
         // When ServiceTypes is specified, it will try to register the interface, so SGIOC006 should be reported.
@@ -214,7 +210,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericWithRegisterAllInterfaces_ReportsDiagnostic()
     {
         // When RegisterAllInterfaces is true, SGIOC006 should be reported for nested open generics.
@@ -238,7 +233,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericWithRegisterAllBaseClasses_ReportsDiagnostic()
     {
         // When RegisterAllBaseClasses is true, SGIOC006 should be reported for nested open generics in base classes.
@@ -262,7 +256,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_NestedOpenGenericBaseClassWithSelfRegistrationOnly_NoDiagnostic()
     {
         // When only registering self (no RegisterAllBaseClasses), nested open generic base class should not cause SGIOC006.
@@ -286,7 +279,6 @@ partial class RegisterAnalyzerTests
     }
 
     [Test]
-    [Category(Constants.SGIOC006)]
     public async Task SGIOC006_IoCRegisterForAttribute_NestedOpenGeneric_ReportsDiagnostic()
     {
         // IoCRegisterForAttribute always registers for service types, so SGIOC006 should be reported.
