@@ -72,16 +72,16 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "A Scoped service should not depend on a Transient service. The Transient instance will be captured for the scope lifetime.");
 
     /// <summary>
-    /// SGIOC006: Nested Open Generic Detected - Service is implementing nested open generic interfaces/class.
+    /// SGIOC006: Nested Open Generic Detected - Service is implementing interface/class with generic type containing unbound type parameters.
     /// </summary>
     public static readonly DiagnosticDescriptor NestedOpenGeneric = new(
         id: "SGIOC006",
         title: "Nested Open Generic Detected",
-        messageFormat: "The type '{0}' implements nested open generic '{1}', which cannot be registered",
+        messageFormat: "The type '{0}' implements '{1}' which has a type argument that is itself a generic type with unbound type parameters (e.g., Wrapper<T>). The DI container cannot resolve such nested open generics",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Services implementing nested open generic interfaces or classes cannot be registered with the dependency injection container.");
+        description: "When a service implements an interface or inherits from a class where a type argument is itself a generic type containing unbound type parameters (e.g., IHandler<Wrapper<T>>), the DI container cannot resolve it. Use IHandler<T> directly, or register closed generic types like IHandler<Wrapper<string>> instead.");
 
     /// <summary>
     /// SGIOC007: Invalid Attribute Usage - InjectAttribute is marked on static member, inaccessible member, or method that does not return void.

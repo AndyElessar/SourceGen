@@ -19,7 +19,10 @@ Format: ID - Level - Category - Description
     - Report when there are scoped service depending on transient service.
 
 6. SGIOC006 - Error - Design - Nested OpenGeneric Detected
-    - Report when there are service is implementing nested open generic interfaces/class, which is not allow to register.
+    - Report when a service implements an interface or inherits from a class where a type argument is itself a generic type containing unbound type parameters.
+    - Example (Error): `class Handler<T> : IHandler<Wrapper<T>>` - `Wrapper<T>` is a generic type with unbound `T` used as type argument.
+    - Example (OK): `class Handler<T> : IHandler<T>` - `T` is directly used as type argument, not wrapped in another generic.
+    - Example (OK): `class Handler : IHandler<Wrapper<string>>` - `Wrapper<string>` is a closed generic type.
 
 7. SGIOC007 - Error - Usage - Invalid Attribute Usage
     - Report when InjectAttribute is mark on static member, or member can not assign/invoke (private setter, setter not exists, private field, readonly field, private method), or mark on method and it is not return void.
