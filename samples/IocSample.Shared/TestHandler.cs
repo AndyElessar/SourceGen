@@ -1,4 +1,4 @@
-﻿namespace IocSample;
+﻿namespace IocSample.Shared;
 
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
@@ -6,7 +6,6 @@ public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSe
 [IoCRegisterDefaults(
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
-    ServiceTypes = [typeof(IGenericTest<,>)],
     Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>), typeof(HandlerDecorator3<,>)],
     ExcludeFromDefault = true,
     Tags = ["Mediator"]
@@ -34,10 +33,6 @@ internal sealed class TestRequest2Handler(ILogger<TestRequest2Handler> logger) :
 {
     private readonly ILogger<TestRequest2Handler> logger = logger;
 
-    private ITest2 Test2 = null!;
-    [Inject]
-    public void SetTest(ITest2 t) => Test2 = t;
-
     public List<string> Handle(TestRequest2 request)
     {
         logger.Log(nameof(TestRequest2Handler));
@@ -58,27 +53,12 @@ internal sealed class TestRequest3Handler(ILogger<TestRequest3Handler> logger) :
     }
 }
 
-public interface ILogger<T>
-{
-    public void Log(string msg);
-}
-[IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
-public sealed class Logger<T> : ILogger<T>
-{
-    public void Log(string msg)
-    {
-        Console.WriteLine(msg);
-    }
-}
-
 internal sealed class HandlerDecorator1<TRequest, TResponse>(
     IRequestHandler<TRequest, TResponse> inner,
-    ILogger<HandlerDecorator1<TRequest, TResponse>> logger,
-    ITest1? test1 = null
+    ILogger<HandlerDecorator1<TRequest, TResponse>> logger
 ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
     private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
-    private readonly ITest1? test1 = test1;
 
     public TResponse Handle(TRequest request)
     {

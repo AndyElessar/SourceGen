@@ -13,7 +13,7 @@ public static class TestAssemblyServiceCollectionExtensions
     /// <summary>
     /// Registers all default services.
     /// </summary>
-    public static IServiceCollection AddTestAssemblyServices(this IServiceCollection services)
+    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
     {
         services.AddKeyedSingleton(typeof(global::TestNamespace.RedisCache<>), "redis", typeof(global::TestNamespace.RedisCache<>));
         services.AddKeyedSingleton(typeof(global::TestNamespace.ICache<>), "redis", typeof(global::TestNamespace.RedisCache<>));

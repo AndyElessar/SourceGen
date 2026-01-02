@@ -1,4 +1,6 @@
-﻿namespace IocSample;
+﻿using IocSample.Shared;
+
+namespace IocSample;
 
 [IoCRegisterDefaults(typeof(ITest2), ServiceLifetime.Singleton)]
 [IoCRegisterDefaults(typeof(IGenericTest<>), ServiceLifetime.Scoped)]
@@ -6,6 +8,7 @@
 [IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 [IoCRegisterFor(typeof(TestInterfaces), Lifetime = ServiceLifetime.Transient)]
 //[IoCRegisterFor(typeof(TestClosed2), Lifetime = ServiceLifetime.Singleton)]
+[ImportModule(typeof(IRequestHandler<,>))]
 public sealed class Module;
 
 public interface ITest1;
@@ -48,7 +51,6 @@ internal sealed class TestKeyTypeCsharp : ITest2;
 
 [IoCRegister(Key = nameof(TestExtensions.Key), KeyType = KeyType.Csharp)]
 internal sealed class TestKeyTypeCsharp2 : ITest2;
-
 
 public interface IGenericTest<T>;
 
@@ -96,6 +98,7 @@ internal abstract class GenericTest3<T>;
 [IoCRegister(RegisterAllInterfaces = true)]
 internal sealed class TestOpenGeneric3<T> : GenericTest3<T>
 {
+    // Because open generic, it is impossible to inject IGenericTest2<T> here.
     [Inject]
     public IGenericTest2<T> TestInject { get; init; } = null!;
 }

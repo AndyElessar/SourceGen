@@ -13,7 +13,7 @@ public static class TestAssemblyServiceCollectionExtensions
     /// <summary>
     /// Registers all default services.
     /// </summary>
-    public static IServiceCollection AddTestAssemblyServices(this IServiceCollection services)
+    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
     {
         services.AddSingleton<global::TestNamespace.OuterClass.NestedService, global::TestNamespace.OuterClass.NestedService>();
         services.AddSingleton<global::TestNamespace.OuterClass.INestedService, global::TestNamespace.OuterClass.NestedService>();

@@ -13,7 +13,7 @@ public static class TestAssemblyServiceCollectionExtensions
     /// <summary>
     /// Registers all default services.
     /// </summary>
-    public static IServiceCollection AddTestAssemblyServices(this IServiceCollection services)
+    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
     {
         services.AddKeyedScoped<global::TestNamespace.MyService, global::TestNamespace.MyService>("myKey");
         services.AddKeyedScoped<global::TestNamespace.IMyService>("myKey", (global::System.IServiceProvider sp, object key) =>

@@ -136,9 +136,8 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 GenerateRegistrationMethod(
                     writer,
                     registrations,
-                    $"{safeMethodName}Services_{safeTagName}",
-                    $"Registers all services tagged with '{methodKey}'.",
-                    skipServicesSuffix: true);
+                    $"{safeMethodName}_{safeTagName}",
+                    $"Registers all services tagged with '{methodKey}'.");
             }
         }
 
@@ -155,15 +154,13 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         SourceWriter writer,
         ImmutableEquatableArray<ServiceRegistrationModel> registrations,
         string methodName,
-        string summary,
-        bool skipServicesSuffix = false)
+        string summary)
     {
-        var fullMethodName = skipServicesSuffix ? methodName : $"{methodName}Services";
 
         writer.WriteLine("/// <summary>");
         writer.WriteLine($"/// {summary}");
         writer.WriteLine("/// </summary>");
-        writer.WriteLine($"public static IServiceCollection Add{fullMethodName}(this IServiceCollection services)");
+        writer.WriteLine($"public static IServiceCollection Add{methodName}(this IServiceCollection services)");
         writer.WriteLine("{");
         writer.Indentation++;
 

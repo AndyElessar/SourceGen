@@ -13,7 +13,7 @@ public static class TestAssemblyServiceCollectionExtensions
     /// <summary>
     /// Registers all default services.
     /// </summary>
-    public static IServiceCollection AddTestAssemblyServices(this IServiceCollection services)
+    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
     {
         services.AddKeyedSingleton<global::TestNamespace.SpecialDependency, global::TestNamespace.SpecialDependency>("special");
         services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>

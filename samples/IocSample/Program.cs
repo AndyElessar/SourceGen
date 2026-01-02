@@ -1,7 +1,11 @@
-﻿var services = new ServiceCollection();
+﻿using IocSample.Shared;
 
-services.AddIocSampleServices();
-services.AddIocSampleServices_Mediator();
+var services = new ServiceCollection();
+
+services
+    .AddIocSample_Shared()
+    .AddIocSample_Shared_Mediator()
+    .AddIocSample();
 
 var sp = services.BuildServiceProvider();
 
