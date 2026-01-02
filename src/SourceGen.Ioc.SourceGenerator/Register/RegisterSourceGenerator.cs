@@ -39,15 +39,36 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 return register.AddRange(registerFor);
             });
 
-        // Default settings
+        // Default settings from current assembly
         var defaultSettingsProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IoCRegisterDefaultsAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct))
             .SelectMany(static (m, _) => m)
-            .Collect()
-            .Select(static (settings, _) => new DefaultSettingsMap(settings));
+            .Collect();
+
+        // Imported default settings from ImportModuleAttribute
+        var importedDefaultSettingsProvider = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                Constants.ImportModuleAttributeFullName,
+                predicate: static (_, _) => true,
+                transform: static (ctx, ct) => TransformImportModule(ctx, ct))
+            .SelectMany(static (m, _) => m)
+            .Collect();
+
+        // Combine default settings from current assembly and imported modules
+        // Current assembly settings take precedence over imported settings
+        var combinedDefaultSettings = defaultSettingsProvider
+            .Combine(importedDefaultSettingsProvider)
+            .Select(static (combined, _) =>
+            {
+                var (currentAssembly, imported) = combined;
+                // Current assembly settings come first (higher priority), then imported settings (lower priority)
+                // DefaultSettingsMap uses first-match semantics, so current assembly settings should be added first
+                var allSettings = currentAssembly.AddRange(imported);
+                return new DefaultSettingsMap(allSettings);
+            });
 
         // Get compilation info
         var compilationInfo = context.CompilationProvider
@@ -59,7 +80,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
         // Combine registrations with default settings, generate service registrations
         var serviceRegistrations = allRegistrations
-            .Combine(defaultSettingsProvider)
+            .Combine(combinedDefaultSettings)
             .Select(static (source, ct) => GenerateServiceRegistrations(source.Left, source.Right, ct));
 
         // Combine service registrations with compilation info

@@ -10,57 +10,81 @@ namespace SourceGen.Ioc.Test.Helpers;
 /// </summary>
 public static class SourceGeneratorTestHelper
 {
-    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
+    /// <summary>
+    /// Gets the parse options for the latest C# language version.
+    /// </summary>
+    public static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
 
     /// <summary>
     /// Gets the metadata reference for the SourceGen.Ioc assembly containing attribute definitions.
     /// </summary>
-    private static readonly MetadataReference IocAttributeReference =
+    public static readonly MetadataReference IocAttributeReference =
         MetadataReference.CreateFromFile(typeof(IoCRegisterAttribute).Assembly.Location);
+
+    /// <summary>
+    /// Gets the metadata reference for the Microsoft.Extensions.DependencyInjection.Abstractions assembly.
+    /// </summary>
+    public static readonly MetadataReference DiAbstractionsReference =
+        MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly.Location);
+
+    /// <summary>
+    /// Gets the base metadata references from the current AppDomain assemblies,
+    /// including IoC attributes and DI abstractions.
+    /// </summary>
+    public static readonly ImmutableArray<MetadataReference> BaseReferences = CreateBaseReferences();
+    private static ImmutableArray<MetadataReference> CreateBaseReferences()
+    {
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+            .Select(a => MetadataReference.CreateFromFile(a.Location))
+            .Cast<MetadataReference>();
+
+        return [.. references, IocAttributeReference, DiAbstractionsReference];
+    }
 
     /// <summary>
     /// Runs the source generator and returns the generated source texts.
     /// </summary>
-    public static GeneratorRunResult RunGenerator<TGenerator>(string source, string assemblyName = "TestAssembly")
+    /// <param name="source">The source code to compile.</param>
+    /// <param name="assemblyName">The assembly name for the compilation.</param>
+    /// <param name="additionalReferences">Optional additional metadata references.</param>
+    public static GeneratorRunResult RunGenerator<TGenerator>(
+        string source,
+        string assemblyName = "TestAssembly",
+        IEnumerable<MetadataReference>? additionalReferences = null)
         where TGenerator : IIncrementalGenerator, new()
     {
-        var userSyntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
-
-        var references = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
-            .Select(a => MetadataReference.CreateFromFile(a.Location))
-            .Cast<MetadataReference>()
-            .ToList();
-
-        // Add reference to SourceGen.Ioc assembly containing attribute definitions
-        references.Add(IocAttributeReference);
-
-        // Add reference to Microsoft.Extensions.DependencyInjection.Abstractions
-        var diAbstractionsAssembly = typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly;
-        references.Add(MetadataReference.CreateFromFile(diAbstractionsAssembly.Location));
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
+        var references = additionalReferences is null
+            ? BaseReferences
+            : BaseReferences.AddRange(additionalReferences);
 
         var compilation = CSharpCompilation.Create(
             assemblyName,
-            [userSyntaxTree],
+            [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        // Check for compilation errors before running generator
-        var compilationDiagnostics = compilation.GetDiagnostics();
-        var errors = compilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        ThrowIfCompilationHasErrors(compilation);
+
+        var generator = new TGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+
+        return driver.GetRunResult().Results.Single();
+    }
+
+    private static void ThrowIfCompilationHasErrors(CSharpCompilation compilation)
+    {
+        var errors = compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+
         if(errors.Count > 0)
         {
             var errorMessages = string.Join(Environment.NewLine, errors.Select(e => e.ToString()));
             throw new InvalidOperationException($"Compilation has errors:{Environment.NewLine}{errorMessages}");
         }
-
-        var generator = new TGenerator();
-
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
-
-        var runResult = driver.GetRunResult();
-        return runResult.Results.Single();
     }
 
     /// <summary>
@@ -85,35 +109,23 @@ public static class SourceGeneratorTestHelper
     /// <summary>
     /// Runs the analyzer and returns the diagnostics.
     /// </summary>
-    public static async Task<ImmutableArray<Diagnostic>> RunAnalyzerAsync<TAnalyzer>(string source, string assemblyName = "TestAssembly")
+    public static async Task<ImmutableArray<Diagnostic>> RunAnalyzerAsync<TAnalyzer>(
+        string source,
+        string assemblyName = "TestAssembly")
         where TAnalyzer : DiagnosticAnalyzer, new()
     {
-        var userSyntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
-
-        var references = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
-            .Select(a => MetadataReference.CreateFromFile(a.Location))
-            .Cast<MetadataReference>()
-            .ToList();
-
-        // Add reference to SourceGen.Ioc assembly containing attribute definitions
-        references.Add(IocAttributeReference);
-
-        // Add reference to Microsoft.Extensions.DependencyInjection.Abstractions
-        var diAbstractionsAssembly = typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly;
-        references.Add(MetadataReference.CreateFromFile(diAbstractionsAssembly.Location));
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
 
         var compilation = CSharpCompilation.Create(
             assemblyName,
-            [userSyntaxTree],
-            references,
+            [syntaxTree],
+            BaseReferences,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var analyzer = new TAnalyzer();
         var compilationWithAnalyzers = compilation.WithAnalyzers([analyzer]);
 
-        var diagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
-        return diagnostics;
+        return await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
     }
 
     /// <summary>
@@ -122,5 +134,28 @@ public static class SourceGeneratorTestHelper
     public static IEnumerable<Diagnostic> GetDiagnosticsById(ImmutableArray<Diagnostic> diagnostics, string diagnosticId)
     {
         return diagnostics.Where(d => d.Id == diagnosticId);
+    }
+
+    /// <summary>
+    /// Creates a CSharpCompilation from source code.
+    /// </summary>
+    /// <param name="assemblyName">The assembly name for the compilation.</param>
+    /// <param name="source">The source code to compile.</param>
+    /// <param name="additionalReferences">Optional additional metadata references.</param>
+    public static CSharpCompilation CreateCompilation(
+        string assemblyName,
+        string source,
+        IEnumerable<MetadataReference>? additionalReferences = null)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
+        var references = additionalReferences is null
+            ? BaseReferences
+            : BaseReferences.AddRange(additionalReferences);
+
+        return CSharpCompilation.Create(
+            assemblyName,
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
     }
 }

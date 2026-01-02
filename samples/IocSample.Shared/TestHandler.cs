@@ -53,7 +53,7 @@ internal sealed class TestRequest3Handler(ILogger<TestRequest3Handler> logger) :
     }
 }
 
-internal sealed class HandlerDecorator1<TRequest, TResponse>(
+public sealed class HandlerDecorator1<TRequest, TResponse>(
     IRequestHandler<TRequest, TResponse> inner,
     ILogger<HandlerDecorator1<TRequest, TResponse>> logger
 ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
@@ -70,7 +70,7 @@ internal sealed class HandlerDecorator1<TRequest, TResponse>(
     }
 }
 
-internal sealed class HandlerDecorator2<TRequest, TResponse>(
+public sealed class HandlerDecorator2<TRequest, TResponse>(
     IRequestHandler<TRequest, TResponse> inner
 ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
@@ -83,7 +83,7 @@ internal sealed class HandlerDecorator2<TRequest, TResponse>(
     }
 }
 
-internal sealed class HandlerDecorator3<TRequest, TResponse>(
+public sealed class HandlerDecorator3<TRequest, TResponse>(
     IRequestHandler<TRequest, TResponse> inner
 ) : IRequestHandler<TRequest, TResponse> where TRequest : IQuery<TRequest, TResponse>
 {

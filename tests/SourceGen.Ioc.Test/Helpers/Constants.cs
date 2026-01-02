@@ -9,6 +9,7 @@ internal static class Constants
     public const string Tags = "Tags";
     public const string Decorator = "Decorator";
     public const string InjectAttribute = "InjectAttribute";
+    public const string ImportModule = "ImportModule";
 
     public const string SGIOC001 = "SGIOC001";
     public const string SGIOC002 = "SGIOC002";
