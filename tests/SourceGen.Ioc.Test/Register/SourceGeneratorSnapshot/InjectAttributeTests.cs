@@ -1,9 +1,13 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
-partial class RegisterSourceGeneratorSnapshotTests
+/// <summary>
+/// Tests for InjectAttribute functionality.
+/// </summary>
+[Category(Constants.SourceGeneratorSnapshot)]
+[Category(Constants.InjectAttribute)]
+public class InjectAttributeTests
 {
     [Test]
-    [Category(Constants.InjectAttribute)]
     public async Task InjectAttribute_PropertyInjection_GeneratesFactoryMethod()
     {
         const string source = """
@@ -40,7 +44,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.InjectAttribute)]
     public async Task InjectAttribute_MethodInjection_GeneratesFactoryMethod()
     {
         const string source = """
@@ -81,7 +84,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.InjectAttribute)]
     public async Task InjectAttribute_MixedInjection_GeneratesFactoryMethod()
     {
         const string source = """
@@ -127,7 +129,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.InjectAttribute)]
     public async Task InjectAttribute_WithKeyedService_GeneratesKeyedServiceResolution()
     {
         const string source = """
@@ -157,7 +158,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.InjectAttribute)]
     public async Task InjectAttribute_ThirdPartyAttribute_GeneratesFactoryMethod()
     {
         // Test that InjectAttribute from other libraries (by name only) also works

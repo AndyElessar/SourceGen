@@ -1,9 +1,13 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
-partial class RegisterSourceGeneratorSnapshotTests
+/// <summary>
+/// Tests for Tags functionality.
+/// </summary>
+[Category(Constants.SourceGeneratorSnapshot)]
+[Category(Constants.Tags)]
+public class TagsTests
 {
     [Test]
-    [Category(Constants.Tags)]
     public async Task Tags_SingleTag_GeneratesTaggedMethod()
     {
         const string source = """
@@ -28,7 +32,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Tags)]
     public async Task Tags_MultipleTags_GeneratesAllTaggedMethods()
     {
         const string source = """
@@ -53,7 +56,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Tags)]
     public async Task Tags_ExcludeFromDefault_ExcludesFromDefaultMethod()
     {
         const string source = """
@@ -86,7 +88,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Tags)]
     public async Task Tags_MixedServicesWithTags_GeneratesCorrectMethods()
     {
         const string source = """

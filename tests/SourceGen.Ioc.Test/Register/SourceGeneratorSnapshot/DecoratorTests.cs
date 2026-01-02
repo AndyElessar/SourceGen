@@ -1,9 +1,13 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
-partial class RegisterSourceGeneratorSnapshotTests
+/// <summary>
+/// Tests for Decorator functionality.
+/// </summary>
+[Category(Constants.SourceGeneratorSnapshot)]
+[Category(Constants.Decorator)]
+public class DecoratorTests
 {
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_SingleDecorator_GeneratesCorrectRegistration()
     {
         const string source = """
@@ -33,7 +37,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_MultipleDecorators_GeneratesCorrectRegistration()
     {
         const string source = """
@@ -68,7 +71,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_WithKeyedService_GeneratesCorrectRegistration()
     {
         const string source = """
@@ -99,7 +101,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_ImplementationTypeOnly_NoDecoratorApplied()
     {
         const string source = """
@@ -130,7 +131,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_WithMultipleServiceTypes_GeneratesCorrectRegistrations()
     {
         const string source = """
@@ -161,81 +161,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
-    [Category(Constants.Defaults)]
-    public async Task DefaultSettings_Decorator_AppliesDecoratorFromDefaultSettings()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IoCRegisterDefaults(
-                typeof(TestNamespace.IMyService),
-                ServiceLifetime.Singleton,
-                Decorators = [typeof(TestNamespace.MyServiceDecorator)])]
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            // Should inherit decorator from default settings
-            [IoCRegister(ServiceTypes = [typeof(IMyService)])]
-            public class MyService : IMyService { }
-
-            public class MyServiceDecorator(IMyService inner) : IMyService
-            {
-                private readonly IMyService _inner = inner;
-            }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    [Category(Constants.Decorator)]
-    [Category(Constants.Defaults)]
-    public async Task DefaultSettings_Decorator_ExplicitDecoratorOverridesDefaultSettings()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IoCRegisterDefaults(
-                typeof(TestNamespace.IMyService),
-                ServiceLifetime.Singleton,
-                Decorators = [typeof(TestNamespace.DefaultDecorator)])]
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            // Explicit decorator should override default settings
-            [IoCRegister(ServiceTypes = [typeof(IMyService)], Decorators = [typeof(ExplicitDecorator)])]
-            public class MyService : IMyService { }
-
-            public class DefaultDecorator(IMyService inner) : IMyService
-            {
-                private readonly IMyService _inner = inner;
-            }
-
-            public class ExplicitDecorator(IMyService inner) : IMyService
-            {
-                private readonly IMyService _inner = inner;
-            }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    [Category(Constants.Decorator)]
-    [Category(Constants.Defaults)]
     public async Task Decorator_GenericDecorator_GeneratesClosedGenericType()
     {
         const string source = """
@@ -278,7 +203,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_MultipleGenericDecorators_GeneratesCorrectChain()
     {
         const string source = """
@@ -325,7 +249,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_GenericDecoratorWithComplexTypeArgs_GeneratesCorrectType()
     {
         const string source = """
@@ -366,7 +289,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_WithTypeConstraints_OnlyAppliesMatchingDecorators()
     {
         const string source = """
@@ -433,71 +355,6 @@ partial class RegisterSourceGeneratorSnapshotTests
     }
 
     [Test]
-    [Category(Constants.Decorator)]
-    [Category(Constants.Defaults)]
-    public async Task Decorator_WithTypeConstraints_DefaultSettingsAppliesOnlyMatchingDecorators()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IoCRegisterDefaults(
-                typeof(TestNamespace.IRequestHandler<,>),
-                ServiceLifetime.Singleton,
-                Decorators = [typeof(TestNamespace.BaseDecorator<,>), typeof(TestNamespace.QueryOnlyDecorator<,>)])]
-
-            namespace TestNamespace;
-
-            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
-            public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
-
-            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
-            {
-                TResponse Handle(TRequest request);
-            }
-
-            // Base decorator without constraint
-            internal sealed class BaseDecorator<TRequest, TResponse>(
-                IRequestHandler<TRequest, TResponse> inner
-            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
-            {
-                public TResponse Handle(TRequest request) => inner.Handle(request);
-            }
-
-            // Query-only decorator with IQuery constraint
-            internal sealed class QueryOnlyDecorator<TRequest, TResponse>(
-                IRequestHandler<TRequest, TResponse> inner
-            ) : IRequestHandler<TRequest, TResponse> where TRequest : IQuery<TRequest, TResponse>
-            {
-                public TResponse Handle(TRequest request) => inner.Handle(request);
-            }
-
-            public sealed record MyCommand(int Id) : IRequest<MyCommand, bool>;
-            public sealed record MyQuery(string Search) : IQuery<MyQuery, string>;
-
-            // Command handler - should only get BaseDecorator
-            [IoCRegister]
-            internal sealed class MyCommandHandler : IRequestHandler<MyCommand, bool>
-            {
-                public bool Handle(MyCommand request) => request.Id > 0;
-            }
-
-            // Query handler - should get both decorators
-            [IoCRegister]
-            internal sealed class MyQueryHandler : IRequestHandler<MyQuery, string>
-            {
-                public string Handle(MyQuery request) => $"Result: {request.Search}";
-            }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    [Category(Constants.Decorator)]
     public async Task Decorator_OpenGenericWithExtraParameters_SubstitutesTypeParameters()
     {
         const string source = """

@@ -5,6 +5,7 @@ internal static class Constants
     public const string SourceGeneratorSnapshot = "SourceGeneratorSnapshot";
     public const string Analyzer = "Analyzer";
 
+    public const string BasicRegistration = "BasicRegistration";
     public const string Defaults = "Defaults";
     public const string Tags = "Tags";
     public const string Decorator = "Decorator";

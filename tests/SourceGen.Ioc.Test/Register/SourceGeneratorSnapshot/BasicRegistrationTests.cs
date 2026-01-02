@@ -1,10 +1,11 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
-/// Snapshot tests for RegisterSourceGenerator.
+/// Basic registration tests for RegisterSourceGenerator.
 /// </summary>
 [Category(Constants.SourceGeneratorSnapshot)]
-public partial class RegisterSourceGeneratorSnapshotTests
+[Category(Constants.BasicRegistration)]
+public class BasicRegistrationTests
 {
     [Test]
     public async Task SimpleService_Singleton_GeneratesCorrectRegistration()
@@ -348,64 +349,6 @@ public partial class RegisterSourceGeneratorSnapshotTests
                 [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INestedService)])]
                 public class NestedService : INestedService { }
             }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    [Category(Constants.Defaults)]
-    public async Task DefaultSettings_AppliesCorrectLifetime()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IBaseService), ServiceLifetime.Scoped)]
-
-            namespace TestNamespace;
-
-            public interface IBaseService { }
-            public interface ISpecificService : IBaseService { }
-
-            [IoCRegister(ServiceTypes = [typeof(ISpecificService)])]
-            public class SpecificService : ISpecificService { }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    [Category(Constants.Defaults)]
-    public async Task DefaultSettings_GenericArity_ShouldNotMatchDifferentArity()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped, ServiceTypes = [typeof(TestNamespace.IBaseService)])]
-
-            namespace TestNamespace;
-
-            public interface IBaseService { }
-            public interface IOtherService { }
-            public interface IGenericService<T> : IBaseService { }
-            public interface IGenericService<T1, T2> : IOtherService { }
-
-            // This should match IGenericService<> default settings (arity 1)
-            [IoCRegister]
-            public class SingleArityService<T> : IGenericService<T> { }
-
-            // This should NOT match IGenericService<> default settings (arity 2 != 1)
-            // Should use default lifetime (Singleton) instead
-            [IoCRegister]
-            public class DoubleArityService<T1, T2> : IGenericService<T1, T2> { }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
