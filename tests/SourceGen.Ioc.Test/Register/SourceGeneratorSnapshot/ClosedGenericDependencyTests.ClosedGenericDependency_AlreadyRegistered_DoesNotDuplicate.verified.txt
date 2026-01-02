@@ -3,28 +3,29 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddSingleton(typeof(global::TestNamespace.TestHandler<>), typeof(global::TestNamespace.TestHandler<>));
-        services.AddSingleton<global::TestNamespace.TestHandlerTestEntity, global::TestNamespace.TestHandlerTestEntity>();
-        services.AddSingleton<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>, global::TestNamespace.TestHandlerTestEntity>();
-        services.AddSingleton<global::TestNamespace.ViewModel>((global::System.IServiceProvider sp) =>
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            var p0 = sp.GetRequiredService<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>();
-            var s0 = new global::TestNamespace.ViewModel(p0);
-            return s0;
-        });
+            services.AddSingleton(typeof(global::TestNamespace.TestHandler<>), typeof(global::TestNamespace.TestHandler<>));
+            services.AddSingleton<global::TestNamespace.TestHandlerTestEntity, global::TestNamespace.TestHandlerTestEntity>();
+            services.AddSingleton<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>, global::TestNamespace.TestHandlerTestEntity>();
+            services.AddSingleton<global::TestNamespace.ViewModel>((global::System.IServiceProvider sp) =>
+            {
+                var p0 = sp.GetRequiredService<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>();
+                var s0 = new global::TestNamespace.ViewModel(p0);
+                return s0;
+            });
 
-        return services;
+            return services;
+        }
     }
 }

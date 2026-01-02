@@ -3,22 +3,23 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddScoped<global::TestNamespace.SpecificService, global::TestNamespace.SpecificService>();
-        services.AddScoped<global::TestNamespace.ISpecificService, global::TestNamespace.SpecificService>();
-        services.AddScoped<global::TestNamespace.IBaseService, global::TestNamespace.SpecificService>();
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        {
+            services.AddScoped<global::TestNamespace.SpecificService, global::TestNamespace.SpecificService>();
+            services.AddScoped<global::TestNamespace.ISpecificService, global::TestNamespace.SpecificService>();
+            services.AddScoped<global::TestNamespace.IBaseService, global::TestNamespace.SpecificService>();
 
-        return services;
+            return services;
+        }
     }
 }

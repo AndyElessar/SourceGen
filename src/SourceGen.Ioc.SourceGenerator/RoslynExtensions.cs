@@ -170,6 +170,7 @@ internal static class RoslynExtensions
                 typeSymbol.ContainsGenericParameters,
                 arity,
                 isNestedOpenGeneric,
+                IsTypeParameter: false, // Named types are not type parameters
                 typeParameters,
                 constructorParams,
                 allInterfaces,
@@ -283,16 +284,17 @@ internal static class RoslynExtensions
         }
 
         /// <summary>
-        /// Creates a basic TypeData with type parameters extracted but without recursive extraction
-        /// of interfaces/base classes to avoid circular dependencies.
+        /// Creates a basic TypeData with type parameters extracted recursively.
         /// </summary>
-        public TypeData CreateBasicTypeData()
+        public TypeData CreateBasicTypeData(int depth = 0)
         {
+            const int MaxDepth = 10; // Prevent infinite recursion for pathological cases
+
             var typeName = typeSymbol.FullyQualifiedName;
 
-            // Extract type parameters but use simple TypeData for type arguments to avoid recursion
+            // Extract type parameters recursively
             ImmutableEquatableArray<TypeParameter>? typeParameters = null;
-            if(typeSymbol.IsGenericType && typeSymbol.TypeArguments.Length > 0)
+            if(typeSymbol.IsGenericType && typeSymbol.TypeArguments.Length > 0 && depth < MaxDepth)
             {
                 var typeParams = typeSymbol.IsUnboundGenericType
                     ? typeSymbol.OriginalDefinition?.TypeParameters ?? typeSymbol.TypeParameters
@@ -306,13 +308,14 @@ internal static class RoslynExtensions
                     var typeParam = typeParams[i];
                     var typeArg = i < typeArgs.Length ? typeArgs[i] : null;
 
-                    // Create TypeData for the type argument, including interfaces for constraint checking
+                    // Create TypeData for the type argument, recursively extracting nested type parameters
                     TypeData typeData;
                     ImmutableEquatableArray<TypeData>? allInterfaces = null;
 
                     if(typeArg is INamedTypeSymbol argNamed && typeArg.TypeKind != TypeKind.TypeParameter)
                     {
-                        var argName = argNamed.FullyQualifiedName;
+                        // Recursively extract type parameters for nested generics
+                        typeData = argNamed.CreateBasicTypeData(depth + 1);
 
                         // Extract interfaces for concrete types (needed for constraint checking)
                         if(argNamed.AllInterfaces.Length > 0)
@@ -322,34 +325,32 @@ internal static class RoslynExtensions
                                     iface.FullyQualifiedName,
                                     GetNameWithoutGeneric(iface.FullyQualifiedName),
                                     iface.ContainsGenericParameters,
-                                    iface.Arity,
-                                    false))
+                                    iface.Arity))
                                 .ToImmutableEquatableArray();
                         }
 
-                        typeData = new TypeData(
-                            argName,
-                            GetNameWithoutGeneric(argName),
-                            argNamed.ContainsGenericParameters,
-                            argNamed.Arity,
-                            argNamed.IsNestedOpenGeneric,
-                            null,
-                            null,
-                            allInterfaces);
+                        // Add interfaces if not already present
+                        if(allInterfaces is not null && allInterfaces.Length > 0)
+                        {
+                            typeData = typeData with { AllInterfaces = allInterfaces };
+                        }
                     }
                     else if(typeArg is not null)
                     {
                         var argName = typeArg.FullyQualifiedName;
+                        var isTypeParam = typeArg.TypeKind == TypeKind.TypeParameter;
                         typeData = new TypeData(
                             argName,
                             GetNameWithoutGeneric(argName),
                             typeArg.ContainsGenericParameters,
                             0,
-                            false);
+                            IsNestedOpenGeneric: false,
+                            IsTypeParameter: isTypeParam);
                     }
                     else
                     {
-                        typeData = new TypeData(typeParam.Name, typeParam.Name, true, 0, false);
+                        // No type argument available, this is a type parameter placeholder
+                        typeData = new TypeData(typeParam.Name, typeParam.Name, true, 0, IsNestedOpenGeneric: false, IsTypeParameter: true);
                     }
 
                     parameters.Add(new TypeParameter(
@@ -372,6 +373,7 @@ internal static class RoslynExtensions
                 typeSymbol.ContainsGenericParameters,
                 typeSymbol.Arity,
                 typeSymbol.IsNestedOpenGeneric,
+                IsTypeParameter: false, // Named types are not type parameters
                 typeParameters);
         }
 

@@ -3,21 +3,22 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MainApp;
-
-/// <summary>
-/// Extension methods for registering services from MainApp.
-/// </summary>
-public static class MainAppServiceCollectionExtensions
+namespace MainApp
 {
     /// <summary>
-    /// Registers all services tagged with 'Mediator'.
+    /// Extension methods for registering services from MainApp.
     /// </summary>
-    public static IServiceCollection AddMainApp_Mediator(this IServiceCollection services)
+    public static class MainAppServiceCollectionExtensions
     {
-        services.AddSingleton<global::MainApp.TestQueryHandler, global::MainApp.TestQueryHandler>();
-        services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.TestQuery, string>, global::MainApp.TestQueryHandler>();
+        /// <summary>
+        /// Registers all services tagged with 'Mediator'.
+        /// </summary>
+        public static IServiceCollection AddMainApp_Mediator(this IServiceCollection services)
+        {
+            services.AddSingleton<global::MainApp.TestQueryHandler, global::MainApp.TestQueryHandler>();
+            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.TestQuery, string>, global::MainApp.TestQueryHandler>();
 
-        return services;
+            return services;
+        }
     }
 }

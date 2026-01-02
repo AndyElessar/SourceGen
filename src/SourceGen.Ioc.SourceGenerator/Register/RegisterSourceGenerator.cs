@@ -130,8 +130,9 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         writer.WriteLine("using Microsoft.Extensions.DependencyInjection;");
         writer.WriteLine();
 
-        writer.WriteLine($"namespace {GetSafeNamespace(rootNamespace)};");
-        writer.WriteLine();
+        writer.WriteLine($"namespace {GetSafeNamespace(rootNamespace)}");
+        writer.WriteLine("{");
+        writer.Indentation++;
 
         var safeMethodName = GetSafeMethodName(assemblyName);
         writer.WriteLine("/// <summary>");
@@ -169,6 +170,9 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                     $"Registers all services tagged with '{methodKey}'.");
             }
         }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
 
         writer.Indentation--;
         writer.WriteLine("}");

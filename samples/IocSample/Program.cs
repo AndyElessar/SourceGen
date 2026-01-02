@@ -20,6 +20,8 @@ var h2 = sp.GetRequiredService<IRequestHandler<TestRequest2, List<string>>>();
 var r2 = h2.Handle(new TestRequest2("Hello"));
 Console.WriteLine(string.Join(", ", r2));
 
+Console.WriteLine();
+
 var vm = sp.GetRequiredService<ViewModel>();
 var es = vm.LoadEntities(5);
 Console.WriteLine(string.Join(',', es.Select(e => e.Id.ToString())));

@@ -3,32 +3,33 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddTransient<global::TestNamespace.MyService, global::TestNamespace.MyService>();
-        services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) =>
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            var s0 = sp.GetRequiredService<global::TestNamespace.MyService>();
-            var s1 = new global::TestNamespace.MyServiceDecorator(s0);
-            return s1;
-        });
-        services.AddTransient<global::TestNamespace.IMyOtherService>((global::System.IServiceProvider sp) =>
-        {
-            var s0 = sp.GetRequiredService<global::TestNamespace.MyService>();
-            var s1 = new global::TestNamespace.MyServiceDecorator(s0);
-            return s1;
-        });
+            services.AddTransient<global::TestNamespace.MyService, global::TestNamespace.MyService>();
+            services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) =>
+            {
+                var s0 = sp.GetRequiredService<global::TestNamespace.MyService>();
+                var s1 = new global::TestNamespace.MyServiceDecorator(s0);
+                return s1;
+            });
+            services.AddTransient<global::TestNamespace.IMyOtherService>((global::System.IServiceProvider sp) =>
+            {
+                var s0 = sp.GetRequiredService<global::TestNamespace.MyService>();
+                var s1 = new global::TestNamespace.MyServiceDecorator(s0);
+                return s1;
+            });
 
-        return services;
+            return services;
+        }
     }
 }

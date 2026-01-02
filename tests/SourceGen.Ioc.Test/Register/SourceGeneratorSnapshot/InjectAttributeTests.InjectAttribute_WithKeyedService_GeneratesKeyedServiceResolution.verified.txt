@@ -3,27 +3,28 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddKeyedSingleton<global::TestNamespace.SpecialDependency, global::TestNamespace.SpecialDependency>("special");
-        services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            var s0_p0 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency>("special");
-            var s0 = new global::TestNamespace.MyService() { Dependency = s0_p0 };
-            return s0;
-        });
-        services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
+            services.AddKeyedSingleton<global::TestNamespace.SpecialDependency, global::TestNamespace.SpecialDependency>("special");
+            services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
+            {
+                var s0_p0 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency>("special");
+                var s0 = new global::TestNamespace.MyService() { Dependency = s0_p0 };
+                return s0;
+            });
+            services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
 
-        return services;
+            return services;
+        }
     }
 }

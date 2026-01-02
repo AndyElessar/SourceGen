@@ -3,26 +3,27 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddKeyedScoped<global::TestNamespace.MyService, global::TestNamespace.MyService>("myKey");
-        services.AddKeyedScoped<global::TestNamespace.IMyService>("myKey", (global::System.IServiceProvider sp, object key) =>
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            var s0 = sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key);
-            var s1 = new global::TestNamespace.MyServiceDecorator(s0);
-            return s1;
-        });
+            services.AddKeyedScoped<global::TestNamespace.MyService, global::TestNamespace.MyService>("myKey");
+            services.AddKeyedScoped<global::TestNamespace.IMyService>("myKey", (global::System.IServiceProvider sp, object key) =>
+            {
+                var s0 = sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key);
+                var s1 = new global::TestNamespace.MyServiceDecorator(s0);
+                return s1;
+            });
 
-        return services;
+            return services;
+        }
     }
 }

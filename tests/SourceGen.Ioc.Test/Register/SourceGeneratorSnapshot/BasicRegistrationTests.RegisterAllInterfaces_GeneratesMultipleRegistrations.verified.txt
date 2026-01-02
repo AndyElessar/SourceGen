@@ -3,22 +3,23 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddSingleton<global::TestNamespace.MultiInterfaceService, global::TestNamespace.MultiInterfaceService>();
-        services.AddSingleton<global::TestNamespace.IFirst, global::TestNamespace.MultiInterfaceService>();
-        services.AddSingleton<global::TestNamespace.ISecond, global::TestNamespace.MultiInterfaceService>();
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        {
+            services.AddSingleton<global::TestNamespace.MultiInterfaceService, global::TestNamespace.MultiInterfaceService>();
+            services.AddSingleton<global::TestNamespace.IFirst, global::TestNamespace.MultiInterfaceService>();
+            services.AddSingleton<global::TestNamespace.ISecond, global::TestNamespace.MultiInterfaceService>();
 
-        return services;
+            return services;
+        }
     }
 }

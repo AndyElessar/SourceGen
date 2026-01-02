@@ -8,6 +8,7 @@
 /// <param name="IsOpenGeneric">Whether the type is an open generic type.</param>
 /// <param name="GenericArity">The number of generic type parameters.</param>
 /// <param name="IsNestedOpenGeneric">Whether the type contains nested open generic type arguments (e.g., IGeneric&lt;IGeneric2&lt;T&gt;&gt;).</param>
+/// <param name="IsTypeParameter">Whether this type represents a type parameter (e.g., T, TRequest). Determined from TypeKind.TypeParameter at creation time.</param>
 /// <param name="TypeParameters">The generic type parameters with their names, resolved types, implemented interfaces, and constraints.</param>
 /// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
 /// <param name="AllInterfaces">All interfaces implemented by the type. Only populated when extractHierarchy is true.</param>
@@ -18,6 +19,7 @@ internal sealed record class TypeData(
     bool IsOpenGeneric,
     int GenericArity,
     bool IsNestedOpenGeneric = false,
+    bool IsTypeParameter = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ConstructorParameterData>? ConstructorParameters = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,

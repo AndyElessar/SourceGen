@@ -3,21 +3,22 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddKeyedSingleton(typeof(global::TestNamespace.RedisCache<>), "redis", typeof(global::TestNamespace.RedisCache<>));
-        services.AddKeyedSingleton(typeof(global::TestNamespace.ICache<>), "redis", typeof(global::TestNamespace.RedisCache<>));
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        {
+            services.AddKeyedSingleton(typeof(global::TestNamespace.RedisCache<>), "redis", typeof(global::TestNamespace.RedisCache<>));
+            services.AddKeyedSingleton(typeof(global::TestNamespace.ICache<>), "redis", typeof(global::TestNamespace.RedisCache<>));
 
-        return services;
+            return services;
+        }
     }
 }

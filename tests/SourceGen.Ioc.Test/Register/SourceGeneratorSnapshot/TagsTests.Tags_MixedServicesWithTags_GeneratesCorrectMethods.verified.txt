@@ -3,53 +3,54 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TestAssembly;
-
-/// <summary>
-/// Extension methods for registering services from TestAssembly.
-/// </summary>
-public static class TestAssemblyServiceCollectionExtensions
+namespace TestAssembly
 {
     /// <summary>
-    /// Registers all default services.
+    /// Extension methods for registering services from TestAssembly.
     /// </summary>
-    public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+    public static class TestAssemblyServiceCollectionExtensions
     {
-        services.AddSingleton<global::TestNamespace.NoTagService, global::TestNamespace.NoTagService>();
-        services.AddSingleton<global::TestNamespace.INoTagService, global::TestNamespace.NoTagService>();
-        services.AddScoped<global::TestNamespace.Tag1Service, global::TestNamespace.Tag1Service>();
-        services.AddScoped<global::TestNamespace.ITag1Service, global::TestNamespace.Tag1Service>();
-        services.AddTransient<global::TestNamespace.Tag2Service, global::TestNamespace.Tag2Service>();
-        services.AddTransient<global::TestNamespace.ITag2Service, global::TestNamespace.Tag2Service>();
-        services.AddSingleton<global::TestNamespace.BothTagsService, global::TestNamespace.BothTagsService>();
-        services.AddSingleton<global::TestNamespace.IBothTagsService, global::TestNamespace.BothTagsService>();
+        /// <summary>
+        /// Registers all default services.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        {
+            services.AddSingleton<global::TestNamespace.NoTagService, global::TestNamespace.NoTagService>();
+            services.AddSingleton<global::TestNamespace.INoTagService, global::TestNamespace.NoTagService>();
+            services.AddScoped<global::TestNamespace.Tag1Service, global::TestNamespace.Tag1Service>();
+            services.AddScoped<global::TestNamespace.ITag1Service, global::TestNamespace.Tag1Service>();
+            services.AddTransient<global::TestNamespace.Tag2Service, global::TestNamespace.Tag2Service>();
+            services.AddTransient<global::TestNamespace.ITag2Service, global::TestNamespace.Tag2Service>();
+            services.AddSingleton<global::TestNamespace.BothTagsService, global::TestNamespace.BothTagsService>();
+            services.AddSingleton<global::TestNamespace.IBothTagsService, global::TestNamespace.BothTagsService>();
 
-        return services;
-    }
+            return services;
+        }
 
-    /// <summary>
-    /// Registers all services tagged with 'Tag1'.
-    /// </summary>
-    public static IServiceCollection AddTestAssembly_Tag1(this IServiceCollection services)
-    {
-        services.AddScoped<global::TestNamespace.Tag1Service, global::TestNamespace.Tag1Service>();
-        services.AddScoped<global::TestNamespace.ITag1Service, global::TestNamespace.Tag1Service>();
-        services.AddSingleton<global::TestNamespace.BothTagsService, global::TestNamespace.BothTagsService>();
-        services.AddSingleton<global::TestNamespace.IBothTagsService, global::TestNamespace.BothTagsService>();
+        /// <summary>
+        /// Registers all services tagged with 'Tag1'.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly_Tag1(this IServiceCollection services)
+        {
+            services.AddScoped<global::TestNamespace.Tag1Service, global::TestNamespace.Tag1Service>();
+            services.AddScoped<global::TestNamespace.ITag1Service, global::TestNamespace.Tag1Service>();
+            services.AddSingleton<global::TestNamespace.BothTagsService, global::TestNamespace.BothTagsService>();
+            services.AddSingleton<global::TestNamespace.IBothTagsService, global::TestNamespace.BothTagsService>();
 
-        return services;
-    }
+            return services;
+        }
 
-    /// <summary>
-    /// Registers all services tagged with 'Tag2'.
-    /// </summary>
-    public static IServiceCollection AddTestAssembly_Tag2(this IServiceCollection services)
-    {
-        services.AddTransient<global::TestNamespace.Tag2Service, global::TestNamespace.Tag2Service>();
-        services.AddTransient<global::TestNamespace.ITag2Service, global::TestNamespace.Tag2Service>();
-        services.AddSingleton<global::TestNamespace.BothTagsService, global::TestNamespace.BothTagsService>();
-        services.AddSingleton<global::TestNamespace.IBothTagsService, global::TestNamespace.BothTagsService>();
+        /// <summary>
+        /// Registers all services tagged with 'Tag2'.
+        /// </summary>
+        public static IServiceCollection AddTestAssembly_Tag2(this IServiceCollection services)
+        {
+            services.AddTransient<global::TestNamespace.Tag2Service, global::TestNamespace.Tag2Service>();
+            services.AddTransient<global::TestNamespace.ITag2Service, global::TestNamespace.Tag2Service>();
+            services.AddSingleton<global::TestNamespace.BothTagsService, global::TestNamespace.BothTagsService>();
+            services.AddSingleton<global::TestNamespace.IBothTagsService, global::TestNamespace.BothTagsService>();
 
-        return services;
+            return services;
+        }
     }
 }

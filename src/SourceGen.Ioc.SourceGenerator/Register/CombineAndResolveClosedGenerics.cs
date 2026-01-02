@@ -346,7 +346,7 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Extracts type argument mappings from nested open generic types.
+    /// Extracts type argument mappings from nested open generic types using TypeParameters.
     /// For example, for IRequestHandler&lt;GenericRequest&lt;T&gt;, List&lt;T&gt;&gt; closed with
     /// IRequestHandler&lt;GenericRequest&lt;Entity&gt;, List&lt;Entity&gt;&gt;,
     /// this extracts T -> Entity.
@@ -374,131 +374,54 @@ partial class RegisterSourceGenerator
 
             // The open param type is a constructed type with nested type parameters
             // e.g., GenericRequest<T> or List<T>
-            // Since TypeParameters may be null for nested types (CreateBasicTypeData doesn't recursively extract),
-            // we extract mappings by parsing the type names
-            ExtractTypeArgumentMappingsFromNames(openParamType.Name, closedParamType.Name, typeArgMap);
+            // Use the recursively extracted TypeParameters from TypeData
+            ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, typeArgMap);
         }
     }
 
     /// <summary>
-    /// Extracts type argument mappings by parsing and comparing type names.
-    /// For example, comparing "GenericRequest&lt;T&gt;" with "GenericRequest&lt;Entity&gt;"
+    /// Extracts type argument mappings by comparing TypeData's TypeParameters recursively.
+    /// For example, comparing GenericRequest&lt;T&gt; with GenericRequest&lt;Entity&gt;
     /// extracts T -> Entity.
     /// </summary>
-    private static void ExtractTypeArgumentMappingsFromNames(
-        string openTypeName,
-        string closedTypeName,
+    private static void ExtractTypeArgumentMappingsFromTypeData(
+        TypeData openType,
+        TypeData closedType,
         Dictionary<string, string> typeArgMap)
     {
-        // Parse the type arguments from both names
-        var openTypeArgs = ParseTypeArguments(openTypeName);
-        var closedTypeArgs = ParseTypeArguments(closedTypeName);
+        var openTypeParams = openType.TypeParameters;
+        var closedTypeParams = closedType.TypeParameters;
 
-        if(openTypeArgs.Count != closedTypeArgs.Count)
+        // If no type parameters, nothing to extract
+        if(openTypeParams is null || closedTypeParams is null)
         {
             return;
         }
 
-        for(int i = 0; i < openTypeArgs.Count; i++)
+        if(openTypeParams.Length != closedTypeParams.Length)
         {
-            var openArg = openTypeArgs[i];
-            var closedArg = closedTypeArgs[i];
-
-            // Check if openArg is a simple type parameter (single identifier)
-            if(IsSimpleTypeParameter(openArg))
-            {
-                // Direct mapping: T -> Entity
-                typeArgMap[openArg] = closedArg;
-            }
-            else if(openArg.Contains('<'))
-            {
-                // Nested generic type, recurse
-                ExtractTypeArgumentMappingsFromNames(openArg, closedArg, typeArgMap);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Parses type arguments from a generic type name.
-    /// For example, "IHandler&lt;Request&lt;T&gt;, List&lt;T&gt;&gt;" returns ["Request&lt;T&gt;", "List&lt;T&gt;"].
-    /// </summary>
-    private static List<string> ParseTypeArguments(string typeName)
-    {
-        var result = new List<string>();
-
-        int genericStart = typeName.IndexOf('<');
-        if(genericStart < 0)
-        {
-            return result;
+            return;
         }
 
-        // Find the matching closing bracket
-        int depth = 0;
-        int argStart = genericStart + 1;
-
-        for(int i = genericStart; i < typeName.Length; i++)
+        for(int i = 0; i < openTypeParams.Length; i++)
         {
-            char c = typeName[i];
-            if(c == '<')
+            var openTypeParam = openTypeParams[i];
+            var closedTypeParam = closedTypeParams[i];
+            var openNestedType = openTypeParam.Type;
+            var closedNestedType = closedTypeParam.Type;
+
+            // Check if openNestedType is a type parameter (determined at creation time from TypeKind)
+            if(openNestedType.IsTypeParameter)
             {
-                depth++;
+                // Direct mapping: T -> Entity (use the full closed type name)
+                typeArgMap[openNestedType.Name] = closedNestedType.Name;
             }
-            else if(c == '>')
+            else if(openNestedType.TypeParameters is not null && openNestedType.TypeParameters.Length > 0)
             {
-                depth--;
-                if(depth == 0)
-                {
-                    // End of type arguments
-                    var arg = typeName.Substring(argStart, i - argStart).Trim();
-                    if(!string.IsNullOrEmpty(arg))
-                    {
-                        result.Add(arg);
-                    }
-                    break;
-                }
-            }
-            else if(c == ',' && depth == 1)
-            {
-                // Argument separator at the top level
-                var arg = typeName.Substring(argStart, i - argStart).Trim();
-                if(!string.IsNullOrEmpty(arg))
-                {
-                    result.Add(arg);
-                }
-                argStart = i + 1;
+                // Nested generic type, recurse using TypeParameters
+                ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, typeArgMap);
             }
         }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Determines if a type name is a simple type parameter (single identifier like "T").
-    /// </summary>
-    private static bool IsSimpleTypeParameter(string typeName)
-    {
-        // A simple type parameter is a single identifier (no dots, no generics, no global::)
-        // It should be a short name like "T", "TRequest", etc.
-        if(string.IsNullOrEmpty(typeName) || typeName.Contains('<') || typeName.Contains('.'))
-        {
-            return false;
-        }
-
-        // Check if it's a valid identifier (starts with letter or underscore, followed by letters/digits/underscores)
-        if(!char.IsLetter(typeName[0]) && typeName[0] != '_')
-        {
-            return false;
-        }
-
-        for(int i = 1; i < typeName.Length; i++)
-        {
-            if(!char.IsLetterOrDigit(typeName[i]) && typeName[i] != '_')
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /// <summary>
@@ -588,6 +511,7 @@ partial class RegisterSourceGenerator
             IsOpenGeneric: false,
             openImplType.GenericArity,
             IsNestedOpenGeneric: false,
+            IsTypeParameter: false, // Closed implementation types are not type parameters
             closedTypeParams,
             closedConstructorParams);
     }
@@ -629,6 +553,7 @@ partial class RegisterSourceGenerator
                 IsOpenGeneric: false,
                 openServiceType.GenericArity,
                 IsNestedOpenGeneric: false,
+                IsTypeParameter: false, // Closed service types are not type parameters
                 SubstituteTypeParameters(openServiceType.TypeParameters, serviceTypeArgMap));
 
             result.Add(closedServiceType);
@@ -714,56 +639,6 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Processes decorators for a closed generic type, substituting type parameters.
-    /// </summary>
-    private static ImmutableEquatableArray<TypeData> ProcessDecoratorsForClosedGeneric(
-        ImmutableEquatableArray<TypeData> decorators,
-        TypeData closedType,
-        HashSet<string> serviceTypeNames)
-    {
-        if(decorators.Length == 0)
-        {
-            return decorators;
-        }
-
-        var typeParams = closedType.TypeParameters;
-        if(typeParams is null || typeParams.Length == 0)
-        {
-            return ProcessDecorators(decorators, serviceTypeNames);
-        }
-
-        // Filter decorators based on type constraints
-        var filteredDecorators = FilterDecoratorsForClosedType(decorators, typeParams);
-        if(filteredDecorators.Length == 0)
-        {
-            return [];
-        }
-
-        // Process and substitute type parameters in decorators
-        var processedDecorators = new List<TypeData>(filteredDecorators.Length);
-        foreach(var decorator in filteredDecorators)
-        {
-            var processedDecorator = SubstituteDecoratorTypeParams(decorator, typeParams, serviceTypeNames);
-            processedDecorators.Add(processedDecorator);
-        }
-
-        return processedDecorators.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
-    /// Filters decorators based on type parameter constraints for a closed type.
-    /// </summary>
-    private static ImmutableEquatableArray<TypeData> FilterDecoratorsForClosedType(
-        ImmutableEquatableArray<TypeData> decorators,
-        ImmutableEquatableArray<TypeParameter> closedTypeParams)
-    {
-        // Build interface name set for constraint checking
-        var interfaceNameSet = BuildInterfaceNameSet(closedTypeParams);
-
-        return FilterDecoratorsCore(decorators, closedTypeParams, interfaceNameSet);
-    }
-
-    /// <summary>
     /// Substitutes type parameters in a decorator and processes its constructor parameters.
     /// </summary>
     private static TypeData SubstituteDecoratorTypeParams(
@@ -823,6 +698,7 @@ partial class RegisterSourceGenerator
             IsOpenGeneric: false,
             decorator.GenericArity,
             IsNestedOpenGeneric: false,
+            IsTypeParameter: false, // Closed decorator types are not type parameters
             newTypeParams,
             closedConstructorParams);
     }
