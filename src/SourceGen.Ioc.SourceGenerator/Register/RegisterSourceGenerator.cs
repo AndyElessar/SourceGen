@@ -255,12 +255,12 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         if(registration.Key is not null)
         {
             // Keyed registration - forward to keyed implementation
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (sp, key) => sp.GetRequiredKeyedService<{implTypeName}>(key));");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) => sp.GetRequiredKeyedService<{implTypeName}>(key));");
         }
         else
         {
             // Non-keyed registration - forward to implementation
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(sp => sp.GetRequiredService<{implTypeName}>());");
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => sp.GetRequiredService<{implTypeName}>());");
         }
     }
 

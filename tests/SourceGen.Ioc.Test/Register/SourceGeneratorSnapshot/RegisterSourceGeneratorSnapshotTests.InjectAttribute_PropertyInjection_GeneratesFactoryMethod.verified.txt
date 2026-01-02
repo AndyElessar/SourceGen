@@ -24,7 +24,7 @@ public static class TestAssemblyServiceCollectionExtensions
             var s0 = new global::TestNamespace.MyService() { Dependency1 = s0_p0, Dependency2 = s0_p1 };
             return s0;
         });
-        services.AddSingleton<global::TestNamespace.IMyService>(sp => sp.GetRequiredService<global::TestNamespace.MyService>());
+        services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
 
         return services;
     }
