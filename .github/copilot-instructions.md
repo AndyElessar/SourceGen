@@ -155,6 +155,7 @@ When generating or modifying code, **always use the latest C# 14 features** wher
 ### Testing
 
 1. **Unit Test Generators**
+   - Use `TUnit` as test framework
    - Use `Microsoft.CodeAnalysis.CSharp.Testing` for testing
    - Test both positive and negative cases
    - Verify diagnostic output
@@ -167,15 +168,12 @@ When generating or modifying code, **always use the latest C# 14 features** wher
 
 ```
 src/
-├── SourceGen.Ioc/                    # Main library
-│   └── Attributes/                   # Public attributes
-├── SourceGen.Ioc.SourceGenerator/    # Generator project
-│   ├── Generators/                   # Generator implementations
-│   ├── Models/                       # Data models for generation
-│   ├── Diagnostics/                  # Diagnostic descriptors
-│   └── Extensions/                   # Helper extensions
-└── tests/
-    └── SourceGen.Ioc.Tests/          # Unit tests
+├── SourceGen.Ioc/                    # Main library, where attributes are defined
+└── SourceGen.Ioc.SourceGenerator/    # Generator project
+    ├── Generators/                   # Generator implementations
+    └── Models/                       # Data models for generation
+tests/
+└── SourceGen.Ioc.Tests/              # Unit tests
 ```
 
 ## Code Style
@@ -197,3 +195,5 @@ src/
 - [Incremental Generators](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.md)
 - [Incremental Generators Cookbook](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.cookbook.md)
 - [Analyzer Actions Semantics](https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md)
+- [TUnit Repo](https://github.com/thomhurst/TUnit)
+- [TUnit Documentation](https://tunit.dev/)

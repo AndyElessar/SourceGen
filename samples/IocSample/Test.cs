@@ -80,6 +80,9 @@ public interface IGenericTest2<T>;
 public sealed class TestClosed2(TestInterfaces testInterfaces) : IGenericTest<IGenericTest2<int>>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;
+
+    [Inject]
+    public IGenericTest<decimal> TestInject { get; init; } = null!;
 }
 
 [IoCRegister(Lifetime = ServiceLifetime.Transient)]
@@ -91,7 +94,11 @@ public sealed class TestOpenGeneric2<T>(TestInterfaces testInterfaces) : IGeneri
 internal abstract class GenericTest3<T>;
 
 [IoCRegister(RegisterAllInterfaces = true)]
-internal sealed class TestOpenGeneric3<T> : GenericTest3<T>;
+internal sealed class TestOpenGeneric3<T> : GenericTest3<T>
+{
+    [Inject]
+    public IGenericTest2<T> TestInject { get; init; } = null!;
+}
 
 //[IoCRegister]
 public abstract class AbstractTest : ITest1

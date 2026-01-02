@@ -31,7 +31,7 @@ partial class RegisterSourceGenerator
 
     private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData)
     {
-        var implementationType = typeSymbol.GetTypeData(extractHierarchy: true);
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
@@ -39,34 +39,10 @@ partial class RegisterSourceGenerator
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
         var excludeFromDefault = attributeData.GetExcludeFromDefault();
+        var (key, keyType) = attributeData.GetKey();
 
-        var keyType = attributeData.GetNamedArgument<int>("KeyType", 0);
-        string? key = null;
-        foreach(var namedArg in attributeData.NamedArguments)
-        {
-            if(namedArg.Key == "Key")
-            {
-                if(namedArg.Value.IsNull)
-                {
-                    key = null;
-                }
-                else
-                {
-                    if(keyType == 1) // KeyType.Csharp
-                    {
-                        // Try to get original syntax for nameof() expressions
-                        key = TryGetOriginalKeySyntax(attributeData, "Key")
-                            ?? namedArg.Value.Value?.ToString();
-                    }
-                    else
-                    {
-                        key = namedArg.Value.GetPrimitiveConstantString();
-                        keyType = 1; // Treat as CSharp code
-                    }
-                }
-                break;
-            }
-        }
+        // Extract injection members (properties, fields, methods marked with InjectAttribute)
+        var injectionMembers = ExtractInjectionMembers(typeSymbol);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
         var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
@@ -87,50 +63,110 @@ partial class RegisterSourceGenerator
             validOpenGenericServiceTypes,
             decorators,
             tags,
-            excludeFromDefault);
+            excludeFromDefault,
+            injectionMembers);
     }
 
     /// <summary>
-    /// Tries to get the original syntax for a named argument, especially for nameof() expressions.
+    /// Extracts injection members (properties, fields, methods) marked with InjectAttribute.
     /// </summary>
-    /// <param name="attributeData">The attribute data.</param>
-    /// <param name="argumentName">The name of the argument to find.</param>
-    /// <returns>The original syntax string if it's a nameof() expression; otherwise, null.</returns>
-    private static string? TryGetOriginalKeySyntax(AttributeData attributeData, string argumentName)
+    /// <param name="typeSymbol">The type symbol to extract injection members from.</param>
+    /// <returns>An array of injection member data.</returns>
+    private static ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembers(INamedTypeSymbol typeSymbol)
     {
-        var syntaxReference = attributeData.ApplicationSyntaxReference;
-        if(syntaxReference is null)
-            return null;
+        List<InjectionMemberData>? injectionMembers = null;
 
-        var syntax = syntaxReference.GetSyntax();
-        if(syntax is not AttributeSyntax attributeSyntax)
-            return null;
-
-        var argumentList = attributeSyntax.ArgumentList;
-        if(argumentList is null)
-            return null;
-
-        foreach(var argument in argumentList.Arguments)
+        foreach(var member in typeSymbol.GetMembers())
         {
-            // Check if this is a named argument with the correct name
-            if(argument.NameEquals?.Name.Identifier.Text == argumentName)
+            // Skip static members
+            if(member.IsStatic)
+                continue;
+
+            // Check if the member has InjectAttribute (by name only)
+            var injectAttribute = member.GetAttributes()
+                .FirstOrDefault(attr => attr.AttributeClass?.Name == "InjectAttribute");
+
+            if(injectAttribute is null)
+                continue;
+
+            // Extract key information from InjectAttribute
+            var (key, keyType) = injectAttribute.GetKey();
+
+            InjectionMemberData? memberData = member switch
             {
-                // Check if the expression is a nameof() invocation
-                if(argument.Expression is InvocationExpressionSyntax invocation &&
-                   invocation.Expression is IdentifierNameSyntax identifierName &&
-                   identifierName.Identifier.Text == "nameof")
-                {
-                    // Extract the argument inside nameof() and return just that expression
-                    if(invocation.ArgumentList.Arguments.Count == 1)
-                    {
-                        var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
-                        return nameofArgument.ToFullString().Trim();
-                    }
-                }
+                IPropertySymbol property when property.SetMethod is not null =>
+                    CreatePropertyInjection(property, key, keyType),
+
+                IFieldSymbol field when !field.IsReadOnly =>
+                    CreateFieldInjection(field, key, keyType),
+
+                IMethodSymbol method when method.MethodKind == MethodKind.Ordinary
+                    && method.ReturnsVoid
+                    && !method.IsGenericMethod =>
+                    CreateMethodInjection(method, key, keyType),
+
+                _ => null
+            };
+
+            if(memberData is not null)
+            {
+                injectionMembers ??= [];
+                injectionMembers.Add(memberData);
             }
         }
 
-        return null;
+        return injectionMembers?.ToImmutableEquatableArray() ?? [];
+    }
+
+    /// <summary>
+    /// Creates injection data for a property.
+    /// </summary>
+    private static InjectionMemberData CreatePropertyInjection(IPropertySymbol property, string? key, int keyType)
+    {
+        var propertyType = property.Type.GetTypeData();
+        return new InjectionMemberData(
+            InjectionMemberType.Property,
+            property.Name,
+            propertyType,
+            null,
+            key,
+            keyType);
+    }
+
+    /// <summary>
+    /// Creates injection data for a field.
+    /// </summary>
+    private static InjectionMemberData CreateFieldInjection(IFieldSymbol field, string? key, int keyType)
+    {
+        var fieldType = field.Type.GetTypeData();
+        return new InjectionMemberData(
+            InjectionMemberType.Field,
+            field.Name,
+            fieldType,
+            null,
+            key,
+            keyType);
+    }
+
+    /// <summary>
+    /// Creates injection data for a method.
+    /// </summary>
+    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, int keyType)
+    {
+        var parameters = method.Parameters
+            .Select(p => new ConstructorParameterData(
+                p.Name,
+                p.Type.GetTypeData(),
+                IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated))
+            .ToImmutableEquatableArray();
+
+        return new InjectionMemberData(
+            InjectionMemberType.Method,
+            method.Name,
+            null,
+            parameters,
+            key,
+            keyType);
     }
 
     /// <summary>

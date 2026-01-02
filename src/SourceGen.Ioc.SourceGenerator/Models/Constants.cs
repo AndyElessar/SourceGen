@@ -72,6 +72,44 @@ internal static class Constants
             attribute.GetNamedArgument<bool>("ExcludeFromDefault", false);
 
         /// <summary>
+        /// Gets the Key and KeyType from the attribute.
+        /// </summary>
+        /// <returns>A tuple containing the key string and key type.</returns>
+        public (string? Key, int KeyType) GetKey()
+        {
+            var keyType = attribute.GetNamedArgument<int>("KeyType", 0);
+            string? key = null;
+
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key == "Key")
+                {
+                    if(namedArg.Value.IsNull)
+                    {
+                        key = null;
+                    }
+                    else
+                    {
+                        if(keyType == 1) // KeyType.Csharp
+                        {
+                            // Try to get original syntax for nameof() expressions
+                            key = attribute.TryGetNameof("Key")
+                                ?? namedArg.Value.Value?.ToString();
+                        }
+                        else
+                        {
+                            key = namedArg.Value.GetPrimitiveConstantString();
+                            keyType = 1; // Treat as CSharp code
+                        }
+                    }
+                    break;
+                }
+            }
+
+            return (key, keyType);
+        }
+
+        /// <summary>
         /// Determines if the attribute will cause registration of interfaces or base classes.
         /// For open generic types, nested open generics are only a problem when registering interfaces/base classes.
         /// </summary>

@@ -34,6 +34,10 @@ internal sealed class TestRequest2Handler(ILogger<TestRequest2Handler> logger) :
 {
     private readonly ILogger<TestRequest2Handler> logger = logger;
 
+    private ITest2 Test2 = null!;
+    [Inject]
+    public void SetTest(ITest2 t) => Test2 = t;
+
     public List<string> Handle(TestRequest2 request)
     {
         logger.Log(nameof(TestRequest2Handler));

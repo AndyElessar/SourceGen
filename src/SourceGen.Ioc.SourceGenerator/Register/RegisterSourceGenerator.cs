@@ -183,14 +183,32 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
     {
         var lifetime = registration.Lifetime.Name;
         var serviceTypeName = registration.ServiceType.Name;
+        var implTypeName = registration.ImplementationType.Name;
+
+        // Check if service type is different from implementation type (registering interface/base class)
+        bool isServiceTypeRegistration = serviceTypeName != implTypeName;
 
         // Check if this registration has decorators and is not the implementation type itself
-        bool hasDecorators = registration.Decorators.Length > 0
-            && serviceTypeName != registration.ImplementationType.Name;
+        bool hasDecorators = registration.Decorators.Length > 0 && isServiceTypeRegistration;
+
+        // Check if this registration has injection members or constructor parameters
+        bool needsFactoryConstruction = registration.InjectionMembers.Length > 0
+            || (registration.ImplementationType.ConstructorParameters?.Length > 0);
 
         if(hasDecorators)
         {
             WriteDecoratorRegistration(writer, registration, lifetime);
+        }
+        else if(needsFactoryConstruction && !registration.IsOpenGeneric && isServiceTypeRegistration)
+        {
+            // Service type registration (interface/base class) where implementation is already registered with factory
+            // Just resolve the implementation from the service provider
+            WriteServiceTypeForwardingRegistration(writer, registration, lifetime);
+        }
+        else if(registration.InjectionMembers.Length > 0 && !registration.IsOpenGeneric)
+        {
+            // Self registration with injection members - generate factory method
+            WriteInjectionRegistration(writer, registration, lifetime);
         }
         else if(registration.IsOpenGeneric)
         {
@@ -217,6 +235,165 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             // Non-keyed registration
             writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}, {registration.ImplementationType.Name}>();");
         }
+    }
+
+    /// <summary>
+    /// Writes registration code for service types (interfaces/base classes) that forward to an already-registered implementation.
+    /// The implementation is already registered with its own factory method, so we just resolve it from the service provider.
+    /// </summary>
+    /// <remarks>
+    /// Generates code like:
+    /// <code>
+    /// services.AddTransient&lt;IMyService&gt;(sp => sp.GetRequiredService&lt;MyService&gt;());
+    /// </code>
+    /// </remarks>
+    private static void WriteServiceTypeForwardingRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        var implTypeName = registration.ImplementationType.Name;
+
+        if(registration.Key is not null)
+        {
+            // Keyed registration - forward to keyed implementation
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (sp, key) => sp.GetRequiredKeyedService<{implTypeName}>(key));");
+        }
+        else
+        {
+            // Non-keyed registration - forward to implementation
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(sp => sp.GetRequiredService<{implTypeName}>());");
+        }
+    }
+
+    /// <summary>
+    /// Writes registration code for services with injection members (properties, fields, methods marked with InjectAttribute).
+    /// </summary>
+    /// <remarks>
+    /// Generates code like:
+    /// <code>
+    /// services.AddSingleton&lt;MyService&gt;((IServiceProvider sp) =>
+    /// {
+    ///     var s0_p0 = sp.GetRequiredService&lt;IMayServiceDependency1&gt;();
+    ///     var s0_p1 = sp.GetRequiredService&lt;IMayServiceDependency2&gt;();
+    ///     var s0_p2 = sp.GetRequiredService&lt;IMayServiceDependency3&gt;();
+    ///     var s0 = new MyService(s0_p0) { Dependency = s0_p1 };
+    ///     s0.Initialize(s0_p2);
+    ///     return s0;
+    /// });
+    /// </code>
+    /// </remarks>
+    private static void WriteInjectionRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        var implTypeName = registration.ImplementationType.Name;
+        var injectionMembers = registration.InjectionMembers;
+
+        // Build the factory lambda
+        if(registration.Key is not null)
+        {
+            // Keyed registration with injection
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
+        }
+        else
+        {
+            // Non-keyed registration with injection
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
+        }
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // Separate injection members by type
+        var propertyAndFieldMembers = injectionMembers.Where(m => m.MemberType is InjectionMemberType.Property or InjectionMemberType.Field).ToList();
+        var methodMembers = injectionMembers.Where(m => m.MemberType == InjectionMemberType.Method).ToList();
+
+        // Resolve constructor parameters
+        var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
+        var constructorParamVars = new List<string>(constructorParams.Length);
+        int paramIndex = 0;
+
+        foreach(var param in constructorParams)
+        {
+            var paramVar = $"s0_ctor{paramIndex}";
+            var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
+            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
+            constructorParamVars.Add(paramVar);
+            paramIndex++;
+        }
+
+        // Resolve property/field injection parameters
+        var propertyInitializers = new List<string>();
+        int memberParamIndex = 0;
+        foreach(var member in propertyAndFieldMembers)
+        {
+            var paramVar = $"s0_p{memberParamIndex}";
+            var memberTypeName = member.Type?.Name ?? "object";
+
+            if(member.Key is not null)
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{memberTypeName}>({member.Key});");
+            }
+            else
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetRequiredService<{memberTypeName}>();");
+            }
+
+            propertyInitializers.Add($"{member.Name} = {paramVar}");
+            memberParamIndex++;
+        }
+
+        // Resolve method injection parameters
+        var methodCalls = new List<(string MethodName, List<string> ParamVars)>();
+        foreach(var method in methodMembers)
+        {
+            var methodParams = method.Parameters ?? [];
+            var methodParamVars = new List<string>(methodParams.Length);
+
+            foreach(var param in methodParams)
+            {
+                var paramVar = $"s0_m{memberParamIndex}";
+
+                if(method.Key is not null)
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{param.Type.Name}>({method.Key});");
+                }
+                else
+                {
+                    var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
+                    writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
+                }
+
+                methodParamVars.Add(paramVar);
+                memberParamIndex++;
+            }
+
+            methodCalls.Add((method.Name, methodParamVars));
+        }
+
+        // Create the instance with constructor and property initializers
+        var constructorArgs = string.Join(", ", constructorParamVars);
+
+        if(propertyInitializers.Count > 0)
+        {
+            var initializerList = string.Join(", ", propertyInitializers);
+            writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs}) {{ {initializerList} }};");
+        }
+        else
+        {
+            writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
+        }
+
+        // Call injection methods
+        foreach(var (methodName, methodParamVars) in methodCalls)
+        {
+            var methodArgs = string.Join(", ", methodParamVars);
+            writer.WriteLine($"s0.{methodName}({methodArgs});");
+        }
+
+        // Return the instance
+        writer.WriteLine("return s0;");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 ﻿var services = new ServiceCollection();
 
 services.AddIocSampleServices();
+services.AddIocSampleServices_Mediator();
 
 var sp = services.BuildServiceProvider();
 

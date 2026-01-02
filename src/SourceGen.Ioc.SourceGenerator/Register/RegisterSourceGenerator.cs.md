@@ -220,7 +220,10 @@ public static class ServiceCollectionExtensions
    #endregion
    ```
 
-9. When a class marked with `IocRegisterAttribute` and its members marked with `InjectAttribute`, generate the necessary code to handle the injection:
+9. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members marked with `InjectAttribute`, generate the necessary code to handle the injection.
+
+   Only check with name `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
+
    ```csharp
    #region Define:
    [IoCRegister]
@@ -259,4 +262,4 @@ public static class ServiceCollectionExtensions
    #endregion
    ```
 
-10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s `IoCRegisterDefaultSettingsAttribute` as default settings for current assembly.
+10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s assembly's `IoCRegisterDefaultSettingsAttribute` as default settings for current assembly.

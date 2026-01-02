@@ -281,7 +281,8 @@ partial class RegisterSourceGenerator
                 registration.Key,
                 registration.KeyType,
                 isOpenGenericImplementation,
-                processedDecorators);
+                processedDecorators,
+                registration.InjectionMembers);
 
             // Add to default method if not excluded
             if(!excludeFromDefault)

@@ -590,6 +590,48 @@ internal static class RoslynExtensions
 
             return [];
         }
+
+        /// <summary>
+        /// Tries to get the original syntax for a named argument, especially for <see langword="nameof"/> expressions.
+        /// </summary>
+        /// <param name="argumentName">The name of the argument to find.</param>
+        /// <returns>The original syntax string if it's a <see langword="nameof"/> expression; otherwise, null.</returns>
+        public string? TryGetNameof(string argumentName)
+        {
+            var syntaxReference = attributeData.ApplicationSyntaxReference;
+            if(syntaxReference is null)
+                return null;
+
+            var syntax = syntaxReference.GetSyntax();
+            if(syntax is not AttributeSyntax attributeSyntax)
+                return null;
+
+            var argumentList = attributeSyntax.ArgumentList;
+            if(argumentList is null)
+                return null;
+
+            foreach(var argument in argumentList.Arguments)
+            {
+                // Check if this is a named argument with the correct name
+                if(argument.NameEquals?.Name.Identifier.Text == argumentName)
+                {
+                    // Check if the expression is a nameof() invocation
+                    if(argument.Expression is InvocationExpressionSyntax invocation &&
+                       invocation.Expression is IdentifierNameSyntax identifierName &&
+                       identifierName.Identifier.Text == "nameof")
+                    {
+                        // Extract the argument inside nameof() and return just that expression
+                        if(invocation.ArgumentList.Arguments.Count == 1)
+                        {
+                            var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
+                            return nameofArgument.ToFullString().Trim();
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
     }
 
     extension(TypedConstant constant)

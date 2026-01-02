@@ -10,6 +10,7 @@
 /// <param name="KeyType">How to interpret the key (Value or Csharp code).</param>
 /// <param name="IsOpenGeneric">Whether this is an open generic registration.</param>
 /// <param name="Decorators">The decorator types to apply (with pre-computed IsServiceParameter), in order from outermost to innermost.</param>
+/// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection.</param>
 internal sealed record class ServiceRegistrationModel(
     TypeData ServiceType,
     TypeData ImplementationType,
@@ -17,4 +18,5 @@ internal sealed record class ServiceRegistrationModel(
     string? Key,
     int KeyType,
     bool IsOpenGeneric,
-    ImmutableEquatableArray<TypeData> Decorators);
+    ImmutableEquatableArray<TypeData> Decorators,
+    ImmutableEquatableArray<InjectionMemberData> InjectionMembers);
