@@ -295,4 +295,143 @@ public class ClosedGenericDependencyTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task ServiceProviderInvocation_GetRequiredService_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+            using System.Collections.Generic;
+
+            [assembly: IoCRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.HandlerDecorator1<,>)])]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            public sealed record QueryRequest<T>(Guid PK) : IRequest<QueryRequest<T>, List<T>>;
+
+            [IoCRegister]
+            internal sealed class QueryRequestHandler<T> : IRequestHandler<QueryRequest<T>, List<T>>
+            {
+                public List<T> Handle(QueryRequest<T> request) => [];
+            }
+
+            internal sealed class HandlerDecorator1<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request) => inner.Handle(request);
+            }
+
+            public class TestEntity { }
+
+            // This uses GetRequiredService to get a closed generic type - should trigger factory generation
+            public class SomeService(IServiceProvider sp)
+            {
+                private readonly IServiceProvider sp = sp;
+
+                public IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>> GetHandler() =>
+                    sp.GetRequiredService<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceProviderInvocation_GetService_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+            using System.Collections.Generic;
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>
+            {
+                void Log(string msg);
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>
+            {
+                public void Log(string msg) => Console.WriteLine(msg);
+            }
+
+            public class MyEntity { }
+
+            // This uses GetService to get a closed generic type - should trigger factory generation
+            public class SomeService(IServiceProvider sp)
+            {
+                private readonly IServiceProvider sp = sp;
+
+                public ILogger<MyEntity>? GetLogger() =>
+                    sp.GetService<ILogger<MyEntity>>();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceProviderInvocation_MultipleInvocations_GeneratesAllFactories()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+            using System.Collections.Generic;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? Get(Guid id);
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T>
+            {
+                public T? Get(Guid id) => default;
+            }
+
+            public class Entity1 { }
+            public class Entity2 { }
+            public class Entity3 { }
+
+            // Multiple GetRequiredService calls for different closed types
+            public class UnitOfWork(IServiceProvider sp)
+            {
+                private readonly IServiceProvider sp = sp;
+
+                public IRepository<Entity1> Entity1Repo => sp.GetRequiredService<IRepository<Entity1>>();
+                public IRepository<Entity2> Entity2Repo => sp.GetRequiredService<IRepository<Entity2>>();
+                public IRepository<Entity3> Entity3Repo => sp.GetRequiredService<IRepository<Entity3>>();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

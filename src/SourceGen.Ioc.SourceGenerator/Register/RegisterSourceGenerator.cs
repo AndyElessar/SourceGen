@@ -57,6 +57,15 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 return new DefaultSettingsMap(allSettings);
             });
 
+        // Collect GetService, GetRequiredService, GetKeyedService, GetRequiredKeyedService invocations
+        var invocations = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: static (node, _) => PredicateInvocations(node),
+                transform: TransformInvocations)
+            .Where(static candidate => candidate is not null)
+            .Select(static (candidate, _) => candidate!.Value)
+            .Collect();
+
         // Get compilation info
         var compilationInfo = context.CompilationProvider
             .Select(static (compilation, _) =>
@@ -85,7 +94,8 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // ========== Pipeline 2: Combine results and resolve closed generics ==========
 
         var serviceRegistrations = allBasicResults
-            .Select(static (results, ct) => CombineAndResolveClosedGenerics(in results, ct));
+            .Combine(invocations)
+            .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left, in source.Right, ct));
 
         // Combine service registrations with compilation info
         var combined = serviceRegistrations

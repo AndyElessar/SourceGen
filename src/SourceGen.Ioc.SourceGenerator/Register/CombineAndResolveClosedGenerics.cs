@@ -4,13 +4,15 @@ partial class RegisterSourceGenerator
 {
     /// <summary>
     /// Pipeline 2: Combines all basic registration results and resolves closed generic dependencies.
-    /// This method re-runs when any BasicRegistrationResult changes.
+    /// This method re-runs when any BasicRegistrationResult changes or when invocations change.
     /// </summary>
     /// <param name="basicResults">The basic registration results from pipeline 1.</param>
+    /// <param name="serviceProviderInvocations">Closed generic types from GetService/GetRequiredService invocations.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Service registrations grouped by method name.</returns>
     private static ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> CombineAndResolveClosedGenerics(
         in ImmutableArray<BasicRegistrationResult> basicResults,
+        in ImmutableArray<ClosedGenericDependency> serviceProviderInvocations,
         CancellationToken ct)
     {
         var methodGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
@@ -50,7 +52,7 @@ partial class RegisterSourceGenerator
                 }
             }
 
-            // Collect closed generic dependencies
+            // Collect closed generic dependencies from constructor parameters
             if(result.ClosedGenericDependencies.Length > 0)
             {
                 closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal);
@@ -60,6 +62,19 @@ partial class RegisterSourceGenerator
                     {
                         closedGenericDependencies[dep.ClosedTypeName] = dep;
                     }
+                }
+            }
+        }
+
+        // Collect closed generic dependencies from GetService/GetRequiredService invocations
+        if(serviceProviderInvocations.Length > 0)
+        {
+            closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal);
+            foreach(var dep in serviceProviderInvocations)
+            {
+                if(!closedGenericDependencies.ContainsKey(dep.ClosedTypeName))
+                {
+                    closedGenericDependencies[dep.ClosedTypeName] = dep;
                 }
             }
         }
@@ -338,7 +353,11 @@ partial class RegisterSourceGenerator
 
         // For nested open generics, we need to extract the actual type parameter mappings
         // by comparing nested type arguments
-        ExtractTypeArgumentMappings(openTypeParams, closedTypeParams, ref typeArgMap);
+        // If extraction fails (incompatible structures), return empty map
+        if(!ExtractTypeArgumentMappings(openTypeParams, closedTypeParams, ref typeArgMap))
+        {
+            return default;
+        }
 
         return typeArgMap;
     }
@@ -348,8 +367,9 @@ partial class RegisterSourceGenerator
     /// For example, for IRequestHandler&lt;GenericRequest&lt;T&gt;, List&lt;T&gt;&gt; closed with
     /// IRequestHandler&lt;GenericRequest&lt;Entity&gt;, List&lt;Entity&gt;&gt;,
     /// this extracts T -> Entity.
+    /// Returns false if the type structures are incompatible.
     /// </summary>
-    private static void ExtractTypeArgumentMappings(
+    private static bool ExtractTypeArgumentMappings(
         ImmutableEquatableArray<TypeParameter> openParams,
         ImmutableEquatableArray<TypeParameter> closedParams,
         ref TypeArgMap typeArgMap)
@@ -373,32 +393,46 @@ partial class RegisterSourceGenerator
             // The open param type is a constructed type with nested type parameters
             // e.g., GenericRequest<T> or List<T>
             // Use the recursively extracted TypeParameters from TypeData
-            ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, ref typeArgMap);
+            if(!ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, ref typeArgMap))
+            {
+                return false; // Incompatible structure
+            }
         }
+
+        return true;
     }
 
     /// <summary>
     /// Extracts type argument mappings by comparing TypeData's TypeParameters recursively.
     /// For example, comparing GenericRequest&lt;T&gt; with GenericRequest&lt;Entity&gt;
     /// extracts T -> Entity.
+    /// Returns false if the type structures are incompatible (e.g., different base types).
     /// </summary>
-    private static void ExtractTypeArgumentMappingsFromTypeData(
+    private static bool ExtractTypeArgumentMappingsFromTypeData(
         TypeData openType,
         TypeData closedType,
         ref TypeArgMap typeArgMap)
     {
+        // Verify base type names match (excluding generic arguments)
+        // e.g., GenericRequest<T> vs TestRequest should fail because GenericRequest != TestRequest
+        if(openType.NameWithoutGeneric != closedType.NameWithoutGeneric)
+        {
+            return false; // Incompatible type structure
+        }
+
         var openTypeParams = openType.TypeParameters;
         var closedTypeParams = closedType.TypeParameters;
 
-        // If no type parameters, nothing to extract
+        // If no type parameters, nothing to extract but structure is compatible
         if(openTypeParams is null || closedTypeParams is null)
         {
-            return;
+            return true;
         }
 
+        // Arity must match
         if(openTypeParams.Length != closedTypeParams.Length)
         {
-            return;
+            return false;
         }
 
         for(int i = 0; i < openTypeParams.Length; i++)
@@ -417,9 +451,22 @@ partial class RegisterSourceGenerator
             else if(openNestedType.TypeParameters is not null && openNestedType.TypeParameters.Length > 0)
             {
                 // Nested generic type, recurse using TypeParameters
-                ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, ref typeArgMap);
+                if(!ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, ref typeArgMap))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // Non-generic, non-type-parameter type - must match exactly
+                if(openNestedType.Name != closedNestedType.Name)
+                {
+                    return false;
+                }
             }
         }
+
+        return true;
     }
 
     /// <summary>

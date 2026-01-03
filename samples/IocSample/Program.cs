@@ -25,3 +25,9 @@ Console.WriteLine();
 var vm = sp.GetRequiredService<ViewModel>();
 var es = vm.LoadEntities(5);
 Console.WriteLine(string.Join(',', es.Select(e => e.Id.ToString())));
+
+Console.WriteLine();
+
+var msger = sp.GetRequiredService<CustomMessenger>();
+var result = msger.Send(new GenericRequest2<Entity>(2));
+Console.WriteLine(string.Join(',', result.Select(e => e.Id.ToString())));

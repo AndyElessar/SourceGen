@@ -5,7 +5,7 @@ namespace IocSample;
 public sealed record TestQuery(string Name) : IQuery<TestQuery, string>;
 
 [IoCRegister]
-internal sealed class TestHandler : IRequestHandler<TestQuery, string>
+internal sealed class TestQueryHandler : IRequestHandler<TestQuery, string>
 {
     public string Handle(TestQuery request)
     {
@@ -53,5 +53,37 @@ internal sealed class ViewModel2(GenericRequestHandler<Entity> handler)
     {
         var request = new GenericRequest<Entity>(count);
         return handler.Handle(request);
+    }
+}
+
+public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
+[IoCRegister]
+internal sealed class GenericRequestHandler2<T>(ILogger<GenericRequestHandler2<T>> logger)
+    : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
+{
+    private readonly ILogger<GenericRequestHandler2<T>> logger = logger;
+
+    public List<T> Handle(GenericRequest2<T> request)
+    {
+        return [.. Enumerable.Range(0, request.Count).Select(_ => new T())];
+    }
+}
+
+[IoCRegister]
+internal sealed class CustomMessenger(IServiceProvider serviceProvider)
+{
+    private readonly IServiceProvider serviceProvider = serviceProvider;
+
+    public TResponse Send<TRequest, TResponse>(IRequest<TRequest, TResponse> request)
+        where TRequest : IRequest<TRequest, TResponse>
+    {
+        if(request is GenericRequest2<Entity> tr)
+        {
+            return (TResponse)(object)serviceProvider.GetRequiredService<GenericRequestHandler2<Entity>>().Handle(tr);
+        }
+        else
+        {
+            throw new NotSupportedException($"Request of type {typeof(TRequest).FullName} is not supported.");
+        }
     }
 }
