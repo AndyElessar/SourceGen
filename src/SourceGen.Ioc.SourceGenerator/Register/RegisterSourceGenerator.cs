@@ -539,7 +539,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         "<,,,,,,,>",
         "<,,,,,,,,>"
     ];
-    private static string GetGenericString(int arity) =>
+    private static string GetGenericString(in int arity) =>
         arity <= 9 ? s_genericArityStrings[arity - 1] : '<' + new string(',', arity - 1) + '>';
 
     /// <summary>
@@ -574,15 +574,12 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // Build service type names set for IsServiceParameter check
         var serviceTypeNames = BuildServiceTypeNames(registration);
 
-        // Build the factory lambda
         if(registration.Key is not null)
         {
-            // Keyed registration with decorators
             writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
         }
         else
         {
-            // Non-keyed registration with decorators
             writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
         }
 
@@ -614,7 +611,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             var constructorParams = decorator.ConstructorParameters ?? [];
             if(constructorParams.Length == 0)
             {
-                // No constructor info available, use ActivatorUtilities as fallback
+                // No constructor info available, use ActivatorUtilities as fallback (Shouldn't reach here)
                 writer.WriteLine($"var {currentVar} = global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{decoratorTypeName}>(sp, {prevVar});");
             }
             else

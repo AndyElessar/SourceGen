@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+﻿namespace SourceGen.Ioc.SourceGenerator.Models;
 
 /// <summary>
 /// Represents a member (property, field, or method) that should be populated by dependency injection.
@@ -13,7 +13,7 @@ internal sealed record class InjectionMemberData(
     InjectionMemberType MemberType,
     string Name,
     TypeData? Type,
-    ImmutableEquatableArray<ConstructorParameterData>? Parameters,
+    ImmutableEquatableArray<ParameterData>? Parameters,
     string? Key,
     int KeyType);
 

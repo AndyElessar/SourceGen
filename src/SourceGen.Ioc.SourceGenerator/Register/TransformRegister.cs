@@ -154,7 +154,7 @@ partial class RegisterSourceGenerator
     private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, int keyType)
     {
         var parameters = method.Parameters
-            .Select(p => new ConstructorParameterData(
+            .Select(p => new ParameterData(
                 p.Name,
                 p.Type.GetTypeData(),
                 IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated))

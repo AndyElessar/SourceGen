@@ -21,6 +21,6 @@ internal sealed record class TypeData(
     bool IsNestedOpenGeneric = false,
     bool IsTypeParameter = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
-    ImmutableEquatableArray<ConstructorParameterData>? ConstructorParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null);

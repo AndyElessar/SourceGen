@@ -149,7 +149,7 @@ internal static class RoslynExtensions
                 typeParameters = typeSymbol.ExtractTypeParameters();
             }
 
-            ImmutableEquatableArray<ConstructorParameterData>? constructorParams = null;
+            ImmutableEquatableArray<ParameterData>? constructorParams = null;
             if(extractConstructorParams && visited != null)
             {
                 constructorParams = typeSymbol.ExtractConstructorParameters(visited);
@@ -466,7 +466,7 @@ internal static class RoslynExtensions
         /// <summary>
         /// Extracts constructor parameters from a type.
         /// </summary>
-        public ImmutableEquatableArray<ConstructorParameterData> ExtractConstructorParameters(
+        public ImmutableEquatableArray<ParameterData> ExtractConstructorParameters(
             HashSet<INamedTypeSymbol>? visited = null)
         {
             // Check if we've already visited this type to prevent infinite recursion
@@ -488,7 +488,7 @@ internal static class RoslynExtensions
             }
 
             visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-            List<ConstructorParameterData> parameters = [];
+            List<ParameterData> parameters = [];
             foreach(var param in constructor.Parameters)
             {
                 var paramType = param.Type;
@@ -501,7 +501,7 @@ internal static class RoslynExtensions
                 // Check if parameter is optional (has default value or is nullable)
                 var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
 
-                parameters.Add(new ConstructorParameterData(param.Name, paramTypeData, IsOptional: isOptional));
+                parameters.Add(new ParameterData(param.Name, paramTypeData, IsOptional: isOptional));
             }
 
             return parameters.ToImmutableEquatableArray();

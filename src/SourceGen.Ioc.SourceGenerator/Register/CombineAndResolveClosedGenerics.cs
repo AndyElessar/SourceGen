@@ -478,10 +478,10 @@ partial class RegisterSourceGenerator
 
         // Build closed constructor parameters
         var openConstructorParams = openImplType.ConstructorParameters;
-        ImmutableEquatableArray<ConstructorParameterData>? closedConstructorParams = null;
+        ImmutableEquatableArray<ParameterData>? closedConstructorParams = null;
         if(openConstructorParams is not null && openConstructorParams.Length > 0)
         {
-            var newParams = new List<ConstructorParameterData>(openConstructorParams.Length);
+            var newParams = new List<ParameterData>(openConstructorParams.Length);
             foreach(var param in openConstructorParams)
             {
                 var newParamTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
@@ -648,10 +648,10 @@ partial class RegisterSourceGenerator
 
         // Substitute in constructor parameters
         var constructorParams = decorator.ConstructorParameters;
-        ImmutableEquatableArray<ConstructorParameterData>? closedConstructorParams = null;
+        ImmutableEquatableArray<ParameterData>? closedConstructorParams = null;
         if(constructorParams is not null && constructorParams.Length > 0)
         {
-            var newParams = new List<ConstructorParameterData>(constructorParams.Length);
+            var newParams = new List<ParameterData>(constructorParams.Length);
             foreach(var param in constructorParams)
             {
                 var newParamTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
