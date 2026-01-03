@@ -11,7 +11,7 @@ namespace SourceGen.Ioc;
 /// When decorated a method, the method will be called after the object is created to set up dependencies. Method should be non-static and have void return type.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-[Conditional("DEBUG")]
+[Conditional("SOURCEGEN_IOC")]
 public sealed class InjectAttribute : Attribute
 {
     /// <summary>

@@ -77,7 +77,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor NestedOpenGeneric = new(
         id: "SGIOC006",
         title: "Nested Open Generic Detected",
-        messageFormat: "The type '{0}' implements '{1}' which has a type argument that is itself a generic type with unbound type parameters (e.g., Wrapper<T>). The DI container cannot resolve such nested open generics",
+        messageFormat: "The type '{0}' implements '{1}' which has a type argument that is itself a generic type with unbound type parameters (e.g., Wrapper<T>). The DI container cannot resolve such nested open generics.",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,

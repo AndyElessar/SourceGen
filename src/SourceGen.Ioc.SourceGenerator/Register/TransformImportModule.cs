@@ -39,8 +39,14 @@ partial class RegisterSourceGenerator
         IAssemblySymbol moduleAssembly,
         CancellationToken ct)
     {
+        // Use OriginalDefinition for generic types to ensure we get the attributes
+        // from the original type definition, not the constructed type.
+        // This is important for unbound generic types like IRequestHandler<,> where
+        // attributes are defined on the original definition.
+        var typeToCheck = moduleType.IsGenericType ? moduleType.OriginalDefinition : moduleType;
+
         // First, check for IoCRegisterDefaultsAttribute on the module type itself
-        foreach(var attr in moduleType.GetAttributes())
+        foreach(var attr in typeToCheck.GetAttributes())
         {
             ct.ThrowIfCancellationRequested();
 
