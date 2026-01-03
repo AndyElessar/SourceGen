@@ -8,14 +8,14 @@
 /// <param name="Type">The type data of the member (for property/field) or method parameters.</param>
 /// <param name="Parameters">The method parameters (only for methods).</param>
 /// <param name="Key">The key for keyed injection.</param>
-/// <param name="KeyType">How to interpret the key (Value or Csharp code).</param>
+/// <param name="IsOptional">Whether this member is optional (nullable type).</param>
 internal sealed record class InjectionMemberData(
     InjectionMemberType MemberType,
     string Name,
     TypeData? Type,
     ImmutableEquatableArray<ParameterData>? Parameters,
     string? Key,
-    int KeyType);
+    bool IsOptional = false);
 
 /// <summary>
 /// The type of injection member.

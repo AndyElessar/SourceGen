@@ -10,8 +10,8 @@ namespace SourceGen.Ioc;
 /// Generator will generate factory method in registration code to populate the member during object creation.<br/>
 /// When decorated a method, the method will be called after the object is created to set up dependencies. Method should be non-static and have void return type.
 /// </remarks>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-[Conditional("SOURCEGEN_IOC")]
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+[Conditional("SOURCEGEN")]
 public sealed class InjectAttribute : Attribute
 {
     /// <summary>

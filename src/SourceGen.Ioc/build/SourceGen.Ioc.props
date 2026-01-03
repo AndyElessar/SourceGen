@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <!--
     This file is automatically included when referencing the SourceGen.Ioc package.
@@ -7,6 +7,6 @@
     in both Debug and Release configurations.
   -->
   <PropertyGroup>
-    <DefineConstants>$(DefineConstants);SOURCEGEN_IOC</DefineConstants>
+    <DefineConstants>$(DefineConstants);SOURCEGEN</DefineConstants>
   </PropertyGroup>
 </Project>

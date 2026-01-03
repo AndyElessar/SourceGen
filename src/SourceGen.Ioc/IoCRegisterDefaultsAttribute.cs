@@ -11,7 +11,7 @@ namespace SourceGen.Ioc;
 /// <param name="lifetime">The lifetime with which the service should be registered in the dependency injection container.
 /// Determines the scope of the service instance.</param>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
-[Conditional("SOURCEGEN_IOC")]
+[Conditional("SOURCEGEN")]
 public sealed class IoCRegisterDefaultsAttribute(Type targetServiceType, ServiceLifetime lifetime) : Attribute
 {
     /// <summary>

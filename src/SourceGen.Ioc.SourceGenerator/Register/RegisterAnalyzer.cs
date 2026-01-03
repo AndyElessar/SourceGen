@@ -95,6 +95,18 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "InjectAttribute cannot be applied to static members, members that cannot be assigned/invoked, or methods that do not return void.");
 
+    /// <summary>
+    /// SGIOC100: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicatedKeyedServiceAttribute = new(
+        id: "SGIOC100",
+        title: "Duplicated Attribute Usage",
+        messageFormat: "Parameter '{0}' has both [FromKeyedServices] and [Inject] attributes; [FromKeyedServices] will take precedence",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "When both [FromKeyedServices] and [Inject] attributes are applied to the same parameter, [FromKeyedServices] takes precedence and [Inject] is ignored.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -103,7 +115,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         SingletonDependsOnTransient,
         ScopedDependsOnTransient,
         NestedOpenGeneric,
-        InvalidInjectAttributeUsage
+        InvalidInjectAttributeUsage,
+        DuplicatedKeyedServiceAttribute
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -143,11 +156,62 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC007: Analyze InjectAttribute on members
         context.RegisterSymbolAction(AnalyzeInjectAttribute, SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
 
+        // SGIOC100: Analyze duplicated keyed service attributes on parameters
+        context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
+
         // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
         context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
 
         // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003-005)
         context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
+    }
+
+    /// <summary>
+    /// SGIOC100: Analyzes parameters for duplicated keyed service attributes.
+    /// Reports warning when both [FromKeyedServices] and [Inject] attributes are marked on the same parameter.
+    /// </summary>
+    private static void AnalyzeDuplicatedKeyedServiceAttributes(SymbolAnalysisContext context)
+    {
+        if(context.Symbol is not IMethodSymbol method)
+            return;
+
+        foreach(var parameter in method.Parameters)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var hasFromKeyedServices = false;
+            var hasInject = false;
+            AttributeData? injectAttribute = null;
+
+            foreach(var attr in parameter.GetAttributes())
+            {
+                var attrClass = attr.AttributeClass;
+                if(attrClass is null)
+                    continue;
+
+                if(attrClass.Name == "FromKeyedServicesAttribute"
+                    && attrClass.ContainingNamespace.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                {
+                    hasFromKeyedServices = true;
+                }
+                else if(attrClass.Name == "InjectAttribute")
+                {
+                    hasInject = true;
+                    injectAttribute = attr;
+                }
+            }
+
+            if(hasFromKeyedServices && hasInject)
+            {
+                var location = injectAttribute?.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
+                    ?? parameter.Locations.FirstOrDefault();
+
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DuplicatedKeyedServiceAttribute,
+                    location,
+                    parameter.Name));
+            }
+        }
     }
 
     /// <summary>

@@ -347,14 +347,13 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // Resolve constructor parameters
         var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
         var constructorParamVars = new string[constructorParams.Length];
+        bool isKeyedRegistration = registration.Key is not null;
         int paramIndex = 0;
 
         foreach(var param in constructorParams)
         {
             var paramVar = $"s0_ctor{paramIndex}";
-            var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
-            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
-            constructorParamVars[paramIndex] = paramVar;
+            constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
             paramIndex++;
         }
 
@@ -386,11 +385,13 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
             if(member.Key is not null)
             {
-                writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{memberTypeName}>({member.Key});");
+                var getKeyedServiceMethod = member.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
+                writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{memberTypeName}>({member.Key});");
             }
             else
             {
-                writer.WriteLine($"var {paramVar} = sp.GetRequiredService<{memberTypeName}>();");
+                var getServiceMethod = member.IsOptional ? "GetService" : "GetRequiredService";
+                writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{memberTypeName}>();");
             }
 
             propertyInitializers[propertyIndex++] = $"{member.Name} = {paramVar}";
@@ -414,15 +415,21 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
                 if(method.Key is not null)
                 {
-                    writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{param.Type.Name}>({method.Key});");
+                    // Method has explicit key from [Inject] attribute
+                    if(IsServiceProviderType(param.Type.Name))
+                    {
+                        methodParamVars[methodParamIdx++] = "sp";
+                    }
+                    else
+                    {
+                        writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{param.Type.Name}>({method.Key});");
+                        methodParamVars[methodParamIdx++] = paramVar;
+                    }
                 }
                 else
                 {
-                    var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
-                    writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
+                    methodParamVars[methodParamIdx++] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
                 }
-
-                methodParamVars[methodParamIdx++] = paramVar;
                 memberParamIndex++;
             }
 
@@ -494,20 +501,19 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // Resolve constructor parameters
         var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
         var constructorParamVars = new string[constructorParams.Length];
+        bool isKeyedRegistration = registration.Key is not null;
         int paramIndex = 0;
 
         foreach(var param in constructorParams)
         {
             var paramVar = $"p{paramIndex}";
-            var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
-            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{param.Type.Name}>();");
-            constructorParamVars[paramIndex] = paramVar;
+            constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
             paramIndex++;
         }
 
         // Create the instance
         var constructorArgs = string.Join(", ", constructorParamVars);
-        writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});"); ;
+        writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
 
         // Return the instance
         writer.WriteLine("return s0;");
@@ -644,10 +650,8 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                     {
                         // This is a dependency, resolve it from service provider
                         var paramVar = $"{currentVar}_p{paramIndex}";
-                        // Use GetService for optional parameters (nullable or has default value), GetRequiredService otherwise
-                        var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
-                        writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
-                        paramVars[paramVarIndex++] = paramVar;
+                        bool isKeyedRegistration = registration.Key is not null;
+                        paramVars[paramVarIndex++] = WriteParameterResolution(writer, param, paramVar, paramTypeName, isKeyedRegistration);
                         paramIndex++;
                     }
                 }
@@ -787,4 +791,71 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         return serviceTypeNames.Contains(paramType.Name)
             || serviceTypeNames.Contains(paramType.NameWithoutGeneric);
     }
+
+    /// <summary>
+    /// Writes parameter resolution code and returns the variable name to use.
+    /// Handles special cases: IServiceProvider, [FromKeyedServices], [Inject] with key, and keyed service key parameter.
+    /// </summary>
+    /// <param name="writer">The source writer.</param>
+    /// <param name="param">The parameter data.</param>
+    /// <param name="paramVar">The variable name for this parameter.</param>
+    /// <param name="paramTypeName">The resolved parameter type name (for generic substitution).</param>
+    /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
+    /// <returns>The variable name or expression to use for this parameter.</returns>
+    private static string WriteParameterResolution(
+        SourceWriter writer,
+        ParameterData param,
+        string paramVar,
+        string paramTypeName,
+        bool isKeyedRegistration)
+    {
+        // Case 1: IServiceProvider - pass sp directly
+        if(IsServiceProviderType(paramTypeName))
+        {
+            return "sp";
+        }
+
+        // Case 2: [FromKeyedServices] or [Inject] attribute with key - use the specified key
+        if(param.ServiceKey is not null)
+        {
+            var getKeyedServiceMethod = param.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
+            writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{paramTypeName}>({param.ServiceKey});");
+            return paramVar;
+        }
+
+        // Case 3: Keyed registration with object/object? parameter named key/serviceKey - pass the key
+        if(isKeyedRegistration && IsServiceKeyParameter(param))
+        {
+            return "key";
+        }
+
+        // Default: resolve from service provider
+        var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
+        writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
+        return paramVar;
+    }
+
+    /// <summary>
+    /// Checks if the parameter is a service key parameter (object/object? named key or serviceKey).
+    /// </summary>
+    private static bool IsServiceKeyParameter(ParameterData param)
+    {
+        // Check if parameter type is object (with or without nullable)
+        var typeName = param.Type.Name;
+        if(typeName != "object" && typeName != "global::System.Object")
+        {
+            return false;
+        }
+
+        // Check if parameter name is "key" or "serviceKey" (case-insensitive)
+        var paramName = param.Name;
+        return paramName.Equals("key", StringComparison.OrdinalIgnoreCase)
+            || paramName.Equals("serviceKey", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks if the type name represents System.IServiceProvider.
+    /// </summary>
+    private static bool IsServiceProviderType(string typeName) =>
+        typeName is "global::System.IServiceProvider" or "System.IServiceProvider" or "IServiceProvider";
 }

@@ -90,20 +90,20 @@ partial class RegisterSourceGenerator
                 continue;
 
             // Extract key information from InjectAttribute
-            var (key, keyType) = injectAttribute.GetKey();
+            var (key, _) = injectAttribute.GetKey();
 
             InjectionMemberData? memberData = member switch
             {
                 IPropertySymbol property when property.SetMethod is not null =>
-                    CreatePropertyInjection(property, key, keyType),
+                    CreatePropertyInjection(property, key),
 
                 IFieldSymbol field when !field.IsReadOnly =>
-                    CreateFieldInjection(field, key, keyType),
+                    CreateFieldInjection(field, key),
 
                 IMethodSymbol method when method.MethodKind == MethodKind.Ordinary
                     && method.ReturnsVoid
                     && !method.IsGenericMethod =>
-                    CreateMethodInjection(method, key, keyType),
+                    CreateMethodInjection(method, key),
 
                 _ => null
             };
@@ -121,43 +121,46 @@ partial class RegisterSourceGenerator
     /// <summary>
     /// Creates injection data for a property.
     /// </summary>
-    private static InjectionMemberData CreatePropertyInjection(IPropertySymbol property, string? key, int keyType)
+    private static InjectionMemberData CreatePropertyInjection(IPropertySymbol property, string? key)
     {
         var propertyType = property.Type.GetTypeData();
+        var isOptional = property.NullableAnnotation == NullableAnnotation.Annotated;
         return new InjectionMemberData(
             InjectionMemberType.Property,
             property.Name,
             propertyType,
             null,
             key,
-            keyType);
+            isOptional);
     }
 
     /// <summary>
     /// Creates injection data for a field.
     /// </summary>
-    private static InjectionMemberData CreateFieldInjection(IFieldSymbol field, string? key, int keyType)
+    private static InjectionMemberData CreateFieldInjection(IFieldSymbol field, string? key)
     {
         var fieldType = field.Type.GetTypeData();
+        var isOptional = field.NullableAnnotation == NullableAnnotation.Annotated;
         return new InjectionMemberData(
             InjectionMemberType.Field,
             field.Name,
             fieldType,
             null,
             key,
-            keyType);
+            isOptional);
     }
 
     /// <summary>
     /// Creates injection data for a method.
     /// </summary>
-    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, int keyType)
+    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key)
     {
         var parameters = method.Parameters
             .Select(p => new ParameterData(
                 p.Name,
                 p.Type.GetTypeData(),
-                IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated))
+                IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated,
+                ServiceKey: GetServiceKey(p)))
             .ToImmutableEquatableArray();
 
         return new InjectionMemberData(
@@ -165,8 +168,47 @@ partial class RegisterSourceGenerator
             method.Name,
             null,
             parameters,
-            key,
-            keyType);
+            key);
+    }
+
+    /// <summary>
+    /// Gets the service key from [FromKeyedServices] or [Inject] attribute on a parameter if present.
+    /// [FromKeyedServices] takes precedence over [Inject].
+    /// </summary>
+    private static string? GetServiceKey(IParameterSymbol param)
+    {
+        foreach(var attribute in param.GetAttributes())
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass is null)
+                continue;
+
+            // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority)
+            if(attrClass.Name == "FromKeyedServicesAttribute"
+                && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+            {
+                // The key is the first constructor argument
+                if(attribute.ConstructorArguments.Length > 0)
+                {
+                    var keyArg = attribute.ConstructorArguments[0];
+                    if(!keyArg.IsNull && keyArg.Value is not null)
+                    {
+                        return keyArg.GetPrimitiveConstantString();
+                    }
+                }
+            }
+
+            // Check for InjectAttribute (by name only, to support third-party attributes)
+            if(attrClass.Name == "InjectAttribute")
+            {
+                var (key, _) = attribute.GetKey();
+                if(key is not null)
+                {
+                    return key;
+                }
+            }
+        }
+        return null;
     }
 
     /// <summary>

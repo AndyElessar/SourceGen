@@ -148,7 +148,12 @@ When generating or modifying code, **always use the latest C# 14 features** wher
    context.ReportDiagnostic(Diagnostic.Create(InvalidUsageError, location, typeName));
    ```
 
-2. **Graceful Degradation**
+2. **Use Correct Diagnostic ID Categories**
+   - `SGIOC001` - `SGIOC099`: Errors
+   - `SGIOC100` - `SGIOC199`: Warnings
+   - `SGIOC200` - `SGIOC299`: Info/Suggestions
+
+3. **Graceful Degradation**
    - Don't crash the generator on invalid input
    - Continue processing valid items
 

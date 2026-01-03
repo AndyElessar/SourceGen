@@ -79,18 +79,38 @@ public sealed class TestInterfaces/*(TestClosed2 testClosed2)*/ : IGenericTest<d
 public interface IGenericTest2<T>;
 
 [IoCRegister(Lifetime = ServiceLifetime.Transient)]
-public sealed class TestClosed2(TestInterfaces testInterfaces) : IGenericTest<IGenericTest2<int>>
+public sealed class TestClosed2(
+    TestInterfaces testInterfaces,
+    [FromKeyedServices(TestEnum.T1)]
+    [Inject(Key = TestEnum.T2)]
+    ITest2 test2,
+    [Inject(Key = "TestExtensions.Key", KeyType = KeyType.Csharp)] ITest2 test3
+) : IGenericTest<IGenericTest2<int>>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;
+    private readonly ITest2 test2 = test2;
+    private readonly ITest2 test3 = test3;
 
     [Inject]
-    public IGenericTest<decimal> TestInject { get; init; } = null!;
+    public IGenericTest<decimal>? TestInject { get; init; }
+
+    [Inject]
+    public void AddDependency(IServiceProvider sp)
+    {
+        var _ = sp.GetRequiredService<IGenericTest<TestFor>>();
+    }
 }
 
 [IoCRegister(Lifetime = ServiceLifetime.Transient)]
 public sealed class TestOpenGeneric2<T>(TestInterfaces testInterfaces) : IGenericTest2<T>
 {
     private readonly TestInterfaces _testInterfaces = testInterfaces;
+
+    [Inject]
+    public void AddDependency(IServiceProvider sp)
+    {
+        var _ = sp.GetRequiredService<IGenericTest<TestFor>>();
+    }
 }
 
 internal abstract class GenericTest3<T>;

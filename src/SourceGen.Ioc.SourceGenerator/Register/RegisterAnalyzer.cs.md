@@ -25,4 +25,7 @@ Format: ID - Level - Category - Description
     - Example (OK): `class Handler : IHandler<Wrapper<string>>` - `Wrapper<string>` is a closed generic type.
 
 7. SGIOC007 - Error - Usage - Invalid Attribute Usage
-    - Report when InjectAttribute is mark on static member, or member can not assign/invoke (private setter, setter not exists, private field, readonly field, private method), or mark on method and it is not return void.
+    - Report when `InjectAttribute` is mark on static member, or member can not assign/invoke (private setter, setter not exists, private field, readonly field, private method), or mark on method and it is not return void.
+
+8. SGIOC100 - Warning - Usage - Duplicated Attribute Usage
+    - Report when `FromKeyedServicesAttribute` and `InjectAttribute` mark on one parameter.

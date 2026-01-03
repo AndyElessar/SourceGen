@@ -10,7 +10,7 @@ namespace SourceGen.Ioc;
 /// Use for import default registration settings from another module(assembly).<br/>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-[Conditional("SOURCEGEN_IOC")]
+[Conditional("SOURCEGEN")]
 public sealed class ImportModuleAttribute(Type moduleType) : Attribute
 {
     /// <summary>

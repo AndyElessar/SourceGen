@@ -500,10 +500,54 @@ internal static class RoslynExtensions
                 // Check if parameter is optional (has default value or is nullable)
                 var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
 
-                parameters.Add(new ParameterData(param.Name, paramTypeData, IsOptional: isOptional));
+                // Check for [FromKeyedServices] or [Inject] attribute with key
+                var serviceKey = GetServiceKey(param);
+
+                parameters.Add(new ParameterData(param.Name, paramTypeData, IsOptional: isOptional,
+                    ServiceKey: serviceKey));
             }
 
             return parameters.ToImmutableEquatableArray();
+        }
+
+        /// <summary>
+        /// Gets the service key from [FromKeyedServices] or [Inject] attribute on a parameter if present.
+        /// [FromKeyedServices] takes precedence over [Inject].
+        /// </summary>
+        private static string? GetServiceKey(IParameterSymbol param)
+        {
+            foreach(var attribute in param.GetAttributes())
+            {
+                var attrClass = attribute.AttributeClass;
+                if(attrClass is null)
+                    continue;
+
+                // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority)
+                if(attrClass.Name == "FromKeyedServicesAttribute"
+                    && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                {
+                    // The key is the first constructor argument
+                    if(attribute.ConstructorArguments.Length > 0)
+                    {
+                        var keyArg = attribute.ConstructorArguments[0];
+                        if(!keyArg.IsNull && keyArg.Value is not null)
+                        {
+                            return keyArg.GetPrimitiveConstantString();
+                        }
+                    }
+                }
+
+                // Check for InjectAttribute (by name only, to support third-party attributes)
+                if(attrClass.Name == "InjectAttribute")
+                {
+                    var (key, _) = attribute.GetKey();
+                    if(key is not null)
+                    {
+                        return key;
+                    }
+                }
+            }
+            return null;
         }
     }
 

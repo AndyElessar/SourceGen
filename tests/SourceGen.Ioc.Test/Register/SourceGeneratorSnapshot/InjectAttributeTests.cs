@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for InjectAttribute functionality.
@@ -148,6 +148,322 @@ public class InjectAttributeTests
             {
                 [Inject(Key = "special")]
                 public IDependency Dependency { get; init; }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_WithCsharpKeyedService_GeneratesKeyedServiceResolution()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+            public class SpecialDependency : IDependency
+            {
+                public const string Key = "special";
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [Inject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+                public IDependency Dependency { get; init; }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_ConstructorParameter_WithKeyedService_GeneratesKeyedServiceResolution()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class SpecialDependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class DefaultDependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([Inject(Key = "special")] IDependency dep) : IMyService
+            {
+                public IDependency Dependency { get; } = dep;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_ConstructorParameter_WithCsharpKey_GeneratesKeyedServiceResolution()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+            public class SpecialDependency : IDependency
+            {
+                public const string Key = "special";
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([Inject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))] IDependency dep) : IMyService
+            {
+                public IDependency Dependency { get; } = dep;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_MethodParameter_WithKeyedService_GeneratesKeyedServiceResolution()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class SpecialDependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class DefaultDependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                public IDependency? Dependency { get; private set; }
+
+                [Inject]
+                public void Initialize([Inject(Key = "special")] IDependency dep)
+                {
+                    Dependency = dep;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_MethodParameter_WithCsharpKey_GeneratesKeyedServiceResolution()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+            public class SpecialDependency : IDependency
+            {
+                public const string Key = "special";
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                public IDependency? Dependency { get; private set; }
+
+                [Inject]
+                public void Initialize([Inject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))] IDependency dep)
+                {
+                    Dependency = dep;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_OptionalProperty_GeneratesGetService()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [Inject]
+                public IDependency? OptionalDependency { get; set; }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_OptionalPropertyWithKey_GeneratesGetKeyedService()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class SpecialDependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [Inject(Key = "special")]
+                public IDependency? OptionalDependency { get; set; }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_OptionalConstructorParameter_GeneratesGetService()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService(IDependency? optionalDep = null) : IMyService
+            {
+                public IDependency? OptionalDependency { get; } = optionalDep;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_OptionalConstructorParameterWithKey_GeneratesGetKeyedService()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class SpecialDependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([Inject(Key = "special")] IDependency? optionalDep = null) : IMyService
+            {
+                public IDependency? OptionalDependency { get; } = optionalDep;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task InjectAttribute_OptionalMethodParameter_GeneratesGetService()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                public IDependency? OptionalDependency { get; private set; }
+
+                [Inject]
+                public void Initialize(IDependency? optionalDep = null)
+                {
+                    OptionalDependency = optionalDep;
+                }
             }
             """;
 

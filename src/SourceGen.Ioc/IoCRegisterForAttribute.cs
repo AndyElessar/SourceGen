@@ -8,7 +8,7 @@ namespace SourceGen.Ioc;
 /// </summary>
 /// <param name="targetType">Specifies which type should be registered in the dependency injection container.</param>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
-[Conditional("SOURCEGEN_IOC")]
+[Conditional("SOURCEGEN")]
 public sealed class IoCRegisterForAttribute(Type targetType) : Attribute
 {
     /// <summary>
