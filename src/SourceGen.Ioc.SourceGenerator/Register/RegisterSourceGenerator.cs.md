@@ -43,10 +43,10 @@ public static class ServiceCollectionExtensions
 	{
 		services.AddTransient<IMyService, MyServiceImplementation>();
 		services.AddSingleton(typeof(IGenericService<>), typeof(GenericServiceImplementation<>));
-		services.AddScoped(typeof(IGenericService<string>), typeof(GenericServiceStringImplementation));
-		services.AddTransient(typeof(IMyKeyedService), provider => new MyKeyedServiceImplementation("MyKey"));
-		services.AddTransient(typeof(IMyKeyedService), provider => new MyKeyedServiceImplementation(MyEnum.EnumValue));
-		services.AddTransient(typeof(IMyKeyedService), provider => new MyKeyedServiceImplementation(MyClass.StaticValue));
+		services.AddScoped<IGenericService<string>, ClosedGenericServiceStringImplementation>();
+		services.AddKeyedTransient<IMyKeyedService, MyKeyedServiceImplementation1>("MyKey");
+      services.AddKeyedTransient<IMyKeyedService, MyKeyedServiceImplementation2>(MyEnum.EnumValue);
+      services.AddKeyedTransient<IMyKeyedService, MyKeyedServiceImplementation3>(MyClass.StaticValue);
 		
 		return services;
 	}

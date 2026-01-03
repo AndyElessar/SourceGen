@@ -67,7 +67,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
         // ========== Pipeline 1: Process individual registrations (cacheable per registration) ==========
         // Each registration is processed independently with default settings.
-        // This allows caching at the individual registration level.
 
         var basicRegistrationResults1 = registerProvider
             .Combine(combinedDefaultSettings)
@@ -84,7 +83,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
         // ========== Pipeline 2: Combine results and resolve closed generics ==========
-        // This pipeline only re-runs when any BasicRegistrationResult changes.
 
         var serviceRegistrations = allBasicResults
             .Select(static (results, ct) => CombineAndResolveClosedGenerics(in results, ct));
@@ -525,7 +523,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Cached generic arity strings to avoid repeated allocations.
-    /// Index 0 = arity 1 ("<>"), Index 1 = arity 2 ("<,>"), etc.
     /// </summary>
     private static readonly string[] s_genericArityStrings =
     [

@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Text;
 
 namespace SourceGen.Ioc.SourceGenerator;
 
@@ -834,11 +833,11 @@ internal static class RoslynExtensions
     /// Uses Span-based processing to minimize string allocations.
     /// </summary>
     /// <param name="typeName">The type name containing type parameters to substitute.</param>
-    /// <param name="typeArgMap">A dictionary mapping type parameter names to their actual type arguments.</param>
+    /// <param name="typeArgMap">A map of type parameter names to their actual type arguments.</param>
     /// <returns>The type name with all type parameters substituted.</returns>
-    public static string SubstituteTypeArguments(string typeName, Dictionary<string, string> typeArgMap)
+    public static string SubstituteTypeArguments(string typeName, TypeArgMap typeArgMap)
     {
-        if(typeArgMap.Count == 0)
+        if(typeArgMap.IsEmpty)
         {
             return typeName;
         }
@@ -846,9 +845,9 @@ internal static class RoslynExtensions
         // Fast path: check if any substitution is needed
         var typeNameSpan = typeName.AsSpan();
         bool needsSubstitution = false;
-        foreach(var kvp in typeArgMap)
+        foreach(var (key, _) in typeArgMap)
         {
-            if(ContainsTypeParameter(typeNameSpan, kvp.Key.AsSpan()))
+            if(ContainsTypeParameter(typeNameSpan, key.AsSpan()))
             {
                 needsSubstitution = true;
                 break;
@@ -860,44 +859,7 @@ internal static class RoslynExtensions
             return typeName;
         }
 
-        // Perform all substitutions in a single pass using StringBuilder
-        var result = new StringBuilder(typeName.Length + 32);
-        int i = 0;
-
-        while(i < typeNameSpan.Length)
-        {
-            bool replaced = false;
-
-            // Try to match any type parameter at current position
-            foreach(var kvp in typeArgMap)
-            {
-                var typeParamSpan = kvp.Key.AsSpan();
-                if(i + typeParamSpan.Length <= typeNameSpan.Length &&
-                   typeNameSpan.Slice(i, typeParamSpan.Length).Equals(typeParamSpan, StringComparison.Ordinal))
-                {
-                    // Check if it's a whole word
-                    bool isStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
-                    bool isEnd = i + typeParamSpan.Length == typeNameSpan.Length ||
-                                 !IsIdentifierChar(typeNameSpan[i + typeParamSpan.Length]);
-
-                    if(isStart && isEnd)
-                    {
-                        result.Append(kvp.Value);
-                        i += typeParamSpan.Length;
-                        replaced = true;
-                        break;
-                    }
-                }
-            }
-
-            if(!replaced)
-            {
-                result.Append(typeNameSpan[i]);
-                i++;
-            }
-        }
-
-        return result.ToString();
+        return SubstituteTypeArgumentsCore(typeNameSpan, typeArgMap.AsSpan());
     }
 
     /// <summary>
@@ -909,45 +871,87 @@ internal static class RoslynExtensions
     /// <returns>The type name with the type parameter replaced.</returns>
     public static string ReplaceTypeParameter(string typeName, string typeParam, string actualArg)
     {
-        // We need to replace the type parameter as a whole word, not as a substring
-        // For example, replacing "T" should not affect "TResponse"
-
         var typeNameSpan = typeName.AsSpan();
-        var typeParamSpan = typeParam.AsSpan();
 
         // Fast path: check if substitution is needed
-        if(!ContainsTypeParameter(typeNameSpan, typeParamSpan))
+        if(!ContainsTypeParameter(typeNameSpan, typeParam.AsSpan()))
         {
             return typeName;
         }
 
-        var result = new StringBuilder(typeNameSpan.Length + actualArg.Length);
+        // Delegate to core implementation with single-element span
+        return SubstituteTypeArgumentsCore(typeNameSpan, [(typeParam, actualArg)]);
+    }
+
+    /// <summary>
+    /// Core implementation for type parameter substitution.
+    /// Performs all substitutions in a single pass using StringBuilder.
+    /// </summary>
+    /// <param name="typeNameSpan">The type name span to process.</param>
+    /// <param name="sortedEntries">Entries sorted by key length descending for correct matching priority.</param>
+    /// <returns>The type name with all type parameters substituted.</returns>
+    private static string SubstituteTypeArgumentsCore(
+        ReadOnlySpan<char> typeNameSpan,
+        ReadOnlySpan<(string Key, string Value)> sortedEntries)
+    {
+        var result = new StringBuilder(typeNameSpan.Length + 32);
         int i = 0;
 
         while(i < typeNameSpan.Length)
         {
-            // Check if we found the type parameter at this position
-            if(i + typeParamSpan.Length <= typeNameSpan.Length &&
-               typeNameSpan.Slice(i, typeParamSpan.Length).Equals(typeParamSpan, StringComparison.Ordinal))
+            // Check if current position is a valid identifier start
+            bool isValidStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
+
+            if(isValidStart && TryMatchTypeParameter(typeNameSpan, i, sortedEntries, out var match, out int matchLength))
             {
-                // Check if it's a whole word (not part of a larger identifier)
-                bool isStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
-                bool isEnd = i + typeParamSpan.Length == typeNameSpan.Length ||
-                             !IsIdentifierChar(typeNameSpan[i + typeParamSpan.Length]);
-
-                if(isStart && isEnd)
-                {
-                    result.Append(actualArg);
-                    i += typeParamSpan.Length;
-                    continue;
-                }
+                result.Append(match);
+                i += matchLength;
             }
-
-            result.Append(typeNameSpan[i]);
-            i++;
+            else
+            {
+                result.Append(typeNameSpan[i]);
+                i++;
+            }
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Tries to match a type parameter at the given position.
+    /// </summary>
+    /// <returns>True if a match was found, with the replacement value and match length.</returns>
+    private static bool TryMatchTypeParameter(
+        ReadOnlySpan<char> typeNameSpan,
+        int position,
+        ReadOnlySpan<(string Key, string Value)> sortedEntries,
+        [NotNullWhen(true)] out string? replacement,
+        out int matchLength)
+    {
+        foreach(var (key, value) in sortedEntries)
+        {
+            var typeParamSpan = key.AsSpan();
+            int paramLength = typeParamSpan.Length;
+
+            if(position + paramLength <= typeNameSpan.Length &&
+               typeNameSpan.Slice(position, paramLength).SequenceEqual(typeParamSpan))
+            {
+                // Check if it's a whole word (ends at identifier boundary)
+                bool isEnd = position + paramLength == typeNameSpan.Length
+                                || !IsIdentifierChar(typeNameSpan[position + paramLength]);
+
+                if(isEnd)
+                {
+                    replacement = value;
+                    matchLength = paramLength;
+                    return true;
+                }
+            }
+        }
+
+        replacement = null;
+        matchLength = 0;
+        return false;
     }
 
     /// <summary>
@@ -958,17 +962,17 @@ internal static class RoslynExtensions
         int index = 0;
         while(index <= typeName.Length - typeParam.Length)
         {
-            var slice = typeName.Slice(index);
-            int pos = slice.IndexOf(typeParam, StringComparison.Ordinal);
+            int pos = typeName[index..].IndexOf(typeParam, StringComparison.Ordinal);
             if(pos < 0)
             {
                 return false;
             }
 
             int absolutePos = index + pos;
-            bool isStart = absolutePos == 0 || !IsIdentifierChar(typeName[absolutePos - 1]);
-            bool isEnd = absolutePos + typeParam.Length == typeName.Length ||
-                         !IsIdentifierChar(typeName[absolutePos + typeParam.Length]);
+            bool isStart = absolutePos == 0
+                            || !IsIdentifierChar(typeName[absolutePos - 1]);
+            bool isEnd = absolutePos + typeParam.Length == typeName.Length
+                            || !IsIdentifierChar(typeName[absolutePos + typeParam.Length]);
 
             if(isStart && isEnd)
             {
@@ -983,7 +987,123 @@ internal static class RoslynExtensions
     /// <summary>
     /// Checks if a character can be part of an identifier.
     /// </summary>
-    private static bool IsIdentifierChar(in char c) => char.IsLetterOrDigit(c) || c == '_';
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     #endregion
+}
+
+/// <summary>
+/// A lightweight structure for mapping type parameter names to their actual type arguments.
+/// Entries are stored sorted by key length descending to ensure correct matching priority
+/// (e.g., "TValue" is matched before "T").
+/// </summary>
+internal struct TypeArgMap
+{
+    private (string Key, string Value)[] _entries;
+    private int _count;
+
+    /// <summary>
+    /// Creates an empty TypeArgMap with the specified initial capacity.
+    /// </summary>
+    public TypeArgMap(int capacity)
+    {
+        _entries = capacity > 0 ? new (string, string)[capacity] : [];
+        _count = 0;
+    }
+
+    /// <summary>
+    /// Gets whether the map is uninitialized or contains no elements.
+    /// </summary>
+    public readonly bool IsDefaultOrEmpty => _entries is null || _count == 0;
+
+    /// <summary>
+    /// Gets whether the map is empty.
+    /// </summary>
+    public readonly bool IsEmpty => _count == 0;
+
+    /// <summary>
+    /// Gets the number of entries in the map.
+    /// </summary>
+    public readonly int Count => _count;
+
+    /// <summary>
+    /// Adds a type parameter mapping, maintaining sorted order by key length descending.
+    /// </summary>
+    public void Add(string typeParam, string actualArg)
+    {
+        // Ensure capacity
+        if(_entries.Length == 0)
+        {
+            _entries = new (string, string)[4];
+        }
+        else if(_count == _entries.Length)
+        {
+            Array.Resize(ref _entries, _entries.Length * 2);
+        }
+
+        // Find insertion position to maintain sorted order (by key length descending)
+        int insertIndex = _count;
+        for(int i = 0; i < _count; i++)
+        {
+            if(typeParam.Length > _entries[i].Key.Length)
+            {
+                insertIndex = i;
+                break;
+            }
+        }
+
+        // Shift elements to make room
+        if(insertIndex < _count)
+        {
+            Array.Copy(_entries, insertIndex, _entries, insertIndex + 1, _count - insertIndex);
+        }
+
+        _entries[insertIndex] = (typeParam, actualArg);
+        _count++;
+    }
+
+    /// <summary>
+    /// Indexer for setting values. Maintains sorted order.
+    /// </summary>
+    public string this[string typeParam]
+    {
+        set => Add(typeParam, value);
+    }
+
+    /// <summary>
+    /// Tries to get a value by key.
+    /// </summary>
+    public readonly bool TryGetValue(string key, [NotNullWhen(true)] out string? value)
+    {
+        for(int i = 0; i < _count; i++)
+        {
+            if(_entries[i].Key == key)
+            {
+                value = _entries[i].Value;
+                return true;
+            }
+        }
+        value = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Gets a span of the entries, sorted by key length descending.
+    /// </summary>
+    public readonly ReadOnlySpan<(string Key, string Value)> AsSpan() => _entries.AsSpan(0, _count);
+
+    /// <summary>
+    /// Returns an enumerator for the entries.
+    /// </summary>
+    public readonly Enumerator GetEnumerator() => new(_entries, _count);
+
+    public ref struct Enumerator(ReadOnlySpan<(string Key, string Value)> entries, int count)
+    {
+        private readonly ReadOnlySpan<(string Key, string Value)> _entries = entries[..count];
+        private int _index = -1;
+
+        public readonly (string Key, string Value) Current => _entries[_index];
+        public bool MoveNext() => ++_index < _entries.Length;
+    }
 }

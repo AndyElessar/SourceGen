@@ -15,11 +15,8 @@ partial class RegisterSourceGenerator
     {
         var methodGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
 
-        // Build open generic index from all results
-        var openGenericIndex = new Dictionary<string, OpenGenericRegistrationInfo>(StringComparer.Ordinal);
-
-        // Collect all closed generic dependencies
-        var closedGenericDependencies = new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal);
+        Dictionary<string, OpenGenericRegistrationInfo>? openGenericIndex = null;
+        Dictionary<string, ClosedGenericDependency>? closedGenericDependencies = null;
 
         // Process each basic result
         foreach(var result in basicResults)
@@ -41,30 +38,41 @@ partial class RegisterSourceGenerator
             }
 
             // Index open generic entries
-            foreach(var entry in result.OpenGenericEntries)
+            if(result.OpenGenericEntries.Length > 0)
             {
-                if(!openGenericIndex.ContainsKey(entry.ServiceTypeKey))
+                openGenericIndex ??= new Dictionary<string, OpenGenericRegistrationInfo>(StringComparer.Ordinal);
+                foreach(var entry in result.OpenGenericEntries)
                 {
-                    openGenericIndex[entry.ServiceTypeKey] = entry.RegistrationInfo;
+                    if(!openGenericIndex.ContainsKey(entry.ServiceTypeKey))
+                    {
+                        openGenericIndex[entry.ServiceTypeKey] = entry.RegistrationInfo;
+                    }
                 }
             }
 
             // Collect closed generic dependencies
-            foreach(var dep in result.ClosedGenericDependencies)
+            if(result.ClosedGenericDependencies.Length > 0)
             {
-                if(!closedGenericDependencies.ContainsKey(dep.ClosedTypeName))
+                closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal);
+                foreach(var dep in result.ClosedGenericDependencies)
                 {
-                    closedGenericDependencies[dep.ClosedTypeName] = dep;
+                    if(!closedGenericDependencies.ContainsKey(dep.ClosedTypeName))
+                    {
+                        closedGenericDependencies[dep.ClosedTypeName] = dep;
+                    }
                 }
             }
         }
 
-        // Generate factory registrations for closed generic dependencies
-        GenerateClosedGenericFactoryRegistrations(
-            openGenericIndex,
-            closedGenericDependencies,
-            methodGroups,
-            ct);
+        // Generate factory registrations only when both dictionaries have data
+        if(openGenericIndex is not null && closedGenericDependencies is not null)
+        {
+            GenerateClosedGenericFactoryRegistrations(
+                openGenericIndex,
+                closedGenericDependencies,
+                methodGroups,
+                ct);
+        }
 
         return methodGroups
             .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
@@ -192,7 +200,7 @@ partial class RegisterSourceGenerator
         var serviceTypeArgMap = BuildTypeArgumentMapFromServiceType(
             matchingOpenServiceType,
             closedServiceType);
-        if(serviceTypeArgMap is null || serviceTypeArgMap.Count == 0)
+        if(serviceTypeArgMap.IsDefaultOrEmpty)
         {
             return; // Cannot build substitution map
         }
@@ -203,7 +211,7 @@ partial class RegisterSourceGenerator
             openImplType,
             matchingOpenServiceType,
             serviceTypeArgMap);
-        if(implTypeArgMap is null)
+        if(implTypeArgMap.IsDefaultOrEmpty)
         {
             return;
         }
@@ -299,7 +307,7 @@ partial class RegisterSourceGenerator
     /// this extracts the actual type parameters (T -> Entity) by comparing
     /// the nested type arguments.
     /// </summary>
-    private static Dictionary<string, string>? BuildTypeArgumentMapFromServiceType(
+    private static TypeArgMap BuildTypeArgumentMapFromServiceType(
         TypeData openServiceType,
         TypeData closedServiceType)
     {
@@ -308,15 +316,15 @@ partial class RegisterSourceGenerator
 
         if(openTypeParams is null || closedTypeParams is null)
         {
-            return null;
+            return default;
         }
 
         if(openTypeParams.Length != closedTypeParams.Length)
         {
-            return null;
+            return default;
         }
 
-        var typeArgMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        var typeArgMap = new TypeArgMap(openTypeParams.Length);
 
         // For non-nested open generics (like ILogger<T>), use direct mapping
         if(!openServiceType.IsNestedOpenGeneric)
@@ -330,9 +338,9 @@ partial class RegisterSourceGenerator
 
         // For nested open generics, we need to extract the actual type parameter mappings
         // by comparing nested type arguments
-        ExtractTypeArgumentMappings(openTypeParams, closedTypeParams, typeArgMap);
+        ExtractTypeArgumentMappings(openTypeParams, closedTypeParams, ref typeArgMap);
 
-        return typeArgMap.Count > 0 ? typeArgMap : null;
+        return typeArgMap;
     }
 
     /// <summary>
@@ -344,7 +352,7 @@ partial class RegisterSourceGenerator
     private static void ExtractTypeArgumentMappings(
         ImmutableEquatableArray<TypeParameter> openParams,
         ImmutableEquatableArray<TypeParameter> closedParams,
-        Dictionary<string, string> typeArgMap)
+        ref TypeArgMap typeArgMap)
     {
         for(int i = 0; i < openParams.Length; i++)
         {
@@ -365,7 +373,7 @@ partial class RegisterSourceGenerator
             // The open param type is a constructed type with nested type parameters
             // e.g., GenericRequest<T> or List<T>
             // Use the recursively extracted TypeParameters from TypeData
-            ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, typeArgMap);
+            ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, ref typeArgMap);
         }
     }
 
@@ -377,7 +385,7 @@ partial class RegisterSourceGenerator
     private static void ExtractTypeArgumentMappingsFromTypeData(
         TypeData openType,
         TypeData closedType,
-        Dictionary<string, string> typeArgMap)
+        ref TypeArgMap typeArgMap)
     {
         var openTypeParams = openType.TypeParameters;
         var closedTypeParams = closedType.TypeParameters;
@@ -409,7 +417,7 @@ partial class RegisterSourceGenerator
             else if(openNestedType.TypeParameters is not null && openNestedType.TypeParameters.Length > 0)
             {
                 // Nested generic type, recurse using TypeParameters
-                ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, typeArgMap);
+                ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, ref typeArgMap);
             }
         }
     }
@@ -419,22 +427,22 @@ partial class RegisterSourceGenerator
     /// For nested open generics, this uses the serviceTypeArgMap which already contains
     /// the extracted type parameter mappings (e.g., T -> Entity).
     /// </summary>
-    private static Dictionary<string, string>? BuildImplTypeArgMapFromServiceTypeMap(
+    private static TypeArgMap BuildImplTypeArgMapFromServiceTypeMap(
         TypeData openImplType,
         TypeData openServiceType,
-        Dictionary<string, string> serviceTypeArgMap)
+        TypeArgMap serviceTypeArgMap)
     {
         var implTypeParams = openImplType.TypeParameters;
 
         if(implTypeParams is null)
         {
-            return null;
+            return default;
         }
 
         // For nested open generics, the serviceTypeArgMap already contains
         // the direct type parameter mappings (e.g., T -> Entity)
         // These should match the implementation type parameters directly
-        var implTypeArgMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        var implTypeArgMap = new TypeArgMap(implTypeParams.Length);
         foreach(var implParam in implTypeParams)
         {
             // Check if the serviceTypeArgMap contains a mapping for this impl type param
@@ -444,7 +452,7 @@ partial class RegisterSourceGenerator
             }
         }
 
-        return implTypeArgMap.Count > 0 ? implTypeArgMap : null;
+        return implTypeArgMap;
     }
 
     /// <summary>
@@ -453,7 +461,7 @@ partial class RegisterSourceGenerator
     private static TypeData BuildClosedImplTypeData(
         string closedImplTypeName,
         TypeData openImplType,
-        Dictionary<string, string> typeArgMap)
+        TypeArgMap typeArgMap)
     {
         // Build closed type parameters
         var openTypeParams = openImplType.TypeParameters;
@@ -511,8 +519,8 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static List<TypeData> BuildClosedServiceTypesFromServiceTypeMap(
         ImmutableEquatableArray<TypeData> openServiceTypes,
-        Dictionary<string, string> serviceTypeArgMap,
-        Dictionary<string, string> implTypeArgMap)
+        TypeArgMap serviceTypeArgMap,
+        TypeArgMap implTypeArgMap)
     {
         var result = new List<TypeData>();
 
@@ -557,7 +565,7 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<TypeParameter>? SubstituteTypeParameters(
         ImmutableEquatableArray<TypeParameter>? typeParams,
-        Dictionary<string, string> typeArgMap)
+        TypeArgMap typeArgMap)
     {
         if(typeParams is null || typeParams.Length == 0)
         {
@@ -636,7 +644,7 @@ partial class RegisterSourceGenerator
         }
 
         // Build substitution map: decorator param name -> closed type arg name
-        var typeArgMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        var typeArgMap = new TypeArgMap(decoratorTypeParams.Length);
         for(int i = 0; i < decoratorTypeParams.Length && i < closedTypeParams.Length; i++)
         {
             typeArgMap[decoratorTypeParams[i].ParameterName] = closedTypeParams[i].Type.Name;

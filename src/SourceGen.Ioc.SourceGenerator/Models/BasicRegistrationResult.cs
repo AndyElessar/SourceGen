@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+﻿namespace SourceGen.Ioc.SourceGenerator.Models;
 
 /// <summary>
 /// Represents the result of processing a single registration, used as intermediate data
@@ -21,7 +21,7 @@ internal sealed record class BasicRegistrationResult(
 /// </summary>
 /// <param name="ServiceTypeKey">The service type's NameWithoutGeneric (e.g., "global::Namespace.IRequestHandler").</param>
 /// <param name="RegistrationInfo">The registration information for closed generic resolution.</param>
-internal sealed record class OpenGenericEntry(
+internal readonly record struct OpenGenericEntry(
     string ServiceTypeKey,
     OpenGenericRegistrationInfo RegistrationInfo);
 
@@ -56,7 +56,7 @@ internal sealed record class OpenGenericRegistrationInfo(
 /// <param name="ClosedTypeName">The full name of the closed generic type.</param>
 /// <param name="ClosedType">The closed generic type data.</param>
 /// <param name="OpenGenericKey">The NameWithoutGeneric for looking up the open generic registration.</param>
-internal sealed record class ClosedGenericDependency(
+internal readonly record struct ClosedGenericDependency(
     string ClosedTypeName,
     TypeData ClosedType,
     string OpenGenericKey);
