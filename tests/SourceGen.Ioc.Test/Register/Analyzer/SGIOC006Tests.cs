@@ -1,7 +1,8 @@
 ﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC006: Nested open generic registration is not supported.
+/// Tests for SGIOC006: Nested open generic registration warning.
+/// The source generator can auto-generate closed generic registrations when used in constructor parameters or GetService calls.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC006)]

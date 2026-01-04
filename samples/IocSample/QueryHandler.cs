@@ -15,7 +15,7 @@ internal sealed class TestQueryHandler : IRequestHandler<TestQuery, string>
 
 public sealed record GenericRequest<T>(int Count) : IRequest<GenericRequest<T>, List<T>> where T : new();
 
-[IoCRegister]
+[IoCRegister(RegisterAllInterfaces = true)]
 internal sealed class GenericRequestHandler<T>(ILogger<GenericRequestHandler<T>> logger)
     : IRequestHandler<GenericRequest<T>, List<T>> where T : new()
 {

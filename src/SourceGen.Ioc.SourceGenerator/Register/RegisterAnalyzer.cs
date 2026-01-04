@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Text;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SourceGen.Ioc.SourceGenerator.Register;
@@ -73,15 +72,17 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// SGIOC006: Nested Open Generic Detected - Service is implementing interface/class with generic type containing unbound type parameters.
+    /// This is a warning because the source generator can automatically generate closed generic registrations
+    /// when closed generic types are used in constructor parameters or GetService calls.
     /// </summary>
     public static readonly DiagnosticDescriptor NestedOpenGeneric = new(
         id: "SGIOC006",
         title: "Nested Open Generic Detected",
-        messageFormat: "The type '{0}' implements '{1}' which has a type argument that is itself a generic type with unbound type parameters (e.g., Wrapper<T>). The DI container cannot resolve such nested open generics.",
+        messageFormat: "The type '{0}' implements '{1}' which has a type argument that is itself a generic type with unbound type parameters (e.g., Wrapper<T>). The source generator will auto-generate closed generic registrations when used.",
         category: Constants.Category_Design,
-        defaultSeverity: DiagnosticSeverity.Error,
+        defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "When a service implements an interface or inherits from a class where a type argument is itself a generic type containing unbound type parameters (e.g., IHandler<Wrapper<T>>), the DI container cannot resolve it. Use IHandler<T> directly, or register closed generic types like IHandler<Wrapper<string>> instead.");
+        description: "When a service implements an interface or inherits from a class where a type argument is itself a generic type containing unbound type parameters (e.g., IHandler<Wrapper<T>>), the DI container cannot resolve it directly. However, the source generator will automatically generate closed generic registrations when closed generic types are used in constructor parameters or GetService/GetRequiredService calls.");
 
     /// <summary>
     /// SGIOC007: Invalid Attribute Usage - InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
@@ -120,10 +121,22 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "When using Instance to provide a pre-created object, the Lifetime must be Singleton because the same instance will be returned for every resolution.");
 
     /// <summary>
-    /// SGIOC100: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
+    /// SGIOC010: Invalid Attribute Usage - Both Factory and Instance are specified on the same attribute.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FactoryAndInstanceConflict = new(
+        id: "SGIOC010",
+        title: "Invalid Attribute Usage",
+        messageFormat: "Both Factory and Instance are specified on the same attribute; Factory takes precedence and Instance will be ignored",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When both Factory and Instance are specified on the same IoCRegisterAttribute or IoCRegisterForAttribute, Factory takes precedence and Instance will be ignored. Remove one of them to avoid confusion.");
+
+    /// <summary>
+    /// SGIOC011: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicatedKeyedServiceAttribute = new(
-        id: "SGIOC100",
+        id: "SGIOC011",
         title: "Duplicated Attribute Usage",
         messageFormat: "Parameter '{0}' has both [FromKeyedServices] and [Inject] attributes; [FromKeyedServices] will take precedence",
         category: Constants.Category_Usage,
@@ -142,6 +155,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         InvalidInjectAttributeUsage,
         InvalidFactoryOrInstanceMember,
         InstanceRequiresSingleton,
+        FactoryAndInstanceConflict,
         DuplicatedKeyedServiceAttribute
     ];
 
@@ -182,7 +196,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC007: Analyze InjectAttribute on members
         context.RegisterSymbolAction(AnalyzeInjectAttribute, SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
 
-        // SGIOC100: Analyze duplicated keyed service attributes on parameters
+        // SGIOC011: Analyze duplicated keyed service attributes on parameters
         context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
 
         // SGIOC008: Analyze Factory and Instance members specified via nameof()
@@ -197,7 +211,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC100: Analyzes parameters for duplicated keyed service attributes.
+    /// SGIOC011: Analyzes parameters for duplicated keyed service attributes.
     /// Reports warning when both [FromKeyedServices] and [Inject] attributes are marked on the same parameter.
     /// </summary>
     private static void AnalyzeDuplicatedKeyedServiceAttributes(SymbolAnalysisContext context)
@@ -689,11 +703,45 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         var location = attributeSyntax.GetLocation();
 
+        // SGIOC010: Check if both Factory and Instance are specified
+        AnalyzeFactoryAndInstanceConflict(context, argumentList, location);
+
         // Check Factory member
         AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Factory");
 
         // Check Instance member
         AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Instance");
+    }
+
+    /// <summary>
+    /// SGIOC010: Analyzes if both Factory and Instance are specified on the same attribute.
+    /// Reports error when both are present, as Factory takes precedence and Instance will be ignored.
+    /// </summary>
+    private static void AnalyzeFactoryAndInstanceConflict(
+        SyntaxNodeAnalysisContext context,
+        AttributeArgumentListSyntax argumentList,
+        Location location)
+    {
+        var hasFactory = false;
+        var hasInstance = false;
+
+        foreach(var argument in argumentList.Arguments)
+        {
+            var name = argument.NameEquals?.Name.Identifier.Text;
+            if(name == "Factory")
+                hasFactory = true;
+            else if(name == "Instance")
+                hasInstance = true;
+
+            // Early exit if both found
+            if(hasFactory && hasInstance)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    FactoryAndInstanceConflict,
+                    location));
+                return;
+            }
+        }
     }
 
     /// <summary>

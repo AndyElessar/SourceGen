@@ -3,14 +3,14 @@ using Microsoft.CodeAnalysis;
 namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC100: Duplicated attribute usage when both [FromKeyedServices] and [Inject] are on same parameter.
+/// Tests for SGIOC011: Duplicated attribute usage when both [FromKeyedServices] and [Inject] are on same parameter.
 /// </summary>
 [Category(Constants.Analyzer)]
-[Category(Constants.SGIOC100)]
-public class SGIOC100Tests
+[Category(Constants.SGIOC011)]
+public class SGIOC011Tests
 {
     [Test]
-    public async Task SGIOC100_BothAttributesOnParameter_ReportsWarning()
+    public async Task SGIOC011_BothAttributesOnParameter_ReportsWarning()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -28,15 +28,15 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(1);
-        await Assert.That(sgioc100[0].GetMessage()).Contains("dependency");
-        await Assert.That(sgioc100[0].Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].GetMessage()).Contains("dependency");
+        await Assert.That(sgioc011[0].Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
 
     [Test]
-    public async Task SGIOC100_OnlyFromKeyedServicesAttribute_NoDiagnostic()
+    public async Task SGIOC011_OnlyFromKeyedServicesAttribute_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -54,13 +54,13 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(0);
+        await Assert.That(sgioc011).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC100_OnlyInjectAttribute_NoDiagnostic()
+    public async Task SGIOC011_OnlyInjectAttribute_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -78,13 +78,13 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(0);
+        await Assert.That(sgioc011).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC100_NoAttributesOnParameter_NoDiagnostic()
+    public async Task SGIOC011_NoAttributesOnParameter_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -102,13 +102,13 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(0);
+        await Assert.That(sgioc011).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC100_MultipleParametersWithBothAttributes_ReportsMultipleWarnings()
+    public async Task SGIOC011_MultipleParametersWithBothAttributes_ReportsMultipleWarnings()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -129,13 +129,13 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(2);
+        await Assert.That(sgioc011).Count().IsEqualTo(2);
     }
 
     [Test]
-    public async Task SGIOC100_MixedParametersWithAndWithoutBothAttributes_ReportsOnlyForDuplicated()
+    public async Task SGIOC011_MixedParametersWithAndWithoutBothAttributes_ReportsOnlyForDuplicated()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -156,14 +156,14 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(1);
-        await Assert.That(sgioc100[0].GetMessage()).Contains("dep1");
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].GetMessage()).Contains("dep1");
     }
 
     [Test]
-    public async Task SGIOC100_BothAttributesOnMethodParameter_ReportsWarning()
+    public async Task SGIOC011_BothAttributesOnMethodParameter_ReportsWarning()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -182,14 +182,14 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(1);
-        await Assert.That(sgioc100[0].GetMessage()).Contains("dependency");
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].GetMessage()).Contains("dependency");
     }
 
     [Test]
-    public async Task SGIOC100_BothAttributesOnPrimaryConstructor_ReportsWarning()
+    public async Task SGIOC011_BothAttributesOnPrimaryConstructor_ReportsWarning()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -204,9 +204,9 @@ public class SGIOC100Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc100 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC100").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
 
-        await Assert.That(sgioc100).Count().IsEqualTo(1);
-        await Assert.That(sgioc100[0].GetMessage()).Contains("dependency");
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].GetMessage()).Contains("dependency");
     }
 }
