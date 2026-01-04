@@ -12,6 +12,7 @@ internal static class Constants
     public const string InjectAttribute = "InjectAttribute";
     public const string ImportModule = "ImportModule";
     public const string SpecialParameter = "SpecialParameter";
+    public const string Collection = "Collection";
 
     public const string SGIOC001 = "SGIOC001";
     public const string SGIOC002 = "SGIOC002";

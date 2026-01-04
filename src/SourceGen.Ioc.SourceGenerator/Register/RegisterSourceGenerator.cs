@@ -57,13 +57,12 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 return new DefaultSettingsMap(allSettings);
             });
 
-        // Collect GetService, GetRequiredService, GetKeyedService, GetRequiredKeyedService invocations
+        // Collect GetService, GetRequiredService, GetKeyedService, GetRequiredKeyedService, GetServices invocations
         var invocations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => PredicateInvocations(node),
                 transform: TransformInvocations)
-            .Where(static candidate => candidate is not null)
-            .Select(static (candidate, _) => candidate!.Value)
+            .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
         // Get compilation info

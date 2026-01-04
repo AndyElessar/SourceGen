@@ -167,4 +167,64 @@ internal static class Constants
                 excludeFromDefault);
         }
     }
+
+    /// <param name="typeData">The type data to check.</param>
+    extension(TypeData typeData)
+    {
+        /// <summary>
+        /// Tries to extract the element type from a collection type (IEnumerable&lt;T&gt;, IList&lt;T&gt;, etc.).
+        /// </summary>
+        /// <param name="typeData">The type data to check.</param>
+        /// <returns>The element type if this is a collection type with exactly one generic argument; otherwise, null.</returns>
+        public TypeData? TryGetCollectionElementType()
+        {
+            // Must be a generic type with exactly one type argument
+            if(typeData.GenericArity != 1)
+                return null;
+
+            // Check if this is an enumerable-compatible collection type
+            if(!IsEnumerableCompatibleType(typeData.NameWithoutGeneric))
+                return null;
+
+            // Get the element type from type parameters
+            var typeParams = typeData.TypeParameters;
+            if(typeParams is null || typeParams.Length != 1)
+                return null;
+
+            return typeParams[0].Type;
+        }
+
+        /// <summary>
+        /// Checks if the type is an array type (e.g., T[]).
+        /// </summary>
+        public bool IsArrayType() =>
+            typeData.Name.EndsWith("[]", StringComparison.Ordinal);
+
+        /// <summary>
+        /// Tries to extract the element type from an array type (T[]).
+        /// </summary>
+        /// <returns>The element type if this is an array type; otherwise, null.</returns>
+        public TypeData? TryGetArrayElementType()
+        {
+            // Check if this is an array type by name pattern
+            if(!IsArrayType(typeData))
+                return null;
+
+            // Get the element type from type parameters (set by RoslynExtensions.GetTypeData for arrays)
+            var typeParams = typeData.TypeParameters;
+            if(typeParams is null || typeParams.Length != 1)
+                return null;
+
+            return typeParams[0].Type;
+        }
+
+        /// <summary>
+        /// Tries to extract the element type from a collection or array type.
+        /// Handles IEnumerable&lt;T&gt;, IList&lt;T&gt;, T[], etc.
+        /// </summary>
+        /// <returns>The element type if this is a collection or array type; otherwise, null.</returns>
+        public TypeData? TryGetEnumerableElementType() =>
+            typeData.TryGetCollectionElementType() ?? typeData.TryGetArrayElementType();
+
+    }
 }

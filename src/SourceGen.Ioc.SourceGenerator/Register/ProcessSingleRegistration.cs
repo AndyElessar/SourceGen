@@ -565,17 +565,40 @@ partial class RegisterSourceGenerator
         }
 
         var dependencies = new List<ClosedGenericDependency>();
+        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach(var param in constructorParams)
         {
             var paramType = param.Type;
+
+            // First, check if this is a collection or array type (IEnumerable<T>, IList<T>, T[], etc.)
+            var elementType = paramType.TryGetEnumerableElementType();
+            if(elementType is not null
+                && elementType.GenericArity > 0
+                && !elementType.IsOpenGeneric
+                && !elementType.IsNestedOpenGeneric)
+            {
+                // Add the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>> or IHandler<T>[])
+                if(addedKeys.Add(elementType.Name))
+                {
+                    dependencies.Add(new ClosedGenericDependency(
+                        elementType.Name,
+                        elementType,
+                        elementType.NameWithoutGeneric));
+                }
+            }
+
             // Check if this is a closed generic type (has generic arguments but is not open generic)
             if(paramType.GenericArity > 0 && !paramType.IsOpenGeneric && !paramType.IsNestedOpenGeneric)
             {
-                dependencies.Add(new ClosedGenericDependency(
-                    paramType.Name,
-                    paramType,
-                    paramType.NameWithoutGeneric));
+                // Add the original type as a dependency (skip arrays as they don't need registration)
+                if(!paramType.IsArrayType() && addedKeys.Add(paramType.Name))
+                {
+                    dependencies.Add(new ClosedGenericDependency(
+                        paramType.Name,
+                        paramType,
+                        paramType.NameWithoutGeneric));
+                }
             }
         }
 

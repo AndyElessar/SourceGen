@@ -7,40 +7,43 @@ partial class RegisterSourceGenerator
         {
             Expression: MemberAccessExpressionSyntax
             {
-                Name.Identifier.ValueText: "GetService" or "GetRequiredService" or "GetKeyedService" or "GetRequiredKeyedService"
+                Name.Identifier.ValueText: "GetService" or "GetRequiredService" or "GetKeyedService" or "GetRequiredKeyedService" or "GetServices" or "GetKeyedServices"
             }
         };
 
     /// <summary>
-    /// Transforms GetService/GetRequiredService/GetKeyedService/GetRequiredKeyedService invocations
+    /// Transforms GetService/GetRequiredService/GetKeyedService/GetRequiredKeyedService/GetServices invocations
     /// to extract closed generic type information for factory registration generation.
     /// </summary>
     /// <remarks>
-    /// This method handles the following patterns:
-    /// - GetService&lt;T&gt;() / GetRequiredService&lt;T&gt;()
-    /// - GetKeyedService&lt;T&gt;(key) / GetRequiredKeyedService&lt;T&gt;(key)
-    /// - GetService(typeof(T)) / GetRequiredService(typeof(T))
-    /// 
-    /// Only closed generic types from open generic registrations are collected.
+    /// This method handles the following patterns: <br/>
+    /// - GetService&lt;T&gt;() / GetRequiredService&lt;T&gt;() <br/>
+    /// - GetKeyedService&lt;T&gt;(key) / GetRequiredKeyedService&lt;T&gt;(key) <br/>
+    /// - GetServices&lt;T&gt;() / GetKeyedServices&lt;T&gt;(key) <br/>
+    /// - GetService(typeof(T)) / GetRequiredService(typeof(T)) <br/>
+    /// - GetKeyedService(typeof(T), key) / GetRequiredKeyedService(typeof(T), key) <br/>
+    /// - GetServices(typeof(T)) / GetKeyedServices(typeof(T), key) <br/>
+    /// Only closed generic types from open generic registrations are collected. <br/>
+    /// For collection types (IEnumerable&lt;T&gt;, IList&lt;T&gt;, etc.), the element type T is also extracted. <br/>
     /// </remarks>
-    private static ClosedGenericDependency? TransformInvocations(GeneratorSyntaxContext context, CancellationToken ct)
+    private static IEnumerable<ClosedGenericDependency> TransformInvocations(GeneratorSyntaxContext context, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
         if(context.Node is not InvocationExpressionSyntax invocation)
         {
-            return null;
+            yield break;
         }
 
         if(invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
         {
-            return null;
+            yield break;
         }
 
         var semanticModel = context.SemanticModel;
         ITypeSymbol? typeSymbol = null;
 
-        // Check for generic method invocation: GetService<T>(), GetRequiredService<T>(), etc.
+        // Check for generic method invocation: GetService<T>(), GetRequiredService<T>(), GetServices<T>(), etc.
         if(memberAccess.Name is GenericNameSyntax genericName && genericName.TypeArgumentList.Arguments.Count == 1)
         {
             var typeArgSyntax = genericName.TypeArgumentList.Arguments[0];
@@ -58,28 +61,61 @@ partial class RegisterSourceGenerator
             }
         }
 
+        // Handle array types (e.g., GetService<IHandler<T>[]>())
+        if(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
+        {
+            var elementTypeSymbol = arrayTypeSymbol.ElementType;
+            if(elementTypeSymbol is INamedTypeSymbol namedElementType
+                && namedElementType.IsGenericType
+                && !namedElementType.IsUnboundGenericType
+                && !namedElementType.ContainsGenericParameters)
+            {
+                var elementTypeData = namedElementType.CreateBasicTypeData();
+                yield return new ClosedGenericDependency(
+                    elementTypeData.Name,
+                    elementTypeData,
+                    elementTypeData.NameWithoutGeneric);
+            }
+            yield break;
+        }
+
         if(typeSymbol is not INamedTypeSymbol namedTypeSymbol)
         {
-            return null;
+            yield break;
         }
 
         // Only process closed generic types (has generic arguments but is not open generic)
         // Skip if it's an open generic (e.g., IService<>) or non-generic type
         if(!namedTypeSymbol.IsGenericType || namedTypeSymbol.IsUnboundGenericType)
         {
-            return null;
+            yield break;
         }
 
         // Skip if it contains unresolved type parameters (nested open generic)
         if(namedTypeSymbol.ContainsGenericParameters)
         {
-            return null;
+            yield break;
         }
 
         // Create TypeData with type parameters for closed generic resolution
         var typeData = namedTypeSymbol.CreateBasicTypeData();
 
-        return new ClosedGenericDependency(
+        // Check if this is a collection type (IEnumerable<T>, IList<T>, etc.)
+        var elementType = typeData.TryGetCollectionElementType();
+        if(elementType is not null
+            && elementType.GenericArity > 0
+            && !elementType.IsOpenGeneric
+            && !elementType.IsNestedOpenGeneric)
+        {
+            // Yield the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>>)
+            yield return new ClosedGenericDependency(
+                elementType.Name,
+                elementType,
+                elementType.NameWithoutGeneric);
+        }
+
+        // Yield the original type as a dependency
+        yield return new ClosedGenericDependency(
             typeData.Name,
             typeData,
             typeData.NameWithoutGeneric);
