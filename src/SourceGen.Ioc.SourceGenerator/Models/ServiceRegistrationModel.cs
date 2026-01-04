@@ -11,6 +11,8 @@
 /// <param name="IsOpenGeneric">Whether this is an open generic registration.</param>
 /// <param name="Decorators">The decorator types to apply, in order from outermost to innermost.</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection.</param>
+/// <param name="Factory">The factory method data to use for creating instances, or null if not specified.</param>
+/// <param name="Instance">The static instance path to use for singleton registration (e.g., "MyService.Default").</param>
 internal sealed record class ServiceRegistrationModel(
     TypeData ServiceType,
     TypeData ImplementationType,
@@ -19,4 +21,6 @@ internal sealed record class ServiceRegistrationModel(
     int KeyType,
     bool IsOpenGeneric,
     ImmutableEquatableArray<TypeData> Decorators,
-    ImmutableEquatableArray<InjectionMemberData> InjectionMembers);
+    ImmutableEquatableArray<InjectionMemberData> InjectionMembers,
+    FactoryMethodData? Factory,
+    string? Instance);

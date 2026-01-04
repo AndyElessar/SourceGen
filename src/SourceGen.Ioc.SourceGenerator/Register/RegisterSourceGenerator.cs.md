@@ -15,6 +15,8 @@ This source generator automatically generates extension methods for registering 
     - Key (from `IoCRegisterAttribute.Key`, `IoCRegisterForAttribute.Key` or default settings)
     - Decorators type (from `IoCRegisterAttribute.Decorators`, `IoCRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
     - Tags (from `IoCRegisterAttribute.Tags`, `IoCRegisterForAttribute.Tags` or default settings)
+    - Factory (from `IoCRegisterAttribute.Factory`, `IoCRegisterForAttribute.Factory`)
+    - Instance (from `IoCRegisterAttribute.Instance`, `IoCRegisterForAttribute.Instance`)
     - Project root namespace (from compilation options)
     - Project name (from compilation options)
 
@@ -423,3 +425,46 @@ public static class ServiceCollectionExtensions
           }
       }
       ```
+
+14. When `Factory` is specify in `IoCRegisterAttribute` or `IoCRegisterForAttribute`:
+    ```csharp
+    #region Define:
+    public interface IMySrevice;
+
+    [IoCRegister(ServiceTypes = [typeof(IMySrevice), Factory = nameof(MyServiceFactory.Get)])]
+    internal sealed class MyService : IMySrevice;
+
+    public sealed class MyServiceFactory
+    {
+      // Must be static
+      // Parameter IServiceProvider and key/servicekey is optional
+      public static IMySrevice Get(IServiceProvider sp)
+      {
+        //...
+      }
+    }
+    #endregion
+
+    #region Generate
+    services.AddSingleton<IMySrevice>(sp => MyServiceFactory.Get(sp));
+    #endregion
+    ```
+
+15. When `Instance` is specify in `IoCRegisterAttribute` or `IoCRegisterForAttribute`:
+    ```csharp
+    #region Define:
+    public interface IMySrevice;
+
+    [IoCRegister(ServiceTypes = [typeof(IMySrevice), Instance = nameof(Default)])]
+    internal sealed class MyService : IMySrevice
+    {
+      // Must be static
+      public static MyService Default = new MyService();
+    }
+    #endregion
+
+    #region Generate:
+    // When specify Instance, only allow AddSingleton or AddKeyedSingleton
+    services.AddSingleton<IMySrevice>(MyService.Default);
+    #endregion
+    ```

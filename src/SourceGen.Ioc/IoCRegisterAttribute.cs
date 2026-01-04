@@ -67,4 +67,16 @@ public sealed class IoCRegisterAttribute : Attribute
     /// Will generate registrations for each tag specified.
     /// </summary>
     public string[] Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets the factory method name to be used for creating instances of the service.<br/>
+    /// Use string or nameof() to specify the factory method.<br/>
+    /// </summary>
+    public string? Factory { get; init; }
+
+    /// <summary>
+    /// Gets the instance name to be used for creating instances of the service.<br/>
+    /// Use string or nameof() to specify the instance name.<br/>
+    /// </summary>
+    public string? Instance { get; init; }
 }

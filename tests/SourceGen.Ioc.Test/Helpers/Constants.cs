@@ -15,6 +15,7 @@ internal static class Constants
     public const string Collection = "Collection";
     public const string CustomIocName = "CustomIocName";
     public const string RootNamespace = "RootNamespace";
+    public const string FactoryAndInstance = "FactoryAndInstance";
 
     public const string SGIOC001 = "SGIOC001";
     public const string SGIOC002 = "SGIOC002";
@@ -23,5 +24,7 @@ internal static class Constants
     public const string SGIOC005 = "SGIOC005";
     public const string SGIOC006 = "SGIOC006";
     public const string SGIOC007 = "SGIOC007";
+    public const string SGIOC008 = "SGIOC008";
+    public const string SGIOC009 = "SGIOC009";
     public const string SGIOC100 = "SGIOC100";
 }

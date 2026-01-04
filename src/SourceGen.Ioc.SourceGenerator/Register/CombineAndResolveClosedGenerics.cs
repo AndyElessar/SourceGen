@@ -255,7 +255,9 @@ partial class RegisterSourceGenerator
             openGenericInfo.KeyType,
             IsOpenGeneric: false,
             [],
-            openGenericInfo.InjectionMembers);
+            openGenericInfo.InjectionMembers,
+            openGenericInfo.Factory,
+            openGenericInfo.Instance);
 
         // Add to method groups
         if(!openGenericInfo.ExcludeFromDefault)
@@ -302,7 +304,9 @@ partial class RegisterSourceGenerator
                 openGenericInfo.KeyType,
                 IsOpenGeneric: false,
                 serviceTypeDecorators,
-                openGenericInfo.InjectionMembers);
+                openGenericInfo.InjectionMembers,
+                openGenericInfo.Factory,
+                openGenericInfo.Instance);
 
             if(!openGenericInfo.ExcludeFromDefault)
             {

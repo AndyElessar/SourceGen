@@ -15,13 +15,8 @@ namespace TestAssembly
         /// </summary>
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            services.AddKeyedScoped<global::TestNamespace.MyService, global::TestNamespace.MyService>("myKey");
-            services.AddKeyedScoped<global::TestNamespace.IMyService>("myKey", (global::System.IServiceProvider sp, object? key) =>
-            {
-                var s0 = sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key);
-                var s1 = new global::TestNamespace.MyServiceDecorator(s0);
-                return s1;
-            });
+            services.AddKeyedSingleton<global::TestNamespace.MyService>("myKey", global::TestNamespace.MyService.Default);
+            services.AddKeyedSingleton<global::TestNamespace.IMyService>("myKey", global::TestNamespace.MyService.Default);
 
             return services;
         }

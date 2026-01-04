@@ -18,6 +18,8 @@
 /// <param name="Tags">The collection of tags associated with this registration.</param>
 /// <param name="ExcludeFromDefault">Whether to exclude this registration from the default registration method.</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection.</param>
+/// <param name="Factory">The factory method data to use for creating instances, or null if not specified.</param>
+/// <param name="Instance">The static instance path to use for singleton registration (e.g., "MyService.Default").</param>
 internal sealed record class RegistrationData(
     TypeData ImplementationType,
     ServiceLifetime Lifetime,
@@ -33,7 +35,9 @@ internal sealed record class RegistrationData(
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
     bool ExcludeFromDefault,
-    ImmutableEquatableArray<InjectionMemberData> InjectionMembers)
+    ImmutableEquatableArray<InjectionMemberData> InjectionMembers,
+    FactoryMethodData? Factory,
+    string? Instance)
 {
     /// <summary>
     /// Gets all interfaces implemented by the type. Shortcut for ImplementationType.AllInterfaces.

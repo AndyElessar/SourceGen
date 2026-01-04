@@ -133,6 +133,116 @@ internal static class Constants
         }
 
         /// <summary>
+        /// Gets the Factory method data from the attribute, including parameter and return type information.
+        /// </summary>
+        /// <param name="semanticModel">Semantic model to resolve method symbols.</param>
+        /// <returns>The factory method data, or null if not specified.</returns>
+        public FactoryMethodData? GetFactoryMethodData(SemanticModel semanticModel)
+        {
+            var syntaxReference = attribute.ApplicationSyntaxReference;
+            if(syntaxReference?.GetSyntax() is not AttributeSyntax attributeSyntax)
+                return null;
+
+            var argumentList = attributeSyntax.ArgumentList;
+            if(argumentList is null)
+                return null;
+
+            foreach(var argument in argumentList.Arguments)
+            {
+                if(argument.NameEquals?.Name.Identifier.Text != "Factory")
+                    continue;
+
+                // Check if the expression is a nameof() invocation
+                if(argument.Expression is InvocationExpressionSyntax invocation &&
+                   invocation.Expression is IdentifierNameSyntax identifierName &&
+                   identifierName.Identifier.Text == "nameof" &&
+                   invocation.ArgumentList.Arguments.Count == 1)
+                {
+                    var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
+                    var methodSymbol = ResolveMethodSymbol(nameofArgument, semanticModel);
+
+                    if(methodSymbol is not null)
+                    {
+                        return CreateFactoryMethodData(methodSymbol);
+                    }
+
+                    // Fallback: get path from nameof expression
+                    var nameofPath = ResolveNameofExpression(nameofArgument, semanticModel)
+                                     ?? nameofArgument.ToFullString().Trim();
+                    return new FactoryMethodData(nameofPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null);
+                }
+
+                // String literal - cannot determine parameters, assume full signature
+                if(argument.Expression is LiteralExpressionSyntax literal &&
+                   literal.Token.Value is string literalPath)
+                {
+                    return new FactoryMethodData(literalPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null);
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Creates FactoryMethodData from a method symbol.
+        /// </summary>
+        private static FactoryMethodData CreateFactoryMethodData(IMethodSymbol methodSymbol)
+        {
+            var path = methodSymbol.FullAccessPath;
+            bool hasServiceProvider = false;
+            bool hasKey = false;
+
+            foreach(var param in methodSymbol.Parameters)
+            {
+                var paramTypeName = param.Type.FullyQualifiedName;
+
+                // Check for IServiceProvider
+                if(paramTypeName is "global::System.IServiceProvider" or "System.IServiceProvider")
+                {
+                    hasServiceProvider = true;
+                }
+                // Check for object key/serviceKey parameter
+                else if(paramTypeName is "object" or "global::System.Object")
+                {
+                    var paramName = param.Name;
+                    if(paramName.Equals("key", StringComparison.OrdinalIgnoreCase)
+                        || paramName.Equals("serviceKey", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasKey = true;
+                    }
+                }
+            }
+
+            // Always store the return type for runtime comparison
+            var returnTypeName = methodSymbol.ReturnType.FullyQualifiedName;
+
+            return new FactoryMethodData(path, hasServiceProvider, hasKey, returnTypeName);
+        }
+
+        /// <summary>
+        /// Gets the Instance path from the attribute.
+        /// </summary>
+        /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
+        /// <returns>The static instance path (e.g., "MyService.Default"), or null if not specified.</returns>
+        public string? GetInstance(SemanticModel? semanticModel = null)
+        {
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key == "Instance")
+                {
+                    if(namedArg.Value.IsNull)
+                        return null;
+
+                    // Try to get original syntax for nameof() expressions with full access path resolution
+                    return attribute.TryGetNameof("Instance", semanticModel)
+                        ?? namedArg.Value.Value?.ToString();
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Determines if the attribute will cause registration of interfaces or base classes.
         /// For open generic types, nested open generics are only a problem when registering interfaces/base classes.
         /// </summary>

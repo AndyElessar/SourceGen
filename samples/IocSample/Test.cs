@@ -107,7 +107,7 @@ public sealed class TestOpenGeneric2<T>(TestInterfaces testInterfaces) : IGeneri
     private readonly TestInterfaces _testInterfaces = testInterfaces;
 
     [Inject]
-    public void AddDependency(IServiceProvider sp)
+    public /*static*/ void AddDependency(IServiceProvider sp)
     {
         var _ = sp.GetRequiredService<IGenericTest<TestFor>>();
     }

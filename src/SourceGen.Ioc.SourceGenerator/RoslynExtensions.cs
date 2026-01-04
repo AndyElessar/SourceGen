@@ -956,6 +956,20 @@ internal static class RoslynExtensions
         return symbol.FullAccessPath;
     }
 
+    /// <summary>
+    /// Resolves the method symbol from a nameof() or string expression in an attribute.
+    /// </summary>
+    /// <param name="expression">The expression inside nameof() or a string literal.</param>
+    /// <param name="semanticModel">The semantic model to use for symbol resolution.</param>
+    /// <returns>The method symbol if found; otherwise, null.</returns>
+    public static IMethodSymbol? ResolveMethodSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
+    {
+        var symbolInfo = semanticModel.GetSymbolInfo(expression);
+        var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+
+        return symbol as IMethodSymbol;
+    }
+
     extension<T>(IEnumerable<T> source)
     {
         public IEnumerable<(int Index, T Item)> Index()

@@ -40,6 +40,14 @@ partial class RegisterSourceGenerator
         var tags = attributeData.GetTags();
         var excludeFromDefault = attributeData.GetExcludeFromDefault();
         var (key, keyType) = attributeData.GetKey(semanticModel);
+        var instance = attributeData.GetInstance(semanticModel);
+
+        // Get factory method data with parameter information
+        FactoryMethodData? factory = null;
+        if(semanticModel is not null)
+        {
+            factory = attributeData.GetFactoryMethodData(semanticModel);
+        }
 
         // Extract injection members (properties, fields, methods marked with InjectAttribute)
         var injectionMembers = ExtractInjectionMembers(typeSymbol);
@@ -64,7 +72,9 @@ partial class RegisterSourceGenerator
             decorators,
             tags,
             excludeFromDefault,
-            injectionMembers);
+            injectionMembers,
+            factory,
+            instance);
     }
 
     /// <summary>

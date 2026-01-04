@@ -247,6 +247,26 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         var serviceTypeName = registration.ServiceType.Name;
         var implTypeName = registration.ImplementationType.Name;
 
+        // Check if this registration uses Factory or Instance
+        bool hasFactory = registration.Factory is not null;
+        bool hasInstance = registration.Instance is not null;
+
+        // Handle Factory registration first (takes precedence)
+        if(hasFactory)
+        {
+            WriteFactoryMethodRegistration(writer, registration, lifetime);
+            return;
+        }
+
+        // Handle Instance registration (only for Singleton)
+        if(hasInstance)
+        {
+            if(registration.Lifetime == ServiceLifetime.Singleton)
+                WriteInstanceRegistration(writer, registration);
+
+            return;
+        }
+
         // Check if service type is different from implementation type (registering interface/base class)
         bool isServiceTypeRegistration = serviceTypeName != implTypeName;
 
@@ -307,6 +327,91 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    /// Writes registration code using a factory method specified in the attribute.
+    /// </summary>
+    /// <remarks>
+    /// Supports factory methods with different parameter combinations:
+    /// <list type="bullet">
+    ///   <item>No parameters: <c>services.AddSingleton&lt;IService&gt;(Factory());</c></item>
+    ///   <item>IServiceProvider only: <c>services.AddSingleton&lt;IService&gt;(sp => Factory(sp));</c></item>
+    ///   <item>object key only (keyed): <c>services.AddKeyedSingleton&lt;IService&gt;("key", (sp, key) => Factory(key));</c></item>
+    ///   <item>Both (keyed): <c>services.AddKeyedSingleton&lt;IService&gt;("key", (sp, key) => Factory(sp, key));</c></item>
+    /// </list>
+    /// If the factory return type differs from the service type, adds a cast.
+    /// </remarks>
+    private static void WriteFactoryMethodRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        var factory = registration.Factory!;
+        var factoryPath = factory.Path;
+        var hasServiceProvider = factory.HasServiceProvider;
+        var hasKey = factory.HasKey;
+        var returnTypeName = factory.ReturnTypeName;
+
+        // Build factory invocation based on parameters
+        string factoryInvocation = (hasServiceProvider, hasKey) switch
+        {
+            (true, true) => $"{factoryPath}(sp, key)",
+            (true, false) => $"{factoryPath}(sp)",
+            (false, true) => $"{factoryPath}(key)",
+            (false, false) => $"{factoryPath}()"
+        };
+
+        // Add cast if return type differs from service type
+        if(returnTypeName is not null && returnTypeName != serviceTypeName)
+        {
+            factoryInvocation = $"({serviceTypeName}){factoryInvocation}";
+        }
+
+        if(registration.Key is not null)
+        {
+            // Keyed registration with factory
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) => {factoryInvocation});");
+        }
+        else if(hasServiceProvider)
+        {
+            // Non-keyed registration with factory
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {factoryInvocation});");
+        }
+        else
+        {
+            // No parameters factory - direct invocation
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>({factoryInvocation});");
+        }
+    }
+
+    /// <summary>
+    /// Writes registration code using a static instance specified in the attribute.
+    /// Instance registrations are only valid for Singleton lifetime.
+    /// </summary>
+    /// <remarks>
+    /// Generates code like:
+    /// <code>
+    /// services.AddSingleton&lt;IMySrevice&gt;(MyService.Default);
+    /// // or for keyed:
+    /// services.AddKeyedSingleton&lt;IMySrevice&gt;("key", MyService.Default);
+    /// </code>
+    /// </remarks>
+    private static void WriteInstanceRegistration(SourceWriter writer, ServiceRegistrationModel registration)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        var instance = registration.Instance!;
+
+        // Instance registration should only be used with Singleton
+        // The analyzer should catch invalid lifetime usage
+        if(registration.Key is not null)
+        {
+            // Keyed singleton with instance
+            writer.WriteLine($"services.AddKeyedSingleton<{serviceTypeName}>({registration.Key}, {instance});");
+        }
+        else
+        {
+            // Non-keyed singleton with instance
+            writer.WriteLine($"services.AddSingleton<{serviceTypeName}>({instance});");
+        }
+    }
+
+    /// <summary>
     /// Writes registration code for service types (interfaces/base classes) that forward to an already-registered implementation.
     /// The implementation is already registered with its own factory method, so we just resolve it from the service provider.
     /// </summary>
@@ -324,7 +429,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         if(registration.Key is not null)
         {
             // Keyed registration - forward to keyed implementation
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) => sp.GetRequiredKeyedService<{implTypeName}>(key));");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<{implTypeName}>(key));");
         }
         else
         {
@@ -360,7 +465,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         if(registration.Key is not null)
         {
             // Keyed registration with injection
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
         }
         else
         {
@@ -515,7 +620,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         // Build the factory lambda
         if(registration.Key is not null)
         {
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
         }
         else
         {
@@ -616,7 +721,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
         if(registration.Key is not null)
         {
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object key) =>");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
         }
         else
         {

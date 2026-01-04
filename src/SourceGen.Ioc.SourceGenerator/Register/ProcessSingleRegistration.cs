@@ -260,7 +260,9 @@ partial class RegisterSourceGenerator
                 registration.KeyType,
                 isOpenGenericImplementation,
                 filteredDecorators,
-                registration.InjectionMembers);
+                registration.InjectionMembers,
+                registration.Factory,
+                registration.Instance);
 
             registrations.Add(model);
         }
@@ -514,7 +516,9 @@ partial class RegisterSourceGenerator
             decorators,
             tags,
             excludeFromDefault,
-            registration.InjectionMembers);
+            registration.InjectionMembers,
+            registration.Factory,
+            registration.Instance);
 
         var entries = new List<OpenGenericEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);

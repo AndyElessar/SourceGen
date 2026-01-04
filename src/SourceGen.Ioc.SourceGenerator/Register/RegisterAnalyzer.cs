@@ -96,6 +96,30 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "InjectAttribute cannot be applied to static members, members that cannot be assigned/invoked, or methods that do not return void.");
 
     /// <summary>
+    /// SGIOC008: Invalid Attribute Usage - Factory or Instance uses nameof() but the referenced member is not static or is inaccessible.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidFactoryOrInstanceMember = new(
+        id: "SGIOC008",
+        title: "Invalid Attribute Usage",
+        messageFormat: "The {0} member '{1}' specified via nameof() is {2}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When using nameof() to specify a Factory or Instance, the referenced field or property must be static and accessible.");
+
+    /// <summary>
+    /// SGIOC009: Invalid Attribute Usage - Instance is specified but Lifetime is not Singleton.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InstanceRequiresSingleton = new(
+        id: "SGIOC009",
+        title: "Invalid Attribute Usage",
+        messageFormat: "Instance registration '{0}' requires Singleton lifetime, but '{1}' was specified",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When using Instance to provide a pre-created object, the Lifetime must be Singleton because the same instance will be returned for every resolution.");
+
+    /// <summary>
     /// SGIOC100: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicatedKeyedServiceAttribute = new(
@@ -116,6 +140,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         ScopedDependsOnTransient,
         NestedOpenGeneric,
         InvalidInjectAttributeUsage,
+        InvalidFactoryOrInstanceMember,
+        InstanceRequiresSingleton,
         DuplicatedKeyedServiceAttribute
     ];
 
@@ -158,6 +184,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         // SGIOC100: Analyze duplicated keyed service attributes on parameters
         context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
+
+        // SGIOC008: Analyze Factory and Instance members specified via nameof()
+        // Using RegisterSyntaxNodeAction to avoid RS1030 warning (do not use Compilation.GetSemanticModel)
+        context.RegisterSyntaxNodeAction(ctx => AnalyzeFactoryAndInstanceOnAttribute(ctx, analyzerContext), SyntaxKind.Attribute);
 
         // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
         context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
@@ -427,6 +457,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             {
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
+
+            // SGIOC009: Check Instance requires Singleton lifetime
+            AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
         }
     }
 
@@ -472,6 +505,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             {
                 AnalyzeNestedOpenGeneric(context, targetType, location);
             }
+
+            // SGIOC009: Check Instance requires Singleton lifetime
+            AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
 
             // Skip registration if type is invalid
             if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
@@ -617,6 +653,184 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             }
             baseType = baseType.BaseType;
         }
+    }
+
+    /// <summary>
+    /// SGIOC008: Analyzes Factory and Instance members specified via nameof() on AttributeSyntax.
+    /// This uses RegisterSyntaxNodeAction to get the SemanticModel directly, avoiding RS1030.
+    /// </summary>
+    private static void AnalyzeFactoryAndInstanceOnAttribute(
+        SyntaxNodeAnalysisContext context,
+        AnalyzerContext analyzerContext)
+    {
+        if(context.Node is not AttributeSyntax attributeSyntax)
+            return;
+
+        // Get the attribute symbol to check if it's an IoC registration attribute
+        var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
+        if(attributeSymbol is not IMethodSymbol attributeConstructor)
+            return;
+
+        var attributeClass = attributeConstructor.ContainingType;
+        if(attributeClass is null)
+            return;
+
+        // Check if this is an IoC registration attribute
+        var comparer = SymbolEqualityComparer.Default;
+        if(!comparer.Equals(attributeClass, analyzerContext.IoCRegisterAttribute) &&
+           !comparer.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+        {
+            return;
+        }
+
+        var argumentList = attributeSyntax.ArgumentList;
+        if(argumentList is null)
+            return;
+
+        var location = attributeSyntax.GetLocation();
+
+        // Check Factory member
+        AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Factory");
+
+        // Check Instance member
+        AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Instance");
+    }
+
+    /// <summary>
+    /// Analyzes a specific member (Factory or Instance) specified via nameof() using SyntaxNodeAnalysisContext.
+    /// </summary>
+    private static void AnalyzeNameofMemberOnSyntax(
+        SyntaxNodeAnalysisContext context,
+        AttributeArgumentListSyntax argumentList,
+        Location location,
+        string memberKind)
+    {
+        foreach(var argument in argumentList.Arguments)
+        {
+            // Check if this is the named argument we're looking for
+            if(argument.NameEquals?.Name.Identifier.Text != memberKind)
+                continue;
+
+            // Check if the expression is a nameof() invocation
+            if(argument.Expression is not InvocationExpressionSyntax invocation ||
+               invocation.Expression is not IdentifierNameSyntax identifierName ||
+               identifierName.Identifier.Text != "nameof")
+            {
+                // Not a nameof() expression, skip validation
+                return;
+            }
+
+            // Extract the argument inside nameof()
+            if(invocation.ArgumentList.Arguments.Count != 1)
+                return;
+
+            var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
+
+            // Resolve the symbol using the SemanticModel from context
+            var symbolInfo = context.SemanticModel.GetSymbolInfo(nameofArgument, context.CancellationToken);
+            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+
+            if(symbol is null)
+                return;
+
+            // Validate the symbol
+            var (isValid, errorReason) = ValidateFactoryOrInstanceSymbol(symbol);
+            if(!isValid)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidFactoryOrInstanceMember,
+                    location,
+                    memberKind,
+                    symbol.Name,
+                    errorReason));
+            }
+
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Validates that a symbol referenced by Factory or Instance via nameof() is valid.
+    /// </summary>
+    /// <returns>A tuple indicating whether the symbol is valid and the error reason if not.</returns>
+    private static (bool IsValid, string? ErrorReason) ValidateFactoryOrInstanceSymbol(ISymbol symbol)
+    {
+        // Check if the symbol is static
+        if(!symbol.IsStatic)
+        {
+            return (false, "not static");
+        }
+
+        // Check accessibility - must be at least internal to be accessible
+        // Private members cannot be accessed from the generated code
+        switch(symbol.DeclaredAccessibility)
+        {
+            case Accessibility.Private:
+                return (false, "private");
+            case Accessibility.ProtectedAndInternal:
+            case Accessibility.Protected:
+                // Protected members are only accessible in derived classes
+                // Since generated code is not a derived class, treat as inaccessible
+                return (false, "protected and not accessible from generated code");
+        }
+
+        // Also check containing type accessibility
+        var containingType = symbol.ContainingType;
+        while(containingType is not null)
+        {
+            if(containingType.DeclaredAccessibility is Accessibility.Private)
+            {
+                return (false, "declared in a private type");
+            }
+            containingType = containingType.ContainingType;
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    /// SGIOC009: Analyzes Instance registration to ensure Lifetime is Singleton.
+    /// Reports error when Instance is specified but Lifetime is not Singleton.
+    /// </summary>
+    /// <param name="reportDiagnostic">The action to report diagnostics.</param>
+    /// <param name="attribute">The IoC registration attribute.</param>
+    /// <param name="location">The location for the diagnostic.</param>
+    private static void AnalyzeInstanceLifetime(
+        Action<Diagnostic> reportDiagnostic,
+        AttributeData attribute,
+        Location? location)
+    {
+        // Check if Instance is specified
+        string? instance = null;
+        foreach(var namedArg in attribute.NamedArguments)
+        {
+            if(namedArg.Key == "Instance" && !namedArg.Value.IsNull)
+            {
+                instance = namedArg.Value.Value?.ToString();
+                break;
+            }
+        }
+
+        if(instance is null)
+            return;
+
+        // Get the lifetime
+        var (hasLifetime, lifetime) = attribute.TryGetLifetime();
+
+        // If lifetime is not explicitly set, it defaults to Singleton (0), which is valid
+        if(!hasLifetime)
+            return;
+
+        // If lifetime is Singleton, it's valid
+        if(lifetime is ServiceLifetime.Singleton)
+            return;
+
+        // Report error: Instance requires Singleton lifetime
+        reportDiagnostic(Diagnostic.Create(
+            InstanceRequiresSingleton,
+            location,
+            instance,
+            lifetime.Name));
     }
 
     private static void AnalyzeDependencies(

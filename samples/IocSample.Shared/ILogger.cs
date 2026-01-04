@@ -4,6 +4,7 @@ public interface ILogger<T>
 {
     public void Log(string msg);
 }
+
 [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
 internal sealed class Logger<T> : ILogger<T>
 {

@@ -42,4 +42,10 @@ public sealed class IoCRegisterForAttribute(Type targetType) : Attribute
 
     /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
+
+    /// <inheritdoc cref="IoCRegisterAttribute.Factory"/>
+    public string? Factory { get; init; }
+
+    /// <inheritdoc cref="IoCRegisterAttribute.Instance"/>
+    public string? Instance { get; init; }
 }

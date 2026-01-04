@@ -17,13 +17,13 @@ namespace TestAssembly
         {
             services.AddSingleton<global::TestNamespace.ObjectService, global::TestNamespace.ObjectService>();
             services.AddSingleton<global::TestNamespace.IObjectService, global::TestNamespace.ObjectService>();
-            services.AddKeyedSingleton<global::TestNamespace.MyService>("myServiceKey", (global::System.IServiceProvider sp, object key) =>
+            services.AddKeyedSingleton<global::TestNamespace.MyService>("myServiceKey", (global::System.IServiceProvider sp, object? key) =>
             {
                 var p0 = sp.GetRequiredService<object>();
                 var s0 = new global::TestNamespace.MyService(p0);
                 return s0;
             });
-            services.AddKeyedSingleton<global::TestNamespace.IMyService>("myServiceKey", (global::System.IServiceProvider sp, object key) => sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key));
+            services.AddKeyedSingleton<global::TestNamespace.IMyService>("myServiceKey", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key));
 
             return services;
         }

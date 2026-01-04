@@ -38,6 +38,8 @@ internal readonly record struct OpenGenericEntry(
 /// <param name="Tags">The tags for method grouping.</param>
 /// <param name="ExcludeFromDefault">Whether excluded from default method.</param>
 /// <param name="InjectionMembers">The injection members.</param>
+/// <param name="Factory">The factory method data to use for creating instances.</param>
+/// <param name="Instance">The static instance path to use for singleton registration.</param>
 internal sealed record class OpenGenericRegistrationInfo(
     TypeData ImplementationType,
     ImmutableEquatableArray<TypeData> ServiceTypes,
@@ -48,7 +50,9 @@ internal sealed record class OpenGenericRegistrationInfo(
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
     bool ExcludeFromDefault,
-    ImmutableEquatableArray<InjectionMemberData> InjectionMembers);
+    ImmutableEquatableArray<InjectionMemberData> InjectionMembers,
+    FactoryMethodData? Factory,
+    string? Instance);
 
 /// <summary>
 /// Represents a closed generic dependency found in a constructor parameter.
