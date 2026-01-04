@@ -7,6 +7,46 @@ namespace SourceGen.Ioc.SourceGenerator;
 /// </summary>
 internal static class RoslynExtensions
 {
+    /// <param name="symbol">The symbol</param>
+    extension(ISymbol symbol)
+    {
+        /// <summary>
+        /// Builds the fully qualified access path for a symbol, including namespace and containing types. <br/>
+        /// For example, for a field <c>Key</c> inside <c>NestClassImpl</c> inside <c>TestNestClass</c> in namespace <c>MyApp.Services</c>,
+        /// returns <c>global::MyApp.Services.TestNestClass.NestClassImpl.Key</c>.
+        /// </summary>
+        /// <returns>The fully qualified access path for the symbol.</returns>
+        public string FullAccessPath
+        {
+            get
+            {
+                // Build path from the symbol up to its containing types (collect in reverse order, then reverse)
+                List<string> pathParts = [symbol.Name];
+
+                var containingType = symbol.ContainingType;
+                while(containingType is not null)
+                {
+                    pathParts.Add(containingType.Name);
+                    containingType = containingType.ContainingType;
+                }
+
+                // Reverse to get correct order (outermost type first)
+                pathParts.Reverse();
+
+                // Add namespace prefix with global::
+                var containingNamespace = symbol.ContainingType?.ContainingNamespace ?? symbol.ContainingNamespace;
+                if(containingNamespace is not null && !containingNamespace.IsGlobalNamespace)
+                {
+                    var namespacePath = containingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    return $"{namespacePath}.{string.Join(".", pathParts)}";
+                }
+
+                // For global namespace, just prepend global::
+                return $"global::{string.Join(".", pathParts)}";
+            }
+        }
+    }
+
     extension(ITypeSymbol typeSymbol)
     {
         /// <summary>
@@ -647,10 +687,12 @@ internal static class RoslynExtensions
 
         /// <summary>
         /// Tries to get the original syntax for a named argument, especially for <see langword="nameof"/> expressions.
+        /// When a <see cref="SemanticModel"/> is provided, resolves the full access path of the referenced symbol.
         /// </summary>
         /// <param name="argumentName">The name of the argument to find.</param>
-        /// <returns>The original syntax string if it's a <see langword="nameof"/> expression; otherwise, null.</returns>
-        public string? TryGetNameof(string argumentName)
+        /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
+        /// <returns>The resolved symbol path if it's a <see langword="nameof"/> expression; otherwise, null.</returns>
+        public string? TryGetNameof(string argumentName, SemanticModel? semanticModel = null)
         {
             var syntaxReference = attributeData.ApplicationSyntaxReference;
             if(syntaxReference is null)
@@ -678,6 +720,15 @@ internal static class RoslynExtensions
                         if(invocation.ArgumentList.Arguments.Count == 1)
                         {
                             var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
+
+                            // If semantic model is provided, try to resolve the full access path
+                            if(semanticModel is not null)
+                            {
+                                var resolvedPath = ResolveNameofExpression(nameofArgument, semanticModel);
+                                if(resolvedPath is not null)
+                                    return resolvedPath;
+                            }
+
                             return nameofArgument.ToFullString().Trim();
                         }
                     }
@@ -884,6 +935,27 @@ internal static class RoslynExtensions
     public static bool IsEnumerableCompatibleType(string nameWithoutGeneric) =>
         s_enumerableCompatibleTypes.Contains(nameWithoutGeneric);
 
+    /// <summary>
+    /// Resolves the full access path of a symbol referenced in a nameof() expression.
+    /// For example, resolves <c>nameof(Key)</c> to <c>global::Namespace.OuterClass.InnerClass.Key</c>
+    /// when Key is a member of InnerClass inside OuterClass.
+    /// </summary>
+    /// <param name="expression">The expression inside nameof().</param>
+    /// <param name="semanticModel">The semantic model to use for symbol resolution.</param>
+    /// <returns>The full access path if successfully resolved; otherwise, null.</returns>
+    public static string? ResolveNameofExpression(ExpressionSyntax expression, SemanticModel semanticModel)
+    {
+        var symbolInfo = semanticModel.GetSymbolInfo(expression);
+        var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+
+        if(symbol is null)
+            return null;
+
+        // If the expression already contains a member access (e.g., KeyHolder.Key),
+        // we need to resolve it to ensure we get the fully qualified path
+        return symbol.FullAccessPath;
+    }
+
     extension<T>(IEnumerable<T> source)
     {
         public IEnumerable<(int Index, T Item)> Index()
@@ -962,7 +1034,8 @@ internal static class RoslynExtensions
         }
 
         // Delegate to core implementation with single-element span
-        return SubstituteTypeArgumentsCore(typeNameSpan, [(typeParam, actualArg)]);
+        Span<TypeArgEntry> singleEntry = [new(typeParam, actualArg)];
+        return SubstituteTypeArgumentsCore(typeNameSpan, singleEntry);
     }
 
     /// <summary>
@@ -974,7 +1047,7 @@ internal static class RoslynExtensions
     /// <returns>The type name with all type parameters substituted.</returns>
     private static string SubstituteTypeArgumentsCore(
         ReadOnlySpan<char> typeNameSpan,
-        ReadOnlySpan<(string Key, string Value)> sortedEntries)
+        ReadOnlySpan<TypeArgEntry> sortedEntries)
     {
         var result = new StringBuilder(typeNameSpan.Length + 32);
         int i = 0;
@@ -1006,7 +1079,7 @@ internal static class RoslynExtensions
     private static bool TryMatchTypeParameter(
         ReadOnlySpan<char> typeNameSpan,
         int position,
-        ReadOnlySpan<(string Key, string Value)> sortedEntries,
+        ReadOnlySpan<TypeArgEntry> sortedEntries,
         [NotNullWhen(true)] out string? replacement,
         out int matchLength)
     {
@@ -1073,119 +1146,4 @@ internal static class RoslynExtensions
     private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     #endregion
-}
-
-/// <summary>
-/// A lightweight structure for mapping type parameter names to their actual type arguments.
-/// Entries are stored sorted by key length descending to ensure correct matching priority
-/// (e.g., "TValue" is matched before "T").
-/// </summary>
-internal struct TypeArgMap
-{
-    private (string Key, string Value)[] _entries;
-    private int _count;
-
-    /// <summary>
-    /// Creates an empty TypeArgMap with the specified initial capacity.
-    /// </summary>
-    public TypeArgMap(int capacity)
-    {
-        _entries = capacity > 0 ? new (string, string)[capacity] : [];
-        _count = 0;
-    }
-
-    /// <summary>
-    /// Gets whether the map is uninitialized or contains no elements.
-    /// </summary>
-    public readonly bool IsDefaultOrEmpty => _entries is null || _count == 0;
-
-    /// <summary>
-    /// Gets whether the map is empty.
-    /// </summary>
-    public readonly bool IsEmpty => _count == 0;
-
-    /// <summary>
-    /// Gets the number of entries in the map.
-    /// </summary>
-    public readonly int Count => _count;
-
-    /// <summary>
-    /// Adds a type parameter mapping, maintaining sorted order by key length descending.
-    /// </summary>
-    public void Add(string typeParam, string actualArg)
-    {
-        // Ensure capacity
-        if(_entries.Length == 0)
-        {
-            _entries = new (string, string)[4];
-        }
-        else if(_count == _entries.Length)
-        {
-            Array.Resize(ref _entries, _entries.Length * 2);
-        }
-
-        // Find insertion position to maintain sorted order (by key length descending)
-        int insertIndex = _count;
-        for(int i = 0; i < _count; i++)
-        {
-            if(typeParam.Length > _entries[i].Key.Length)
-            {
-                insertIndex = i;
-                break;
-            }
-        }
-
-        // Shift elements to make room
-        if(insertIndex < _count)
-        {
-            Array.Copy(_entries, insertIndex, _entries, insertIndex + 1, _count - insertIndex);
-        }
-
-        _entries[insertIndex] = (typeParam, actualArg);
-        _count++;
-    }
-
-    /// <summary>
-    /// Indexer for setting values. Maintains sorted order.
-    /// </summary>
-    public string this[string typeParam]
-    {
-        set => Add(typeParam, value);
-    }
-
-    /// <summary>
-    /// Tries to get a value by key.
-    /// </summary>
-    public readonly bool TryGetValue(string key, [NotNullWhen(true)] out string? value)
-    {
-        for(int i = 0; i < _count; i++)
-        {
-            if(_entries[i].Key == key)
-            {
-                value = _entries[i].Value;
-                return true;
-            }
-        }
-        value = null;
-        return false;
-    }
-
-    /// <summary>
-    /// Gets a span of the entries, sorted by key length descending.
-    /// </summary>
-    public readonly ReadOnlySpan<(string Key, string Value)> AsSpan() => _entries.AsSpan(0, _count);
-
-    /// <summary>
-    /// Returns an enumerator for the entries.
-    /// </summary>
-    public readonly Enumerator GetEnumerator() => new(_entries, _count);
-
-    public ref struct Enumerator(ReadOnlySpan<(string Key, string Value)> entries, int count)
-    {
-        private readonly ReadOnlySpan<(string Key, string Value)> _entries = entries[..count];
-        private int _index = -1;
-
-        public readonly (string Key, string Value) Current => _entries[_index];
-        public bool MoveNext() => ++_index < _entries.Length;
-    }
 }

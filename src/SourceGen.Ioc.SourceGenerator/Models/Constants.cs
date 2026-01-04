@@ -96,8 +96,9 @@ internal static class Constants
         /// <summary>
         /// Gets the Key and KeyType from the attribute.
         /// </summary>
+        /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
         /// <returns>A tuple containing the key string and key type.</returns>
-        public (string? Key, int KeyType) GetKey()
+        public (string? Key, int KeyType) GetKey(SemanticModel? semanticModel = null)
         {
             var keyType = attribute.GetNamedArgument<int>("KeyType", 0);
             string? key = null;
@@ -114,8 +115,8 @@ internal static class Constants
                     {
                         if(keyType == 1) // KeyType.Csharp
                         {
-                            // Try to get original syntax for nameof() expressions
-                            key = attribute.TryGetNameof("Key")
+                            // Try to get original syntax for nameof() expressions with full access path resolution
+                            key = attribute.TryGetNameof("Key", semanticModel)
                                 ?? namedArg.Value.Value?.ToString();
                         }
                         else

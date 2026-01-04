@@ -17,8 +17,8 @@ namespace TestAssembly
         {
             services.AddKeyedSingleton<global::TestNamespace.KeyedService, global::TestNamespace.KeyedService>(KeyHolder.Key);
             services.AddKeyedSingleton<global::TestNamespace.IKeyedService, global::TestNamespace.KeyedService>(KeyHolder.Key);
-            services.AddKeyedSingleton<global::TestNamespace.KeyedService2, global::TestNamespace.KeyedService2>(KeyHolder.Key);
-            services.AddKeyedSingleton<global::TestNamespace.IKeyedService, global::TestNamespace.KeyedService2>(KeyHolder.Key);
+            services.AddKeyedSingleton<global::TestNamespace.KeyedService2, global::TestNamespace.KeyedService2>(global::TestNamespace.KeyHolder.Key);
+            services.AddKeyedSingleton<global::TestNamespace.IKeyedService, global::TestNamespace.KeyedService2>(global::TestNamespace.KeyHolder.Key);
 
             return services;
         }

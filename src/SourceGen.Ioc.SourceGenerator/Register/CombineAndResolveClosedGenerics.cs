@@ -691,8 +691,9 @@ partial class RegisterSourceGenerator
         }
 
         // Build substitution map: decorator param name -> closed type arg name
-        var typeArgMap = new TypeArgMap(decoratorTypeParams.Length);
-        for(int i = 0; i < decoratorTypeParams.Length && i < closedTypeParams.Length; i++)
+        int mapSize = Math.Min(decoratorTypeParams.Length, closedTypeParams.Length);
+        var typeArgMap = new TypeArgMap(mapSize);
+        for(int i = 0; i < mapSize; i++)
         {
             typeArgMap[decoratorTypeParams[i].ParameterName] = closedTypeParams[i].Type.Name;
         }

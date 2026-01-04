@@ -11,7 +11,7 @@ partial class RegisterSourceGenerator
         if(attributeData == null)
             return null;
 
-        return ExtractRegistrationData(typeSymbol, attributeData);
+        return ExtractRegistrationData(typeSymbol, attributeData, ctx.SemanticModel);
     }
 
     private static IEnumerable<RegistrationData> TransformRegisterFor(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
@@ -23,13 +23,13 @@ partial class RegisterSourceGenerator
             if(attr.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
                 continue;
 
-            var data = ExtractRegistrationData(targetType, attr);
+            var data = ExtractRegistrationData(targetType, attr, ctx.SemanticModel);
 
             yield return data;
         }
     }
 
-    private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData)
+    private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel? semanticModel = null)
     {
         var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
@@ -39,7 +39,7 @@ partial class RegisterSourceGenerator
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
         var excludeFromDefault = attributeData.GetExcludeFromDefault();
-        var (key, keyType) = attributeData.GetKey();
+        var (key, keyType) = attributeData.GetKey(semanticModel);
 
         // Extract injection members (properties, fields, methods marked with InjectAttribute)
         var injectionMembers = ExtractInjectionMembers(typeSymbol);

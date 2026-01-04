@@ -356,4 +356,87 @@ public class BasicRegistrationTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task KeyedService_WithCsharpKeyNameofInNestedClass_GeneratesKeyedRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            internal sealed class OuterClass
+            {
+                public interface INestedService { }
+
+                [IoCRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(INestedService)], KeyType = KeyType.Csharp, Key = nameof(Key))]
+                internal sealed class NestedServiceImpl : INestedService
+                {
+                    public const string Key = "NestedKey";
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task KeyedService_WithCsharpKeyNameofInDeeplyNestedClass_GeneratesKeyedRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            internal sealed class Level1
+            {
+                internal sealed class Level2
+                {
+                    public interface IDeepNestedService { }
+
+                    [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IDeepNestedService)], KeyType = KeyType.Csharp, Key = nameof(ServiceKey))]
+                    internal sealed class DeepNestedServiceImpl : IDeepNestedService
+                    {
+                        public const string ServiceKey = "DeepKey";
+                    }
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task KeyedService_WithCsharpKeyNameofExternalMember_GeneratesKeyedRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public static class Keys
+            {
+                public const string SharedKey = "Shared";
+            }
+
+            public interface IMyService { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], KeyType = KeyType.Csharp, Key = nameof(Keys.SharedKey))]
+            public class MyServiceImpl : IMyService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }
