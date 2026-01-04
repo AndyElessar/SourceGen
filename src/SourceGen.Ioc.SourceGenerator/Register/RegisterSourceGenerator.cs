@@ -65,12 +65,31 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
-        // Get compilation info
-        var compilationInfo = context.CompilationProvider
-            .Select(static (compilation, _) =>
+        // Get assembly name from compilation
+        var assemblyNameProvider = context.CompilationProvider
+            .Select(static (compilation, _) => compilation.AssemblyName ?? "Generated");
+
+        // Get MSBuild properties from analyzer config options
+        var msbuildPropertiesProvider = context.AnalyzerConfigOptionsProvider
+            .Select(static (configOptions, _) =>
             {
-                var rootNamespace = compilation.AssemblyName ?? "Generated";
-                return (RootNamespace: rootNamespace, AssemblyName: compilation.AssemblyName ?? "Generated");
+                // Try to get RootNamespace from MSBuild property
+                string? rootNamespace = null;
+                if(configOptions.GlobalOptions.TryGetValue(Constants.RootNamespaceProperty, out var ns)
+                    && !string.IsNullOrWhiteSpace(ns))
+                {
+                    rootNamespace = ns;
+                }
+
+                // Try to get custom IoC name from MSBuild property
+                string? customIocName = null;
+                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocNameProperty, out var iocName)
+                    && !string.IsNullOrWhiteSpace(iocName))
+                {
+                    customIocName = iocName;
+                }
+
+                return (RootNamespace: rootNamespace, CustomIocName: customIocName);
             });
 
         // ========== Pipeline 1: Process individual registrations (cacheable per registration) ==========
@@ -96,15 +115,18 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Combine(invocations)
             .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left, in source.Right, ct));
 
-        // Combine service registrations with compilation info
+        // Combine service registrations with assembly name and MSBuild properties
         var combined = serviceRegistrations
-            .Combine(compilationInfo);
+            .Combine(assemblyNameProvider)
+            .Combine(msbuildPropertiesProvider);
 
         // Generate output
         context.RegisterSourceOutput(combined, static (ctx, source) =>
         {
-            var (registrations, compilationInfo) = source;
-            GenerateOutput(in ctx, registrations, compilationInfo.RootNamespace, compilationInfo.AssemblyName);
+            var ((registrations, assemblyName), msbuildProps) = source;
+            // Use RootNamespace from MSBuild if available, otherwise fall back to assembly name
+            var rootNamespace = msbuildProps.RootNamespace ?? assemblyName;
+            GenerateOutput(in ctx, registrations, rootNamespace, assemblyName, msbuildProps.CustomIocName);
         });
     }
 
@@ -112,20 +134,22 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         in SourceProductionContext ctx,
         ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> registrationsByMethod,
         string rootNamespace,
-        string assemblyName)
+        string assemblyName,
+        string? customIocName)
     {
         if(registrationsByMethod.Count == 0)
             return;
 
         // Generate source
-        var source = GenerateExtensionMethodSource(registrationsByMethod, rootNamespace, assemblyName);
+        var source = GenerateExtensionMethodSource(registrationsByMethod, rootNamespace, assemblyName, customIocName);
         ctx.AddSource($"{assemblyName}.ServiceRegistration.g.cs", source);
     }
 
     private static string GenerateExtensionMethodSource(
         ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> registrationsByMethod,
         string rootNamespace,
-        string assemblyName)
+        string assemblyName,
+        string? customIocName)
     {
         var writer = new SourceWriter();
 
@@ -139,11 +163,15 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        var safeMethodName = GetSafeMethodName(assemblyName);
+        // Use custom IoC name if provided, otherwise use assembly name
+        var methodBaseName = !string.IsNullOrWhiteSpace(customIocName)
+            ? GetSafeMethodName(customIocName!)
+            : GetSafeMethodName(assemblyName);
+
         writer.WriteLine("/// <summary>");
         writer.WriteLine($"/// Extension methods for registering services from {assemblyName}.");
         writer.WriteLine("/// </summary>");
-        writer.WriteLine($"public static class {safeMethodName}ServiceCollectionExtensions");
+        writer.WriteLine($"public static class {methodBaseName}ServiceCollectionExtensions");
         writer.WriteLine("{");
         writer.Indentation++;
 
@@ -162,7 +190,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             if(string.IsNullOrEmpty(methodKey))
             {
                 // Default method
-                GenerateRegistrationMethod(writer, registrations, safeMethodName, "Registers all default services.");
+                GenerateRegistrationMethod(writer, registrations, methodBaseName, "Registers all default services.");
             }
             else
             {
@@ -171,7 +199,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
                 GenerateRegistrationMethod(
                     writer,
                     registrations,
-                    $"{safeMethodName}_{safeTagName}",
+                    $"{methodBaseName}_{safeTagName}",
                     $"Registers all services tagged with '{methodKey}'.");
             }
         }

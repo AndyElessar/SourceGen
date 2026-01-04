@@ -3,8 +3,8 @@
 var services = new ServiceCollection();
 
 services
-    .AddIocSample_Shared()
-    .AddIocSample_Shared_Mediator()
+    .AddShared()
+    .AddShared_Mediator()
     .AddIocSample()
     .AddIocSample_Mediator();
 

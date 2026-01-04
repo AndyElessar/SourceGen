@@ -48,10 +48,12 @@ public static class SourceGeneratorTestHelper
     /// <param name="source">The source code to compile.</param>
     /// <param name="assemblyName">The assembly name for the compilation.</param>
     /// <param name="additionalReferences">Optional additional metadata references.</param>
+    /// <param name="analyzerConfigOptions">Optional analyzer config options (e.g., MSBuild properties).</param>
     public static GeneratorRunResult RunGenerator<TGenerator>(
         string source,
         string assemblyName = "TestAssembly",
-        IEnumerable<MetadataReference>? additionalReferences = null)
+        IEnumerable<MetadataReference>? additionalReferences = null,
+        IReadOnlyDictionary<string, string>? analyzerConfigOptions = null)
         where TGenerator : IIncrementalGenerator, new()
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
@@ -69,6 +71,14 @@ public static class SourceGeneratorTestHelper
 
         var generator = new TGenerator();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
+
+        // Apply analyzer config options if provided
+        if(analyzerConfigOptions is not null)
+        {
+            var optionsProvider = new TestAnalyzerConfigOptionsProvider(analyzerConfigOptions);
+            driver = driver.WithUpdatedAnalyzerConfigOptions(optionsProvider);
+        }
+
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
 
         return driver.GetRunResult().Results.Single();
@@ -157,5 +167,38 @@ public static class SourceGeneratorTestHelper
             [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+}
+
+/// <summary>
+/// Test implementation of AnalyzerConfigOptionsProvider for providing MSBuild properties in tests.
+/// </summary>
+file sealed class TestAnalyzerConfigOptionsProvider(IReadOnlyDictionary<string, string> globalOptions) : AnalyzerConfigOptionsProvider
+{
+    private readonly TestAnalyzerConfigOptions _globalOptions = new(globalOptions);
+
+    public override AnalyzerConfigOptions GlobalOptions => _globalOptions;
+
+    public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => TestAnalyzerConfigOptions.Empty;
+
+    public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => TestAnalyzerConfigOptions.Empty;
+}
+
+/// <summary>
+/// Test implementation of AnalyzerConfigOptions.
+/// </summary>
+file sealed class TestAnalyzerConfigOptions(IReadOnlyDictionary<string, string> options) : AnalyzerConfigOptions
+{
+    public static readonly TestAnalyzerConfigOptions Empty = new(new Dictionary<string, string>());
+
+    public override bool TryGetValue(string key, out string value)
+    {
+        if(options.TryGetValue(key, out var result))
+        {
+            value = result;
+            return true;
+        }
+        value = string.Empty;
+        return false;
     }
 }

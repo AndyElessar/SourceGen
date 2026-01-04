@@ -6,6 +6,7 @@
   <PropertyGroup>
     <IsAotCompatible>true</IsAotCompatible>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <SourceGenIocName>Shared</SourceGenIocName>
   </PropertyGroup>
 
   <ItemGroup>

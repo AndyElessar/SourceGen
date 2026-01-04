@@ -9,4 +9,19 @@
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);SOURCEGEN</DefineConstants>
   </PropertyGroup>
+
+  <!--
+    Make SourceGenIocName visible to the Source Generator for customizing
+    the generated extension method name.
+    
+    Usage in your .csproj:
+    <PropertyGroup>
+      <SourceGenIocName>CustomName</SourceGenIocName>
+    </PropertyGroup>
+    
+    This will generate: AddCustomName() instead of Add{AssemblyName}()
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="SourceGenIocName" />
+  </ItemGroup>
 </Project>

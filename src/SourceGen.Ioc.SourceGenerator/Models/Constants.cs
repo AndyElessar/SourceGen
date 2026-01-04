@@ -7,6 +7,27 @@ internal static class Constants
     public const string IoCRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultsAttribute";
     public const string ImportModuleAttributeFullName = "SourceGen.Ioc.ImportModuleAttribute";
 
+    /// <summary>
+    /// The MSBuild property name for the root namespace.
+    /// </summary>
+    public const string RootNamespaceProperty = "build_property.RootNamespace";
+
+    /// <summary>
+    /// The MSBuild property name for customizing the generated method name.
+    /// </summary>
+    /// <remarks>
+    /// Usage in .csproj:
+    /// <code>
+    /// &lt;PropertyGroup&gt;
+    ///     &lt;SourceGenIocName&gt;CustomName&lt;/SourceGenIocName&gt;
+    /// &lt;/PropertyGroup&gt;
+    /// &lt;ItemGroup&gt;
+    ///     &lt;CompilerVisibleProperty Include="SourceGenIocName" /&gt;
+    /// &lt;/ItemGroup&gt;
+    /// </code>
+    /// </remarks>
+    public const string SourceGenIocNameProperty = "build_property.SourceGenIocName";
+
     public const string Category_Usage = "Usage";
     public const string Category_Design = "Design";
 
