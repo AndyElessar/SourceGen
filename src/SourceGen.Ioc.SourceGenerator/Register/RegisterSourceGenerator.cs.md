@@ -221,14 +221,14 @@ public static class ServiceCollectionExtensions
     #endregion
     ```
 
-9. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members marked with `InjectAttribute`, generate the necessary code to handle the injection.
+9. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `InjectAttribute`, generate the necessary code to handle the injection.
 
     Only check with name `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
     ```csharp
     #region Define:
     [IoCRegister]
-    public class MyService(IMayServiceDependency1 sd)
+    public class MyService([Inject(Key = 10)]IMayServiceDependency1 sd)
     {
         private readonly IMayServiceDependency1 sd = sd;
 
@@ -250,7 +250,7 @@ public static class ServiceCollectionExtensions
       {
           services.AddSingleton<MyService>((IServiceProvider sp) =>
           {
-              var s0_p0 = sp.GetRequiredService<IMayServiceDependency1>();
+              var s0_p0 = sp.GetRequiredKeyedService<IMayServiceDependency1>(10);
               var s0_p1 = sp.GetRequiredService<IMayServiceDependency2>();
               var s0_p2 = sp.GetRequiredService<IMayServiceDependency3>();
               var s0 = new MyService(s0_p0) { Dependency = s0_p1 };

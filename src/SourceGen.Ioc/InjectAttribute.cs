@@ -3,14 +3,15 @@
 namespace SourceGen.Ioc;
 
 /// <summary>
-/// Specifies that a property, field, or method should be populated by dependency injection.
+/// Specifies that a property, field, method, or constructor should be populated by dependency injection.
 /// </summary>
 /// <remarks>
 /// Apply this attribute to indicate that the decorated member will receive its value from the dependency injection container.<br/>
 /// Generator will generate factory method in registration code to populate the member during object creation.<br/>
-/// When decorated a method, the method will be called after the object is created to set up dependencies. Method should be non-static and have void return type.
+/// When decorated a method, the method will be called after the object is created to set up dependencies. Method should be non-static and have void return type.<br/>
+/// When decorated a constructor, that constructor will be used for dependency injection instead of the primary constructor or the constructor with most parameters.
 /// </remarks>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method | AttributeTargets.Parameter | AttributeTargets.Constructor, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
 public sealed class InjectAttribute : Attribute
 {

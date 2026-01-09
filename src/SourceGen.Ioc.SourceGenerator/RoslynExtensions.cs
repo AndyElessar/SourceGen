@@ -374,14 +374,14 @@ internal static class RoslynExtensions
         {
             get
             {
-                foreach(var constructor in typeSymbol.Constructors)
+                foreach(var ctor in typeSymbol.Constructors)
                 {
-                    if(constructor.IsImplicitlyDeclared)
+                    if(ctor.IsImplicitlyDeclared)
                         continue;
 
-                    var syntaxRef = constructor.DeclaringSyntaxReferences.FirstOrDefault();
+                    var syntaxRef = ctor.DeclaringSyntaxReferences.FirstOrDefault();
                     if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
-                        return constructor;
+                        return ctor;
                 }
 
                 return null;
@@ -399,16 +399,18 @@ internal static class RoslynExtensions
                     if(ctor.IsImplicitlyDeclared)
                         continue;
 
+                    var syntaxRef = ctor.DeclaringSyntaxReferences.FirstOrDefault();
+                    // Primary constructor
+                    if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
+                        return ctor;
+
                     if(ctor.IsStatic)
                         continue;
 
                     if(ctor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
                         continue;
 
-                    var syntaxRef = ctor.DeclaringSyntaxReferences.FirstOrDefault();
-                    if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
-                        return ctor;
-
+                    // Find constructor with most parameters
                     if(ctor.Parameters.Length > maxParameters)
                     {
                         maxParameters = ctor.Parameters.Length;
@@ -416,6 +418,52 @@ internal static class RoslynExtensions
                     }
                 }
                 return bestCtor;
+            }
+        }
+
+        public IMethodSymbol? SpecifiedOrPrimaryOrMostParametersConstructor
+        {
+            get
+            {
+                IMethodSymbol? injectCtor = null;
+                IMethodSymbol? primaryCtor = null;
+                IMethodSymbol? bestCtor = null;
+                int maxParameters = -1;
+                foreach(var ctor in typeSymbol.Constructors)
+                {
+                    if(ctor.IsImplicitlyDeclared)
+                        continue;
+
+                    if(ctor.IsStatic)
+                        continue;
+
+                    if(ctor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+                        continue;
+
+                    // InjectAttribute specified constructor - highest priority
+                    if(ctor.GetAttributes().Any(attr => attr.AttributeClass?.Name == "InjectAttribute"))
+                    {
+                        injectCtor = ctor;
+                        continue;
+                    }
+
+                    var syntaxRef = ctor.DeclaringSyntaxReferences.FirstOrDefault();
+                    // Primary constructor - second priority
+                    if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
+                    {
+                        primaryCtor = ctor;
+                        continue;
+                    }
+
+                    // Find constructor with most parameters - lowest priority
+                    if(ctor.Parameters.Length > maxParameters)
+                    {
+                        maxParameters = ctor.Parameters.Length;
+                        bestCtor = ctor;
+                    }
+                }
+                // Return by priority: [Inject] > primary > most parameters
+                return injectCtor ?? primaryCtor ?? bestCtor;
             }
         }
 
@@ -436,8 +484,8 @@ internal static class RoslynExtensions
                 ? typeSymbol
                 : typeSymbol.OriginalDefinition ?? typeSymbol;
 
-            // Get the primary constructor or the constructor with most parameters
-            var constructor = typeToInspect.PrimaryOrMostParametersConstructor;
+            // Get the constructor: [Inject] marked > primary constructor > most parameters
+            var constructor = typeToInspect.SpecifiedOrPrimaryOrMostParametersConstructor;
             if(constructor is null)
             {
                 return [];
