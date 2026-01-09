@@ -6,6 +6,7 @@ internal static class Constants
     public const string IoCRegisterForAttributeFullName = "SourceGen.Ioc.IoCRegisterForAttribute";
     public const string IoCRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultsAttribute";
     public const string ImportModuleAttributeFullName = "SourceGen.Ioc.ImportModuleAttribute";
+    public const string DiscoverAttributeFullName = "SourceGen.Ioc.DiscoverAttribute";
 
     /// <summary>
     /// The MSBuild property name for the root namespace.

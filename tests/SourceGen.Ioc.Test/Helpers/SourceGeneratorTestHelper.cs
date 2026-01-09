@@ -11,9 +11,10 @@ namespace SourceGen.Ioc.Test.Helpers;
 public static class SourceGeneratorTestHelper
 {
     /// <summary>
-    /// Gets the parse options for the latest C# language version.
+    /// Gets the parse options for the latest C# language version with SOURCEGEN preprocessor definition.
     /// </summary>
-    public static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
+    public static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
+        .WithPreprocessorSymbols("SOURCEGEN");
 
     /// <summary>
     /// Gets the metadata reference for the SourceGen.Ioc assembly containing attribute definitions.

@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for closed generic dependency resolution (Feature #11).
@@ -426,6 +426,334 @@ public class ClosedGenericDependencyTests
                 public IRepository<Entity1> Entity1Repo => sp.GetRequiredService<IRepository<Entity1>>();
                 public IRepository<Entity2> Entity2Repo => sp.GetRequiredService<IRepository<Entity2>>();
                 public IRepository<Entity3> Entity3Repo => sp.GetRequiredService<IRepository<Entity3>>();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
+
+            public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
+
+            [IoCRegister]
+            public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
+            {
+                public List<T> Handle(TestRequest<T> request) => [];
+            }
+
+            // Using DiscoverAttribute to discover closed generic type
+            public class ViewModel
+            {
+                [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+                public void DoAction()
+                {
+                    // Mediator.Send(new TestRequest<string>());
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_MultipleDiscoverAttributes_GeneratesAllFactories()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
+
+            public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
+
+            [IoCRegister]
+            public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
+            {
+                public List<T> Handle(TestRequest<T> request) => [];
+            }
+
+            public class Entity1 { }
+            public class Entity2 { }
+
+            // Using multiple DiscoverAttribute to discover different closed generic types
+            [Discover(typeof(IRequestHandler<TestRequest<Entity1>, List<Entity1>>))]
+            [Discover(typeof(IRequestHandler<TestRequest<Entity2>, List<Entity2>>))]
+            [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+            public class DiscoverMarker { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_WithDecorators_GeneratesFactoryWithDecorators()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IoCRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.LoggingDecorator<,>)])]
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>
+            {
+                void Log(string msg);
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>
+            {
+                public void Log(string msg) => System.Console.WriteLine(msg);
+            }
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
+
+            [IoCRegister]
+            public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
+            {
+                public List<T> Handle(TestRequest<T> request) => [];
+            }
+
+            public class LoggingDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner,
+                ILogger<LoggingDecorator<TRequest, TResponse>> logger
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request)
+                {
+                    logger.Log("Before");
+                    var result = inner.Handle(request);
+                    logger.Log("After");
+                    return result;
+                }
+            }
+
+            // Using DiscoverAttribute to discover closed generic type
+            [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+            public class DiscoverMarker { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_OnMethod_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? Get(int id);
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T>
+            {
+                public T? Get(int id) => default;
+            }
+
+            public class Entity { }
+
+            // DiscoverAttribute on method
+            public class Service
+            {
+                [Discover(typeof(IRepository<Entity>))]
+                public void Process()
+                {
+                    // Some indirect usage
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_OnAssembly_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: Discover(typeof(TestNamespace.IRepository<TestNamespace.Entity1>))]
+            [assembly: Discover(typeof(TestNamespace.IRepository<TestNamespace.Entity2>))]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? Get(int id);
+            }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T>
+            {
+                public T? Get(int id) => default;
+            }
+
+            public class Entity1 { }
+            public class Entity2 { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_IgnoresNonGenericTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            public class Service : IService { }
+
+            // DiscoverAttribute with non-generic type should be ignored
+            [Discover(typeof(IService))]
+            public class DiscoverMarker { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DiscoverAttribute_IgnoresOpenGenericTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> { }
+
+            // DiscoverAttribute with open generic type should be ignored (if even possible)
+            // Note: typeof(IRepository<>) in attribute is open generic
+            [Discover(typeof(IRepository<>))]
+            public class DiscoverMarker { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests DiscoverAttribute with nested open generic service interface (e.g., IRequestHandler&lt;GenericRequest&lt;T&gt;, List&lt;T&gt;&gt;).
+    /// This is the scenario from IocSample where GenericRequestHandler2 implements IRequestHandler&lt;GenericRequest2&lt;T&gt;, List&lt;T&gt;&gt;.
+    /// </summary>
+    [Test]
+    public async Task DiscoverAttribute_WithNestedOpenGenericServiceInterface_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            // GenericRequest2<T> is a nested open generic when used as type argument
+            public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
+
+            // GenericRequestHandler2<T> implements IRequestHandler<GenericRequest2<T>, List<T>>
+            // This is a nested open generic service interface
+            [IoCRegister]
+            internal sealed class GenericRequestHandler2<T> : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
+            {
+                public List<T> Handle(GenericRequest2<T> request)
+                {
+                    return [.. Enumerable.Range(0, request.Count).Select(_ => new T())];
+                }
+            }
+
+            internal class Entity2 { }
+
+            // Using DiscoverAttribute to discover the closed generic service type
+            // IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>
+            internal sealed class ViewModel2
+            {
+                [Discover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
+                public void SendRequest2()
+                {
+                    // Some indirect usage via mediator pattern
+                }
             }
             """;
 

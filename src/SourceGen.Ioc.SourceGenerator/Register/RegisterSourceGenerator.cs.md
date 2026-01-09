@@ -468,3 +468,33 @@ public static class ServiceCollectionExtensions
     services.AddSingleton<IMySrevice>(MyService.Default);
     #endregion
     ```
+
+16. When `DiscoverAttribte` is exists, collect `DiscoverAttribte.ClosedGenericType` for generate factory code for open generic registrations.
+    ```csharp
+    #region Define:
+    public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
+
+    public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
+
+    [IoCRegister]
+    public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
+
+    public class ViewModel
+    {
+      [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+      public void DoAction()
+      {
+        var response = Mediator.Send(new TestRequest<string>());
+      }
+    }
+    #endregion
+
+    #region Generate:
+    services.AddSingleton<IRequestHandler<TestRequest<string>, List<string>>>((IServiceProvider sp) =>
+    {
+      var s0 = sp.GetRequiredService<TestRequestHandler<string>>();
+      return s0;
+    });
+    #endregion
+    ```

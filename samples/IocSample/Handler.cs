@@ -18,7 +18,7 @@ internal sealed class TestQueryHandler : IRequestHandler<TestQuery, string>
 
 public sealed record GenericRequest<T>(int Count) : IRequest<GenericRequest<T>, List<T>> where T : new();
 
-[IoCRegister(RegisterAllInterfaces = true)]
+[IoCRegister]
 internal sealed class GenericRequestHandler<T>(ILogger<GenericRequestHandler<T>> logger)
     : IRequestHandler<GenericRequest<T>, List<T>> where T : new()
 {
@@ -39,18 +39,6 @@ public class Entity
 internal sealed class ViewModel(IRequestHandler<GenericRequest<Entity>, List<Entity>> handler)
 {
     private readonly IRequestHandler<GenericRequest<Entity>, List<Entity>> handler = handler;
-
-    public List<Entity> LoadEntities(int count)
-    {
-        var request = new GenericRequest<Entity>(count);
-        return handler.Handle(request);
-    }
-}
-
-[IoCRegister]
-internal sealed class ViewModel2(GenericRequestHandler<Entity> handler)
-{
-    private readonly GenericRequestHandler<Entity> handler = handler;
 
     public List<Entity> LoadEntities(int count)
     {
@@ -82,11 +70,24 @@ internal sealed class CustomMessenger(IServiceProvider serviceProvider)
     {
         if(request is GenericRequest2<Entity> tr)
         {
-            return (TResponse)(object)serviceProvider.GetRequiredService<GenericRequestHandler2<Entity>>().Handle(tr);
+            return (TResponse)(object)serviceProvider.GetRequiredService<IRequestHandler<GenericRequest2<Entity>, List<Entity>>>().Handle(tr);
         }
         else
         {
             throw new NotSupportedException($"Request of type {typeof(TRequest).FullName} is not supported.");
         }
+    }
+}
+
+internal class Entity2;
+[IoCRegister]
+internal sealed class ViewModel2(CustomMessenger customMessenger)
+{
+    private readonly CustomMessenger customMessenger = customMessenger;
+
+    [Discover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
+    public List<Entity2> SendRequest2()
+    {
+        return customMessenger.Send(new GenericRequest2<Entity2>(5));
     }
 }

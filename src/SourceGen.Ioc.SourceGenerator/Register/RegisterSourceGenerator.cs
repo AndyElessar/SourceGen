@@ -65,6 +65,15 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
+        // Collect DiscoverAttribute for explicit closed generic type discovery
+        var discoverProvider = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                Constants.DiscoverAttributeFullName,
+                predicate: static (_, _) => true,
+                transform: static (ctx, ct) => TransformDiscover(ctx, ct))
+            .SelectMany(static (m, _) => m)
+            .Collect();
+
         // Get assembly name from compilation
         var assemblyNameProvider = context.CompilationProvider
             .Select(static (compilation, _) => compilation.AssemblyName ?? "Generated");
@@ -111,8 +120,13 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 
         // ========== Pipeline 2: Combine results and resolve closed generics ==========
 
+        // Combine invocations with discover attributes
+        var combinedClosedGenericDependencies = invocations
+            .Combine(discoverProvider)
+            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+
         var serviceRegistrations = allBasicResults
-            .Combine(invocations)
+            .Combine(combinedClosedGenericDependencies)
             .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left, in source.Right, ct));
 
         // Combine service registrations with assembly name and MSBuild properties

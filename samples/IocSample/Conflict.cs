@@ -1,7 +1,7 @@
 ﻿namespace IocSample;
 
 // Error will show when `dotnet build`
-
+/*
 [IoCRegister(Lifetime = ServiceLifetime.Transient)]
 internal class Transient
 {
@@ -28,3 +28,4 @@ internal class Circular2(Circular1 circular1)
 {
     private readonly Circular1 circular1 = circular1;
 }
+*/

@@ -17,7 +17,9 @@ partial class RegisterSourceGenerator
     {
         var methodGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
 
-        Dictionary<string, OpenGenericRegistrationInfo>? openGenericIndex = null;
+        // Use List to allow multiple implementations per service type key
+        // (e.g., GenericRequestHandler<T> and GenericRequestHandler2<T> both implement IRequestHandler<,>)
+        Dictionary<string, List<OpenGenericRegistrationInfo>>? openGenericIndex = null;
         Dictionary<string, ClosedGenericDependency>? closedGenericDependencies = null;
 
         // Process each basic result
@@ -39,16 +41,18 @@ partial class RegisterSourceGenerator
                 }
             }
 
-            // Index open generic entries
+            // Index open generic entries - store ALL implementations per service type key
             if(result.OpenGenericEntries.Length > 0)
             {
-                openGenericIndex ??= new Dictionary<string, OpenGenericRegistrationInfo>(StringComparer.Ordinal);
+                openGenericIndex ??= new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
                 foreach(var entry in result.OpenGenericEntries)
                 {
-                    if(!openGenericIndex.ContainsKey(entry.ServiceTypeKey))
+                    if(!openGenericIndex.TryGetValue(entry.ServiceTypeKey, out var list))
                     {
-                        openGenericIndex[entry.ServiceTypeKey] = entry.RegistrationInfo;
+                        list = [];
+                        openGenericIndex[entry.ServiceTypeKey] = list;
                     }
+                    list.Add(entry.RegistrationInfo);
                 }
             }
 
@@ -116,7 +120,7 @@ partial class RegisterSourceGenerator
     /// Generates factory registrations for closed generic types that depend on open generic registrations.
     /// </summary>
     private static void GenerateClosedGenericFactoryRegistrations(
-        Dictionary<string, OpenGenericRegistrationInfo> openGenericIndex,
+        Dictionary<string, List<OpenGenericRegistrationInfo>> openGenericIndex,
         Dictionary<string, ClosedGenericDependency> closedGenericDependencies,
         Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
         CancellationToken ct)
@@ -148,7 +152,7 @@ partial class RegisterSourceGenerator
             var dependency = kvp.Value;
 
             // Check if the open generic version is registered
-            if(!openGenericIndex.TryGetValue(dependency.OpenGenericKey, out var openGenericInfo))
+            if(!openGenericIndex.TryGetValue(dependency.OpenGenericKey, out var openGenericInfoList))
             {
                 continue;
             }
@@ -159,20 +163,29 @@ partial class RegisterSourceGenerator
                 continue;
             }
 
-            // Generate the closed generic factory registration
-            GenerateClosedGenericRegistration(
-                dependency.ClosedType,
-                openGenericInfo,
-                methodGroups,
-                generatedClosedGenerics);
+            // Try each open generic registration to find one that matches the closed type structure
+            foreach(var openGenericInfo in openGenericInfoList)
+            {
+                // Generate the closed generic factory registration
+                // Returns true if successful, allowing us to break early
+                if(TryGenerateClosedGenericRegistration(
+                    dependency.ClosedType,
+                    openGenericInfo,
+                    methodGroups,
+                    generatedClosedGenerics))
+                {
+                    break; // Found a matching registration, stop searching
+                }
+            }
         }
     }
 
     /// <summary>
-    /// Generates a closed generic registration based on an open generic registration.
-    /// The closedServiceType is the closed service type from the dependency (e.g., IRequestHandler&lt;GenericRequest&lt;Entity&gt;, List&lt;Entity&gt;&gt;)
+    /// Tries to generate a closed generic registration based on an open generic registration.
+    /// The closedServiceType is the closed service type from the dependency (e.g., IRequestHandler&lt;GenericRequest&lt;Entity&gt;, List&lt;Entity&gt;&gt;).
+    /// Returns true if registration was successfully generated, false if type structure is incompatible.
     /// </summary>
-    private static void GenerateClosedGenericRegistration(
+    private static bool TryGenerateClosedGenericRegistration(
         TypeData closedServiceType,
         OpenGenericRegistrationInfo openGenericInfo,
         Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
@@ -207,7 +220,7 @@ partial class RegisterSourceGenerator
 
         if(matchingOpenServiceType is null)
         {
-            return; // No matching open service type found
+            return false; // No matching open service type found
         }
 
         // Build type argument substitution map from service type parameters
@@ -217,7 +230,7 @@ partial class RegisterSourceGenerator
             closedServiceType);
         if(serviceTypeArgMap.IsDefaultOrEmpty)
         {
-            return; // Cannot build substitution map
+            return false; // Cannot build substitution map - type structure incompatible
         }
 
         // Build mapping from open implementation type params to closed type args
@@ -228,7 +241,7 @@ partial class RegisterSourceGenerator
             serviceTypeArgMap);
         if(implTypeArgMap.IsDefaultOrEmpty)
         {
-            return;
+            return false;
         }
 
         // Build closed implementation type name
@@ -318,6 +331,8 @@ partial class RegisterSourceGenerator
             }
             generatedClosedGenerics.Add(closedSvcType.Name);
         }
+
+        return true; // Successfully generated registration
     }
 
     /// <summary>
