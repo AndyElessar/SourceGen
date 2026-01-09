@@ -11,15 +11,21 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(RoslynVersion)" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="$(RoslynVersion)" />
     <!-- Build Infra & Packaging -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
     <PackageVersion Include="PolySharp" Version="1.15.0" />
     <PackageVersion Include="PolyType.Roslyn" Version="1.0.0-unstable" />
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.8-alpha" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <!-- Testing dependencies -->
-    <PackageVersion Include="TUnit" Version="1.6.5" />
-    <PackageVersion Include="Verify.TUnit" Version="31.9.0" />
+    <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.1.0" />
+    <PackageVersion Include="TUnit" Version="1.9.42" />
+    <PackageVersion Include="Verify.TUnit" Version="31.9.3" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <!-- SourceGen.Ioc -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
+    <PackageVersion Include="System.IO.Abstractions" Version="22.1.0" />
+    <!-- Tool -->
+    <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
+    <PackageVersion Include="ZLogger" Version="2.5.10" />
   </ItemGroup>
 </Project>
