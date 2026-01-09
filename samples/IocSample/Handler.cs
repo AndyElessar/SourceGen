@@ -2,6 +2,9 @@
 
 namespace IocSample;
 
+[ImportModule(typeof(IRequestHandler<,>))]
+public sealed class Module;
+
 public sealed record TestQuery(string Name) : IQuery<TestQuery, string>;
 
 [IoCRegister]

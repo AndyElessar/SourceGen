@@ -27,5 +27,4 @@ internal static class Constants
     public const string SGIOC008 = "SGIOC008";
     public const string SGIOC009 = "SGIOC009";
     public const string SGIOC010 = "SGIOC010";
-    public const string SGIOC011 = "SGIOC011";
 }

@@ -1,126 +1,16 @@
-﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
+using Microsoft.CodeAnalysis;
+
+namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC006: Nested open generic registration warning.
-/// The source generator can auto-generate closed generic registrations when used in constructor parameters or GetService calls.
+/// Tests for SGIOC006: Duplicated attribute usage when both [FromKeyedServices] and [Inject] are on same parameter.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC006)]
 public class SGIOC006Tests
 {
     [Test]
-    public async Task SGIOC006_NestedOpenGenericInterface_ReportsDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegister(RegisterAllInterfaces = true)]
-            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(1);
-        await Assert.That(sgioc006[0].GetMessage()).Contains("NestedGenericHandler").And.Contains("IHandler<Wrapper<T>>");
-    }
-
-    [Test]
-    public async Task SGIOC006_DeeplyNestedOpenGenericInterface_ReportsDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IProcessor<T> { }
-            public class Outer<T> { }
-            public class Inner<T> { }
-
-            [IoCRegister(RegisterAllInterfaces = true)]
-            public class DeeplyNestedHandler<T> : IProcessor<Outer<Inner<T>>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(1);
-    }
-
-    [Test]
-    public async Task SGIOC006_NestedOpenGenericBaseClass_ReportsDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public class BaseHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegister(RegisterAllBaseClasses = true)]
-            public class NestedGenericHandler<T> : BaseHandler<Wrapper<T>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(1);
-    }
-
-    [Test]
-    public async Task SGIOC006_SimpleOpenGeneric_NoDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IHandler<T> { }
-
-            [IoCRegister]
-            public class SimpleHandler<T> : IHandler<T> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC006_ClosedGeneric_NoDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegister]
-            public class ClosedGenericHandler : IHandler<Wrapper<string>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC006_NonGenericClass_NoDiagnostic()
+    public async Task SGIOC006_BothAttributesOnParameter_ReportsWarning()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -131,7 +21,36 @@ public class SGIOC006Tests
             public interface IService { }
 
             [IoCRegister]
-            public class SimpleService : IService { }
+            public class TestService : IService
+            {
+                public TestService([FromKeyedServices("key")] [Inject(Key = "otherKey")] IService dependency) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+
+        await Assert.That(sgioc006).Count().IsEqualTo(1);
+        await Assert.That(sgioc006[0].GetMessage()).Contains("dependency");
+        await Assert.That(sgioc006[0].Severity).IsEqualTo(DiagnosticSeverity.Warning);
+    }
+
+    [Test]
+    public async Task SGIOC006_OnlyFromKeyedServicesAttribute_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IoCRegister]
+            public class TestService : IService
+            {
+                public TestService([FromKeyedServices("key")] IService dependency) { }
+            }
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
@@ -141,7 +60,7 @@ public class SGIOC006Tests
     }
 
     [Test]
-    public async Task SGIOC006_MultipleNestedOpenGenerics_ReportsMultipleDiagnostics()
+    public async Task SGIOC006_OnlyInjectAttribute_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -149,12 +68,64 @@ public class SGIOC006Tests
 
             namespace TestNamespace;
 
-            public interface IHandler<T> { }
-            public interface IProcessor<T> { }
-            public class Wrapper<T> { }
+            public interface IService { }
 
-            [IoCRegister(RegisterAllInterfaces = true)]
-            public class MultiNestedHandler<T> : IHandler<Wrapper<T>>, IProcessor<Wrapper<T>> { }
+            [IoCRegister]
+            public class TestService : IService
+            {
+                public TestService([Inject(Key = "key")] IService dependency) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+
+        await Assert.That(sgioc006).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC006_NoAttributesOnParameter_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IoCRegister]
+            public class TestService : IService
+            {
+                public TestService(IService dependency) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+
+        await Assert.That(sgioc006).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC006_MultipleParametersWithBothAttributes_ReportsMultipleWarnings()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+            public interface IOtherService { }
+
+            [IoCRegister]
+            public class TestService : IService
+            {
+                public TestService(
+                    [FromKeyedServices("key1")] [Inject(Key = "otherKey1")] IService dep1,
+                    [FromKeyedServices("key2")] [Inject(Key = "otherKey2")] IOtherService dep2) { }
+            }
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
@@ -164,141 +135,78 @@ public class SGIOC006Tests
     }
 
     [Test]
-    public async Task SGIOC006_NestedOpenGenericWithSelfRegistrationOnly_NoDiagnostic()
+    public async Task SGIOC006_MixedParametersWithAndWithoutBothAttributes_ReportsOnlyForDuplicated()
     {
-        // When an open generic only registers itself (no ServiceTypes, no RegisterAllInterfaces, no RegisterAllBaseClasses),
-        // it should not report SGIOC006 because the nested open generic interface won't be registered.
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
             namespace TestNamespace;
 
-            public interface IHandler<T> { }
-            public class Wrapper<T> { }
+            public interface IService { }
+            public interface IOtherService { }
 
             [IoCRegister]
-            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC006_NestedOpenGenericWithServiceTypes_ReportsDiagnostic()
-    {
-        // When ServiceTypes is specified, it will try to register the interface, so SGIOC006 should be reported.
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegister(ServiceTypes = [typeof(IHandler<>)])]
-            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
+            public class TestService : IService
+            {
+                public TestService(
+                    [FromKeyedServices("key1")] [Inject(Key = "otherKey1")] IService dep1,
+                    [FromKeyedServices("key2")] IOtherService dep2) { }
+            }
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
 
         await Assert.That(sgioc006).Count().IsEqualTo(1);
+        await Assert.That(sgioc006[0].GetMessage()).Contains("dep1");
     }
 
     [Test]
-    public async Task SGIOC006_NestedOpenGenericWithRegisterAllInterfaces_ReportsDiagnostic()
+    public async Task SGIOC006_BothAttributesOnMethodParameter_ReportsWarning()
     {
-        // When RegisterAllInterfaces is true, SGIOC006 should be reported for nested open generics.
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
             namespace TestNamespace;
 
-            public interface IHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegister(RegisterAllInterfaces = true)]
-            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(1);
-    }
-
-    [Test]
-    public async Task SGIOC006_NestedOpenGenericWithRegisterAllBaseClasses_ReportsDiagnostic()
-    {
-        // When RegisterAllBaseClasses is true, SGIOC006 should be reported for nested open generics in base classes.
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public class BaseHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegister(RegisterAllBaseClasses = true)]
-            public class NestedGenericHandler<T> : BaseHandler<Wrapper<T>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(1);
-    }
-
-    [Test]
-    public async Task SGIOC006_NestedOpenGenericBaseClassWithSelfRegistrationOnly_NoDiagnostic()
-    {
-        // When only registering self (no RegisterAllBaseClasses), nested open generic base class should not cause SGIOC006.
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public class BaseHandler<T> { }
-            public class Wrapper<T> { }
+            public interface IService { }
 
             [IoCRegister]
-            public class NestedGenericHandler<T> : BaseHandler<Wrapper<T>> { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
-
-        await Assert.That(sgioc006).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC006_IoCRegisterForAttribute_NestedOpenGeneric_ReportsDiagnostic()
-    {
-        // IoCRegisterForAttribute always registers for service types, so SGIOC006 should be reported.
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IHandler<T> { }
-            public class Wrapper<T> { }
-
-            [IoCRegisterFor(typeof(NestedGenericHandler<>), RegisterAllInterfaces = true)]
-            public class NestedGenericHandler<T> : IHandler<Wrapper<T>> { }
+            public class TestService : IService
+            {
+                [Inject]
+                public void Initialize([FromKeyedServices("key")] [Inject(Key = "otherKey")] IService dependency) { }
+            }
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
 
         await Assert.That(sgioc006).Count().IsEqualTo(1);
+        await Assert.That(sgioc006[0].GetMessage()).Contains("dependency");
+    }
+
+    [Test]
+    public async Task SGIOC006_BothAttributesOnPrimaryConstructor_ReportsWarning()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IoCRegister]
+            public class TestService([FromKeyedServices("key")] [Inject(Key = "otherKey")] IService dependency) : IService;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+
+        await Assert.That(sgioc006).Count().IsEqualTo(1);
+        await Assert.That(sgioc006[0].GetMessage()).Contains("dependency");
     }
 }

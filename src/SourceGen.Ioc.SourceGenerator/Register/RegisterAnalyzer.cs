@@ -71,20 +71,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "A Scoped service should not depend on a Transient service. The Transient instance will be captured for the scope lifetime.");
 
     /// <summary>
-    /// SGIOC006: Nested Open Generic Detected - Service is implementing interface/class with generic type containing unbound type parameters.
-    /// This is a warning because the source generator can automatically generate closed generic registrations
-    /// when closed generic types are used in constructor parameters or GetService calls.
-    /// </summary>
-    public static readonly DiagnosticDescriptor NestedOpenGeneric = new(
-        id: "SGIOC006",
-        title: "Nested Open Generic Detected",
-        messageFormat: "The type '{0}' implements '{1}' which has a type argument that is itself a generic type with unbound type parameters (e.g., Wrapper<T>). The source generator will auto-generate closed generic registrations when used.",
-        category: Constants.Category_Design,
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "When a service implements an interface or inherits from a class where a type argument is itself a generic type containing unbound type parameters (e.g., IHandler<Wrapper<T>>), the DI container cannot resolve it directly. However, the source generator will automatically generate closed generic registrations when closed generic types are used in constructor parameters or GetService/GetRequiredService calls.");
-
-    /// <summary>
     /// SGIOC007: Invalid Attribute Usage - InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
     /// </summary>
     public static readonly DiagnosticDescriptor InvalidInjectAttributeUsage = new(
@@ -133,10 +119,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "When both Factory and Instance are specified on the same IoCRegisterAttribute or IoCRegisterForAttribute, Factory takes precedence and Instance will be ignored. Remove one of them to avoid confusion.");
 
     /// <summary>
-    /// SGIOC011: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
+    /// SGIOC006: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicatedKeyedServiceAttribute = new(
-        id: "SGIOC011",
+        id: "SGIOC006",
         title: "Duplicated Attribute Usage",
         messageFormat: "Parameter '{0}' has both [FromKeyedServices] and [Inject] attributes; [FromKeyedServices] will take precedence",
         category: Constants.Category_Usage,
@@ -151,7 +137,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         SingletonDependsOnScoped,
         SingletonDependsOnTransient,
         ScopedDependsOnTransient,
-        NestedOpenGeneric,
         InvalidInjectAttributeUsage,
         InvalidFactoryOrInstanceMember,
         InstanceRequiresSingleton,
@@ -190,13 +175,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
 
-        // First pass: collect services and do immediate validation (SGIOC001, SGIOC006)
+        // First pass: collect services and do immediate validation (SGIOC001)
         context.RegisterSymbolAction(ctx => CollectAndValidateNamedType(ctx, analyzerContext), SymbolKind.NamedType);
 
         // SGIOC007: Analyze InjectAttribute on members
         context.RegisterSymbolAction(AnalyzeInjectAttribute, SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
 
-        // SGIOC011: Analyze duplicated keyed service attributes on parameters
+        // SGIOC006: Analyze duplicated keyed service attributes on parameters
         context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
 
         // SGIOC008: Analyze Factory and Instance members specified via nameof()
@@ -211,7 +196,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC011: Analyzes parameters for duplicated keyed service attributes.
+    /// SGIOC006: Analyzes parameters for duplicated keyed service attributes.
     /// Reports warning when both [FromKeyedServices] and [Inject] attributes are marked on the same parameter.
     /// </summary>
     private static void AnalyzeDuplicatedKeyedServiceAttributes(SymbolAnalysisContext context)
@@ -466,19 +451,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
 
-            // SGIOC006: Check for nested open generic (only when registering interfaces/base classes)
-            if(attribute.WillRegisterInterfacesOrBaseClasses())
-            {
-                AnalyzeNestedOpenGeneric(context, targetType, location);
-            }
-
             // SGIOC009: Check Instance requires Singleton lifetime
             AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
         }
     }
 
     /// <summary>
-    /// First pass: collect services and do immediate validation (SGIOC001, SGIOC006).
+    /// First pass: collect services and do immediate validation (SGIOC001).
     /// Dependency analysis (SGIOC002, SGIOC003-005) is deferred to CompilationEnd.
     /// </summary>
     private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
@@ -513,12 +492,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
-
-            // SGIOC006: Check for nested open generic (only when registering interfaces/base classes)
-            if(attribute.WillRegisterInterfacesOrBaseClasses())
-            {
-                AnalyzeNestedOpenGeneric(context, targetType, location);
-            }
 
             // SGIOC009: Check Instance requires Singleton lifetime
             AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
@@ -619,53 +592,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 targetType.Name,
                 "abstract");
             reportDiagnostic(diagnostic);
-        }
-    }
-
-    private static void AnalyzeNestedOpenGeneric(SymbolAnalysisContext context, INamedTypeSymbol targetType, Location? location)
-        => AnalyzeNestedOpenGeneric(context.ReportDiagnostic, targetType, location);
-
-    private static void AnalyzeNestedOpenGeneric(SemanticModelAnalysisContext context, INamedTypeSymbol targetType, Location? location)
-        => AnalyzeNestedOpenGeneric(context.ReportDiagnostic, targetType, location);
-
-    private static void AnalyzeNestedOpenGeneric(Action<Diagnostic> reportDiagnostic, INamedTypeSymbol targetType, Location? location)
-    {
-        // Only check open generic types
-        if(!targetType.IsGenericType)
-            return;
-
-        // For unbound generic types (e.g., from typeof(MyClass<>)), we need to use OriginalDefinition
-        // to properly check interfaces and base classes
-        var typeToCheck = targetType.IsUnboundGenericType ? targetType.OriginalDefinition : targetType;
-
-        // Check all interfaces for nested open generics
-        foreach(var iface in typeToCheck.AllInterfaces)
-        {
-            if(iface.IsNestedOpenGeneric)
-            {
-                var diagnostic = Diagnostic.Create(
-                    NestedOpenGeneric,
-                    location,
-                    targetType.Name,
-                    iface.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
-                reportDiagnostic(diagnostic);
-            }
-        }
-
-        // Check base classes for nested open generics
-        var baseType = typeToCheck.BaseType;
-        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
-        {
-            if(baseType.IsNestedOpenGeneric)
-            {
-                var diagnostic = Diagnostic.Create(
-                    NestedOpenGeneric,
-                    location,
-                    targetType.Name,
-                    baseType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
-                reportDiagnostic(diagnostic);
-            }
-            baseType = baseType.BaseType;
         }
     }
 
