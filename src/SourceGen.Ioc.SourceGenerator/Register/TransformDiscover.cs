@@ -36,27 +36,68 @@ partial class RegisterSourceGenerator
                 continue;
             }
 
-            // Only process closed generic types (has generic arguments but is not open generic)
-            // Skip if it's an open generic (e.g., IService<>) or non-generic type
-            if(!typeSymbol.IsGenericType || typeSymbol.IsUnboundGenericType)
+            var dependency = CreateClosedGenericDependency(typeSymbol);
+            if(dependency.HasValue)
             {
-                continue;
+                yield return dependency.Value;
             }
-
-            // Skip if it contains unresolved type parameters (nested open generic)
-            if(typeSymbol.ContainsGenericParameters)
-            {
-                continue;
-            }
-
-            // Create TypeData with type parameters for closed generic resolution
-            var typeData = typeSymbol.CreateBasicTypeData();
-
-            // Yield the type as a dependency
-            yield return new ClosedGenericDependency(
-                typeData.Name,
-                typeData,
-                typeData.NameWithoutGeneric);
         }
+    }
+
+    /// <summary>
+    /// Transforms generic DiscoverAttribute (DiscoverAttribute&lt;T&gt;) to extract closed generic type information.
+    /// The type is specified via type parameter instead of constructor argument.
+    /// </summary>
+    private static IEnumerable<ClosedGenericDependency> TransformDiscoverGeneric(GeneratorAttributeSyntaxContext context, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        foreach(var attribute in context.Attributes)
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
+            {
+                continue;
+            }
+
+            if(attrClass.TypeArguments[0] is not INamedTypeSymbol typeSymbol)
+            {
+                continue;
+            }
+
+            var dependency = CreateClosedGenericDependency(typeSymbol);
+            if(dependency.HasValue)
+            {
+                yield return dependency.Value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a ClosedGenericDependency from a type symbol if it's a valid closed generic type.
+    /// </summary>
+    private static ClosedGenericDependency? CreateClosedGenericDependency(INamedTypeSymbol typeSymbol)
+    {
+        // Only process closed generic types (has generic arguments but is not open generic)
+        // Skip if it's an open generic (e.g., IService<>) or non-generic type
+        if(!typeSymbol.IsGenericType || typeSymbol.IsUnboundGenericType)
+        {
+            return null;
+        }
+
+        // Skip if it contains unresolved type parameters (nested open generic)
+        if(typeSymbol.ContainsGenericParameters)
+        {
+            return null;
+        }
+
+        // Create TypeData with type parameters for closed generic resolution
+        var typeData = typeSymbol.CreateBasicTypeData();
+
+        // Return the type as a dependency
+        return new ClosedGenericDependency(
+            typeData.Name,
+            typeData,
+            typeData.NameWithoutGeneric);
     }
 }

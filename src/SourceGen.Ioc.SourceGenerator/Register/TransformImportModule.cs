@@ -32,6 +32,36 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
+    /// Transforms generic ImportModuleAttribute (ImportModuleAttribute&lt;T&gt;) to extract default settings
+    /// from the referenced module's assembly. The module type is specified via type parameter.
+    /// </summary>
+    private static IEnumerable<DefaultSettingsModel> TransformImportModuleGeneric(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
+    {
+        foreach(var attr in ctx.Attributes)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var attrClass = attr.AttributeClass;
+            if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
+                continue;
+
+            if(attrClass.TypeArguments[0] is not INamedTypeSymbol moduleType)
+                continue;
+
+            // Get the assembly containing the module type
+            var moduleAssembly = moduleType.ContainingAssembly;
+            if(moduleAssembly is null)
+                continue;
+
+            // Find all IoCRegisterDefaultsAttribute on the module type and its assembly
+            foreach(var defaultSettings in ExtractDefaultSettingsFromModule(moduleType, moduleAssembly, ct))
+            {
+                yield return defaultSettings;
+            }
+        }
+    }
+
+    /// <summary>
     /// Extracts default settings from the module type and its containing assembly.
     /// </summary>
     private static IEnumerable<DefaultSettingsModel> ExtractDefaultSettingsFromModule(
@@ -52,7 +82,7 @@ partial class RegisterSourceGenerator
 
             if(IsIoCRegisterDefaultsAttribute(attr))
             {
-                var data = attr.ExtractDefaultSettings();
+                var data = ExtractDefaultSettingsFromAttributeData(attr);
                 if(data is not null)
                     yield return data;
             }
@@ -65,7 +95,7 @@ partial class RegisterSourceGenerator
 
             if(IsIoCRegisterDefaultsAttribute(attr))
             {
-                var data = attr.ExtractDefaultSettings();
+                var data = ExtractDefaultSettingsFromAttributeData(attr);
                 if(data is not null)
                     yield return data;
             }
@@ -73,7 +103,26 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Checks if the attribute is IoCRegisterDefaultsAttribute by its full name.
+    /// Extracts default settings from an attribute, handling both generic and non-generic variants.
+    /// </summary>
+    private static DefaultSettingsModel? ExtractDefaultSettingsFromAttributeData(AttributeData attr)
+    {
+        var attrClass = attr.AttributeClass;
+        if(attrClass is null)
+            return null;
+
+        // Check if this is a generic version (IoCRegisterDefaultsAttribute<T>)
+        if(attrClass.IsGenericType && attrClass.TypeArguments.Length > 0)
+        {
+            return attr.ExtractDefaultSettingsFromGenericAttribute();
+        }
+
+        // Non-generic version
+        return attr.ExtractDefaultSettings();
+    }
+
+    /// <summary>
+    /// Checks if the attribute is IoCRegisterDefaultsAttribute (or its generic variant) by its full name.
     /// </summary>
     private static bool IsIoCRegisterDefaultsAttribute(AttributeData attr)
     {
@@ -81,13 +130,18 @@ partial class RegisterSourceGenerator
         if(attrClass is null)
             return false;
 
+        // For generic types, use the original definition
+        var typeToCheck = attrClass.IsGenericType ? attrClass.OriginalDefinition : attrClass;
+
         // Build the full name and compare
-        var fullName = attrClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var fullName = typeToCheck.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         // Remove "global::" prefix if present
         if(fullName.StartsWith("global::", StringComparison.Ordinal))
             fullName = fullName[8..];
 
-        return fullName == Constants.IoCRegisterDefaultsAttributeFullName;
+        // Check for both generic and non-generic variants
+        return fullName == Constants.IoCRegisterDefaultsAttributeFullName
+            || fullName == Constants.IoCRegisterDefaultsAttributeFullName_T1;
     }
 }

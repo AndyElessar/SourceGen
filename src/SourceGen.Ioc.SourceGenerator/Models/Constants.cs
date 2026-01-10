@@ -3,10 +3,18 @@
 internal static class Constants
 {
     public const string IoCRegisterAttributeFullName = "SourceGen.Ioc.IoCRegisterAttribute";
+    public const string IoCRegisterAttributeFullName_T1 = "SourceGen.Ioc.IoCRegisterAttribute`1";
+    public const string IoCRegisterAttributeFullName_T2 = "SourceGen.Ioc.IoCRegisterAttribute`2";
+    public const string IoCRegisterAttributeFullName_T3 = "SourceGen.Ioc.IoCRegisterAttribute`3";
+    public const string IoCRegisterAttributeFullName_T4 = "SourceGen.Ioc.IoCRegisterAttribute`4";
     public const string IoCRegisterForAttributeFullName = "SourceGen.Ioc.IoCRegisterForAttribute";
+    public const string IoCRegisterForAttributeFullName_T1 = "SourceGen.Ioc.IoCRegisterForAttribute`1";
     public const string IoCRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultsAttribute";
+    public const string IoCRegisterDefaultsAttributeFullName_T1 = "SourceGen.Ioc.IoCRegisterDefaultsAttribute`1";
     public const string ImportModuleAttributeFullName = "SourceGen.Ioc.ImportModuleAttribute";
+    public const string ImportModuleAttributeFullName_T1 = "SourceGen.Ioc.ImportModuleAttribute`1";
     public const string DiscoverAttributeFullName = "SourceGen.Ioc.DiscoverAttribute";
+    public const string DiscoverAttributeFullName_T1 = "SourceGen.Ioc.DiscoverAttribute`1";
 
     /// <summary>
     /// The MSBuild property name for the root namespace.
@@ -48,7 +56,17 @@ internal static class Constants
     {
         public (bool HasArg, ServiceLifetime Lifetime) TryGetLifetime()
         {
-            var (hasArg, val) = attribute.TryGetNamedArgument<int>("Lifetime", 0);// Default is ServiceLifetime.Singleton
+            // First, check if lifetime is passed as a constructor argument (for generic attributes like IoCRegisterAttribute<T>(ServiceLifetime.Scoped))
+            foreach(var ctorArg in attribute.ConstructorArguments)
+            {
+                if(ctorArg.Type?.Name == nameof(ServiceLifetime) && ctorArg.Value is int lifetimeValue)
+                {
+                    return (true, (ServiceLifetime)lifetimeValue);
+                }
+            }
+
+            // Fall back to named argument
+            var (hasArg, val) = attribute.TryGetNamedArgument<int>("Lifetime", 0); // Default is ServiceLifetime.Singleton
             return (hasArg, (ServiceLifetime)val);
         }
 
@@ -60,6 +78,26 @@ internal static class Constants
 
         public ImmutableEquatableArray<TypeData> GetServiceTypes() =>
             attribute.GetTypeArrayArgument("ServiceTypes");
+
+        /// <summary>
+        /// Gets the service types from generic attribute type parameters (e.g., IoCRegisterAttribute&lt;T1, T2&gt;).
+        /// </summary>
+        public ImmutableEquatableArray<TypeData> GetServiceTypesFromGenericAttribute()
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
+                return [];
+
+            List<TypeData> result = [];
+            foreach(var typeArg in attrClass.TypeArguments)
+            {
+                if(typeArg is INamedTypeSymbol namedType)
+                {
+                    result.Add(namedType.GetTypeData());
+                }
+            }
+            return result.ToImmutableEquatableArray();
+        }
 
         public ImmutableEquatableArray<TypeData> GetDecorators() =>
             attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true);
@@ -279,6 +317,45 @@ internal static class Constants
             if(attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetServiceType)
                 return null;
             if(attribute.ConstructorArguments[1].Value is not int lifetime)
+                return null;
+
+            var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
+            var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
+            var serviceTypes = attribute.GetServiceTypes();
+            var typeData = targetServiceType.GetTypeData();
+            var decorators = attribute.GetDecorators();
+            var tags = attribute.GetTags();
+            var excludeFromDefault = attribute.GetExcludeFromDefault();
+
+            return new DefaultSettingsModel(
+                typeData,
+                (ServiceLifetime)lifetime,
+                registerAllInterfaces,
+                registerAllBaseClasses,
+                serviceTypes,
+                decorators,
+                tags,
+                excludeFromDefault);
+        }
+
+        /// <summary>
+        /// Extracts default settings from a generic IoCRegisterDefaultsAttribute (e.g., IoCRegisterDefaultsAttribute&lt;T&gt;).
+        /// The target service type is specified via type parameter instead of constructor argument.
+        /// </summary>
+        /// <returns>The default settings model, or null if the attribute data is invalid.</returns>
+        public DefaultSettingsModel? ExtractDefaultSettingsFromGenericAttribute()
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
+                return null;
+
+            if(attrClass.TypeArguments[0] is not INamedTypeSymbol targetServiceType)
+                return null;
+
+            // Lifetime is the first constructor argument for the generic version
+            if(attribute.ConstructorArguments.Length < 1)
+                return null;
+            if(attribute.ConstructorArguments[0].Value is not int lifetime)
                 return null;
 
             var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();

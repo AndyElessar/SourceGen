@@ -14,6 +14,22 @@ partial class RegisterSourceGenerator
         return ExtractRegistrationData(typeSymbol, attributeData, ctx.SemanticModel);
     }
 
+    /// <summary>
+    /// Transforms generic IoCRegisterAttribute (e.g., IoCRegisterAttribute&lt;T&gt;) to extract registration data.
+    /// The service types are specified via type parameters instead of constructor arguments.
+    /// </summary>
+    private static RegistrationData? TransformRegisterGeneric(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
+    {
+        if(ctx.TargetSymbol is not INamedTypeSymbol typeSymbol)
+            return null;
+
+        var attributeData = ctx.Attributes.FirstOrDefault();
+        if(attributeData == null)
+            return null;
+
+        return ExtractRegistrationDataFromGenericAttribute(typeSymbol, attributeData, ctx.SemanticModel);
+    }
+
     private static IEnumerable<RegistrationData> TransformRegisterFor(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
         foreach(var attr in ctx.Attributes)
@@ -29,6 +45,29 @@ partial class RegisterSourceGenerator
         }
     }
 
+    /// <summary>
+    /// Transforms generic IoCRegisterForAttribute (IoCRegisterForAttribute&lt;T&gt;) to extract registration data.
+    /// The target type is specified via type parameter instead of constructor argument.
+    /// </summary>
+    private static IEnumerable<RegistrationData> TransformRegisterForGeneric(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
+    {
+        foreach(var attr in ctx.Attributes)
+        {
+            var attrClass = attr.AttributeClass;
+            if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
+                continue;
+
+            if(attrClass.TypeArguments[0] is not INamedTypeSymbol targetType)
+                continue;
+
+            // Use ExtractRegistrationData because IoCRegisterForAttribute<T> uses ServiceTypes named argument,
+            // not the generic type parameter, for specifying service types.
+            var data = ExtractRegistrationData(targetType, attr, ctx.SemanticModel);
+
+            yield return data;
+        }
+    }
+
     private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel? semanticModel = null)
     {
         var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
@@ -36,6 +75,64 @@ partial class RegisterSourceGenerator
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
         var serviceTypes = attributeData.GetServiceTypes();
+        var decorators = attributeData.GetDecorators();
+        var tags = attributeData.GetTags();
+        var excludeFromDefault = attributeData.GetExcludeFromDefault();
+        var (key, keyType) = attributeData.GetKey(semanticModel);
+        var instance = attributeData.GetInstance(semanticModel);
+
+        // Get factory method data with parameter information
+        FactoryMethodData? factory = null;
+        if(semanticModel is not null)
+        {
+            factory = attributeData.GetFactoryMethodData(semanticModel);
+        }
+
+        // Extract injection members (properties, fields, methods marked with InjectAttribute)
+        var injectionMembers = ExtractInjectionMembers(typeSymbol);
+
+        // Build set of valid open generic service types (non-nested) for quick lookup
+        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
+            implementationType.AllInterfaces ?? [],
+            implementationType.AllBaseClasses ?? []);
+
+        return new RegistrationData(
+            implementationType,
+            lifetime,
+            registerAllInterfaces,
+            registerAllBaseClasses,
+            serviceTypes,
+            key,
+            keyType,
+            hasExplicitLifetime,
+            hasExplicitRegisterAllInterfaces,
+            hasExplicitRegisterAllBaseClasses,
+            validOpenGenericServiceTypes,
+            decorators,
+            tags,
+            excludeFromDefault,
+            injectionMembers,
+            factory,
+            instance);
+    }
+
+    /// <summary>
+    /// Extracts registration data from a generic attribute (e.g., IoCRegisterAttribute&lt;T&gt;, IoCRegisterForAttribute&lt;T&gt;).
+    /// The service types are specified via type parameters instead of constructor arguments or named arguments.
+    /// </summary>
+    private static RegistrationData ExtractRegistrationDataFromGenericAttribute(
+        INamedTypeSymbol typeSymbol,
+        AttributeData attributeData,
+        SemanticModel? semanticModel = null)
+    {
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+        var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
+        var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
+        var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
+
+        // Extract service types from generic type arguments instead of named argument
+        var serviceTypes = attributeData.GetServiceTypesFromGenericAttribute();
+
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
         var excludeFromDefault = attributeData.GetExcludeFromDefault();

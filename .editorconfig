@@ -22,3 +22,9 @@ dotnet_diagnostic.SA1200.severity = silent
 
 # SA1633: File should have header
 dotnet_diagnostic.SA1633.severity = silent
+
+# SA1402: File may only contain a single type
+dotnet_diagnostic.SA1402.severity = silent
+
+# SA1625: Element documentation should not be copied and pasted
+dotnet_diagnostic.SA1625.severity = silent
