@@ -557,13 +557,17 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Collects closed generic dependencies from a registration's constructor parameters.
+    /// Collects closed generic dependencies from a registration's constructor parameters and injection members.
     /// </summary>
     private static ImmutableEquatableArray<ClosedGenericDependency> CollectClosedGenericDependenciesFromRegistration(
         RegistrationData registration)
     {
         var constructorParams = registration.ImplementationType.ConstructorParameters;
-        if(constructorParams is null || constructorParams.Length == 0)
+        var injectionMembers = registration.InjectionMembers;
+
+        // Early exit if no constructor params and no injection members
+        if((constructorParams is null || constructorParams.Length == 0)
+            && injectionMembers.Length == 0)
         {
             return [];
         }
@@ -571,41 +575,76 @@ partial class RegisterSourceGenerator
         var dependencies = new List<ClosedGenericDependency>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach(var param in constructorParams)
+        // Collect from constructor parameters
+        if(constructorParams is not null)
         {
-            var paramType = param.Type;
-
-            // First, check if this is a collection or array type (IEnumerable<T>, IList<T>, T[], etc.)
-            var elementType = paramType.TryGetEnumerableElementType();
-            if(elementType is not null
-                && elementType.GenericArity > 0
-                && !elementType.IsOpenGeneric
-                && !elementType.IsNestedOpenGeneric)
+            foreach(var param in constructorParams)
             {
-                // Add the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>> or IHandler<T>[])
-                if(addedKeys.Add(elementType.Name))
-                {
-                    dependencies.Add(new ClosedGenericDependency(
-                        elementType.Name,
-                        elementType,
-                        elementType.NameWithoutGeneric));
-                }
+                CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+            }
+        }
+
+        // Collect from injection members (properties, fields, methods with [Inject] attribute)
+        foreach(var member in injectionMembers)
+        {
+            // For properties and fields, check the member type
+            if(member.Type is not null)
+            {
+                CollectClosedGenericDependencyFromType(member.Type, dependencies, addedKeys);
             }
 
-            // Check if this is a closed generic type (has generic arguments but is not open generic)
-            if(paramType.GenericArity > 0 && !paramType.IsOpenGeneric && !paramType.IsNestedOpenGeneric)
+            // For methods, check each parameter type
+            if(member.Parameters is not null)
             {
-                // Add the original type as a dependency (skip arrays as they don't need registration)
-                if(!paramType.IsArrayType() && addedKeys.Add(paramType.Name))
+                foreach(var param in member.Parameters)
                 {
-                    dependencies.Add(new ClosedGenericDependency(
-                        paramType.Name,
-                        paramType,
-                        paramType.NameWithoutGeneric));
+                    CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
                 }
             }
         }
 
         return dependencies.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Collects closed generic dependency from a type and adds it to the dependencies list.
+    /// </summary>
+    /// <param name="paramType">The type to check for closed generic dependencies.</param>
+    /// <param name="dependencies">The list to add dependencies to.</param>
+    /// <param name="addedKeys">Set of already added dependency keys to avoid duplicates.</param>
+    private static void CollectClosedGenericDependencyFromType(
+        TypeData paramType,
+        List<ClosedGenericDependency> dependencies,
+        HashSet<string> addedKeys)
+    {
+        // First, check if this is a collection or array type (IEnumerable<T>, IList<T>, T[], etc.)
+        var elementType = paramType.TryGetEnumerableElementType();
+        if(elementType is not null
+            && elementType.GenericArity > 0
+            && !elementType.IsOpenGeneric
+            && !elementType.IsNestedOpenGeneric)
+        {
+            // Add the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>> or IHandler<T>[])
+            if(addedKeys.Add(elementType.Name))
+            {
+                dependencies.Add(new ClosedGenericDependency(
+                    elementType.Name,
+                    elementType,
+                    elementType.NameWithoutGeneric));
+            }
+        }
+
+        // Check if this is a closed generic type (has generic arguments but is not open generic)
+        if(paramType.GenericArity > 0 && !paramType.IsOpenGeneric && !paramType.IsNestedOpenGeneric)
+        {
+            // Add the original type as a dependency (skip arrays as they don't need registration)
+            if(!paramType.IsArrayType() && addedKeys.Add(paramType.Name))
+            {
+                dependencies.Add(new ClosedGenericDependency(
+                    paramType.Name,
+                    paramType,
+                    paramType.NameWithoutGeneric));
+            }
+        }
     }
 }

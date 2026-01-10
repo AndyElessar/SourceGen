@@ -97,4 +97,10 @@ internal sealed class ViewModel2(CustomMessenger customMessenger)
     public void Initialize(IRequestHandler<GenericRequest2<Entity3>, List<Entity3>> handler)
     {
     }
+
+    [Inject]
+    public IRequestHandler<GenericRequest<Entity2>, List<Entity2>> Handler = null!;
+
+    [Inject]
+    public IRequestHandler<GenericRequest<Entity3>, List<Entity3>> Handler2 { get; init; } = null!;
 }

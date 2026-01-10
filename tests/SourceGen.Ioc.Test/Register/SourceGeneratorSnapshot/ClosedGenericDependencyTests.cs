@@ -762,4 +762,290 @@ public class ClosedGenericDependencyTests
 
         await Verify(generatedSource);
     }
+
+    /// <summary>
+    /// Tests that closed generic dependencies in [Inject] method parameters are discovered.
+    /// The generator should automatically create factory registrations for the closed generic type.
+    /// </summary>
+    [Test]
+    public async Task InjectMethod_ClosedGenericParameter_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            public sealed record GenericRequest<T>(int Count) : IRequest<GenericRequest<T>, List<T>> where T : new();
+
+            [IoCRegister]
+            internal sealed class GenericRequestHandler<T> : IRequestHandler<GenericRequest<T>, List<T>> where T : new()
+            {
+                public List<T> Handle(GenericRequest<T> request)
+                {
+                    return [.. Enumerable.Range(0, request.Count).Select(_ => new T())];
+                }
+            }
+
+            internal class Entity { }
+
+            // This class uses [Inject] method with closed generic parameter
+            // The generator should discover IRequestHandler<GenericRequest<Entity>, List<Entity>>
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class ViewModel
+            {
+                private IRequestHandler<GenericRequest<Entity>, List<Entity>>? handler;
+
+                [Inject]
+                public void Initialize(IRequestHandler<GenericRequest<Entity>, List<Entity>> handler)
+                {
+                    this.handler = handler;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests that closed generic dependencies in [Inject] property are discovered.
+    /// </summary>
+    [Test]
+    public async Task InjectProperty_ClosedGenericType_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? GetById(int id);
+            }
+
+            [IoCRegister]
+            internal sealed class Repository<T> : IRepository<T>
+            {
+                public T? GetById(int id) => default;
+            }
+
+            internal class User { }
+
+            // This class uses [Inject] property with closed generic type
+            // The generator should discover IRepository<User>
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            internal sealed class UserService
+            {
+                [Inject]
+                public IRepository<User> Repository { get; init; } = null!;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests that multiple closed generic dependencies in [Inject] method parameters are all discovered.
+    /// </summary>
+    [Test]
+    public async Task InjectMethod_MultipleClosedGenericParameters_GeneratesAllFactoryRegistrations()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? GetById(int id);
+            }
+
+            [IoCRegister]
+            internal sealed class Repository<T> : IRepository<T>
+            {
+                public T? GetById(int id) => default;
+            }
+
+            internal class User { }
+            internal class Order { }
+            internal class Product { }
+
+            // This class uses [Inject] method with multiple closed generic parameters
+            // The generator should discover all three: IRepository<User>, IRepository<Order>, IRepository<Product>
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            internal sealed class DashboardService
+            {
+                private IRepository<User>? userRepo;
+                private IRepository<Order>? orderRepo;
+                private IRepository<Product>? productRepo;
+
+                [Inject]
+                public void Initialize(
+                    IRepository<User> userRepo,
+                    IRepository<Order> orderRepo,
+                    IRepository<Product> productRepo)
+                {
+                    this.userRepo = userRepo;
+                    this.orderRepo = orderRepo;
+                    this.productRepo = productRepo;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests that closed generic dependencies in [Inject] method parameters with decorators work correctly.
+    /// </summary>
+    [Test]
+    public async Task InjectMethod_ClosedGenericParameter_WithDecorators_GeneratesFactoryWithDecorators()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [assembly: IoCRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.LoggingDecorator<,>)])]
+
+            namespace TestNamespace;
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            public sealed record TestRequest<T>(int Count) : IRequest<TestRequest<T>, List<T>> where T : new();
+
+            [IoCRegister]
+            internal sealed class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>> where T : new()
+            {
+                public List<T> Handle(TestRequest<T> request)
+                {
+                    return [.. Enumerable.Range(0, request.Count).Select(_ => new T())];
+                }
+            }
+
+            internal sealed class LoggingDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request)
+                {
+                    System.Console.WriteLine($"Handling {typeof(TRequest).Name}");
+                    return inner.Handle(request);
+                }
+            }
+
+            internal class Entity { }
+
+            // This class uses [Inject] method with closed generic parameter
+            // The decorator should be applied to the closed generic registration
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class ViewModel
+            {
+                private IRequestHandler<TestRequest<Entity>, List<Entity>>? handler;
+
+                [Inject]
+                public void Initialize(IRequestHandler<TestRequest<Entity>, List<Entity>> handler)
+                {
+                    this.handler = handler;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests combined scenario: constructor with closed generic + [Inject] method with different closed generic.
+    /// Both should be discovered and generate factory registrations.
+    /// </summary>
+    [Test]
+    public async Task MixedInjection_ConstructorAndInjectMethod_BothClosedGenerics_GeneratesAllFactories()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? GetById(int id);
+            }
+
+            [IoCRegister]
+            internal sealed class Repository<T> : IRepository<T>
+            {
+                public T? GetById(int id) => default;
+            }
+
+            internal class User { }
+            internal class Order { }
+
+            // This class has closed generic in constructor and different closed generic in [Inject] method
+            // Both IRepository<User> and IRepository<Order> should be discovered
+            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            internal sealed class OrderService(IRepository<User> userRepo)
+            {
+                private readonly IRepository<User> userRepo = userRepo;
+                private IRepository<Order>? orderRepo;
+
+                [Inject]
+                public void SetOrderRepository(IRepository<Order> orderRepo)
+                {
+                    this.orderRepo = orderRepo;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }
