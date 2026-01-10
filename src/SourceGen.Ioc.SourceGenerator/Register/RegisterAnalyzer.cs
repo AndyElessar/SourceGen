@@ -155,12 +155,27 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
     private static void OnCompilationStart(CompilationStartAnalysisContext context)
     {
-        // Get attribute type symbols for faster lookup
+        // Get attribute type symbols for faster lookup (including generic variants)
         var iocRegisterAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName);
+        var iocRegisterAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T1);
+        var iocRegisterAttribute_T2 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T2);
+        var iocRegisterAttribute_T3 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T3);
+        var iocRegisterAttribute_T4 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T4);
         var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName);
+        var iocRegisterForAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName_T1);
         var iocRegisterDefaultSettingsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName);
+        var iocRegisterDefaultSettingsAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName_T1);
 
-        if(iocRegisterAttribute is null && iocRegisterForAttribute is null)
+        // Check if any IoC attribute is available
+        var hasAnyIoCRegisterAttribute = iocRegisterAttribute is not null
+            || iocRegisterAttribute_T1 is not null
+            || iocRegisterAttribute_T2 is not null
+            || iocRegisterAttribute_T3 is not null
+            || iocRegisterAttribute_T4 is not null;
+        var hasAnyIoCRegisterForAttribute = iocRegisterForAttribute is not null
+            || iocRegisterForAttribute_T1 is not null;
+
+        if(!hasAnyIoCRegisterAttribute && !hasAnyIoCRegisterForAttribute)
             return;
 
         // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis
@@ -168,9 +183,19 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Index for service type -> implementation lookup (interfaces/base classes)
         var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
         // Collect default settings from IoCRegisterDefaultSettingsAttribute using shared method
-        var defaultSettings = CollectDefaultSettings(context.Compilation, iocRegisterDefaultSettingsAttribute, context.CancellationToken);
+        var defaultSettings = CollectDefaultSettings(context.Compilation, iocRegisterDefaultSettingsAttribute, iocRegisterDefaultSettingsAttribute_T1, context.CancellationToken);
 
-        var analyzerContext = new AnalyzerContext(iocRegisterAttribute, iocRegisterForAttribute, registeredServices, serviceTypeIndex, defaultSettings);
+        var analyzerContext = new AnalyzerContext(
+            iocRegisterAttribute,
+            iocRegisterAttribute_T1,
+            iocRegisterAttribute_T2,
+            iocRegisterAttribute_T3,
+            iocRegisterAttribute_T4,
+            iocRegisterForAttribute,
+            iocRegisterForAttribute_T1,
+            registeredServices,
+            serviceTypeIndex,
+            defaultSettings);
 
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
@@ -372,7 +397,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     {
         var syntaxTreesBuilder = ImmutableHashSet.CreateBuilder<SyntaxTree>();
 
-        if(analyzerContext.IoCRegisterForAttribute is null)
+        // Check if any IoCRegisterForAttribute variant is available
+        if(analyzerContext.IoCRegisterForAttribute is null && analyzerContext.IoCRegisterForAttribute_T1 is null)
             return syntaxTreesBuilder.ToImmutable();
 
         foreach(var attribute in compilation.Assembly.GetAttributes())
@@ -383,7 +409,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(attributeClass is null)
                 continue;
 
-            if(!SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+            // Check if this is an IoCRegisterForAttribute (non-generic or generic)
+            if(!IsIoCRegisterForAttribute(attributeClass, analyzerContext))
                 continue;
 
             // Track which syntax tree contains this attribute
@@ -393,8 +420,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 syntaxTreesBuilder.Add(syntaxTree);
             }
 
-            if(attribute.ConstructorArguments.Length == 0 ||
-               attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
+            // Get target type from attribute (constructor arg for non-generic, type parameter for generic)
+            var targetType = GetTargetTypeFromAttribute(attribute);
+            if(targetType is null)
                 continue;
 
             // Skip invalid types
@@ -419,7 +447,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         AnalyzerContext analyzerContext,
         ImmutableHashSet<SyntaxTree> assemblyAttributeSyntaxTrees)
     {
-        if(analyzerContext.IoCRegisterForAttribute is null)
+        // Check if any IoCRegisterForAttribute variant is available
+        if(analyzerContext.IoCRegisterForAttribute is null && analyzerContext.IoCRegisterForAttribute_T1 is null)
             return;
 
         // Only analyze if this syntax tree contains assembly-level attributes
@@ -439,11 +468,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(attributeClass is null)
                 continue;
 
-            if(!SymbolEqualityComparer.Default.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+            // Check if this is an IoCRegisterForAttribute (non-generic or generic)
+            if(!IsIoCRegisterForAttribute(attributeClass, analyzerContext))
                 continue;
 
-            if(attribute.ConstructorArguments.Length == 0 ||
-               attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
+            // Get target type from attribute (constructor arg for non-generic, type parameter for generic)
+            var targetType = GetTargetTypeFromAttribute(attribute);
+            if(targetType is null)
                 continue;
 
             var location = syntaxReference.GetSyntax(context.CancellationToken).GetLocation();
@@ -476,8 +507,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
             if(isIoCRegisterFor)
             {
-                if(attribute.ConstructorArguments.Length == 0 ||
-                   attribute.ConstructorArguments[0].Value is not INamedTypeSymbol target)
+                // Use helper method to get target type (supports both generic and non-generic variants)
+                var target = GetTargetTypeFromAttribute(attribute);
+                if(target is null)
                     continue;
 
                 targetType = target;
@@ -514,6 +546,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Checks if the attribute is an IoC registration attribute and returns which type.
+    /// Supports both non-generic and generic variants.
     /// </summary>
     private static bool TryGetIoCAttribute(AttributeData attribute, AnalyzerContext analyzerContext, out bool isIoCRegisterFor)
     {
@@ -522,17 +555,94 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         if(attributeClass is null)
             return false;
 
-        var comparer = SymbolEqualityComparer.Default;
-        if(comparer.Equals(attributeClass, analyzerContext.IoCRegisterAttribute))
-            return true;
+        // For generic types, get the original unbound definition for comparison
+        var typeToCompare = attributeClass.IsGenericType ? attributeClass.OriginalDefinition : attributeClass;
 
-        if(comparer.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
+        var comparer = SymbolEqualityComparer.Default;
+
+        // Check IoCRegisterAttribute variants (non-generic and generic)
+        if(comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T1)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T2)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T3)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T4))
+        {
+            return true;
+        }
+
+        // Check IoCRegisterForAttribute variants (non-generic and generic)
+        if(comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute_T1))
         {
             isIoCRegisterFor = true;
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if the attribute class is any IoCRegisterForAttribute variant (non-generic or generic).
+    /// </summary>
+    private static bool IsIoCRegisterForAttribute(INamedTypeSymbol attributeClass, AnalyzerContext analyzerContext)
+    {
+        // For generic types, get the original unbound definition for comparison
+        var typeToCompare = attributeClass.IsGenericType ? attributeClass.OriginalDefinition : attributeClass;
+        var comparer = SymbolEqualityComparer.Default;
+
+        return comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute_T1);
+    }
+
+    /// <summary>
+    /// Checks if the attribute class is any IoC registration attribute variant (IoCRegisterAttribute or IoCRegisterForAttribute).
+    /// </summary>
+    private static bool IsIoCRegistrationAttribute(INamedTypeSymbol attributeClass, AnalyzerContext analyzerContext)
+    {
+        // For generic types, get the original unbound definition for comparison
+        var typeToCompare = attributeClass.IsGenericType ? attributeClass.OriginalDefinition : attributeClass;
+        var comparer = SymbolEqualityComparer.Default;
+
+        // Check IoCRegisterAttribute variants
+        if(comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T1)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T2)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T3)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T4))
+        {
+            return true;
+        }
+
+        // Check IoCRegisterForAttribute variants
+        return comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute_T1);
+    }
+
+    /// <summary>
+    /// Gets the target type from an IoCRegisterForAttribute.
+    /// For non-generic variant, extracts from constructor argument.
+    /// For generic variant (IoCRegisterForAttribute&lt;T&gt;), extracts from type parameter.
+    /// </summary>
+    private static INamedTypeSymbol? GetTargetTypeFromAttribute(AttributeData attribute)
+    {
+        var attributeClass = attribute.AttributeClass;
+        if(attributeClass is null)
+            return null;
+
+        // For generic IoCRegisterForAttribute<T>, get T from type arguments
+        if(attributeClass.IsGenericType && attributeClass.TypeArguments.Length > 0)
+        {
+            return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+        }
+
+        // For non-generic IoCRegisterForAttribute, get from constructor argument
+        if(attribute.ConstructorArguments.Length > 0 &&
+           attribute.ConstructorArguments[0].Value is INamedTypeSymbol targetType)
+        {
+            return targetType;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -615,13 +725,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         if(attributeClass is null)
             return;
 
-        // Check if this is an IoC registration attribute
-        var comparer = SymbolEqualityComparer.Default;
-        if(!comparer.Equals(attributeClass, analyzerContext.IoCRegisterAttribute) &&
-           !comparer.Equals(attributeClass, analyzerContext.IoCRegisterForAttribute))
-        {
+        // Check if this is an IoC registration attribute (including generic variants)
+        if(!IsIoCRegistrationAttribute(attributeClass, analyzerContext))
             return;
-        }
 
         var argumentList = attributeSyntax.ArgumentList;
         if(argumentList is null)
@@ -984,12 +1090,14 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     private static DefaultSettingsMap CollectDefaultSettings(
         Compilation compilation,
         INamedTypeSymbol? iocRegisterDefaultSettingsAttribute,
+        INamedTypeSymbol? iocRegisterDefaultSettingsAttribute_T1,
         CancellationToken cancellationToken)
     {
-        if(iocRegisterDefaultSettingsAttribute is null)
+        if(iocRegisterDefaultSettingsAttribute is null && iocRegisterDefaultSettingsAttribute_T1 is null)
             return new DefaultSettingsMap([]);
 
         var settingsBuilder = ImmutableArray.CreateBuilder<DefaultSettingsModel>();
+        var comparer = SymbolEqualityComparer.Default;
 
         foreach(var attribute in compilation.Assembly.GetAttributes())
         {
@@ -999,8 +1107,15 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(attributeClass is null)
                 continue;
 
-            if(!SymbolEqualityComparer.Default.Equals(attributeClass, iocRegisterDefaultSettingsAttribute))
+            // For generic types, get the original unbound definition for comparison
+            var typeToCompare = attributeClass.IsGenericType ? attributeClass.OriginalDefinition : attributeClass;
+
+            // Check if this is an IoCRegisterDefaultsAttribute (non-generic or generic)
+            if(!comparer.Equals(typeToCompare, iocRegisterDefaultSettingsAttribute)
+                && !comparer.Equals(typeToCompare, iocRegisterDefaultSettingsAttribute_T1))
+            {
                 continue;
+            }
 
             // Use shared method to extract default settings
             var settings = attribute.ExtractDefaultSettings();
@@ -1068,13 +1183,23 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
     private sealed class AnalyzerContext(
         INamedTypeSymbol? iocRegisterAttribute,
+        INamedTypeSymbol? iocRegisterAttribute_T1,
+        INamedTypeSymbol? iocRegisterAttribute_T2,
+        INamedTypeSymbol? iocRegisterAttribute_T3,
+        INamedTypeSymbol? iocRegisterAttribute_T4,
         INamedTypeSymbol? iocRegisterForAttribute,
+        INamedTypeSymbol? iocRegisterForAttribute_T1,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         DefaultSettingsMap defaultSettings)
     {
         public INamedTypeSymbol? IoCRegisterAttribute { get; } = iocRegisterAttribute;
+        public INamedTypeSymbol? IoCRegisterAttribute_T1 { get; } = iocRegisterAttribute_T1;
+        public INamedTypeSymbol? IoCRegisterAttribute_T2 { get; } = iocRegisterAttribute_T2;
+        public INamedTypeSymbol? IoCRegisterAttribute_T3 { get; } = iocRegisterAttribute_T3;
+        public INamedTypeSymbol? IoCRegisterAttribute_T4 { get; } = iocRegisterAttribute_T4;
         public INamedTypeSymbol? IoCRegisterForAttribute { get; } = iocRegisterForAttribute;
+        public INamedTypeSymbol? IoCRegisterForAttribute_T1 { get; } = iocRegisterForAttribute_T1;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
         /// <summary>
         /// Index mapping service types (interfaces/base classes) to their implementations.
