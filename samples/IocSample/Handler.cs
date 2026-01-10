@@ -80,6 +80,8 @@ internal sealed class CustomMessenger(IServiceProvider serviceProvider)
 }
 
 internal class Entity2;
+internal class Entity3;
+
 [IoCRegister]
 internal sealed class ViewModel2(CustomMessenger customMessenger)
 {
@@ -89,5 +91,10 @@ internal sealed class ViewModel2(CustomMessenger customMessenger)
     public List<Entity2> SendRequest2()
     {
         return customMessenger.Send(new GenericRequest2<Entity2>(5));
+    }
+
+    [Inject]
+    public void Initialize(IRequestHandler<GenericRequest2<Entity3>, List<Entity3>> handler)
+    {
     }
 }

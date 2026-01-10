@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/.github/">
     <File Path=".github/copilot-instructions.md" />
+    <File Path=".github/instructions/csharp-source-generator.instructions.md" />
+    <File Path=".github/instructions/csharp.instructions.md" />
+    <File Path=".github/prompts/csharp-tunit.prompt.md" />
   </Folder>
   <Folder Name="/.solution/">
     <File Path=".editorconfig" />

@@ -128,6 +128,8 @@ This document contains best practices for developing C# Source Generators.
 ## Error Handling
 
 1. **Report Diagnostics Properly**
+   - Report diagnostics in separate analyzer, do not report directly from generator
+   - Use `DiagnosticDescriptor` for defining diagnostics
    ```csharp
    private static readonly DiagnosticDescriptor InvalidUsageError = new(
        id: "SGXXX001",
