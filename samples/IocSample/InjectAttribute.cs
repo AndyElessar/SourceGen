@@ -2,26 +2,26 @@
 
 public interface IDependency;
 
-[IoCRegister(ServiceTypes = [typeof(IDependency)], Key = "1")]
+[IoCRegister<IDependency>(Key = "1")]
 internal class Dependency : IDependency;
 
-[IoCRegister(ServiceTypes = [typeof(IDependency)], Key = "2")]
+[IoCRegister<IDependency>(Key = "2")]
 internal class Dependency2 : IDependency;
 
-[IoCRegister(ServiceTypes = [typeof(IDependency)], Key = "3")]
+[IoCRegister<IDependency>(Key = "3")]
 internal class Dependency3 : IDependency;
 
 [IoCRegister]
-internal class DependentClass([Inject(Key = "1")] IDependency dependency)
+internal class DependentClass([Inject("1")] IDependency dependency)
 {
     private readonly IDependency dependency = dependency;
 
-    [Inject(Key = "2")]
+    [Inject("2")]
     public IDependency Dependency2 { get; init; } = null!;
 
     private IDependency dependency3 = null!;
     [Inject]
-    public void Initialize([Inject(Key = "3")] IDependency dependency)
+    public void Initialize([Inject("3")] IDependency dependency)
     {
         dependency3 = dependency;
     }

@@ -16,14 +16,30 @@ namespace SourceGen.Ioc;
 public sealed class InjectAttribute : Attribute
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="InjectAttribute"/> class.
+    /// </summary>
+    public InjectAttribute()
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InjectAttribute"/> class with the specified key used for dependency resolution.
+    /// </summary>
+    /// <param name="key">The key that identifies the dependency to be injected. Default KeyType is <see cref="KeyType.Value"/>.</param>
+    public InjectAttribute(object key)
+    {
+        this.Key = key;
+    }
+
+    /// <summary>
     /// Gets a value specifying how to interpret <see cref="Key"/>.
     /// </summary>
     public KeyType KeyType { get; init; } = KeyType.Value;
 
     /// <summary>
-    /// Gets a key for keyed injection like [FromKeyedService]. The interpretation of the key depends on the <see cref="KeyType"/>.<br/>
-    /// When <see cref="KeyType"/> is <see cref="KeyType.Value"/>, this should be a primitive value, like <see cref="int"/>, <see cref="string"/> or <see langword="enum"/>.<br/>
-    /// When <see cref="KeyType"/> is <see cref="KeyType.Csharp"/>, this should be a C# code snippet. You can use <see langword="nameof"/> for compile time safety.
+    /// Gets a key for keyed injection like [FromKeyedService]. The interpretation of the key depends on <see cref="KeyType"/>.<br/>
+    /// When KeyType is <see cref="KeyType.Value"/>, this should be a primitive value, like <see cref="int"/>, <see cref="string"/> or <see langword="enum"/>.<br/>
+    /// When KeyType is <see cref="KeyType.Csharp"/>, this should be a C# code snippet. You can use <see langword="nameof"/> for compile time safety.
     /// </summary>
     public object? Key { get; init; }
 }

@@ -15,6 +15,16 @@ namespace SourceGen.Ioc;
 public sealed class IoCRegisterAttribute : Attribute
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute"/> class. <br/>
+    /// Default lifetime is Singleton.
+    /// </summary>
+    /// <param name="serviceTypes">The service types to register the class as.</param>
+    public IoCRegisterAttribute(params Type[] serviceTypes)
+    {
+        this.ServiceTypes = serviceTypes;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="IoCRegisterAttribute"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
@@ -22,16 +32,6 @@ public sealed class IoCRegisterAttribute : Attribute
     public IoCRegisterAttribute(ServiceLifetime lifetime, params Type[] serviceTypes)
     {
         this.Lifetime = lifetime;
-        this.ServiceTypes = serviceTypes;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute"/> class. <br/>
-    /// Default lifetime is Singleton.
-    /// </summary>
-    /// <param name="serviceTypes">The service types to register the class as.</param>
-    public IoCRegisterAttribute(params Type[] serviceTypes)
-    {
         this.ServiceTypes = serviceTypes;
     }
 
@@ -110,6 +110,14 @@ public sealed class IoCRegisterAttribute : Attribute
 public sealed class IoCRegisterAttribute<T> : Attribute
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{}"/> class. <br/>
+    /// Default lifetime is Singleton.
+    /// </summary>
+    public IoCRegisterAttribute()
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="IoCRegisterAttribute{}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
@@ -156,6 +164,14 @@ public sealed class IoCRegisterAttribute<T> : Attribute
 [Conditional("SOURCEGEN")]
 public sealed class IoCRegisterAttribute<T1, T2> : Attribute
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,}"/> class. <br/>
+    /// Default lifetime is Singleton.
+    /// </summary>
+    public IoCRegisterAttribute()
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,}"/> class.
     /// </summary>
@@ -205,6 +221,14 @@ public sealed class IoCRegisterAttribute<T1, T2> : Attribute
 public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,}"/> class. <br/>
+    /// Default lifetime is Singleton.
+    /// </summary>
+    public IoCRegisterAttribute()
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
@@ -253,6 +277,14 @@ public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
 [Conditional("SOURCEGEN")]
 public sealed class IoCRegisterAttribute<T1, T2, T3, T4> : Attribute
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,,}"/> class. <br/>
+    /// Default lifetime is Singleton.
+    /// </summary>
+    public IoCRegisterAttribute()
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,,}"/> class.
     /// </summary>

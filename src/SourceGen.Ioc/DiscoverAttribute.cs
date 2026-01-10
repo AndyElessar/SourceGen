@@ -14,7 +14,7 @@ public sealed class DiscoverAttribute(Type closedGenericType) : Attribute
     /// <summary>
     /// Gets the constructed generic type.
     /// </summary>
-    public Type ClosedGenericType { get; init; } = closedGenericType;
+    public Type ClosedGenericType { get; } = closedGenericType;
 }
 
 #if NET7_0_OR_GREATER

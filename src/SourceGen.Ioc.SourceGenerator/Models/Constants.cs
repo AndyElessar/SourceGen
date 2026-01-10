@@ -142,6 +142,35 @@ internal static class Constants
             var keyType = attribute.GetNamedArgument<int>("KeyType", 0);
             string? key = null;
 
+            // First, check if key is passed as a constructor argument (e.g., InjectAttribute(object key))
+            if(attribute.ConstructorArguments.Length > 0)
+            {
+                var ctorArg = attribute.ConstructorArguments[0];
+                // Skip if the first argument is a type, lifetime enum, or array (e.g., IoCRegisterDefaultsAttribute)
+                if(ctorArg.Type?.Name != nameof(ServiceLifetime)
+                    && ctorArg.Kind != TypedConstantKind.Type
+                    && ctorArg.Kind != TypedConstantKind.Array)
+                {
+                    if(!ctorArg.IsNull)
+                    {
+                        if(keyType == 1) // KeyType.Csharp
+                        {
+                            // Try to get original syntax for nameof() expressions with full access path resolution
+                            key = attribute.TryGetNameofFromConstructorArg(0, semanticModel)
+                                ?? ctorArg.Value?.ToString();
+                        }
+                        else
+                        {
+                            key = ctorArg.GetPrimitiveConstantString();
+                            keyType = 1; // Treat as CSharp code
+                        }
+
+                        return (key, keyType);
+                    }
+                }
+            }
+
+            // Fall back to named argument
             foreach(var namedArg in attribute.NamedArguments)
             {
                 if(namedArg.Key == "Key")
