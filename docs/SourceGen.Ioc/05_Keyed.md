@@ -62,7 +62,7 @@ public static class CacheKeys
     public static readonly Guid Primary = Guid.CreateVersion7();
 }
 
-[IoCRegister<ICache>(Key = "CacheKeys.Primary", KeyType = KeyType.Csharp)]
+[IoCRegister<ICache>(Key = nameof(CacheKeys.Primary), KeyType = KeyType.Csharp)]
 internal class PrimaryCache : ICache;
 ```
 

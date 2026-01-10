@@ -29,27 +29,6 @@ public interface IRepository;
 internal class UserRepository : IRepository;
 ```
 
-## Default Decorators
-
-```csharp
-[IoCRegisterDefaults<IHandler>(
-    ServiceLifetime.Transient,
-    Decorators = [typeof(LoggingDecorator<>), typeof(CachingDecorator<>)])]
-public interface IHandler;
-```
-
-## Exclude from Defaults
-
-```csharp
-// Set ExcludeFromDefault in defaults
-[IoCRegisterDefaults<IHandler>(ServiceLifetime.Transient, ExcludeFromDefault = true)]
-public interface IHandler;
-
-// Or exclude specific registration
-[IoCRegister(ExcludeFromDefault = true)]
-internal class SpecialHandler : IHandler;
-```
-
 ## Assembly-Level Defaults
 
 ```csharp
@@ -62,10 +41,14 @@ Import default settings from another assembly:
 
 ```csharp
 // In shared library
-[IoCRegisterDefaults(typeof(IRequestHandler<,>), ServiceLifetime.Transient)]
+public interface IMyService;
 public interface IRequestHandler<TRequest, TResponse>;
 
-// In consuming project
-[ImportModule(typeof(IRequestHandler<,>))]
+[assembly: IoCRegisterDefaults<IMyService>(ServiceLifetime.Transient)]
+[IoCRegisterDefaults(typeof(IRequestHandler<,>), ServiceLifetime.Transient)]
+public sealed class SharedMarker;
+
+// In consuming project, will import defaults from attribute on `SharedMarker` or its assembly
+[ImportModule(typeof(SharedMarker))]
 public sealed class Module;
 ```

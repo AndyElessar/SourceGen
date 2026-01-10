@@ -32,13 +32,13 @@ internal class TransientService : IService;
 Register a class under multiple service types:
 
 ```csharp
-// Using params
-[IoCRegister(ServiceLifetime.Singleton, typeof(IService1), typeof(IService2))]
+// Using generic attribute parameters
+[IoCRegister<IService1, IService2>]
 internal class MultiService : IService1, IService2;
 
-// Or register all interfaces
-[IoCRegister(RegisterAllInterfaces = true)]
-internal class AutoRegisterService : IService1, IService2;
+// Or using params
+[IoCRegister(typeof(IService1), typeof(IService2))]
+internal class MultiService : IService1, IService2;
 ```
 
 ## Register All Interfaces/Base Classes
