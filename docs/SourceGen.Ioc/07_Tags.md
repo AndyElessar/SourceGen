@@ -102,3 +102,7 @@ public interface IMediator;
 [IoCRegister]
 internal class Mediator : IMediator;  // Only in AddMyProject_Mediator()
 ```
+
+---
+
+[← Back to Overview](01_Overview.md)

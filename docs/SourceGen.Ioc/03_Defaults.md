@@ -52,3 +52,7 @@ public sealed class SharedMarker;
 [ImportModule(typeof(SharedMarker))]
 public sealed class Module;
 ```
+
+---
+
+[← Back to Overview](01_Overview.md)
