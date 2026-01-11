@@ -1,14 +1,22 @@
-name: CI
+name: SourceGen.Ioc
 
 on:
   workflow_dispatch:
 
   push:
     branches: [main]
+    paths:
+      - 'src/SourceGen.Ioc/**'
+      - 'src/SourceGen.Ioc.SourceGenerator/**'
+      - 'tests/SourceGen.Ioc.Test/**'
     tags:
-      - 'v*'
+      - 'ioc-v*'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/SourceGen.Ioc/**'
+      - 'src/SourceGen.Ioc.SourceGenerator/**'
+      - 'tests/SourceGen.Ioc.Test/**'
 
 env:
   DOTNET_NOLOGO: true
@@ -37,7 +45,7 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       - name: Test
-        run: dotnet test --no-build -c Release --verbosity normal
+        run: dotnet test tests/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj --no-build -c Release --verbosity normal
 
   pack:
     runs-on: ubuntu-latest
@@ -63,26 +71,23 @@ jobs:
       - name: Pack SourceGen.Ioc
         run: dotnet pack src/SourceGen.Ioc/SourceGen.Ioc.csproj --no-build -c Release -o ./artifacts
 
-      - name: Pack SourceGen.Ioc.Cli
-        run: dotnet pack src/SourceGen.Ioc.Cli/SourceGen.Ioc.Cli.csproj --no-build -c Release -o ./artifacts
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages
+          name: sourcegen-ioc-nuget
           path: ./artifacts/*.nupkg
           retention-days: 7
 
   publish:
     runs-on: ubuntu-latest
     needs: pack
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/ioc-v')
 
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages
+          name: sourcegen-ioc-nuget
           path: ./artifacts
 
       - name: Setup .NET
