@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Folder Name="/.github/">
     <File Path=".github/copilot-instructions.md" />
     <File Path=".github/instructions/csharp-source-generator.instructions.md" />
@@ -14,6 +14,18 @@
     <File Path="global.json" />
     <File Path="LICENSE.txt" />
     <File Path="README.md" />
+  </Folder>
+  <Folder Name="/docs/SourceGen.Ioc/">
+    <File Path="docs/SourceGen.Ioc/01_Overview.md" />
+    <File Path="docs/SourceGen.Ioc/02_Basic.md" />
+    <File Path="docs/SourceGen.Ioc/03_Defaults.md" />
+    <File Path="docs/SourceGen.Ioc/04_Field_Property_Method_Injection.md" />
+    <File Path="docs/SourceGen.Ioc/05_Keyed.md" />
+    <File Path="docs/SourceGen.Ioc/06_Decorator.md" />
+    <File Path="docs/SourceGen.Ioc/07_Tags.md" />
+    <File Path="docs/SourceGen.Ioc/08_Factory_Instance.md" />
+    <File Path="docs/SourceGen.Ioc/09_OpenGeneric.md" />
+    <File Path="docs/SourceGen.Ioc/10_CliTool.md" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/IocSample.Shared/IocSample.Shared.csproj" Id="2bd603d7-eb72-4991-ae47-5d846256f628" />
