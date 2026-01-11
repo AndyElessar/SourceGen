@@ -1,0 +1,250 @@
+[
+  {
+    "CommandName": "",
+    "Options": [
+      {
+        "Options": [
+          "-t",
+          "--target"
+        ],
+        "Description": "Target directory or file, default is current directory.",
+        "DefaultValue": "null",
+        "ValueTypeName": "string?",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring?\u003E"
+      },
+      {
+        "Options": [
+          "-f",
+          "--file-pattern"
+        ],
+        "Description": "File pattern to filter files.",
+        "DefaultValue": "@\u0022*.cs\u0022",
+        "ValueTypeName": "string",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring\u003E"
+      },
+      {
+        "Options": [
+          "-s",
+          "--search-sub-directories"
+        ],
+        "Description": "Whether to search sub directories.",
+        "DefaultValue": null,
+        "ValueTypeName": "bool",
+        "Index": null,
+        "IsRequired": true,
+        "IsFlag": true,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cbool\u003E"
+      },
+      {
+        "Options": [
+          "-cn",
+          "--class-name-regex"
+        ],
+        "Description": "Regex pattern to match class names.\r\n                                       Full regex will be: \u0022(public|internal)\\s\u002B(?!static\\s\u002B).*class\\s\u002B(classNameRegex)(?=\\s|:|$)\u0022",
+        "DefaultValue": "null",
+        "ValueTypeName": "string?",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring?\u003E"
+      },
+      {
+        "Options": [
+          "--full-regex"
+        ],
+        "Description": "Full regex pattern to match file content.",
+        "DefaultValue": "null",
+        "ValueTypeName": "string?",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring?\u003E"
+      },
+      {
+        "Options": [
+          "--attribute-name"
+        ],
+        "Description": "Name of the attribute to add, default is IocRegister",
+        "DefaultValue": "@\u0022IocRegister\u0022",
+        "ValueTypeName": "string",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring\u003E"
+      },
+      {
+        "Options": [
+          "-m",
+          "--max-apply"
+        ],
+        "Description": "How many matches should apply, 0 means unlimited.",
+        "DefaultValue": "0",
+        "ValueTypeName": "int",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cint\u003E"
+      },
+      {
+        "Options": [
+          "-n",
+          "--dry-run"
+        ],
+        "Description": "Dry run.",
+        "DefaultValue": null,
+        "ValueTypeName": "bool",
+        "Index": null,
+        "IsRequired": true,
+        "IsFlag": true,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cbool\u003E"
+      },
+      {
+        "Options": [
+          "-v",
+          "--verbose"
+        ],
+        "Description": "Detailed logging message.",
+        "DefaultValue": null,
+        "ValueTypeName": "bool",
+        "Index": null,
+        "IsRequired": true,
+        "IsFlag": true,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cbool\u003E"
+      },
+      {
+        "Options": [
+          "--log"
+        ],
+        "Description": "Log file path.",
+        "DefaultValue": "@\u0022\u0022",
+        "ValueTypeName": "string",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring\u003E"
+      }
+    ],
+    "Description": "Add attribute."
+  },
+  {
+    "CommandName": "cli-schema",
+    "Options": [
+      {
+        "Options": [
+          "-c",
+          "--command"
+        ],
+        "Description": "Command name.",
+        "DefaultValue": "null",
+        "ValueTypeName": "string?",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring?\u003E"
+      },
+      {
+        "Options": [
+          "-t",
+          "--target"
+        ],
+        "Description": "Target file/folder to write cli schema.",
+        "DefaultValue": "null",
+        "ValueTypeName": "string?",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring?\u003E"
+      },
+      {
+        "Options": [
+          "-n",
+          "--dry-run"
+        ],
+        "Description": "Dry run.",
+        "DefaultValue": null,
+        "ValueTypeName": "bool",
+        "Index": null,
+        "IsRequired": true,
+        "IsFlag": true,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cbool\u003E"
+      },
+      {
+        "Options": [
+          "-v",
+          "--verbose"
+        ],
+        "Description": "Detailed logging message.",
+        "DefaultValue": null,
+        "ValueTypeName": "bool",
+        "Index": null,
+        "IsRequired": true,
+        "IsFlag": true,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cbool\u003E"
+      },
+      {
+        "Options": [
+          "--log"
+        ],
+        "Description": "Log file path.",
+        "DefaultValue": "@\u0022\u0022",
+        "ValueTypeName": "string",
+        "Index": null,
+        "IsRequired": false,
+        "IsFlag": false,
+        "IsParams": false,
+        "IsHidden": false,
+        "IsDefaultValueHidden": false,
+        "FormattedValueTypeName": "\u003Cstring\u003E"
+      }
+    ],
+    "Description": "Print CLI schema in JSON format."
+  }
+]

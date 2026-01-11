@@ -19,6 +19,7 @@ app.ConfigureGlobalOptions((ref builder) =>
     services.AddSingleton(globalOptions);
     services.AddSingleton<IFileSystem, FileSystem>();
     services.AddSingleton<IEnvironmentProvider, EnvironmentProvider>();
+    services.AddSingleton(new CliSchemaData(app.GetCliSchema()));
 
     services.AddLogging(logging =>
     {
@@ -38,5 +39,6 @@ app.ConfigureGlobalOptions((ref builder) =>
 });
 
 app.Add<AddAttributeCommands>();
+app.Add<CliSchemaCommand>();
 
 app.Run(args);

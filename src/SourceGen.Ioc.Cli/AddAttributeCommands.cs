@@ -1,4 +1,5 @@
-﻿using System.IO.Abstractions;
+﻿using System.Diagnostics;
+using System.IO.Abstractions;
 using System.Text.RegularExpressions;
 using ConsoleAppFramework;
 using Microsoft.Extensions.Logging;
@@ -73,8 +74,7 @@ public sealed class AddAttributeCommands(
         }
         else
         {
-            logger.ZLogError($"-cn|--class-name-regex and --full-regex can not all be empty! You must specify at least one.");
-            return;
+            throw new UnreachableException();
         }
 
         int fileCount = 0;
@@ -130,7 +130,11 @@ public sealed class AddAttributeCommands(
 
         var result = MatchFileContent(regex, content, maxApply, appliedCount, attributeLine, globalOptions, logger);
 
-        await fileSystem.File.WriteAllTextAsync(file, result.Result, ct);
+        if(!globalOptions.DryRun)
+        {
+            await fileSystem.File.WriteAllTextAsync(file, result.Result, ct);
+        }
+
         fileCount++;
         appliedCount = result.AppliedCount;
         return (fileCount, appliedCount);

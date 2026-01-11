@@ -75,3 +75,4 @@ public static IServiceCollection AddMyProject(this IServiceCollection services)
 7. [Tags](07_Tags.md) - Tag-based registration methods
 8. [Factory & Instance](08_Factory_Instance.md) - Factory and instance registration
 9. [Open Generics](09_OpenGeneric.md) - Open generic type support
+10. [CLI Tool](10_CliTool.md) - Command-line tool for adding attributes
