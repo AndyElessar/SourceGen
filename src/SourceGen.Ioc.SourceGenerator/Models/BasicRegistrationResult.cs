@@ -6,13 +6,13 @@
 /// </summary>
 /// <param name="ServiceRegistrations">The service registration models generated from this registration.</param>
 /// <param name="Tags">The tags associated with this registration.</param>
-/// <param name="ExcludeFromDefault">Whether to exclude from the default registration method.</param>
+/// <param name="TagOnly">Whether this registration should only appear in tagged extension methods.</param>
 /// <param name="OpenGenericEntries">Open generic service type entries for indexing (if this is an open generic registration).</param>
 /// <param name="ClosedGenericDependencies">Closed generic dependencies found in constructor parameters.</param>
 internal sealed record class BasicRegistrationResult(
     ImmutableEquatableArray<ServiceRegistrationModel> ServiceRegistrations,
     ImmutableEquatableArray<string> Tags,
-    bool ExcludeFromDefault,
+    bool TagOnly,
     ImmutableEquatableArray<OpenGenericEntry> OpenGenericEntries,
     ImmutableEquatableArray<ClosedGenericDependency> ClosedGenericDependencies);
 
@@ -36,7 +36,7 @@ internal readonly record struct OpenGenericEntry(
 /// <param name="KeyType">The key type.</param>
 /// <param name="Decorators">The decorators to apply.</param>
 /// <param name="Tags">The tags for method grouping.</param>
-/// <param name="ExcludeFromDefault">Whether excluded from default method.</param>
+/// <param name="TagOnly">Whether this registration should only appear in tagged extension methods.</param>
 /// <param name="InjectionMembers">The injection members.</param>
 /// <param name="Factory">The factory method data to use for creating instances.</param>
 /// <param name="Instance">The static instance path to use for singleton registration.</param>
@@ -49,7 +49,7 @@ internal sealed record class OpenGenericRegistrationInfo(
     int KeyType,
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
-    bool ExcludeFromDefault,
+    bool TagOnly,
     ImmutableEquatableArray<InjectionMemberData> InjectionMembers,
     FactoryMethodData? Factory,
     string? Instance);

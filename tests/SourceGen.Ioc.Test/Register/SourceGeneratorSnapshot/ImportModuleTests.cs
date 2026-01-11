@@ -23,7 +23,7 @@ public class ImportModuleTests
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Tags = ["Mediator"],
-                ExcludeFromDefault = true
+                TagOnly = true
             )]
             public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
             {

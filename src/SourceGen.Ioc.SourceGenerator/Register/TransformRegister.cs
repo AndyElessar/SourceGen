@@ -77,7 +77,7 @@ partial class RegisterSourceGenerator
         var serviceTypes = attributeData.GetServiceTypes();
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
-        var excludeFromDefault = attributeData.GetExcludeFromDefault();
+        var tagOnly = attributeData.GetTagOnly();
         var (key, keyType) = attributeData.GetKey(semanticModel);
         var instance = attributeData.GetInstance(semanticModel);
 
@@ -110,7 +110,7 @@ partial class RegisterSourceGenerator
             validOpenGenericServiceTypes,
             decorators,
             tags,
-            excludeFromDefault,
+            tagOnly,
             injectionMembers,
             factory,
             instance);
@@ -135,7 +135,7 @@ partial class RegisterSourceGenerator
 
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
-        var excludeFromDefault = attributeData.GetExcludeFromDefault();
+        var tagOnly = attributeData.GetTagOnly();
         var (key, keyType) = attributeData.GetKey(semanticModel);
         var instance = attributeData.GetInstance(semanticModel);
 
@@ -168,7 +168,7 @@ partial class RegisterSourceGenerator
             validOpenGenericServiceTypes,
             decorators,
             tags,
-            excludeFromDefault,
+            tagOnly,
             injectionMembers,
             factory,
             instance);

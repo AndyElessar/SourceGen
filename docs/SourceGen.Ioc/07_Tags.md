@@ -42,12 +42,12 @@ internal class MyService : IService;
 
 Generates registration in both `AddMyProject_Feature1` and `AddMyProject_Feature2`, as well as the default `AddMyProject`.
 
-## Exclude From Default
+## Tag Only Registration
 
-Use `ExcludeFromDefault = true` to exclude a registration from the default extension method. This is useful when you want certain services to only be registered via specific tag methods.
+Use `TagOnly = true` to exclude a registration from the default extension method. This is useful when you want certain services to only be registered via specific tag methods.
 
 ```csharp
-[IoCRegister<IService>(Tags = ["Feature1"], ExcludeFromDefault = true)]
+[IoCRegister<IService>(Tags = ["Feature1"], TagOnly = true)]
 internal class FeatureOnlyService : IService;
 
 [IoCRegister<IService>]
@@ -75,7 +75,7 @@ public static IServiceCollection AddMyProject_Feature1(this IServiceCollection s
 }
 ```
 
-> **Note:** `ExcludeFromDefault` defaults to `false`, meaning registrations are included in both the default method and any tag methods.
+> **Note:** `TagOnly` defaults to `false`, meaning registrations are included in both the default method and any tag methods.
 
 ## Using Tags
 
@@ -96,7 +96,7 @@ Apply tags and exclusion settings to all implementations via `IoCRegisterDefault
 [IoCRegisterDefaults<IMediator>(
     ServiceLifetime.Singleton,
     Tags = ["Mediator"],
-    ExcludeFromDefault = true)]  // All IMediator implementations excluded from AddMyProject()
+    TagOnly = true)]  // All IMediator implementations only in AddMyProject_Mediator()
 public interface IMediator;
 
 [IoCRegister]

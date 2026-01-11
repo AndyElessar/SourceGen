@@ -194,7 +194,7 @@ public static class ServiceCollectionExtensions
       Lifetime = ServiceLifetime.Singleton,
       ServiceTypes = [typeof(IMyTaggedService2)],
       Tags = ["Tag1"],
-      ExcludeFromDefault = true)] // Exclude from default registration
+      TagOnly = true)] // Only register in tag-specific methods
     public class MyTaggedServiceImplementation2 : IMyTaggedService2;
     #endregion
 

@@ -7,7 +7,7 @@ public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSe
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>), typeof(HandlerDecorator3<,>)],
-    ExcludeFromDefault = true,
+    TagOnly = true,
     Tags = ["Mediator"]
 )]
 public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>

@@ -56,7 +56,7 @@ public class TagsTests
     }
 
     [Test]
-    public async Task Tags_ExcludeFromDefault_ExcludesFromDefaultMethod()
+    public async Task Tags_TagOnly_ExcludesFromDefaultMethod()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -77,7 +77,7 @@ public class TagsTests
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyTaggedService2)],
                 Tags = ["Tag1"],
-                ExcludeFromDefault = true)]
+                TagOnly = true)]
             public class MyTaggedService2 : IMyTaggedService2 { }
             """;
 

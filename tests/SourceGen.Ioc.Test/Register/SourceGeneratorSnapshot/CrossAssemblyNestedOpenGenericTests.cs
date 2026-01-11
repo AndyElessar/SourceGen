@@ -24,7 +24,7 @@ public class CrossAssemblyNestedOpenGenericTests
             [IoCRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
-                ExcludeFromDefault = true,
+                TagOnly = true,
                 Tags = ["Mediator"]
             )]
             public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
@@ -105,7 +105,7 @@ public class CrossAssemblyNestedOpenGenericTests
             [IoCRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
-                ExcludeFromDefault = true,
+                TagOnly = true,
                 Tags = ["Mediator"]
             )]
             public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
@@ -183,7 +183,7 @@ public class CrossAssemblyNestedOpenGenericTests
             [IoCRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
-                ExcludeFromDefault = true,
+                TagOnly = true,
                 Tags = ["Mediator"]
             )]
             public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
@@ -260,7 +260,7 @@ public class CrossAssemblyNestedOpenGenericTests
             [IoCRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
-                ExcludeFromDefault = true,
+                TagOnly = true,
                 Tags = ["Mediator"]
             )]
             public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>

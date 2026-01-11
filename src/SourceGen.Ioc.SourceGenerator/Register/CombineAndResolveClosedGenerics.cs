@@ -30,7 +30,7 @@ partial class RegisterSourceGenerator
             // Add service registrations to method groups
             foreach(var model in result.ServiceRegistrations)
             {
-                if(!result.ExcludeFromDefault)
+                if(!result.TagOnly)
                 {
                     AddToMethodGroup(methodGroups, DefaultMethodKey, model);
                 }
@@ -273,7 +273,7 @@ partial class RegisterSourceGenerator
             openGenericInfo.Instance);
 
         // Add to method groups
-        if(!openGenericInfo.ExcludeFromDefault)
+        if(!openGenericInfo.TagOnly)
         {
             AddToMethodGroup(methodGroups, DefaultMethodKey, implModel);
         }
@@ -321,7 +321,7 @@ partial class RegisterSourceGenerator
                 openGenericInfo.Factory,
                 openGenericInfo.Instance);
 
-            if(!openGenericInfo.ExcludeFromDefault)
+            if(!openGenericInfo.TagOnly)
             {
                 AddToMethodGroup(methodGroups, DefaultMethodKey, serviceModel);
             }

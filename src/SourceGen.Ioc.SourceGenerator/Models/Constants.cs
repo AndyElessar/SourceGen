@@ -127,10 +127,10 @@ internal static class Constants
         }
 
         /// <summary>
-        /// Gets the ExcludeFromDefault value from the attribute.
+        /// Gets the TagOnly value from the attribute.
         /// </summary>
-        public bool GetExcludeFromDefault() =>
-            attribute.GetNamedArgument<bool>("ExcludeFromDefault", false);
+        public bool GetTagOnly() =>
+            attribute.GetNamedArgument<bool>("TagOnly", false);
 
         /// <summary>
         /// Gets the Key and KeyType from the attribute.
@@ -354,7 +354,7 @@ internal static class Constants
             var typeData = targetServiceType.GetTypeData();
             var decorators = attribute.GetDecorators();
             var tags = attribute.GetTags();
-            var excludeFromDefault = attribute.GetExcludeFromDefault();
+            var tagOnly = attribute.GetTagOnly();
 
             return new DefaultSettingsModel(
                 typeData,
@@ -364,7 +364,7 @@ internal static class Constants
                 serviceTypes,
                 decorators,
                 tags,
-                excludeFromDefault);
+                tagOnly);
         }
 
         /// <summary>
@@ -393,7 +393,7 @@ internal static class Constants
             var typeData = targetServiceType.GetTypeData();
             var decorators = attribute.GetDecorators();
             var tags = attribute.GetTags();
-            var excludeFromDefault = attribute.GetExcludeFromDefault();
+            var tagOnly = attribute.GetTagOnly();
 
             return new DefaultSettingsModel(
                 typeData,
@@ -403,7 +403,7 @@ internal static class Constants
                 serviceTypes,
                 decorators,
                 tags,
-                excludeFromDefault);
+                tagOnly);
         }
     }
 

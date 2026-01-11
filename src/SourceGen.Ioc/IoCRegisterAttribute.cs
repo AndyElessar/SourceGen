@@ -78,9 +78,11 @@ public sealed class IoCRegisterAttribute : Attribute
     public Type[] Decorators { get; init; } = [];
 
     /// <summary>
-    /// Gets a value indicating whether to exclude this class from default registrations.
+    /// Gets a value indicating whether this registration should only appear in tagged extension methods.
+    /// When <see langword="true"/>, this service is excluded from the default registration method
+    /// and will only be registered in tag-specific methods defined by <see cref="Tags"/>.
     /// </summary>
-    public bool ExcludeFromDefault { get; init; }
+    public bool TagOnly { get; init; }
 
     /// <summary>
     /// Gets the collection of tags associated with this registration.<br/>
@@ -144,8 +146,8 @@ public sealed class IoCRegisterAttribute<T> : Attribute
     /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.ExcludeFromDefault"/>
-    public bool ExcludeFromDefault { get; init; }
+    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
@@ -199,8 +201,8 @@ public sealed class IoCRegisterAttribute<T1, T2> : Attribute
     /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.ExcludeFromDefault"/>
-    public bool ExcludeFromDefault { get; init; }
+    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
@@ -255,8 +257,8 @@ public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
     /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.ExcludeFromDefault"/>
-    public bool ExcludeFromDefault { get; init; }
+    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
@@ -312,8 +314,8 @@ public sealed class IoCRegisterAttribute<T1, T2, T3, T4> : Attribute
     /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.ExcludeFromDefault"/>
-    public bool ExcludeFromDefault { get; init; }
+    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];

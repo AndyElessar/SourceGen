@@ -53,9 +53,9 @@ partial class RegisterSourceGenerator
             ? registration.Tags
             : (matchingDefault?.Tags ?? registration.Tags);
 
-        var excludeFromDefault = registration.Tags.Length > 0 || registration.ExcludeFromDefault
-            ? registration.ExcludeFromDefault
-            : (matchingDefault?.ExcludeFromDefault ?? false);
+        var tagOnly = registration.Tags.Length > 0 || registration.TagOnly
+            ? registration.TagOnly
+            : (matchingDefault?.TagOnly ?? false);
 
         // Create service registration models
         var serviceRegistrations = CreateServiceRegistrations(
@@ -71,7 +71,7 @@ partial class RegisterSourceGenerator
             lifetime,
             decorators,
             tags,
-            excludeFromDefault);
+            tagOnly);
 
         // Collect closed generic dependencies
         var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration);
@@ -79,7 +79,7 @@ partial class RegisterSourceGenerator
         return new BasicRegistrationResult(
             serviceRegistrations,
             tags,
-            excludeFromDefault,
+            tagOnly,
             openGenericEntries,
             closedGenericDependencies);
     }
@@ -496,7 +496,7 @@ partial class RegisterSourceGenerator
         ServiceLifetime lifetime,
         ImmutableEquatableArray<TypeData> decorators,
         ImmutableEquatableArray<string> tags,
-        bool excludeFromDefault)
+        bool tagOnly)
     {
         var implementationType = registration.ImplementationType;
 
@@ -515,7 +515,7 @@ partial class RegisterSourceGenerator
             registration.KeyType,
             decorators,
             tags,
-            excludeFromDefault,
+            tagOnly,
             registration.InjectionMembers,
             registration.Factory,
             registration.Instance);

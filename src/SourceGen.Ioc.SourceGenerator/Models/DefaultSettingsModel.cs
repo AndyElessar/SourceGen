@@ -10,7 +10,7 @@
 /// <param name="ServiceTypes">Additional service types to register by default.</param>
 /// <param name="Decorators">The decorator types to apply by default.</param>
 /// <param name="Tags">The collection of tags associated with this default setting.</param>
-/// <param name="ExcludeFromDefault">Whether to exclude registrations from the default registration method.</param>
+/// <param name="TagOnly">Whether registrations should only appear in tagged extension methods.</param>
 internal sealed record class DefaultSettingsModel(
     TypeData TargetServiceType,
     ServiceLifetime Lifetime,
@@ -19,4 +19,4 @@ internal sealed record class DefaultSettingsModel(
     ImmutableEquatableArray<TypeData> ServiceTypes,
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
-    bool ExcludeFromDefault);
+    bool TagOnly);
