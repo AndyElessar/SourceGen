@@ -2,7 +2,21 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- dotnet tool configuration -->
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>sourcegen-ioc</ToolCommandName>
+    <!-- NuGet Package Metadata -->
+    <PackageId>SourceGen.Ioc.Cli</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/AndyElessar/SourceGen</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/AndyElessar/SourceGen.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ConsoleAppFramework">

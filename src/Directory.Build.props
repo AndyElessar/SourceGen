@@ -9,8 +9,17 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <Description>Dependency injection source generator for C#</Description>
+    <Authors>Andy Elessar</Authors>
+    <Copyright>2026</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>source generator, dependency injection, decorator pattern</PackageTags>
     <PackageOutputPath>$(RepoRoot)artifacts/</PackageOutputPath>
+    <!-- Source Link support -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
