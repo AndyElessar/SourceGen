@@ -1,8 +1,12 @@
 name: CI
 
 on:
+  workflow_dispatch:
+
   push:
     branches: [main]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
 
@@ -14,7 +18,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,16 +34,15 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore -c Release
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test --no-build -c Release --verbosity normal
 
   pack:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,13 +58,37 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore -c Release
 
-      - name: Pack
-        run: dotnet pack --no-build --configuration Release
+      - name: Pack SourceGen.Ioc
+        run: dotnet pack src/SourceGen.Ioc/SourceGen.Ioc.csproj --no-build -c Release -o ./artifacts
 
-      - name: Upload NuGet packages
+      - name: Pack SourceGen.Ioc.Cli
+        run: dotnet pack src/SourceGen.Ioc.Cli/SourceGen.Ioc.Cli.csproj --no-build -c Release -o ./artifacts
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
-          path: artifacts/*.nupkg
+          path: ./artifacts/*.nupkg
+          retention-days: 7
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: pack
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Push to NuGet
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
