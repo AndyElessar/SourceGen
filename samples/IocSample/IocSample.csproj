@@ -6,7 +6,6 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
   <ItemGroup>

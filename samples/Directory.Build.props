@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="..\Directory.Build.props" />
+
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+</Project>

@@ -6,7 +6,7 @@ A collection of C# Source Generators for compile-time code generation.
 
 | Package | Description |
 |---------|-------------|
-| SourceGen.Ioc | IoC/DI registration source generator for Microsoft.Extensions.DependencyInjection.Abstractions |
+| SourceGen.Ioc | IoC/DI registration source generator for `Microsoft.Extensions.DependencyInjection.Abstractions` |
 | SourceGen.Ioc.Cli | CLI tool for adding IoC attributes to existing projects |
 
 ## SourceGen.Ioc

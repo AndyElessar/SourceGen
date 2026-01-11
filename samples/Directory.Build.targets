@@ -1,0 +1,6 @@
+<Project>
+  <ItemGroup>
+    <!-- Exclude the output of source generators from the compilation (must be in .targets to run after SDK default includes) -->
+    <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs" />
+  </ItemGroup>
+</Project>

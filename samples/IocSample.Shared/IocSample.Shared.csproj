@@ -4,8 +4,6 @@
   <Import Project="..\..\src\SourceGen.Ioc\build\SourceGen.Ioc.props" />
 
   <PropertyGroup>
-    <IsAotCompatible>true</IsAotCompatible>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <SourceGenIocName>Shared</SourceGenIocName>
   </PropertyGroup>
 
