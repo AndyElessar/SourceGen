@@ -72,7 +72,7 @@ public sealed class IoCRegisterForAttribute(Type targetType) : Attribute
 public sealed class IoCRegisterForAttribute<T> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterForAttribute{}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IoCRegisterForAttribute{T}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
     public IoCRegisterForAttribute()
@@ -80,7 +80,7 @@ public sealed class IoCRegisterForAttribute<T> : Attribute
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterForAttribute{}"/> class.
+    /// Initializes a new instance of the <see cref="IoCRegisterForAttribute{T}"/> class.
     /// </summary>
     /// <param name="lifetime">Specifies the service lifetime for the registration.</param>
     public IoCRegisterForAttribute(ServiceLifetime lifetime)

@@ -112,7 +112,7 @@ public sealed class IoCRegisterAttribute : Attribute
 public sealed class IoCRegisterAttribute<T> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
     public IoCRegisterAttribute()
@@ -120,7 +120,7 @@ public sealed class IoCRegisterAttribute<T> : Attribute
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{}"/> class.
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
     public IoCRegisterAttribute(ServiceLifetime lifetime)
@@ -167,7 +167,7 @@ public sealed class IoCRegisterAttribute<T> : Attribute
 public sealed class IoCRegisterAttribute<T1, T2> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
     public IoCRegisterAttribute()
@@ -175,7 +175,7 @@ public sealed class IoCRegisterAttribute<T1, T2> : Attribute
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,}"/> class.
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
     public IoCRegisterAttribute(ServiceLifetime lifetime)
@@ -223,7 +223,7 @@ public sealed class IoCRegisterAttribute<T1, T2> : Attribute
 public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
     public IoCRegisterAttribute()
@@ -231,7 +231,7 @@ public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,}"/> class.
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
     public IoCRegisterAttribute(ServiceLifetime lifetime)
@@ -280,7 +280,7 @@ public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
 public sealed class IoCRegisterAttribute<T1, T2, T3, T4> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,,}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3,T4}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
     public IoCRegisterAttribute()
@@ -288,7 +288,7 @@ public sealed class IoCRegisterAttribute<T1, T2, T3, T4> : Attribute
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{,,,}"/> class.
+    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3,T4}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
     public IoCRegisterAttribute(ServiceLifetime lifetime)

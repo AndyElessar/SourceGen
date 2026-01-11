@@ -45,9 +45,9 @@ public sealed class IoCRegisterDefaultsAttribute(Type targetServiceType, Service
 #if NET7_0_OR_GREATER
 
 /// <summary>
-/// Sepcifies default settings for types marked with <see cref="IoCRegisterAttribute{}"/> and implement/inherit <typeparamref name="T"/>.
+/// Sepcifies default settings for types marked with <see cref="IoCRegisterAttribute{T}"/> and implement/inherit <typeparamref name="T"/>.
 /// </summary>
-/// <typeparam name="T">Find types marked with <see cref="IoCRegisterAttribute{}"/> and implement/inherit <typeparamref name="T"/>.
+/// <typeparam name="T">Find types marked with <see cref="IoCRegisterAttribute{T}"/> and implement/inherit <typeparamref name="T"/>.
 /// Apply settings from this attribute as defaults.</typeparam>
 /// <param name="lifetime">The lifetime with which the service should be registered in the dependency injection container.
 /// Determines the scope of the service instance.</param>
