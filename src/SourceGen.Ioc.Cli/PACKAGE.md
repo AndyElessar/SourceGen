@@ -18,18 +18,18 @@ sourcegen-ioc [options]
 
 ### Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-t`, `--target` | Target directory or file | Current directory |
-| `-f`, `--file-pattern` | File pattern to filter files | `*.cs` |
-| `-s`, `--search-sub-directories` | Search subdirectories | `false` |
-| `-cn`, `--class-name-regex` | Regex pattern to match class names | `null` |
-| `--full-regex` | Full regex pattern to match file content | `null` |
-| `--attribute-name` | Name of the attribute to add | `IocRegister` |
-| `-m`, `--max-apply` | Maximum matches to apply (0 = unlimited) | `0` |
-| `-n`, `--dry-run` | Preview changes without modifying files | `false` |
-| `-v`, `--verbose` | Enable detailed logging | `false` |
-| `--log` | Log file path | `""` |
+|Option|Description|Default|
+|:---|:---|:---|
+|`-t`, `--target`|Target directory or file|Current directory|
+|`-f`, `--file-pattern`|File pattern to filter files|`*.cs`|
+|`-s`, `--search-sub-directories`|Search subdirectories|`false`|
+|`-cn`, `--class-name-regex`|Regex pattern to match class names|`null`|
+|`--full-regex`|Full regex pattern to match file content|`null`|
+|`--attribute-name`|Name of the attribute to add|`IocRegister`|
+|`-m`, `--max-apply`|Maximum matches to apply (0 = unlimited)|`0`|
+|`-n`, `--dry-run`|Preview changes without modifying files|`false`|
+|`-v`, `--verbose`|Enable detailed logging|`false`|
+|`--log`|Logging file path|`""`|
 
 ## Examples
 
@@ -73,18 +73,6 @@ When using `-cn` or `--class-name-regex`, the tool matches non-static `public` o
 
 ```regex
 (public|internal)\s+(?!static\s+).*class\s+(classNameRegex)(?=\s|:|$)
-```
-
-## CLI Schema Command
-
-Output CLI schema in JSON format (useful for LLM/AI integration):
-
-```bash
-# Output schema for all commands
-sourcegen-ioc cli-schema
-
-# Write schema to file
-sourcegen-ioc cli-schema -t ./cli-schema.json
 ```
 
 ## Workflow

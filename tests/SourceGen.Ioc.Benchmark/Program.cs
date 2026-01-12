@@ -1,0 +1,2 @@
+﻿
+BenchmarkRunner.Run<DependencyInjectionRegistrationBenchmark>();

@@ -1,17 +1,17 @@
 # SourceGen.Ioc
 
-A C# source generator that automatically generates dependency injection registration code at compile time for `Microsoft.Extensions.DependencyInjection`.
+A C# source generator that automatically generates dependency injection registration code at compile time for `Microsoft.Extensions.DependencyInjection.Abstractions`.
 
 ## Why Use SourceGen.Ioc?
 
-| Feature | MS.DI | SourceGen.Ioc |
-|---------|-------|---------------|
-| Open Generic | Runtime resolution only | Auto-discovers closed types |
-| Nested Open Generic | ❌ Not supported | ✅ Fully supported |
-| Decorator Pattern | ❌ Not supported | ✅ Built-in support |
-| Lifecycle validation | Runtime errors | ✅ Compile-time analyzer |
-| Circular dependency | Runtime errors | ✅ Compile-time analyzer |
-| Field/Property Injection | ❌ Not supported | ✅ `[Inject]` attribute |
+|Feature|MS.DI|SourceGen.Ioc|
+|:---|:---|:---|
+|Open Generic|Runtime resolution only|Auto-discovers closed types|
+|Nested Open Generic|❌ Not supported|✅ Fully supported|
+|Decorator Pattern|❌ Not supported|✅ Built-in support|
+|Lifecycle validation|Runtime errors|✅ Compile-time analyzer|
+|Circular dependency|Runtime errors|✅ Compile-time analyzer|
+|Field/Property/Method Injection|❌ Not supported|✅ `[Inject]` attribute|
 
 ## Installation
 
@@ -84,7 +84,7 @@ internal class MyService : IMyService
 [IoCRegisterDefaults<IHandler>(Decorators = [typeof(LoggingDecorator<>), typeof(CachingDecorator<>)])]
 internal partial class Defaults;
 
-[IoCRegister<IHandler>]
+[IoCRegister]
 internal class MyHandler : IHandler;
 ```
 
@@ -106,7 +106,7 @@ internal class GenericHandler<T> : IHandler<T>;
 
 // Auto-discovers closed types from usage:
 // - Constructor injection
-// - Property/Field injection
+// - Field/Property/Method injection
 // - IServiceProvider.GetService<T>() calls
 ```
 
