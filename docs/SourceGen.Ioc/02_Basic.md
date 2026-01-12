@@ -9,6 +9,9 @@ public interface IMyService;
 
 [IoCRegister<IMyService>]
 internal class MyService : IMyService;
+// Or non-generic version
+[IoCRegister(typeof(IMyService))]
+internal class MyService : IMyService;
 ```
 
 ## Specifying Lifetime

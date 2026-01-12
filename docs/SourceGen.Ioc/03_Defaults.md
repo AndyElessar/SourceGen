@@ -6,7 +6,8 @@ Use `[IoCRegisterDefaults<T>]` to define default registration settings for all t
 
 ```csharp
 // All classes implementing IHandler will be registered as Transient by default
-[IoCRegisterDefaults<IHandler>(ServiceLifetime.Transient)]
+[assembly: IoCRegisterDefaults<IHandler>(ServiceLifetime.Transient)]
+
 public interface IHandler;
 
 // Uses default lifetime (Transient) from IHandler
@@ -21,7 +22,8 @@ internal class SingletonHandler : IHandler;
 ## Default Service Types
 
 ```csharp
-[IoCRegisterDefaults<IRepository>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository)])]
+[assembly: IoCRegisterDefaults<IRepository>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository)])]
+
 public interface IRepository;
 
 // Automatically registered as IRepository
@@ -29,10 +31,15 @@ public interface IRepository;
 internal class UserRepository : IRepository;
 ```
 
-## Assembly-Level Defaults
+## Mark on assembly or marker type
 
 ```csharp
+// Assembly
 [assembly: IoCRegisterDefaults<IService>(ServiceLifetime.Scoped)]
+
+// Or marker class
+[IoCRegisterDefaults<IService>(ServiceLifetime.Scoped)]
+public class Marker;
 ```
 
 ## Import Module Defaults
@@ -48,7 +55,7 @@ public interface IRequestHandler<TRequest, TResponse>;
 [IoCRegisterDefaults(typeof(IRequestHandler<,>), ServiceLifetime.Transient)]
 public sealed class SharedMarker;
 
-// In consuming project, will import defaults from attribute on `SharedMarker` or its assembly
+// In consuming project, **only** import defaults from attribute on `SharedMarker` or its assembly
 [ImportModule(typeof(SharedMarker))]
 public sealed class Module;
 ```

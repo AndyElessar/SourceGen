@@ -76,8 +76,24 @@ internal static class Constants
         public (bool HasArg, bool Value) TryGetRegisterAllBaseClasses() =>
             attribute.TryGetNamedArgument<bool>("RegisterAllBaseClasses", false);
 
-        public ImmutableEquatableArray<TypeData> GetServiceTypes() =>
-            attribute.GetTypeArrayArgument("ServiceTypes");
+        /// <summary>
+        /// Gets the service types from the attribute.
+        /// This method checks both named arguments and constructor arguments for service types.
+        /// </summary>
+        /// <remarks>
+        /// The method first checks for a named argument "ServiceTypes" (e.g., ServiceTypes = [typeof(IService)]).
+        /// If not found, it checks constructor arguments for an array of types (e.g., params Type[] serviceTypes).
+        /// </remarks>
+        public ImmutableEquatableArray<TypeData> GetServiceTypes()
+        {
+            // First, try to get from named argument
+            var namedResult = attribute.GetTypeArrayArgument("ServiceTypes");
+            if(namedResult.Length > 0)
+                return namedResult;
+
+            // Fall back to constructor argument (params Type[] serviceTypes)
+            return attribute.GetTypeArrayFromConstructorArgument();
+        }
 
         /// <summary>
         /// Gets the service types from generic attribute type parameters (e.g., IoCRegisterAttribute&lt;T1, T2&gt;).

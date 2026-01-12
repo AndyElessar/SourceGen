@@ -165,7 +165,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 </details>
 
-## Using [FromKeyedServices]
+## Using `[FromKeyedServices]`
 
 You can also use the standard `[FromKeyedServices]` attribute:
 
@@ -193,7 +193,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 </details>
 
-## Using [Inject] from `Microsoft.AspNetCore.Components` or other libraries
+## Using `[Inject]` from `Microsoft.AspNetCore.Components` or other libraries
 
 You can also use any attribute that name is `[Inject]`, for example `Microsoft.AspNetCore.Components.InjectAttribute`:
 

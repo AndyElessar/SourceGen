@@ -75,7 +75,8 @@ public static IServiceCollection AddMyProject_Feature1(this IServiceCollection s
 }
 ```
 
-> **Note:** `TagOnly` defaults to `false`, meaning registrations are included in both the default method and any tag methods.
+> [!Note]  
+> `TagOnly` defaults to `false`, meaning registrations are included in both the default method and any tag methods.
 
 ## Using Tags
 

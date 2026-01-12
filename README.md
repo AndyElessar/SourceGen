@@ -4,10 +4,10 @@ A collection of C# Source Generators for compile-time code generation.
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| SourceGen.Ioc | IoC/DI registration source generator for `Microsoft.Extensions.DependencyInjection.Abstractions` |
-| SourceGen.Ioc.Cli | CLI tool for adding IoC attributes to existing projects |
+|Package|Description|
+|:---|:---|
+|SourceGen.Ioc|IoC/DI registration source generator for `Microsoft.Extensions.DependencyInjection.Abstractions`|
+|SourceGen.Ioc.Cli|CLI tool for adding IoC attributes to existing projects|
 
 ## SourceGen.Ioc
 
@@ -17,13 +17,13 @@ A source generator that automatically generates dependency injection registratio
 
 Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.DI`:
 
-| | MS.DI | SourceGen.Ioc |
-|---|---|---|
-| Open Generic | Runtime resolution only | Auto-discovers closed types from usage |
-| Nested Open Generic | ❌ Not supported | ✅ Fully supported |
-| Decorator Pattern | ❌ Not supported | ✅ Fully supported with type constraint validation |
-| Lifecycle validation | Runtime errors | ✅ Compile-time analyzer |
-| Circular dependency | Runtime errors | ✅ Compile-time analyzer |
+||MS.DI|SourceGen.Ioc|
+|:-|:-|:-|
+|Open Generic|Runtime resolution only|Auto-discovers closed types from usage|
+|Nested Open Generic|❌ Not supported|✅ Fully supported|
+|Decorator Pattern|❌ Not supported|✅ Fully supported with type constraint validation|
+|Lifecycle validation|Runtime errors|✅ Compile-time analyzer|
+|Circular dependency|Runtime errors|✅ Compile-time analyzer|
 
 1. **Compile-time Code Generation** - All registration code is generated at compile time, eliminating runtime reflection overhead and enabling better AOT/trimming support
 
@@ -33,7 +33,7 @@ Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.DI`:
 
 4. **Compile-time Analyzers** - Detects lifetime conflicts (e.g., Singleton depending on Scoped) and circular dependencies at compile time, not runtime
 
-5. **Field/Property/Method Injection** - Use `[Inject]` attribute for injection beyond constructors, `MS.DI` only supports constructor injection
+5. **Field/Property/Method Injection** - Use `[Inject]` attribute for injection beyond constructors
 
 6. **Decorator Pattern with Type Constraint Validation** - Built-in decorator chain support with automatic type constraint checking, skips non-matching decorators
 
@@ -70,4 +70,3 @@ See [SourceGen.Ioc Documentation](docs/SourceGen.Ioc/01_Overview.md) for complet
 ## License
 
 This project is licensed under the MIT License.
-

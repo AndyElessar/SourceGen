@@ -27,22 +27,23 @@ services.AddScoped(typeof(global::MyNamespace.IRepository<>), typeof(global::MyN
 ## Auto-Discovery
 
 The generator automatically discovers closed generic types used in:
+
 - Constructor parameters
 - Property/field types marked with `[Inject]`
 - Method parameters that method are marked with `[Inject]`
 - `IServiceProvider` invocations:
-    - `GetService(typeof(T))`
-    - `GetService<T>()`
-    - `GetRequiredService(typeof(T))`
-    - `GetRequiredService<T>()`
-    - `GetKeyedService(typeof(T), Key)`
-    - `GetKeyedService<T>(Key)`
-    - `GetRequiredKeyedService(typeof(T), Key)`
-    - `GetRequiredKeyedService<T>(Key)`
-    - `GetServices(typeof(T))`
-    - `GetServices<T>()`
-    - `GetKeyedServices(typeof(T), Key)`
-    - `GetKeyedServices<T>(Key)`
+  - `GetService(typeof(T))`
+  - `GetService<T>()`
+  - `GetRequiredService(typeof(T))`
+  - `GetRequiredService<T>()`
+  - `GetKeyedService(typeof(T), Key)`
+  - `GetKeyedService<T>(Key)`
+  - `GetRequiredKeyedService(typeof(T), Key)`
+  - `GetRequiredKeyedService<T>(Key)`
+  - `GetServices(typeof(T))`
+  - `GetServices<T>()`
+  - `GetKeyedServices(typeof(T), Key)`
+  - `GetKeyedServices<T>(Key)`
 
 ```csharp
 public interface ILogger<T>;
@@ -81,7 +82,7 @@ services.AddSingleton<global::MyNamespace.UserService>((global::System.IServiceP
 
 ## Nested Generic Types
 
-SourceGen.Ioc supports nested open generic service interfaces that standard DI container cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), the runtime DI container cannot properly map from the open generic registration to the correct closed generic type.
+SourceGen.Ioc supports nested open generic service interfaces that standard DI container cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.DI` cannot properly map from the open generic registration to the correct closed generic type.
 
 ```csharp
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
@@ -94,8 +95,10 @@ internal class GenericRequestHandler<T> : IRequestHandler<GenericRequest<T>, Lis
 
 public class Entity;
 
-[Discover<IRequestHandler<GenericRequest<Entity>, List<Entity>>>]
-internal class Consumer;
+internal class ViewModel(IRequestHandler<GenericRequest<Entity>, List<Entity>> handler)
+{
+    // ...
+}
 ```
 
 <details>
@@ -113,9 +116,10 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Ge
 
 </details>
 
-> **Note:** The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. The standard DI container cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. SourceGen.Ioc handles this through compile-time code generation.
+> [!NOTE]  
+> The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. SourceGen.Ioc handles this through compile-time code generation.
 
-## Manual Discovery with [Discover]
+## Manual Discovery with `[Discover]`
 
 For types not directly referenced in code, use `[Discover]` attribute:
 

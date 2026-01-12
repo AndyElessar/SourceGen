@@ -8,14 +8,14 @@
     <ToolCommandName>sourcegen-ioc</ToolCommandName>
     <!-- NuGet Package Metadata -->
     <PackageId>SourceGen.Ioc.Cli</PackageId>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/AndyElessar/SourceGen</PackageProjectUrl>
     <RepositoryUrl>https://github.com/AndyElessar/SourceGen.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="PACKAGE.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

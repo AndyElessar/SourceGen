@@ -734,6 +734,41 @@ internal static class RoslynExtensions
         }
 
         /// <summary>
+        /// Gets an array of type symbols from an attribute constructor argument of type <c>params Type[]</c>.
+        /// This is the constructor-argument counterpart to <see cref="GetTypeArrayArgument"/>, and is used when
+        /// service types are supplied positionally to the attribute constructor instead of via a named <c>Type[]</c> argument.
+        /// </summary>
+        /// <remarks>
+        /// This method scans the attribute's constructor arguments for an array (or <c>params</c>) argument that contains
+        /// type values (for example, <c>params Type[] serviceTypes</c>) and converts those <see cref="ITypeSymbol"/> instances
+        /// to <see cref="TypeData"/>. It skips non-type arguments, such as <c>ServiceLifetime</c> enum values.
+        /// </remarks>
+        public ImmutableEquatableArray<TypeData> GetTypeArrayFromConstructorArgument(bool extractConstructorParams = false)
+        {
+            foreach(var ctorArg in attributeData.ConstructorArguments)
+            {
+                // Look for an array argument containing type values
+                if(ctorArg.Kind == TypedConstantKind.Array && !ctorArg.IsNull)
+                {
+                    List<TypeData> result = [];
+                    foreach(var value in ctorArg.Values)
+                    {
+                        if(value.Value is ITypeSymbol typeSymbol)
+                        {
+                            result.Add(typeSymbol.GetTypeData(extractConstructorParams));
+                        }
+                    }
+
+                    // Only return if we found type values
+                    if(result.Count > 0)
+                        return result.ToImmutableEquatableArray();
+                }
+            }
+
+            return [];
+        }
+
+        /// <summary>
         /// Tries to get the original syntax for a named argument, especially for <see langword="nameof"/> expressions.
         /// When a <see cref="SemanticModel"/> is provided, resolves the full access path of the referenced symbol.
         /// </summary>

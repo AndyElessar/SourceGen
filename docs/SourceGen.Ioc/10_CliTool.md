@@ -20,24 +20,24 @@ sourcegen-ioc [options]
 
 #### Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-t`, `--target` | Target directory or file, defaults to current directory | `null` (current directory) |
-| `-f`, `--file-pattern` | File pattern to filter files | `*.cs` |
-| `-s`, `--search-sub-directories` | Whether to search sub directories | `false` |
-| `-cn`, `--class-name-regex` | Regex pattern to match class names | `null` |
-| `--full-regex` | Full regex pattern to match file content | `null` |
-| `--attribute-name` | Name of the attribute to add | `IocRegister` |
-| `-m`, `--max-apply` | How many matches should apply, 0 means unlimited | `0` |
-| `-n`, `--dry-run` | Dry run, does not modify files | `false` |
-| `-v`, `--verbose` | Detailed logging message | `false` |
-| `--log` | Log file path | `""` |
+|Option|Description|Default|
+|:---|:---|:---|
+|`-t`, `--target`|Target directory or file, defaults to current directory|`null` (current directory)|
+|`-f`, `--file-pattern`|File pattern to filter files|`*.cs`|
+|`-s`, `--search-sub-directories`|Whether to search sub directories|`false`|
+|`-cn`, `--class-name-regex`|Regex pattern to match class names|`null`|
+|`--full-regex`|Full regex pattern to match file content|`null`|
+|`--attribute-name`|Name of the attribute to add|`IocRegister`|
+|`-m`, `--max-apply`|How many matches should apply, 0 means unlimited|`0`|
+|`-n`, `--dry-run`|Dry run, does not modify files|`false`|
+|`-v`, `--verbose`|Detailed logging message|`false`|
+|`--log`|Logging file path|`""`|
 
 #### Class Name Regex
 
 When using `-cn` or `--class-name-regex` option, the actual regex used is:
 
-```
+```regex
 (public|internal)\s+(?!static\s+).*class\s+(classNameRegex)(?=\s|:|$)
 ```
 
@@ -76,17 +76,17 @@ Output CLI schema in JSON format for LLM AI.
 sourcegen-ioc cli-schema [options]
 ```
 
-#### Options
+#### cli-schema Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-c`, `--command` | Command name | `null` (all) |
-| `-t`, `--target` | Target file/folder to write CLI schema | `null` (stdout) |
-| `-n`, `--dry-run` | Dry run | `false` |
-| `-v`, `--verbose` | Detailed logging message | `false` |
-| `--log` | Log file path | `""` |
+|Option|Description|Default|
+|:---|:---|:---|
+|`-c`, `--command`|Command name|`null` (all)|
+|`-t`, `--target`|Target file/folder to write CLI schema|`null` (stdout)|
+|`-n`, `--dry-run`|Dry run|`false`|
+|`-v`, `--verbose`|Detailed logging message|`false`|
+|`--log`|Logging file path|`""`|
 
-#### Examples
+#### cli-schema Examples
 
 ```bash
 # Output schema for all commands

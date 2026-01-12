@@ -16,6 +16,8 @@ namespace IocSample
         public static IServiceCollection AddIocSample(this IServiceCollection services)
         {
             services.AddTransient<global::IocSample.Basic2, global::IocSample.Basic2>();
+            services.AddTransient<global::IocSample.IBasic, global::IocSample.Basic2>();
+            services.AddTransient<global::IocSample.IBasic2, global::IocSample.Basic2>();
             services.AddTransient<global::IocSample.Default1, global::IocSample.Default1>();
             services.AddTransient<global::IocSample.IDenpendency2, global::IocSample.Default1>();
             services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();

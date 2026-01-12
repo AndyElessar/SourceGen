@@ -108,6 +108,9 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 </details>
 
+> [!NOTE]  
+> Constructor selection order: constructor with `[Inject]` &rarr; primary constructor &rarr; constructor with most parameters.
+
 ---
 
 [← Back to Overview](01_Overview.md)

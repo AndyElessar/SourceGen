@@ -439,4 +439,72 @@ public class BasicRegistrationTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task ServiceTypes_AsConstructorArguments_GeneratesCorrectRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IBasic { }
+            public interface IBasic2 { }
+
+            [IoCRegister(ServiceLifetime.Transient, typeof(IBasic), typeof(IBasic2))]
+            public class Basic2 : IBasic, IBasic2 { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceTypes_AsConstructorArguments_WithoutLifetime_GeneratesCorrectRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService1 { }
+            public interface IService2 { }
+
+            [IoCRegister(typeof(IService1), typeof(IService2))]
+            public class MultiService : IService1, IService2 { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceTypes_MixedConstructorAndNamedArguments_NamedArgumentTakesPrecedence()
+    {
+        // When both constructor arguments and named arguments specify service types,
+        // the named argument should take precedence (as it is more explicit).
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPreferred { }
+            public interface IIgnored { }
+
+            [IoCRegister(ServiceLifetime.Singleton, typeof(IIgnored), ServiceTypes = [typeof(IPreferred)])]
+            public class ServiceWithMixedArgs : IPreferred, IIgnored { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

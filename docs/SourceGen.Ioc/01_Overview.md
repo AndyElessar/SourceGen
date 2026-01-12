@@ -6,7 +6,7 @@ SourceGen.Ioc is a C# source generator that automatically generates dependency i
 
 ### Performance & AOT
 
-- **Minimal Runtime Reflection** - All registration code is generated at compile time, eliminating runtime reflection overhead
+- **Avoid Runtime Reflection** - All registration code is generated at compile time, eliminating runtime reflection overhead
 - **Open Generic Auto-Discovery** - Automatically discovers closed generic types from constructor/property/method injection and `IServiceProvider` invocations
 - **Nested Open Generic Support** - Supports nested open generic service interfaces (e.g., `IHandler<Request<T>, Response<T>>`) that standard DI cannot resolve at runtime, with both auto-discovery and manual `[Discover]` attribute
 - **AOT Compatible** - Works with Native AOT and trimming
@@ -19,7 +19,7 @@ SourceGen.Ioc is a C# source generator that automatically generates dependency i
 
 ### Flexible Configuration
 
-- **Field, Property & Method Injection** - Supports `[Inject]` attribute on fields, properties, methods, and constructor parameters
+- **Field, Property & Method Injection** - Supports `[Inject]` attribute on fields, properties, methods and constructors
 - **Centralized Defaults** - Use `[IoCRegisterDefaults<T>]` to define default settings for all implementations, with ability to override per-registration
 - **Decorator Pattern** - Built-in support for decorator chains with type constraint validation
 - **Keyed Services** - Full support for keyed service registration with string, enum, or C# expression keys
@@ -32,16 +32,19 @@ SourceGen.Ioc is a C# source generator that automatically generates dependency i
 
 ## Core Concepts
 
-### Attributes
+### Attributes Reference
 
-| Attribute | Description |
-|-----------|-------------|
-| `[IoCRegister]` | Mark a class for DI registration |
-| `[IoCRegisterFor<T>]` | Register an external type |
-| `[IoCRegisterDefaults<T>]` | Define default settings for types implementing T |
-| `[Inject]` | Mark property/field/method for injection |
-| `[ImportModule<T>]` | Import defaults from another module |
-| `[Discover<T>]` | Discover closed generic types for open generic registration |
+|Attribute|Description|
+|:---|:---|
+|`[IoCRegister]`<br/>`[IoCRegister<T>]`<br/>`[IoCRegister<T,T>]`<br/>`[IoCRegister<T,T,T>]`<br/>`[IoCRegister<T,T,T,T>]`|Mark a class for DI registration|
+|`[IoCRegisterFor]`<br/>`[IoCRegisterFor<T>]`|Register an external type|
+|`[IoCRegisterDefaults]`<br/>`[IoCRegisterDefaults<T>]`|Define default settings for types implementing T|
+|`[Inject]`|Mark property/field/method/constructor for injection, or parameter for keyed services|
+|`[ImportModule]`<br/>`[ImportModule<T>]`|Import defaults from another module|
+|`[Discover]`<br/>`[Discover<T>]`|Discover closed generic types for open generic registration|
+
+> [!NOTE]  
+> Generic attribute only supported in C# 11 and later.
 
 ### Generated Code
 

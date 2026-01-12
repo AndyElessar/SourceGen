@@ -1,10 +1,12 @@
 ﻿namespace IocSample;
 
 public interface IBasic;
+public interface IBasic2;
+
 [IoCRegister<IBasic>(ServiceLifetime.Scoped)]
 internal class Basic : IBasic;
-[IoCRegister(ServiceLifetime.Transient, typeof(IBasic))]
-internal class Basic2 : IBasic;
+[IoCRegister(ServiceLifetime.Transient, typeof(IBasic), typeof(IBasic2))]
+internal class Basic2 : IBasic, IBasic2;
 
 public interface IExternal;
 public class External : IExternal;
