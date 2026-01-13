@@ -196,13 +196,18 @@ internal static class RoslynExtensions
                 allBaseClasses = typeSymbol.GetAllBaseClasses();
             }
 
+            // Check if this is a non-IEnumerable collection type that requires factory method for DI
+            var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
+            var isNonEnumerableCollection = IsNonEnumerableCollectionType(nameWithoutGeneric);
+
             return new TypeData(
                 typeName,
-                GetNameWithoutGeneric(typeName),
+                nameWithoutGeneric,
                 typeSymbol.ContainsGenericParameters,
                 typeSymbol.Arity,
                 typeSymbol.IsNestedOpenGeneric,
                 IsTypeParameter: false, // Named types are not type parameters
+                isNonEnumerableCollection,
                 typeParameters,
                 constructorParams,
                 hasInjectConstructor,
@@ -317,6 +322,7 @@ internal static class RoslynExtensions
         public TypeData CreateBasicTypeData(int depth = 0)
         {
             var typeName = typeSymbol.FullyQualifiedName;
+            var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
 
             // Extract type parameters without constraints (to avoid recursion)
             ImmutableEquatableArray<TypeParameter>? typeParameters = null;
@@ -325,13 +331,17 @@ internal static class RoslynExtensions
                 typeParameters = typeSymbol.ExtractTypeParameters(extractConstraints: false, depth);
             }
 
+            // Check if this is a non-IEnumerable collection type
+            var isNonEnumerableCollection = IsNonEnumerableCollectionType(nameWithoutGeneric);
+
             return new TypeData(
                 typeName,
-                GetNameWithoutGeneric(typeName),
+                nameWithoutGeneric,
                 typeSymbol.ContainsGenericParameters,
                 typeSymbol.Arity,
                 typeSymbol.IsNestedOpenGeneric,
                 IsTypeParameter: false, // Named types are not type parameters
+                isNonEnumerableCollection,
                 typeParameters);
         }
 
@@ -561,6 +571,7 @@ internal static class RoslynExtensions
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 IsNestedOpenGeneric: false,
                 IsTypeParameter: false,
+                IsNonEnumerableCollection: true, // Arrays require factory method for DI
                 typeParameters);
         }
     }
@@ -1081,10 +1092,40 @@ internal static class RoslynExtensions
     };
 
     /// <summary>
+    /// Collection type names (without generic part) that require factory method for DI injection.
+    /// MS.DI only supports automatic injection for IEnumerable&lt;T&gt;, not these types.
+    /// </summary>
+    private static readonly HashSet<string> s_nonEnumerableCollectionTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.ICollection",
+        "global::System.Collections.Generic.IList",
+        "global::System.Collections.Generic.IReadOnlyCollection",
+        "global::System.Collections.Generic.IReadOnlyList",
+        "global::System.Collections.Generic.List",
+        "System.Collections.Generic.ICollection",
+        "System.Collections.Generic.IList",
+        "System.Collections.Generic.IReadOnlyCollection",
+        "System.Collections.Generic.IReadOnlyList",
+        "System.Collections.Generic.List",
+        "ICollection",
+        "IList",
+        "IReadOnlyCollection",
+        "IReadOnlyList",
+        "List"
+    };
+
+    /// <summary>
     /// Checks if the given type name (without generic part) is compatible with IEnumerable&lt;T&gt;.
     /// </summary>
     public static bool IsEnumerableCompatibleType(string nameWithoutGeneric) =>
         s_enumerableCompatibleTypes.Contains(nameWithoutGeneric);
+
+    /// <summary>
+    /// Checks if the given type name (without generic part) is a non-IEnumerable collection type.
+    /// These types require factory method for DI injection.
+    /// </summary>
+    public static bool IsNonEnumerableCollectionType(string nameWithoutGeneric) =>
+        s_nonEnumerableCollectionTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
     /// Resolves the full access path of a symbol referenced in a nameof() expression.

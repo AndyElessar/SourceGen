@@ -131,7 +131,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "When both [FromKeyedServices] and [Inject] attributes are applied to the same parameter, [FromKeyedServices] takes precedence and [Inject] is ignored.");
 
     /// <summary>
-    /// SGIOC011: Duplicated Registration Detected - Same implementation type and key are registered multiple times.
+    /// SGIOC011: Duplicated Registration Detected - Same implementation type, key, and at least one matching tag are registered multiple times.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicatedRegistration = new(
         id: "SGIOC011",
@@ -140,10 +140,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The same implementation type with the same key is registered multiple times. Only the last registration will be effective.");
+        description: "The same implementation type with the same key and at least one overlapping tag is registered multiple times. When TagOnly=false, an empty tag is added for comparison. Only the last registration will be effective.");
 
     /// <summary>
-    /// SGIOC012: Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.
+    /// SGIOC012: Duplicated IoCRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicatedDefaultSettings = new(
         id: "SGIOC012",
@@ -152,7 +152,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The same target type has multiple IoCRegisterDefaultsAttribute definitions. Only the first definition will be used.",
+        description: "The same target type with at least one overlapping tag has multiple IoCRegisterDefaultsAttribute definitions. When TagOnly=false, an empty tag is added for comparison. Only the first definition will be used.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
@@ -212,8 +212,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Collect default settings from IoCRegisterDefaultSettingsAttribute using shared method
         // Also collect duplicated default settings for SGIOC012 reporting
         var duplicatedDefaults = new ConcurrentBag<(string TargetTypeName, Location? Location)>();
-        // Track seen target types for SGIOC012 (shared between assembly and type-level)
-        var seenDefaultTargetTypes = new ConcurrentDictionary<string, Location?>();
+        // Track seen (target type, single tag) pairs for SGIOC012 (shared between assembly and type-level)
+        var seenDefaultTargetTypes = new ConcurrentDictionary<(string TargetTypeName, string Tag), Location?>();
         var defaultSettings = CollectDefaults(context.Compilation, iocRegisterDefaultsAttribute, iocRegisterDefaultsAttribute_T1, duplicatedDefaults, seenDefaultTargetTypes, context.CancellationToken);
 
         var analyzerContext = new AnalyzerContext(
@@ -260,7 +260,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// SGIOC012: Analyzes IoCRegisterDefaultsAttribute on types (class, struct, interface).
-    /// Reports warning when the same target type has multiple default settings.
+    /// Reports warning when the same target type with at least one matching tag has multiple default settings.
+    /// When TagOnly=false, the setting is considered to have an empty tag for comparison.
     /// </summary>
     private static void AnalyzeTypeLevelDefaultsAttribute(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
@@ -291,7 +292,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 continue;
             }
 
-            // Extract default settings to get target type name
+            // Extract default settings to get target type name and tags
             var settings = attributeClass.IsGenericType
                 ? attribute.ExtractDefaultSettingsFromGenericAttribute()
                 : attribute.ExtractDefaultSettings();
@@ -300,10 +301,28 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 continue;
 
             var targetTypeName = settings.TargetServiceType.Name;
+            var tags = settings.Tags;
+            var tagOnly = settings.TagOnly;
             var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
 
-            // SGIOC012: Check for duplicated target type (shared with assembly-level)
-            if(!analyzerContext.SeenDefaultTargetTypes.TryAdd(targetTypeName, location))
+            // Build effective tags list: if TagOnly=false, add empty string as a tag
+            var effectiveTags = tagOnly
+                ? tags
+                : [.. tags, ""];
+
+            // SGIOC012: Check each effective tag for duplicates (shared with assembly-level)
+            var hasDuplicate = false;
+            foreach(var tag in effectiveTags)
+            {
+                var defaultKey = (targetTypeName, tag);
+                if(!analyzerContext.SeenDefaultTargetTypes.TryAdd(defaultKey, location))
+                {
+                    hasDuplicate = true;
+                    break; // Only need to find one duplicate
+                }
+            }
+
+            if(hasDuplicate)
             {
                 // Report immediately for type-level attributes
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -822,8 +841,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC011: Analyzes for duplicated registrations (same implementation type and key).
-    /// Reports warning when the same (ImplementationType, Key) combination is registered multiple times.
+    /// SGIOC011: Analyzes for duplicated registrations (same implementation type, key, and at least one matching tag).
+    /// Reports warning when registrations share the same (ImplementationType, Key) and have at least one overlapping tag.
+    /// When TagOnly=false, the registration is considered to have an empty tag for comparison.
     /// </summary>
     private static void AnalyzeDuplicatedRegistration(
         Action<Diagnostic> reportDiagnostic,
@@ -833,14 +853,31 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         string fullyQualifiedTypeName,
         Location? location)
     {
-        // Get the registration key from the attribute
+        // Get the registration key and tags from the attribute
         var (key, _) = attribute.GetKey();
+        var tags = attribute.GetTags();
+        var tagOnly = attribute.GetTagOnly();
 
-        // Create a unique key for this registration: fully qualified type name + key
-        var registrationKey = (fullyQualifiedTypeName, key);
+        // Build effective tags list: if TagOnly=false, add empty string as a tag
+        var effectiveTags = tagOnly
+            ? tags
+            : [.. tags, ""];
 
-        // Try to add; if already exists, report duplicate
-        if(!analyzerContext.RegistrationKeys.TryAdd(registrationKey, location))
+        // Check each effective tag for duplicates
+        var hasDuplicate = false;
+        foreach(var tag in effectiveTags)
+        {
+            var registrationKey = (fullyQualifiedTypeName, key, tag);
+
+            // Try to add; if already exists, mark as duplicate
+            if(!analyzerContext.RegistrationKeys.TryAdd(registrationKey, location))
+            {
+                hasDuplicate = true;
+                break; // Only need to find one duplicate
+            }
+        }
+
+        if(hasDuplicate)
         {
             var keyPart = key is not null ? $" with key '{key}'" : "";
             reportDiagnostic(Diagnostic.Create(
@@ -1239,7 +1276,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? iocRegisterDefaultSettingsAttribute,
         INamedTypeSymbol? iocRegisterDefaultSettingsAttribute_T1,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
-        ConcurrentDictionary<string, Location?> seenTargetTypes,
+        ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenTargetTypes,
         CancellationToken cancellationToken)
     {
         if(iocRegisterDefaultSettingsAttribute is null && iocRegisterDefaultSettingsAttribute_T1 is null)
@@ -1274,9 +1311,27 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(settings is not null)
             {
                 var targetTypeName = settings.TargetServiceType.Name;
+                var tags = settings.Tags;
+                var tagOnly = settings.TagOnly;
 
-                // SGIOC012: Check for duplicated target type
-                if(!seenTargetTypes.TryAdd(targetTypeName, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()))
+                // Build effective tags list: if TagOnly=false, add empty string as a tag
+                var effectiveTags = tagOnly
+                    ? tags
+                    : [.. tags, ""];
+
+                // SGIOC012: Check each effective tag for duplicates
+                var hasDuplicate = false;
+                foreach(var tag in effectiveTags)
+                {
+                    var defaultKey = (targetTypeName, tag);
+                    if(!seenTargetTypes.TryAdd(defaultKey, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()))
+                    {
+                        hasDuplicate = true;
+                        break; // Only need to find one duplicate
+                    }
+                }
+
+                if(hasDuplicate)
                 {
                     var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
                     duplicatedDefaults.Add((targetTypeName, location));
@@ -1358,7 +1413,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         DefaultSettingsMap defaultSettings,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
-        ConcurrentDictionary<string, Location?> seenDefaultTargetTypes)
+        ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes)
     {
         public INamedTypeSymbol? IoCRegisterAttribute { get; } = iocRegisterAttribute;
         public INamedTypeSymbol? IoCRegisterAttribute_T1 { get; } = iocRegisterAttribute_T1;
@@ -1384,16 +1439,18 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         /// </summary>
         public ConcurrentBag<(string TargetTypeName, Location? Location)> DuplicatedDefaults { get; } = duplicatedDefaults;
         /// <summary>
-        /// Tracks seen IoCRegisterDefaults target types across assembly and type-level attributes (SGIOC012).
+        /// Tracks seen IoCRegisterDefaults (target type name, single tag) pairs across assembly and type-level attributes (SGIOC012).
+        /// When TagOnly=false, an empty string tag is added for comparison.
         /// </summary>
-        public ConcurrentDictionary<string, Location?> SeenDefaultTargetTypes { get; } = seenDefaultTargetTypes;
+        public ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> SeenDefaultTargetTypes { get; } = seenDefaultTargetTypes;
 
         /// <summary>
-        /// Tracks registered (ImplementationType, Key) pairs to detect duplicates (SGIOC011).
-        /// Key is the fully qualified type name combined with the registration key.
+        /// Tracks registered (ImplementationType, Key, single Tag) tuples to detect duplicates (SGIOC011).
+        /// Each tag is tracked separately; duplicates are detected when any single tag matches.
+        /// When TagOnly=false, an empty string tag is added for comparison.
         /// Value is the first registration location for diagnostic reporting.
         /// </summary>
-        public ConcurrentDictionary<(string TypeName, string? Key), Location?> RegistrationKeys { get; } = [];
+        public ConcurrentDictionary<(string TypeName, string? Key, string Tag), Location?> RegistrationKeys { get; } = [];
     }
 
     private sealed record ServiceInfo

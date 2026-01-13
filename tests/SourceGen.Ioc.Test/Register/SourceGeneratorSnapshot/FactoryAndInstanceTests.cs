@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
@@ -301,9 +303,11 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Instance_WithTransientLifetime_DoesNotGenerateRegistration()
+    [Arguments(ServiceLifetime.Transient)]
+    [Arguments(ServiceLifetime.Scoped)]
+    public async Task Instance_WithNonSingletonLifetime_DoesNotGenerateRegistration(ServiceLifetime lifetime)
     {
-        const string source = """
+        var source = $$"""
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
@@ -312,7 +316,7 @@ public class FactoryAndInstanceTests
             public interface IMyService { }
 
             [IoCRegister(
-                Lifetime = ServiceLifetime.Transient,
+                Lifetime = ServiceLifetime.{{lifetime}},
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
             public class MyService : IMyService
@@ -324,34 +328,7 @@ public class FactoryAndInstanceTests
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    public async Task Instance_WithScopedLifetime_DoesNotGenerateRegistration()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IoCRegister(
-                Lifetime = ServiceLifetime.Scoped,
-                ServiceTypes = [typeof(IMyService)],
-                Instance = nameof(MyService.Default))]
-            public class MyService : IMyService
-            {
-                public static readonly MyService Default = new MyService();
-            }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
+        await Verify(generatedSource).UseParameters(lifetime);
     }
 
     [Test]

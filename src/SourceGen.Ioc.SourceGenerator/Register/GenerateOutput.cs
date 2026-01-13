@@ -29,6 +29,7 @@ partial class RegisterSourceGenerator
         writer.WriteLine("#nullable enable");
         writer.WriteLine();
         writer.WriteLine("using Microsoft.Extensions.DependencyInjection;");
+        writer.WriteLine("using System.Linq;");
         writer.WriteLine();
 
         writer.WriteLine($"namespace {GetSafeNamespace(rootNamespace)}");
@@ -156,11 +157,17 @@ partial class RegisterSourceGenerator
         var constructorParams = registration.ImplementationType.ConstructorParameters;
         bool hasSpecialConstructorParams = constructorParams?.Any(static p => p.HasInjectAttribute) == true;
 
+        // Check if any constructor parameter is a non-IEnumerable collection type (IList<T>, T[], IReadOnlyList<T>, etc.)
+        // MS.DI only supports automatic injection for IEnumerable<T>, other collection types require factory method
+        // This check uses pre-computed IsNonEnumerableCollection from TypeData
+        bool hasNonEnumerableCollectionParams = constructorParams?.Any(static p => p.Type.IsNonEnumerableCollection) == true;
+
         // Determine if factory construction is needed:
         // - Injection members (properties, fields, methods) always require factory
         // - Constructor with [Inject] attribute requires factory (to use correct constructor)
         // - Constructor parameters with [Inject] attribute require factory (MS.DI doesn't recognize [Inject])
-        bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams;
+        // - Constructor parameters with non-IEnumerable collection types require factory (MS.DI doesn't support them)
+        bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams || hasNonEnumerableCollectionParams;
 
         if(hasDecorators)
         {
@@ -781,10 +788,74 @@ partial class RegisterSourceGenerator
             return "key";
         }
 
+        // Case 4: Non-IEnumerable collection type (IList<T>, T[], IReadOnlyList<T>, etc.)
+        // MS.DI only supports automatic injection for IEnumerable<T>, other collection types need manual resolution
+        // This check uses pre-computed IsNonEnumerableCollection from TypeData
+        if(param.Type.IsNonEnumerableCollection)
+        {
+            WriteCollectionParameterResolution(writer, param, paramVar, isKeyedRegistration);
+            return paramVar;
+        }
+
         // Default: resolve from service provider
         var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
         writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
         return paramVar;
+    }
+
+    /// <summary>
+    /// Writes parameter resolution code for non-IEnumerable collection types.
+    /// Converts IEnumerable&lt;T&gt; to the target collection type (IList&lt;T&gt;, T[], IReadOnlyList&lt;T&gt;, etc.).
+    /// </summary>
+    /// <param name="writer">The source writer.</param>
+    /// <param name="param">The parameter data.</param>
+    /// <param name="paramVar">The variable name for this parameter.</param>
+    /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
+    private static void WriteCollectionParameterResolution(
+        SourceWriter writer,
+        ParameterData param,
+        string paramVar,
+        bool isKeyedRegistration)
+    {
+        var paramType = param.Type;
+        var elementType = paramType.TryGetEnumerableElementType();
+
+        if(elementType is null)
+        {
+            // Fallback: couldn't determine element type, use direct service resolution
+            var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
+            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramType.Name}>();");
+            return;
+        }
+
+        var elementTypeName = elementType.Name;
+
+        // Check if this is an array type (T[])
+        if(paramType.Name.EndsWith("[]", StringComparison.Ordinal))
+        {
+            // Resolve as IEnumerable<T> and convert to array
+            if(isKeyedRegistration)
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>(key).ToArray();");
+            }
+            else
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToArray();");
+            }
+        }
+        else
+        {
+            // For IList<T>, IReadOnlyList<T>, ICollection<T>, IReadOnlyCollection<T>, List<T>
+            // Resolve as IEnumerable<T> and convert to List<T> which implements all these interfaces
+            if(isKeyedRegistration)
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>(key).ToList();");
+            }
+            else
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToList();");
+            }
+        }
     }
 
     /// <summary>

@@ -122,7 +122,9 @@ public class CustomIocNameTests
     }
 
     [Test]
-    public async Task CustomIocName_EmptyValue_UsesAssemblyName()
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task CustomIocName_EmptyOrWhitespaceValue_UsesAssemblyName(string iocNameValue)
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -138,7 +140,7 @@ public class CustomIocNameTests
 
         var analyzerConfigOptions = new Dictionary<string, string>
         {
-            ["build_property.SourceGenIocName"] = ""
+            ["build_property.SourceGenIocName"] = iocNameValue
         };
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
@@ -147,35 +149,6 @@ public class CustomIocNameTests
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    public async Task CustomIocName_WhitespaceValue_UsesAssemblyName()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
-            public class MyService : IMyService { }
-            """;
-
-        var analyzerConfigOptions = new Dictionary<string, string>
-        {
-            ["build_property.SourceGenIocName"] = "   "
-        };
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
-            source,
-            assemblyName: "FallbackAssembly",
-            analyzerConfigOptions: analyzerConfigOptions);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
+        await Verify(generatedSource).UseParameters(iocNameValue);
     }
 }

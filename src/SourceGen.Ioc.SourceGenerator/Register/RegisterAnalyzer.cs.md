@@ -35,7 +35,9 @@ Format: ID - Level - Category - Description
   - Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Factory` and `Instance` at same attribute. `Factory` takes precedence.
 
 - SGIOC011 - Warning - Design - Duplicated Registration Detected
-  - Report when there are duplicated registrations for same implement type and same key.
+  - Report when there are duplicated registrations for same implement type, same key, and at least one matching tag.
+  - When TagOnly=false, the registration is considered to have an empty tag for comparison.
 
 - SGIOC012 - Warning - Design - Duplicated Registration Detected
-  - Report when there are duplicated `IoCRegisterDefaults` for same target type.
+  - Report when there are duplicated `IoCRegisterDefaults` for same target type and at least one matching tag.
+  - When TagOnly=false, the setting is considered to have an empty tag for comparison.
