@@ -82,7 +82,7 @@ services.AddSingleton<global::MyNamespace.UserService>((global::System.IServiceP
 
 ## Nested Generic Types
 
-SourceGen.Ioc supports nested open generic service interfaces that standard DI container cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.DI` cannot properly map from the open generic registration to the correct closed generic type.
+SourceGen.Ioc supports nested open generic service interfaces that `MS.DI` cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.DI` cannot properly map from the open generic registration to the correct closed generic type.
 
 ```csharp
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;

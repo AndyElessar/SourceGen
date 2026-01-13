@@ -109,7 +109,8 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 </details>
 
 > [!NOTE]  
-> Constructor selection order: constructor with `[Inject]` &rarr; primary constructor &rarr; constructor with most parameters.
+> Constructor selection order: constructor with `[Inject]` &rarr; primary constructor &rarr; constructor with most parameters.\
+> If multiple constructors have the same maximum parameter count and none is marked with `[Inject]`, the selection between them is undefined and should not be relied upon.
 
 ---
 

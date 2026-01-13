@@ -76,7 +76,7 @@ Output CLI schema in JSON format for LLM AI.
 sourcegen-ioc cli-schema [options]
 ```
 
-#### cli-schema Options
+#### Options
 
 |Option|Description|Default|
 |:---|:---|:---|
@@ -86,7 +86,7 @@ sourcegen-ioc cli-schema [options]
 |`-v`, `--verbose`|Detailed logging message|`false`|
 |`--log`|Logging file path|`""`|
 
-#### cli-schema Examples
+#### Examples
 
 ```bash
 # Output schema for all commands

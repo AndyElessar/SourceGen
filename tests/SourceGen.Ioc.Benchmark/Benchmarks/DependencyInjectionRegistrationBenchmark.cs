@@ -11,10 +11,9 @@
 /// </para>
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 10)]
+[SimpleJob]
 public class DependencyInjectionRegistrationBenchmark
 {
-    private ServiceCollection _services = null!;
     private IServiceProvider _providerWithTypeRegistration = null!;
     private IServiceProvider _providerWithFactoryRegistration = null!;
 
@@ -24,17 +23,13 @@ public class DependencyInjectionRegistrationBenchmark
         // Build providers for resolution benchmarks
         var typeServices = new ServiceCollection();
         typeServices.AddTransient<ISimpleService, SimpleService>();
+        typeServices.AddTransient<IHaveInjectService, HaveInjectService>();
         _providerWithTypeRegistration = typeServices.BuildServiceProvider();
 
         var factoryServices = new ServiceCollection();
         factoryServices.AddTransient<ISimpleService>(sp => new SimpleService());
+        factoryServices.AddTransient<IHaveInjectService>(sp => new HaveInjectService(sp.GetRequiredService<ISimpleService>()));
         _providerWithFactoryRegistration = factoryServices.BuildServiceProvider();
-    }
-
-    [IterationSetup]
-    public void IterationSetup()
-    {
-        _services = new ServiceCollection();
     }
 
     #region Resolution Benchmarks
@@ -42,7 +37,7 @@ public class DependencyInjectionRegistrationBenchmark
     /// <summary>
     /// Benchmark: Resolving a service registered with type-based registration
     /// </summary>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
     public ISimpleService Resolve_TypeBased()
     {
         return _providerWithTypeRegistration.GetRequiredService<ISimpleService>();
@@ -55,6 +50,24 @@ public class DependencyInjectionRegistrationBenchmark
     public ISimpleService Resolve_FactoryBased()
     {
         return _providerWithFactoryRegistration.GetRequiredService<ISimpleService>();
+    }
+
+    /// <summary>
+    /// Benchmark: Resolving a service registered with type-based registration
+    /// </summary>
+    [Benchmark]
+    public IHaveInjectService Resolve_TypeBased_HaveInjectService()
+    {
+        return _providerWithTypeRegistration.GetRequiredService<IHaveInjectService>();
+    }
+
+    /// <summary>
+    /// Benchmark: Resolving a service registered with factory-based registration
+    /// </summary>
+    [Benchmark]
+    public IHaveInjectService Resolve_FactoryBased_HaveInjectService()
+    {
+        return _providerWithFactoryRegistration.GetRequiredService<IHaveInjectService>();
     }
 
     #endregion
@@ -78,6 +91,21 @@ public sealed class SimpleService : ISimpleService
     public void DoWork()
     {
         // Intentionally empty - just for DI benchmarking
+    }
+}
+
+public interface IHaveInjectService
+{
+    void DoWork();
+}
+
+public sealed class HaveInjectService(ISimpleService simpleService) : IHaveInjectService
+{
+    private readonly ISimpleService _simpleService = simpleService;
+
+    public void DoWork()
+    {
+        _simpleService.DoWork();
     }
 }
 

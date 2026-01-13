@@ -1,17 +1,17 @@
 # SourceGen.Ioc
 
-A C# source generator that automatically generates dependency injection registration code at compile time for `Microsoft.Extensions.DependencyInjection.Abstractions`.
+A C# source generator that extends the capabilities of `Microsoft.Extensions.DependencyInjection.Abstractions` by generating registration code.
 
 ## Why Use SourceGen.Ioc?
 
 |Feature|MS.DI|SourceGen.Ioc|
-|:---|:---|:---|
-|Open Generic|Runtime resolution only|Auto-discovers closed types|
-|Nested Open Generic|❌ Not supported|✅ Fully supported|
-|Decorator Pattern|❌ Not supported|✅ Built-in support|
+|:-|:-|:-|
+|Open Generic|Runtime resolution only|Auto-discovers closed types from usage|
+|Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[Discover]` attribute|
+|Decorator Pattern|❌ Not supported|✅ Fully supported with type constraint validation|
+|Field/Property/Method Injection|❌ Not supported|✅ `[Inject]` attribute|
 |Lifecycle validation|Runtime errors|✅ Compile-time analyzer|
 |Circular dependency|Runtime errors|✅ Compile-time analyzer|
-|Field/Property/Method Injection|❌ Not supported|✅ `[Inject]` attribute|
 
 ## Installation
 
