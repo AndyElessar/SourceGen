@@ -91,27 +91,27 @@ Your goal is to help me write effective unit tests with TUnit, covering both sta
 - Examples:
     ```powershell
     # Run all tests in a specific class
-    dotnet run -- --treenode-filter "/*/*/MyTestClass/*"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/MyTestClass/*"
 
     # Run a specific test method
-    dotnet run -- --treenode-filter "/*/*/MyTestClass/MyTestMethod"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/MyTestClass/MyTestMethod"
 
     # Run tests with a specific category
-    dotnet run -- --treenode-filter "/*/*/*/*[Category=Integration]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Category=Integration]"
 
     # Run tests NOT in a category
-    dotnet run -- --treenode-filter "/*/*/*/*[Category!=Performance]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Category!=Performance]"
 
     # Multiple filters (OR)
-    dotnet run -- --treenode-filter "/*/*/ClassA/*|/*/*/ClassB/*"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/ClassA/*|/*/*/ClassB/*"
 
     # Combine filters (AND)
-    dotnet run -- --treenode-filter "/*/*/*/*[Category=Integration][Priority=High]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Category=Integration][Priority=High]"
     ```
 - Common Filter Patterns
     ```powershell
     # Run All Tests in Namespace
-    dotnet run -- --treenode-filter "/*/MyNamespace.*/*"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/MyNamespace.*/*"
 
     # Run Tests by Category
     [Test]
@@ -123,20 +123,20 @@ Your goal is to help me write effective unit tests with TUnit, covering both sta
     public async Task CalculationTest() { }
 
     # Run integration tests
-    dotnet run -- --treenode-filter "/*/*/*/*[Category=Integration]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Category=Integration]"
 
     # Run unit tests
-    dotnet run -- --treenode-filter "/*/*/*/*[Category=Unit]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Category=Unit]"
 
     # Run everything except performance tests
-    dotnet run -- --treenode-filter "/*/*/*/*[Category!=Performance]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Category!=Performance]"
 
     # Run Tests by Property
     [Test]
     [Property("Owner", "TeamA")]
     public async Task FeatureTest() { }
 
-    dotnet run -- --treenode-filter "/*/*/*/*[Owner=TeamA]"
+    dotnet run --project ../../MyProject.csproj -- --treenode-filter "/*/*/*/*[Owner=TeamA]"
     ```
 
 ## References

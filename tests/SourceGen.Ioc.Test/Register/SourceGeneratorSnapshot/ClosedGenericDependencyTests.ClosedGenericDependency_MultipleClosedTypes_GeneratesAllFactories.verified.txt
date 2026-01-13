@@ -16,18 +16,8 @@ namespace TestAssembly
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
             services.AddSingleton(typeof(global::TestNamespace.Repository<>), typeof(global::TestNamespace.Repository<>));
-            services.AddSingleton<global::TestNamespace.Service1>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Entity1>>();
-                var s0 = new global::TestNamespace.Service1(p0);
-                return s0;
-            });
-            services.AddSingleton<global::TestNamespace.Service2>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Entity2>>();
-                var s0 = new global::TestNamespace.Service2(p0);
-                return s0;
-            });
+            services.AddSingleton<global::TestNamespace.Service1, global::TestNamespace.Service1>();
+            services.AddSingleton<global::TestNamespace.Service2, global::TestNamespace.Service2>();
             services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Entity1>, global::TestNamespace.Repository<global::TestNamespace.Entity1>>();
             services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Entity2>, global::TestNamespace.Repository<global::TestNamespace.Entity2>>();
 

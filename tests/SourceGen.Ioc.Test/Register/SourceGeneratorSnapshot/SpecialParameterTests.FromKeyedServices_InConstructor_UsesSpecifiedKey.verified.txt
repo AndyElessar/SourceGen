@@ -17,14 +17,8 @@ namespace TestAssembly
         {
             services.AddKeyedSingleton<global::TestNamespace.SpecialDependency, global::TestNamespace.SpecialDependency>("special");
             services.AddKeyedSingleton<global::TestNamespace.NormalDependency, global::TestNamespace.NormalDependency>("normal");
-            services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency>("special");
-                var p1 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency>("normal");
-                var s0 = new global::TestNamespace.MyService(p0, p1);
-                return s0;
-            });
-            services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
+            services.AddSingleton<global::TestNamespace.MyService, global::TestNamespace.MyService>();
+            services.AddSingleton<global::TestNamespace.IMyService, global::TestNamespace.MyService>();
 
             return services;
         }

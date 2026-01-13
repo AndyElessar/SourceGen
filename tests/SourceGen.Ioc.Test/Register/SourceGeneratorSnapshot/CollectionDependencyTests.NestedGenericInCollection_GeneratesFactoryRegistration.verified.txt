@@ -18,12 +18,7 @@ namespace TestAssembly
             services.AddSingleton<global::TestNamespace.GetUserHandler, global::TestNamespace.GetUserHandler>();
             services.AddSingleton(typeof(global::TestNamespace.GenericHandler<,>), typeof(global::TestNamespace.GenericHandler<,>));
             services.AddSingleton(typeof(global::TestNamespace.IRequestHandler<,>), typeof(global::TestNamespace.GenericHandler<,>));
-            services.AddSingleton<global::TestNamespace.Consumer>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredService<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IRequestHandler<global::TestNamespace.ListUsersRequest, global::System.Collections.Generic.List<global::TestNamespace.User>>>>();
-                var s0 = new global::TestNamespace.Consumer(p0);
-                return s0;
-            });
+            services.AddSingleton<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
             services.AddSingleton<global::TestNamespace.GenericHandler<global::TestNamespace.ListUsersRequest, global::System.Collections.Generic.List<global::TestNamespace.User>>, global::TestNamespace.GenericHandler<global::TestNamespace.ListUsersRequest, global::System.Collections.Generic.List<global::TestNamespace.User>>>();
             services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.ListUsersRequest, global::System.Collections.Generic.List<global::TestNamespace.User>>, global::TestNamespace.GenericHandler<global::TestNamespace.ListUsersRequest, global::System.Collections.Generic.List<global::TestNamespace.User>>>();
 

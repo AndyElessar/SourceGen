@@ -225,6 +225,16 @@ public static class ServiceCollectionExtensions
 
     Only check with name `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
+    **Important**: Factory method registration is only generated when necessary. The following cases require factory method:
+    - Constructor parameter has `[Inject]` attribute (SourceGen.Ioc-specific, MS.DI cannot handle)
+    - Field/Property/Method has `[Inject]` attribute
+    - Decorator pattern is used
+    - Factory or Instance is specified
+
+    The following cases are handled natively by MS.DI and do **NOT** require factory method:
+    - `[FromKeyedServices]` attribute on constructor parameters (MS.DI native support)
+    - `IServiceProvider` parameter in constructor (MS.DI native support)
+
     ```csharp
     #region Define:
     [IoCRegister]
@@ -260,6 +270,23 @@ public static class ServiceCollectionExtensions
           return services;
       }
     }
+    #endregion
+    ```
+
+    MS.DI native handling example (no factory needed):
+    ```csharp
+    #region Define:
+    [IoCRegister<IMyService>]
+    public class MyService(
+        [FromKeyedServices("special")] IDependency dep,  // MS.DI handles [FromKeyedServices]
+        IServiceProvider sp                               // MS.DI handles IServiceProvider
+    ) : IMyService;
+    #endregion
+
+    #region Generate:
+    // Simple type-based registration - MS.DI handles the special parameters automatically
+    services.AddSingleton<MyService, MyService>();
+    services.AddSingleton<IMyService, MyService>();
     #endregion
     ```
 

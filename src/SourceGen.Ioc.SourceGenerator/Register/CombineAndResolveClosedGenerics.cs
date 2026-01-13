@@ -577,7 +577,8 @@ partial class RegisterSourceGenerator
             IsNestedOpenGeneric: false,
             IsTypeParameter: false, // Closed implementation types are not type parameters
             closedTypeParams,
-            closedConstructorParams);
+            closedConstructorParams,
+            openImplType.HasInjectConstructor);
     }
 
     /// <summary>

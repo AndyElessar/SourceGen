@@ -15,11 +15,7 @@ namespace MainApp
         /// </summary>
         public static IServiceCollection AddMainApp(this IServiceCollection services)
         {
-            services.AddSingleton<global::MainApp.Mediator>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = new global::MainApp.Mediator(sp);
-                return s0;
-            });
+            services.AddSingleton<global::MainApp.Mediator, global::MainApp.Mediator>();
 
             return services;
         }

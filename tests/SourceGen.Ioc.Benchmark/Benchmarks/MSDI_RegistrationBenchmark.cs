@@ -1,4 +1,6 @@
-﻿namespace SourceGen.Ioc.Benchmark;
+﻿using BenchmarkDotNet.Configs;
+
+namespace SourceGen.Ioc.Benchmark;
 
 /// <summary>
 /// Benchmark comparing different registration methods in Microsoft.Extensions.DependencyInjection.
@@ -11,8 +13,9 @@
 /// </para>
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob]
-public class DependencyInjectionRegistrationBenchmark
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[CategoriesColumn]
+public class MSDI_RegistrationBenchmark
 {
     private IServiceProvider _providerWithTypeRegistration = null!;
     private IServiceProvider _providerWithFactoryRegistration = null!;
@@ -24,89 +27,65 @@ public class DependencyInjectionRegistrationBenchmark
         var typeServices = new ServiceCollection();
         typeServices.AddTransient<ISimpleService, SimpleService>();
         typeServices.AddTransient<IHaveInjectService, HaveInjectService>();
+        typeServices.AddTransient(typeof(IGenericService<>), typeof(GenericService<>));
+        typeServices.AddTransient<IInjectGenericService, InjectGenericService>();
         _providerWithTypeRegistration = typeServices.BuildServiceProvider();
 
         var factoryServices = new ServiceCollection();
         factoryServices.AddTransient<ISimpleService>(sp => new SimpleService());
         factoryServices.AddTransient<IHaveInjectService>(sp => new HaveInjectService(sp.GetRequiredService<ISimpleService>()));
+        factoryServices.AddTransient(typeof(IGenericService<>), typeof(GenericService<>));
+        factoryServices.AddTransient<IGenericService<string>, GenericService<string>>();
+        factoryServices.AddTransient<IGenericService<int>, GenericService<int>>();
+        factoryServices.AddTransient<IInjectGenericService>(sp => new InjectGenericService(sp.GetRequiredService<IGenericService<int>>()));
         _providerWithFactoryRegistration = factoryServices.BuildServiceProvider();
     }
 
-    #region Resolution Benchmarks
-
-    /// <summary>
-    /// Benchmark: Resolving a service registered with type-based registration
-    /// </summary>
-    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("NoInject"), Benchmark(Baseline = true)]
     public ISimpleService Resolve_TypeBased()
     {
         return _providerWithTypeRegistration.GetRequiredService<ISimpleService>();
     }
 
-    /// <summary>
-    /// Benchmark: Resolving a service registered with factory-based registration
-    /// </summary>
-    [Benchmark]
+    [BenchmarkCategory("NoInject"), Benchmark]
     public ISimpleService Resolve_FactoryBased()
     {
         return _providerWithFactoryRegistration.GetRequiredService<ISimpleService>();
     }
 
-    /// <summary>
-    /// Benchmark: Resolving a service registered with type-based registration
-    /// </summary>
-    [Benchmark]
+    [BenchmarkCategory("HasInject"), Benchmark(Baseline = true)]
     public IHaveInjectService Resolve_TypeBased_HaveInjectService()
     {
         return _providerWithTypeRegistration.GetRequiredService<IHaveInjectService>();
     }
 
-    /// <summary>
-    /// Benchmark: Resolving a service registered with factory-based registration
-    /// </summary>
-    [Benchmark]
+    [BenchmarkCategory("HasInject"), Benchmark]
     public IHaveInjectService Resolve_FactoryBased_HaveInjectService()
     {
         return _providerWithFactoryRegistration.GetRequiredService<IHaveInjectService>();
     }
 
-    #endregion
-}
-
-#region Test Services
-
-/// <summary>
-/// Simple service interface for benchmarking.
-/// </summary>
-public interface ISimpleService
-{
-    void DoWork();
-}
-
-/// <summary>
-/// Simple service implementation for benchmarking.
-/// </summary>
-public sealed class SimpleService : ISimpleService
-{
-    public void DoWork()
+    [BenchmarkCategory("Generic"), Benchmark(Baseline = true)]
+    public IGenericService<string> Resolve_OpenGenericService()
     {
-        // Intentionally empty - just for DI benchmarking
+        return _providerWithTypeRegistration.GetRequiredService<IGenericService<string>>();
+    }
+
+    [BenchmarkCategory("Generic"), Benchmark]
+    public IGenericService<string> Resolve_ClosedGenericService()
+    {
+        return _providerWithFactoryRegistration.GetRequiredService<IGenericService<string>>();
+    }
+
+    [BenchmarkCategory("InjectGeneric"), Benchmark(Baseline = true)]
+    public IInjectGenericService Resolve_TypeBased_InjectGenericService()
+    {
+        return _providerWithTypeRegistration.GetRequiredService<IInjectGenericService>();
+    }
+
+    [BenchmarkCategory("InjectGeneric"), Benchmark]
+    public IInjectGenericService Resolve_FactoryBased_InjectGenericService()
+    {
+        return _providerWithFactoryRegistration.GetRequiredService<IInjectGenericService>();
     }
 }
-
-public interface IHaveInjectService
-{
-    void DoWork();
-}
-
-public sealed class HaveInjectService(ISimpleService simpleService) : IHaveInjectService
-{
-    private readonly ISimpleService _simpleService = simpleService;
-
-    public void DoWork()
-    {
-        _simpleService.DoWork();
-    }
-}
-
-#endregion

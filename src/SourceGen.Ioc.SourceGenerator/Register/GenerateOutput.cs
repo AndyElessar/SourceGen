@@ -145,10 +145,22 @@ partial class RegisterSourceGenerator
         // Check if this registration has decorators and is not the implementation type itself
         bool hasDecorators = registration.Decorators.Length > 0 && isServiceTypeRegistration;
 
-        // Check if this registration has injection members or constructor parameters
+        // Check if this registration has injection members (properties, fields, methods with [Inject])
         bool hasInjectionMembers = registration.InjectionMembers.Length > 0;
-        bool hasConstructorParams = registration.ImplementationType.ConstructorParameters?.Length > 0;
-        bool needsFactoryConstruction = hasInjectionMembers || hasConstructorParams;
+
+        // Check if the constructor was selected by [Inject] attribute (requires factory for proper constructor selection)
+        bool hasInjectConstructor = registration.ImplementationType.HasInjectConstructor;
+
+        // Check if any constructor parameter has [Inject] attribute (SourceGen.Ioc specific, MS.DI doesn't recognize it)
+        // Note: [FromKeyedServices], IServiceProvider parameters are handled by MS.DI automatically
+        var constructorParams = registration.ImplementationType.ConstructorParameters;
+        bool hasSpecialConstructorParams = constructorParams?.Any(static p => p.HasInjectAttribute) == true;
+
+        // Determine if factory construction is needed:
+        // - Injection members (properties, fields, methods) always require factory
+        // - Constructor with [Inject] attribute requires factory (to use correct constructor)
+        // - Constructor parameters with [Inject] attribute require factory (MS.DI doesn't recognize [Inject])
+        bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams;
 
         if(hasDecorators)
         {
@@ -160,16 +172,10 @@ partial class RegisterSourceGenerator
             // Just resolve the implementation from the service provider
             WriteServiceTypeForwardingRegistration(writer, registration, lifetime);
         }
-        else if(hasInjectionMembers && !registration.IsOpenGeneric)
+        else if(needsFactoryConstruction && !registration.IsOpenGeneric)
         {
-            // Self registration with injection members - generate factory method
+            // Self registration with injection members or constructor params with special handling - generate factory method
             WriteInjectionRegistration(writer, registration, lifetime);
-        }
-        else if(hasConstructorParams && !registration.IsOpenGeneric && !isServiceTypeRegistration)
-        {
-            // Self registration (service type = implementation type) with constructor parameters
-            // This is for closed generic types generated from open generic registrations
-            WriteFactoryRegistration(writer, registration, lifetime);
         }
         else if(registration.IsOpenGeneric)
         {
@@ -356,7 +362,7 @@ partial class RegisterSourceGenerator
 
         foreach(var param in constructorParams)
         {
-            var paramVar = $"s0_ctor{paramIndex}";
+            var paramVar = $"p{paramIndex}";
             constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
             paramIndex++;
         }
@@ -459,65 +465,6 @@ partial class RegisterSourceGenerator
             var methodArgs = string.Join(", ", methodParamVars);
             writer.WriteLine($"s0.{methodName}({methodArgs});");
         }
-
-        // Return the instance
-        writer.WriteLine("return s0;");
-
-        writer.Indentation--;
-        writer.WriteLine("});");
-    }
-
-    /// <summary>
-    /// Writes factory registration code for closed generic types with constructor parameters.
-    /// This is used when an open generic type needs to be registered as a closed generic because
-    /// another registration depends on it.
-    /// </summary>
-    /// <remarks>
-    /// Generates code like:
-    /// <code>
-    /// services.AddSingleton&lt;TestHandler&lt;TestEntity&gt;&gt;((IServiceProvider sp) =>
-    /// {
-    ///     var p0 = sp.GetRequiredService&lt;ILogger&lt;TestHandler&lt;TestEntity&gt;&gt;&gt;();
-    ///     var p1 = sp.GetRequiredService&lt;IUnitOfWorkFactory&gt;();
-    ///     var s0 = new TestHandler&lt;TestEntity&gt;(p0, p1);
-    ///     return s0;
-    /// });
-    /// </code>
-    /// </remarks>
-    private static void WriteFactoryRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
-    {
-        var serviceTypeName = registration.ServiceType.Name;
-        var implTypeName = registration.ImplementationType.Name;
-
-        // Build the factory lambda
-        if(registration.Key is not null)
-        {
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
-        }
-        else
-        {
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
-        }
-
-        writer.WriteLine("{");
-        writer.Indentation++;
-
-        // Resolve constructor parameters
-        var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
-        var constructorParamVars = new string[constructorParams.Length];
-        bool isKeyedRegistration = registration.Key is not null;
-        int paramIndex = 0;
-
-        foreach(var param in constructorParams)
-        {
-            var paramVar = $"p{paramIndex}";
-            constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
-            paramIndex++;
-        }
-
-        // Create the instance
-        var constructorArgs = string.Join(", ", constructorParamVars);
-        writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
 
         // Return the instance
         writer.WriteLine("return s0;");

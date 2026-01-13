@@ -1,5 +1,7 @@
 # Field, Property, and Method Injection
 
+SourceGen.Ioc generates factory method registration when `[Inject]` attribute is used on fields, properties, methods, or constructor parameters.
+
 ## Property & Field Injection
 
 Use `[Inject]` to inject dependencies into properties or fields:

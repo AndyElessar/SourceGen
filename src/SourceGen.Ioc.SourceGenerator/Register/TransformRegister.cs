@@ -263,11 +263,16 @@ partial class RegisterSourceGenerator
     private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key)
     {
         var parameters = method.Parameters
-            .Select(p => new ParameterData(
-                p.Name,
-                p.Type.GetTypeData(),
-                IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated,
-                ServiceKey: GetServiceKey(p)))
+            .Select(p =>
+            {
+                var (serviceKey, hasInjectAttribute) = p.GetServiceKeyAndInjectAttribute();
+                return new ParameterData(
+                    p.Name,
+                    p.Type.GetTypeData(),
+                    IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated,
+                    ServiceKey: serviceKey,
+                    HasInjectAttribute: hasInjectAttribute);
+            })
             .ToImmutableEquatableArray();
 
         return new InjectionMemberData(
@@ -276,46 +281,6 @@ partial class RegisterSourceGenerator
             null,
             parameters,
             key);
-    }
-
-    /// <summary>
-    /// Gets the service key from [FromKeyedServices] or [Inject] attribute on a parameter if present.
-    /// [FromKeyedServices] takes precedence over [Inject].
-    /// </summary>
-    private static string? GetServiceKey(IParameterSymbol param)
-    {
-        foreach(var attribute in param.GetAttributes())
-        {
-            var attrClass = attribute.AttributeClass;
-            if(attrClass is null)
-                continue;
-
-            // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority)
-            if(attrClass.Name == "FromKeyedServicesAttribute"
-                && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
-            {
-                // The key is the first constructor argument
-                if(attribute.ConstructorArguments.Length > 0)
-                {
-                    var keyArg = attribute.ConstructorArguments[0];
-                    if(!keyArg.IsNull && keyArg.Value is not null)
-                    {
-                        return keyArg.GetPrimitiveConstantString();
-                    }
-                }
-            }
-
-            // Check for InjectAttribute (by name only, to support third-party attributes)
-            if(attrClass.Name == "InjectAttribute")
-            {
-                var (key, _) = attribute.GetKey();
-                if(key is not null)
-                {
-                    return key;
-                }
-            }
-        }
-        return null;
     }
 
     /// <summary>

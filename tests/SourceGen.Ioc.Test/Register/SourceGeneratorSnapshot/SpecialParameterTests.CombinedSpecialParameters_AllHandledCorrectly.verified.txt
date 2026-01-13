@@ -17,14 +17,8 @@ namespace TestAssembly
         {
             services.AddKeyedSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>("dep1");
             services.AddSingleton<global::TestNamespace.Dependency2, global::TestNamespace.Dependency2>();
-            services.AddKeyedSingleton<global::TestNamespace.MyService>("myService", (global::System.IServiceProvider sp, object? key) =>
-            {
-                var p1 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency1>("dep1");
-                var p2 = sp.GetRequiredService<global::TestNamespace.IDependency2>();
-                var s0 = new global::TestNamespace.MyService(sp, p1, p2, key);
-                return s0;
-            });
-            services.AddKeyedSingleton<global::TestNamespace.IMyService>("myService", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key));
+            services.AddKeyedSingleton<global::TestNamespace.MyService, global::TestNamespace.MyService>("myService");
+            services.AddKeyedSingleton<global::TestNamespace.IMyService, global::TestNamespace.MyService>("myService");
 
             return services;
         }

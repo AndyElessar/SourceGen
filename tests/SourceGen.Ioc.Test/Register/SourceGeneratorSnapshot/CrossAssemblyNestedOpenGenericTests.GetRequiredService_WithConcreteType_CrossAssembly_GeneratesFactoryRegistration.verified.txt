@@ -15,11 +15,7 @@ namespace MainApp
         /// </summary>
         public static IServiceCollection AddMainApp(this IServiceCollection services)
         {
-            services.AddSingleton<global::MainApp.CustomMessenger>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = new global::MainApp.CustomMessenger(sp);
-                return s0;
-            });
+            services.AddSingleton<global::MainApp.CustomMessenger, global::MainApp.CustomMessenger>();
 
             return services;
         }

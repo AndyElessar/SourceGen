@@ -181,9 +181,10 @@ internal static class RoslynExtensions
             }
 
             ImmutableEquatableArray<ParameterData>? constructorParams = null;
+            bool hasInjectConstructor = false;
             if(extractConstructorParams && visited is not null)
             {
-                constructorParams = typeSymbol.ExtractConstructorParameters(visited);
+                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(visited);
             }
 
             // Extract hierarchy (interfaces and base classes) if requested
@@ -204,6 +205,7 @@ internal static class RoslynExtensions
                 IsTypeParameter: false, // Named types are not type parameters
                 typeParameters,
                 constructorParams,
+                hasInjectConstructor,
                 allInterfaces,
                 allBaseClasses);
         }
@@ -468,15 +470,16 @@ internal static class RoslynExtensions
         }
 
         /// <summary>
-        /// Extracts constructor parameters from a type.
+        /// Extracts constructor parameters from a type and indicates whether the constructor was selected by [Inject] attribute.
         /// </summary>
-        public ImmutableEquatableArray<ParameterData> ExtractConstructorParameters(
+        /// <returns>A tuple containing the constructor parameters and whether the constructor has [Inject] attribute.</returns>
+        public (ImmutableEquatableArray<ParameterData> Parameters, bool HasInjectConstructor) ExtractConstructorParametersWithInfo(
             HashSet<INamedTypeSymbol>? visited = null)
         {
             // Check if we've already visited this type to prevent infinite recursion
             if(visited is not null && !visited.Add(typeSymbol))
             {
-                return [];
+                return ([], false);
             }
 
             // Get the original definition for open generic types to access constructors
@@ -488,8 +491,12 @@ internal static class RoslynExtensions
             var constructor = typeToInspect.SpecifiedOrPrimaryOrMostParametersConstructor;
             if(constructor is null)
             {
-                return [];
+                return ([], false);
             }
+
+            // Check if the selected constructor has [Inject] attribute
+            bool hasInjectConstructor = constructor.GetAttributes()
+                .Any(static attr => attr.AttributeClass?.Name == "InjectAttribute");
 
             visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             List<ParameterData> parameters = [];
@@ -506,13 +513,13 @@ internal static class RoslynExtensions
                 var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
 
                 // Check for [FromKeyedServices] or [Inject] attribute with key
-                var serviceKey = param.GetServiceKey();
+                var (serviceKey, hasInjectAttribute) = param.GetServiceKeyAndInjectAttribute();
 
                 parameters.Add(new ParameterData(param.Name, paramTypeData, IsOptional: isOptional,
-                    ServiceKey: serviceKey));
+                    ServiceKey: serviceKey, HasInjectAttribute: hasInjectAttribute));
             }
 
-            return parameters.ToImmutableEquatableArray();
+            return (parameters.ToImmutableEquatableArray(), hasInjectConstructor);
         }
     }
 
@@ -561,18 +568,24 @@ internal static class RoslynExtensions
     extension(IParameterSymbol param)
     {
         /// <summary>
-        /// Gets the service key from [FromKeyedServices] or [Inject] attribute on a parameter if present.
-        /// [FromKeyedServices] takes precedence over [Inject].
+        /// Gets the service key and injection attribute info from [FromKeyedServices] or [Inject] attribute on a parameter.
+        /// [FromKeyedServices] takes precedence over [Inject] for service key resolution.
+        /// HasInjectAttribute is only true for [Inject] attribute (not [FromKeyedServices], which MS.DI handles automatically).
         /// </summary>
-        public string? GetServiceKey()
+        /// <returns>A tuple containing the service key (if any) and whether the parameter has [Inject] attribute.</returns>
+        public (string? ServiceKey, bool HasInjectAttribute) GetServiceKeyAndInjectAttribute()
         {
+            string? serviceKey = null;
+            bool hasInjectAttribute = false;
+
             foreach(var attribute in param.GetAttributes())
             {
                 var attrClass = attribute.AttributeClass;
                 if(attrClass is null)
                     continue;
 
-                // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority)
+                // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority for key)
+                // Note: [FromKeyedServices] is handled by MS.DI automatically, so we don't set hasInjectAttribute
                 if(attrClass.Name == "FromKeyedServicesAttribute"
                     && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
                 {
@@ -582,22 +595,26 @@ internal static class RoslynExtensions
                         var keyArg = attribute.ConstructorArguments[0];
                         if(!keyArg.IsNull && keyArg.Value is not null)
                         {
-                            return keyArg.GetPrimitiveConstantString();
+                            serviceKey = keyArg.GetPrimitiveConstantString();
                         }
                     }
+                    // [FromKeyedServices] found, but continue to check for [Inject] as well
+                    continue;
                 }
 
                 // Check for InjectAttribute (by name only, to support third-party attributes)
                 if(attrClass.Name == "InjectAttribute")
                 {
-                    var (key, _) = attribute.GetKey();
-                    if(key is not null)
+                    hasInjectAttribute = true;
+                    // Only use [Inject] key if no [FromKeyedServices] key was found
+                    if(serviceKey is null)
                     {
-                        return key;
+                        var (key, _) = attribute.GetKey();
+                        serviceKey = key;
                     }
                 }
             }
-            return null;
+            return (serviceKey, hasInjectAttribute);
         }
     }
 

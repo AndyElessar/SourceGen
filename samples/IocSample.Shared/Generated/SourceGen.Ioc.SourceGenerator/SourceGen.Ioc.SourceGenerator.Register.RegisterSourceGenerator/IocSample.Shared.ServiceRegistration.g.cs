@@ -39,12 +39,7 @@ namespace IocSample.Shared
                 var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>(s1, s2_p0);
                 return s2;
             });
-            services.AddSingleton<global::IocSample.Shared.TestRequest2Handler>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>>();
-                var s0 = new global::IocSample.Shared.TestRequest2Handler(p0);
-                return s0;
-            });
+            services.AddSingleton<global::IocSample.Shared.TestRequest2Handler, global::IocSample.Shared.TestRequest2Handler>();
             services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>((global::System.IServiceProvider sp) =>
             {
                 var s0 = sp.GetRequiredService<global::IocSample.Shared.TestRequest2Handler>();
@@ -54,12 +49,7 @@ namespace IocSample.Shared
                 var s3 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>(s2, s3_p0);
                 return s3;
             });
-            services.AddSingleton<global::IocSample.Shared.TestRequest3Handler>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>>();
-                var s0 = new global::IocSample.Shared.TestRequest3Handler(p0);
-                return s0;
-            });
+            services.AddSingleton<global::IocSample.Shared.TestRequest3Handler, global::IocSample.Shared.TestRequest3Handler>();
             services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>>((global::System.IServiceProvider sp) =>
             {
                 var s0 = sp.GetRequiredService<global::IocSample.Shared.TestRequest3Handler>();
