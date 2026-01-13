@@ -10,7 +10,7 @@
 public class ClosedGenericDependencyTests
 {
     [Test]
-    public async Task ClosedGenericDependency_GeneratesFactoryRegistration()
+    public async Task ClosedGenericDependency_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -353,7 +353,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task ServiceProviderInvocation_GetService_GeneratesFactoryRegistration()
+    public async Task ServiceProviderInvocation_GetService_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -436,7 +436,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -580,7 +580,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_OnMethod_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_OnMethod_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -620,7 +620,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_OnAssembly_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_OnAssembly_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -710,7 +710,7 @@ public class ClosedGenericDependencyTests
     /// This is the scenario from IocSample where GenericRequestHandler2 implements IRequestHandler&lt;GenericRequest2&lt;T&gt;, List&lt;T&gt;&gt;.
     /// </summary>
     [Test]
-    public async Task DiscoverAttribute_WithNestedOpenGenericServiceInterface_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_WithNestedOpenGenericServiceInterface_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;

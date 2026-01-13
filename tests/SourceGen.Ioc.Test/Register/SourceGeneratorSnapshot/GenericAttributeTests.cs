@@ -270,7 +270,7 @@ public class GenericAttributeTests
     #region DiscoverAttribute<T>
 
     [Test]
-    public async Task DiscoverAttribute_T1_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_T1_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -298,7 +298,7 @@ public class GenericAttributeTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_T1_OnMethod_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_T1_OnMethod_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;

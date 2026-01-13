@@ -10,7 +10,7 @@
 public class CollectionDependencyTests
 {
     [Test]
-    public async Task IEnumerableDependency_GeneratesFactoryRegistration()
+    public async Task IEnumerableDependency_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -169,7 +169,7 @@ public class CollectionDependencyTests
     }
 
     [Test]
-    public async Task GetServiceWithEnumerable_GeneratesFactoryRegistration()
+    public async Task GetServiceWithEnumerable_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -264,7 +264,7 @@ public class CollectionDependencyTests
     }
 
     [Test]
-    public async Task NestedGenericInCollection_GeneratesFactoryRegistration()
+    public async Task NestedGenericInCollection_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -311,7 +311,7 @@ public class CollectionDependencyTests
     }
 
     [Test]
-    public async Task NullableIEnumerableDependency_GeneratesFactoryRegistration()
+    public async Task NullableIEnumerableDependency_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;

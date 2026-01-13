@@ -10,7 +10,7 @@ namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 public class CrossAssemblyNestedOpenGenericTests
 {
     [Test]
-    public async Task GetRequiredService_WithNestedOpenGenericInterface_CrossAssembly_GeneratesFactoryRegistration()
+    public async Task GetRequiredService_WithNestedOpenGenericInterface_CrossAssembly_GeneratesClosedGenericRegistration()
     {
         // Simulate a shared assembly with IoCRegisterDefaults on an interface
         const string sharedSource = """
@@ -91,7 +91,7 @@ public class CrossAssemblyNestedOpenGenericTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_WithNestedOpenGenericInterface_CrossAssembly_GeneratesFactoryRegistration()
+    public async Task DiscoverAttribute_WithNestedOpenGenericInterface_CrossAssembly_GeneratesClosedGenericRegistration()
     {
         // Simulate a shared assembly with IoCRegisterDefaults on an interface
         const string sharedSource = """
@@ -169,7 +169,7 @@ public class CrossAssemblyNestedOpenGenericTests
     }
 
     [Test]
-    public async Task GetRequiredService_WithConcreteType_CrossAssembly_GeneratesFactoryRegistration()
+    public async Task GetRequiredService_WithConcreteType_CrossAssembly_GeneratesClosedGenericRegistration()
     {
         // This test verifies that using concrete type (instead of interface) also works
         const string sharedSource = """
