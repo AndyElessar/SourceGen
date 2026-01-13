@@ -130,6 +130,31 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "When both [FromKeyedServices] and [Inject] attributes are applied to the same parameter, [FromKeyedServices] takes precedence and [Inject] is ignored.");
 
+    /// <summary>
+    /// SGIOC011: Duplicated Registration Detected - Same implementation type and key are registered multiple times.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicatedRegistration = new(
+        id: "SGIOC011",
+        title: "Duplicated Registration Detected",
+        messageFormat: "Duplicated registration: type '{0}'{1} is already registered",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The same implementation type with the same key is registered multiple times. Only the last registration will be effective.");
+
+    /// <summary>
+    /// SGIOC012: Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicatedDefaultSettings = new(
+        id: "SGIOC012",
+        title: "Duplicated Registration Detected",
+        messageFormat: "Duplicated IoCRegisterDefaults: target type '{0}' already has default settings defined",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The same target type has multiple IoCRegisterDefaultsAttribute definitions. Only the first definition will be used.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -141,7 +166,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         InvalidFactoryOrInstanceMember,
         InstanceRequiresSingleton,
         FactoryAndInstanceConflict,
-        DuplicatedKeyedServiceAttribute
+        DuplicatedKeyedServiceAttribute,
+        DuplicatedRegistration,
+        DuplicatedDefaultSettings
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -163,8 +190,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         var iocRegisterAttribute_T4 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T4);
         var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName);
         var iocRegisterForAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName_T1);
-        var iocRegisterDefaultSettingsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName);
-        var iocRegisterDefaultSettingsAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName_T1);
+        var iocRegisterDefaultsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName);
+        var iocRegisterDefaultsAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName_T1);
 
         // Check if any IoC attribute is available
         var hasAnyIoCRegisterAttribute = iocRegisterAttribute is not null
@@ -183,7 +210,11 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Index for service type -> implementation lookup (interfaces/base classes)
         var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
         // Collect default settings from IoCRegisterDefaultSettingsAttribute using shared method
-        var defaultSettings = CollectDefaultSettings(context.Compilation, iocRegisterDefaultSettingsAttribute, iocRegisterDefaultSettingsAttribute_T1, context.CancellationToken);
+        // Also collect duplicated default settings for SGIOC012 reporting
+        var duplicatedDefaults = new ConcurrentBag<(string TargetTypeName, Location? Location)>();
+        // Track seen target types for SGIOC012 (shared between assembly and type-level)
+        var seenDefaultTargetTypes = new ConcurrentDictionary<string, Location?>();
+        var defaultSettings = CollectDefaults(context.Compilation, iocRegisterDefaultsAttribute, iocRegisterDefaultsAttribute_T1, duplicatedDefaults, seenDefaultTargetTypes, context.CancellationToken);
 
         var analyzerContext = new AnalyzerContext(
             iocRegisterAttribute,
@@ -193,15 +224,22 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             iocRegisterAttribute_T4,
             iocRegisterForAttribute,
             iocRegisterForAttribute_T1,
+            iocRegisterDefaultsAttribute,
+            iocRegisterDefaultsAttribute_T1,
             registeredServices,
             serviceTypeIndex,
-            defaultSettings);
+            defaultSettings,
+            duplicatedDefaults,
+            seenDefaultTargetTypes);
 
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
 
         // First pass: collect services and do immediate validation (SGIOC001)
         context.RegisterSymbolAction(ctx => CollectAndValidateNamedType(ctx, analyzerContext), SymbolKind.NamedType);
+
+        // SGIOC012: Analyze IoCRegisterDefaultsAttribute on types (class, struct, interface)
+        context.RegisterSymbolAction(ctx => AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext), SymbolKind.NamedType);
 
         // SGIOC007: Analyze InjectAttribute on members
         context.RegisterSymbolAction(AnalyzeInjectAttribute, SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
@@ -218,6 +256,62 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003-005)
         context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
+    }
+
+    /// <summary>
+    /// SGIOC012: Analyzes IoCRegisterDefaultsAttribute on types (class, struct, interface).
+    /// Reports warning when the same target type has multiple default settings.
+    /// </summary>
+    private static void AnalyzeTypeLevelDefaultsAttribute(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
+    {
+        if(context.Symbol is not INamedTypeSymbol typeSymbol)
+            return;
+
+        // Skip if no IoCRegisterDefaultsAttribute is available
+        if(analyzerContext.IoCRegisterDefaultsAttribute is null && analyzerContext.IoCRegisterDefaultsAttribute_T1 is null)
+            return;
+
+        var comparer = SymbolEqualityComparer.Default;
+
+        foreach(var attribute in typeSymbol.GetAttributes())
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var attributeClass = attribute.AttributeClass;
+            if(attributeClass is null)
+                continue;
+
+            // For generic types, get the original unbound definition for comparison
+            var typeToCompare = attributeClass.IsGenericType ? attributeClass.OriginalDefinition : attributeClass;
+
+            // Check if this is an IoCRegisterDefaultsAttribute (non-generic or generic)
+            if(!comparer.Equals(typeToCompare, analyzerContext.IoCRegisterDefaultsAttribute)
+                && !comparer.Equals(typeToCompare, analyzerContext.IoCRegisterDefaultsAttribute_T1))
+            {
+                continue;
+            }
+
+            // Extract default settings to get target type name
+            var settings = attributeClass.IsGenericType
+                ? attribute.ExtractDefaultSettingsFromGenericAttribute()
+                : attribute.ExtractDefaultSettings();
+
+            if(settings is null)
+                continue;
+
+            var targetTypeName = settings.TargetServiceType.Name;
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
+
+            // SGIOC012: Check for duplicated target type (shared with assembly-level)
+            if(!analyzerContext.SeenDefaultTargetTypes.TryAdd(targetTypeName, location))
+            {
+                // Report immediately for type-level attributes
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DuplicatedDefaultSettings,
+                    location,
+                    targetTypeName));
+            }
+        }
     }
 
     /// <summary>
@@ -366,9 +460,19 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// Analyzes all dependencies after all services have been collected.
     /// This ensures we have a complete picture of all registered services before checking dependencies.
+    /// Also reports SGIOC012 for duplicated IoCRegisterDefaults.
     /// </summary>
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
     {
+        // SGIOC012: Report duplicated IoCRegisterDefaults
+        foreach(var (targetTypeName, location) in analyzerContext.DuplicatedDefaults)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DuplicatedDefaultSettings,
+                location,
+                targetTypeName));
+        }
+
         // Reuse these collections across all services to reduce allocations
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var pathStack = new Stack<INamedTypeSymbol>();
@@ -479,11 +583,17 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
             var location = syntaxReference.GetSyntax(context.CancellationToken).GetLocation();
 
+            // Pre-compute fully qualified type name for SGIOC011 check
+            var fullyQualifiedTypeName = targetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
 
             // SGIOC009: Check Instance requires Singleton lifetime
             AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
+
+            // SGIOC011: Check for duplicated registrations (same implementation type and key)
+            AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
         }
     }
 
@@ -522,11 +632,17 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
                 ?? typeSymbol.Locations.FirstOrDefault();
 
+            // Pre-compute fully qualified type name for SGIOC011 check
+            var fullyQualifiedTypeName = targetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
             // SGIOC001: Check if target type is private or abstract
             AnalyzeInvalidAttributeUsage(context, targetType, location);
 
             // SGIOC009: Check Instance requires Singleton lifetime
             AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
+
+            // SGIOC011: Check for duplicated registrations (same implementation type and key)
+            AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
 
             // Skip registration if type is invalid
             if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
@@ -702,6 +818,36 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 targetType.Name,
                 "abstract");
             reportDiagnostic(diagnostic);
+        }
+    }
+
+    /// <summary>
+    /// SGIOC011: Analyzes for duplicated registrations (same implementation type and key).
+    /// Reports warning when the same (ImplementationType, Key) combination is registered multiple times.
+    /// </summary>
+    private static void AnalyzeDuplicatedRegistration(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        string fullyQualifiedTypeName,
+        Location? location)
+    {
+        // Get the registration key from the attribute
+        var (key, _) = attribute.GetKey();
+
+        // Create a unique key for this registration: fully qualified type name + key
+        var registrationKey = (fullyQualifiedTypeName, key);
+
+        // Try to add; if already exists, report duplicate
+        if(!analyzerContext.RegistrationKeys.TryAdd(registrationKey, location))
+        {
+            var keyPart = key is not null ? $" with key '{key}'" : "";
+            reportDiagnostic(Diagnostic.Create(
+                DuplicatedRegistration,
+                location,
+                targetType.Name,
+                keyPart));
         }
     }
 
@@ -1086,11 +1232,14 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// Collects default settings from IoCRegisterDefaultSettingsAttribute on the assembly.
     /// Uses the shared ExtractDefaultSettings method from Constants.
+    /// Also tracks duplicated target types for SGIOC012 reporting.
     /// </summary>
-    private static DefaultSettingsMap CollectDefaultSettings(
+    private static DefaultSettingsMap CollectDefaults(
         Compilation compilation,
         INamedTypeSymbol? iocRegisterDefaultSettingsAttribute,
         INamedTypeSymbol? iocRegisterDefaultSettingsAttribute_T1,
+        ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
+        ConcurrentDictionary<string, Location?> seenTargetTypes,
         CancellationToken cancellationToken)
     {
         if(iocRegisterDefaultSettingsAttribute is null && iocRegisterDefaultSettingsAttribute_T1 is null)
@@ -1118,10 +1267,24 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             }
 
             // Use shared method to extract default settings
-            var settings = attribute.ExtractDefaultSettings();
+            // Use different extraction method for generic vs non-generic attributes
+            var settings = attributeClass.IsGenericType
+                ? attribute.ExtractDefaultSettingsFromGenericAttribute()
+                : attribute.ExtractDefaultSettings();
             if(settings is not null)
             {
-                settingsBuilder.Add(settings);
+                var targetTypeName = settings.TargetServiceType.Name;
+
+                // SGIOC012: Check for duplicated target type
+                if(!seenTargetTypes.TryAdd(targetTypeName, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()))
+                {
+                    var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
+                    duplicatedDefaults.Add((targetTypeName, location));
+                }
+                else
+                {
+                    settingsBuilder.Add(settings);
+                }
             }
         }
 
@@ -1189,9 +1352,13 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? iocRegisterAttribute_T4,
         INamedTypeSymbol? iocRegisterForAttribute,
         INamedTypeSymbol? iocRegisterForAttribute_T1,
+        INamedTypeSymbol? iocRegisterDefaultsAttribute,
+        INamedTypeSymbol? iocRegisterDefaultsAttribute_T1,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
-        DefaultSettingsMap defaultSettings)
+        DefaultSettingsMap defaultSettings,
+        ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
+        ConcurrentDictionary<string, Location?> seenDefaultTargetTypes)
     {
         public INamedTypeSymbol? IoCRegisterAttribute { get; } = iocRegisterAttribute;
         public INamedTypeSymbol? IoCRegisterAttribute_T1 { get; } = iocRegisterAttribute_T1;
@@ -1200,6 +1367,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         public INamedTypeSymbol? IoCRegisterAttribute_T4 { get; } = iocRegisterAttribute_T4;
         public INamedTypeSymbol? IoCRegisterForAttribute { get; } = iocRegisterForAttribute;
         public INamedTypeSymbol? IoCRegisterForAttribute_T1 { get; } = iocRegisterForAttribute_T1;
+        public INamedTypeSymbol? IoCRegisterDefaultsAttribute { get; } = iocRegisterDefaultsAttribute;
+        public INamedTypeSymbol? IoCRegisterDefaultsAttribute_T1 { get; } = iocRegisterDefaultsAttribute_T1;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
         /// <summary>
         /// Index mapping service types (interfaces/base classes) to their implementations.
@@ -1210,7 +1379,39 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         /// Default settings from IoCRegisterDefaultSettingsAttribute, using DefaultSettingsMap for efficient lookups.
         /// </summary>
         public DefaultSettingsMap DefaultSettings { get; } = defaultSettings;
+        /// <summary>
+        /// List of duplicated IoCRegisterDefaults for SGIOC012 reporting.
+        /// </summary>
+        public ConcurrentBag<(string TargetTypeName, Location? Location)> DuplicatedDefaults { get; } = duplicatedDefaults;
+        /// <summary>
+        /// Tracks seen IoCRegisterDefaults target types across assembly and type-level attributes (SGIOC012).
+        /// </summary>
+        public ConcurrentDictionary<string, Location?> SeenDefaultTargetTypes { get; } = seenDefaultTargetTypes;
+
+        /// <summary>
+        /// Tracks registered (ImplementationType, Key) pairs to detect duplicates (SGIOC011).
+        /// Key is the fully qualified type name combined with the registration key.
+        /// Value is the first registration location for diagnostic reporting.
+        /// </summary>
+        public ConcurrentDictionary<(string TypeName, string? Key), Location?> RegistrationKeys { get; } = [];
     }
 
-    private sealed record ServiceInfo(INamedTypeSymbol Type, ServiceLifetime Lifetime, Location? Location);
+    private sealed record ServiceInfo
+    {
+        public INamedTypeSymbol Type { get; }
+        public ServiceLifetime Lifetime { get; }
+        public Location? Location { get; }
+        /// <summary>
+        /// Pre-computed fully qualified type name to avoid repeated ToDisplayString calls.
+        /// </summary>
+        public string FullyQualifiedName { get; }
+
+        public ServiceInfo(INamedTypeSymbol type, ServiceLifetime lifetime, Location? location)
+        {
+            Type = type;
+            Lifetime = lifetime;
+            Location = location;
+            FullyQualifiedName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+    }
 }

@@ -29,3 +29,15 @@ internal class Circular2(Circular1 circular1)
     private readonly Circular1 circular1 = circular1;
 }
 */
+
+public interface IConflict
+{
+}
+
+[IoCRegisterDefaults<IConflict>(ServiceLifetime.Transient)]
+//[IoCRegisterDefaults<IConflict>(ServiceLifetime.Transient)] //SGIOC012
+[IoCRegisterFor<Conflict>]
+//[IoCRegister] //SGIOC011
+public class Conflict
+{
+}

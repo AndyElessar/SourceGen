@@ -12,3 +12,5 @@ SGIOC007 | Usage | Error | Invalid Attribute Usage - InjectAttribute is marked o
 SGIOC008 | Usage | Error | Invalid Attribute Usage - Factory or Instance uses nameof() but the referenced member is not static or is inaccessible.
 SGIOC009 | Usage | Error | Invalid Attribute Usage - Instance is specified but Lifetime is not Singleton.
 SGIOC010 | Usage | Error | Invalid Attribute Usage - Both Factory and Instance are specified on the same attribute.
+SGIOC011 | Design | Warning | Duplicated Registration Detected - Same implementation type and key are registered multiple times.
+SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.

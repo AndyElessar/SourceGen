@@ -80,6 +80,7 @@ namespace IocSample
             services.AddSingleton<global::IocSample.External, global::IocSample.External>();
             services.AddTransient<global::IocSample.External2, global::IocSample.External2>();
             services.AddTransient<global::IocSample.IExternal, global::IocSample.External2>();
+            services.AddSingleton<global::IocSample.Conflict, global::IocSample.Conflict>();
 
             return services;
         }
