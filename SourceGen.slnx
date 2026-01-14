@@ -1,22 +1,34 @@
 ﻿<Solution>
   <Folder Name="/.github/">
     <File Path=".github/copilot-instructions.md" />
+    <File Path=".github/pull_request_template.md" />
   </Folder>
   <Folder Name="/.github/instructions/">
     <File Path=".github/instructions/csharp-source-generator.instructions.md" />
     <File Path=".github/instructions/csharp.instructions.md" />
   </Folder>
+  <Folder Name="/.github/skills/add-feature-with-specification/">
+    <File Path=".github/skills/add-feature-with-specification/SKILL.md" />
+  </Folder>
   <Folder Name="/.github/prompts/">
     <File Path=".github/prompts/csharp-tunit.prompt.md" />
+  </Folder>
+  <Folder Name="/.github/workflows/">
+    <File Path=".github/workflows/ioc.ci.yml" />
+    <File Path=".github/workflows/ioc.cli.ci.yml" />
+  </Folder>
+  <Folder Name="/.github/ISSUE_TEMPLATE/">
+    <File Path=".github/ISSUE_TEMPLATE/bug_report.md" />
+    <File Path=".github/ISSUE_TEMPLATE/feature_request.md" />
   </Folder>
   <Folder Name="/.solution/">
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
+    <File Path="CONTRIBUTING.md" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
-    <File Path="version.json" />
     <File Path="LICENSE.txt" />
     <File Path="README.md" />
   </Folder>

@@ -1,9 +1,9 @@
 ---
-name: add feature with specification
-description: Guide for add feature with specification. Use this when you want to add a new feature based on a given specification.
+name: add feature
+description: Guide for adding new features according to specifications. Use this when you need to add a new feature.
 ---
 
-To add a new feature based on a given specification, follow these steps:
+To add new features according to specifications, follow these steps:
 
 1. **Clarify the Specification**: Clarify any ambiguities in the specification. Ensure you understand the requirements, constraints, and expected outcomes. If anything in the specification is unclear, ask questions to clarify before proceeding.
 
