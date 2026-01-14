@@ -198,7 +198,7 @@ internal static class RoslynExtensions
 
             // Check if this is a collection type for DI
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
-            var collectionKind = GetCollectionKind(nameWithoutGeneric);
+            var collectionKind = GetCollectionKind(typeSymbol);
 
             return new TypeData(
                 typeName,
@@ -332,7 +332,7 @@ internal static class RoslynExtensions
             }
 
             // Check if this is a collection type
-            var collectionKind = GetCollectionKind(nameWithoutGeneric);
+            var collectionKind = GetCollectionKind(typeSymbol);
 
             return new TypeData(
                 typeName,
@@ -571,7 +571,7 @@ internal static class RoslynExtensions
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 IsNestedOpenGeneric: false,
                 IsTypeParameter: false,
-                CollectionKind: GetArrayCollectionKind(), // Arrays are read-only collections
+                CollectionKind: CollectionKind.ReadOnlyCollection, // Arrays are read-only collections
                 typeParameters);
         }
     }
@@ -1090,18 +1090,24 @@ internal static class RoslynExtensions
         "global::System.Collections.Generic.IReadOnlyCollection",
         "global::System.Collections.Generic.IReadOnlyList",
         "global::System.Collections.Generic.List",
+        "global::System.Collections.Generic.ISet",
+        "global::System.Collections.Generic.HashSet",
         "System.Collections.Generic.IEnumerable",
         "System.Collections.Generic.ICollection",
         "System.Collections.Generic.IList",
         "System.Collections.Generic.IReadOnlyCollection",
         "System.Collections.Generic.IReadOnlyList",
         "System.Collections.Generic.List",
+        "System.Collections.Generic.ISet",
+        "System.Collections.Generic.HashSet",
         "IEnumerable",
         "ICollection",
         "IList",
         "IReadOnlyCollection",
         "IReadOnlyList",
-        "List"
+        "List",
+        "ISet",
+        "HashSet"
     };
 
     /// <summary>
@@ -1146,32 +1152,69 @@ internal static class RoslynExtensions
     };
 
     /// <summary>
+    /// Set type names (without generic part).
+    /// These should be resolved using GetServices&lt;T&gt;().ToHashSet().
+    /// </summary>
+    private static readonly HashSet<string> s_setTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.ISet",
+        "global::System.Collections.Generic.HashSet",
+        "System.Collections.Generic.ISet",
+        "System.Collections.Generic.HashSet",
+        "ISet",
+        "HashSet"
+    };
+
+    /// <summary>
     /// Checks if the given type name (without generic part) is compatible with IEnumerable&lt;T&gt;.
     /// </summary>
     public static bool IsEnumerableCompatibleType(string nameWithoutGeneric) =>
         s_enumerableCompatibleTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
-    /// Gets the CollectionKind for the given type name (without generic part).
+    /// Gets the CollectionKind for the given type symbol using the type and its implemented interfaces.
+    /// Priority: Set > MutableCollection > ReadOnlyCollection > Enumerable > None.
     /// </summary>
-    public static CollectionKind GetCollectionKind(string nameWithoutGeneric)
+    /// <param name="typeSymbol">The type symbol to check.</param>
+    /// <returns>The CollectionKind based on the type and its interfaces.</returns>
+    public static CollectionKind GetCollectionKind(INamedTypeSymbol typeSymbol)
     {
-        if(s_enumerableTypes.Contains(nameWithoutGeneric))
-            return CollectionKind.Enumerable;
+        var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
 
-        if(s_readOnlyCollectionTypes.Contains(nameWithoutGeneric))
-            return CollectionKind.ReadOnlyCollection;
+        // Check the type itself first
+        if(s_setTypes.Contains(nameWithoutGeneric))
+            return CollectionKind.Set;
 
         if(s_mutableCollectionTypes.Contains(nameWithoutGeneric))
             return CollectionKind.MutableCollection;
 
-        return CollectionKind.None;
-    }
+        if(s_readOnlyCollectionTypes.Contains(nameWithoutGeneric) || typeSymbol.TypeKind == TypeKind.Array)
+            return CollectionKind.ReadOnlyCollection;
 
-    /// <summary>
-    /// Gets the CollectionKind for array types.
-    /// </summary>
-    public static CollectionKind GetArrayCollectionKind() => CollectionKind.ReadOnlyCollection;
+        if(s_enumerableTypes.Contains(nameWithoutGeneric))
+            return CollectionKind.Enumerable;
+
+        // Check implemented interfaces in a single pass, tracking the highest priority match
+        // Priority: Set > MutableCollection > ReadOnlyCollection > Enumerable
+        var bestMatch = CollectionKind.None;
+
+        foreach(var iface in typeSymbol.AllInterfaces)
+        {
+            var ifaceNameWithoutGeneric = GetNameWithoutGeneric(iface.FullyQualifiedName);
+
+            if(s_setTypes.Contains(ifaceNameWithoutGeneric))
+                return CollectionKind.Set; // Highest priority, return immediately
+
+            if(bestMatch < CollectionKind.MutableCollection && s_mutableCollectionTypes.Contains(ifaceNameWithoutGeneric))
+                bestMatch = CollectionKind.MutableCollection;
+            else if(bestMatch < CollectionKind.ReadOnlyCollection && s_readOnlyCollectionTypes.Contains(ifaceNameWithoutGeneric))
+                bestMatch = CollectionKind.ReadOnlyCollection;
+            else if(bestMatch < CollectionKind.Enumerable && s_enumerableTypes.Contains(ifaceNameWithoutGeneric))
+                bestMatch = CollectionKind.Enumerable;
+        }
+
+        return bestMatch;
+    }
 
     /// <summary>
     /// Resolves the full access path of a symbol referenced in a nameof() expression.

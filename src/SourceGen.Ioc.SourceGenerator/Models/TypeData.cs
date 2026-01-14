@@ -62,5 +62,10 @@ internal enum CollectionKind
     /// Mutable collection types: ICollection&lt;T&gt;, IList&lt;T&gt;, List&lt;T&gt;.
     /// Should be resolved using GetServices&lt;T&gt;().ToList().
     /// </summary>
-    MutableCollection
+    MutableCollection,
+    /// <summary>
+    /// Set types: ISet&lt;T&gt;, HashSet&lt;T&gt;.
+    /// Should be resolved using GetServices&lt;T&gt;().ToHashSet().
+    /// </summary>
+    Set
 }

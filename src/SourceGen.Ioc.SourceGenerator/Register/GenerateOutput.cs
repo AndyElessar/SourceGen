@@ -146,6 +146,12 @@ partial class RegisterSourceGenerator
         // Check if this registration has decorators and is not the implementation type itself
         bool hasDecorators = registration.Decorators.Length > 0 && isServiceTypeRegistration;
 
+        if(hasDecorators)
+        {
+            WriteDecoratorRegistration(writer, registration, lifetime);
+            return;
+        }
+
         // Check if this registration has injection members (properties, fields, methods with [Inject])
         bool hasInjectionMembers = registration.InjectionMembers.Length > 0;
 
@@ -166,46 +172,46 @@ partial class RegisterSourceGenerator
         // - Constructor parameters with special handling (see above)
         bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams;
 
-        if(hasDecorators)
-        {
-            WriteDecoratorRegistration(writer, registration, lifetime);
-        }
-        else if(needsFactoryConstruction && !registration.IsOpenGeneric && isServiceTypeRegistration)
+        if(needsFactoryConstruction && !registration.IsOpenGeneric && isServiceTypeRegistration)
         {
             // Service type registration (interface/base class) where implementation is already registered with factory
             // Just resolve the implementation from the service provider
             WriteServiceTypeForwardingRegistration(writer, registration, lifetime);
+            return;
         }
-        else if(needsFactoryConstruction && !registration.IsOpenGeneric)
+
+        if(needsFactoryConstruction && !registration.IsOpenGeneric)
         {
             // Self registration with injection members or constructor params with special handling - generate factory method
             WriteInjectionRegistration(writer, registration, lifetime);
+            return;
         }
-        else if(registration.IsOpenGeneric)
+
+        if(registration.IsOpenGeneric)
         {
             // Open generic registration requires typeof() syntax
             var serviceTypeOf = ConvertToTypeOf(registration.ServiceType);
             var implTypeOf = ConvertToTypeOf(registration.ImplementationType);
 
-            if(registration.Key != null)
+            if(registration.Key is not null)
             {
                 writer.WriteLine($"services.AddKeyed{lifetime}({serviceTypeOf}, {registration.Key}, {implTypeOf});");
+                return;
             }
-            else
-            {
-                writer.WriteLine($"services.Add{lifetime}({serviceTypeOf}, {implTypeOf});");
-            }
+
+            writer.WriteLine($"services.Add{lifetime}({serviceTypeOf}, {implTypeOf});");
+            return;
         }
-        else if(registration.Key != null)
+
+        if(registration.Key is not null)
         {
             // Keyed registration
             writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}, {registration.ImplementationType.Name}>({registration.Key});");
+            return;
         }
-        else
-        {
-            // Non-keyed registration
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}, {registration.ImplementationType.Name}>();");
-        }
+
+        // Non-keyed registration
+        writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}, {registration.ImplementationType.Name}>();");
     }
 
     /// <summary>
@@ -802,7 +808,14 @@ partial class RegisterSourceGenerator
             return "sp";
         }
 
-        // Case 2: Non-IEnumerable collection types (IList<T>, T[], IReadOnlyList<T>, etc.)
+        // Case 2: [ServiceKey] attribute - inject the registration key
+        // Must check before collection resolution since string implements IEnumerable<char>
+        if(param.HasServiceKeyAttribute)
+        {
+            return WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
+        }
+
+        // Case 3: Non-IEnumerable collection types (IList<T>, T[], IReadOnlyList<T>, etc.)
         // OR IEnumerable<T> without [FromKeyedServices] key (MS.DI can handle [FromKeyedServices] + IEnumerable<T> automatically)
         // Use CollectionKind to determine resolution method
         var collectionKind = param.Type.CollectionKind;
@@ -811,24 +824,16 @@ partial class RegisterSourceGenerator
 
         if(needsManualCollectionResolution)
         {
-            // Determine the key to use: [FromKeyedServices]/[Inject] key takes precedence, then registration key if isKeyedRegistration
-            var keyToUse = param.ServiceKey ?? (isKeyedRegistration ? "key" : null);
-            WriteCollectionResolution(writer, param.Type, paramVar, keyToUse, param.IsOptional);
+            WriteCollectionResolution(writer, param.Type, paramVar, param.ServiceKey, param.IsOptional);
             return paramVar;
         }
 
-        // Case 3: [FromKeyedServices] or [Inject] attribute with key - use the specified key
+        // Case 4: [FromKeyedServices] or [Inject] attribute with key - use the specified key
         if(param.ServiceKey is not null)
         {
             var getKeyedServiceMethod = param.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
             writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{paramTypeName}>({param.ServiceKey});");
             return paramVar;
-        }
-
-        // Case 4: [ServiceKey] attribute - inject the registration key
-        if(param.HasServiceKeyAttribute)
-        {
-            return WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
         }
 
         // Default: resolve from service provider
