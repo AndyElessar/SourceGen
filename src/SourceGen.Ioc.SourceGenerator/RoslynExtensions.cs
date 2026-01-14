@@ -196,9 +196,9 @@ internal static class RoslynExtensions
                 allBaseClasses = typeSymbol.GetAllBaseClasses();
             }
 
-            // Check if this is a non-IEnumerable collection type that requires factory method for DI
+            // Check if this is a collection type for DI
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
-            var isNonEnumerableCollection = IsNonEnumerableCollectionType(nameWithoutGeneric);
+            var collectionKind = GetCollectionKind(nameWithoutGeneric);
 
             return new TypeData(
                 typeName,
@@ -207,7 +207,7 @@ internal static class RoslynExtensions
                 typeSymbol.Arity,
                 typeSymbol.IsNestedOpenGeneric,
                 IsTypeParameter: false, // Named types are not type parameters
-                isNonEnumerableCollection,
+                collectionKind,
                 typeParameters,
                 constructorParams,
                 hasInjectConstructor,
@@ -331,8 +331,8 @@ internal static class RoslynExtensions
                 typeParameters = typeSymbol.ExtractTypeParameters(extractConstraints: false, depth);
             }
 
-            // Check if this is a non-IEnumerable collection type
-            var isNonEnumerableCollection = IsNonEnumerableCollectionType(nameWithoutGeneric);
+            // Check if this is a collection type
+            var collectionKind = GetCollectionKind(nameWithoutGeneric);
 
             return new TypeData(
                 typeName,
@@ -341,7 +341,7 @@ internal static class RoslynExtensions
                 typeSymbol.Arity,
                 typeSymbol.IsNestedOpenGeneric,
                 IsTypeParameter: false, // Named types are not type parameters
-                isNonEnumerableCollection,
+                collectionKind,
                 typeParameters);
         }
 
@@ -571,7 +571,7 @@ internal static class RoslynExtensions
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 IsNestedOpenGeneric: false,
                 IsTypeParameter: false,
-                IsNonEnumerableCollection: true, // Arrays require factory method for DI
+                CollectionKind: GetArrayCollectionKind(), // Arrays are read-only collections
                 typeParameters);
         }
     }
@@ -1089,38 +1089,59 @@ internal static class RoslynExtensions
         "global::System.Collections.Generic.IList",
         "global::System.Collections.Generic.IReadOnlyCollection",
         "global::System.Collections.Generic.IReadOnlyList",
+        "global::System.Collections.Generic.List",
         "System.Collections.Generic.IEnumerable",
         "System.Collections.Generic.ICollection",
         "System.Collections.Generic.IList",
         "System.Collections.Generic.IReadOnlyCollection",
         "System.Collections.Generic.IReadOnlyList",
+        "System.Collections.Generic.List",
         "IEnumerable",
         "ICollection",
         "IList",
+        "IReadOnlyCollection",
+        "IReadOnlyList",
+        "List"
+    };
+
+    /// <summary>
+    /// IEnumerable type names (without generic part).
+    /// </summary>
+    private static readonly HashSet<string> s_enumerableTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.IEnumerable",
+        "System.Collections.Generic.IEnumerable",
+        "IEnumerable"
+    };
+
+    /// <summary>
+    /// Read-only collection type names (without generic part).
+    /// These should be resolved using GetServices&lt;T&gt;().ToArray().
+    /// </summary>
+    private static readonly HashSet<string> s_readOnlyCollectionTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.IReadOnlyCollection",
+        "global::System.Collections.Generic.IReadOnlyList",
+        "System.Collections.Generic.IReadOnlyCollection",
+        "System.Collections.Generic.IReadOnlyList",
         "IReadOnlyCollection",
         "IReadOnlyList"
     };
 
     /// <summary>
-    /// Collection type names (without generic part) that require factory method for DI injection.
-    /// MS.DI only supports automatic injection for IEnumerable&lt;T&gt;, not these types.
+    /// Mutable collection type names (without generic part).
+    /// These should be resolved using GetServices&lt;T&gt;().ToList().
     /// </summary>
-    private static readonly HashSet<string> s_nonEnumerableCollectionTypes = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> s_mutableCollectionTypes = new(StringComparer.Ordinal)
     {
         "global::System.Collections.Generic.ICollection",
         "global::System.Collections.Generic.IList",
-        "global::System.Collections.Generic.IReadOnlyCollection",
-        "global::System.Collections.Generic.IReadOnlyList",
         "global::System.Collections.Generic.List",
         "System.Collections.Generic.ICollection",
         "System.Collections.Generic.IList",
-        "System.Collections.Generic.IReadOnlyCollection",
-        "System.Collections.Generic.IReadOnlyList",
         "System.Collections.Generic.List",
         "ICollection",
         "IList",
-        "IReadOnlyCollection",
-        "IReadOnlyList",
         "List"
     };
 
@@ -1131,11 +1152,26 @@ internal static class RoslynExtensions
         s_enumerableCompatibleTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
-    /// Checks if the given type name (without generic part) is a non-IEnumerable collection type.
-    /// These types require factory method for DI injection.
+    /// Gets the CollectionKind for the given type name (without generic part).
     /// </summary>
-    public static bool IsNonEnumerableCollectionType(string nameWithoutGeneric) =>
-        s_nonEnumerableCollectionTypes.Contains(nameWithoutGeneric);
+    public static CollectionKind GetCollectionKind(string nameWithoutGeneric)
+    {
+        if(s_enumerableTypes.Contains(nameWithoutGeneric))
+            return CollectionKind.Enumerable;
+
+        if(s_readOnlyCollectionTypes.Contains(nameWithoutGeneric))
+            return CollectionKind.ReadOnlyCollection;
+
+        if(s_mutableCollectionTypes.Contains(nameWithoutGeneric))
+            return CollectionKind.MutableCollection;
+
+        return CollectionKind.None;
+    }
+
+    /// <summary>
+    /// Gets the CollectionKind for array types.
+    /// </summary>
+    public static CollectionKind GetArrayCollectionKind() => CollectionKind.ReadOnlyCollection;
 
     /// <summary>
     /// Resolves the full access path of a symbol referenced in a nameof() expression.

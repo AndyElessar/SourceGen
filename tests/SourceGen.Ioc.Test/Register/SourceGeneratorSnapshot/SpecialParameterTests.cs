@@ -335,4 +335,234 @@ public class SpecialParameterTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task FromKeyedServices_IEnumerableCollection_InConstructor_HandledByMsDi()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] IEnumerable<IDependency> dependencies) : IMyService
+            {
+                private readonly IEnumerable<IDependency> _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FromKeyedServices_IListCollection_InConstructor_UsesGetKeyedServicesToList()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] IList<IDependency> dependencies) : IMyService
+            {
+                private readonly IList<IDependency> _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FromKeyedServices_IReadOnlyListCollection_InConstructor_UsesGetKeyedServicesToArray()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] IReadOnlyList<IDependency> dependencies) : IMyService
+            {
+                private readonly IReadOnlyList<IDependency> _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FromKeyedServices_ArrayCollection_InConstructor_UsesGetKeyedServicesToArray()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] IDependency[] dependencies) : IMyService
+            {
+                private readonly IDependency[] _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FromKeyedServices_IReadOnlyCollectionCollection_InConstructor_UsesGetKeyedServicesToArray()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] IReadOnlyCollection<IDependency> dependencies) : IMyService
+            {
+                private readonly IReadOnlyCollection<IDependency> _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FromKeyedServices_ListCollection_InConstructor_UsesGetKeyedServicesToList()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] List<IDependency> dependencies) : IMyService
+            {
+                private readonly List<IDependency> _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FromKeyedServices_ICollectionCollection_InConstructor_UsesGetKeyedServicesToList()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            public class Dependency2 : IDependency { }
+
+            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([FromKeyedServices("special")] ICollection<IDependency> dependencies) : IMyService
+            {
+                private readonly ICollection<IDependency> _dependencies = dependencies;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

@@ -1,7 +1,7 @@
 # Keyed Services
 
 SourceGen.Ioc supports keyed service registration with `Key` and `KeyType`.\
-Support key injecting by `[FromKeyedServices]`, `[ServiceKey]` and `[Inject]`.
+Support keyed service injecting with `[FromKeyedServices]`, `[ServiceKey]` and `[Inject]`.
 
 ## String Keys
 

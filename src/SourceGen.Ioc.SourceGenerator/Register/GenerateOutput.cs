@@ -152,22 +152,19 @@ partial class RegisterSourceGenerator
         // Check if the constructor was selected by [Inject] attribute (requires factory for proper constructor selection)
         bool hasInjectConstructor = registration.ImplementationType.HasInjectConstructor;
 
-        // Check if any constructor parameter has [Inject] attribute (SourceGen.Ioc specific, MS.DI doesn't recognize it)
-        // Note: [FromKeyedServices], [ServiceKey], IServiceProvider parameters are handled by MS.DI automatically
+        // Check constructor parameters for special handling requirements:
+        // - [Inject] attribute on parameters: MS.DI doesn't recognize it
+        // - Non-IEnumerable collection types (IList<T>, T[], etc.): MS.DI only supports IEnumerable<T>
+        // Note: [FromKeyedServices], [ServiceKey], IServiceProvider are handled by MS.DI automatically
         var constructorParams = registration.ImplementationType.ConstructorParameters;
-        bool hasSpecialConstructorParams = constructorParams?.Any(static p => p.HasInjectAttribute) == true;
-
-        // Check if any constructor parameter is a non-IEnumerable collection type (IList<T>, T[], IReadOnlyList<T>, etc.)
-        // MS.DI only supports automatic injection for IEnumerable<T>, other collection types require factory method
-        // This check uses pre-computed IsNonEnumerableCollection from TypeData
-        bool hasNonEnumerableCollectionParams = constructorParams?.Any(static p => p.Type.IsNonEnumerableCollection) == true;
+        bool hasSpecialConstructorParams = constructorParams?.Any(static p =>
+            p.HasInjectAttribute || p.Type.IsNonEnumerableCollection) == true;
 
         // Determine if factory construction is needed:
         // - Injection members (properties, fields, methods) always require factory
         // - Constructor with [Inject] attribute requires factory (to use correct constructor)
-        // - Constructor parameters with [Inject] attribute require factory (MS.DI doesn't recognize [Inject])
-        // - Constructor parameters with non-IEnumerable collection types require factory (MS.DI doesn't support them)
-        bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams || hasNonEnumerableCollectionParams;
+        // - Constructor parameters with special handling (see above)
+        bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams;
 
         if(hasDecorators)
         {
@@ -398,17 +395,34 @@ partial class RegisterSourceGenerator
                 continue;
 
             var paramVar = $"s0_p{memberParamIndex}";
-            var memberTypeName = member.Type?.Name ?? "object";
+            var memberType = member.Type;
+            var memberTypeName = memberType?.Name ?? "object";
 
             if(member.Key is not null)
             {
-                var getKeyedServiceMethod = member.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
-                writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{memberTypeName}>({member.Key});");
+                // Check for collection types with key
+                if(memberType?.CollectionKind is not null and not CollectionKind.None)
+                {
+                    WriteCollectionResolution(writer, memberType, paramVar, member.Key, member.IsOptional);
+                }
+                else
+                {
+                    var getKeyedServiceMethod = member.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
+                    writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{memberTypeName}>({member.Key});");
+                }
             }
             else
             {
-                var getServiceMethod = member.IsOptional ? "GetService" : "GetRequiredService";
-                writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{memberTypeName}>();");
+                // Check for collection types without key
+                if(memberType?.CollectionKind is not null and not CollectionKind.None)
+                {
+                    WriteCollectionResolution(writer, memberType, paramVar, serviceKey: null, member.IsOptional);
+                }
+                else
+                {
+                    var getServiceMethod = member.IsOptional ? "GetService" : "GetRequiredService";
+                    writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{memberTypeName}>();");
+                }
             }
 
             propertyInitializers[propertyIndex++] = $"{member.Name} = {paramVar}";
@@ -442,6 +456,12 @@ partial class RegisterSourceGenerator
                         // [ServiceKey] attribute - inject the class registration's key, not the method's key
                         methodParamVars[methodParamIdx++] = WriteServiceKeyParameterResolution(
                             writer, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+                    }
+                    else if(param.Type.CollectionKind is not CollectionKind.None)
+                    {
+                        // Collection type with method-level key
+                        WriteCollectionResolution(writer, param.Type, paramVar, method.Key);
+                        methodParamVars[methodParamIdx++] = paramVar;
                     }
                     else
                     {
@@ -782,7 +802,22 @@ partial class RegisterSourceGenerator
             return "sp";
         }
 
-        // Case 2: [FromKeyedServices] or [Inject] attribute with key - use the specified key
+        // Case 2: Non-IEnumerable collection types (IList<T>, T[], IReadOnlyList<T>, etc.)
+        // OR IEnumerable<T> without [FromKeyedServices] key (MS.DI can handle [FromKeyedServices] + IEnumerable<T> automatically)
+        // Use CollectionKind to determine resolution method
+        var collectionKind = param.Type.CollectionKind;
+        var needsManualCollectionResolution = collectionKind is not CollectionKind.None &&
+            (collectionKind is not CollectionKind.Enumerable || param.ServiceKey is null);
+
+        if(needsManualCollectionResolution)
+        {
+            // Determine the key to use: [FromKeyedServices]/[Inject] key takes precedence, then registration key if isKeyedRegistration
+            var keyToUse = param.ServiceKey ?? (isKeyedRegistration ? "key" : null);
+            WriteCollectionResolution(writer, param.Type, paramVar, keyToUse, param.IsOptional);
+            return paramVar;
+        }
+
+        // Case 3: [FromKeyedServices] or [Inject] attribute with key - use the specified key
         if(param.ServiceKey is not null)
         {
             var getKeyedServiceMethod = param.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
@@ -790,25 +825,10 @@ partial class RegisterSourceGenerator
             return paramVar;
         }
 
-        // Case 3: [ServiceKey] attribute - inject the registration key
+        // Case 4: [ServiceKey] attribute - inject the registration key
         if(param.HasServiceKeyAttribute)
         {
             return WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
-        }
-
-        // Case 4: Keyed registration with object/object? parameter named key/serviceKey - pass the key
-        if(isKeyedRegistration && IsServiceKeyParameter(param))
-        {
-            return "key";
-        }
-
-        // Case 5: Non-IEnumerable collection type (IList<T>, T[], IReadOnlyList<T>, etc.)
-        // MS.DI only supports automatic injection for IEnumerable<T>, other collection types need manual resolution
-        // This check uses pre-computed IsNonEnumerableCollection from TypeData
-        if(param.Type.IsNonEnumerableCollection)
-        {
-            WriteCollectionParameterResolution(writer, param, paramVar, isKeyedRegistration);
-            return paramVar;
         }
 
         // Default: resolve from service provider
@@ -848,76 +868,95 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Writes parameter resolution code for non-IEnumerable collection types.
-    /// Converts IEnumerable&lt;T&gt; to the target collection type (IList&lt;T&gt;, T[], IReadOnlyList&lt;T&gt;, etc.).
+    /// Writes collection resolution code for constructor parameters and injection members.
+    /// Handles all collection types including IEnumerable&lt;T&gt;, IList&lt;T&gt;, T[], IReadOnlyList&lt;T&gt;, etc.
     /// </summary>
     /// <param name="writer">The source writer.</param>
-    /// <param name="param">The parameter data.</param>
+    /// <param name="type">The type data of the collection.</param>
     /// <param name="paramVar">The variable name for this parameter.</param>
-    /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
-    private static void WriteCollectionParameterResolution(
+    /// <param name="serviceKey">The service key (null for non-keyed services).</param>
+    /// <param name="isOptional">Whether the parameter is optional (uses GetService instead of GetRequiredService).</param>
+    private static void WriteCollectionResolution(
         SourceWriter writer,
-        ParameterData param,
+        TypeData type,
         string paramVar,
-        bool isKeyedRegistration)
+        string? serviceKey,
+        bool isOptional = false)
     {
-        var paramType = param.Type;
-        var elementType = paramType.TryGetEnumerableElementType();
+        var elementType = type.TryGetEnumerableElementType();
+        var isKeyed = serviceKey is not null;
 
         if(elementType is null)
         {
             // Fallback: couldn't determine element type, use direct service resolution
-            var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
-            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramType.Name}>();");
+            if(isKeyed)
+            {
+                var method = isOptional ? "GetKeyedService" : "GetRequiredKeyedService";
+                writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>({serviceKey});");
+            }
+            else
+            {
+                var method = isOptional ? "GetService" : "GetRequiredService";
+                writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>();");
+            }
             return;
         }
 
         var elementTypeName = elementType.Name;
 
-        // Check if this is an array type (T[])
-        if(paramType.Name.EndsWith("[]", StringComparison.Ordinal))
+        // Use CollectionKind to determine the resolution method
+        switch(type.CollectionKind)
         {
-            // Resolve as IEnumerable<T> and convert to array
-            if(isKeyedRegistration)
-            {
-                writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>(key).ToArray();");
-            }
-            else
-            {
-                writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToArray();");
-            }
-        }
-        else
-        {
-            // For IList<T>, IReadOnlyList<T>, ICollection<T>, IReadOnlyCollection<T>, List<T>
-            // Resolve as IEnumerable<T> and convert to List<T> which implements all these interfaces
-            if(isKeyedRegistration)
-            {
-                writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>(key).ToList();");
-            }
-            else
-            {
-                writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToList();");
-            }
-        }
-    }
+            case CollectionKind.Enumerable:
+                // IEnumerable<T> - use GetServices directly
+                if(isKeyed)
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>({serviceKey});");
+                }
+                else
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>();");
+                }
+                break;
 
-    /// <summary>
-    /// Checks if the parameter is a service key parameter (object/object? named key or serviceKey).
-    /// </summary>
-    private static bool IsServiceKeyParameter(ParameterData param)
-    {
-        // Check if parameter type is object (with or without nullable)
-        var typeName = param.Type.Name;
-        if(typeName != "object" && typeName != "global::System.Object")
-        {
-            return false;
-        }
+            case CollectionKind.ReadOnlyCollection:
+                // IReadOnlyCollection<T>, IReadOnlyList<T>, T[] - resolve as array
+                if(isKeyed)
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>({serviceKey}).ToArray();");
+                }
+                else
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToArray();");
+                }
+                break;
 
-        // Check if parameter name is "key" or "serviceKey" (case-insensitive)
-        var paramName = param.Name;
-        return paramName.Equals("key", StringComparison.OrdinalIgnoreCase)
-            || paramName.Equals("serviceKey", StringComparison.OrdinalIgnoreCase);
+            case CollectionKind.MutableCollection:
+                // ICollection<T>, IList<T>, List<T> - resolve as list
+                if(isKeyed)
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>({serviceKey}).ToList();");
+                }
+                else
+                {
+                    writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToList();");
+                }
+                break;
+
+            default:
+                // Fallback for unknown collection types
+                if(isKeyed)
+                {
+                    var method = isOptional ? "GetKeyedService" : "GetRequiredKeyedService";
+                    writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>({serviceKey});");
+                }
+                else
+                {
+                    var method = isOptional ? "GetService" : "GetRequiredService";
+                    writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>();");
+                }
+                break;
+        }
     }
 
     /// <summary>
