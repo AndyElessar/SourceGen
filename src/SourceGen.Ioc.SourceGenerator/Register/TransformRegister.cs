@@ -265,13 +265,14 @@ partial class RegisterSourceGenerator
         var parameters = method.Parameters
             .Select(p =>
             {
-                var (serviceKey, hasInjectAttribute) = p.GetServiceKeyAndInjectAttribute();
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute) = p.GetServiceKeyAndAttributeInfo();
                 return new ParameterData(
                     p.Name,
                     p.Type.GetTypeData(),
                     IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated,
                     ServiceKey: serviceKey,
-                    HasInjectAttribute: hasInjectAttribute);
+                    HasInjectAttribute: hasInjectAttribute,
+                    HasServiceKeyAttribute: hasServiceKeyAttribute);
             })
             .ToImmutableEquatableArray();
 

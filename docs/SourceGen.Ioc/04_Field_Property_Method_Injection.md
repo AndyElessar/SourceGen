@@ -110,9 +110,11 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 </details>
 
-> [!NOTE]  
-> Constructor selection order: constructor with `[Inject]` &rarr; primary constructor &rarr; constructor with most parameters.\
-> If multiple constructors have the same maximum parameter count and none is marked with `[Inject]`, the selection between them is undefined and should not be relied upon.
+> [!NOTE]
+> If `[Inject]` does not exist on any constructor, there are 2 situations:
+>
+> - If no need to generate factory method (no field/property/method injection or decorator), will let `IServiceProvider` select constructor.
+> - If factory method generation is needed (due to field/property/method injection or decorator), will use primary constructor, then the constructor with the most parameters.
 
 ---
 

@@ -474,6 +474,102 @@ public class InjectAttributeTests
     }
 
     [Test]
+    public async Task ServiceKeyAttribute_MethodParameter_KeyedService_InjectsKey()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IoCRegister(Key = "MyKey")]
+            public class MyService : IMyService
+            {
+                public string? Key { get; private set; }
+
+                [Inject]
+                public void Initialize([ServiceKey] string key)
+                {
+                    Key = key;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceKeyAttribute_InMethodWithExplicitKey_InjectsRegistrationKey()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IoCRegister(Key = "dep1")]
+            public class Dependency1 : IDependency { }
+
+            [IoCRegister(Key = "ServiceKey")]
+            public class MyService : IMyService
+            {
+                public IDependency? Dep { get; private set; }
+                public string? Key { get; private set; }
+
+                [Inject(Key = "dep1")]
+                public void Initialize(IDependency dep, [ServiceKey] string key)
+                {
+                    Dep = dep;
+                    Key = key;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceKeyAttribute_MethodParameter_NonKeyedService_InjectsNull()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IoCRegister]
+            public class MyService : IMyService
+            {
+                public string? Key { get; private set; }
+
+                [Inject]
+                public void Initialize([ServiceKey] string? key)
+                {
+                    Key = key;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task InjectAttribute_ThirdPartyAttribute_GeneratesFactoryMethod()
     {
         // Test that InjectAttribute from other libraries (by name only) also works

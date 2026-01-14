@@ -522,11 +522,11 @@ internal static class RoslynExtensions
                 // Check if parameter is optional (has default value or is nullable)
                 var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
 
-                // Check for [FromKeyedServices] or [Inject] attribute with key
-                var (serviceKey, hasInjectAttribute) = param.GetServiceKeyAndInjectAttribute();
+                // Check for [FromKeyedServices], [Inject], or [ServiceKey] attribute
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute) = param.GetServiceKeyAndAttributeInfo();
 
                 parameters.Add(new ParameterData(param.Name, paramTypeData, IsOptional: isOptional,
-                    ServiceKey: serviceKey, HasInjectAttribute: hasInjectAttribute));
+                    ServiceKey: serviceKey, HasInjectAttribute: hasInjectAttribute, HasServiceKeyAttribute: hasServiceKeyAttribute));
             }
 
             return (parameters.ToImmutableEquatableArray(), hasInjectConstructor);
@@ -579,21 +579,31 @@ internal static class RoslynExtensions
     extension(IParameterSymbol param)
     {
         /// <summary>
-        /// Gets the service key and injection attribute info from [FromKeyedServices] or [Inject] attribute on a parameter.
+        /// Gets the service key, injection attribute info, and [ServiceKey] attribute from a parameter.
         /// [FromKeyedServices] takes precedence over [Inject] for service key resolution.
         /// HasInjectAttribute is only true for [Inject] attribute (not [FromKeyedServices], which MS.DI handles automatically).
+        /// HasServiceKeyAttribute indicates the parameter is marked with [ServiceKey] from Microsoft.Extensions.DependencyInjection.
         /// </summary>
-        /// <returns>A tuple containing the service key (if any) and whether the parameter has [Inject] attribute.</returns>
-        public (string? ServiceKey, bool HasInjectAttribute) GetServiceKeyAndInjectAttribute()
+        /// <returns>A tuple containing the service key (if any), whether the parameter has [Inject] attribute, and whether it has [ServiceKey] attribute.</returns>
+        public (string? ServiceKey, bool HasInjectAttribute, bool HasServiceKeyAttribute) GetServiceKeyAndAttributeInfo()
         {
             string? serviceKey = null;
             bool hasInjectAttribute = false;
+            bool hasServiceKeyAttribute = false;
 
             foreach(var attribute in param.GetAttributes())
             {
                 var attrClass = attribute.AttributeClass;
                 if(attrClass is null)
                     continue;
+
+                // Check for Microsoft.Extensions.DependencyInjection.ServiceKeyAttribute
+                if(attrClass.Name == "ServiceKeyAttribute"
+                    && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                {
+                    hasServiceKeyAttribute = true;
+                    continue;
+                }
 
                 // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority for key)
                 // Note: [FromKeyedServices] is handled by MS.DI automatically, so we don't set hasInjectAttribute
@@ -625,7 +635,7 @@ internal static class RoslynExtensions
                     }
                 }
             }
-            return (serviceKey, hasInjectAttribute);
+            return (serviceKey, hasInjectAttribute, hasServiceKeyAttribute);
         }
     }
 

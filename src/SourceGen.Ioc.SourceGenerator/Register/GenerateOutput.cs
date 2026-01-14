@@ -153,7 +153,7 @@ partial class RegisterSourceGenerator
         bool hasInjectConstructor = registration.ImplementationType.HasInjectConstructor;
 
         // Check if any constructor parameter has [Inject] attribute (SourceGen.Ioc specific, MS.DI doesn't recognize it)
-        // Note: [FromKeyedServices], IServiceProvider parameters are handled by MS.DI automatically
+        // Note: [FromKeyedServices], [ServiceKey], IServiceProvider parameters are handled by MS.DI automatically
         var constructorParams = registration.ImplementationType.ConstructorParameters;
         bool hasSpecialConstructorParams = constructorParams?.Any(static p => p.HasInjectAttribute) == true;
 
@@ -370,7 +370,7 @@ partial class RegisterSourceGenerator
         foreach(var param in constructorParams)
         {
             var paramVar = $"p{paramIndex}";
-            constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
+            constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
             paramIndex++;
         }
 
@@ -437,6 +437,12 @@ partial class RegisterSourceGenerator
                     {
                         methodParamVars[methodParamIdx++] = "sp";
                     }
+                    else if(param.HasServiceKeyAttribute)
+                    {
+                        // [ServiceKey] attribute - inject the class registration's key, not the method's key
+                        methodParamVars[methodParamIdx++] = WriteServiceKeyParameterResolution(
+                            writer, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+                    }
                     else
                     {
                         writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{param.Type.Name}>({method.Key});");
@@ -445,7 +451,7 @@ partial class RegisterSourceGenerator
                 }
                 else
                 {
-                    methodParamVars[methodParamIdx++] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration);
+                    methodParamVars[methodParamIdx++] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
                 }
                 memberParamIndex++;
             }
@@ -610,7 +616,7 @@ partial class RegisterSourceGenerator
                         // This is a dependency, resolve it from service provider
                         var paramVar = $"{currentVar}_p{paramIndex}";
                         bool isKeyedRegistration = registration.Key is not null;
-                        paramVars[paramVarIndex++] = WriteParameterResolution(writer, param, paramVar, paramTypeName, isKeyedRegistration);
+                        paramVars[paramVarIndex++] = WriteParameterResolution(writer, param, paramVar, paramTypeName, isKeyedRegistration, registration.Key);
                         paramIndex++;
                     }
                 }
@@ -753,20 +759,22 @@ partial class RegisterSourceGenerator
 
     /// <summary>
     /// Writes parameter resolution code and returns the variable name to use.
-    /// Handles special cases: IServiceProvider, [FromKeyedServices], [Inject] with key, and keyed service key parameter.
+    /// Handles special cases: IServiceProvider, [FromKeyedServices], [Inject] with key, [ServiceKey], and keyed service key parameter.
     /// </summary>
     /// <param name="writer">The source writer.</param>
     /// <param name="param">The parameter data.</param>
     /// <param name="paramVar">The variable name for this parameter.</param>
     /// <param name="paramTypeName">The resolved parameter type name (for generic substitution).</param>
     /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
+    /// <param name="registrationKey">The registration key for keyed services, used for [ServiceKey] parameter injection.</param>
     /// <returns>The variable name or expression to use for this parameter.</returns>
     private static string WriteParameterResolution(
         SourceWriter writer,
         ParameterData param,
         string paramVar,
         string paramTypeName,
-        bool isKeyedRegistration)
+        bool isKeyedRegistration,
+        string? registrationKey = null)
     {
         // Case 1: IServiceProvider - pass sp directly
         if(IsServiceProviderType(paramTypeName))
@@ -782,13 +790,19 @@ partial class RegisterSourceGenerator
             return paramVar;
         }
 
-        // Case 3: Keyed registration with object/object? parameter named key/serviceKey - pass the key
+        // Case 3: [ServiceKey] attribute - inject the registration key
+        if(param.HasServiceKeyAttribute)
+        {
+            return WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
+        }
+
+        // Case 4: Keyed registration with object/object? parameter named key/serviceKey - pass the key
         if(isKeyedRegistration && IsServiceKeyParameter(param))
         {
             return "key";
         }
 
-        // Case 4: Non-IEnumerable collection type (IList<T>, T[], IReadOnlyList<T>, etc.)
+        // Case 5: Non-IEnumerable collection type (IList<T>, T[], IReadOnlyList<T>, etc.)
         // MS.DI only supports automatic injection for IEnumerable<T>, other collection types need manual resolution
         // This check uses pre-computed IsNonEnumerableCollection from TypeData
         if(param.Type.IsNonEnumerableCollection)
@@ -800,6 +814,36 @@ partial class RegisterSourceGenerator
         // Default: resolve from service provider
         var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
         writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
+        return paramVar;
+    }
+
+    /// <summary>
+    /// Writes parameter resolution code for [ServiceKey] attribute.
+    /// When the service is registered as keyed, injects the registration key with appropriate type casting.
+    /// When the service is not keyed, injects null.
+    /// </summary>
+    /// <param name="writer">The source writer.</param>
+    /// <param name="paramVar">The variable name for this parameter.</param>
+    /// <param name="paramTypeName">The resolved parameter type name.</param>
+    /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
+    /// <param name="registrationKey">The registration key for keyed services.</param>
+    /// <returns>The variable name or expression to use for this parameter.</returns>
+    private static string WriteServiceKeyParameterResolution(
+        SourceWriter writer,
+        string paramVar,
+        string paramTypeName,
+        bool isKeyedRegistration,
+        string? registrationKey)
+    {
+        if(isKeyedRegistration && registrationKey is not null)
+        {
+            writer.WriteLine($"var {paramVar} = {registrationKey};");
+        }
+        else
+        {
+            // Non-keyed registration: use the default value for the key type
+            writer.WriteLine($"var {paramVar} = default({paramTypeName});");
+        }
         return paramVar;
     }
 
