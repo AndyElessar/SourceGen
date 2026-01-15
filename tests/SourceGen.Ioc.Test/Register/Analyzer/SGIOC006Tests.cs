@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC006: Duplicated attribute usage when both [FromKeyedServices] and [Inject] are on same parameter.
+/// Tests for SGIOC006: Duplicated attribute usage when both [FromKeyedServices] and [IocInject] are on same parameter.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC006)]
@@ -20,10 +20,10 @@ public class SGIOC006Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                public TestService([FromKeyedServices("key")] [Inject(Key = "otherKey")] IService dependency) { }
+                public TestService([FromKeyedServices("key")] [IocInject(Key = "otherKey")] IService dependency) { }
             }
             """;
 
@@ -46,7 +46,7 @@ public class SGIOC006Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
                 public TestService([FromKeyedServices("key")] IService dependency) { }
@@ -70,10 +70,10 @@ public class SGIOC006Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                public TestService([Inject(Key = "key")] IService dependency) { }
+                public TestService([IocInject(Key = "key")] IService dependency) { }
             }
             """;
 
@@ -94,7 +94,7 @@ public class SGIOC006Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
                 public TestService(IService dependency) { }
@@ -119,12 +119,12 @@ public class SGIOC006Tests
             public interface IService { }
             public interface IOtherService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
                 public TestService(
-                    [FromKeyedServices("key1")] [Inject(Key = "otherKey1")] IService dep1,
-                    [FromKeyedServices("key2")] [Inject(Key = "otherKey2")] IOtherService dep2) { }
+                    [FromKeyedServices("key1")] [IocInject(Key = "otherKey1")] IService dep1,
+                    [FromKeyedServices("key2")] [IocInject(Key = "otherKey2")] IOtherService dep2) { }
             }
             """;
 
@@ -146,11 +146,11 @@ public class SGIOC006Tests
             public interface IService { }
             public interface IOtherService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
                 public TestService(
-                    [FromKeyedServices("key1")] [Inject(Key = "otherKey1")] IService dep1,
+                    [FromKeyedServices("key1")] [IocInject(Key = "otherKey1")] IService dep1,
                     [FromKeyedServices("key2")] IOtherService dep2) { }
             }
             """;
@@ -173,11 +173,11 @@ public class SGIOC006Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
-                public void Initialize([FromKeyedServices("key")] [Inject(Key = "otherKey")] IService dependency) { }
+                [IocInject]
+                public void Initialize([FromKeyedServices("key")] [IocInject(Key = "otherKey")] IService dependency) { }
             }
             """;
 
@@ -199,8 +199,8 @@ public class SGIOC006Tests
 
             public interface IService { }
 
-            [IoCRegister]
-            public class TestService([FromKeyedServices("key")] [Inject(Key = "otherKey")] IService dependency) : IService;
+            [IocRegister]
+            public class TestService([FromKeyedServices("key")] [IocInject(Key = "otherKey")] IService dependency) : IService;
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);

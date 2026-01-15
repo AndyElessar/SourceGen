@@ -18,7 +18,7 @@ public class SGIOC009Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -46,7 +46,7 @@ public class SGIOC009Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -74,7 +74,7 @@ public class SGIOC009Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -101,7 +101,7 @@ public class SGIOC009Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
             public class MyService : IMyService
@@ -128,7 +128,7 @@ public class SGIOC009Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = "MyService.Default")]
@@ -157,7 +157,7 @@ public class SGIOC009Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -176,7 +176,7 @@ public class SGIOC009Tests
         await Assert.That(sgioc009).Count().IsEqualTo(0);
     }
 
-    #region IoCRegisterForAttribute Tests
+    #region IocRegisterForAttribute Tests
 
     [Test]
     public async Task SGIOC009_IoCRegisterFor_Instance_WithTransientLifetime_ReportsDiagnostic()
@@ -194,7 +194,7 @@ public class SGIOC009Tests
                 public static readonly MyService Default = new MyService();
             }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(IMyService)],
@@ -225,7 +225,7 @@ public class SGIOC009Tests
                 public static readonly MyService Default = new MyService();
             }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IMyService)],
@@ -251,7 +251,7 @@ public class SGIOC009Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(
+            [assembly: IocRegisterFor(
                 typeof(TestNamespace.MyService),
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(TestNamespace.IMyService)],
@@ -281,7 +281,7 @@ public class SGIOC009Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(
+            [assembly: IocRegisterFor(
                 typeof(TestNamespace.MyService),
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(TestNamespace.IMyService)],

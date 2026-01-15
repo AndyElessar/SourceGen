@@ -1,8 +1,8 @@
-﻿namespace IocSample;
+namespace IocSample;
 
 public interface IKeyed;
 
-[IoCRegister<IKeyed>(Key = "Key")]
+[IocRegister<IKeyed>(Key = "Key")]
 internal class Keyed : IKeyed;
 
 public enum KeyEnum
@@ -10,10 +10,10 @@ public enum KeyEnum
     Key0 = 0,
     Key1 = 1
 }
-[IoCRegister<IKeyed>(Key = KeyEnum.Key0)]
+[IocRegister<IKeyed>(Key = KeyEnum.Key0)]
 internal class KeyedEnum : IKeyed
 {
-    [Inject]
+    [IocInject]
     public void Init([ServiceKey] KeyEnum key)
     {
 
@@ -24,7 +24,7 @@ public static class KeyedExtensions
 {
     public static readonly Guid Key = Guid.CreateVersion7();
 }
-[IoCRegister<IKeyed>(Key = nameof(KeyedExtensions.Key), KeyType = KeyType.Csharp)]
+[IocRegister<IKeyed>(Key = nameof(KeyedExtensions.Key), KeyType = KeyType.Csharp)]
 internal class KeyedCsharp : IKeyed
 {
 

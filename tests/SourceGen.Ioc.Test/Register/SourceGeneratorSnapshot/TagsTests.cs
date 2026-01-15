@@ -18,7 +18,7 @@ public class TagsTests
 
             public interface IMyTaggedService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyTaggedService)],
                 Tags = ["Tag1"])]
@@ -42,7 +42,7 @@ public class TagsTests
 
             public interface IMyTaggedService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyTaggedService)],
                 Tags = ["Tag1", "Tag2"])]
@@ -67,13 +67,13 @@ public class TagsTests
             public interface IMyTaggedService { }
             public interface IMyTaggedService2 { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyTaggedService)],
                 Tags = ["Tag1", "Tag2"])]
             public class MyTaggedService : IMyTaggedService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyTaggedService2)],
                 Tags = ["Tag1"],
@@ -101,24 +101,24 @@ public class TagsTests
             public interface ITag2Service { }
             public interface IBothTagsService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(INoTagService)])]
             public class NoTagService : INoTagService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(ITag1Service)],
                 Tags = ["Tag1"])]
             public class Tag1Service : ITag1Service { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(ITag2Service)],
                 Tags = ["Tag2"])]
             public class Tag2Service : ITag2Service { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IBothTagsService)],
                 Tags = ["Tag1", "Tag2"])]

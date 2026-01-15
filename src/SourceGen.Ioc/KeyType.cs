@@ -1,7 +1,7 @@
 ﻿namespace SourceGen.Ioc;
 
 /// <summary>
-/// Specifies <see cref="IoCRegisterAttribute.Key"/> type.
+/// Specifies <see cref="IocRegisterAttribute.Key"/> type.
 /// </summary>
 public enum KeyType
 {

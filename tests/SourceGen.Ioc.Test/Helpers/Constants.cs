@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Helpers;
+namespace SourceGen.Ioc.Test.Helpers;
 
 internal static class Constants
 {

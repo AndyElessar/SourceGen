@@ -7,9 +7,9 @@ A C# source generator that extends the capabilities of `Microsoft.Extensions.Dep
 |Feature|MS.DI|SourceGen.Ioc|
 |:-|:-|:-|
 |Open Generic|Runtime resolution only|Auto-discovers closed types from usage|
-|Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[Discover]` attribute|
+|Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[IocDiscover]` attribute|
 |Decorator Pattern|❌ Not supported|✅ Fully supported with type constraint validation|
-|Field/Property/Method Injection|❌ Not supported|✅ `[Inject]` attribute|
+|Field/Property/Method Injection|❌ Not supported|✅ `[IocInject]` attribute|
 |Lifecycle validation|Runtime errors|✅ Compile-time analyzer|
 |Circular dependency|Runtime errors|✅ Compile-time analyzer|
 
@@ -25,10 +25,10 @@ dotnet add package SourceGen.Ioc
 using SourceGen.Ioc;
 using Microsoft.Extensions.DependencyInjection;
 
-// 1. Mark your class with [IoCRegister]
+// 1. Mark your class with [IocRegister]
 public interface IMyService;
 
-[IoCRegister<IMyService>(ServiceLifetime.Scoped)]
+[IocRegister<IMyService>(ServiceLifetime.Scoped)]
 internal class MyService : IMyService;
 
 // 2. Register in DI container
@@ -42,38 +42,38 @@ services.AddMyProject(); // Generated extension method
 
 ```csharp
 // Singleton (default)
-[IoCRegister<IService>]
+[IocRegister<IService>]
 internal class SingletonService : IService;
 
 // Scoped
-[IoCRegister<IService>(ServiceLifetime.Scoped)]
+[IocRegister<IService>(ServiceLifetime.Scoped)]
 internal class ScopedService : IService;
 
 // Transient
-[IoCRegister<IService>(ServiceLifetime.Transient)]
+[IocRegister<IService>(ServiceLifetime.Transient)]
 internal class TransientService : IService;
 ```
 
 ### Multiple Service Types
 
 ```csharp
-[IoCRegister<IService1, IService2>]
+[IocRegister<IService1, IService2>]
 internal class MultiService : IService1, IService2;
 ```
 
 ### Field/Property/Method Injection
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService
 {
-    [Inject]
+    [IocInject]
     private ILogger _logger;
 
-    [Inject]
+    [IocInject]
     public IConfiguration Config { get; set; }
 
-    [Inject]
+    [IocInject]
     public void Initialize(IOptions<MyOptions> options) { }
 }
 ```
@@ -81,27 +81,27 @@ internal class MyService : IMyService
 ### Decorator Pattern
 
 ```csharp
-[IoCRegisterDefaults<IHandler>(Decorators = [typeof(LoggingDecorator<>), typeof(CachingDecorator<>)])]
+[IocRegisterDefaults<IHandler>(Decorators = [typeof(LoggingDecorator<>), typeof(CachingDecorator<>)])]
 internal partial class Defaults;
 
-[IoCRegister]
+[IocRegister]
 internal class MyHandler : IHandler;
 ```
 
 ### Keyed Services
 
 ```csharp
-[IoCRegister<IService>(Key = "primary")]
+[IocRegister<IService>(Key = "primary")]
 internal class PrimaryService : IService;
 
-[IoCRegister<IService>(Key = "secondary")]
+[IocRegister<IService>(Key = "secondary")]
 internal class SecondaryService : IService;
 ```
 
 ### Open Generic Support
 
 ```csharp
-[IoCRegister(typeof(IHandler<>))]
+[IocRegister(typeof(IHandler<>))]
 internal class GenericHandler<T> : IHandler<T>;
 
 // Auto-discovers closed types from usage:
@@ -113,7 +113,7 @@ internal class GenericHandler<T> : IHandler<T>;
 ### Tag-based Registration
 
 ```csharp
-[IoCRegister<IService>(Tags = ["Feature1"])]
+[IocRegister<IService>(Tags = ["Feature1"])]
 internal class Feature1Service : IService;
 
 // Generates: services.AddMyProject_Feature1();

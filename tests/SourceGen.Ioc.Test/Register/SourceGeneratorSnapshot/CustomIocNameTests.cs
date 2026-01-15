@@ -18,7 +18,7 @@ public class CustomIocNameTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -47,10 +47,10 @@ public class CustomIocNameTests
             public interface IMyService { }
             public interface ITaggedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped, 
                 ServiceTypes = [typeof(ITaggedService)],
                 Tags = ["Feature1", "Feature2"])]
@@ -81,7 +81,7 @@ public class CustomIocNameTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -109,7 +109,7 @@ public class CustomIocNameTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -134,7 +134,7 @@ public class CustomIocNameTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 

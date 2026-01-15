@@ -1,7 +1,7 @@
 ﻿namespace SourceGen.Ioc.SourceGenerator.Register;
 
 /// <summary>
-/// Generates code to register types marked with SourceGen.Ioc.IoCRegisterAttribute/SourceGen.Ioc.IoCRegisterForAttribute
+/// Generates code to register types marked with SourceGen.Ioc.IocRegisterAttribute/SourceGen.Ioc.IocRegisterForAttribute
 /// in Microsoft.Extensions.DependencyInjection container.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
@@ -9,82 +9,82 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // ========== IoCRegisterAttribute providers ==========
-        // IoCRegisterAttribute (non-generic)
+        // ========== IocRegisterAttribute providers ==========
+        // IocRegisterAttribute (non-generic)
         var registerProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterAttributeFullName,
+                Constants.IocRegisterAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegister(ctx, ct))
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // IoCRegisterAttribute<T>
+        // IocRegisterAttribute<T>
         var registerProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterAttributeFullName_T1,
+                Constants.IocRegisterAttributeFullName_T1,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // IoCRegisterAttribute<T1, T2>
+        // IocRegisterAttribute<T1, T2>
         var registerProvider_T2 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterAttributeFullName_T2,
+                Constants.IocRegisterAttributeFullName_T2,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // IoCRegisterAttribute<T1, T2, T3>
+        // IocRegisterAttribute<T1, T2, T3>
         var registerProvider_T3 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterAttributeFullName_T3,
+                Constants.IocRegisterAttributeFullName_T3,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // IoCRegisterAttribute<T1, T2, T3, T4>
+        // IocRegisterAttribute<T1, T2, T3, T4>
         var registerProvider_T4 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterAttributeFullName_T4,
+                Constants.IocRegisterAttributeFullName_T4,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // ========== IoCRegisterForAttribute providers ==========
-        // IoCRegisterForAttribute (non-generic)
+        // ========== IocRegisterForAttribute providers ==========
+        // IocRegisterForAttribute (non-generic)
         var registerForProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterForAttributeFullName,
+                Constants.IocRegisterForAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterFor(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // IoCRegisterForAttribute<T>
+        // IocRegisterForAttribute<T>
         var registerForProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterForAttributeFullName_T1,
+                Constants.IocRegisterForAttributeFullName_T1,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegisterForGeneric(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // ========== IoCRegisterDefaultsAttribute providers ==========
-        // IoCRegisterDefaultsAttribute (non-generic)
+        // ========== IocRegisterDefaultsAttribute providers ==========
+        // IocRegisterDefaultsAttribute (non-generic)
         var defaultSettingsProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterDefaultsAttributeFullName,
+                Constants.IocRegisterDefaultsAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // IoCRegisterDefaultsAttribute<T>
+        // IocRegisterDefaultsAttribute<T>
         var defaultSettingsProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IoCRegisterDefaultsAttributeFullName_T1,
+                Constants.IocRegisterDefaultsAttributeFullName_T1,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDefaultSettingsGeneric(ctx, ct))
             .SelectMany(static (m, _) => m);
@@ -95,19 +95,19 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Combine(defaultSettingsProvider_T1.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // ========== ImportModuleAttribute providers ==========
-        // ImportModuleAttribute (non-generic)
+        // ========== IocImportModuleAttribute providers ==========
+        // IocImportModuleAttribute (non-generic)
         var importedDefaultSettingsProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.ImportModuleAttributeFullName,
+                Constants.IocImportModuleAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformImportModule(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // ImportModuleAttribute<T>
+        // IocImportModuleAttribute<T>
         var importedDefaultSettingsProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.ImportModuleAttributeFullName_T1,
+                Constants.IocImportModuleAttributeFullName_T1,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformImportModuleGeneric(ctx, ct))
             .SelectMany(static (m, _) => m);
@@ -139,19 +139,19 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
-        // ========== DiscoverAttribute providers ==========
-        // DiscoverAttribute (non-generic)
+        // ========== IocDiscoverAttribute providers ==========
+        // IocDiscoverAttribute (non-generic)
         var discoverProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.DiscoverAttributeFullName,
+                Constants.IocDiscoverAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDiscover(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // DiscoverAttribute<T>
+        // IocDiscoverAttribute<T>
         var discoverProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.DiscoverAttributeFullName_T1,
+                Constants.IocDiscoverAttributeFullName_T1,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDiscoverGeneric(ctx, ct))
             .SelectMany(static (m, _) => m);

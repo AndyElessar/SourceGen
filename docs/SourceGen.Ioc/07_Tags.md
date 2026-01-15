@@ -5,10 +5,10 @@ Tags allow generating multiple registration methods for different scenarios.
 ## Basic Tags
 
 ```csharp
-[IoCRegisterDefaults<IHandler>(ServiceLifetime.Transient, Tags = ["Mediator"])]
+[IocRegisterDefaults<IHandler>(ServiceLifetime.Transient, Tags = ["Mediator"])]
 public interface IHandler;
 
-[IoCRegister]
+[IocRegister]
 internal class MyHandler : IHandler;
 ```
 
@@ -36,7 +36,7 @@ public static IServiceCollection AddMyProject_Mediator(this IServiceCollection s
 ## Multiple Tags
 
 ```csharp
-[IoCRegister<IService>(Tags = ["Feature1", "Feature2"])]
+[IocRegister<IService>(Tags = ["Feature1", "Feature2"])]
 internal class MyService : IService;
 ```
 
@@ -47,10 +47,10 @@ Generates registration in both `AddMyProject_Feature1` and `AddMyProject_Feature
 Use `TagOnly = true` to exclude a registration from the default extension method. This is useful when you want certain services to only be registered via specific tag methods.
 
 ```csharp
-[IoCRegister<IService>(Tags = ["Feature1"], TagOnly = true)]
+[IocRegister<IService>(Tags = ["Feature1"], TagOnly = true)]
 internal class FeatureOnlyService : IService;
 
-[IoCRegister<IService>]
+[IocRegister<IService>]
 internal class DefaultService : IService;
 ```
 
@@ -91,10 +91,10 @@ services.AddMyProject_Feature1();
 
 ## Tags with Defaults
 
-Apply tags and exclusion settings to all implementations via `IoCRegisterDefaults`:
+Apply tags and exclusion settings to all implementations via `IocRegisterDefaults`:
 
 ```csharp
-[IoCRegisterDefaults<IMediator>(
+[IocRegisterDefaults<IMediator>(
     ServiceLifetime.Singleton,
     Tags = ["Mediator"],
     TagOnly = true)]  // All IMediator implementations only in AddMyProject_Mediator()

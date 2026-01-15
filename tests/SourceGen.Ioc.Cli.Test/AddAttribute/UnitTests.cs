@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Cli.Test.AddAttribute;
+namespace SourceGen.Ioc.Cli.Test.AddAttribute;
 
 [Category(Constants.AddAttribute)]
 [Category(Constants.UnitCategory)]

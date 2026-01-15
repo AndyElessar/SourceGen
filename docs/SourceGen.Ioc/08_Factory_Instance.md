@@ -5,7 +5,7 @@
 Register a service using a factory method:
 
 ```csharp
-[IoCRegister<IMyService>(Factory = nameof(MyServiceFactory.Create))]
+[IocRegister<IMyService>(Factory = nameof(MyServiceFactory.Create))]
 internal class MyService : IMyService;
 
 public static class MyServiceFactory
@@ -34,7 +34,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 When the factory method has an `IServiceProvider` parameter, the generator passes it automatically:
 
 ```csharp
-[IoCRegister<IMyService>(Factory = nameof(MyServiceFactory.Create))]
+[IocRegister<IMyService>(Factory = nameof(MyServiceFactory.Create))]
 internal class MyService : IMyService;
 
 public static class MyServiceFactory
@@ -63,7 +63,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 For keyed services, the factory can receive both `IServiceProvider` and the `key`:
 
 ```csharp
-[IoCRegister<IMyService>(
+[IocRegister<IMyService>(
     ServiceLifetime.Scoped,
     Factory = nameof(MyServiceFactory.Create),
     Key = "myKey")]
@@ -94,7 +94,7 @@ services.AddKeyedScoped<global::MyNamespace.IMyService>("myKey", (global::System
 Register a static instance (only allows `Singleton` lifetime):
 
 ```csharp
-[IoCRegister<IMyService>(Instance = nameof(Default))]
+[IocRegister<IMyService>(Instance = nameof(Default))]
 internal class MyService : IMyService
 {
     public static readonly MyService Default = new();
@@ -115,7 +115,7 @@ services.AddSingleton<global::MyNamespace.IMyService>(global::MyNamespace.MyServ
 ### Instance with Keyed Service
 
 ```csharp
-[IoCRegister<IMyService>(Instance = nameof(Default), Key = "myKey")]
+[IocRegister<IMyService>(Instance = nameof(Default), Key = "myKey")]
 internal class MyService : IMyService
 {
     public static readonly MyService Default = new();
@@ -147,7 +147,7 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 ## Combined Example
 
 ```csharp
-[IoCRegister(
+[IocRegister(
     RegisterAllInterfaces = true,
     Factory = nameof(Factory.Create),
     Key = "special")]

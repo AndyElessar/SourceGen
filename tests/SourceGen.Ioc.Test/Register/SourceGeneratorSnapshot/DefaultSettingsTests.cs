@@ -1,7 +1,7 @@
 namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
-/// Tests for IoCRegisterDefaults functionality.
+/// Tests for IocRegisterDefaults functionality.
 /// </summary>
 [Category(Constants.SourceGeneratorSnapshot)]
 [Category(Constants.Defaults)]
@@ -14,14 +14,14 @@ public class DefaultSettingsTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IBaseService), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IBaseService), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IBaseService { }
             public interface ISpecificService : IBaseService { }
 
-            [IoCRegister(ServiceTypes = [typeof(ISpecificService)])]
+            [IocRegister(ServiceTypes = [typeof(ISpecificService)])]
             public class SpecificService : ISpecificService { }
             """;
 
@@ -38,7 +38,7 @@ public class DefaultSettingsTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped, ServiceTypes = [typeof(TestNamespace.IBaseService)])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped, ServiceTypes = [typeof(TestNamespace.IBaseService)])]
 
             namespace TestNamespace;
 
@@ -48,12 +48,12 @@ public class DefaultSettingsTests
             public interface IGenericService<T1, T2> : IOtherService { }
 
             // This should match IGenericService<> default settings (arity 1)
-            [IoCRegister]
+            [IocRegister]
             public class SingleArityService<T> : IGenericService<T> { }
 
             // This should NOT match IGenericService<> default settings (arity 2 != 1)
             // Should use default lifetime (Singleton) instead
-            [IoCRegister]
+            [IocRegister]
             public class DoubleArityService<T1, T2> : IGenericService<T1, T2> { }
             """;
 
@@ -70,7 +70,7 @@ public class DefaultSettingsTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IMyService),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.MyServiceDecorator)])]
@@ -80,7 +80,7 @@ public class DefaultSettingsTests
             public interface IMyService { }
 
             // Should inherit decorator from default settings
-            [IoCRegister(ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
             public class MyServiceDecorator(IMyService inner) : IMyService
@@ -102,7 +102,7 @@ public class DefaultSettingsTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IMyService),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.DefaultDecorator)])]
@@ -112,7 +112,7 @@ public class DefaultSettingsTests
             public interface IMyService { }
 
             // Explicit decorator should override default settings
-            [IoCRegister(ServiceTypes = [typeof(IMyService)], Decorators = [typeof(ExplicitDecorator)])]
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Decorators = [typeof(ExplicitDecorator)])]
             public class MyService : IMyService { }
 
             public class DefaultDecorator(IMyService inner) : IMyService
@@ -139,7 +139,7 @@ public class DefaultSettingsTests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.BaseDecorator<,>), typeof(TestNamespace.QueryOnlyDecorator<,>)])]
@@ -174,14 +174,14 @@ public class DefaultSettingsTests
             public sealed record MyQuery(string Search) : IQuery<MyQuery, string>;
 
             // Command handler - should only get BaseDecorator
-            [IoCRegister]
+            [IocRegister]
             internal sealed class MyCommandHandler : IRequestHandler<MyCommand, bool>
             {
                 public bool Handle(MyCommand request) => request.Id > 0;
             }
 
             // Query handler - should get both decorators
-            [IoCRegister]
+            [IocRegister]
             internal sealed class MyQueryHandler : IRequestHandler<MyQuery, string>
             {
                 public string Handle(MyQuery request) => $"Result: {request.Search}";

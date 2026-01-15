@@ -2,19 +2,20 @@
 
 internal static class Constants
 {
-    public const string IoCRegisterAttributeFullName = "SourceGen.Ioc.IoCRegisterAttribute";
-    public const string IoCRegisterAttributeFullName_T1 = "SourceGen.Ioc.IoCRegisterAttribute`1";
-    public const string IoCRegisterAttributeFullName_T2 = "SourceGen.Ioc.IoCRegisterAttribute`2";
-    public const string IoCRegisterAttributeFullName_T3 = "SourceGen.Ioc.IoCRegisterAttribute`3";
-    public const string IoCRegisterAttributeFullName_T4 = "SourceGen.Ioc.IoCRegisterAttribute`4";
-    public const string IoCRegisterForAttributeFullName = "SourceGen.Ioc.IoCRegisterForAttribute";
-    public const string IoCRegisterForAttributeFullName_T1 = "SourceGen.Ioc.IoCRegisterForAttribute`1";
-    public const string IoCRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IoCRegisterDefaultsAttribute";
-    public const string IoCRegisterDefaultsAttributeFullName_T1 = "SourceGen.Ioc.IoCRegisterDefaultsAttribute`1";
-    public const string ImportModuleAttributeFullName = "SourceGen.Ioc.ImportModuleAttribute";
-    public const string ImportModuleAttributeFullName_T1 = "SourceGen.Ioc.ImportModuleAttribute`1";
-    public const string DiscoverAttributeFullName = "SourceGen.Ioc.DiscoverAttribute";
-    public const string DiscoverAttributeFullName_T1 = "SourceGen.Ioc.DiscoverAttribute`1";
+    public const string IocRegisterAttributeFullName = "SourceGen.Ioc.IocRegisterAttribute";
+    public const string IocRegisterAttributeFullName_T1 = "SourceGen.Ioc.IocRegisterAttribute`1";
+    public const string IocRegisterAttributeFullName_T2 = "SourceGen.Ioc.IocRegisterAttribute`2";
+    public const string IocRegisterAttributeFullName_T3 = "SourceGen.Ioc.IocRegisterAttribute`3";
+    public const string IocRegisterAttributeFullName_T4 = "SourceGen.Ioc.IocRegisterAttribute`4";
+    public const string IocRegisterForAttributeFullName = "SourceGen.Ioc.IocRegisterForAttribute";
+    public const string IocRegisterForAttributeFullName_T1 = "SourceGen.Ioc.IocRegisterForAttribute`1";
+    public const string IocRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IocRegisterDefaultsAttribute";
+    public const string IocRegisterDefaultsAttributeFullName_T1 = "SourceGen.Ioc.IocRegisterDefaultsAttribute`1";
+    public const string IocImportModuleAttributeFullName = "SourceGen.Ioc.IocImportModuleAttribute";
+    public const string IocImportModuleAttributeFullName_T1 = "SourceGen.Ioc.IocImportModuleAttribute`1";
+    public const string IocDiscoverAttributeFullName = "SourceGen.Ioc.IocDiscoverAttribute";
+    public const string IocDiscoverAttributeFullName_T1 = "SourceGen.Ioc.IocDiscoverAttribute`1";
+    public const string IocInjectAttributeFullName = "SourceGen.Ioc.IocInjectAttribute";
 
     /// <summary>
     /// The MSBuild property name for the root namespace.

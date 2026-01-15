@@ -1,7 +1,7 @@
 namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC012: Duplicated IoCRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.
+/// Tests for SGIOC012: Duplicated IocRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.
 /// When TagOnly=false, an empty tag is added for comparison.
 /// </summary>
 [Category(Constants.Analyzer)]
@@ -15,14 +15,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -40,18 +40,18 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService1), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService2), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService1), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService2), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IMyService1 { }
             public interface IMyService2 { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService1 : IMyService1 { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService2 : IMyService2 { }
             """;
 
@@ -68,13 +68,13 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -91,14 +91,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -116,14 +116,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -141,15 +141,15 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Transient)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Transient)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -171,7 +171,7 @@ public class SGIOC012Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -188,14 +188,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IGenericService<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IGenericService<T> { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyGenericService<T> : IGenericService<T> { }
             """;
 
@@ -217,9 +217,9 @@ public class SGIOC012Tests
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Singleton)]
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped)]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Singleton)]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped)]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -237,14 +237,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped)]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped)]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -262,14 +262,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"])]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1", "tag2"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1", "tag2"])]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -287,14 +287,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -312,14 +312,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"])]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2"])]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -337,14 +337,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1"], TagOnly = true)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -362,14 +362,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1"])]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -387,14 +387,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"])]
-            [assembly: IoCRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Scoped, Tags = ["tag1"])]
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"])]
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(ServiceLifetime.Scoped, Tags = ["tag1"])]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -416,9 +416,9 @@ public class SGIOC012Tests
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"])]
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag1"])]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"])]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag1"])]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -440,9 +440,9 @@ public class SGIOC012Tests
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -464,9 +464,9 @@ public class SGIOC012Tests
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"])]
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"])]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"])]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"])]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -484,14 +484,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"])]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag1"])]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag1"])]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -509,14 +509,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -534,14 +534,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"])]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"])]
-            [IoCRegister]
+            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"])]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -560,14 +560,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"], TagOnly = true)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2", "tag3"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2", "tag3"], TagOnly = true)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -586,14 +586,14 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"], TagOnly = true)]
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag3", "tag4"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag3", "tag4"], TagOnly = true)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 

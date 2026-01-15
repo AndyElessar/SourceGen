@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for closed generic dependency resolution (Feature #11).
@@ -23,7 +23,7 @@ public class ClosedGenericDependencyTests
                 void Log(string msg);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
             public sealed class Logger<T> : ILogger<T>
             {
                 public void Log(string msg) => System.Console.WriteLine(msg);
@@ -31,14 +31,14 @@ public class ClosedGenericDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class TestHandler<T>(ILogger<TestHandler<T>> logger)
             {
                 private readonly ILogger<TestHandler<T>> logger = logger;
                 public void Handle() => logger.Log("Handling");
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class ViewModel(TestHandler<TestEntity> handler)
             {
                 private readonly TestHandler<TestEntity> handler = handler;
@@ -60,7 +60,7 @@ public class ClosedGenericDependencyTests
             using SourceGen.Ioc;
             using System.Collections.Generic;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.HandlerDecorator1<,>), typeof(TestNamespace.HandlerDecorator2<,>)])]
@@ -72,7 +72,7 @@ public class ClosedGenericDependencyTests
                 void Log(string msg);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
             public sealed class Logger<T> : ILogger<T>
             {
                 public void Log(string msg) => System.Console.WriteLine(msg);
@@ -87,7 +87,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record TestRequest<T>(System.Guid PK) : IRequest<TestRequest<T>, List<T>>;
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class TestHandler<T>(
                 ILogger<TestHandler<T>> logger
             ) : IRequestHandler<TestRequest<T>, List<T>>
@@ -124,7 +124,7 @@ public class ClosedGenericDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class ViewModel(TestHandler<TestEntity> handler)
             {
                 private readonly TestHandler<TestEntity> handler = handler;
@@ -148,17 +148,17 @@ public class ClosedGenericDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal class TestHandler<T>
             {
                 public void Handle() { }
             }
 
             // TestHandler<TestEntity> is explicitly registered via a concrete class
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestHandler<TestEntity>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestHandler<TestEntity>)])]
             internal sealed class TestHandlerTestEntity : TestHandler<TestEntity> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class ViewModel(TestHandler<TestEntity> handler)
             {
                 private readonly TestHandler<TestEntity> handler = handler;
@@ -183,19 +183,19 @@ public class ClosedGenericDependencyTests
             public class Entity1 { }
             public class Entity2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class Repository<T>
             {
                 public void Save(T entity) { }
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class Service1(Repository<Entity1> repo)
             {
                 private readonly Repository<Entity1> repo = repo;
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class Service2(Repository<Entity2> repo)
             {
                 private readonly Repository<Entity2> repo = repo;
@@ -216,7 +216,7 @@ public class ClosedGenericDependencyTests
             using SourceGen.Ioc;
             using System.Collections.Generic;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.HandlerDecorator1<,>), typeof(TestNamespace.HandlerDecorator2<,>)])]
@@ -228,7 +228,7 @@ public class ClosedGenericDependencyTests
                 void Log(string msg);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
             public sealed class Logger<T> : ILogger<T>
             {
                 public void Log(string msg) => System.Console.WriteLine(msg);
@@ -243,7 +243,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record GenericRequest<T>(int Count) : IRequest<GenericRequest<T>, List<T>> where T : new();
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler<T>(ILogger<GenericRequestHandler<T>> logger)
                 : IRequestHandler<GenericRequest<T>, List<T>> where T : new()
             {
@@ -283,7 +283,7 @@ public class ClosedGenericDependencyTests
             }
 
             // This depends on the service interface, not the implementation type
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class ViewModel(IRequestHandler<GenericRequest<Entity>, List<Entity>> handler)
             {
                 private readonly IRequestHandler<GenericRequest<Entity>, List<Entity>> handler = handler;
@@ -305,7 +305,7 @@ public class ClosedGenericDependencyTests
             using System;
             using System.Collections.Generic;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.HandlerDecorator1<,>)])]
@@ -321,7 +321,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record QueryRequest<T>(Guid PK) : IRequest<QueryRequest<T>, List<T>>;
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class QueryRequestHandler<T> : IRequestHandler<QueryRequest<T>, List<T>>
             {
                 public List<T> Handle(QueryRequest<T> request) => [];
@@ -368,7 +368,7 @@ public class ClosedGenericDependencyTests
                 void Log(string msg);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
             public sealed class Logger<T> : ILogger<T>
             {
                 public void Log(string msg) => Console.WriteLine(msg);
@@ -408,7 +408,7 @@ public class ClosedGenericDependencyTests
                 T? Get(Guid id);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<T>
             {
                 public T? Get(Guid id) => default;
@@ -436,14 +436,14 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using System.Collections.Generic;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
@@ -452,16 +452,16 @@ public class ClosedGenericDependencyTests
 
             public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
 
-            [IoCRegister]
+            [IocRegister]
             public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
             {
                 public List<T> Handle(TestRequest<T> request) => [];
             }
 
-            // Using DiscoverAttribute to discover closed generic type
+            // Using IocDiscoverAttribute to discover closed generic type
             public class ViewModel
             {
-                [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+                [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
                 public void DoAction()
                 {
                     // Mediator.Send(new TestRequest<string>());
@@ -476,14 +476,14 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_MultipleDiscoverAttributes_GeneratesAllFactories()
+    public async Task IocDiscoverAttribute_MultipleIocDiscoverAttributes_GeneratesAllFactories()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using System.Collections.Generic;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
@@ -492,7 +492,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
 
-            [IoCRegister]
+            [IocRegister]
             public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
             {
                 public List<T> Handle(TestRequest<T> request) => [];
@@ -501,10 +501,10 @@ public class ClosedGenericDependencyTests
             public class Entity1 { }
             public class Entity2 { }
 
-            // Using multiple DiscoverAttribute to discover different closed generic types
-            [Discover(typeof(IRequestHandler<TestRequest<Entity1>, List<Entity1>>))]
-            [Discover(typeof(IRequestHandler<TestRequest<Entity2>, List<Entity2>>))]
-            [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+            // Using multiple IocDiscoverAttribute to discover different closed generic types
+            [IocDiscover(typeof(IRequestHandler<TestRequest<Entity1>, List<Entity1>>))]
+            [IocDiscover(typeof(IRequestHandler<TestRequest<Entity2>, List<Entity2>>))]
+            [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
             public class DiscoverMarker { }
             """;
 
@@ -515,14 +515,14 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_WithDecorators_GeneratesFactoryWithDecorators()
+    public async Task IocDiscoverAttribute_WithDecorators_GeneratesFactoryWithDecorators()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using System.Collections.Generic;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.LoggingDecorator<,>)])]
@@ -534,7 +534,7 @@ public class ClosedGenericDependencyTests
                 void Log(string msg);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
             public sealed class Logger<T> : ILogger<T>
             {
                 public void Log(string msg) => System.Console.WriteLine(msg);
@@ -548,7 +548,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
 
-            [IoCRegister]
+            [IocRegister]
             public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
             {
                 public List<T> Handle(TestRequest<T> request) => [];
@@ -568,8 +568,8 @@ public class ClosedGenericDependencyTests
                 }
             }
 
-            // Using DiscoverAttribute to discover closed generic type
-            [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+            // Using IocDiscoverAttribute to discover closed generic type
+            [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
             public class DiscoverMarker { }
             """;
 
@@ -580,7 +580,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_OnMethod_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_OnMethod_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -594,7 +594,7 @@ public class ClosedGenericDependencyTests
                 T? Get(int id);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<T>
             {
                 public T? Get(int id) => default;
@@ -602,10 +602,10 @@ public class ClosedGenericDependencyTests
 
             public class Entity { }
 
-            // DiscoverAttribute on method
+            // IocDiscoverAttribute on method
             public class Service
             {
-                [Discover(typeof(IRepository<Entity>))]
+                [IocDiscover(typeof(IRepository<Entity>))]
                 public void Process()
                 {
                     // Some indirect usage
@@ -620,15 +620,15 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_OnAssembly_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_OnAssembly_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using System.Collections.Generic;
 
-            [assembly: Discover(typeof(TestNamespace.IRepository<TestNamespace.Entity1>))]
-            [assembly: Discover(typeof(TestNamespace.IRepository<TestNamespace.Entity2>))]
+            [assembly: IocDiscover(typeof(TestNamespace.IRepository<TestNamespace.Entity1>))]
+            [assembly: IocDiscover(typeof(TestNamespace.IRepository<TestNamespace.Entity2>))]
 
             namespace TestNamespace;
 
@@ -637,7 +637,7 @@ public class ClosedGenericDependencyTests
                 T? Get(int id);
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<T>
             {
                 public T? Get(int id) => default;
@@ -654,7 +654,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_IgnoresNonGenericTypes()
+    public async Task IocDiscoverAttribute_IgnoresNonGenericTypes()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -664,11 +664,11 @@ public class ClosedGenericDependencyTests
 
             public interface IService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class Service : IService { }
 
-            // DiscoverAttribute with non-generic type should be ignored
-            [Discover(typeof(IService))]
+            // IocDiscoverAttribute with non-generic type should be ignored
+            [IocDiscover(typeof(IService))]
             public class DiscoverMarker { }
             """;
 
@@ -679,7 +679,7 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_IgnoresOpenGenericTypes()
+    public async Task IocDiscoverAttribute_IgnoresOpenGenericTypes()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -690,12 +690,12 @@ public class ClosedGenericDependencyTests
 
             public interface IRepository<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<T> { }
 
-            // DiscoverAttribute with open generic type should be ignored (if even possible)
+            // IocDiscoverAttribute with open generic type should be ignored (if even possible)
             // Note: typeof(IRepository<>) in attribute is open generic
-            [Discover(typeof(IRepository<>))]
+            [IocDiscover(typeof(IRepository<>))]
             public class DiscoverMarker { }
             """;
 
@@ -706,11 +706,11 @@ public class ClosedGenericDependencyTests
     }
 
     /// <summary>
-    /// Tests DiscoverAttribute with nested open generic service interface (e.g., IRequestHandler&lt;GenericRequest&lt;T&gt;, List&lt;T&gt;&gt;).
+    /// Tests IocDiscoverAttribute with nested open generic service interface (e.g., IRequestHandler&lt;GenericRequest&lt;T&gt;, List&lt;T&gt;&gt;).
     /// This is the scenario from IocSample where GenericRequestHandler2 implements IRequestHandler&lt;GenericRequest2&lt;T&gt;, List&lt;T&gt;&gt;.
     /// </summary>
     [Test]
-    public async Task DiscoverAttribute_WithNestedOpenGenericServiceInterface_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_WithNestedOpenGenericServiceInterface_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -718,7 +718,7 @@ public class ClosedGenericDependencyTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
@@ -734,7 +734,7 @@ public class ClosedGenericDependencyTests
 
             // GenericRequestHandler2<T> implements IRequestHandler<GenericRequest2<T>, List<T>>
             // This is a nested open generic service interface
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler2<T> : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest2<T> request)
@@ -745,11 +745,11 @@ public class ClosedGenericDependencyTests
 
             internal class Entity2 { }
 
-            // Using DiscoverAttribute to discover the closed generic service type
+            // Using IocDiscoverAttribute to discover the closed generic service type
             // IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>
             internal sealed class ViewModel2
             {
-                [Discover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
+                [IocDiscover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
                 public void SendRequest2()
                 {
                     // Some indirect usage via mediator pattern
@@ -764,7 +764,7 @@ public class ClosedGenericDependencyTests
     }
 
     /// <summary>
-    /// Tests that closed generic dependencies in [Inject] method parameters are discovered.
+    /// Tests that closed generic dependencies in [IocInject] method parameters are discovered.
     /// The generator should automatically create factory registrations for the closed generic type.
     /// </summary>
     [Test]
@@ -776,7 +776,7 @@ public class ClosedGenericDependencyTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRequestHandler<,>), ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
@@ -789,7 +789,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record GenericRequest<T>(int Count) : IRequest<GenericRequest<T>, List<T>> where T : new();
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler<T> : IRequestHandler<GenericRequest<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest<T> request)
@@ -800,14 +800,14 @@ public class ClosedGenericDependencyTests
 
             internal class Entity { }
 
-            // This class uses [Inject] method with closed generic parameter
+            // This class uses [IocInject] method with closed generic parameter
             // The generator should discover IRequestHandler<GenericRequest<Entity>, List<Entity>>
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class ViewModel
             {
                 private IRequestHandler<GenericRequest<Entity>, List<Entity>>? handler;
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IRequestHandler<GenericRequest<Entity>, List<Entity>> handler)
                 {
                     this.handler = handler;
@@ -822,7 +822,7 @@ public class ClosedGenericDependencyTests
     }
 
     /// <summary>
-    /// Tests that closed generic dependencies in [Inject] property are discovered.
+    /// Tests that closed generic dependencies in [IocInject] property are discovered.
     /// </summary>
     [Test]
     public async Task InjectProperty_ClosedGenericType_GeneratesFactoryRegistration()
@@ -833,7 +833,7 @@ public class ClosedGenericDependencyTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -842,7 +842,7 @@ public class ClosedGenericDependencyTests
                 T? GetById(int id);
             }
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class Repository<T> : IRepository<T>
             {
                 public T? GetById(int id) => default;
@@ -850,12 +850,12 @@ public class ClosedGenericDependencyTests
 
             internal class User { }
 
-            // This class uses [Inject] property with closed generic type
+            // This class uses [IocInject] property with closed generic type
             // The generator should discover IRepository<User>
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             internal sealed class UserService
             {
-                [Inject]
+                [IocInject]
                 public IRepository<User> Repository { get; init; } = null!;
             }
             """;
@@ -867,7 +867,7 @@ public class ClosedGenericDependencyTests
     }
 
     /// <summary>
-    /// Tests that multiple closed generic dependencies in [Inject] method parameters are all discovered.
+    /// Tests that multiple closed generic dependencies in [IocInject] method parameters are all discovered.
     /// </summary>
     [Test]
     public async Task InjectMethod_MultipleClosedGenericParameters_GeneratesAllFactoryRegistrations()
@@ -878,7 +878,7 @@ public class ClosedGenericDependencyTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -887,7 +887,7 @@ public class ClosedGenericDependencyTests
                 T? GetById(int id);
             }
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class Repository<T> : IRepository<T>
             {
                 public T? GetById(int id) => default;
@@ -897,16 +897,16 @@ public class ClosedGenericDependencyTests
             internal class Order { }
             internal class Product { }
 
-            // This class uses [Inject] method with multiple closed generic parameters
+            // This class uses [IocInject] method with multiple closed generic parameters
             // The generator should discover all three: IRepository<User>, IRepository<Order>, IRepository<Product>
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             internal sealed class DashboardService
             {
                 private IRepository<User>? userRepo;
                 private IRepository<Order>? orderRepo;
                 private IRepository<Product>? productRepo;
 
-                [Inject]
+                [IocInject]
                 public void Initialize(
                     IRepository<User> userRepo,
                     IRepository<Order> orderRepo,
@@ -926,7 +926,7 @@ public class ClosedGenericDependencyTests
     }
 
     /// <summary>
-    /// Tests that closed generic dependencies in [Inject] method parameters with decorators work correctly.
+    /// Tests that closed generic dependencies in [IocInject] method parameters with decorators work correctly.
     /// </summary>
     [Test]
     public async Task InjectMethod_ClosedGenericParameter_WithDecorators_GeneratesFactoryWithDecorators()
@@ -937,7 +937,7 @@ public class ClosedGenericDependencyTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [assembly: IoCRegisterDefaults(
+            [assembly: IocRegisterDefaults(
                 typeof(TestNamespace.IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.LoggingDecorator<,>)])]
@@ -953,7 +953,7 @@ public class ClosedGenericDependencyTests
 
             public sealed record TestRequest<T>(int Count) : IRequest<TestRequest<T>, List<T>> where T : new();
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>> where T : new()
             {
                 public List<T> Handle(TestRequest<T> request)
@@ -975,14 +975,14 @@ public class ClosedGenericDependencyTests
 
             internal class Entity { }
 
-            // This class uses [Inject] method with closed generic parameter
+            // This class uses [IocInject] method with closed generic parameter
             // The decorator should be applied to the closed generic registration
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             internal sealed class ViewModel
             {
                 private IRequestHandler<TestRequest<Entity>, List<Entity>>? handler;
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IRequestHandler<TestRequest<Entity>, List<Entity>> handler)
                 {
                     this.handler = handler;
@@ -997,7 +997,7 @@ public class ClosedGenericDependencyTests
     }
 
     /// <summary>
-    /// Tests combined scenario: constructor with closed generic + [Inject] method with different closed generic.
+    /// Tests combined scenario: constructor with closed generic + [IocInject] method with different closed generic.
     /// Both should be discovered and generate factory registrations.
     /// </summary>
     [Test]
@@ -1009,7 +1009,7 @@ public class ClosedGenericDependencyTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [assembly: IoCRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -1018,7 +1018,7 @@ public class ClosedGenericDependencyTests
                 T? GetById(int id);
             }
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class Repository<T> : IRepository<T>
             {
                 public T? GetById(int id) => default;
@@ -1027,15 +1027,15 @@ public class ClosedGenericDependencyTests
             internal class User { }
             internal class Order { }
 
-            // This class has closed generic in constructor and different closed generic in [Inject] method
+            // This class has closed generic in constructor and different closed generic in [IocInject] method
             // Both IRepository<User> and IRepository<Order> should be discovered
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             internal sealed class OrderService(IRepository<User> userRepo)
             {
                 private readonly IRepository<User> userRepo = userRepo;
                 private IRepository<Order>? orderRepo;
 
-                [Inject]
+                [IocInject]
                 public void SetOrderRepository(IRepository<Order> orderRepo)
                 {
                     this.orderRepo = orderRepo;

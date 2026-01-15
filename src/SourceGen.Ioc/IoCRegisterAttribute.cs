@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SourceGen.Ioc;
@@ -12,24 +12,24 @@ namespace SourceGen.Ioc;
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class IoCRegisterAttribute : Attribute
+public sealed class IocRegisterAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
     /// <param name="serviceTypes">The service types to register the class as.</param>
-    public IoCRegisterAttribute(params Type[] serviceTypes)
+    public IocRegisterAttribute(params Type[] serviceTypes)
     {
         this.ServiceTypes = serviceTypes;
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute"/> class.
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
     /// <param name="serviceTypes">The service types to register the class as.</param>
-    public IoCRegisterAttribute(ServiceLifetime lifetime, params Type[] serviceTypes)
+    public IocRegisterAttribute(ServiceLifetime lifetime, params Type[] serviceTypes)
     {
         this.Lifetime = lifetime;
         this.ServiceTypes = serviceTypes;
@@ -105,225 +105,225 @@ public sealed class IoCRegisterAttribute : Attribute
 
 #if NET7_0_OR_GREATER
 
-/// <inheritdoc cref="IoCRegisterAttribute"/>
+/// <inheritdoc cref="IocRegisterAttribute"/>
 /// <typeparam name="T">The service type to register the class as.</typeparam>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class IoCRegisterAttribute<T> : Attribute
+public sealed class IocRegisterAttribute<T> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
-    public IoCRegisterAttribute()
+    public IocRegisterAttribute()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T}"/> class.
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
-    public IoCRegisterAttribute(ServiceLifetime lifetime)
+    public IocRegisterAttribute(ServiceLifetime lifetime)
     {
         this.Lifetime = lifetime;
     }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Lifetime"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Lifetime"/>
     public ServiceLifetime Lifetime { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllInterfaces"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllInterfaces"/>
     public bool RegisterAllInterfaces { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllBaseClasses"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllBaseClasses"/>
     public bool RegisterAllBaseClasses { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.KeyType"/>
+    /// <inheritdoc cref="IocRegisterAttribute.KeyType"/>
     public KeyType KeyType { get; init; } = KeyType.Value;
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Key"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Key"/>
     public object? Key { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
     public bool TagOnly { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Factory"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Instance"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Instance"/>
     public string? Instance { get; init; }
 }
 
-/// <inheritdoc cref="IoCRegisterAttribute"/>
-/// <typeparam name="T1"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
-/// <typeparam name="T2"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
+/// <inheritdoc cref="IocRegisterAttribute"/>
+/// <typeparam name="T1"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
+/// <typeparam name="T2"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class IoCRegisterAttribute<T1, T2> : Attribute
+public sealed class IocRegisterAttribute<T1, T2> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T1,T2}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
-    public IoCRegisterAttribute()
+    public IocRegisterAttribute()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2}"/> class.
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T1,T2}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
-    public IoCRegisterAttribute(ServiceLifetime lifetime)
+    public IocRegisterAttribute(ServiceLifetime lifetime)
     {
         this.Lifetime = lifetime;
     }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Lifetime"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Lifetime"/>
     public ServiceLifetime Lifetime { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllInterfaces"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllInterfaces"/>
     public bool RegisterAllInterfaces { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllBaseClasses"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllBaseClasses"/>
     public bool RegisterAllBaseClasses { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.KeyType"/>
+    /// <inheritdoc cref="IocRegisterAttribute.KeyType"/>
     public KeyType KeyType { get; init; } = KeyType.Value;
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Key"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Key"/>
     public object? Key { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
     public bool TagOnly { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Factory"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Instance"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Instance"/>
     public string? Instance { get; init; }
 }
 
-/// <inheritdoc cref="IoCRegisterAttribute"/>
-/// <typeparam name="T1"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
-/// <typeparam name="T2"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
-/// <typeparam name="T3"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
+/// <inheritdoc cref="IocRegisterAttribute"/>
+/// <typeparam name="T1"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
+/// <typeparam name="T2"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
+/// <typeparam name="T3"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class IoCRegisterAttribute<T1, T2, T3> : Attribute
+public sealed class IocRegisterAttribute<T1, T2, T3> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T1,T2,T3}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
-    public IoCRegisterAttribute()
+    public IocRegisterAttribute()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3}"/> class.
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T1,T2,T3}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
-    public IoCRegisterAttribute(ServiceLifetime lifetime)
+    public IocRegisterAttribute(ServiceLifetime lifetime)
     {
         this.Lifetime = lifetime;
     }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Lifetime"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Lifetime"/>
     public ServiceLifetime Lifetime { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllInterfaces"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllInterfaces"/>
     public bool RegisterAllInterfaces { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllBaseClasses"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllBaseClasses"/>
     public bool RegisterAllBaseClasses { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.KeyType"/>
+    /// <inheritdoc cref="IocRegisterAttribute.KeyType"/>
     public KeyType KeyType { get; init; } = KeyType.Value;
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Key"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Key"/>
     public object? Key { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
     public bool TagOnly { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Factory"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Instance"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Instance"/>
     public string? Instance { get; init; }
 }
 
-/// <inheritdoc cref="IoCRegisterAttribute"/>
-/// <typeparam name="T1"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
-/// <typeparam name="T2"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
-/// <typeparam name="T3"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
-/// <typeparam name="T4"><inheritdoc cref="IoCRegisterAttribute{T}"/></typeparam>
+/// <inheritdoc cref="IocRegisterAttribute"/>
+/// <typeparam name="T1"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
+/// <typeparam name="T2"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
+/// <typeparam name="T3"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
+/// <typeparam name="T4"><inheritdoc cref="IocRegisterAttribute{T}"/></typeparam>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class IoCRegisterAttribute<T1, T2, T3, T4> : Attribute
+public sealed class IocRegisterAttribute<T1, T2, T3, T4> : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3,T4}"/> class. <br/>
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T1,T2,T3,T4}"/> class. <br/>
     /// Default lifetime is Singleton.
     /// </summary>
-    public IoCRegisterAttribute()
+    public IocRegisterAttribute()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IoCRegisterAttribute{T1,T2,T3,T4}"/> class.
+    /// Initializes a new instance of the <see cref="IocRegisterAttribute{T1,T2,T3,T4}"/> class.
     /// </summary>
     /// <param name="lifetime">The service lifetime for the registration.</param>
-    public IoCRegisterAttribute(ServiceLifetime lifetime)
+    public IocRegisterAttribute(ServiceLifetime lifetime)
     {
         this.Lifetime = lifetime;
     }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Lifetime"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Lifetime"/>
     public ServiceLifetime Lifetime { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllInterfaces"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllInterfaces"/>
     public bool RegisterAllInterfaces { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.RegisterAllBaseClasses"/>
+    /// <inheritdoc cref="IocRegisterAttribute.RegisterAllBaseClasses"/>
     public bool RegisterAllBaseClasses { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.KeyType"/>
+    /// <inheritdoc cref="IocRegisterAttribute.KeyType"/>
     public KeyType KeyType { get; init; } = KeyType.Value;
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Key"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Key"/>
     public object? Key { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Decorators"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.TagOnly"/>
+    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
     public bool TagOnly { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Tags"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Factory"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
 
-    /// <inheritdoc cref="IoCRegisterAttribute.Instance"/>
+    /// <inheritdoc cref="IocRegisterAttribute.Instance"/>
     public string? Instance { get; init; }
 }
 

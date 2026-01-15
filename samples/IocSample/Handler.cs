@@ -1,13 +1,13 @@
-﻿using IocSample.Shared;
+using IocSample.Shared;
 
 namespace IocSample;
 
-[ImportModule(typeof(IRequestHandler<,>))]
+[IocImportModule(typeof(IRequestHandler<,>))]
 public sealed class Module;
 
 public sealed record TestQuery(string Name) : IQuery<TestQuery, string>;
 
-[IoCRegister]
+[IocRegister]
 internal sealed class TestQueryHandler : IRequestHandler<TestQuery, string>
 {
     public string Handle(TestQuery request)
@@ -18,7 +18,7 @@ internal sealed class TestQueryHandler : IRequestHandler<TestQuery, string>
 
 public sealed record GenericRequest<T>(int Count) : IRequest<GenericRequest<T>, List<T>> where T : new();
 
-[IoCRegister]
+[IocRegister]
 internal sealed class GenericRequestHandler<T>(ILogger<GenericRequestHandler<T>> logger)
     : IRequestHandler<GenericRequest<T>, List<T>> where T : new()
 {
@@ -35,7 +35,7 @@ public class Entity
     public Guid Id { get; init; } = Guid.NewGuid();
 }
 
-[IoCRegister]
+[IocRegister]
 internal sealed class ViewModel(IRequestHandler<GenericRequest<Entity>, List<Entity>> handler)
 {
     private readonly IRequestHandler<GenericRequest<Entity>, List<Entity>> handler = handler;
@@ -48,7 +48,7 @@ internal sealed class ViewModel(IRequestHandler<GenericRequest<Entity>, List<Ent
 }
 
 public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
-[IoCRegister]
+[IocRegister]
 internal sealed class GenericRequestHandler2<T>(ILogger<GenericRequestHandler2<T>> logger)
     : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
 {
@@ -60,7 +60,7 @@ internal sealed class GenericRequestHandler2<T>(ILogger<GenericRequestHandler2<T
     }
 }
 
-[IoCRegister]
+[IocRegister]
 internal sealed class CustomMessenger(IServiceProvider serviceProvider)
 {
     private readonly IServiceProvider serviceProvider = serviceProvider;
@@ -82,25 +82,25 @@ internal sealed class CustomMessenger(IServiceProvider serviceProvider)
 internal class Entity2;
 internal class Entity3;
 
-[IoCRegister]
+[IocRegister]
 internal sealed class ViewModel2(CustomMessenger customMessenger)
 {
     private readonly CustomMessenger customMessenger = customMessenger;
 
-    [Discover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
+    [IocDiscover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
     public List<Entity2> SendRequest2()
     {
         return customMessenger.Send(new GenericRequest2<Entity2>(5));
     }
 
-    [Inject]
+    [IocInject]
     public void Initialize(IRequestHandler<GenericRequest2<Entity3>, List<Entity3>> handler)
     {
     }
 
-    [Inject]
+    [IocInject]
     public IRequestHandler<GenericRequest<Entity2>, List<Entity2>> Handler = null!;
 
-    [Inject]
+    [IocInject]
     public IRequestHandler<GenericRequest<Entity3>, List<Entity3>> Handler2 { get; init; } = null!;
 }

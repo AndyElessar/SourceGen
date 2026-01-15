@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
+namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC001: Invalid type for IoC registration (private/abstract).
@@ -18,7 +18,7 @@ public class SGIOC001Tests
 
             public class OuterClass
             {
-                [IoCRegister]
+                [IocRegister]
                 private class PrivateService { }
             }
             """;
@@ -39,7 +39,7 @@ public class SGIOC001Tests
 
             namespace TestNamespace;
 
-            [IoCRegister]
+            [IocRegister]
             public abstract class AbstractService { }
             """;
 
@@ -51,9 +51,9 @@ public class SGIOC001Tests
     }
 
     [Test]
-    public async Task SGIOC001_IoCRegisterForAttribute_PrivateTargetType_ReportsDiagnostic()
+    public async Task SGIOC001_IocRegisterForAttribute_PrivateTargetType_ReportsDiagnostic()
     {
-        // Note: When using IoCRegisterForAttribute with typeof(), the type must be accessible
+        // Note: When using IocRegisterForAttribute with typeof(), the type must be accessible
         // So we test with a nested private class where the attribute is on an outer accessible type
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -63,7 +63,7 @@ public class SGIOC001Tests
 
             public class OuterClass
             {
-                [IoCRegisterFor(typeof(PrivateService))]
+                [IocRegisterFor(typeof(PrivateService))]
                 private class PrivateService { }
             }
             """;
@@ -76,7 +76,7 @@ public class SGIOC001Tests
     }
 
     [Test]
-    public async Task SGIOC001_IoCRegisterForAttribute_AbstractTargetType_ReportsDiagnostic()
+    public async Task SGIOC001_IocRegisterForAttribute_AbstractTargetType_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -86,7 +86,7 @@ public class SGIOC001Tests
 
             public abstract class AbstractService { }
 
-            [IoCRegisterFor(typeof(AbstractService))]
+            [IocRegisterFor(typeof(AbstractService))]
             public interface IServiceMarker { }
             """;
 
@@ -106,7 +106,7 @@ public class SGIOC001Tests
 
             namespace TestNamespace;
 
-            [IoCRegister]
+            [IocRegister]
             public class ValidService { }
             """;
 
@@ -125,7 +125,7 @@ public class SGIOC001Tests
 
             namespace TestNamespace;
 
-            [IoCRegister]
+            [IocRegister]
             internal class InternalService { }
             """;
 

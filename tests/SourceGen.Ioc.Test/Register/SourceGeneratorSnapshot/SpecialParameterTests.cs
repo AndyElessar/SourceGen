@@ -23,10 +23,10 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(IServiceProvider serviceProvider, IDependency dependency) : IMyService
             {
                 private readonly IServiceProvider _serviceProvider = serviceProvider;
@@ -53,16 +53,16 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IServiceProvider? ServiceProvider { get; private set; }
                 public IDependency? Dependency { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IServiceProvider serviceProvider, IDependency dependency)
                 {
                     ServiceProvider = serviceProvider;
@@ -90,13 +90,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class SpecialDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "normal")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "normal")]
             public class NormalDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(
                 [FromKeyedServices("special")] IDependency specialDep,
                 [FromKeyedServices("normal")] IDependency normalDep) : IMyService
@@ -125,10 +125,10 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
             public class MyService(object key, IDependency dependency) : IMyService
             {
                 private readonly object _key = key;
@@ -155,10 +155,10 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
             public class MyService(object? serviceKey, IDependency dependency) : IMyService
             {
                 private readonly object? _serviceKey = serviceKey;
@@ -185,10 +185,10 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IObjectService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
             public class ObjectService : IObjectService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
             public class MyService(object someData) : IMyService
             {
                 private readonly object _someData = someData;
@@ -214,10 +214,10 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IObjectService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
             public class ObjectService : IObjectService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(object key) : IMyService
             {
                 private readonly object _key = key;
@@ -244,13 +244,13 @@ public class SpecialParameterTests
             public interface IDependency1 { }
             public interface IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "dep1")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "dep1")]
             public class Dependency1 : IDependency1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myService")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myService")]
             public class MyService(
                 IServiceProvider serviceProvider,
                 [FromKeyedServices("dep1")] IDependency1 dep1,
@@ -282,7 +282,7 @@ public class SpecialParameterTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class MyServiceImpl : IMyService { }
 
             public class MyServiceDecorator(IMyService inner, IServiceProvider serviceProvider) : IMyService
@@ -291,7 +291,7 @@ public class SpecialParameterTests
                 private readonly IServiceProvider _serviceProvider = serviceProvider;
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
             public class DecoratedService : IMyService { }
             """;
 
@@ -314,10 +314,10 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface ILogger { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "decoratorLogger")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "decoratorLogger")]
             public class DecoratorLogger : ILogger { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class MyServiceImpl : IMyService { }
 
             public class MyServiceDecorator(IMyService inner, [FromKeyedServices("decoratorLogger")] ILogger logger) : IMyService
@@ -326,7 +326,7 @@ public class SpecialParameterTests
                 private readonly ILogger _logger = logger;
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
             public class DecoratedService : IMyService { }
             """;
 
@@ -350,13 +350,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] IEnumerable<IDependency> dependencies) : IMyService
             {
                 private readonly IEnumerable<IDependency> _dependencies = dependencies;
@@ -383,13 +383,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] IList<IDependency> dependencies) : IMyService
             {
                 private readonly IList<IDependency> _dependencies = dependencies;
@@ -416,13 +416,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] IReadOnlyList<IDependency> dependencies) : IMyService
             {
                 private readonly IReadOnlyList<IDependency> _dependencies = dependencies;
@@ -448,13 +448,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] IDependency[] dependencies) : IMyService
             {
                 private readonly IDependency[] _dependencies = dependencies;
@@ -481,13 +481,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] IReadOnlyCollection<IDependency> dependencies) : IMyService
             {
                 private readonly IReadOnlyCollection<IDependency> _dependencies = dependencies;
@@ -514,13 +514,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] List<IDependency> dependencies) : IMyService
             {
                 private readonly List<IDependency> _dependencies = dependencies;
@@ -547,13 +547,13 @@ public class SpecialParameterTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService([FromKeyedServices("special")] ICollection<IDependency> dependencies) : IMyService
             {
                 private readonly ICollection<IDependency> _dependencies = dependencies;

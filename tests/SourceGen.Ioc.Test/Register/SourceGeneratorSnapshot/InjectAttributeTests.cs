@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for InjectAttribute functionality.
@@ -20,19 +20,19 @@ public class InjectAttributeTests
             public interface IDependency1 { }
             public interface IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public IDependency1 Dependency1 { get; init; }
 
-                [Inject]
+                [IocInject]
                 public IDependency2 Dependency2 { get; set; }
             }
             """;
@@ -56,19 +56,19 @@ public class InjectAttributeTests
             public interface IDependency1 { }
             public interface IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IDependency1? Dep1 { get; private set; }
                 public IDependency2? Dep2 { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IDependency1 dep1, IDependency2 dep2)
                 {
                     Dep1 = dep1;
@@ -97,24 +97,24 @@ public class InjectAttributeTests
             public interface IDependency2 { }
             public interface IDependency3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency3 : IDependency3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(IDependency1 dep1) : IMyService
             {
                 private readonly IDependency1 _dep1 = dep1;
 
-                [Inject]
+                [IocInject]
                 public IDependency2 Dep2 { get; init; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IDependency3 dep3)
                 {
                     // Initialization
@@ -140,13 +140,13 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class SpecialDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public IDependency Dependency { get; init; }
             }
             """;
@@ -169,16 +169,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
             public class SpecialDependency : IDependency
             {
                 public const string Key = "special";
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+                [IocInject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
                 public IDependency Dependency { get; init; }
             }
             """;
@@ -201,14 +201,14 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class SpecialDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class DefaultDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
-            public class MyService([Inject(Key = "special")] IDependency dep) : IMyService
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([IocInject(Key = "special")] IDependency dep) : IMyService
             {
                 public IDependency Dependency { get; } = dep;
             }
@@ -232,14 +232,14 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
             public class SpecialDependency : IDependency
             {
                 public const string Key = "special";
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
-            public class MyService([Inject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))] IDependency dep) : IMyService
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([IocInject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))] IDependency dep) : IMyService
             {
                 public IDependency Dependency { get; } = dep;
             }
@@ -263,19 +263,19 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class SpecialDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class DefaultDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IDependency? Dependency { get; private set; }
 
-                [Inject]
-                public void Initialize([Inject(Key = "special")] IDependency dep)
+                [IocInject]
+                public void Initialize([IocInject(Key = "special")] IDependency dep)
                 {
                     Dependency = dep;
                 }
@@ -300,19 +300,19 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))]
             public class SpecialDependency : IDependency
             {
                 public const string Key = "special";
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IDependency? Dependency { get; private set; }
 
-                [Inject]
-                public void Initialize([Inject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))] IDependency dep)
+                [IocInject]
+                public void Initialize([IocInject(KeyType = KeyType.Csharp, Key = nameof(SpecialDependency.Key))] IDependency dep)
                 {
                     Dependency = dep;
                 }
@@ -337,13 +337,13 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public IDependency? OptionalDependency { get; set; }
             }
             """;
@@ -366,13 +366,13 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class SpecialDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public IDependency? OptionalDependency { get; set; }
             }
             """;
@@ -395,10 +395,10 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(IDependency? optionalDep = null) : IMyService
             {
                 public IDependency? OptionalDependency { get; } = optionalDep;
@@ -423,11 +423,11 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class SpecialDependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
-            public class MyService([Inject(Key = "special")] IDependency? optionalDep = null) : IMyService
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService([IocInject(Key = "special")] IDependency? optionalDep = null) : IMyService
             {
                 public IDependency? OptionalDependency { get; } = optionalDep;
             }
@@ -451,15 +451,15 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IDependency? OptionalDependency { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IDependency? optionalDep = null)
                 {
                     OptionalDependency = optionalDep;
@@ -484,12 +484,12 @@ public class InjectAttributeTests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService : IMyService
             {
                 public string? Key { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string key)
                 {
                     Key = key;
@@ -515,16 +515,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Key = "dep1")]
+            [IocRegister(Key = "dep1")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Key = "ServiceKey")]
+            [IocRegister(Key = "ServiceKey")]
             public class MyService : IMyService
             {
                 public IDependency? Dep { get; private set; }
                 public string? Key { get; private set; }
 
-                [Inject(Key = "dep1")]
+                [IocInject(Key = "dep1")]
                 public void Initialize(IDependency dep, [ServiceKey] string key)
                 {
                     Dep = dep;
@@ -550,12 +550,12 @@ public class InjectAttributeTests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService
             {
                 public string? Key { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string? key)
                 {
                     Key = key;
@@ -597,13 +597,13 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject(Key = "TestKey")]
+                [IocInject(Key = "TestKey")]
                 public IDependency Dependency { get; set; }
             }
             """;
@@ -627,16 +627,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public IList<IDependency> Dependencies { get; init; }
             }
             """;
@@ -659,16 +659,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public IDependency[] Dependencies { get; init; }
             }
             """;
@@ -692,16 +692,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public IList<IDependency> Dependencies { get; init; }
             }
             """;
@@ -725,18 +725,18 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IList<IDependency>? Dependencies { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IList<IDependency> dependencies)
                 {
                     Dependencies = dependencies;
@@ -763,18 +763,18 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IList<IDependency>? Dependencies { get; private set; }
 
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public void Initialize(IList<IDependency> dependencies)
                 {
                     Dependencies = dependencies;
@@ -800,18 +800,18 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IDependency[]? Dependencies { get; private set; }
 
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public void Initialize(IDependency[] dependencies)
                 {
                     Dependencies = dependencies;
@@ -838,16 +838,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public IEnumerable<IDependency> Dependencies { get; init; }
             }
             """;
@@ -871,16 +871,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public IEnumerable<IDependency> Dependencies { get; init; }
             }
             """;
@@ -904,18 +904,18 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IEnumerable<IDependency>? Dependencies { get; private set; }
 
-                [Inject]
+                [IocInject]
                 public void Initialize(IEnumerable<IDependency> dependencies)
                 {
                     Dependencies = dependencies;
@@ -942,18 +942,18 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IEnumerable<IDependency>? Dependencies { get; private set; }
 
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public void Initialize(IEnumerable<IDependency> dependencies)
                 {
                     Dependencies = dependencies;
@@ -980,16 +980,16 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public IReadOnlyList<IDependency> Dependencies { get; init; }
             }
             """;
@@ -1013,18 +1013,18 @@ public class InjectAttributeTests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency1 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "special")]
             public class Dependency2 : IDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService
             {
                 public IReadOnlyCollection<IDependency>? Dependencies { get; private set; }
 
-                [Inject(Key = "special")]
+                [IocInject(Key = "special")]
                 public void Initialize(IReadOnlyCollection<IDependency> dependencies)
                 {
                     Dependencies = dependencies;

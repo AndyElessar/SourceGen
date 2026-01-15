@@ -1,4 +1,4 @@
-﻿using System.IO.Abstractions.TestingHelpers;
+using System.IO.Abstractions.TestingHelpers;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 

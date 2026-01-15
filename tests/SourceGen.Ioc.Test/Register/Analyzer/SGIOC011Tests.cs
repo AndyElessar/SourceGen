@@ -19,10 +19,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService))]
+            [IocRegisterFor(typeof(MyService))]
             public interface IServiceMarker { }
             """;
 
@@ -44,10 +44,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "key1")]
+            [IocRegister(Key = "key1")]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Key = "key1")]
+            [IocRegisterFor(typeof(MyService), Key = "key1")]
             public interface IServiceMarker { }
             """;
 
@@ -69,10 +69,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "key1")]
+            [IocRegister(Key = "key1")]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Key = "key2")]
+            [IocRegisterFor(typeof(MyService), Key = "key2")]
             public interface IServiceMarker { }
             """;
 
@@ -93,10 +93,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService1 : IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService2 : IMyService { }
             """;
 
@@ -117,7 +117,7 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 
@@ -138,10 +138,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor<MyService>]
+            [IocRegisterFor<MyService>]
             public interface IServiceMarker { }
             """;
 
@@ -163,10 +163,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Key = "keyed")]
+            [IocRegisterFor(typeof(MyService), Key = "keyed")]
             public interface IServiceMarker { }
             """;
 
@@ -189,10 +189,10 @@ public class SGIOC011Tests
 
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService))]
+            [IocRegisterFor(typeof(MyService))]
             public interface IServiceMarker1 { }
 
-            [IoCRegisterFor(typeof(MyService))]
+            [IocRegisterFor(typeof(MyService))]
             public interface IServiceMarker2 { }
             """;
 
@@ -214,10 +214,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Tags = ["tag1", "tag2"])]
+            [IocRegister(Tags = ["tag1", "tag2"])]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag1", "tag2"])]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag1", "tag2"])]
             public interface IServiceMarker { }
             """;
 
@@ -239,10 +239,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Tags = ["tag1"], TagOnly = true)]
+            [IocRegister(Tags = ["tag1"], TagOnly = true)]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag2"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag2"], TagOnly = true)]
             public interface IServiceMarker { }
             """;
 
@@ -265,10 +265,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Tags = ["tag1"])]
+            [IocRegister(Tags = ["tag1"])]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag2"])]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag2"])]
             public interface IServiceMarker { }
             """;
 
@@ -290,10 +290,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag1"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag1"], TagOnly = true)]
             public interface IServiceMarker { }
             """;
 
@@ -315,10 +315,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag1"])]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag1"])]
             public interface IServiceMarker { }
             """;
 
@@ -340,10 +340,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "key1", Tags = ["tag1"])]
+            [IocRegister(Key = "key1", Tags = ["tag1"])]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Key = "key1", Tags = ["tag1"])]
+            [IocRegisterFor(typeof(MyService), Key = "key1", Tags = ["tag1"])]
             public interface IServiceMarker { }
             """;
 
@@ -365,10 +365,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "key1", Tags = ["tag1"], TagOnly = true)]
+            [IocRegister(Key = "key1", Tags = ["tag1"], TagOnly = true)]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Key = "key1", Tags = ["tag2"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Key = "key1", Tags = ["tag2"], TagOnly = true)]
             public interface IServiceMarker { }
             """;
 
@@ -389,10 +389,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "key1", Tags = ["tag1"])]
+            [IocRegister(Key = "key1", Tags = ["tag1"])]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Key = "key2", Tags = ["tag1"])]
+            [IocRegisterFor(typeof(MyService), Key = "key2", Tags = ["tag1"])]
             public interface IServiceMarker { }
             """;
 
@@ -414,10 +414,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Tags = ["tag1", "tag2"], TagOnly = true)]
+            [IocRegister(Tags = ["tag1", "tag2"], TagOnly = true)]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag2", "tag3"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag2", "tag3"], TagOnly = true)]
             public interface IServiceMarker { }
             """;
 
@@ -440,10 +440,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Tags = ["tag1", "tag2"], TagOnly = true)]
+            [IocRegister(Tags = ["tag1", "tag2"], TagOnly = true)]
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(typeof(MyService), Tags = ["tag3", "tag4"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag3", "tag4"], TagOnly = true)]
             public interface IServiceMarker { }
             """;
 

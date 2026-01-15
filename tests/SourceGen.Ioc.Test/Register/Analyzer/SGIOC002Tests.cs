@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
+namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC002: Circular dependency detected.
@@ -16,13 +16,13 @@ public class SGIOC002Tests
 
             namespace TestNamespace;
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceA
             {
                 public ServiceA(ServiceB b) { }
             }
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceB
             {
                 public ServiceB(ServiceA a) { }
@@ -44,19 +44,19 @@ public class SGIOC002Tests
 
             namespace TestNamespace;
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceA
             {
                 public ServiceA(ServiceB b) { }
             }
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceB
             {
                 public ServiceB(ServiceC c) { }
             }
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceC
             {
                 public ServiceC(ServiceA a) { }
@@ -78,19 +78,19 @@ public class SGIOC002Tests
 
             namespace TestNamespace;
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceA
             {
                 public ServiceA(ServiceB b) { }
             }
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceB
             {
                 public ServiceB(ServiceC c) { }
             }
 
-            [IoCRegister]
+            [IocRegister]
             public class ServiceC { }
             """;
 
@@ -112,13 +112,13 @@ public class SGIOC002Tests
             public interface IServiceA { }
             public interface IServiceB { }
 
-            [IoCRegister(ServiceTypes = [typeof(IServiceA)])]
+            [IocRegister(ServiceTypes = [typeof(IServiceA)])]
             public class ServiceA : IServiceA
             {
                 public ServiceA(IServiceB b) { }
             }
 
-            [IoCRegister(ServiceTypes = [typeof(IServiceB)])]
+            [IocRegister(ServiceTypes = [typeof(IServiceB)])]
             public class ServiceB : IServiceB
             {
                 public ServiceB(IServiceA a) { }
@@ -141,13 +141,13 @@ public class SGIOC002Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService
             {
                 public ScopedService(SingletonService singleton) { }
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(ScopedService scoped) { }

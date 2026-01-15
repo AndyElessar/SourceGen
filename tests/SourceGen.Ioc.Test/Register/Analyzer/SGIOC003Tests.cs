@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
+namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC003: Singleton depends on Scoped service.
@@ -16,10 +16,10 @@ public class SGIOC003Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(ScopedService scoped) { }
@@ -42,10 +42,10 @@ public class SGIOC003Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(SingletonDependency dep) { }
@@ -67,10 +67,10 @@ public class SGIOC003Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient)]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService
             {
                 public ScopedService(TransientService transient) { }
@@ -95,10 +95,10 @@ public class SGIOC003Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService
             {
                 public ScopedService(SingletonService singleton) { }
@@ -122,10 +122,10 @@ public class SGIOC003Tests
 
             public interface IScopedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
             public class ScopedService : IScopedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(IScopedService scoped) { }
@@ -143,25 +143,25 @@ public class SGIOC003Tests
     public async Task SGIOC003_DefaultSettings_OpenGenericInterface_AppliesLifetimeFromDefaultSettings()
     {
         // TestOpenGeneric2<T> implements IGenericTest2<T>
-        // IoCRegisterDefaults specifies Scoped for IGenericTest2<>
+        // IocRegisterDefaults specifies Scoped for IGenericTest2<>
         // So TestOpenGeneric2<T> should be treated as Scoped (from default settings), not Singleton
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IGenericTest2<T> { }
 
             // This service should be Scoped (from default settings), not Singleton
-            [IoCRegister]
+            [IocRegister]
             public class TestOpenGeneric2<T> : IGenericTest2<T> { }
 
             // Singleton service depending on Scoped service should report error
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(TestOpenGeneric2<int> scoped) { }
@@ -185,18 +185,18 @@ public class SGIOC003Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IGenericTest2<T> { }
 
             // This service should be Scoped (from default settings)
-            [IoCRegister]
+            [IocRegister]
             public class TestOpenGeneric2<T> : IGenericTest2<T> { }
 
             // Scoped service depending on Scoped service should NOT report error
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class AnotherScopedService
             {
                 public AnotherScopedService(TestOpenGeneric2<int> scoped) { }
@@ -219,18 +219,18 @@ public class SGIOC003Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IGenericTest2<T> { }
 
             // Explicit Singleton should override default Scoped
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class TestOpenGeneric2<T> : IGenericTest2<T> { }
 
             // Singleton service depending on Singleton service should NOT report error
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(TestOpenGeneric2<int> singleton) { }
@@ -253,18 +253,18 @@ public class SGIOC003Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(IGenericTest2<>), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IGenericTest2<T> { }
 
             // Closed generic implementing IGenericTest2<int> should also get Scoped lifetime
-            [IoCRegister]
+            [IocRegister]
             public class ClosedGenericService : IGenericTest2<int> { }
 
             // Singleton service depending on Scoped service should report error
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(ClosedGenericService scoped) { }
@@ -287,18 +287,18 @@ public class SGIOC003Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(BaseService), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(BaseService), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public abstract class BaseService { }
 
             // Should get Scoped lifetime from base class default settings
-            [IoCRegister]
+            [IocRegister]
             public class DerivedService : BaseService { }
 
             // Singleton service depending on Scoped service should report error
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(DerivedService scoped) { }
@@ -321,8 +321,8 @@ public class SGIOC003Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IFirst), ServiceLifetime.Scoped)]
-            [assembly: IoCRegisterDefaults(typeof(ISecond), ServiceLifetime.Transient)]
+            [assembly: IocRegisterDefaults(typeof(IFirst), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(ISecond), ServiceLifetime.Transient)]
 
             namespace TestNamespace;
 
@@ -330,11 +330,11 @@ public class SGIOC003Tests
             public interface ISecond { }
 
             // Implements both interfaces, should get Scoped from IFirst (first in AllInterfaces)
-            [IoCRegister]
+            [IocRegister]
             public class MultiInterfaceService : IFirst, ISecond { }
 
             // Singleton service depending on Scoped service should report error
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(MultiInterfaceService service) { }
@@ -357,7 +357,7 @@ public class SGIOC003Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IOtherInterface), ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults(typeof(IOtherInterface), ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
@@ -365,11 +365,11 @@ public class SGIOC003Tests
             public interface IMyInterface { }
 
             // No matching default settings, should use Singleton default
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyInterface { }
 
             // Singleton service depending on Singleton service should NOT report error
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(MyService singleton) { }

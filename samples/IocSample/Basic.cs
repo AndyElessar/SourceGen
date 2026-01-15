@@ -1,11 +1,11 @@
-﻿namespace IocSample;
+namespace IocSample;
 
 public interface IBasic;
 public interface IBasic2;
 
-[IoCRegister<IBasic>(ServiceLifetime.Scoped)]
+[IocRegister<IBasic>(ServiceLifetime.Scoped)]
 internal class Basic : IBasic;
-[IoCRegister(ServiceLifetime.Transient, typeof(IBasic), typeof(IBasic2))]
+[IocRegister(ServiceLifetime.Transient, typeof(IBasic), typeof(IBasic2))]
 internal class Basic2 : IBasic, IBasic2;
 
 public interface IExternal;
@@ -13,20 +13,20 @@ public class External : IExternal;
 public class External2 : IExternal;
 
 //[assembly: IoCRegisterFor<External>]
-[IoCRegisterFor<External>(ServiceLifetime.Singleton)]
-[IoCRegisterFor<External2>(ServiceLifetime.Transient, ServiceTypes = [typeof(IExternal)])]
+[IocRegisterFor<External>(ServiceLifetime.Singleton)]
+[IocRegisterFor<External2>(ServiceLifetime.Transient, ServiceTypes = [typeof(IExternal)])]
 public class Marker;
 
-[IoCRegisterDefaults<IDenpendency2>(ServiceLifetime.Transient)]
+[IocRegisterDefaults<IDenpendency2>(ServiceLifetime.Transient)]
 public interface IDenpendency2;
-[IoCRegister]
+[IocRegister]
 internal class Default1 : IDenpendency2;
-[IoCRegister(ServiceLifetime.Scoped)]
+[IocRegister(ServiceLifetime.Scoped)]
 internal class Default2 : IDenpendency2;
 
-//[IoCRegister]
+//[IocRegister]
 public abstract class AbstractClass
 {
-    //[IoCRegister]
+    //[IocRegister]
     private class PrivateClass;
 }

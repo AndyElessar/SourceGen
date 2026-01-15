@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 namespace SourceGen.Ioc.Test.Register.Analyzer;
 
@@ -18,10 +18,10 @@ public class SGIOC004Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient)]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(TransientService transient) { }
@@ -46,10 +46,10 @@ public class SGIOC004Tests
 
             public interface ITransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
             public class TransientService : ITransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(ITransientService transient) { }
@@ -72,10 +72,10 @@ public class SGIOC004Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient)]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(TransientService transient) { }
@@ -99,18 +99,18 @@ public class SGIOC004Tests
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IoCRegisterDefaults(typeof(IMyService), ServiceLifetime.Transient)]
+            [assembly: IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Transient)]
 
             namespace TestNamespace;
 
             public interface IMyService { }
 
             // Should get Transient lifetime from default settings
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
 
             // Singleton service depending on Transient service should report error (SGIOC004)
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class SingletonService
             {
                 public SingletonService(MyService transient) { }

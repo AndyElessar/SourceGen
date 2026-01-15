@@ -1,7 +1,7 @@
 namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
-/// Tests for analyzer support of generic attribute variants (IoCRegisterAttribute&lt;T&gt;, IoCRegisterForAttribute&lt;T&gt;, etc.).
+/// Tests for analyzer support of generic attribute variants (IoCRegisterAttribute&lt;T&gt;, IocRegisterForAttribute&lt;T&gt;, etc.).
 /// These tests verify that diagnostics are correctly reported for generic attribute variants.
 /// </summary>
 [Category(Constants.Analyzer)]
@@ -22,7 +22,7 @@ public class GenericAttributeAnalyzerTests
 
             public class OuterClass
             {
-                [IoCRegister<IMyService>(ServiceLifetime.Singleton)]
+                [IocRegister<IMyService>(ServiceLifetime.Singleton)]
                 private class PrivateService : IMyService { }
             }
             """;
@@ -46,7 +46,7 @@ public class GenericAttributeAnalyzerTests
             public interface IFirst { }
             public interface ISecond { }
 
-            [IoCRegister<IFirst, ISecond>(ServiceLifetime.Singleton)]
+            [IocRegister<IFirst, ISecond>(ServiceLifetime.Singleton)]
             public abstract class AbstractService : IFirst, ISecond { }
             """;
 
@@ -58,7 +58,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC001_IoCRegisterForAttribute_T1_PrivateTargetType_ReportsDiagnostic()
+    public async Task SGIOC001_IocRegisterForAttribute_T1_PrivateTargetType_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -68,7 +68,7 @@ public class GenericAttributeAnalyzerTests
 
             public class OuterClass
             {
-                [IoCRegisterFor<PrivateService>(ServiceLifetime.Singleton)]
+                [IocRegisterFor<PrivateService>(ServiceLifetime.Singleton)]
                 private class PrivateService { }
             }
             """;
@@ -81,7 +81,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC001_IoCRegisterForAttribute_T1_AbstractTargetType_ReportsDiagnostic()
+    public async Task SGIOC001_IocRegisterForAttribute_T1_AbstractTargetType_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -91,7 +91,7 @@ public class GenericAttributeAnalyzerTests
 
             public abstract class AbstractService { }
 
-            [IoCRegisterFor<AbstractService>(ServiceLifetime.Singleton)]
+            [IocRegisterFor<AbstractService>(ServiceLifetime.Singleton)]
             public interface IServiceMarker { }
             """;
 
@@ -113,7 +113,7 @@ public class GenericAttributeAnalyzerTests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton)]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton)]
             public class ValidService : IMyService { }
             """;
 
@@ -124,7 +124,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC001_IoCRegisterForAttribute_T1_ValidClass_NoDiagnostic()
+    public async Task SGIOC001_IocRegisterForAttribute_T1_ValidClass_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -134,7 +134,7 @@ public class GenericAttributeAnalyzerTests
 
             public class ExternalService { }
 
-            [IoCRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
+            [IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
             public interface IServiceMarker { }
             """;
 
@@ -160,10 +160,10 @@ public class GenericAttributeAnalyzerTests
             public interface IServiceA { }
             public interface IServiceB { }
 
-            [IoCRegister<IServiceA>(ServiceLifetime.Singleton)]
+            [IocRegister<IServiceA>(ServiceLifetime.Singleton)]
             public class ServiceA(ServiceB b) : IServiceA { }
 
-            [IoCRegister<IServiceB>(ServiceLifetime.Singleton)]
+            [IocRegister<IServiceB>(ServiceLifetime.Singleton)]
             public class ServiceB(ServiceA a) : IServiceB { }
             """;
 
@@ -189,10 +189,10 @@ public class GenericAttributeAnalyzerTests
             public interface ISingleton { }
             public interface IScoped { }
 
-            [IoCRegister<ISingleton>(ServiceLifetime.Singleton)]
+            [IocRegister<ISingleton>(ServiceLifetime.Singleton)]
             public class SingletonService(ScopedService scoped) : ISingleton { }
 
-            [IoCRegister<IScoped>(ServiceLifetime.Scoped)]
+            [IocRegister<IScoped>(ServiceLifetime.Scoped)]
             public class ScopedService : IScoped { }
             """;
 
@@ -215,10 +215,10 @@ public class GenericAttributeAnalyzerTests
             public interface ISingleton { }
             public interface ITransient { }
 
-            [IoCRegister<ISingleton>(ServiceLifetime.Singleton)]
+            [IocRegister<ISingleton>(ServiceLifetime.Singleton)]
             public class SingletonService(TransientService transient) : ISingleton { }
 
-            [IoCRegister<ITransient>(ServiceLifetime.Transient)]
+            [IocRegister<ITransient>(ServiceLifetime.Transient)]
             public class TransientService : ITransient { }
             """;
 
@@ -230,7 +230,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC005_IoCRegisterForAttribute_T1_ScopedDependsOnTransient_ReportsDiagnostic()
+    public async Task SGIOC005_IocRegisterForAttribute_T1_ScopedDependsOnTransient_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -243,10 +243,10 @@ public class GenericAttributeAnalyzerTests
 
             public class ScopedService(TransientService transient) : IScoped { }
 
-            [IoCRegisterFor<ScopedService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IScoped)])]
+            [IocRegisterFor<ScopedService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IScoped)])]
             public sealed class Module;
 
-            [IoCRegister<ITransient>(ServiceLifetime.Transient)]
+            [IocRegister<ITransient>(ServiceLifetime.Transient)]
             public class TransientService : ITransient { }
             """;
 
@@ -273,7 +273,7 @@ public class GenericAttributeAnalyzerTests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
             public class MyService : IMyService { }
 
             public class MyServiceFactory
@@ -290,7 +290,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC008_IoCRegisterForAttribute_T1_Factory_PrivateMethod_ReportsDiagnostic()
+    public async Task SGIOC008_IocRegisterForAttribute_T1_Factory_PrivateMethod_ReportsDiagnostic()
     {
         const string source = """
             using System;
@@ -306,7 +306,7 @@ public class GenericAttributeAnalyzerTests
                 private static IMyService Create(IServiceProvider sp) => new ExternalService();
             }
 
-            [IoCRegisterFor<ExternalService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Factory = nameof(ExternalService.Create))]
+            [IocRegisterFor<ExternalService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Factory = nameof(ExternalService.Create))]
             public sealed class Module;
             """;
 
@@ -328,7 +328,7 @@ public class GenericAttributeAnalyzerTests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton, Instance = nameof(ServiceProvider.Instance))]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Instance = nameof(ServiceProvider.Instance))]
             public class MyService : IMyService { }
 
             public class ServiceProvider
@@ -356,7 +356,7 @@ public class GenericAttributeAnalyzerTests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
             public class MyService : IMyService { }
 
             public static class MyServiceFactory
@@ -391,7 +391,7 @@ public class GenericAttributeAnalyzerTests
                 public static readonly IMyService MyInstance = new MyService();
             }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Scoped, Instance = nameof(ServiceInstances.MyInstance))]
+            [IocRegister<IMyService>(ServiceLifetime.Scoped, Instance = nameof(ServiceInstances.MyInstance))]
             public class MyService : IMyService { }
             """;
 
@@ -403,7 +403,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC009_IoCRegisterForAttribute_T1_InstanceWithTransientLifetime_ReportsDiagnostic()
+    public async Task SGIOC009_IocRegisterForAttribute_T1_InstanceWithTransientLifetime_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -420,7 +420,7 @@ public class GenericAttributeAnalyzerTests
                 public static readonly ExternalService MyInstance = new();
             }
 
-            [IoCRegisterFor<ExternalService>(ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)], Instance = nameof(ServiceInstances.MyInstance))]
+            [IocRegisterFor<ExternalService>(ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)], Instance = nameof(ServiceInstances.MyInstance))]
             public sealed class Module;
             """;
 
@@ -447,7 +447,7 @@ public class GenericAttributeAnalyzerTests
                 public static readonly IMyService MyInstance = new MyService();
             }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton, Instance = nameof(ServiceInstances.MyInstance))]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Instance = nameof(ServiceInstances.MyInstance))]
             public class MyService : IMyService { }
             """;
 
@@ -479,7 +479,7 @@ public class GenericAttributeAnalyzerTests
                 public static IMyService Create(IServiceProvider sp) => new MyService();
             }
 
-            [IoCRegister<IMyService>(
+            [IocRegister<IMyService>(
                 ServiceLifetime.Singleton,
                 Factory = nameof(ServiceProvider.Create),
                 Instance = nameof(ServiceProvider.Instance))]
@@ -494,7 +494,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC010_IoCRegisterForAttribute_T1_BothFactoryAndInstance_ReportsDiagnostic()
+    public async Task SGIOC010_IocRegisterForAttribute_T1_BothFactoryAndInstance_ReportsDiagnostic()
     {
         const string source = """
             using System;
@@ -513,7 +513,7 @@ public class GenericAttributeAnalyzerTests
                 public static ExternalService Create(IServiceProvider sp) => new();
             }
 
-            [IoCRegisterFor<ExternalService>(
+            [IocRegisterFor<ExternalService>(
                 ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(ServiceProvider.Create),
@@ -530,16 +530,16 @@ public class GenericAttributeAnalyzerTests
 
     #endregion
 
-    #region Assembly-level IoCRegisterForAttribute<T>
+    #region Assembly-level IocRegisterForAttribute<T>
 
     [Test]
-    public async Task SGIOC001_AssemblyLevel_IoCRegisterForAttribute_T1_AbstractType_ReportsDiagnostic()
+    public async Task SGIOC001_AssemblyLevel_IocRegisterForAttribute_T1_AbstractType_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor<TestNamespace.AbstractService>(ServiceLifetime.Singleton)]
+            [assembly: IocRegisterFor<TestNamespace.AbstractService>(ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
@@ -554,13 +554,13 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC001_AssemblyLevel_IoCRegisterForAttribute_T1_ValidType_NoDiagnostic()
+    public async Task SGIOC001_AssemblyLevel_IocRegisterForAttribute_T1_ValidType_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor<TestNamespace.ExternalService>(ServiceLifetime.Singleton)]
+            [assembly: IocRegisterFor<TestNamespace.ExternalService>(ServiceLifetime.Singleton)]
 
             namespace TestNamespace;
 
@@ -574,13 +574,13 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC009_AssemblyLevel_IoCRegisterForAttribute_T1_InstanceWithScopedLifetime_ReportsDiagnostic()
+    public async Task SGIOC009_AssemblyLevel_IocRegisterForAttribute_T1_InstanceWithScopedLifetime_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor<TestNamespace.ExternalService>(ServiceLifetime.Scoped, Instance = nameof(TestNamespace.ServiceInstances.MyInstance))]
+            [assembly: IocRegisterFor<TestNamespace.ExternalService>(ServiceLifetime.Scoped, Instance = nameof(TestNamespace.ServiceInstances.MyInstance))]
 
             namespace TestNamespace;
 
@@ -618,25 +618,25 @@ public class GenericAttributeAnalyzerTests
             // Non-generic attribute on private class
             public class Outer1
             {
-                [IoCRegister]
+                [IocRegister]
                 private class PrivateService1 { }
             }
 
             // Generic attribute on private class
             public class Outer2
             {
-                [IoCRegister<IService1>(ServiceLifetime.Singleton)]
+                [IocRegister<IService1>(ServiceLifetime.Singleton)]
                 private class PrivateService2 : IService1 { }
             }
 
             // Non-generic IoCRegisterFor on abstract class
             public abstract class AbstractService1 { }
-            [IoCRegisterFor(typeof(AbstractService1))]
+            [IocRegisterFor(typeof(AbstractService1))]
             public interface IMarker1 { }
 
             // Generic IoCRegisterFor on abstract class
             public abstract class AbstractService2 { }
-            [IoCRegisterFor<AbstractService2>(ServiceLifetime.Singleton)]
+            [IocRegisterFor<AbstractService2>(ServiceLifetime.Singleton)]
             public interface IMarker2 { }
             """;
 

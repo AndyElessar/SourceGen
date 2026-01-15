@@ -2,15 +2,15 @@
 
 ## Simple Registration
 
-Mark a class with `[IoCRegister]` to register it for dependency injection:
+Mark a class with `[IocRegister]` to register it for dependency injection:
 
 ```csharp
 public interface IMyService;
 
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService;
 // Or non-generic version
-[IoCRegister(typeof(IMyService))]
+[IocRegister(typeof(IMyService))]
 internal class MyService : IMyService;
 ```
 
@@ -18,15 +18,15 @@ internal class MyService : IMyService;
 
 ```csharp
 // Singleton (default)
-[IoCRegister<IService>]
+[IocRegister<IService>]
 internal class SingletonService : IService;
 
 // Scoped
-[IoCRegister<IService>(ServiceLifetime.Scoped)]
+[IocRegister<IService>(ServiceLifetime.Scoped)]
 internal class ScopedService : IService;
 
 // Transient
-[IoCRegister<IService>(ServiceLifetime.Transient)]
+[IocRegister<IService>(ServiceLifetime.Transient)]
 internal class TransientService : IService;
 ```
 
@@ -36,11 +36,11 @@ Register a class under multiple service types:
 
 ```csharp
 // Using generic attribute parameters
-[IoCRegister<IService1, IService2>]
+[IocRegister<IService1, IService2>]
 internal class MultiService : IService1, IService2;
 
 // Or using params
-[IoCRegister(typeof(IService1), typeof(IService2))]
+[IocRegister(typeof(IService1), typeof(IService2))]
 internal class MultiService : IService1, IService2;
 ```
 
@@ -48,25 +48,25 @@ internal class MultiService : IService1, IService2;
 
 ```csharp
 // Register all implemented interfaces
-[IoCRegister(RegisterAllInterfaces = true)]
+[IocRegister(RegisterAllInterfaces = true)]
 internal class MyService : IService1, IService2, IDisposable;
 
 // Register all base classes
-[IoCRegister(RegisterAllBaseClasses = true)]
+[IocRegister(RegisterAllBaseClasses = true)]
 internal class DerivedService : BaseService;
 ```
 
 ## Registering External Types
 
-Use `[IoCRegisterFor<T>]` to register types you don't own:
+Use `[IocRegisterFor<T>]` to register types you don't own:
 
 ```csharp
 // On assembly level
-[assembly: IoCRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
+[assembly: IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
 
 // Or on a marker class
-[IoCRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
-[IoCRegisterFor<AnotherExternal>(ServiceTypes = [typeof(IExternal)])]
+[IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
+[IocRegisterFor<AnotherExternal>(ServiceTypes = [typeof(IExternal)])]
 public class RegistrationMarker;
 ```
 
@@ -82,7 +82,7 @@ services.AddMyProject(); // Generated extension method
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC001|Error|`[IoCRegister]` or `[IoCRegisterFor]` cannot be applied to `private` or `abstract` classes.|
+|SGIOC001|Error|`[IocRegister]` or `[IocRegisterFor]` cannot be applied to `private` or `abstract` classes.|
 |SGIOC011|Warning|Duplicated registration detected for the same implementation type, same key, and at least one matching tag.|
 
 ## Custom Method Name

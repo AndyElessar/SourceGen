@@ -18,10 +18,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public static IService? StaticProperty { get; set; }
             }
             """;
@@ -44,10 +44,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public static IService? _staticField;
             }
             """;
@@ -70,10 +70,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public static void StaticInitialize(IService service) { }
             }
             """;
@@ -96,10 +96,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public int Initialize(IService service) => 0;
             }
             """;
@@ -122,10 +122,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 private void Initialize(IService service) { }
             }
             """;
@@ -148,10 +148,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public IService? Dependency { get; private set; }
             }
             """;
@@ -174,10 +174,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public IService? Dependency { get; }
             }
             """;
@@ -200,10 +200,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public readonly IService? _dependency;
             }
             """;
@@ -226,10 +226,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 private IService? _dependency;
             }
             """;
@@ -252,10 +252,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize(IService service) { }
             }
             """;
@@ -277,10 +277,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 internal void Initialize(IService service) { }
             }
             """;
@@ -302,10 +302,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public IService? Dependency { get; set; }
             }
             """;
@@ -327,10 +327,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public IService? Dependency { get; internal set; }
             }
             """;
@@ -352,10 +352,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public IService? _dependency;
             }
             """;
@@ -377,10 +377,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 internal IService? _dependency;
             }
             """;
@@ -403,10 +403,10 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public async Task InitializeAsync(IService service) => await Task.CompletedTask;
             }
             """;
@@ -429,22 +429,22 @@ public class SGIOC007Tests
 
             public interface IService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public static IService? StaticProperty { get; set; }
 
-                [Inject]
+                [IocInject]
                 public int NonVoidMethod(IService service) => 0;
 
-                [Inject]
+                [IocInject]
                 public static void StaticMethod() { }
 
-                [Inject]
+                [IocInject]
                 private IService? _privateField;
 
-                [Inject]
+                [IocInject]
                 public readonly IService? _readonlyField;
             }
             """;
@@ -470,7 +470,7 @@ public class SGIOC007Tests
 
             public class TestService : IService
             {
-                [Inject]
+                [IocInject]
                 public static IService? StaticProperty { get; set; }
             }
             """;
@@ -502,7 +502,7 @@ public class SGIOC007Tests
             {
                 public interface IService { }
 
-                [IoCRegister]
+                [IocRegister]
                 public class TestService : IService
                 {
                     [ThirdParty.Inject]

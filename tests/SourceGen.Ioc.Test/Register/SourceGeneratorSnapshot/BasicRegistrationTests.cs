@@ -18,7 +18,7 @@ public class BasicRegistrationTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -39,7 +39,7 @@ public class BasicRegistrationTests
 
             public interface IScopedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
             public class ScopedService : IScopedService { }
             """;
 
@@ -60,7 +60,7 @@ public class BasicRegistrationTests
 
             public interface ITransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
             public class TransientService : ITransientService { }
             """;
 
@@ -82,7 +82,7 @@ public class BasicRegistrationTests
             public interface IFirst { }
             public interface ISecond { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, RegisterAllInterfaces = true)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, RegisterAllInterfaces = true)]
             public class MultiInterfaceService : IFirst, ISecond { }
             """;
 
@@ -103,7 +103,7 @@ public class BasicRegistrationTests
 
             public interface IKeyedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = "myKey")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = "myKey")]
             public class KeyedService : IKeyedService { }
 
             public enum MyEnum
@@ -111,14 +111,14 @@ public class BasicRegistrationTests
                 Key1 = 0,
                 Key2 = 1
             }
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = MyEnum.Key1)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = MyEnum.Key1)]
             public class KeyedService2 : IKeyedService { }
 
             public static class KeyHolder
             {
                 public const int IntKey = 42;
             }
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = KeyHolder.IntKey)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = KeyHolder.IntKey)]
             public class KeyedService3 : IKeyedService { }
             """;
 
@@ -145,10 +145,10 @@ public class BasicRegistrationTests
                 public static readonly Guid Key = Guid.NewGuid();
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = "KeyHolder.Key")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = "KeyHolder.Key")]
             public class KeyedService : IKeyedService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = nameof(KeyHolder.Key))]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], KeyType = KeyType.Csharp, Key = nameof(KeyHolder.Key))]
             public class KeyedService2 : IKeyedService { }
             """;
 
@@ -169,7 +169,7 @@ public class BasicRegistrationTests
 
             public interface IRepository<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<T> { }
             """;
 
@@ -192,7 +192,7 @@ public class BasicRegistrationTests
 
             public interface IGeneric<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
             public class Repository<T> : IRepository<IGeneric<T>> { }
             """;
 
@@ -215,7 +215,7 @@ public class BasicRegistrationTests
 
             public interface IGeneric<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, RegisterAllInterfaces = true)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, RegisterAllInterfaces = true)]
             public class Repository<T> : IRepository<IGeneric<T>> { }
             """;
 
@@ -226,13 +226,13 @@ public class BasicRegistrationTests
     }
 
     [Test]
-    public async Task IoCRegisterForAttribute_OnAssembly_GeneratesRegistration()
+    public async Task IocRegisterForAttribute_OnAssembly_GeneratesRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(typeof(TestNamespace.ExternalService), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IExternalService)])]
+            [assembly: IocRegisterFor(typeof(TestNamespace.ExternalService), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IExternalService)])]
 
             namespace TestNamespace;
 
@@ -259,13 +259,13 @@ public class BasicRegistrationTests
             public interface IServiceB { }
             public interface IServiceC { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IServiceA)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IServiceA)])]
             public class ServiceA : IServiceA { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IServiceB)])]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IServiceB)])]
             public class ServiceB : IServiceB { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IServiceC)])]
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IServiceC)])]
             public class ServiceC : IServiceC { }
             """;
 
@@ -302,7 +302,7 @@ public class BasicRegistrationTests
 
             public abstract class BaseService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, RegisterAllBaseClasses = true)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, RegisterAllBaseClasses = true)]
             public class DerivedService : BaseService { }
             """;
 
@@ -323,7 +323,7 @@ public class BasicRegistrationTests
 
             public interface ICache<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ICache<>)], Key = "redis")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ICache<>)], Key = "redis")]
             public class RedisCache<T> : ICache<T> { }
             """;
 
@@ -346,7 +346,7 @@ public class BasicRegistrationTests
             {
                 public interface INestedService { }
 
-                [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INestedService)])]
+                [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INestedService)])]
                 public class NestedService : INestedService { }
             }
             """;
@@ -370,7 +370,7 @@ public class BasicRegistrationTests
             {
                 public interface INestedService { }
 
-                [IoCRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(INestedService)], KeyType = KeyType.Csharp, Key = nameof(Key))]
+                [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(INestedService)], KeyType = KeyType.Csharp, Key = nameof(Key))]
                 internal sealed class NestedServiceImpl : INestedService
                 {
                     public const string Key = "NestedKey";
@@ -399,7 +399,7 @@ public class BasicRegistrationTests
                 {
                     public interface IDeepNestedService { }
 
-                    [IoCRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IDeepNestedService)], KeyType = KeyType.Csharp, Key = nameof(ServiceKey))]
+                    [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IDeepNestedService)], KeyType = KeyType.Csharp, Key = nameof(ServiceKey))]
                     internal sealed class DeepNestedServiceImpl : IDeepNestedService
                     {
                         public const string ServiceKey = "DeepKey";
@@ -430,7 +430,7 @@ public class BasicRegistrationTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], KeyType = KeyType.Csharp, Key = nameof(Keys.SharedKey))]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], KeyType = KeyType.Csharp, Key = nameof(Keys.SharedKey))]
             public class MyServiceImpl : IMyService { }
             """;
 
@@ -452,7 +452,7 @@ public class BasicRegistrationTests
             public interface IBasic { }
             public interface IBasic2 { }
 
-            [IoCRegister(ServiceLifetime.Transient, typeof(IBasic), typeof(IBasic2))]
+            [IocRegister(ServiceLifetime.Transient, typeof(IBasic), typeof(IBasic2))]
             public class Basic2 : IBasic, IBasic2 { }
             """;
 
@@ -474,7 +474,7 @@ public class BasicRegistrationTests
             public interface IService1 { }
             public interface IService2 { }
 
-            [IoCRegister(typeof(IService1), typeof(IService2))]
+            [IocRegister(typeof(IService1), typeof(IService2))]
             public class MultiService : IService1, IService2 { }
             """;
 
@@ -498,7 +498,7 @@ public class BasicRegistrationTests
             public interface IPreferred { }
             public interface IIgnored { }
 
-            [IoCRegister(ServiceLifetime.Singleton, typeof(IIgnored), ServiceTypes = [typeof(IPreferred)])]
+            [IocRegister(ServiceLifetime.Singleton, typeof(IIgnored), ServiceTypes = [typeof(IPreferred)])]
             public class ServiceWithMixedArgs : IPreferred, IIgnored { }
             """;
 

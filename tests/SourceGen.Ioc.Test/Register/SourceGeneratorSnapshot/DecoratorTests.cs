@@ -18,7 +18,7 @@ public class DecoratorTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Decorators = [typeof(MyServiceDecorator)])]
@@ -47,7 +47,7 @@ public class DecoratorTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Decorators = [typeof(MyServiceDecorator), typeof(MyServiceDecorator2)])]
@@ -81,7 +81,7 @@ public class DecoratorTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IMyService)],
                 Key = "myKey",
@@ -113,7 +113,7 @@ public class DecoratorTests
 
             // When registering implementation type itself (no explicit ServiceTypes),
             // decorators should not be applied to the implementation type registration
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 Decorators = [typeof(MyServiceDecorator)])]
             public class MyService : IMyService { }
@@ -142,7 +142,7 @@ public class DecoratorTests
             public interface IMyService { }
             public interface IMyOtherService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(IMyService), typeof(IMyOtherService)],
                 Decorators = [typeof(MyServiceDecorator)])]
@@ -171,7 +171,7 @@ public class DecoratorTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(HandlerDecorator<,>)])]
@@ -182,7 +182,7 @@ public class DecoratorTests
 
             public sealed record TestRequest(int Key) : IRequest<TestRequest, string>;
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class TestHandler : IRequestHandler<TestRequest, string>
             {
                 public string Handle(TestRequest request) => $"Result: {request.Key}";
@@ -218,7 +218,7 @@ public class DecoratorTests
 
             public sealed record MyRequest(int Value);
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IHandler<MyRequest, string>)],
                 Decorators = [typeof(LoggingDecorator<,>), typeof(ValidationDecorator<,>)])]
@@ -265,7 +265,7 @@ public class DecoratorTests
 
             public sealed record ListRequest(int Count);
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IHandler<ListRequest, List<string>>)],
                 Decorators = [typeof(CachingDecorator<,>)])]
@@ -328,7 +328,7 @@ public class DecoratorTests
             public sealed record TestQuery(string Filter) : IQuery<TestQuery, int>;
 
             // Command handler - should only get LoggingDecorator (TestCommand doesn't implement IQuery)
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IRequestHandler<TestCommand, string>)],
                 Decorators = [typeof(LoggingDecorator<,>), typeof(QueryDecorator<,>)])]
@@ -338,7 +338,7 @@ public class DecoratorTests
             }
 
             // Query handler - should get both LoggingDecorator and QueryDecorator (TestQuery implements IQuery)
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IRequestHandler<TestQuery, int>)],
                 Decorators = [typeof(LoggingDecorator<,>), typeof(QueryDecorator<,>)])]
@@ -376,7 +376,7 @@ public class DecoratorTests
 
             public sealed record MyRequest(int Value);
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IHandler<MyRequest, List<string>>)],
                 Decorators = [typeof(LoggingDecorator<,>)])]

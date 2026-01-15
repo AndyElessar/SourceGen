@@ -18,10 +18,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string key) { }
             }
             """;
@@ -43,10 +43,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] int key) { }
             }
             """;
@@ -69,10 +69,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = 42)]
+            [IocRegister(Key = 42)]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] int key) { }
             }
             """;
@@ -94,10 +94,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = 42)]
+            [IocRegister(Key = 42)]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string key) { }
             }
             """;
@@ -120,10 +120,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] object key) { }
             }
             """;
@@ -145,10 +145,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = 42)]
+            [IocRegister(Key = 42)]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] int? key) { }
             }
             """;
@@ -170,7 +170,7 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService([ServiceKey] int key) : IMyService
             {
             }
@@ -194,7 +194,7 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService([ServiceKey] string key) : IMyService
             {
             }
@@ -217,10 +217,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string? key) { }
             }
             """;
@@ -244,10 +244,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = ServiceKey.Key1)]
+            [IocRegister(Key = ServiceKey.Key1)]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] ServiceKey key) { }
             }
             """;
@@ -272,10 +272,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Key = ServiceKeyType.Key1)]
+            [IocRegister(Key = ServiceKeyType.Key1)]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] OtherEnum key) { }
             }
             """;
@@ -298,13 +298,13 @@ public class SGIOC013Tests
             public interface IMyService { }
             public interface IDependency { }
 
-            [IoCRegister]
+            [IocRegister]
             public class Dependency : IDependency { }
 
-            [IoCRegister(Key = "MyKey")]
+            [IocRegister(Key = "MyKey")]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize(IDependency dep, [ServiceKey] int key) { }
             }
             """;
@@ -317,13 +317,13 @@ public class SGIOC013Tests
     }
 
     [Test]
-    public async Task SGIOC013_IoCRegisterForAttribute_ServiceKeyAttribute_MismatchedType_ReportsDiagnostic()
+    public async Task SGIOC013_IocRegisterForAttribute_ServiceKeyAttribute_MismatchedType_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(typeof(TestNamespace.MyService), Key = "MyKey")]
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyService), Key = "MyKey")]
 
             namespace TestNamespace;
 
@@ -352,10 +352,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(Key = "MyKey")]
+            [IocRegister<IMyService>(Key = "MyKey")]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] int key) { }
             }
             """;
@@ -382,10 +382,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(KeyType = KeyType.Csharp, Key = nameof(KeyHolder.Key))]
+            [IocRegister(KeyType = KeyType.Csharp, Key = nameof(KeyHolder.Key))]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string key) { }
             }
             """;
@@ -414,10 +414,10 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(KeyType = KeyType.Csharp, Key = "KeyHolder.Key")]
+            [IocRegister(KeyType = KeyType.Csharp, Key = "KeyHolder.Key")]
             public class MyService : IMyService
             {
-                [Inject]
+                [IocInject]
                 public void Initialize([ServiceKey] string key) { }
             }
             """;
@@ -441,7 +441,7 @@ public class SGIOC013Tests
 
             public interface IMyService { }
 
-            [IoCRegister(KeyType = KeyType.Csharp, Key = "nameof(MyService)")]
+            [IocRegister(KeyType = KeyType.Csharp, Key = "nameof(MyService)")]
             public class MyService([ServiceKey] int key) : IMyService
             {
             }
@@ -455,14 +455,14 @@ public class SGIOC013Tests
     }
 
     [Test]
-    public async Task SGIOC013_KeyTypeCsharp_IoCRegisterForAttribute_NoDiagnostic()
+    public async Task SGIOC013_KeyTypeCsharp_IocRegisterForAttribute_NoDiagnostic()
     {
         // When KeyType is Csharp, the analyzer should skip type checking for IoCRegisterFor
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(typeof(TestNamespace.MyService), KeyType = KeyType.Csharp, Key = "SomeExpression")]
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyService), KeyType = KeyType.Csharp, Key = "SomeExpression")]
 
             namespace TestNamespace;
 

@@ -13,20 +13,20 @@ namespace SourceGen.Ioc;
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method | AttributeTargets.Parameter | AttributeTargets.Constructor, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class InjectAttribute : Attribute
+public sealed class IocInjectAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="InjectAttribute"/> class.
+    /// Initializes a new instance of the <see cref="IocInjectAttribute"/> class.
     /// </summary>
-    public InjectAttribute()
+    public IocInjectAttribute()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="InjectAttribute"/> class with the specified key used for dependency resolution.
+    /// Initializes a new instance of the <see cref="IocInjectAttribute"/> class with the specified key used for dependency resolution.
     /// </summary>
     /// <param name="key">The key that identifies the dependency to be injected. Default KeyType is <see cref="KeyType.Value"/>.</param>
-    public InjectAttribute(object key)
+    public IocInjectAttribute(object key)
     {
         this.Key = key;
     }

@@ -18,7 +18,7 @@ public class SGIOC010Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Factory = nameof(MyService.Create),
                 Instance = nameof(MyService.Default))]
             public class MyService : IMyService
@@ -46,7 +46,7 @@ public class SGIOC010Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Factory = nameof(MyService.Create))]
+            [IocRegister(Factory = nameof(MyService.Create))]
             public class MyService : IMyService
             {
                 public static MyService Create() => new MyService();
@@ -70,7 +70,7 @@ public class SGIOC010Tests
 
             public interface IMyService { }
 
-            [IoCRegister(Instance = nameof(MyService.Default))]
+            [IocRegister(Instance = nameof(MyService.Default))]
             public class MyService : IMyService
             {
                 public static readonly MyService Default = new MyService();
@@ -94,7 +94,7 @@ public class SGIOC010Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Factory = "MyService.Create",
                 Instance = "MyService.Default")]
             public class MyService : IMyService
@@ -127,7 +127,7 @@ public class SGIOC010Tests
                 public static MyService Create() => new MyService();
             }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Factory = nameof(MyService.Create),
                 Instance = nameof(MyService.Default))]
@@ -147,7 +147,7 @@ public class SGIOC010Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(
+            [assembly: IocRegisterFor(
                 typeof(TestNamespace.MyService),
                 Factory = nameof(TestNamespace.MyService.Create),
                 Instance = nameof(TestNamespace.MyService.Default))]
@@ -180,7 +180,7 @@ public class SGIOC010Tests
 
             public interface IMyService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IMyService { }
             """;
 

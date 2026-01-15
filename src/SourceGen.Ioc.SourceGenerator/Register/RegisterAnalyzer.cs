@@ -209,15 +209,15 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     private static void OnCompilationStart(CompilationStartAnalysisContext context)
     {
         // Get attribute type symbols for faster lookup (including generic variants)
-        var iocRegisterAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName);
-        var iocRegisterAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T1);
-        var iocRegisterAttribute_T2 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T2);
-        var iocRegisterAttribute_T3 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T3);
-        var iocRegisterAttribute_T4 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterAttributeFullName_T4);
-        var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName);
-        var iocRegisterForAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterForAttributeFullName_T1);
-        var iocRegisterDefaultsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName);
-        var iocRegisterDefaultsAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IoCRegisterDefaultsAttributeFullName_T1);
+        var iocRegisterAttribute = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName);
+        var iocRegisterAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T1);
+        var iocRegisterAttribute_T2 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T2);
+        var iocRegisterAttribute_T3 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T3);
+        var iocRegisterAttribute_T4 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T4);
+        var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName);
+        var iocRegisterForAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName_T1);
+        var iocRegisterDefaultsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName);
+        var iocRegisterDefaultsAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName_T1);
 
         // Check if any IoC attribute is available
         var hasAnyIoCRegisterAttribute = iocRegisterAttribute is not null
@@ -387,7 +387,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 {
                     hasFromKeyedServices = true;
                 }
-                else if(attrClass.Name == "InjectAttribute")
+                else if(attrClass.Name is "IocInjectAttribute" or "InjectAttribute")
                 {
                     hasInject = true;
                     injectAttribute = attr;
@@ -408,16 +408,16 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC007: Analyzes InjectAttribute usage on members.
-    /// Reports error when InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
+    /// SGIOC007: Analyzes IocInjectAttribute/InjectAttribute usage on members.
+    /// Reports error when IocInjectAttribute/InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
     /// </summary>
     private static void AnalyzeInjectAttribute(SymbolAnalysisContext context)
     {
         var member = context.Symbol;
 
-        // Check if the member has InjectAttribute (by name only, matching TransformRegister behavior)
+        // Check if the member has IocInjectAttribute/InjectAttribute (by name only, matching TransformRegister behavior)
         var injectAttribute = member.GetAttributes()
-            .FirstOrDefault(static attr => attr.AttributeClass?.Name == "InjectAttribute");
+            .FirstOrDefault(static attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
 
         if(injectAttribute is null)
             return;
@@ -572,9 +572,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             if(member is not IMethodSymbol method)
                 continue;
 
-            // Check if method has [Inject] attribute
+            // Check if method has [IocInject] or [Inject] attribute
             var hasInjectAttribute = method.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.Name == "InjectAttribute");
+                .Any(static attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
 
             if(!hasInjectAttribute)
                 continue;

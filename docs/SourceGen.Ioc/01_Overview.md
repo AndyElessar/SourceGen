@@ -24,8 +24,8 @@ SourceGen.Ioc is a C# source generator that extends the capabilities of `Microso
 
 ### Flexible Configuration
 
-- **Field, Property & Method Injection** - Supports `[Inject]` attribute on fields, properties, methods and constructors
-- **Centralized Defaults** - Use `[IoCRegisterDefaults<T>]` to define default settings for all implementations, with ability to override per-registration
+- **Field, Property & Method Injection** - Supports `[IocInject]` attribute on fields, properties, methods and constructors
+- **Centralized Defaults** - Use `[IocRegisterDefaults<T>]` to define default settings for all implementations, with ability to override per-registration
 - **Decorator Pattern** - Built-in support for decorator chains with type constraint validation
 - **Keyed Services** - Full support for keyed service registration with string, enum, or C# expression keys
 - **Tags** - Organize registrations into groups with tag-based extension methods
@@ -41,12 +41,12 @@ SourceGen.Ioc is a C# source generator that extends the capabilities of `Microso
 
 |Attribute|Description|
 |:---|:---|
-|`[IoCRegister]`<br/>`[IoCRegister<T>]`<br/>`[IoCRegister<T,T>]`<br/>`[IoCRegister<T,T,T>]`<br/>`[IoCRegister<T,T,T,T>]`|Mark a class for DI registration|
-|`[IoCRegisterFor]`<br/>`[IoCRegisterFor<T>]`|Register an external type|
-|`[IoCRegisterDefaults]`<br/>`[IoCRegisterDefaults<T>]`|Define default settings for types implementing T|
-|`[Inject]`|Mark property/field/method/constructor for injection, or parameter for keyed services|
-|`[ImportModule]`<br/>`[ImportModule<T>]`|Import defaults from another module|
-|`[Discover]`<br/>`[Discover<T>]`|Discover closed generic types for open generic registration|
+|`[IocRegister]`<br/>`[IocRegister<T>]`<br/>`[IocRegister<T,T>]`<br/>`[IocRegister<T,T,T>]`<br/>`[IocRegister<T,T,T,T>]`|Mark a class for DI registration|
+|`[IocRegisterFor]`<br/>`[IocRegisterFor<T>]`|Register an external type|
+|`[IocRegisterDefaults]`<br/>`[IocRegisterDefaults<T>]`|Define default settings for types implementing T|
+|`[IocInject]`|Mark property/field/method/constructor for injection, or parameter for keyed services|
+|`[IocImportModule]`<br/>`[IocImportModule<T>]`|Import defaults from another module|
+|`[IocDiscover]`<br/>`[IocDiscover<T>]`|Discover closed generic types for open generic registration|
 
 > [!NOTE]  
 > Generic attribute only supported in C# 11 and later.
@@ -67,9 +67,9 @@ public static IServiceCollection AddMyProject(this IServiceCollection services)
 ## Service Lifetimes
 
 ```csharp
-[IoCRegister<IService>(ServiceLifetime.Singleton)]  // Default
-[IoCRegister<IService>(ServiceLifetime.Scoped)]
-[IoCRegister<IService>(ServiceLifetime.Transient)]
+[IocRegister<IService>(ServiceLifetime.Singleton)]  // Default
+[IocRegister<IService>(ServiceLifetime.Scoped)]
+[IocRegister<IService>(ServiceLifetime.Transient)]
 ```
 
 ## Table of Contents

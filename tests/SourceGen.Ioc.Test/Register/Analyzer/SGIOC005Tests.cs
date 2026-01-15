@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.Analyzer;
+namespace SourceGen.Ioc.Test.Register.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC005: Scoped depends on Transient service.
@@ -16,10 +16,10 @@ public class SGIOC005Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient)]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService
             {
                 public ScopedService(TransientService transient) { }
@@ -44,10 +44,10 @@ public class SGIOC005Tests
 
             public interface ITransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
             public class TransientService : ITransientService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService
             {
                 public ScopedService(ITransientService transient) { }
@@ -69,10 +69,10 @@ public class SGIOC005Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient)]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Transient)]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientService
             {
                 public TransientService(TransientDependency dep) { }
@@ -94,10 +94,10 @@ public class SGIOC005Tests
 
             namespace TestNamespace;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedDependency { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Scoped)]
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService
             {
                 public ScopedService(ScopedDependency dep) { }

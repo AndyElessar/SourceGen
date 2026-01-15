@@ -2,7 +2,7 @@ namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for cross-assembly scenarios with nested open generic interfaces.
-/// These tests ensure that GetRequiredService and DiscoverAttribute with interface types
+/// These tests ensure that GetRequiredService and IocDiscoverAttribute with interface types
 /// correctly generate closed generic registrations when the interface is defined in a different assembly.
 /// </summary>
 [Category(Constants.SourceGeneratorSnapshot)]
@@ -12,7 +12,7 @@ public class CrossAssemblyNestedOpenGenericTests
     [Test]
     public async Task GetRequiredService_WithNestedOpenGenericInterface_CrossAssembly_GeneratesClosedGenericRegistration()
     {
-        // Simulate a shared assembly with IoCRegisterDefaults on an interface
+        // Simulate a shared assembly with IocRegisterDefaults on an interface
         const string sharedSource = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -21,7 +21,7 @@ public class CrossAssemblyNestedOpenGenericTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 TagOnly = true,
@@ -46,14 +46,14 @@ public class CrossAssemblyNestedOpenGenericTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(IRequestHandler<,>))]
+            [IocImportModule(typeof(IRequestHandler<,>))]
             public sealed class Module;
 
             // Nested open generic request type
             public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
 
             // Open generic handler implementing nested open generic service interface
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler2<T> : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest2<T> request)
@@ -66,7 +66,7 @@ public class CrossAssemblyNestedOpenGenericTests
 
             // This uses GetRequiredService with the service INTERFACE type
             // Should generate closed generic registration for GenericRequestHandler2<Entity>
-            [IoCRegister]
+            [IocRegister]
             internal sealed class CustomMessenger(IServiceProvider serviceProvider)
             {
                 private readonly IServiceProvider serviceProvider = serviceProvider;
@@ -91,9 +91,9 @@ public class CrossAssemblyNestedOpenGenericTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_WithNestedOpenGenericInterface_CrossAssembly_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_WithNestedOpenGenericInterface_CrossAssembly_GeneratesClosedGenericRegistration()
     {
-        // Simulate a shared assembly with IoCRegisterDefaults on an interface
+        // Simulate a shared assembly with IocRegisterDefaults on an interface
         const string sharedSource = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -102,7 +102,7 @@ public class CrossAssemblyNestedOpenGenericTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 TagOnly = true,
@@ -116,7 +116,7 @@ public class CrossAssemblyNestedOpenGenericTests
 
         var sharedCompilation = SourceGeneratorTestHelper.CreateCompilation("SharedModule", sharedSource);
 
-        // Main assembly with DiscoverAttribute on interface type
+        // Main assembly with IocDiscoverAttribute on interface type
         const string mainSource = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -127,14 +127,14 @@ public class CrossAssemblyNestedOpenGenericTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(IRequestHandler<,>))]
+            [IocImportModule(typeof(IRequestHandler<,>))]
             public sealed class Module;
 
             // Nested open generic request type
             public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
 
             // Open generic handler implementing nested open generic service interface
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler2<T> : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest2<T> request)
@@ -145,13 +145,13 @@ public class CrossAssemblyNestedOpenGenericTests
 
             internal class Entity2 { }
 
-            // Using DiscoverAttribute with the service INTERFACE type
-            [IoCRegister]
+            // Using IocDiscoverAttribute with the service INTERFACE type
+            [IocRegister]
             internal sealed class ViewModel2
             {
                 // This should trigger generation of GenericRequestHandler2<Entity2> and
                 // IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>
-                [Discover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
+                [IocDiscover(typeof(IRequestHandler<GenericRequest2<Entity2>, List<Entity2>>))]
                 public void SendRequest2()
                 {
                     // Some indirect usage via mediator pattern
@@ -180,7 +180,7 @@ public class CrossAssemblyNestedOpenGenericTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 TagOnly = true,
@@ -204,12 +204,12 @@ public class CrossAssemblyNestedOpenGenericTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(IRequestHandler<,>))]
+            [IocImportModule(typeof(IRequestHandler<,>))]
             public sealed class Module;
 
             public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler2<T> : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest2<T> request)
@@ -221,7 +221,7 @@ public class CrossAssemblyNestedOpenGenericTests
             internal class Entity { }
 
             // Using concrete type - this should also work
-            [IoCRegister]
+            [IocRegister]
             internal sealed class CustomMessenger(IServiceProvider serviceProvider)
             {
                 private readonly IServiceProvider serviceProvider = serviceProvider;
@@ -257,7 +257,7 @@ public class CrossAssemblyNestedOpenGenericTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 TagOnly = true,
@@ -281,13 +281,13 @@ public class CrossAssemblyNestedOpenGenericTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(IRequestHandler<,>))]
+            [IocImportModule(typeof(IRequestHandler<,>))]
             public sealed class Module;
 
             // First request/handler pair
             public sealed record GenericRequest1<T>(int Count) : IRequest<GenericRequest1<T>, List<T>> where T : new();
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler1<T> : IRequestHandler<GenericRequest1<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest1<T> request) => [];
@@ -296,7 +296,7 @@ public class CrossAssemblyNestedOpenGenericTests
             // Second request/handler pair
             public sealed record GenericRequest2<T>(int Count) : IRequest<GenericRequest2<T>, List<T>> where T : new();
 
-            [IoCRegister]
+            [IocRegister]
             internal sealed class GenericRequestHandler2<T> : IRequestHandler<GenericRequest2<T>, List<T>> where T : new()
             {
                 public List<T> Handle(GenericRequest2<T> request) => [];
@@ -306,7 +306,7 @@ public class CrossAssemblyNestedOpenGenericTests
             internal class Entity2 { }
 
             // Service that uses both handlers via interface types
-            [IoCRegister]
+            [IocRegister]
             internal sealed class Mediator(IServiceProvider sp)
             {
                 private readonly IServiceProvider sp = sp;

@@ -21,7 +21,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -51,7 +51,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Transient,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = "MyServiceFactory.Create")]
@@ -81,7 +81,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Scoped,
                 ServiceTypes = [typeof(IMyService)],
                 Key = "myKey",
@@ -111,7 +111,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -138,7 +138,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = "MyService.Default")]
@@ -165,7 +165,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Key = "myKey",
@@ -183,7 +183,7 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Factory_WithIoCRegisterForAttribute_GeneratesFactoryRegistration()
+    public async Task Factory_WithIocRegisterForAttribute_GeneratesFactoryRegistration()
     {
         const string source = """
             using System;
@@ -196,7 +196,7 @@ public class FactoryAndInstanceTests
 
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
@@ -214,7 +214,7 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Instance_WithIoCRegisterForAttribute_GeneratesSingletonInstanceRegistration()
+    public async Task Instance_WithIocRegisterForAttribute_GeneratesSingletonInstanceRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -229,7 +229,7 @@ public class FactoryAndInstanceTests
                 public static readonly MyService Default = new MyService();
             }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
@@ -256,7 +256,7 @@ public class FactoryAndInstanceTests
             public interface IFirst { }
             public interface ISecond { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IFirst), typeof(ISecond)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -286,7 +286,7 @@ public class FactoryAndInstanceTests
             public interface IFirst { }
             public interface ISecond { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IFirst), typeof(ISecond)],
                 Instance = nameof(MyService.Default))]
@@ -315,7 +315,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.{{lifetime}},
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -342,7 +342,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -371,7 +371,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Key = "myKey",
@@ -402,7 +402,7 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -434,7 +434,7 @@ public class FactoryAndInstanceTests
             public interface IMyService { }
 
             // Only register IMyService, not the implementation
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 RegisterAllInterfaces = false,

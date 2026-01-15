@@ -1,7 +1,7 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
-/// Tests for ImportModuleAttribute functionality.
+/// Tests for IocImportModuleAttribute functionality.
 /// </summary>
 [Category(Constants.SourceGeneratorSnapshot)]
 [Category(Constants.ImportModule)]
@@ -10,7 +10,7 @@ public class ImportModuleTests
     [Test]
     public async Task ImportModule_ImportsDefaultSettingsFromReferencedAssembly()
     {
-        // First, create a "shared" assembly with IoCRegisterDefaults on an interface
+        // First, create a "shared" assembly with IocRegisterDefaults on an interface
         const string sharedSource = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -19,7 +19,7 @@ public class ImportModuleTests
 
             public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
                 Tags = ["Mediator"],
@@ -42,12 +42,12 @@ public class ImportModuleTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(IRequestHandler<,>))]
+            [IocImportModule(typeof(IRequestHandler<,>))]
             public sealed class Module;
 
             public sealed record TestQuery(string Name) : IRequest<TestQuery, string>;
 
-            [IoCRegister]
+            [IocRegister]
             public sealed class TestQueryHandler : IRequestHandler<TestQuery, string>
             {
                 public string Handle(TestQuery request) => $"Hello, {request.Name}!";
@@ -72,7 +72,7 @@ public class ImportModuleTests
 
             public interface IService { }
 
-            [IoCRegisterDefaults(typeof(IService), ServiceLifetime.Singleton)]
+            [IocRegisterDefaults(typeof(IService), ServiceLifetime.Singleton)]
             public class SharedDefaults { }
             """;
 
@@ -87,14 +87,14 @@ public class ImportModuleTests
             namespace MainApp;
 
             // Import from shared module (Singleton)
-            [ImportModule(typeof(SharedDefaults))]
+            [IocImportModule(typeof(SharedDefaults))]
             public sealed class Module;
 
             // Local default settings (Scoped) - should take precedence
-            [IoCRegisterDefaults(typeof(IService), ServiceLifetime.Scoped)]
+            [IocRegisterDefaults(typeof(IService), ServiceLifetime.Scoped)]
             public sealed class LocalDefaults;
 
-            [IoCRegister]
+            [IocRegister]
             public sealed class MyService : IService { }
             """;
 
@@ -116,7 +116,7 @@ public class ImportModuleTests
 
             public interface IService1 { }
 
-            [IoCRegisterDefaults(typeof(IService1), ServiceLifetime.Singleton)]
+            [IocRegisterDefaults(typeof(IService1), ServiceLifetime.Singleton)]
             public class Module1Defaults { }
             """;
 
@@ -129,7 +129,7 @@ public class ImportModuleTests
 
             public interface IService2 { }
 
-            [IoCRegisterDefaults(typeof(IService2), ServiceLifetime.Scoped)]
+            [IocRegisterDefaults(typeof(IService2), ServiceLifetime.Scoped)]
             public class Module2Defaults { }
             """;
 
@@ -145,14 +145,14 @@ public class ImportModuleTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(Module1Defaults))]
-            [ImportModule(typeof(Module2Defaults))]
+            [IocImportModule(typeof(Module1Defaults))]
+            [IocImportModule(typeof(Module2Defaults))]
             public sealed class Module;
 
-            [IoCRegister]
+            [IocRegister]
             public sealed class Service1Impl : IService1 { }
 
-            [IoCRegister]
+            [IocRegister]
             public sealed class Service2Impl : IService2 { }
             """;
 
@@ -182,7 +182,7 @@ public class ImportModuleTests
                 public void Handle(T request) => inner.Handle(request);
             }
 
-            [IoCRegisterDefaults(
+            [IocRegisterDefaults(
                 typeof(IHandler<>),
                 ServiceLifetime.Transient,
                 Decorators = [typeof(LoggingDecorator<>)]
@@ -200,12 +200,12 @@ public class ImportModuleTests
 
             namespace MainApp;
 
-            [ImportModule(typeof(IHandlerMarker))]
+            [IocImportModule(typeof(IHandlerMarker))]
             public sealed class Module;
 
             public record MyCommand(string Data);
 
-            [IoCRegister]
+            [IocRegister]
             public sealed class MyCommandHandler : IHandler<MyCommand>
             {
                 public void Handle(MyCommand request) { }

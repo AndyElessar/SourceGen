@@ -18,7 +18,7 @@ public class RootNamespaceTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -46,7 +46,7 @@ public class RootNamespaceTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -69,7 +69,7 @@ public class RootNamespaceTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -98,7 +98,7 @@ public class RootNamespaceTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -127,7 +127,7 @@ public class RootNamespaceTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 
@@ -155,7 +155,7 @@ public class RootNamespaceTests
 
             public interface IMyService { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
             """;
 

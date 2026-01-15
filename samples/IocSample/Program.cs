@@ -1,4 +1,4 @@
-﻿using IocSample.Shared;
+using IocSample.Shared;
 
 var services = new ServiceCollection();
 

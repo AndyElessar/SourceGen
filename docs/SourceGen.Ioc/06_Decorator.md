@@ -23,7 +23,7 @@ public class LoggingDecorator<T>(T inner, ILogger logger) : IHandler
 }
 
 // Register with decorator
-[IoCRegister<IHandler>(Decorators = [typeof(LoggingDecorator<>)])]
+[IocRegister<IHandler>(Decorators = [typeof(LoggingDecorator<>)])]
 internal class MyHandler : IHandler
 {
     public void Handle() => Console.WriteLine("Handling");
@@ -52,7 +52,7 @@ services.AddSingleton<global::MyNamespace.IHandler>((global::System.IServiceProv
 Decorators are applied in order (first = outermost):
 
 ```csharp
-[IoCRegister<IHandler>(
+[IocRegister<IHandler>(
     Decorators = [typeof(LoggingDecorator<>), typeof(CachingDecorator<>)])]
 internal class MyHandler : IHandler;
 
@@ -81,16 +81,16 @@ services.AddSingleton<global::MyNamespace.IHandler>((global::System.IServiceProv
 Apply decorators to all implementations of an interface:
 
 ```csharp
-[IoCRegisterDefaults<IHandler>(
+[IocRegisterDefaults<IHandler>(
     ServiceLifetime.Transient,
     Decorators = [typeof(LoggingDecorator<>), typeof(MetricsDecorator<>)])]
 public interface IHandler;
 
 // All handlers get logging and metrics decorators
-[IoCRegister]
+[IocRegister]
 internal class Handler1 : IHandler;
 
-[IoCRegister]
+[IocRegister]
 internal class Handler2 : IHandler;
 ```
 
@@ -123,11 +123,11 @@ services.AddTransient<global::MyNamespace.IHandler>((global::System.IServiceProv
 
 ```csharp
 // Override decorators for specific handler
-[IoCRegister(Decorators = [typeof(CustomDecorator<>)])]
+[IocRegister(Decorators = [typeof(CustomDecorator<>)])]
 internal class SpecialHandler : IHandler;
 
 // Or disable decorators
-[IoCRegister(Decorators = [])]
+[IocRegister(Decorators = [])]
 internal class NoDecoratorsHandler : IHandler;
 ```
 
@@ -172,7 +172,7 @@ public class QueryCachingDecorator<TRequest, TResponse>(IRequestHandler<TRequest
     where TRequest : IQuery;
 
 // Define defaults with both decorators
-[IoCRegisterDefaults(typeof(IRequestHandler<,>),
+[IocRegisterDefaults(typeof(IRequestHandler<,>),
     ServiceLifetime.Scoped,
     Decorators = [typeof(LoggingDecorator<,>), typeof(QueryCachingDecorator<,>)])]
 public interface IRequestHandler<TRequest, TResponse>;
@@ -180,13 +180,13 @@ public interface IRequestHandler<TRequest, TResponse>;
 // Command handler - only gets LoggingDecorator (QueryCachingDecorator constraint not satisfied)
 public record MyCommand : ICommand;
 
-[IoCRegister]
+[IocRegister]
 internal class MyCommandHandler : IRequestHandler<MyCommand, bool>;
 
 // Query handler - gets both LoggingDecorator and QueryCachingDecorator
 public record MyQuery : IQuery;
 
-[IoCRegister]
+[IocRegister]
 internal class MyQueryHandler : IRequestHandler<MyQuery, string>;
 ```
 

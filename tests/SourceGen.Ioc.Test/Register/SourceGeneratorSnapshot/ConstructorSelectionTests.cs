@@ -2,7 +2,7 @@ namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for constructor selection order:
-/// 1. [Inject] marked constructor
+/// 1. [IocInject] marked constructor
 /// 2. Primary constructor
 /// 3. Constructor with most parameters
 /// </summary>
@@ -24,23 +24,23 @@ public class ConstructorSelectionTests
             public interface IDep2 { }
             public interface IDep3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep1 : IDep1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep2 : IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep3 : IDep3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class MyService : IService
             {
                 // Constructor with most parameters (3) - should NOT be used
                 public MyService(IDep1 dep1, IDep2 dep2, IDep3 dep3) { }
 
-                // [Inject] marked constructor (1 parameter) - should be used
-                [Inject]
+                // [IocInject] marked constructor (1 parameter) - should be used
+                [IocInject]
                 public MyService(IDep1 dep1) { }
 
                 // Constructor with 2 parameters - should NOT be used
@@ -68,17 +68,17 @@ public class ConstructorSelectionTests
             public interface IDep2 { }
             public interface IDep3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep1 : IDep1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep2 : IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep3 : IDep3 { }
 
             // Primary constructor with 1 parameter - should be used
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class MyService(IDep1 dep1) : IService
             {
                 // Constructor with most parameters (3) - should NOT be used
@@ -109,16 +109,16 @@ public class ConstructorSelectionTests
             public interface IDep2 { }
             public interface IDep3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep1 : IDep1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep2 : IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep3 : IDep3 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class MyService : IService
             {
                 // Constructor with 1 parameter - should NOT be used
@@ -151,18 +151,18 @@ public class ConstructorSelectionTests
             public interface IDep1 { }
             public interface IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep1 : IDep1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep2 : IDep2 { }
 
             // Primary constructor with 1 parameter - should NOT be used
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class MyService(IDep1 dep1) : IService
             {
-                // [Inject] marked constructor with 2 parameters - should be used
-                [Inject]
+                // [IocInject] marked constructor with 2 parameters - should be used
+                [IocInject]
                 public MyService(IDep1 dep1, IDep2 dep2) : this(dep1) { }
             }
             """;
@@ -186,20 +186,20 @@ public class ConstructorSelectionTests
             public interface IDep1 { }
             public interface IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep1 : IDep1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep2 : IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class MyService : IService
             {
                 // Public constructor with 1 parameter - should NOT be used
                 public MyService(IDep1 dep1) { }
 
-                // Internal constructor with [Inject] - should be used
-                [Inject]
+                // Internal constructor with [IocInject] - should be used
+                [IocInject]
                 internal MyService(IDep1 dep1, IDep2 dep2) { }
             }
             """;
@@ -223,20 +223,20 @@ public class ConstructorSelectionTests
             public interface IDep1 { }
             public interface IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep1 : IDep1 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public class Dep2 : IDep2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class MyService : IService
             {
                 // Public constructor with 1 parameter - should be used (most parameters among accessible)
                 public MyService(IDep1 dep1) { }
 
-                // Private constructor with [Inject] - should be ignored (not accessible)
-                [Inject]
+                // Private constructor with [IocInject] - should be ignored (not accessible)
+                [IocInject]
                 private MyService(IDep1 dep1, IDep2 dep2) { }
             }
             """;

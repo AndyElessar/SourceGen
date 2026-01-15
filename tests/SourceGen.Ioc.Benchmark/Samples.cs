@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Benchmark;
+namespace SourceGen.Ioc.Benchmark;
 
 /// <summary>
 /// Simple service interface for benchmarking.

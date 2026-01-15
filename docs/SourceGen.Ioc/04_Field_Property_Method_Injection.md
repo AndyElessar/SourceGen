@@ -1,19 +1,19 @@
 # Field, Property, and Method Injection
 
-SourceGen.Ioc generates factory method registration when `[Inject]` attribute is used on fields, properties, methods, or constructor parameters.
+SourceGen.Ioc generates factory method registration when `[IocInject]` attribute is used on fields, properties, methods, or constructor parameters.
 
 ## Property & Field Injection
 
-Use `[Inject]` to inject dependencies into properties or fields:
+Use `[IocInject]` to inject dependencies into properties or fields:
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService
 {
-    [Inject]
+    [IocInject]
     public ILogger Logger { get; init; } = null!;
 
-    [Inject]
+    [IocInject]
     internal IConfiguration configuration = null!;
 }
 ```
@@ -37,17 +37,17 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 ## Method Injection
 
-Use `[Inject]` on a method to call it after object creation:
+Use `[IocInject]` on a method to call it after object creation:
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService
 {
     private ILogger logger = null!;
     private IConfiguration config = null!;
 
     // Must be void return type
-    [Inject]
+    [IocInject]
     public void Initialize(ILogger logger, IConfiguration config)
     {
         this.logger = logger;
@@ -76,17 +76,17 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 ## Constructor Selection
 
-Use `[Inject]` on a constructor to specify which constructor to use for DI:
+Use `[IocInject]` on a constructor to specify which constructor to use for DI:
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService(IDependency1 dep1, IDependency2 dep2) : IMyService
 {
     private readonly IDependency1 dep1 = dep1;
     private readonly IDependency2 dep2 = dep2;
 
     // Use this constructor instead of the primary constructor
-    [Inject]
+    [IocInject]
     internal MyService(IDependency1 dep1)
         : this(dep1, new DefaultDependency2())
     {
@@ -111,7 +111,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 </details>
 
 > [!NOTE]
-> If `[Inject]` does not exist on any constructor, there are 2 situations:
+> If `[IocInject]` does not exist on any constructor, there are 2 situations:
 >
 > - If no need to generate factory method (no field/property/method injection or decorator), will let `IServiceProvider` select constructor.
 > - If factory method generation is needed (due to field/property/method injection or decorator), will use primary constructor, then the constructor with the most parameters.
@@ -120,7 +120,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC007|Error|Invalid `[Inject]` usage. The attribute cannot be applied to static members, inaccessible members (private setter, no setter, private field, readonly field, private method), or methods that do not return `void`.|
+|SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, inaccessible members (private setter, no setter, private field, readonly field, private method), or methods that do not return `void`.|
 
 ---
 

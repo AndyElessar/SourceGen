@@ -9,7 +9,7 @@ SourceGen.Ioc can automatically discover closed generic types used in constructo
 ```csharp
 public interface IRepository<T>;
 
-[IoCRegister(ServiceLifetime.Scoped, typeof(IRepository<>))]
+[IocRegister(ServiceLifetime.Scoped, typeof(IRepository<>))]
 internal class Repository<T> : IRepository<T>;
 ```
 
@@ -29,8 +29,8 @@ services.AddScoped(typeof(global::MyNamespace.IRepository<>), typeof(global::MyN
 The generator automatically discovers closed generic types used in:
 
 - Constructor parameters
-- Property/field types marked with `[Inject]`
-- Method parameters that method are marked with `[Inject]`
+- Property/field types marked with `[IocInject]`
+- Method parameters that method are marked with `[IocInject]`
 - `IServiceProvider` invocations:
   - `GetService(typeof(T))`
   - `GetService<T>()`
@@ -48,12 +48,12 @@ The generator automatically discovers closed generic types used in:
 ```csharp
 public interface ILogger<T>;
 
-[IoCRegister(ServiceTypes = [typeof(ILogger<>)])]
+[IocRegister(ServiceTypes = [typeof(ILogger<>)])]
 internal class Logger<T> : ILogger<T>;
 
 public class User;
 
-[IoCRegister]
+[IocRegister]
 internal class UserService(ILogger<UserService> logger)
 {
     // ILogger<UserService> is automatically discovered and registered
@@ -90,7 +90,7 @@ public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<
 
 public record GenericRequest<T> : IRequest<GenericRequest<T>, List<T>>;
 
-[IoCRegister]
+[IocRegister]
 internal class GenericRequestHandler<T> : IRequestHandler<GenericRequest<T>, List<T>>;
 
 public class Entity;
@@ -119,9 +119,9 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Ge
 > [!NOTE]  
 > The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. SourceGen.Ioc handles this through compile-time code generation.
 
-## Manual Discovery with `[Discover]`
+## Manual Discovery with `[IocDiscover]`
 
-For types not directly referenced in code, use `[Discover]` attribute:
+For types not directly referenced in code, use `[IocDiscover]` attribute:
 
 ### On Method
 
@@ -131,13 +131,13 @@ public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<
 
 public record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
 
-[IoCRegister]
+[IocRegister]
 internal class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
 
 internal class Consumer
 {
     // Discover closed generic type for registration
-    [Discover<IRequestHandler<TestRequest<string>, List<string>>>]
+    [IocDiscover<IRequestHandler<TestRequest<string>, List<string>>>]
     public void Process() { }
 }
 ```
@@ -160,14 +160,14 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Te
 ### On Class
 
 ```csharp
-[Discover(typeof(IRequestHandler<TestRequest<CustomType>, List<CustomType>>))]
+[IocDiscover(typeof(IRequestHandler<TestRequest<CustomType>, List<CustomType>>))]
 internal class MyClass;
 ```
 
 ### On Assembly
 
 ```csharp
-[assembly: Discover(typeof(IRequestHandler<TestRequest<Entity>, List<Entity>>))]
+[assembly: IocDiscover(typeof(IRequestHandler<TestRequest<Entity>, List<Entity>>))]
 ```
 
 ## With Decorators
@@ -175,16 +175,16 @@ internal class MyClass;
 Open generic types with decorators also support automatic discovery:
 
 ```csharp
-[IoCRegisterDefaults(
+[IocRegisterDefaults(
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     Decorators = [typeof(LoggingDecorator<,>)])]
 public interface IRequestHandler<TRequest, TResponse>;
 
-[IoCRegister]
+[IocRegister]
 internal class TestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
 
-[IoCRegister]
+[IocRegister]
 internal class ViewModel(IRequestHandler<TestRequest<Entity>, List<Entity>> handler);
 ```
 

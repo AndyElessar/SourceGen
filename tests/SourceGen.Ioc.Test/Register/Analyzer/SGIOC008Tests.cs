@@ -21,7 +21,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -52,7 +52,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyService.Create))]
@@ -83,7 +83,7 @@ public class SGIOC008Tests
 
             public class OuterClass
             {
-                [IoCRegister(
+                [IocRegister(
                     Lifetime = ServiceLifetime.Singleton,
                     ServiceTypes = [typeof(IMyService)],
                     Factory = nameof(PrivateFactory.Create))]
@@ -115,7 +115,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -145,7 +145,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyServiceFactory.Create))]
@@ -175,7 +175,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = "MyServiceFactory.Create")]
@@ -209,7 +209,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -237,7 +237,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -265,7 +265,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -293,7 +293,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -320,7 +320,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = nameof(MyService.Default))]
@@ -347,7 +347,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Instance = "MyService.Default")]
@@ -366,7 +366,7 @@ public class SGIOC008Tests
 
     #endregion
 
-    #region IoCRegisterForAttribute Tests
+    #region IocRegisterForAttribute Tests
 
     [Test]
     public async Task SGIOC008_IoCRegisterFor_Factory_WithNonStaticMethod_ReportsDiagnostic()
@@ -382,7 +382,7 @@ public class SGIOC008Tests
 
             public class MyService : IMyService { }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
@@ -416,7 +416,7 @@ public class SGIOC008Tests
                 public readonly MyService Default = new MyService();
             }
 
-            [IoCRegisterFor(
+            [IocRegisterFor(
                 typeof(MyService),
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
@@ -443,7 +443,7 @@ public class SGIOC008Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor(
+            [assembly: IocRegisterFor(
                 typeof(TestNamespace.MyService),
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(TestNamespace.IMyService)],
@@ -484,7 +484,7 @@ public class SGIOC008Tests
 
             public interface IMyService { }
 
-            [IoCRegister(
+            [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
                 Factory = nameof(MyService.Create))]

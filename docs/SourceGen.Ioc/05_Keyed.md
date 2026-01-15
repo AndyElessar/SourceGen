@@ -1,17 +1,17 @@
 # Keyed Services
 
 SourceGen.Ioc supports keyed service registration with `Key` and `KeyType`.\
-Support keyed service injecting with `[FromKeyedServices]`, `[ServiceKey]` and `[Inject]`.
+Support keyed service injecting with `[FromKeyedServices]`, `[ServiceKey]` and `[IocInject]`.
 
 ## String Keys
 
 ```csharp
 public interface ICache;
 
-[IoCRegister<ICache>(Key = "memory")]
+[IocRegister<ICache>(Key = "memory")]
 internal class MemoryCache : ICache;
 
-[IoCRegister<ICache>(Key = "distributed")]
+[IocRegister<ICache>(Key = "distributed")]
 internal class DistributedCache : ICache;
 ```
 
@@ -33,10 +33,10 @@ services.AddKeyedSingleton<global::MyNamespace.ICache, global::MyNamespace.Distr
 ```csharp
 public enum CacheType { Memory, Distributed }
 
-[IoCRegister<ICache>(Key = CacheType.Memory)]
+[IocRegister<ICache>(Key = CacheType.Memory)]
 internal class MemoryCache : ICache;
 
-[IoCRegister<ICache>(Key = CacheType.Distributed)]
+[IocRegister<ICache>(Key = CacheType.Distributed)]
 internal class DistributedCache : ICache;
 ```
 
@@ -63,7 +63,7 @@ public static class CacheKeys
     public static readonly Guid Primary = Guid.CreateVersion7();
 }
 
-[IoCRegister<ICache>(Key = nameof(CacheKeys.Primary), KeyType = KeyType.Csharp)]
+[IocRegister<ICache>(Key = nameof(CacheKeys.Primary), KeyType = KeyType.Csharp)]
 internal class PrimaryCache : ICache;
 ```
 
@@ -80,13 +80,13 @@ services.AddKeyedSingleton<global::MyNamespace.ICache, global::MyNamespace.Prima
 
 ## Injecting Keyed Services
 
-### Constructor Injection with `[Inject]`
+### Constructor Injection with `[IocInject]`
 
-Use `[Inject]` to inject keyed services. This will generate factory method registration:
+Use `[IocInject]` to inject keyed services. This will generate factory method registration:
 
 ```csharp
-[IoCRegister<IMyService>]
-internal class MyService([Inject("memory")] ICache cache) : IMyService
+[IocRegister<IMyService>]
+internal class MyService([IocInject("memory")] ICache cache) : IMyService
 {
     private readonly ICache cache = cache;
 }
@@ -114,10 +114,10 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 ### Property Injection
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService
 {
-    [Inject("distributed")]
+    [IocInject("distributed")]
     public ICache Cache { get; init; } = null!;
 }
 ```
@@ -141,13 +141,13 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 ### Method Injection
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService
 {
     private ICache cache = null!;
 
-    [Inject]
-    public void Initialize([Inject("memory")] ICache cache)
+    [IocInject]
+    public void Initialize([IocInject("memory")] ICache cache)
     {
         this.cache = cache;
     }
@@ -179,7 +179,7 @@ You can also use the standard `[FromKeyedServices]` attribute from `Microsoft.Ex
 > `[FromKeyedServices]` is natively handled by MS.DI, so the generator uses simple type-based registration instead of factory methods.
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService([FromKeyedServices("memory")] ICache cache) : IMyService
 {
     private readonly ICache cache = cache;
@@ -197,13 +197,13 @@ services.AddSingleton<global::MyNamespace.IMyService, global::MyNamespace.MyServ
 
 </details>
 
-### Difference from `[Inject]`
+### Difference from `[IocInject]`
 
-`[Inject]` attribute requires factory method registration because it's a SourceGen.Ioc-specific feature that MS.DI doesn't recognize:
+`[IocInject]` attribute requires factory method registration because it's a SourceGen.Ioc-specific feature that MS.DI doesn't recognize:
 
 ```csharp
-[IoCRegister<IMyService>]
-internal class MyService([Inject("memory")] ICache cache) : IMyService
+[IocRegister<IMyService>]
+internal class MyService([IocInject("memory")] ICache cache) : IMyService
 {
     private readonly ICache cache = cache;
 }
@@ -227,10 +227,10 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 ## Using `[Inject]` from `Microsoft.AspNetCore.Components` or other libraries
 
-You can also use any attribute that name is `[Inject]`, for example `Microsoft.AspNetCore.Components.InjectAttribute`:
+You can also use any attribute that name is `[Inject]` or `[IocInject]`, for example `Microsoft.AspNetCore.Components.InjectAttribute`:
 
 ```csharp
-[IoCRegister<IMyService>]
+[IocRegister<IMyService>]
 internal class MyService : IMyService
 {
     [Inject(Key = "memory")]
@@ -259,10 +259,10 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 You can use `[ServiceKey]` attribute to inject the key from service registration:
 
 ```csharp
-[IoCRegister(Key = "Key")]
+[IocRegister(Key = "Key")]
 public class KeyService
 {
-    [Inject]
+    [IocInject]
     public void Initialize([ServiceKey] string key)
     {
         Console.WriteLine($"Service Key: {key}");
@@ -290,9 +290,9 @@ services.AddKeyedSingleton<global::MyNamespace.KeyService>("Key", (IServiceProvi
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC006|Warning|Both `[FromKeyedServices]` and `[Inject]` are applied to the same parameter. `[FromKeyedServices]` takes precedence.|
-|SGIOC013|Error|`[ServiceKey]` parameter type does not match the registered key type from `[IoCRegister]` or `[IoCRegisterFor]`.|
-|SGIOC014|Error|`[ServiceKey]` is applied to a parameter, but no `Key` is specified in `[IoCRegister]` or `[IoCRegisterFor]`.|
+|SGIOC006|Warning|Both `[FromKeyedServices]` and `[IocInject]` are applied to the same parameter. `[FromKeyedServices]` takes precedence.|
+|SGIOC013|Error|`[ServiceKey]` parameter type does not match the registered key type from `[IocRegister]` or `[IocRegisterFor]`.|
+|SGIOC014|Error|`[ServiceKey]` is applied to a parameter, but no `Key` is specified in `[IocRegister]` or `[IocRegisterFor]`.|
 
 ---
 

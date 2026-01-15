@@ -15,7 +15,7 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Transforms generic IoCRegisterAttribute (e.g., IoCRegisterAttribute&lt;T&gt;) to extract registration data.
+    /// Transforms generic IocRegisterAttribute (e.g., IocRegisterAttribute&lt;T&gt;) to extract registration data.
     /// The service types are specified via type parameters instead of constructor arguments.
     /// </summary>
     private static RegistrationData? TransformRegisterGeneric(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
@@ -88,7 +88,7 @@ partial class RegisterSourceGenerator
             factory = attributeData.GetFactoryMethodData(semanticModel);
         }
 
-        // Extract injection members (properties, fields, methods marked with InjectAttribute)
+        // Extract injection members (properties, fields, methods marked with IocInjectAttribute/InjectAttribute)
         var injectionMembers = ExtractInjectionMembers(typeSymbol);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
@@ -117,7 +117,7 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Extracts registration data from a generic attribute (e.g., IoCRegisterAttribute&lt;T&gt;, IoCRegisterForAttribute&lt;T&gt;).
+    /// Extracts registration data from a generic attribute (e.g., IocRegisterAttribute&lt;T&gt;, IocRegisterForAttribute&lt;T&gt;).
     /// The service types are specified via type parameters instead of constructor arguments or named arguments.
     /// </summary>
     private static RegistrationData ExtractRegistrationDataFromGenericAttribute(
@@ -175,7 +175,7 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Extracts injection members (properties, fields, methods) marked with InjectAttribute.
+    /// Extracts injection members (properties, fields, methods) marked with IocInjectAttribute/InjectAttribute.
     /// </summary>
     /// <param name="typeSymbol">The type symbol to extract injection members from.</param>
     /// <returns>An array of injection member data.</returns>
@@ -189,14 +189,14 @@ partial class RegisterSourceGenerator
             if(member.IsStatic)
                 continue;
 
-            // Check if the member has InjectAttribute (by name only)
+            // Check if the member has IocInjectAttribute/InjectAttribute (by name only)
             var injectAttribute = member.GetAttributes()
-                .FirstOrDefault(attr => attr.AttributeClass?.Name == "InjectAttribute");
+                .FirstOrDefault(attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
 
             if(injectAttribute is null)
                 continue;
 
-            // Extract key information from InjectAttribute
+            // Extract key information from IocInjectAttribute/InjectAttribute
             var (key, _) = injectAttribute.GetKey();
 
             InjectionMemberData? memberData = member switch

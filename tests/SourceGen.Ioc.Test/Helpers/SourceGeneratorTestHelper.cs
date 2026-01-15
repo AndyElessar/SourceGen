@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -20,7 +20,7 @@ public static class SourceGeneratorTestHelper
     /// Gets the metadata reference for the SourceGen.Ioc assembly containing attribute definitions.
     /// </summary>
     public static readonly MetadataReference IocAttributeReference =
-        MetadataReference.CreateFromFile(typeof(IoCRegisterAttribute).Assembly.Location);
+        MetadataReference.CreateFromFile(typeof(IocRegisterAttribute).Assembly.Location);
 
     /// <summary>
     /// Gets the metadata reference for the Microsoft.Extensions.DependencyInjection.Abstractions assembly.

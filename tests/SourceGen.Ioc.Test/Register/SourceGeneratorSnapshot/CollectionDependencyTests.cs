@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for collection dependency resolution.
@@ -26,13 +26,13 @@ public class CollectionDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => System.Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IEnumerable<IHandler<TestEntity>> handlers)
             {
                 private readonly IEnumerable<IHandler<TestEntity>> handlers = handlers;
@@ -66,13 +66,13 @@ public class CollectionDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => System.Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IList<IHandler<TestEntity>> handlers)
             {
                 private readonly IList<IHandler<TestEntity>> handlers = handlers;
@@ -105,13 +105,13 @@ public class CollectionDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => System.Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IHandler<TestEntity>[] handlers)
             {
                 private readonly IHandler<TestEntity>[] handlers = handlers;
@@ -145,13 +145,13 @@ public class CollectionDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => System.Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IReadOnlyList<IHandler<TestEntity>> handlers)
             {
                 private readonly IReadOnlyList<IHandler<TestEntity>> handlers = handlers;
@@ -186,13 +186,13 @@ public class CollectionDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IServiceProvider sp)
             {
                 private readonly IServiceProvider sp = sp;
@@ -233,19 +233,19 @@ public class CollectionDependencyTests
             public class Entity1 { }
             public class Entity2 { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => System.Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IValidator<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IValidator<>)])]
             public sealed class Validator<T> : IValidator<T>
             {
                 public bool Validate(T item) => item is not null;
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(
                 IEnumerable<IHandler<Entity1>> handlers1,
                 IHandler<Entity2>[] handlers2,
@@ -282,13 +282,13 @@ public class CollectionDependencyTests
             public record GetUserRequest(int Id) : IRequest<User>;
             public record User(int Id, string Name);
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class GetUserHandler : IRequestHandler<GetUserRequest, User>
             {
                 public User Handle(GetUserRequest request) => new(request.Id, "Test");
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IRequestHandler<,>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IRequestHandler<,>)])]
             public sealed class GenericHandler<TRequest, TResponse> : IRequestHandler<TRequest, TResponse>
                 where TRequest : IRequest<TResponse>
             {
@@ -297,7 +297,7 @@ public class CollectionDependencyTests
 
             public record ListUsersRequest() : IRequest<List<User>>;
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IEnumerable<IRequestHandler<ListUsersRequest, List<User>>> handlers)
             {
                 private readonly IEnumerable<IRequestHandler<ListUsersRequest, List<User>>> handlers = handlers;
@@ -327,13 +327,13 @@ public class CollectionDependencyTests
 
             public class TestEntity { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public sealed class Handler<T> : IHandler<T>
             {
                 public void Handle(T item) => System.Console.WriteLine(item?.ToString());
             }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton)]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
             public sealed class Consumer(IEnumerable<IHandler<TestEntity>>? handlers)
             {
                 private readonly IEnumerable<IHandler<TestEntity>> handlers = handlers;

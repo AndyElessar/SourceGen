@@ -452,8 +452,8 @@ internal static class RoslynExtensions
                     if(ctor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
                         continue;
 
-                    // InjectAttribute specified constructor - highest priority
-                    if(ctor.GetAttributes().Any(attr => attr.AttributeClass?.Name == "InjectAttribute"))
+                    // IocInjectAttribute/InjectAttribute specified constructor - highest priority
+                    if(ctor.GetAttributes().Any(attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute"))
                     {
                         injectCtor = ctor;
                         continue;
@@ -504,9 +504,9 @@ internal static class RoslynExtensions
                 return ([], false);
             }
 
-            // Check if the selected constructor has [Inject] attribute
+            // Check if the selected constructor has [IocInject] or [Inject] attribute
             bool hasInjectConstructor = constructor.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.Name == "InjectAttribute");
+                .Any(static attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
 
             visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             List<ParameterData> parameters = [];
@@ -623,8 +623,8 @@ internal static class RoslynExtensions
                     continue;
                 }
 
-                // Check for InjectAttribute (by name only, to support third-party attributes)
-                if(attrClass.Name == "InjectAttribute")
+                // Check for IocInjectAttribute/InjectAttribute (by name only, to support third-party attributes)
+                if(attrClass.Name is "IocInjectAttribute" or "InjectAttribute")
                 {
                     hasInjectAttribute = true;
                     // Only use [Inject] key if no [FromKeyedServices] key was found

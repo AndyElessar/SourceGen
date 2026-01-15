@@ -1,33 +1,33 @@
 # Default Settings
 
-Use `[IoCRegisterDefaults<T>]` to define default registration settings for all types that implement or inherit from `T`.
+Use `[IocRegisterDefaults<T>]` to define default registration settings for all types that implement or inherit from `T`.
 
 ## Basic Defaults
 
 ```csharp
 // All classes implementing IHandler will be registered as Transient by default
-[assembly: IoCRegisterDefaults<IHandler>(ServiceLifetime.Transient)]
+[assembly: IocRegisterDefaults<IHandler>(ServiceLifetime.Transient)]
 
 public interface IHandler;
 
 // Uses default lifetime (Transient) from IHandler
-[IoCRegister]
+[IocRegister]
 internal class MyHandler : IHandler;
 
 // Override the default
-[IoCRegister(ServiceLifetime.Singleton)]
+[IocRegister(ServiceLifetime.Singleton)]
 internal class SingletonHandler : IHandler;
 ```
 
 ## Default Service Types
 
 ```csharp
-[assembly: IoCRegisterDefaults<IRepository>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository)])]
+[assembly: IocRegisterDefaults<IRepository>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository)])]
 
 public interface IRepository;
 
 // Automatically registered as IRepository
-[IoCRegister]
+[IocRegister]
 internal class UserRepository : IRepository;
 ```
 
@@ -35,10 +35,10 @@ internal class UserRepository : IRepository;
 
 ```csharp
 // Assembly
-[assembly: IoCRegisterDefaults<IService>(ServiceLifetime.Scoped)]
+[assembly: IocRegisterDefaults<IService>(ServiceLifetime.Scoped)]
 
 // Or marker class
-[IoCRegisterDefaults<IService>(ServiceLifetime.Scoped)]
+[IocRegisterDefaults<IService>(ServiceLifetime.Scoped)]
 public class Marker;
 ```
 
@@ -51,12 +51,12 @@ Import default settings from another assembly:
 public interface IMyService;
 public interface IRequestHandler<TRequest, TResponse>;
 
-[assembly: IoCRegisterDefaults<IMyService>(ServiceLifetime.Transient)]
-[IoCRegisterDefaults(typeof(IRequestHandler<,>), ServiceLifetime.Transient)]
+[assembly: IocRegisterDefaults<IMyService>(ServiceLifetime.Transient)]
+[IocRegisterDefaults(typeof(IRequestHandler<,>), ServiceLifetime.Transient)]
 public sealed class SharedMarker;
 
 // In consuming project, **only** import defaults from attribute on `SharedMarker` or its assembly
-[ImportModule(typeof(SharedMarker))]
+[IocImportModule(typeof(SharedMarker))]
 public sealed class Module;
 ```
 
@@ -64,7 +64,7 @@ public sealed class Module;
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC012|Warning|Duplicated `[IoCRegisterDefaults]` detected for the same target type and at least one matching tag.|
+|SGIOC012|Warning|Duplicated `[IocRegisterDefaults]` detected for the same target type and at least one matching tag.|
 
 ---
 

@@ -9,7 +9,7 @@ namespace SourceGen.Ioc;
 /// <param name="closedGenericType">The constructed generic type should be discovered by source generators.</param>
 [AttributeUsage(AttributeTargets.All, AllowMultiple = true, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class DiscoverAttribute(Type closedGenericType) : Attribute
+public sealed class IocDiscoverAttribute(Type closedGenericType) : Attribute
 {
     /// <summary>
     /// Gets the constructed generic type.
@@ -26,7 +26,7 @@ public sealed class DiscoverAttribute(Type closedGenericType) : Attribute
 /// <typeparam name="T">The constructed generic type should be discovered by source generators.</typeparam>
 [AttributeUsage(AttributeTargets.All, AllowMultiple = true, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class DiscoverAttribute<T> : Attribute
+public sealed class IocDiscoverAttribute<T> : Attribute
 {
 }
 

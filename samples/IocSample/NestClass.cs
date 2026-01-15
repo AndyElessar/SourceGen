@@ -1,10 +1,10 @@
-﻿namespace IocSample.TestNest;
+namespace IocSample.TestNest;
 
 internal sealed class TestNestClass
 {
     public interface INestInterface;
 
-    [IoCRegister<INestInterface>(Lifetime = ServiceLifetime.Transient, KeyType = KeyType.Csharp, Key = nameof(Key))]
+    [IocRegister<INestInterface>(Lifetime = ServiceLifetime.Transient, KeyType = KeyType.Csharp, Key = nameof(Key))]
     internal sealed class NestClassImpl : INestInterface
     {
         public const string Key = "Nest";

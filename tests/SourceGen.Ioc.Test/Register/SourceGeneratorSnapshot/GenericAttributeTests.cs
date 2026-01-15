@@ -1,7 +1,7 @@
 namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
 /// <summary>
-/// Tests for generic attribute variants (IoCRegisterAttribute&lt;T&gt;, IoCRegisterForAttribute&lt;T&gt;, etc.).
+/// Tests for generic attribute variants (IoCRegisterAttribute&lt;T&gt;, IocRegisterForAttribute&lt;T&gt;, etc.).
 /// </summary>
 [Category(Constants.SourceGeneratorSnapshot)]
 [Category(Constants.BasicRegistration)]
@@ -20,7 +20,7 @@ public class GenericAttributeTests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton)]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton)]
             public class MyService : IMyService { }
             """;
 
@@ -42,7 +42,7 @@ public class GenericAttributeTests
             public interface IFirst { }
             public interface ISecond { }
 
-            [IoCRegister<IFirst, ISecond>(ServiceLifetime.Scoped)]
+            [IocRegister<IFirst, ISecond>(ServiceLifetime.Scoped)]
             public class MultiService : IFirst, ISecond { }
             """;
 
@@ -65,7 +65,7 @@ public class GenericAttributeTests
             public interface ISecond { }
             public interface IThird { }
 
-            [IoCRegister<IFirst, ISecond, IThird>(ServiceLifetime.Transient)]
+            [IocRegister<IFirst, ISecond, IThird>(ServiceLifetime.Transient)]
             public class TripleService : IFirst, ISecond, IThird { }
             """;
 
@@ -89,7 +89,7 @@ public class GenericAttributeTests
             public interface IThird { }
             public interface IFourth { }
 
-            [IoCRegister<IFirst, ISecond, IThird, IFourth>(ServiceLifetime.Singleton)]
+            [IocRegister<IFirst, ISecond, IThird, IFourth>(ServiceLifetime.Singleton)]
             public class QuadService : IFirst, ISecond, IThird, IFourth { }
             """;
 
@@ -110,7 +110,7 @@ public class GenericAttributeTests
 
             public interface IMyService { }
 
-            [IoCRegister<IMyService>(ServiceLifetime.Singleton, Key = "mykey")]
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Key = "mykey")]
             public class MyService : IMyService { }
             """;
 
@@ -122,16 +122,16 @@ public class GenericAttributeTests
 
     #endregion
 
-    #region IoCRegisterForAttribute<T>
+    #region IocRegisterForAttribute<T>
 
     [Test]
-    public async Task IoCRegisterForAttribute_T1_GeneratesCorrectRegistration()
+    public async Task IocRegisterForAttribute_T1_GeneratesCorrectRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterFor<TestNamespace.ExternalService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IExternalService)])]
+            [assembly: IocRegisterFor<TestNamespace.ExternalService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IExternalService)])]
 
             namespace TestNamespace;
 
@@ -146,7 +146,7 @@ public class GenericAttributeTests
     }
 
     [Test]
-    public async Task IoCRegisterForAttribute_T1_OnClass_GeneratesCorrectRegistration()
+    public async Task IocRegisterForAttribute_T1_OnClass_GeneratesCorrectRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -157,7 +157,7 @@ public class GenericAttributeTests
             public interface IExternalService { }
             public class ExternalService : IExternalService { }
 
-            [IoCRegisterFor<ExternalService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IExternalService)])]
+            [IocRegisterFor<ExternalService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IExternalService)])]
             public sealed class Module;
             """;
 
@@ -169,22 +169,22 @@ public class GenericAttributeTests
 
     #endregion
 
-    #region IoCRegisterDefaultsAttribute<T>
+    #region IocRegisterDefaultsAttribute<T>
 
     [Test]
-    public async Task IoCRegisterDefaultsAttribute_T1_AppliesCorrectLifetime()
+    public async Task IocRegisterDefaultsAttribute_T1_AppliesCorrectLifetime()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults<TestNamespace.IBaseService>(ServiceLifetime.Scoped)]
+            [assembly: IocRegisterDefaults<TestNamespace.IBaseService>(ServiceLifetime.Scoped)]
 
             namespace TestNamespace;
 
             public interface IBaseService { }
 
-            [IoCRegister]
+            [IocRegister]
             public class MyService : IBaseService { }
             """;
 
@@ -195,13 +195,13 @@ public class GenericAttributeTests
     }
 
     [Test]
-    public async Task IoCRegisterDefaultsAttribute_T1_WithDecorators_AppliesDecorators()
+    public async Task IocRegisterDefaultsAttribute_T1_WithDecorators_AppliesDecorators()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IoCRegisterDefaults<TestNamespace.IMyService>(
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(
                 ServiceLifetime.Singleton,
                 Decorators = [typeof(TestNamespace.MyServiceDecorator)])]
 
@@ -209,7 +209,7 @@ public class GenericAttributeTests
 
             public interface IMyService { }
 
-            [IoCRegister(ServiceTypes = [typeof(IMyService)])]
+            [IocRegister(ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
             public class MyServiceDecorator(IMyService inner) : IMyService
@@ -226,19 +226,19 @@ public class GenericAttributeTests
 
     #endregion
 
-    #region ImportModuleAttribute<T>
+    #region IocImportModuleAttribute<T>
 
     [Test]
-    public async Task ImportModuleAttribute_T1_ImportsDefaultSettings()
+    public async Task IocImportModuleAttribute_T1_ImportsDefaultSettings()
     {
-        // Create a "shared" assembly with IoCRegisterDefaults on an interface
+        // Create a "shared" assembly with IocRegisterDefaults on an interface
         const string sharedSource = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
             namespace SharedModule;
 
-            [IoCRegisterDefaults(typeof(ISharedService), ServiceLifetime.Scoped)]
+            [IocRegisterDefaults(typeof(ISharedService), ServiceLifetime.Scoped)]
             public interface ISharedService { }
             """;
 
@@ -252,10 +252,10 @@ public class GenericAttributeTests
 
             namespace MainApp;
 
-            [ImportModule<ISharedService>]
+            [IocImportModule<ISharedService>]
             public sealed class Module;
 
-            [IoCRegister]
+            [IocRegister]
             public sealed class MyService : ISharedService { }
             """;
 
@@ -267,10 +267,10 @@ public class GenericAttributeTests
 
     #endregion
 
-    #region DiscoverAttribute<T>
+    #region IocDiscoverAttribute<T>
 
     [Test]
-    public async Task DiscoverAttribute_T1_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_T1_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -281,13 +281,13 @@ public class GenericAttributeTests
 
             public interface IHandler<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public class GenericHandler<T> : IHandler<T> { }
 
             public class TestEntity { }
 
-            // Using generic DiscoverAttribute
-            [Discover<IHandler<TestEntity>>]
+            // Using generic IocDiscoverAttribute
+            [IocDiscover<IHandler<TestEntity>>]
             public sealed class Startup;
             """;
 
@@ -298,7 +298,7 @@ public class GenericAttributeTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_T1_OnMethod_GeneratesClosedGenericRegistration()
+    public async Task IocDiscoverAttribute_T1_OnMethod_GeneratesClosedGenericRegistration()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -309,14 +309,14 @@ public class GenericAttributeTests
 
             public interface IHandler<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public class GenericHandler<T> : IHandler<T> { }
 
             public class TestEntity { }
 
             public class Startup
             {
-                [Discover<IHandler<TestEntity>>]
+                [IocDiscover<IHandler<TestEntity>>]
                 public void Configure() { }
             }
             """;
@@ -328,7 +328,7 @@ public class GenericAttributeTests
     }
 
     [Test]
-    public async Task DiscoverAttribute_T1_MultipleDiscoverAttributes_GeneratesAllFactories()
+    public async Task IocDiscoverAttribute_T1_MultipleIocDiscoverAttributes_GeneratesAllFactories()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -339,16 +339,16 @@ public class GenericAttributeTests
 
             public interface IHandler<T> { }
 
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
             public class GenericHandler<T> : IHandler<T> { }
 
             public class Entity1 { }
             public class Entity2 { }
             public class Entity3 { }
 
-            [Discover<IHandler<Entity1>>]
-            [Discover<IHandler<Entity2>>]
-            [Discover<IHandler<Entity3>>]
+            [IocDiscover<IHandler<Entity1>>]
+            [IocDiscover<IHandler<Entity2>>]
+            [IocDiscover<IHandler<Entity3>>]
             public sealed class Startup;
             """;
 
@@ -376,15 +376,15 @@ public class GenericAttributeTests
             public interface IThird { }
 
             // Non-generic version
-            [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFirst)])]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFirst)])]
             public class Service1 : IFirst { }
 
             // Generic version with 1 type parameter
-            [IoCRegister<ISecond>(ServiceLifetime.Scoped)]
+            [IocRegister<ISecond>(ServiceLifetime.Scoped)]
             public class Service2 : ISecond { }
 
             // Generic version with 2 type parameters
-            [IoCRegister<IFirst, IThird>(ServiceLifetime.Transient)]
+            [IocRegister<IFirst, IThird>(ServiceLifetime.Transient)]
             public class Service3 : IFirst, IThird { }
             """;
 

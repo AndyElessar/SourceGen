@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Cli.Test;
+namespace SourceGen.Ioc.Cli.Test;
 
 internal static class Constants
 {

@@ -141,7 +141,7 @@ partial class RegisterSourceGenerator
             fullName = fullName[8..];
 
         // Check for both generic and non-generic variants
-        return fullName == Constants.IoCRegisterDefaultsAttributeFullName
-            || fullName == Constants.IoCRegisterDefaultsAttributeFullName_T1;
+        return fullName == Constants.IocRegisterDefaultsAttributeFullName
+            || fullName == Constants.IocRegisterDefaultsAttributeFullName_T1;
     }
 }
