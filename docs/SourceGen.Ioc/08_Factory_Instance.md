@@ -136,6 +136,14 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 > [!NOTE]  
 > When using `Instance`, only `Singleton` lifetime is allowed. Using `Scoped` or `Transient` will not generate any registration code.
 
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
+|SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
+|SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Factory` takes precedence.|
+
 ## Combined Example
 
 ```csharp

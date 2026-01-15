@@ -60,6 +60,12 @@ public sealed class SharedMarker;
 public sealed class Module;
 ```
 
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC012|Warning|Duplicated `[IoCRegisterDefaults]` detected for the same target type and at least one matching tag.|
+
 ---
 
 [← Back to Overview](01_Overview.md)

@@ -116,6 +116,12 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 > - If no need to generate factory method (no field/property/method injection or decorator), will let `IServiceProvider` select constructor.
 > - If factory method generation is needed (due to field/property/method injection or decorator), will use primary constructor, then the constructor with the most parameters.
 
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC007|Error|Invalid `[Inject]` usage. The attribute cannot be applied to static members, inaccessible members (private setter, no setter, private field, readonly field, private method), or methods that do not return `void`.|
+
 ---
 
 [← Back to Overview](01_Overview.md)

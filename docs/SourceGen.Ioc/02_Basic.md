@@ -78,6 +78,13 @@ var services = new ServiceCollection();
 services.AddMyProject(); // Generated extension method
 ```
 
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC001|Error|`[IoCRegister]` or `[IoCRegisterFor]` cannot be applied to `private` or `abstract` classes.|
+|SGIOC011|Warning|Duplicated registration detected for the same implementation type, same key, and at least one matching tag.|
+
 ## Custom Method Name
 
 Use the `SourceGenIocName` MSBuild property to customize the generated method name:

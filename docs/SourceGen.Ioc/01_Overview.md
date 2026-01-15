@@ -15,6 +15,13 @@ SourceGen.Ioc is a C# source generator that extends the capabilities of `Microso
 - **Circular Dependency Detection** - Analyzer detects circular dependencies at compile time
 - **Decorator Type Constraint Validation** - Automatically validates decorator type constraints and skips non-matching decorators
 
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC002|Error|Circular dependency detected among registered services.|
+|SGIOC003|Error|Singleton service cannot depend on Scoped service.|
+|SGIOC004|Error|Singleton service cannot depend on Transient service.|
+|SGIOC005|Error|Scoped service cannot depend on Transient service.|
+
 ### Flexible Configuration
 
 - **Field, Property & Method Injection** - Supports `[Inject]` attribute on fields, properties, methods and constructors

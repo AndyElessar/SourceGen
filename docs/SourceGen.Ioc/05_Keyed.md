@@ -286,6 +286,14 @@ services.AddKeyedSingleton<global::MyNamespace.KeyService>("Key", (IServiceProvi
 
 </details>
 
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC006|Warning|Both `[FromKeyedServices]` and `[Inject]` are applied to the same parameter. `[FromKeyedServices]` takes precedence.|
+|SGIOC013|Error|`[ServiceKey]` parameter type does not match the registered key type from `[IoCRegister]` or `[IoCRegisterFor]`.|
+|SGIOC014|Error|`[ServiceKey]` is applied to a parameter, but no `Key` is specified in `[IoCRegister]` or `[IoCRegisterFor]`.|
+
 ---
 
 [← Back to Overview](01_Overview.md)
