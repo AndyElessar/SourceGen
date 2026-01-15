@@ -14,3 +14,5 @@ SGIOC009 | Usage | Error | Invalid Attribute Usage - Instance is specified but L
 SGIOC010 | Usage | Error | Invalid Attribute Usage - Both Factory and Instance are specified on the same attribute.
 SGIOC011 | Design | Warning | Duplicated Registration Detected - Same implementation type and key are registered multiple times.
 SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.
+SGIOC013 | Usage | Error | Key type is unmatched - ServiceKeyAttribute parameter type does not match the registered key type.
+SGIOC014 | Usage | Error | Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.

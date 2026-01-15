@@ -155,6 +155,30 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "The same target type with at least one overlapping tag has multiple IoCRegisterDefaultsAttribute definitions. When TagOnly=false, an empty tag is added for comparison. Only the first definition will be used.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC013: Key type is unmatched - ServiceKeyAttribute parameter type does not match the registered key type.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ServiceKeyTypeMismatch = new(
+        id: "SGIOC013",
+        title: "Key type is unmatched",
+        messageFormat: "[ServiceKey] parameter '{0}' has type '{1}' but the registered key type is '{2}'",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The parameter marked with [ServiceKey] attribute must have a type that matches or is assignable from the registered key type in [IoCRegister] or [IoCRegisterFor] attribute.");
+
+    /// <summary>
+    /// SGIOC014: Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ServiceKeyNotRegistered = new(
+        id: "SGIOC014",
+        title: "Key does not exist",
+        messageFormat: "[ServiceKey] parameter '{0}' is used but no Key is specified in [IoCRegister] or [IoCRegisterFor] attribute",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -168,7 +192,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         FactoryAndInstanceConflict,
         DuplicatedKeyedServiceAttribute,
         DuplicatedRegistration,
-        DuplicatedDefaultSettings
+        DuplicatedDefaultSettings,
+        ServiceKeyTypeMismatch,
+        ServiceKeyNotRegistered
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -479,7 +505,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// Analyzes all dependencies after all services have been collected.
     /// This ensures we have a complete picture of all registered services before checking dependencies.
-    /// Also reports SGIOC012 for duplicated IoCRegisterDefaults.
+    /// Also reports SGIOC012 for duplicated IoCRegisterDefaults and SGIOC013 for ServiceKey type mismatches.
     /// </summary>
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
     {
@@ -501,6 +527,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             context.CancellationToken.ThrowIfCancellationRequested();
 
             var serviceInfo = kvp.Value;
+
+            // SGIOC013: Analyze ServiceKey parameter type mismatches
+            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
+
             AnalyzeDependencies(
                 context.ReportDiagnostic,
                 analyzerContext,
@@ -510,6 +540,104 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 visited,
                 pathStack,
                 context.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// SGIOC013 and SGIOC014: Analyzes [ServiceKey] parameter usage.
+    /// SGIOC013: Reports error when the parameter type does not match the registered key type.
+    /// SGIOC014: Reports error when [ServiceKey] is used but no Key is registered.
+    /// </summary>
+    private static void AnalyzeServiceKeyTypeMismatch(
+        Action<Diagnostic> reportDiagnostic,
+        ServiceInfo serviceInfo,
+        CancellationToken cancellationToken)
+    {
+        var targetType = serviceInfo.Type;
+        var keyTypeSymbol = serviceInfo.KeyTypeSymbol;
+        var hasKey = serviceInfo.HasKey;
+
+        // Check constructor parameters
+        var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
+        if(constructor is not null)
+        {
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, constructor.Parameters, keyTypeSymbol, hasKey, cancellationToken);
+        }
+
+        // Check [Inject] method parameters
+        foreach(var member in targetType.GetMembers())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(member is not IMethodSymbol method)
+                continue;
+
+            // Check if method has [Inject] attribute
+            var hasInjectAttribute = method.GetAttributes()
+                .Any(static attr => attr.AttributeClass?.Name == "InjectAttribute");
+
+            if(!hasInjectAttribute)
+                continue;
+
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, keyTypeSymbol, hasKey, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Analyzes parameters for [ServiceKey] attribute and reports diagnostics.
+    /// SGIOC013: Reports when parameter type does not match registered key type.
+    /// SGIOC014: Reports when [ServiceKey] is used but no Key is registered.
+    /// </summary>
+    private static void AnalyzeServiceKeyParametersInMethod(
+        Action<Diagnostic> reportDiagnostic,
+        ImmutableArray<IParameterSymbol> parameters,
+        ITypeSymbol? keyTypeSymbol,
+        bool hasKey,
+        CancellationToken cancellationToken)
+    {
+        foreach(var param in parameters)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Check if parameter has [ServiceKey] attribute
+            var serviceKeyAttribute = param.GetAttributes()
+                .FirstOrDefault(attr =>
+                    attr.AttributeClass?.Name == "ServiceKeyAttribute"
+                    && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection");
+
+            if(serviceKeyAttribute is null)
+                continue;
+
+            var location = serviceKeyAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+                ?? param.Locations.FirstOrDefault();
+
+            // SGIOC014: No key is registered but [ServiceKey] is used
+            if(!hasKey)
+            {
+                reportDiagnostic(Diagnostic.Create(
+                    ServiceKeyNotRegistered,
+                    location,
+                    param.Name));
+                continue;
+            }
+
+            // Skip type checking if KeyType is Csharp (keyTypeSymbol will be null)
+            if(keyTypeSymbol is null)
+                continue;
+
+            var paramType = param.Type;
+
+            // SGIOC013: Check if the parameter type is compatible with the key type
+            // The parameter type should be the same as or assignable from the key type
+            if(!IsAssignable(paramType, keyTypeSymbol))
+            {
+                reportDiagnostic(Diagnostic.Create(
+                    ServiceKeyTypeMismatch,
+                    location,
+                    param.Name,
+                    paramType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    keyTypeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            }
         }
     }
 
@@ -559,7 +687,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
             var lifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
 
-            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location);
+            // Get key type for SGIOC013/SGIOC014 analysis
+            var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
+
+            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, hasKey);
         }
 
         return syntaxTreesBuilder.ToImmutable();
@@ -673,9 +804,12 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
             var currentLifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
 
+            // Get key type for SGIOC013/SGIOC014 analysis
+            var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
+
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
-            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location);
+            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, keyTypeSymbol, hasKey);
         }
     }
 
@@ -787,9 +921,11 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         AnalyzerContext analyzerContext,
         INamedTypeSymbol targetType,
         ServiceLifetime lifetime,
-        Location? location)
+        Location? location,
+        ITypeSymbol? keyTypeSymbol = null,
+        bool hasKey = false)
     {
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location);
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, keyTypeSymbol, hasKey);
 
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
             return; // Already registered
@@ -1106,7 +1242,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         Stack<INamedTypeSymbol> pathStack,
         CancellationToken cancellationToken)
     {
-        var constructor = targetType.PrimaryOrMostParametersConstructor;
+        var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
         if(constructor is null)
             return;
 
@@ -1224,7 +1360,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         if(!analyzerContext.RegisteredServices.ContainsKey(currentType))
             return false;
 
-        var constructor = currentType.PrimaryOrMostParametersConstructor;
+        var constructor = currentType.SpecifiedOrPrimaryOrMostParametersConstructor;
         if(constructor is null)
             return false;
 
@@ -1462,13 +1598,23 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         /// Pre-computed fully qualified type name to avoid repeated ToDisplayString calls.
         /// </summary>
         public string FullyQualifiedName { get; }
+        /// <summary>
+        /// The type symbol of the registration key, or null if no key is specified or KeyType is Csharp.
+        /// </summary>
+        public ITypeSymbol? KeyTypeSymbol { get; }
+        /// <summary>
+        /// Indicates whether a Key is specified (regardless of KeyType).
+        /// </summary>
+        public bool HasKey { get; }
 
-        public ServiceInfo(INamedTypeSymbol type, ServiceLifetime lifetime, Location? location)
+        public ServiceInfo(INamedTypeSymbol type, ServiceLifetime lifetime, Location? location, ITypeSymbol? keyTypeSymbol = null, bool hasKey = false)
         {
             Type = type;
             Lifetime = lifetime;
             Location = location;
             FullyQualifiedName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            KeyTypeSymbol = keyTypeSymbol;
+            HasKey = hasKey;
         }
     }
 }

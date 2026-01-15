@@ -11,11 +11,21 @@ public enum KeyEnum
     Key1 = 1
 }
 [IoCRegister<IKeyed>(Key = KeyEnum.Key0)]
-internal class KeyedEnum : IKeyed;
+internal class KeyedEnum : IKeyed
+{
+    [Inject]
+    public void Init([ServiceKey] KeyEnum key)
+    {
+
+    }
+}
 
 public static class KeyedExtensions
 {
     public static readonly Guid Key = Guid.CreateVersion7();
 }
 [IoCRegister<IKeyed>(Key = nameof(KeyedExtensions.Key), KeyType = KeyType.Csharp)]
-internal class KeyedCsharp : IKeyed;
+internal class KeyedCsharp : IKeyed
+{
+
+}

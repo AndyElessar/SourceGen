@@ -63,8 +63,14 @@ namespace IocSample
             services.AddKeyedSingleton<global::IocSample.IDependency, global::IocSample.Dependency3>("3");
             services.AddKeyedSingleton<global::IocSample.Keyed, global::IocSample.Keyed>("Key");
             services.AddKeyedSingleton<global::IocSample.IKeyed, global::IocSample.Keyed>("Key");
-            services.AddKeyedSingleton<global::IocSample.KeyedEnum, global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0);
-            services.AddKeyedSingleton<global::IocSample.IKeyed, global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0);
+            services.AddKeyedSingleton<global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) =>
+            {
+                var s0_m0 = global::IocSample.KeyEnum.Key0;
+                var s0 = new global::IocSample.KeyedEnum();
+                s0.Init(s0_m0);
+                return s0;
+            });
+            services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedEnum>(key));
             services.AddKeyedSingleton<global::IocSample.KeyedCsharp, global::IocSample.KeyedCsharp>(global::IocSample.KeyedExtensions.Key);
             services.AddKeyedSingleton<global::IocSample.IKeyed, global::IocSample.KeyedCsharp>(global::IocSample.KeyedExtensions.Key);
             services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.NestClassImpl, global::IocSample.TestNest.TestNestClass.NestClassImpl>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key);

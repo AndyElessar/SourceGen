@@ -149,6 +149,33 @@ internal static class Constants
             attribute.GetNamedArgument<bool>("TagOnly", false);
 
         /// <summary>
+        /// Gets the Key information from the attribute (IoCRegisterAttribute or IoCRegisterForAttribute).
+        /// </summary>
+        /// <returns>
+        /// A tuple containing:
+        /// - HasKey: True if a Key is specified (regardless of KeyType)
+        /// - KeyTypeSymbol: The type symbol of the key value, or null if no key is specified or KeyType is Csharp
+        /// </returns>
+        public (bool HasKey, ITypeSymbol? KeyTypeSymbol) GetKeySymbol()
+        {
+            // When KeyType is Csharp (1), the key is a C# expression string, not a typed value
+            var keyType = attribute.GetNamedArgument<int>("KeyType", 0);
+            var isCsharpKeyType = keyType == 1;
+
+            // Check named arguments
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key == "Key" && !namedArg.Value.IsNull)
+                {
+                    // Has key from named argument, but type is null if KeyType is Csharp
+                    return (true, isCsharpKeyType ? null : namedArg.Value.Type);
+                }
+            }
+
+            return (false, null);
+        }
+
+        /// <summary>
         /// Gets the Key and KeyType from the attribute.
         /// </summary>
         /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>

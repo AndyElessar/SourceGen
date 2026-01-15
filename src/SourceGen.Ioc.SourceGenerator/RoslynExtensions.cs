@@ -1079,6 +1079,47 @@ internal static class RoslynExtensions
     }
 
     /// <summary>
+    /// Checks if sourceType is assignable to targetType.
+    /// Returns true if a value of sourceType can be assigned to a variable of targetType.
+    /// </summary>
+    /// <param name="targetType">The target type (e.g., parameter type).</param>
+    /// <param name="sourceType">The source type (e.g., value type).</param>
+    /// <returns>True if sourceType is assignable to targetType.</returns>
+    public static bool IsAssignable(ITypeSymbol targetType, ITypeSymbol sourceType)
+    {
+        // Exact match
+        if(SymbolEqualityComparer.Default.Equals(targetType, sourceType))
+            return true;
+
+        // Handle nullable types - if target is nullable and source type is the underlying type
+        if(targetType.OriginalDefinition.SpecialType is SpecialType.System_Nullable_T
+            && targetType is INamedTypeSymbol nullableTarget)
+        {
+            var underlyingType = nullableTarget.TypeArguments.FirstOrDefault();
+            if(underlyingType is not null && SymbolEqualityComparer.Default.Equals(underlyingType, sourceType))
+                return true;
+        }
+
+        // Handle object type - any type is assignable to object
+        if(targetType.SpecialType is SpecialType.System_Object)
+            return true;
+
+        // Handle inheritance - target type should be a base type or interface of source type
+        if(sourceType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, targetType)))
+            return true;
+
+        var currentBase = sourceType.BaseType;
+        while(currentBase is not null)
+        {
+            if(SymbolEqualityComparer.Default.Equals(currentBase, targetType))
+                return true;
+            currentBase = currentBase.BaseType;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Collection type names (without generic part) that are compatible with IEnumerable&lt;T&gt;.
     /// These types are resolved by DI as collections of the element type.
     /// </summary>

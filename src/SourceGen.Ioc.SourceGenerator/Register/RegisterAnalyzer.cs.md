@@ -41,3 +41,9 @@ Format: ID - Level - Category - Description
 - SGIOC012 - Warning - Design - Duplicated Registration Detected
   - Report when there are duplicated `IoCRegisterDefaults` for same target type and at least one matching tag.
   - When TagOnly=false, the setting is considered to have an empty tag for comparison.
+
+- SGIOC013 - Error - Usage - Key type is unmatched
+  - Report when `ServiceKeyAttribute` is mark on parameter, but the key type is not matched with the registered key type from `IoCRegisterAttribute` or `IoCRegisterForAttribute`.
+
+- SGIOC014 - Error - Usage - Key does not exists
+  - Report when `ServiceKeyAttribute` is mark on parameter, but there is no specified `Key` from `IoCRegisterAttribute` or `IoCRegisterForAttribute`.
