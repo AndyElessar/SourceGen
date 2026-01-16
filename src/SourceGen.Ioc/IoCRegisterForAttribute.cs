@@ -4,12 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace SourceGen.Ioc;
 
 /// <summary>
-/// Specifies <paramref name="targetType"/> should be registered in the dependency injection container.
+/// Specifies <paramref name="implementationType"/> should be registered in the dependency injection container.
 /// </summary>
-/// <param name="targetType">Specifies which type should be registered in the dependency injection container.</param>
+/// <param name="implementationType">Specifies which type should be registered in the dependency injection container.</param>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
 [Conditional("SOURCEGEN")]
-public sealed class IocRegisterForAttribute(Type targetType) : Attribute
+public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="IocRegisterForAttribute"/> class.
@@ -25,7 +25,7 @@ public sealed class IocRegisterForAttribute(Type targetType) : Attribute
     /// <summary>
     /// Gets the type that should be registered in the dependency injection container.
     /// </summary>
-    public Type TargetType { get; } = targetType;
+    public Type ImplementationType { get; } = implementationType;
 
     /// <inheritdoc cref="IocRegisterAttribute.Lifetime"/>
     public ServiceLifetime Lifetime { get; init; }

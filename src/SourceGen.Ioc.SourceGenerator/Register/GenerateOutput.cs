@@ -244,15 +244,16 @@ partial class RegisterSourceGenerator
         var factory = registration.Factory!;
         var factoryPath = factory.Path;
         var hasServiceProvider = factory.HasServiceProvider;
-        var hasKey = factory.HasKey;
+        // hasKey is only meaningful when registration has a key
+        var hasKey = factory.HasKey && registration.Key is not null;
         var returnTypeName = factory.ReturnTypeName;
 
         // Build factory invocation based on parameters
         string factoryInvocation = (hasServiceProvider, hasKey) switch
         {
-            (true, true) => $"{factoryPath}(sp, key)",
+            (true, true) => $"{factoryPath}(sp, {registration.Key})",
             (true, false) => $"{factoryPath}(sp)",
-            (false, true) => $"{factoryPath}(key)",
+            (false, true) => $"{factoryPath}({registration.Key})",
             (false, false) => $"{factoryPath}()"
         };
 

@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 
 namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 
@@ -9,6 +9,65 @@ namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 [Category(Constants.FactoryAndInstance)]
 public class FactoryAndInstanceTests
 {
+    [Test]
+    public async Task Factory_WithNoParameters_GeneratesDirectInvocation()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create() => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithKeyedService_NoParameters_GeneratesDirectInvocation()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Key = "myKey",
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create() => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
     [Test]
     public async Task Factory_WithNameof_GeneratesFactoryRegistration()
     {
@@ -332,65 +391,6 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Factory_WithNoParameters_GeneratesDirectInvocation()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegister(
-                Lifetime = ServiceLifetime.Singleton,
-                ServiceTypes = [typeof(IMyService)],
-                Factory = nameof(MyServiceFactory.Create))]
-            public class MyService : IMyService { }
-
-            public static class MyServiceFactory
-            {
-                public static IMyService Create() => new MyService();
-            }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    public async Task Factory_WithKeyedService_NoParameters_GeneratesDirectInvocation()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegister(
-                Lifetime = ServiceLifetime.Singleton,
-                ServiceTypes = [typeof(IMyService)],
-                Key = "myKey",
-                Factory = nameof(MyServiceFactory.Create))]
-            public class MyService : IMyService { }
-
-            public static class MyServiceFactory
-            {
-                public static IMyService Create() => new MyService();
-            }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
     public async Task Factory_WithDifferentReturnType_GeneratesCast()
     {
         const string source = """
@@ -422,7 +422,7 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Factory_WithMatchingReturnType_NoCast()
+    public async Task Factory_WithServiceKeyParameter_GeneratesKeyedFactoryWithKeyArgument()
     {
         const string source = """
             using System;
@@ -433,17 +433,78 @@ public class FactoryAndInstanceTests
 
             public interface IMyService { }
 
-            // Only register IMyService, not the implementation
             [IocRegister(
                 Lifetime = ServiceLifetime.Singleton,
                 ServiceTypes = [typeof(IMyService)],
-                RegisterAllInterfaces = false,
+                Key = "myKey",
                 Factory = nameof(MyServiceFactory.Create))]
             public class MyService : IMyService { }
 
             public static class MyServiceFactory
             {
-                public static IMyService Create(IServiceProvider sp) => new MyService();
+                public static IMyService Create(IServiceProvider sp, [ServiceKey] string key) => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithServiceKeyParameterOnly_GeneratesKeyedFactoryWithKeyArgument()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Key = 42,
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create([ServiceKey] int key) => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithServiceKeyParameterButNoKey_GeneratesWithoutKeyArgument()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                // [ServiceKey] is present but no Key in registration - key arg should be ignored
+                public static IMyService Create(IServiceProvider sp, [ServiceKey] string key) => new MyService();
             }
             """;
 

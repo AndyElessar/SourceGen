@@ -20,11 +20,7 @@ public class Marker;
 [IocRegisterDefaults<IDenpendency2>(ServiceLifetime.Transient)]
 public interface IDenpendency2;
 [IocRegister]
-internal class Default1 : IDenpendency2
-{
-    [IocInject]
-    public string Test { get; init; }
-}
+internal class Default1 : IDenpendency2;
 [IocRegister(ServiceLifetime.Scoped)]
 internal class Default2 : IDenpendency2;
 

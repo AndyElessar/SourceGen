@@ -4,19 +4,19 @@ This source generator automatically generates extension methods for registering 
 
 ## Collect information
 
-1. Find classes marked with `SourceGen.Ioc.IoCRegisterAttribute` and `SourceGen.Ioc.IoCRegisterForAttribute`.
+1. Find classes marked with `SourceGen.Ioc.IocRegisterAttribute` and `SourceGen.Ioc.IocRegisterForAttribute`.
 
-2. Find `SourceGen.Ioc.IoCRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
+2. Find `SourceGen.Ioc.IocRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
 
 3. Service registration settings to collect:
     - Service type (from `TargetServiceType`, `ServiceTypes` or follow settings: `RegisterAllInterfaces`, `RegisterAllBaseClasses`; always register Implementation type itself)
-    - Implementation type (from `IoCRegisterForAttribute.TargetType` or the class marked with `IoCRegisterAttribute`) and its constructor's parameters
-    - Lifetime (from `IoCRegisterAttribute` or default settings)
-    - Key (from `IoCRegisterAttribute.Key`, `IoCRegisterForAttribute.Key` or default settings)
-    - Decorators type (from `IoCRegisterAttribute.Decorators`, `IoCRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
-    - Tags (from `IoCRegisterAttribute.Tags`, `IoCRegisterForAttribute.Tags` or default settings)
-    - Factory (from `IoCRegisterAttribute.Factory`, `IoCRegisterForAttribute.Factory`)
-    - Instance (from `IoCRegisterAttribute.Instance`, `IoCRegisterForAttribute.Instance`)
+    - Implementation type (from `IocRegisterForAttribute.ImplementationType` or the class marked with `IocRegisterAttribute`) and its constructor's parameters
+    - Lifetime (from `IocRegisterAttribute` or default settings)
+    - Key (from `IocRegisterAttribute.Key`, `IocRegisterForAttribute.Key` or default settings)
+    - Decorators type (from `IocRegisterAttribute.Decorators`, `IocRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
+    - Tags (from `IocRegisterAttribute.Tags`, `IocRegisterForAttribute.Tags` or default settings)
+    - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory`)
+    - Instance (from `IocRegisterAttribute.Instance`, `IocRegisterForAttribute.Instance`)
     - Project root namespace (from compilation options)
     - Assembly name (from compilation options)
     - Project properties: SourceGenIocName
@@ -102,7 +102,7 @@ This source generator automatically generates extension methods for registering 
     {
         public void Log(string msg);
     }
-    [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+    [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
     public sealed class Logger<T> : ILogger<T>
     {
         public void Log(string msg)
@@ -113,7 +113,7 @@ This source generator automatically generates extension methods for registering 
 
     public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-    [IoCRegisterDefaultSettings(
+    [IocRegisterDefaultSettings(
         typeof(IRequestHandler<,>),
         ServiceLifetime.Singleton,
         Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
@@ -125,7 +125,7 @@ This source generator automatically generates extension methods for registering 
 
     public sealed record TestRequest(int Key) : IRequest<TestRequest, List<string>>;
 
-    [IoCRegister]
+    [IocRegister]
     internal sealed class TestHandler : IRequestHandler<TestRequest, List<string>>
     {
         public List<string> Handle(TestRequest request)
@@ -260,7 +260,7 @@ This source generator automatically generates extension methods for registering 
 
     ```csharp
     #region Define:
-    [IoCRegister]
+    [IocRegister]
     public class MyService([Inject(Key = 10)]IMayServiceDependency1 sd)
     {
         private readonly IMayServiceDependency1 sd = sd;
@@ -296,11 +296,11 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-    **Method with [ServiceKey] and [FromKeyedServices] on parameters**:
+    **Method with `[ServiceKey]` and `[FromKeyedServices]` on parameters**:
 
     ```csharp
     #region Define:
-    [IoCRegister(Key = "MyKey")]
+    [IocRegister(Key = "MyKey")]
     public class MyService : IMyService
     {
         public IDependency? Dep { get; private set; }
@@ -334,7 +334,7 @@ This source generator automatically generates extension methods for registering 
 
     ```csharp
     #region Define:
-    [IoCRegister]
+    [IocRegister]
     public class MyService : IMyService
     {
         public IOptionalDependency? OptDep { get; private set; }
@@ -371,7 +371,7 @@ This source generator automatically generates extension methods for registering 
 
     ```csharp
     #region Define:
-    [IoCRegister]
+    [IocRegister]
     public class MyService(IOptionalDependency? optDep = null) : IMyService
     {
         public IOptionalDependency? OptDep { get; } = optDep;
@@ -393,7 +393,7 @@ This source generator automatically generates extension methods for registering 
 
     ```csharp
     #region Define:
-    [IoCRegister<IMyService>]
+    [IocRegister<IMyService>]
     public class MyService(
         [FromKeyedServices("special")] IDependency dep,  // MS.DI handles [FromKeyedServices]
         IServiceProvider sp                              // MS.DI handles IServiceProvider
@@ -407,7 +407,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s and assembly's `IoCRegisterDefaultSettingsAttribute` as default settings for current assembly.
+10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s and assembly's `IocRegisterDefaultSettingsAttribute` as default settings for current assembly.
 
 11. When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate closed generic registration.
 
@@ -417,7 +417,7 @@ This source generator automatically generates extension methods for registering 
     {
         public void Log(string msg);
     }
-    [IoCRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+    [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
     public sealed class Logger<T> : ILogger<T>
     {
         public void Log(string msg)
@@ -428,7 +428,7 @@ This source generator automatically generates extension methods for registering 
 
     public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 
-    [IoCRegisterDefaultSettings(
+    [IocRegisterDefaultSettings(
         typeof(IRequestHandler<,>),
         ServiceLifetime.Singleton,
         Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
@@ -440,7 +440,7 @@ This source generator automatically generates extension methods for registering 
 
     public sealed record TestRequest<T>(Guid PK) : IRequest<TestRequest<T>, List<T>>;
 
-    [IoCRegister]
+    [IocRegister]
     internal sealed class TestHandler<T>(
         ILogger<TestHandler<T>> logger,
         IUnitOfWorkFactory factory 
@@ -487,7 +487,7 @@ This source generator automatically generates extension methods for registering 
 
     public class TestEntity;
 
-    [IoCRegister]
+    [IocRegister]
     internal sealed class ViewModel(IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler)
     {
         private readonly IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler = handler;
@@ -567,13 +567,18 @@ This source generator automatically generates extension methods for registering 
       }
       ```
 
-14. When `Factory` is specify in `IoCRegisterAttribute` or `IoCRegisterForAttribute`:
+14. When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
+
+    **Factory Method Parameter Analysis**:
+    - If parameter type is `IServiceProvider`: Pass the service provider directly
+    - If parameter has `[ServiceKey]` attribute and registration has a Key: Pass the Key value
+    - Other parameters are not supported and should be ignored or report diagnostic
 
     ```csharp
     #region Define:
     public interface IMyService;
 
-    [IoCRegister(ServiceTypes = [typeof(IMyService), Factory = nameof(MyServiceFactory.Get)])]
+    [IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Get))]
     internal sealed class MyService : IMyService;
 
     public sealed class MyServiceFactory
@@ -587,18 +592,65 @@ This source generator automatically generates extension methods for registering 
     }
     #endregion
 
-    #region Generate
+    #region Generate:
     services.AddSingleton<IMyService>(sp => MyServiceFactory.Get(sp));
     #endregion
     ```
 
-15. When `Instance` is specify in `IoCRegisterAttribute` or `IoCRegisterForAttribute`:
+    **Keyed Factory with [ServiceKey] parameter**:
 
     ```csharp
     #region Define:
     public interface IMyService;
 
-    [IoCRegister(ServiceTypes = [typeof(IMyService), Instance = nameof(Default)])]
+    [IocRegister(ServiceTypes = [typeof(IMyService)], Key = "MyKey", Factory = nameof(MyServiceFactory.Create))]
+    internal sealed class MyService : IMyService;
+
+    public sealed class MyServiceFactory
+    {
+      public static IMyService Create(IServiceProvider sp, [ServiceKey] string key)
+      {
+        // Use key to customize creation
+        return new MyService();
+      }
+    }
+    #endregion
+
+    #region Generate:
+    services.AddKeyedSingleton<IMyService>("MyKey", (sp, key) => MyServiceFactory.Create(sp, "MyKey"));
+    #endregion
+    ```
+
+    **Factory without IServiceProvider parameter**:
+
+    ```csharp
+    #region Define:
+    public interface IMyService;
+
+    [IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Create))]
+    internal sealed class MyService : IMyService;
+
+    public sealed class MyServiceFactory
+    {
+      public static IMyService Create()
+      {
+        return new MyService();
+      }
+    }
+    #endregion
+
+    #region Generate:
+    services.AddSingleton<IMyService>(sp => MyServiceFactory.Create());
+    #endregion
+    ```
+
+15. When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
+
+    ```csharp
+    #region Define:
+    public interface IMyService;
+
+    [IocRegister(ServiceTypes = [typeof(IMyService), Instance = nameof(Default)])]
     internal sealed class MyService : IMyService
     {
       // Must be static
@@ -621,7 +673,7 @@ This source generator automatically generates extension methods for registering 
 
     public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
 
-    [IoCRegister]
+    [IocRegister]
     public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
 
     public class ViewModel

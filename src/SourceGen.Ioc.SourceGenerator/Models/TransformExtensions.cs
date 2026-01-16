@@ -957,6 +957,9 @@ internal static class TransformExtensions
     {
         /// <summary>
         /// Creates FactoryMethodData from a method symbol.
+        /// Analyzes factory method parameters:
+        /// - IServiceProvider: Will be passed the service provider directly
+        /// - [ServiceKey] attribute: Will be passed the registration key value
         /// </summary>
         public FactoryMethodData CreateFactoryMethodData()
         {
@@ -972,6 +975,22 @@ internal static class TransformExtensions
                 if(paramTypeName is "global::System.IServiceProvider" or "System.IServiceProvider")
                 {
                     hasServiceProvider = true;
+                    continue;
+                }
+
+                // Check for [ServiceKey] attribute
+                foreach(var attribute in param.GetAttributes())
+                {
+                    var attrClass = attribute.AttributeClass;
+                    if(attrClass is null)
+                        continue;
+
+                    if(attrClass.Name == "ServiceKeyAttribute"
+                        && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                    {
+                        hasKey = true;
+                        break;
+                    }
                 }
             }
 
