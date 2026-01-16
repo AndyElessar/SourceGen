@@ -231,14 +231,20 @@ partial class RegisterSourceGenerator
     private static InjectionMemberData CreatePropertyInjection(IPropertySymbol property, string? key)
     {
         var propertyType = property.Type.GetTypeData();
-        var isOptional = property.NullableAnnotation == NullableAnnotation.Annotated;
+        var isNullable = property.NullableAnnotation == NullableAnnotation.Annotated;
+
+        // Try to get the default value from property initializer
+        var (hasDefaultValue, defaultValue) = GetPropertyDefaultValue(property);
+
         return new InjectionMemberData(
             InjectionMemberType.Property,
             property.Name,
             propertyType,
             null,
             key,
-            isOptional);
+            isNullable,
+            hasDefaultValue,
+            defaultValue);
     }
 
     /// <summary>
@@ -247,14 +253,93 @@ partial class RegisterSourceGenerator
     private static InjectionMemberData CreateFieldInjection(IFieldSymbol field, string? key)
     {
         var fieldType = field.Type.GetTypeData();
-        var isOptional = field.NullableAnnotation == NullableAnnotation.Annotated;
+        var isNullable = field.NullableAnnotation == NullableAnnotation.Annotated;
+
+        // Try to get the default value from field initializer
+        var (hasDefaultValue, defaultValue) = GetFieldDefaultValue(field);
+
         return new InjectionMemberData(
             InjectionMemberType.Field,
             field.Name,
             fieldType,
             null,
             key,
-            isOptional);
+            isNullable,
+            hasDefaultValue,
+            defaultValue);
+    }
+
+    /// <summary>
+    /// Gets the default value from a property initializer.
+    /// </summary>
+    private static (bool HasDefaultValue, string? DefaultValue) GetPropertyDefaultValue(IPropertySymbol property)
+    {
+        var syntaxRef = property.DeclaringSyntaxReferences.FirstOrDefault();
+        if(syntaxRef?.GetSyntax() is not PropertyDeclarationSyntax propertySyntax)
+            return (false, null);
+
+        var initializer = propertySyntax.Initializer;
+        if(initializer is null)
+            return (false, null);
+
+        // Check if it's a null literal or null-forgiving expression (null!)
+        if(IsNullExpression(initializer.Value))
+        {
+            return (true, null);
+        }
+
+        return (true, initializer.Value.ToString());
+    }
+
+    /// <summary>
+    /// Gets the default value from a field initializer.
+    /// </summary>
+    private static (bool HasDefaultValue, string? DefaultValue) GetFieldDefaultValue(IFieldSymbol field)
+    {
+        var syntaxRef = field.DeclaringSyntaxReferences.FirstOrDefault();
+        var syntax = syntaxRef?.GetSyntax();
+
+        // Field can be declared in VariableDeclaratorSyntax
+        EqualsValueClauseSyntax? initializer = syntax switch
+        {
+            VariableDeclaratorSyntax variableDeclarator => variableDeclarator.Initializer,
+            _ => null
+        };
+
+        if(initializer is null)
+            return (false, null);
+
+        // Check if it's a null literal or null-forgiving expression (null!)
+        if(IsNullExpression(initializer.Value))
+        {
+            return (true, null);
+        }
+
+        return (true, initializer.Value.ToString());
+    }
+
+    /// <summary>
+    /// Checks if an expression is a null literal or null-forgiving expression (null!).
+    /// </summary>
+    private static bool IsNullExpression(ExpressionSyntax expression)
+    {
+        // Direct null literal
+        if(expression is LiteralExpressionSyntax literal &&
+           literal.Kind() == SyntaxKind.NullLiteralExpression)
+        {
+            return true;
+        }
+
+        // Null-forgiving expression: null!
+        if(expression is PostfixUnaryExpressionSyntax postfix &&
+           postfix.Kind() == SyntaxKind.SuppressNullableWarningExpression &&
+           postfix.Operand is LiteralExpressionSyntax innerLiteral &&
+           innerLiteral.Kind() == SyntaxKind.NullLiteralExpression)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -269,8 +354,9 @@ partial class RegisterSourceGenerator
                 return new ParameterData(
                     p.Name,
                     p.Type.GetTypeData(),
-                    IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated,
+                    IsNullable: p.NullableAnnotation == NullableAnnotation.Annotated,
                     HasDefaultValue: p.HasExplicitDefaultValue,
+                    DefaultValue: p.HasExplicitDefaultValue ? ToDefaultValueCodeString(p.ExplicitDefaultValue) : null,
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: hasServiceKeyAttribute,

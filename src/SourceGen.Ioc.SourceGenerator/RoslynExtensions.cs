@@ -921,5 +921,32 @@ internal static class RoslynExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
+    /// <summary>
+    /// Converts a parameter's explicit default value to its C# code representation.
+    /// </summary>
+    /// <param name="value">The default value object from IParameterSymbol.ExplicitDefaultValue.</param>
+    /// <returns>The C# code string representing the default value, or null if the value is null.</returns>
+    public static string? ToDefaultValueCodeString(object? value)
+    {
+        if(value is null)
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            string s => $"\"{s.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",
+            char c => $"'{(c == '\'' ? "\\'" : c == '\\' ? "\\\\" : c.ToString())}'",
+            bool b => b ? "true" : "false",
+            byte or sbyte or short or ushort or int or uint => value.ToString()!,
+            long l => $"{l}L",
+            ulong ul => $"{ul}UL",
+            float f => float.IsNaN(f) ? "float.NaN" : float.IsPositiveInfinity(f) ? "float.PositiveInfinity" : float.IsNegativeInfinity(f) ? "float.NegativeInfinity" : $"{f.ToString(CultureInfo.InvariantCulture)}f",
+            double d => double.IsNaN(d) ? "double.NaN" : double.IsPositiveInfinity(d) ? "double.PositiveInfinity" : double.IsNegativeInfinity(d) ? "double.NegativeInfinity" : $"{d.ToString(CultureInfo.InvariantCulture)}d",
+            decimal m => $"{m.ToString(CultureInfo.InvariantCulture)}m",
+            _ => value.ToString()!
+        };
+    }
+
     #endregion
 }

@@ -180,16 +180,16 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.");
 
     /// <summary>
-    /// SGIOC015: Unresolvable Constructor Parameter - Constructor parameter is a built-in type that cannot be resolved from dependency injection.
+    /// SGIOC015: Unresolvable Member - Constructor parameter or injected property/field is a built-in type that cannot be resolved from dependency injection.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnresolvableConstructorParameter = new(
+    public static readonly DiagnosticDescriptor UnresolvableMember = new(
         id: "SGIOC015",
-        title: "Unresolvable Constructor Parameter",
-        messageFormat: "Constructor parameter '{0}' of type '{1}' cannot be resolved from dependency injection",
+        title: "Unresolvable Member",
+        messageFormat: "{0} '{1}' of type '{2}' cannot be resolved from dependency injection",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Built-in types cannot be resolved from the dependency injection container. Use [IocInject] with a factory, [FromKeyedServices], or provide a default value.");
+        description: "Built-in types cannot be resolved from the dependency injection container. Use [IocInject] with a service key, [FromKeyedServices], or provide a default value.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
@@ -207,7 +207,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedDefaultSettings,
         ServiceKeyTypeMismatch,
         ServiceKeyNotRegistered,
-        UnresolvableConstructorParameter
+        UnresolvableMember
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -544,8 +544,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
             AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
 
-            // SGIOC015: Analyze unresolvable constructor parameters (built-in types without attributes)
-            AnalyzeUnresolvableConstructorParameters(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
+            // SGIOC015: Analyze unresolvable members (constructor parameters and injected properties/fields with built-in types)
+            AnalyzeUnresolvableMembers(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,
@@ -600,31 +600,46 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC015: Analyzes constructor parameters for unresolvable built-in types.
-    /// Reports error when a constructor parameter is a built-in type (int, string, byte[], etc.)
-    /// that cannot be resolved from dependency injection and does not have:
-    /// - [IocInject] attribute
-    /// - [ServiceKey] attribute
-    /// - [FromKeyedServices] attribute
-    /// - An explicit default value
+    /// SGIOC015: Analyzes constructor parameters and injected properties/fields/methods for unresolvable built-in types.
+    /// Reports error when:
+    /// - A constructor parameter is a built-in type (int, string, byte[], etc.) that cannot be resolved from dependency injection
+    ///   and does not have [IocInject] with key, [ServiceKey], [FromKeyedServices], or an explicit default value.
+    /// - A property or field with [IocInject] or [Inject] attribute is a built-in type and does not have a service key specified.
+    /// - A method with [IocInject] or [Inject] attribute has a parameter of built-in type and does not have a service key or default value.
     /// </summary>
-    private static void AnalyzeUnresolvableConstructorParameters(
+    private static void AnalyzeUnresolvableMembers(
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
         CancellationToken cancellationToken)
     {
         var targetType = serviceInfo.Type;
 
-        // Skip if this service has a factory method or instance - no constructor resolution needed
-        if(serviceInfo.HasFactory || serviceInfo.HasInstance)
-            return;
+        // Skip constructor analysis if this service has a factory method or instance - no constructor resolution needed
+        // But still check injected properties/fields/methods
+        if(!serviceInfo.HasFactory && !serviceInfo.HasInstance)
+        {
+            // Analyze constructor parameters
+            var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
+            if(constructor is not null)
+            {
+                AnalyzeUnresolvableConstructorParameters(reportDiagnostic, constructor.Parameters, serviceInfo.Location, cancellationToken);
+            }
+        }
 
-        // Get the constructor that would be used for DI
-        var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
-        if(constructor is null)
-            return;
+        // Analyze injected properties, fields, and methods (always check regardless of Factory/Instance)
+        AnalyzeUnresolvableInjectedMembers(reportDiagnostic, targetType, serviceInfo.Location, cancellationToken);
+    }
 
-        foreach(var param in constructor.Parameters)
+    /// <summary>
+    /// Analyzes constructor parameters for unresolvable built-in types.
+    /// </summary>
+    private static void AnalyzeUnresolvableConstructorParameters(
+        Action<Diagnostic> reportDiagnostic,
+        ImmutableArray<IParameterSymbol> parameters,
+        Location? serviceLocation,
+        CancellationToken cancellationToken)
+    {
+        foreach(var param in parameters)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -639,7 +654,152 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 continue;
 
             // Check for special attributes that would make this resolvable
-            bool hasSpecialAttribute = false;
+            if(HasResolvableAttribute(param.GetAttributes()))
+                continue;
+
+            // Report SGIOC015: Unresolvable constructor parameter
+            var location = param.Locations.FirstOrDefault() ?? serviceLocation;
+            reportDiagnostic(Diagnostic.Create(
+                UnresolvableMember,
+                location,
+                "Constructor parameter",
+                param.Name,
+                paramType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        }
+    }
+
+    /// <summary>
+    /// Analyzes properties, fields, and methods with [IocInject] or [Inject] attribute for unresolvable built-in types.
+    /// </summary>
+    private static void AnalyzeUnresolvableInjectedMembers(
+        Action<Diagnostic> reportDiagnostic,
+        INamedTypeSymbol targetType,
+        Location? serviceLocation,
+        CancellationToken cancellationToken)
+    {
+        foreach(var member in targetType.GetMembers())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Check for [IocInject] or [Inject] attribute
+            var injectAttribute = member.GetAttributes()
+                .FirstOrDefault(static attr => attr.AttributeClass?.IsInject == true);
+
+            if(injectAttribute is null)
+                continue;
+
+            switch(member)
+            {
+                case IPropertySymbol property:
+                    AnalyzeUnresolvableInjectedProperty(reportDiagnostic, property, injectAttribute, serviceLocation, cancellationToken);
+                    break;
+
+                case IFieldSymbol field:
+                    AnalyzeUnresolvableInjectedField(reportDiagnostic, field, injectAttribute, serviceLocation, cancellationToken);
+                    break;
+
+                case IMethodSymbol method:
+                    AnalyzeUnresolvableInjectedMethodParameters(reportDiagnostic, method, injectAttribute, serviceLocation, cancellationToken);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Analyzes a property with [IocInject] or [Inject] attribute for unresolvable built-in types.
+    /// </summary>
+    private static void AnalyzeUnresolvableInjectedProperty(
+        Action<Diagnostic> reportDiagnostic,
+        IPropertySymbol property,
+        AttributeData injectAttribute,
+        Location? serviceLocation,
+        CancellationToken cancellationToken)
+    {
+        var memberType = property.Type;
+
+        // Check if the member type is a built-in type or collection of built-in types
+        if(!memberType.IsBuiltInTypeOrBuiltInCollection)
+            return;
+
+        // Check if [IocInject] or [Inject] has a Key specified - this makes it resolvable
+        var (key, _) = injectAttribute.GetKey();
+        if(key is not null)
+            return;
+
+        // Report SGIOC015: Unresolvable injected property
+        var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+            ?? property.Locations.FirstOrDefault()
+            ?? serviceLocation;
+
+        reportDiagnostic(Diagnostic.Create(
+            UnresolvableMember,
+            location,
+            "Property",
+            property.Name,
+            memberType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+    }
+
+    /// <summary>
+    /// Analyzes a field with [IocInject] or [Inject] attribute for unresolvable built-in types.
+    /// </summary>
+    private static void AnalyzeUnresolvableInjectedField(
+        Action<Diagnostic> reportDiagnostic,
+        IFieldSymbol field,
+        AttributeData injectAttribute,
+        Location? serviceLocation,
+        CancellationToken cancellationToken)
+    {
+        var memberType = field.Type;
+
+        // Check if the member type is a built-in type or collection of built-in types
+        if(!memberType.IsBuiltInTypeOrBuiltInCollection)
+            return;
+
+        // Check if [IocInject] or [Inject] has a Key specified - this makes it resolvable
+        var (key, _) = injectAttribute.GetKey();
+        if(key is not null)
+            return;
+
+        // Report SGIOC015: Unresolvable injected field
+        var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+            ?? field.Locations.FirstOrDefault()
+            ?? serviceLocation;
+
+        reportDiagnostic(Diagnostic.Create(
+            UnresolvableMember,
+            location,
+            "Field",
+            field.Name,
+            memberType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+    }
+
+    /// <summary>
+    /// Analyzes method parameters with [IocInject] or [Inject] attribute for unresolvable built-in types.
+    /// </summary>
+    private static void AnalyzeUnresolvableInjectedMethodParameters(
+        Action<Diagnostic> reportDiagnostic,
+        IMethodSymbol method,
+        AttributeData methodInjectAttribute,
+        Location? serviceLocation,
+        CancellationToken cancellationToken)
+    {
+        foreach(var param in method.Parameters)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var paramType = param.Type;
+
+            // Check if the parameter type is a built-in type or collection of built-in types
+            if(!paramType.IsBuiltInTypeOrBuiltInCollection)
+                continue;
+
+            // Skip if parameter has an explicit default value
+            if(param.HasExplicitDefaultValue)
+                continue;
+
+            // Check for special attributes on the parameter that would make this resolvable
+            // For method parameters: [IocInject] with key or [FromKeyedServices]
+            bool hasResolvableAttribute = false;
             foreach(var attribute in param.GetAttributes())
             {
                 var attrClass = attribute.AttributeClass;
@@ -648,39 +808,70 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
                 var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
 
-                // [IocInject] or [Inject] - user explicitly handles this
+                // [IocInject] or [Inject] with Key - check if it has a key
                 if(attrClass.IsInject)
                 {
-                    hasSpecialAttribute = true;
-                    break;
-                }
-
-                // [ServiceKey] - injects the registration key
-                if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
-                {
-                    hasSpecialAttribute = true;
-                    break;
+                    var (key, _) = attribute.GetKey();
+                    if(key is not null)
+                    {
+                        hasResolvableAttribute = true;
+                        break;
+                    }
                 }
 
                 // [FromKeyedServices] - MS.DI handles this automatically
                 if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
                 {
-                    hasSpecialAttribute = true;
+                    hasResolvableAttribute = true;
                     break;
                 }
             }
 
-            if(hasSpecialAttribute)
+            if(hasResolvableAttribute)
                 continue;
 
-            // Report SGIOC015: Unresolvable constructor parameter
-            var location = param.Locations.FirstOrDefault() ?? serviceInfo.Location;
+            // Report SGIOC015: Unresolvable method parameter
+            var location = param.Locations.FirstOrDefault()
+                ?? methodInjectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+                ?? method.Locations.FirstOrDefault()
+                ?? serviceLocation;
+
             reportDiagnostic(Diagnostic.Create(
-                UnresolvableConstructorParameter,
+                UnresolvableMember,
                 location,
+                "Method parameter",
                 param.Name,
                 paramType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
+    }
+
+    /// <summary>
+    /// Checks if the parameter has any attribute that makes it resolvable (IocInject, ServiceKey, FromKeyedServices).
+    /// </summary>
+    private static bool HasResolvableAttribute(ImmutableArray<AttributeData> attributes)
+    {
+        foreach(var attribute in attributes)
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass is null)
+                continue;
+
+            var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
+
+            // [IocInject] or [Inject] - user explicitly handles this
+            if(attrClass.IsInject)
+                return true;
+
+            // [ServiceKey] - injects the registration key
+            if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+                return true;
+
+            // [FromKeyedServices] - MS.DI handles this automatically
+            if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

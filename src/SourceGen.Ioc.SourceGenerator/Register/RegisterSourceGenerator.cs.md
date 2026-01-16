@@ -6,7 +6,7 @@ This source generator automatically generates extension methods for registering 
 
 1. Find classes marked with `SourceGen.Ioc.IoCRegisterAttribute` and `SourceGen.Ioc.IoCRegisterForAttribute`.
 
-2. Find `SourceGen.Ioc.IoCRegisterDefaultSettingsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
+2. Find `SourceGen.Ioc.IoCRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
 
 3. Service registration settings to collect:
     - Service type (from `TargetServiceType`, `ServiceTypes` or follow settings: `RegisterAllInterfaces`, `RegisterAllBaseClasses`; always register Implementation type itself)
@@ -226,13 +226,13 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-9. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `InjectAttribute`, generate the necessary code to handle the injection.
+9. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `IocInjectAttribute` or `InjectAttribute`, generate the necessary code to handle the injection.
 
-    Only check with name `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
+    Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
     **Important**: Factory method registration is only generated when necessary. The following cases require factory method:
-    - Constructor parameter has `[Inject]` attribute (SourceGen.Ioc-specific, MS.DI cannot handle)
-    - Field/Property/Method has `[Inject]` attribute
+    - Constructor parameter has `[IocInject]` attribute (SourceGen.Ioc-specific, MS.DI cannot handle)
+    - Field/Property/Method has `[IocInject]` attribute
     - Decorator pattern is used
     - Factory or Instance is specified
 
@@ -240,6 +240,23 @@ This source generator automatically generates extension methods for registering 
     - `[FromKeyedServices]` attribute on constructor parameters
     - `[ServiceKey]` attribute on constructor parameters
     - `IServiceProvider` parameter in constructor
+
+    **Method Parameter Analysis (same as constructor parameters)**:
+    Method parameters marked with `[IocInject]` must be analyzed using the same logic as constructor parameters:
+    - `[ServiceKey]` attribute: Inject the registration key (or default if non-keyed)
+    - `[FromKeyedServices]` attribute: Use keyed service resolution
+    - `[IocInject]` attribute with Key: Use keyed service resolution
+    - `IServiceProvider` type: Pass the service provider directly
+    - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
+    - Built-in types without attributes and without default value: Skip (unresolvable)
+    - Parameters with default values: See rule for optional parameters below
+
+    **Optional Parameter Handling (constructor and method parameters)**:
+    When a parameter has a default value:
+    - If the type is a built-in type (int, string, etc.) or collection of built-in types: Skip (use default value)
+    - If the type is resolvable from DI: Use `GetService<T>()` (non-required) and conditionally assign:
+      - If the resolved value is not null: Use the resolved value
+      - If the resolved value is null: Do not specify the argument (use default value)
 
     ```csharp
     #region Define:
@@ -276,6 +293,99 @@ This source generator automatically generates extension methods for registering 
                 return services;
         }
     }
+    #endregion
+    ```
+
+    **Method with [ServiceKey] and [FromKeyedServices] on parameters**:
+
+    ```csharp
+    #region Define:
+    [IoCRegister(Key = "MyKey")]
+    public class MyService : IMyService
+    {
+        public IDependency? Dep { get; private set; }
+        public string? Key { get; private set; }
+
+        [IocInject]
+        public void Initialize(
+            [FromKeyedServices("special")] IDependency dep,
+            [ServiceKey] string key,
+            IServiceProvider sp)
+        {
+            Dep = dep;
+            Key = key;
+        }
+    }
+    #endregion
+
+    #region Generate:
+    services.AddKeyedSingleton<MyService>("MyKey", (global::System.IServiceProvider sp, object? key) =>
+    {
+        var s0_m0 = sp.GetRequiredKeyedService<IDependency>("special");
+        var s0_m1 = "MyKey";
+        var s0 = new MyService();
+        s0.Initialize(s0_m0, s0_m1, sp);
+        return s0;
+    });
+    #endregion
+    ```
+
+    **Optional parameters with default values**:
+
+    ```csharp
+    #region Define:
+    [IoCRegister]
+    public class MyService : IMyService
+    {
+        public IOptionalDependency? OptDep { get; private set; }
+
+        [IocInject]
+        public void Initialize(IOptionalDependency? optDep = null, int timeout = 30)
+        {
+            OptDep = optDep;
+        }
+    }
+    #endregion
+
+    #region Generate:
+    services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
+    {
+        var s0_m0 = sp.GetService<IOptionalDependency>();
+        // timeout is built-in type with default value - skip
+        var s0 = new MyService();
+        // Use named argument only when value is not null
+        if (s0_m0 is not null)
+        {
+            s0.Initialize(optDep: s0_m0);
+        }
+        else
+        {
+            s0.Initialize();
+        }
+        return s0;
+    });
+    #endregion
+    ```
+
+    **Constructor with optional resolvable parameter**:
+
+    ```csharp
+    #region Define:
+    [IoCRegister]
+    public class MyService(IOptionalDependency? optDep = null) : IMyService
+    {
+        public IOptionalDependency? OptDep { get; } = optDep;
+    }
+    #endregion
+
+    #region Generate:
+    services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
+    {
+        var p0 = sp.GetService<IOptionalDependency>();
+        // Use named argument only when value is not null
+        var s0 = p0 is not null ? new MyService(optDep: p0) : new MyService();
+        return s0;
+    });
     #endregion
     ```
 

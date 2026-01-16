@@ -48,12 +48,21 @@ Format: ID - Level - Category - Description
 - SGIOC014 - Error - Usage - Key does not exists
   - Report when `ServiceKeyAttribute` is mark on parameter, but there is no specified `Key` from `IoCRegisterAttribute` or `IoCRegisterForAttribute`.
 
-- SGIOC015 - Error - Design - Unresolvable Constructor Parameter
-  - Report when constructor contains a built-in type parameter (or collection of built-in types) that cannot be resolved by the service provider.
+- SGIOC015 - Error - Design - Unresolvable Member
+  - Report when:
+    - Constructor contains a built-in type parameter (or collection of built-in types) that cannot be resolved by the service provider.
+    - Property or Field with `[IocInject]` or `[Inject]` attribute has a built-in type (or collection of built-in types) that cannot be resolved by the service provider.
+    - Method with `[IocInject]` or `[Inject]` attribute has a parameter of built-in type (or collection of built-in types) that cannot be resolved by the service provider.
   - Built-in types include: bool, char, byte, sbyte, int, uint, long, ulong, float, double, decimal, string, DateTime, Guid, TimeSpan, DateTimeOffset, DateOnly, TimeOnly, Uri, Type, Version, Half, Int128, UInt128.
-  - Exception: This diagnostic is NOT reported when the parameter has:
+  - Exception: This diagnostic is NOT reported when the constructor parameter has:
     - `[IocInject]` attribute with a service key
     - `[ServiceKey]` attribute
     - `[FromKeyedServices]` attribute
     - A default value specified in the constructor signature
+  - Exception: This diagnostic is NOT reported when the property/field has:
+    - `[IocInject]` or `[Inject]` attribute with a service key specified
+  - Exception: This diagnostic is NOT reported when the method parameter has:
+    - `[IocInject]` attribute with a service key
+    - `[FromKeyedServices]` attribute
+    - A default value specified in the method signature
   - Exception: This diagnostic is NOT reported when the service registration uses `Factory` or `Instance` (since constructor resolution is bypassed).

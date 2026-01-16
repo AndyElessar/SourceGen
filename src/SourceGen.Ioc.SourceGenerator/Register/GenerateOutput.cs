@@ -169,10 +169,13 @@ partial class RegisterSourceGenerator
         // Check constructor parameters for special handling requirements:
         // - [Inject] attribute on parameters: MS.DI doesn't recognize it
         // - Non-IEnumerable collection types (IList<T>, T[], etc.): MS.DI only supports IEnumerable<T>
+        // - Has default value and is resolvable type: needs conditional handling (GetService + null check)
         // Note: [FromKeyedServices], [ServiceKey], IServiceProvider are handled by MS.DI automatically
         var constructorParams = registration.ImplementationType.ConstructorParameters;
         bool hasSpecialConstructorParams = constructorParams?.Any(static p =>
-            p.HasInjectAttribute || p.Type.IsNonEnumerableCollection) == true;
+            p.HasInjectAttribute ||
+            p.Type.IsNonEnumerableCollection ||
+            (p.HasDefaultValue && !p.Type.IsBuiltInTypeOrBuiltInCollection)) == true;
 
         // Determine if factory construction is needed:
         // - Injection members (properties, fields, methods) always require factory
@@ -350,6 +353,11 @@ partial class RegisterSourceGenerator
     ///     return s0;
     /// });
     /// </code>
+    /// For optional parameters with default values, generates conditional logic:
+    /// <code>
+    /// var p0 = sp.GetService&lt;IOptionalDep&gt;();
+    /// var s0 = p0 is not null ? new MyService(optDep: p0) : new MyService();
+    /// </code>
     /// </remarks>
     private static void WriteInjectionRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
     {
@@ -374,15 +382,15 @@ partial class RegisterSourceGenerator
 
         // Resolve constructor parameters
         var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
-        var constructorParamEntries = new List<(string Name, string? Value)>(constructorParams.Length);
+        var constructorParamEntries = new List<(string Name, string? Value, bool NeedsConditional)>(constructorParams.Length);
         bool isKeyedRegistration = registration.Key is not null;
         int paramIndex = 0;
 
         foreach(var param in constructorParams)
         {
             var paramVar = $"p{paramIndex}";
-            var resolvedVar = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
-            constructorParamEntries.Add((param.Name, resolvedVar));
+            var result = WriteParameterResolutionWithConditional(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+            constructorParamEntries.Add((param.Name, result.VarName, result.NeedsConditional));
             paramIndex++;
         }
 
@@ -398,8 +406,8 @@ partial class RegisterSourceGenerator
         }
 
         // Pre-allocate arrays based on counts
-        var propertyInitializers = propertyFieldCount > 0 ? new string[propertyFieldCount] : [];
-        var methodCalls = methodCount > 0 ? new (string MethodName, string?[] ParamVars, string[] ParamNames)[methodCount] : [];
+        var propertyInitializers = propertyFieldCount > 0 ? new (string Name, string ParamVar, bool NeedsConditional)[propertyFieldCount] : [];
+        var methodCalls = methodCount > 0 ? new (string MethodName, string?[] ParamVars, string[] ParamNames, bool[] NeedsConditional)[methodCount] : [];
 
         // Process property/field injection parameters
         int propertyIndex = 0;
@@ -413,16 +421,26 @@ partial class RegisterSourceGenerator
             var memberType = member.Type;
             var memberTypeName = memberType?.Name ?? "object";
 
+            // Determine if this member needs conditional handling
+            // Property/Field with non-null default value needs conditional handling
+            bool needsConditional = member.HasDefaultValue && !member.DefaultValueIsNull;
+
             if(member.Key is not null)
             {
                 // Check for collection types with key
                 if(memberType?.CollectionKind is not null and not CollectionKind.None)
                 {
-                    WriteCollectionResolution(writer, memberType, paramVar, member.Key, member.IsOptional);
+                    WriteCollectionResolution(writer, memberType, paramVar, member.Key, member.IsNullable);
+                }
+                else if(needsConditional)
+                {
+                    // Use GetKeyedService for conditional handling
+                    writer.WriteLine($"var {paramVar} = sp.GetKeyedService<{memberTypeName}>({member.Key});");
                 }
                 else
                 {
-                    var getKeyedServiceMethod = member.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
+                    // Use GetService only if the type is nullable, regardless of default value
+                    var getKeyedServiceMethod = member.IsNullable ? "GetKeyedService" : "GetRequiredKeyedService";
                     writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{memberTypeName}>({member.Key});");
                 }
             }
@@ -431,16 +449,22 @@ partial class RegisterSourceGenerator
                 // Check for collection types without key
                 if(memberType?.CollectionKind is not null and not CollectionKind.None)
                 {
-                    WriteCollectionResolution(writer, memberType, paramVar, serviceKey: null, member.IsOptional);
+                    WriteCollectionResolution(writer, memberType, paramVar, serviceKey: null, member.IsNullable);
+                }
+                else if(needsConditional)
+                {
+                    // Use GetService for conditional handling
+                    writer.WriteLine($"var {paramVar} = sp.GetService<{memberTypeName}>();");
                 }
                 else
                 {
-                    var getServiceMethod = member.IsOptional ? "GetService" : "GetRequiredService";
+                    // Use GetService only if the type is nullable, regardless of default value
+                    var getServiceMethod = member.IsNullable ? "GetService" : "GetRequiredService";
                     writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{memberTypeName}>();");
                 }
             }
 
-            propertyInitializers[propertyIndex++] = $"{member.Name} = {paramVar}";
+            propertyInitializers[propertyIndex++] = (member.Name, paramVar, needsConditional);
             memberParamIndex++;
         }
 
@@ -454,6 +478,7 @@ partial class RegisterSourceGenerator
             var methodParams = method.Parameters ?? [];
             var methodParamVars = new string?[methodParams.Length];
             var methodParamNames = new string[methodParams.Length];
+            var methodNeedsConditional = new bool[methodParams.Length];
             int methodParamIdx = 0;
 
             foreach(var param in methodParams)
@@ -466,60 +491,125 @@ partial class RegisterSourceGenerator
                     // Method has explicit key from [Inject] attribute
                     if(IsServiceProviderType(param.Type.Name))
                     {
-                        methodParamVars[methodParamIdx++] = "sp";
+                        methodParamVars[methodParamIdx] = "sp";
+                        methodNeedsConditional[methodParamIdx] = false;
                     }
                     else if(param.HasServiceKeyAttribute)
                     {
                         // [ServiceKey] attribute - inject the class registration's key, not the method's key
-                        methodParamVars[methodParamIdx++] = WriteServiceKeyParameterResolution(
+                        methodParamVars[methodParamIdx] = WriteServiceKeyParameterResolution(
                             writer, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+                        methodNeedsConditional[methodParamIdx] = false;
                     }
                     else if(param.Type.CollectionKind is not CollectionKind.None)
                     {
                         // Collection type with method-level key
                         WriteCollectionResolution(writer, param.Type, paramVar, method.Key);
-                        methodParamVars[methodParamIdx++] = paramVar;
+                        methodParamVars[methodParamIdx] = paramVar;
+                        methodNeedsConditional[methodParamIdx] = false;
+                    }
+                    else if(param.HasDefaultValue && !param.Type.IsBuiltInTypeOrBuiltInCollection && !param.DefaultValueIsNull)
+                    {
+                        // Optional parameter with non-null default value and method-level key - use GetService and conditional
+                        writer.WriteLine($"var {paramVar} = sp.GetKeyedService<{param.Type.Name}>({method.Key});");
+                        methodParamVars[methodParamIdx] = paramVar;
+                        methodNeedsConditional[methodParamIdx] = true;
+                    }
+                    else if(param.HasDefaultValue && param.Type.IsBuiltInTypeOrBuiltInCollection)
+                    {
+                        // Built-in type with default value - skip
+                        methodParamVars[methodParamIdx] = null;
+                        methodNeedsConditional[methodParamIdx] = false;
+                    }
+                    else if(param.HasDefaultValue && param.DefaultValueIsNull)
+                    {
+                        // Default value is null - use GetKeyedService directly without conditional
+                        writer.WriteLine($"var {paramVar} = sp.GetKeyedService<{param.Type.Name}>({method.Key});");
+                        methodParamVars[methodParamIdx] = paramVar;
+                        methodNeedsConditional[methodParamIdx] = false;
                     }
                     else
                     {
                         writer.WriteLine($"var {paramVar} = sp.GetRequiredKeyedService<{param.Type.Name}>({method.Key});");
-                        methodParamVars[methodParamIdx++] = paramVar;
+                        methodParamVars[methodParamIdx] = paramVar;
+                        methodNeedsConditional[methodParamIdx] = false;
                     }
+                    methodParamIdx++;
                 }
                 else
                 {
-                    methodParamVars[methodParamIdx++] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+                    var result = WriteParameterResolutionWithConditional(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+                    methodParamVars[methodParamIdx] = result.VarName;
+                    methodNeedsConditional[methodParamIdx] = result.NeedsConditional;
+                    methodParamIdx++;
                 }
                 memberParamIndex++;
             }
 
-            methodCalls[methodIndex++] = (method.Name, methodParamVars, methodParamNames);
+            methodCalls[methodIndex++] = (method.Name, methodParamVars, methodParamNames, methodNeedsConditional);
         }
 
-        // Create the instance with constructor and property initializers
-        // Use named arguments if any parameter uses default value (value is null)
-        var constructorArgs = BuildArgumentList(constructorParamEntries);
+        // Check if any constructor parameter needs conditional handling
+        bool hasConditionalConstructorParams = constructorParamEntries.Any(e => e.NeedsConditional);
 
-        if(propertyInitializers.Length > 0)
+        // Split property initializers into unconditional and conditional
+        var unconditionalPropertyInits = propertyInitializers.Where(p => !p.NeedsConditional).Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
+        var conditionalPropertyInits = propertyInitializers.Where(p => p.NeedsConditional).ToArray();
+
+        // Create the instance with constructor and unconditional property initializers
+        if(hasConditionalConstructorParams)
         {
-            var initializerList = string.Join(", ", propertyInitializers);
-            writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs}) {{ {initializerList} }};");
+            // Generate conditional construction using ternary operator pattern
+            WriteConditionalConstruction(writer, implTypeName, constructorParamEntries, unconditionalPropertyInits);
         }
         else
         {
-            writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
+            // Use named arguments if any parameter uses default value (value is null)
+            var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
+
+            if(unconditionalPropertyInits.Length > 0)
+            {
+                var initializerList = string.Join(", ", unconditionalPropertyInits);
+                writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs}) {{ {initializerList} }};");
+            }
+            else
+            {
+                writer.WriteLine($"var s0 = new {implTypeName}({constructorArgs});");
+            }
+        }
+
+        // Apply conditional property/field assignments
+        foreach(var (propName, paramVar, _) in conditionalPropertyInits)
+        {
+            writer.WriteLine($"if ({paramVar} is not null)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine($"s0.{propName} = {paramVar};");
+            writer.Indentation--;
+            writer.WriteLine("}");
         }
 
         // Call injection methods
-        foreach(var (methodName, methodParamVars, methodParamNames) in methodCalls)
+        foreach(var (methodName, methodParamVars, methodParamNames, methodNeedsConditional) in methodCalls)
         {
-            var methodEntries = new List<(string Name, string? Value)>(methodParamVars.Length);
-            for(int i = 0; i < methodParamVars.Length; i++)
+            // Check if any method parameter needs conditional handling
+            bool hasConditionalMethodParams = methodNeedsConditional.Any(c => c);
+
+            if(hasConditionalMethodParams)
             {
-                methodEntries.Add((methodParamNames[i], methodParamVars[i]));
+                // Generate conditional method call
+                WriteConditionalMethodCall(writer, methodName, methodParamVars, methodParamNames, methodNeedsConditional);
             }
-            var methodArgs = BuildArgumentList(methodEntries);
-            writer.WriteLine($"s0.{methodName}({methodArgs});");
+            else
+            {
+                var methodEntries = new List<(string Name, string? Value, bool NeedsConditional)>(methodParamVars.Length);
+                for(int i = 0; i < methodParamVars.Length; i++)
+                {
+                    methodEntries.Add((methodParamNames[i], methodParamVars[i], false));
+                }
+                var methodArgs = BuildArgumentListFromEntries(methodEntries);
+                writer.WriteLine($"s0.{methodName}({methodArgs});");
+            }
         }
 
         // Return the instance
@@ -530,46 +620,192 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
-    /// Builds an argument list string from a list of parameter entries.
-    /// Uses positional arguments when all values are present, or named arguments when any value is null (uses default value).
+    /// Writes conditional construction code when some constructor parameters need conditional handling.
+    /// Generates code like:
+    /// <code>
+    /// var s0 = p0 is not null ? new MyService(optDep: p0) : new MyService();
+    /// </code>
+    /// For multiple conditional parameters, uses nested ternary or if-else blocks.
     /// </summary>
-    /// <param name="entries">List of parameter name and value pairs.</param>
-    /// <returns>A comma-separated argument list string.</returns>
-    private static string BuildArgumentList(List<(string Name, string? Value)> entries)
+    private static void WriteConditionalConstruction(
+        SourceWriter writer,
+        string implTypeName,
+        List<(string Name, string? Value, bool NeedsConditional)> paramEntries,
+        string[] propertyInitializers)
     {
-        // Check if any parameter uses default value
-        bool hasDefaultValue = false;
-        foreach(var (_, value) in entries)
+        var conditionalParams = paramEntries.Where(e => e.NeedsConditional && e.Value is not null).ToList();
+        var initializerPart = propertyInitializers.Length > 0
+            ? $" {{ {string.Join(", ", propertyInitializers)} }}"
+            : "";
+
+        if(conditionalParams.Count == 1)
         {
-            if(value is null)
+            // Single conditional parameter - use simple ternary
+            var condParam = conditionalParams[0];
+            var withArgsEntries = paramEntries.Select(e => (e.Name, e.NeedsConditional ? e.Value : e.Value, false)).ToList();
+            var withoutArgsEntries = paramEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false)).ToList();
+
+            var withArgs = BuildArgumentListFromEntries(withArgsEntries);
+            var withoutArgs = BuildArgumentListFromEntries(withoutArgsEntries);
+
+            writer.WriteLine($"var s0 = {condParam.Value} is not null ? new {implTypeName}({withArgs}){initializerPart} : new {implTypeName}({withoutArgs}){initializerPart};");
+        }
+        else
+        {
+            // Multiple conditional parameters - generate if-else chain
+            // Build all possible combinations would be exponential, so we use a simpler approach:
+            // Check each conditional param and add to args if not null
+            writer.WriteLine($"{implTypeName} s0;");
+
+            // Generate condition check
+            var conditions = conditionalParams.Select(p => $"{p.Value} is not null").ToList();
+            var allCondition = string.Join(" && ", conditions);
+
+            // Generate the "all not null" case
+            writer.WriteLine($"if ({allCondition})");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            var allArgs = BuildArgumentListFromEntries(paramEntries.Select(e => (e.Name, e.Value, false)).ToList());
+            writer.WriteLine($"s0 = new {implTypeName}({allArgs}){initializerPart};");
+            writer.Indentation--;
+            writer.WriteLine("}");
+
+            // Generate the "fallback" case (only non-conditional params)
+            writer.WriteLine("else");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            var fallbackArgs = BuildArgumentListFromEntries(paramEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false)).ToList());
+            writer.WriteLine($"s0 = new {implTypeName}({fallbackArgs}){initializerPart};");
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
+    }
+
+    /// <summary>
+    /// Writes conditional method call when some parameters need conditional handling.
+    /// </summary>
+    private static void WriteConditionalMethodCall(
+        SourceWriter writer,
+        string methodName,
+        string?[] paramVars,
+        string[] paramNames,
+        bool[] needsConditional)
+    {
+        var conditionalIndices = new List<int>();
+        for(int i = 0; i < needsConditional.Length; i++)
+        {
+            if(needsConditional[i] && paramVars[i] is not null)
             {
-                hasDefaultValue = true;
+                conditionalIndices.Add(i);
+            }
+        }
+
+        if(conditionalIndices.Count == 1)
+        {
+            // Single conditional parameter - use simple if
+            var idx = conditionalIndices[0];
+            var condVar = paramVars[idx]!;
+
+            writer.WriteLine($"if ({condVar} is not null)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            var withArgs = BuildMethodArgumentList(paramVars, paramNames, i => true);
+            writer.WriteLine($"s0.{methodName}({withArgs});");
+
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine("else");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            var withoutArgs = BuildMethodArgumentList(paramVars, paramNames, i => !needsConditional[i]);
+            writer.WriteLine($"s0.{methodName}({withoutArgs});");
+
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
+        else
+        {
+            // Multiple conditional parameters
+            var conditions = conditionalIndices.Select(i => $"{paramVars[i]} is not null").ToList();
+            var allCondition = string.Join(" && ", conditions);
+
+            writer.WriteLine($"if ({allCondition})");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            var allArgs = BuildMethodArgumentList(paramVars, paramNames, i => true);
+            writer.WriteLine($"s0.{methodName}({allArgs});");
+            writer.Indentation--;
+            writer.WriteLine("}");
+
+            writer.WriteLine("else");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            var fallbackArgs = BuildMethodArgumentList(paramVars, paramNames, i => !needsConditional[i]);
+            writer.WriteLine($"s0.{methodName}({fallbackArgs});");
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
+    }
+
+    /// <summary>
+    /// Builds a method argument list based on which parameters to include.
+    /// </summary>
+    private static string BuildMethodArgumentList(string?[] paramVars, string[] paramNames, Func<int, bool> includeParam)
+    {
+        bool hasExcluded = false;
+        for(int i = 0; i < paramVars.Length; i++)
+        {
+            if(!includeParam(i) || paramVars[i] is null)
+            {
+                hasExcluded = true;
                 break;
             }
         }
 
-        if(!hasDefaultValue)
+        if(!hasExcluded)
         {
-            // All values present - use positional arguments
-            var values = new string[entries.Count];
-            for(int i = 0; i < entries.Count; i++)
+            // All parameters included - use positional
+            var values = new List<string>(paramVars.Length);
+            for(int i = 0; i < paramVars.Length; i++)
             {
-                values[i] = entries[i].Value!;
+                if(paramVars[i] is not null)
+                {
+                    values.Add(paramVars[i]!);
+                }
             }
-
             return string.Join(", ", values);
         }
 
-        // Some values are null - use named arguments for non-null values only
-        var namedArgs = new List<string>(entries.Count);
-        foreach(var (name, value) in entries)
+        // Some parameters excluded - use named arguments for included ones
+        var namedArgs = new List<string>(paramVars.Length);
+        for(int i = 0; i < paramVars.Length; i++)
         {
-            if(value is not null)
+            if(includeParam(i) && paramVars[i] is not null)
             {
-                namedArgs.Add($"{name}: {value}");
+                namedArgs.Add($"{paramNames[i]}: {paramVars[i]}");
             }
         }
+        return string.Join(", ", namedArgs);
+    }
 
+    /// <summary>
+    /// Builds an argument list from entries with conditional flag.
+    /// </summary>
+    private static string BuildArgumentListFromEntries(List<(string Name, string? Value, bool NeedsConditional)> entries)
+    {
+        // Check if any parameter uses default value
+        bool hasDefaultValue = entries.Any(e => e.Value is null);
+
+        if(!hasDefaultValue)
+        {
+            // All values present - use positional arguments
+            return string.Join(", ", entries.Select(e => e.Value!));
+        }
+
+        // Some values are null - use named arguments for non-null values only
+        var namedArgs = entries.Where(e => e.Value is not null).Select(e => $"{e.Name}: {e.Value}").ToList();
         return string.Join(", ", namedArgs);
     }
 
@@ -847,6 +1083,13 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
+    /// Result of parameter resolution containing the variable name and whether it needs conditional handling.
+    /// </summary>
+    /// <param name="VarName">The variable name or expression to use for this parameter, or null if the parameter should use its default value.</param>
+    /// <param name="NeedsConditional">Whether this parameter needs conditional handling (only use if not null).</param>
+    private readonly record struct ParameterResolutionResult(string? VarName, bool NeedsConditional = false);
+
+    /// <summary>
     /// Writes parameter resolution code and returns the variable name to use.
     /// Handles special cases: IServiceProvider, [FromKeyedServices], [Inject] with key, [ServiceKey], and keyed service key parameter.
     /// </summary>
@@ -865,23 +1108,39 @@ partial class RegisterSourceGenerator
         bool isKeyedRegistration,
         string? registrationKey = null)
     {
+        var result = WriteParameterResolutionWithConditional(writer, param, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
+        return result.VarName;
+    }
+
+    /// <summary>
+    /// Writes parameter resolution code and returns the result with conditional handling information.
+    /// </summary>
+    private static ParameterResolutionResult WriteParameterResolutionWithConditional(
+        SourceWriter writer,
+        ParameterData param,
+        string paramVar,
+        string paramTypeName,
+        bool isKeyedRegistration,
+        string? registrationKey = null)
+    {
         // Skip built-in type parameters with default values - let them use their default value
         if(param.HasDefaultValue && param.Type.IsBuiltInTypeOrBuiltInCollection)
         {
-            return null;
+            return new ParameterResolutionResult(null, false);
         }
 
         // Case 1: IServiceProvider - pass sp directly
         if(IsServiceProviderType(paramTypeName))
         {
-            return "sp";
+            return new ParameterResolutionResult("sp", false);
         }
 
         // Case 2: [ServiceKey] attribute - inject the registration key
         // Must check before collection resolution since string implements IEnumerable<char>
         if(param.HasServiceKeyAttribute)
         {
-            return WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
+            var keyVar = WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
+            return new ParameterResolutionResult(keyVar, false);
         }
 
         // Case 3: Non-IEnumerable collection types (IList<T>, T[], IReadOnlyList<T>, etc.)
@@ -894,21 +1153,37 @@ partial class RegisterSourceGenerator
         if(needsManualCollectionResolution)
         {
             WriteCollectionResolution(writer, param.Type, paramVar, param.ServiceKey, param.IsOptional);
-            return paramVar;
+            return new ParameterResolutionResult(paramVar, false);
         }
 
         // Case 4: [FromKeyedServices] or [Inject] attribute with key - use the specified key
         if(param.ServiceKey is not null)
         {
+            // For optional parameters with default values (non-null default), use GetService and conditional handling
+            // If default value is null, GetService returning null is equivalent to using default, so no conditional needed
+            if(param.HasDefaultValue && !param.DefaultValueIsNull)
+            {
+                writer.WriteLine($"var {paramVar} = sp.GetKeyedService<{paramTypeName}>({param.ServiceKey});");
+                return new ParameterResolutionResult(paramVar, true);
+            }
+
             var getKeyedServiceMethod = param.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
             writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{paramTypeName}>({param.ServiceKey});");
-            return paramVar;
+            return new ParameterResolutionResult(paramVar, false);
+        }
+
+        // Case 5: Parameter with default value (resolvable type) - use GetService and conditional handling
+        // If default value is null, GetService returning null is equivalent to using default, so no conditional needed
+        if(param.HasDefaultValue && !param.DefaultValueIsNull)
+        {
+            writer.WriteLine($"var {paramVar} = sp.GetService<{paramTypeName}>();");
+            return new ParameterResolutionResult(paramVar, true);
         }
 
         // Default: resolve from service provider
         var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
         writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
-        return paramVar;
+        return new ParameterResolutionResult(paramVar, false);
     }
 
     /// <summary>

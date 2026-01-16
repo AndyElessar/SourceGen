@@ -321,8 +321,8 @@ internal static class TransformExtensions
                     ? namedParamType.GetTypeData(extractConstructorParams: true, extractHierarchy: namedParamType.IsGenericType, visited: visited)
                     : paramType.GetTypeData();
 
-                // Check if parameter is optional (has default value or is nullable)
-                var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
+                // Check if parameter type is nullable (e.g., IDependency?)
+                var isNullable = param.NullableAnnotation == NullableAnnotation.Annotated;
 
                 // Check if parameter has an explicit default value (for skipping unresolvable parameters)
                 var hasDefaultValue = param.HasExplicitDefaultValue;
@@ -330,9 +330,13 @@ internal static class TransformExtensions
                 // Check for [FromKeyedServices], [Inject], or [ServiceKey] attribute
                 var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo();
 
+                // Get the C# code representation of the default value
+                var defaultValue = hasDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue) : null;
+
                 parameters.Add(new ParameterData(param.Name, paramTypeData,
-                    IsOptional: isOptional,
+                    IsNullable: isNullable,
                     HasDefaultValue: hasDefaultValue,
+                    DefaultValue: defaultValue,
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: hasServiceKeyAttribute,
