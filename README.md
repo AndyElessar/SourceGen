@@ -20,9 +20,9 @@ Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.DI`:
 |Feature|MS.DI|SourceGen.Ioc|
 |:-|:-|:-|
 |Open Generic|Runtime resolution only|Auto-discovers closed types from usage|
-|Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[Discover]` attribute|
+|Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[IocDiscover]` attribute|
 |Decorator Pattern|❌ Not supported|✅ Fully supported with type constraint validation|
-|Field/Property/Method Injection|❌ Not supported|✅ `[Inject]` attribute|
+|Field/Property/Method Injection|❌ Not supported|✅ `[IocInject]` attribute|
 |Lifecycle validation|Runtime errors|✅ Compile-time analyzer|
 |Circular dependency|Runtime errors|✅ Compile-time analyzer|
 
@@ -32,7 +32,7 @@ Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.DI`:
 
 3. **Compile-time Analyzers** - Detects lifetime conflicts (e.g., Singleton depending on Scoped) and circular dependencies at compile time, not runtime
 
-4. **Field/Property/Method Injection** - Use `[Inject]` attribute for injection beyond constructors
+4. **Field/Property/Method Injection** - Use `[IocInject]` attribute for injection beyond constructors
 
 5. **Decorator Pattern with Type Constraint Validation** - Built-in decorator chain support with automatic type constraint checking, skips non-matching decorators
 

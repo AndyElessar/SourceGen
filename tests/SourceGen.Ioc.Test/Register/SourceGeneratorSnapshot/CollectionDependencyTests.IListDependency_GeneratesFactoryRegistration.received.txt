@@ -18,12 +18,7 @@ namespace TestAssembly
         {
             services.AddSingleton(typeof(global::TestNamespace.Handler<>), typeof(global::TestNamespace.Handler<>));
             services.AddSingleton(typeof(global::TestNamespace.IHandler<>), typeof(global::TestNamespace.Handler<>));
-            services.AddSingleton<global::TestNamespace.Consumer>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetServices<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>>().ToList();
-                var s0 = new global::TestNamespace.Consumer(p0);
-                return s0;
-            });
+            services.AddSingleton<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
             services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.TestEntity>, global::TestNamespace.Handler<global::TestNamespace.TestEntity>>();
             services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>, global::TestNamespace.Handler<global::TestNamespace.TestEntity>>();
 

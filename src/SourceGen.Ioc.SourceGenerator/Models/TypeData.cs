@@ -10,6 +10,7 @@
 /// <param name="IsNestedOpenGeneric">Whether the type contains nested open generic type arguments (e.g., IGeneric&lt;IGeneric2&lt;T&gt;&gt;).</param>
 /// <param name="IsTypeParameter">Whether this type represents a type parameter (e.g., T, TRequest). Determined from TypeKind.TypeParameter at creation time.</param>
 /// <param name="CollectionKind">The kind of collection this type represents for DI injection purposes.</param>
+/// <param name="IsBuiltInTypeOrBuiltInCollection">Whether this type is a built-in type or a collection of built-in types that cannot be resolved from DI.</param>
 /// <param name="TypeParameters">The generic type parameters with their names, resolved types, implemented interfaces, and constraints.</param>
 /// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
 /// <param name="HasInjectConstructor">Whether the type's constructor was selected by [Inject] attribute (requires factory method for proper instantiation).</param>
@@ -23,6 +24,7 @@ internal sealed record class TypeData(
     bool IsNestedOpenGeneric = false,
     bool IsTypeParameter = false,
     CollectionKind CollectionKind = CollectionKind.None,
+    bool IsBuiltInTypeOrBuiltInCollection = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
@@ -56,16 +58,5 @@ internal enum CollectionKind
     /// Read-only collection types: IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[].
     /// Should be resolved using GetServices&lt;T&gt;().ToArray().
     /// </summary>
-    ReadOnlyCollection,
-
-    /// <summary>
-    /// Mutable collection types: ICollection&lt;T&gt;, IList&lt;T&gt;, List&lt;T&gt;.
-    /// Should be resolved using GetServices&lt;T&gt;().ToList().
-    /// </summary>
-    MutableCollection,
-    /// <summary>
-    /// Set types: ISet&lt;T&gt;, HashSet&lt;T&gt;.
-    /// Should be resolved using GetServices&lt;T&gt;().ToHashSet().
-    /// </summary>
-    Set
+    ReadOnlyCollection
 }

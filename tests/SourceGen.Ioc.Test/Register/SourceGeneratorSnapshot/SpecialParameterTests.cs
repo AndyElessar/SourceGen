@@ -4,7 +4,7 @@ namespace SourceGen.Ioc.Test.Register.SourceGeneratorSnapshot;
 /// Tests for special parameter handling in factory methods:
 /// - IServiceProvider parameters
 /// - [FromKeyedServices] attribute
-/// - Service key parameters (object key/serviceKey)
+/// - [ServiceKey] attribute
 /// </summary>
 [Category(Constants.SourceGeneratorSnapshot)]
 [Category(Constants.SpecialParameter)]
@@ -113,7 +113,7 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task KeyedService_WithObjectKeyParameter_PassesKey()
+    public async Task KeyedService_WithServiceKeyAttribute_PassesKey()
     {
         const string source = """
             using System;
@@ -129,7 +129,7 @@ public class SpecialParameterTests
             public class Dependency : IDependency { }
 
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
-            public class MyService(object key, IDependency dependency) : IMyService
+            public class MyService([ServiceKey] object key, IDependency dependency) : IMyService
             {
                 private readonly object _key = key;
                 private readonly IDependency _dependency = dependency;
@@ -143,7 +143,7 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task KeyedService_WithObjectServiceKeyParameter_PassesKey()
+    public async Task KeyedService_WithNullableServiceKeyAttribute_PassesKey()
     {
         const string source = """
             using System;
@@ -159,7 +159,7 @@ public class SpecialParameterTests
             public class Dependency : IDependency { }
 
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
-            public class MyService(object? serviceKey, IDependency dependency) : IMyService
+            public class MyService([ServiceKey] object? serviceKey, IDependency dependency) : IMyService
             {
                 private readonly object? _serviceKey = serviceKey;
                 private readonly IDependency _dependency = dependency;
@@ -173,7 +173,7 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task KeyedService_WithObjectParameterNotNamedKey_DoesNotPassKey()
+    public async Task KeyedService_WithUnresolvableObjectParameter_SkipsRegistration()
     {
         const string source = """
             using System;
@@ -188,6 +188,7 @@ public class SpecialParameterTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
             public class ObjectService : IObjectService { }
 
+            // This service should be skipped because 'object someData' cannot be resolved from DI
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
             public class MyService(object someData) : IMyService
             {
@@ -202,7 +203,7 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task NonKeyedService_WithObjectKeyParameter_ResolvesFromServiceProvider()
+    public async Task NonKeyedService_WithUnresolvableObjectParameter_SkipsRegistration()
     {
         const string source = """
             using System;
@@ -217,6 +218,7 @@ public class SpecialParameterTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
             public class ObjectService : IObjectService { }
 
+            // This service should be skipped because 'object key' without [ServiceKey] cannot be resolved from DI
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(object key) : IMyService
             {
@@ -255,7 +257,7 @@ public class SpecialParameterTests
                 IServiceProvider serviceProvider,
                 [FromKeyedServices("dep1")] IDependency1 dep1,
                 IDependency2 dep2,
-                object key) : IMyService
+                [ServiceKey] object key) : IMyService
             {
                 private readonly IServiceProvider _serviceProvider = serviceProvider;
                 private readonly IDependency1 _dep1 = dep1;
@@ -370,8 +372,10 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task FromKeyedServices_IListCollection_InConstructor_UsesGetKeyedServicesToList()
+    public async Task FromKeyedServices_IListCollection_InConstructor_NotRecognizedAsCollection()
     {
+        // IList<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -501,8 +505,10 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task FromKeyedServices_ListCollection_InConstructor_UsesGetKeyedServicesToList()
+    public async Task FromKeyedServices_ListCollection_InConstructor_NotRecognizedAsCollection()
     {
+        // List<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -534,8 +540,10 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task FromKeyedServices_ICollectionCollection_InConstructor_UsesGetKeyedServicesToList()
+    public async Task FromKeyedServices_ICollectionCollection_InConstructor_NotRecognizedAsCollection()
     {
+        // ICollection<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using System;
             using System.Collections.Generic;

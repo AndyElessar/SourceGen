@@ -56,6 +56,92 @@ internal static class RoslynExtensions
 
         public bool IsNullable => !typeSymbol.IsValueType || typeSymbol.OriginalDefinition.SpecialType is SpecialType.System_Nullable_T;
 
+        /// <summary>
+        /// Determines whether the type is a built-in/primitive type that cannot be resolved from dependency injection.
+        /// This includes numeric types, string, bool, char, DateTime, Guid, TimeSpan, Uri, Type, etc.
+        /// </summary>
+        public bool IsBuiltInType
+        {
+            get
+            {
+                // Check if it's a special type (primitives, string, object, etc.)
+                var specialType = typeSymbol.SpecialType;
+                if(specialType is not SpecialType.None)
+                {
+                    // These special types are built-in and cannot be resolved from DI
+                    return specialType is
+                        SpecialType.System_Boolean or
+                        SpecialType.System_Char or
+                        SpecialType.System_SByte or
+                        SpecialType.System_Byte or
+                        SpecialType.System_Int16 or
+                        SpecialType.System_UInt16 or
+                        SpecialType.System_Int32 or
+                        SpecialType.System_UInt32 or
+                        SpecialType.System_Int64 or
+                        SpecialType.System_UInt64 or
+                        SpecialType.System_Decimal or
+                        SpecialType.System_Single or
+                        SpecialType.System_Double or
+                        SpecialType.System_String or
+                        SpecialType.System_IntPtr or
+                        SpecialType.System_UIntPtr or
+                        SpecialType.System_Object or
+                        SpecialType.System_DateTime;
+                }
+
+                // Check for common System types by name
+                if(typeSymbol.ContainingNamespace?.ToDisplayString() is "System")
+                {
+                    return typeSymbol.Name is
+                        "Guid" or
+                        "TimeSpan" or
+                        "DateTimeOffset" or
+                        "DateOnly" or
+                        "TimeOnly" or
+                        "Uri" or
+                        "Type" or
+                        "Version" or
+                        "Half" or
+                        "Int128" or
+                        "UInt128";
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Determines whether the type is a built-in type or an array/collection of built-in types.
+        /// </summary>
+        public bool IsBuiltInTypeOrBuiltInCollection
+        {
+            get
+            {
+                // Check if it's directly a built-in type
+                if(typeSymbol.IsBuiltInType)
+                    return true;
+
+                // Check if it's an array of built-in type
+                if(typeSymbol is IArrayTypeSymbol arrayType)
+                    return arrayType.ElementType.IsBuiltInType;
+
+                // Check if it's a generic collection of built-in type
+                if(typeSymbol is INamedTypeSymbol namedType && namedType.IsGenericType)
+                {
+                    var typeArgs = namedType.TypeArguments;
+                    if(typeArgs.Length == 1)
+                    {
+                        var elementType = typeArgs[0];
+                        // Check if the element type is a built-in type
+                        return elementType.IsBuiltInType;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         public bool ContainsGenericParameters
         {
             get
@@ -120,27 +206,6 @@ internal static class RoslynExtensions
                 return candidate.IsGenericType && SymbolEqualityComparer.Default.Equals(candidate.ConstructedFrom, baseType);
             }
         }
-
-        public TypeData GetTypeData(
-            bool extractConstructorParams = false,
-            bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null)
-        {
-            if(typeSymbol is INamedTypeSymbol namedTypeSymbol)
-                return namedTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
-
-            // Handle array types specially - extract element type information
-            if(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
-                return arrayTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
-
-            var name = typeSymbol.FullyQualifiedName;
-            return new TypeData(
-                name,
-                GetNameWithoutGeneric(name),
-                typeSymbol.ContainsGenericParameters,
-                0,
-                false);
-        }
     }
 
     extension(INamedTypeSymbol typeSymbol)
@@ -155,195 +220,6 @@ internal static class RoslynExtensions
             typeSymbol.IsUnboundGenericType
                 ? typeSymbol.OriginalDefinition?.TypeParameters ?? typeSymbol.TypeParameters
                 : typeSymbol.TypeParameters;
-
-        /// <summary>
-        /// Gets the type data for this type symbol.
-        /// </summary>
-        /// <param name="extractConstructorParams">Whether to extract constructor parameters recursively.</param>
-        /// <param name="extractHierarchy">Whether to extract all interfaces and base classes.</param>
-        public TypeData GetTypeData(
-            bool extractConstructorParams = false,
-            bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null)
-        {
-            visited = extractConstructorParams
-                ? (visited ?? new(SymbolEqualityComparer.Default))
-                : null;
-
-            // Build type name - for unbound generics, use actual type parameter names
-            var typeName = typeSymbol.BuildTypeName();
-
-            // Extract type parameters with full constraints
-            ImmutableEquatableArray<TypeParameter>? typeParameters = null;
-            if(typeSymbol.IsGenericType && typeSymbol.TypeArguments.Length > 0)
-            {
-                typeParameters = typeSymbol.ExtractTypeParameters(extractConstraints: true, depth: 0);
-            }
-
-            ImmutableEquatableArray<ParameterData>? constructorParams = null;
-            bool hasInjectConstructor = false;
-            if(extractConstructorParams && visited is not null)
-            {
-                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(visited);
-            }
-
-            // Extract hierarchy (interfaces and base classes) if requested
-            ImmutableEquatableArray<TypeData>? allInterfaces = null;
-            ImmutableEquatableArray<TypeData>? allBaseClasses = null;
-            if(extractHierarchy)
-            {
-                allInterfaces = typeSymbol.GetAllInterfaces();
-                allBaseClasses = typeSymbol.GetAllBaseClasses();
-            }
-
-            // Check if this is a collection type for DI
-            var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
-            var collectionKind = GetCollectionKind(typeSymbol);
-
-            return new TypeData(
-                typeName,
-                nameWithoutGeneric,
-                typeSymbol.ContainsGenericParameters,
-                typeSymbol.Arity,
-                typeSymbol.IsNestedOpenGeneric,
-                IsTypeParameter: false, // Named types are not type parameters
-                collectionKind,
-                typeParameters,
-                constructorParams,
-                hasInjectConstructor,
-                allInterfaces,
-                allBaseClasses);
-        }
-
-        /// <summary>
-        /// Builds the fully qualified type name for this type symbol.
-        /// For unbound generic types, uses actual type parameter names instead of empty placeholders.
-        /// </summary>
-        public string BuildTypeName()
-        {
-            // For unbound generic types (e.g., typeof(Handler<,>)), we need to get the 
-            // type parameter names from TypeParameters, not from FullyQualifiedName
-            // FullyQualifiedName returns "global::Ns.Handler<,>" but we need "global::Ns.Handler<TRequest, TResponse>"
-            if(typeSymbol.IsUnboundGenericType && typeSymbol.TypeParametersSource.Length > 0)
-            {
-                var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
-                var typeParamNames = typeSymbol.TypeParametersSource.Select(tp => tp.Name);
-                return $"{nameWithoutGeneric}<{string.Join(", ", typeParamNames)}>";
-            }
-
-            return typeSymbol.FullyQualifiedName;
-        }
-
-        /// <summary>
-        /// Core implementation for extracting type parameters.
-        /// </summary>
-        /// <param name="extractConstraints">Whether to extract constraint types for each type parameter.</param>
-        /// <param name="depth">Current recursion depth to prevent infinite recursion.</param>
-        /// <returns>An immutable array of type parameters with their resolved types.</returns>
-        public ImmutableEquatableArray<TypeParameter> ExtractTypeParameters(bool extractConstraints, int depth)
-        {
-            const int MaxDepth = 10; // Prevent infinite recursion for pathological cases
-
-            var typeParams = typeSymbol.TypeParametersSource;
-            if(typeParams.Length == 0 || depth >= MaxDepth)
-            {
-                return [];
-            }
-
-            var typeArgs = typeSymbol.TypeArguments;
-            List<TypeParameter> parameters = new(typeParams.Length);
-
-            for(int i = 0; i < typeParams.Length; i++)
-            {
-                var typeParam = typeParams[i];
-                var typeArg = i < typeArgs.Length ? typeArgs[i] : null;
-
-                // Create TypeData for the type argument
-                var (typeData, allInterfaces) = typeParam.CreateTypeDataForTypeArg(typeArg, depth);
-
-                // Add interfaces if extracted
-                if(allInterfaces is { Length: > 0 })
-                {
-                    typeData = typeData with { AllInterfaces = allInterfaces };
-                }
-
-                // Extract constraints only when requested (to avoid recursion in basic scenarios)
-                ImmutableEquatableArray<TypeData>? constraintTypes = null;
-                if(extractConstraints)
-                {
-                    constraintTypes = typeParam.ConstraintTypes
-                        .Select(ct => ct is INamedTypeSymbol namedCt
-                            ? namedCt.CreateBasicTypeData(depth + 1)
-                            : new TypeData(ct.FullyQualifiedName, GetNameWithoutGeneric(ct.FullyQualifiedName), ct.ContainsGenericParameters, 0, false))
-                        .ToImmutableEquatableArray();
-                }
-
-                parameters.Add(new TypeParameter(
-                    typeParam.Name,
-                    typeData,
-                    constraintTypes,
-                    typeParam.HasValueTypeConstraint,
-                    typeParam.HasReferenceTypeConstraint,
-                    typeParam.HasUnmanagedTypeConstraint,
-                    typeParam.HasNotNullConstraint,
-                    typeParam.HasConstructorConstraint));
-            }
-
-            return parameters.ToImmutableEquatableArray();
-        }
-
-        /// <summary>
-        /// Gets all interfaces implemented by a type.
-        /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
-        /// </summary>
-        public ImmutableEquatableArray<TypeData> GetAllInterfaces() =>
-            typeSymbol.AllInterfaces.Select(CreateBasicTypeData).ToImmutableEquatableArray();
-
-        /// <summary>
-        /// Gets all base classes of a type, excluding System.Object.
-        /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
-        /// </summary>
-        public ImmutableEquatableArray<TypeData> GetAllBaseClasses()
-        {
-            List<TypeData> result = [];
-            var baseType = typeSymbol.BaseType;
-            while(baseType != null && baseType.SpecialType != SpecialType.System_Object)
-            {
-                result.Add(baseType.CreateBasicTypeData());
-                baseType = baseType.BaseType;
-            }
-            return result.ToImmutableEquatableArray();
-        }
-
-        /// <summary>
-        /// Creates a basic TypeData with type parameters extracted recursively.
-        /// Does not extract constraint types to avoid circular dependencies.
-        /// </summary>
-        public TypeData CreateBasicTypeData(int depth = 0)
-        {
-            var typeName = typeSymbol.FullyQualifiedName;
-            var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
-
-            // Extract type parameters without constraints (to avoid recursion)
-            ImmutableEquatableArray<TypeParameter>? typeParameters = null;
-            if(typeSymbol.IsGenericType && typeSymbol.TypeArguments.Length > 0)
-            {
-                typeParameters = typeSymbol.ExtractTypeParameters(extractConstraints: false, depth);
-            }
-
-            // Check if this is a collection type
-            var collectionKind = GetCollectionKind(typeSymbol);
-
-            return new TypeData(
-                typeName,
-                nameWithoutGeneric,
-                typeSymbol.ContainsGenericParameters,
-                typeSymbol.Arity,
-                typeSymbol.IsNestedOpenGeneric,
-                IsTypeParameter: false, // Named types are not type parameters
-                collectionKind,
-                typeParameters);
-        }
 
         /// <summary>
         /// Determines whether the type is a nested open generic type.
@@ -432,258 +308,6 @@ internal static class RoslynExtensions
                 return bestCtor;
             }
         }
-
-        public IMethodSymbol? SpecifiedOrPrimaryOrMostParametersConstructor
-        {
-            get
-            {
-                IMethodSymbol? injectCtor = null;
-                IMethodSymbol? primaryCtor = null;
-                IMethodSymbol? bestCtor = null;
-                int maxParameters = -1;
-                foreach(var ctor in typeSymbol.Constructors)
-                {
-                    if(ctor.IsImplicitlyDeclared)
-                        continue;
-
-                    if(ctor.IsStatic)
-                        continue;
-
-                    if(ctor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
-                        continue;
-
-                    // IocInjectAttribute/InjectAttribute specified constructor - highest priority
-                    if(ctor.GetAttributes().Any(attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute"))
-                    {
-                        injectCtor = ctor;
-                        continue;
-                    }
-
-                    var syntaxRef = ctor.DeclaringSyntaxReferences.FirstOrDefault();
-                    // Primary constructor - second priority
-                    if(syntaxRef?.GetSyntax() is TypeDeclarationSyntax)
-                    {
-                        primaryCtor = ctor;
-                        continue;
-                    }
-
-                    // Find constructor with most parameters - lowest priority
-                    if(ctor.Parameters.Length > maxParameters)
-                    {
-                        maxParameters = ctor.Parameters.Length;
-                        bestCtor = ctor;
-                    }
-                }
-                // Return by priority: [Inject] > primary > most parameters
-                return injectCtor ?? primaryCtor ?? bestCtor;
-            }
-        }
-
-        /// <summary>
-        /// Extracts constructor parameters from a type and indicates whether the constructor was selected by [Inject] attribute.
-        /// </summary>
-        /// <returns>A tuple containing the constructor parameters and whether the constructor has [Inject] attribute.</returns>
-        public (ImmutableEquatableArray<ParameterData> Parameters, bool HasInjectConstructor) ExtractConstructorParametersWithInfo(
-            HashSet<INamedTypeSymbol>? visited = null)
-        {
-            // Check if we've already visited this type to prevent infinite recursion
-            if(visited is not null && !visited.Add(typeSymbol))
-            {
-                return ([], false);
-            }
-
-            // Get the original definition for open generic types to access constructors
-            var typeToInspect = typeSymbol.IsGenericType && typeSymbol.IsDefinition
-                ? typeSymbol
-                : typeSymbol.OriginalDefinition ?? typeSymbol;
-
-            // Get the constructor: [Inject] marked > primary constructor > most parameters
-            var constructor = typeToInspect.SpecifiedOrPrimaryOrMostParametersConstructor;
-            if(constructor is null)
-            {
-                return ([], false);
-            }
-
-            // Check if the selected constructor has [IocInject] or [Inject] attribute
-            bool hasInjectConstructor = constructor.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
-
-            visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-            List<ParameterData> parameters = [];
-            foreach(var param in constructor.Parameters)
-            {
-                var paramType = param.Type;
-
-                // Get TypeData using the unified method with recursive constructor extraction
-                var paramTypeData = paramType is INamedTypeSymbol namedParamType
-                    ? namedParamType.GetTypeData(extractConstructorParams: true, visited: visited)
-                    : paramType.GetTypeData();
-
-                // Check if parameter is optional (has default value or is nullable)
-                var isOptional = param.HasExplicitDefaultValue || param.NullableAnnotation == NullableAnnotation.Annotated;
-
-                // Check for [FromKeyedServices], [Inject], or [ServiceKey] attribute
-                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute) = param.GetServiceKeyAndAttributeInfo();
-
-                parameters.Add(new ParameterData(param.Name, paramTypeData, IsOptional: isOptional,
-                    ServiceKey: serviceKey, HasInjectAttribute: hasInjectAttribute, HasServiceKeyAttribute: hasServiceKeyAttribute));
-            }
-
-            return (parameters.ToImmutableEquatableArray(), hasInjectConstructor);
-        }
-    }
-
-    extension(IArrayTypeSymbol arrayTypeSymbol)
-    {
-        public TypeData GetTypeData(
-            bool extractConstructorParams = false,
-            bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null)
-        {
-            var elementType = arrayTypeSymbol.ElementType;
-            var typeName = arrayTypeSymbol.FullyQualifiedName;
-
-            // For arrays, create TypeData with element type as a pseudo-TypeParameter
-            // This allows TryGetArrayElementType to extract the element type
-            ImmutableEquatableArray<TypeParameter> typeParameters;
-            if(elementType is INamedTypeSymbol namedElementType)
-            {
-                var elementTypeData = namedElementType.GetTypeData(extractConstructorParams, extractHierarchy, visited);
-                typeParameters = [new TypeParameter("T", elementTypeData)];
-            }
-            else
-            {
-                var elementTypeName = elementType.FullyQualifiedName;
-                var elementTypeData = new TypeData(
-                    elementTypeName,
-                    GetNameWithoutGeneric(elementTypeName),
-                    elementType.ContainsGenericParameters,
-                    0,
-                    IsNestedOpenGeneric: false,
-                    IsTypeParameter: elementType.TypeKind == TypeKind.TypeParameter);
-                typeParameters = [new TypeParameter("T", elementTypeData)];
-            }
-
-            return new TypeData(
-                typeName,
-                typeName, // For arrays, use full name as NameWithoutGeneric
-                elementType.ContainsGenericParameters,
-                GenericArity: 1, // Arrays have one "type parameter" (the element type)
-                IsNestedOpenGeneric: false,
-                IsTypeParameter: false,
-                CollectionKind: CollectionKind.ReadOnlyCollection, // Arrays are read-only collections
-                typeParameters);
-        }
-    }
-
-    extension(IParameterSymbol param)
-    {
-        /// <summary>
-        /// Gets the service key, injection attribute info, and [ServiceKey] attribute from a parameter.
-        /// [FromKeyedServices] takes precedence over [Inject] for service key resolution.
-        /// HasInjectAttribute is only true for [Inject] attribute (not [FromKeyedServices], which MS.DI handles automatically).
-        /// HasServiceKeyAttribute indicates the parameter is marked with [ServiceKey] from Microsoft.Extensions.DependencyInjection.
-        /// </summary>
-        /// <returns>A tuple containing the service key (if any), whether the parameter has [Inject] attribute, and whether it has [ServiceKey] attribute.</returns>
-        public (string? ServiceKey, bool HasInjectAttribute, bool HasServiceKeyAttribute) GetServiceKeyAndAttributeInfo()
-        {
-            string? serviceKey = null;
-            bool hasInjectAttribute = false;
-            bool hasServiceKeyAttribute = false;
-
-            foreach(var attribute in param.GetAttributes())
-            {
-                var attrClass = attribute.AttributeClass;
-                if(attrClass is null)
-                    continue;
-
-                // Check for Microsoft.Extensions.DependencyInjection.ServiceKeyAttribute
-                if(attrClass.Name == "ServiceKeyAttribute"
-                    && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
-                {
-                    hasServiceKeyAttribute = true;
-                    continue;
-                }
-
-                // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority for key)
-                // Note: [FromKeyedServices] is handled by MS.DI automatically, so we don't set hasInjectAttribute
-                if(attrClass.Name == "FromKeyedServicesAttribute"
-                    && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
-                {
-                    // The key is the first constructor argument
-                    if(attribute.ConstructorArguments.Length > 0)
-                    {
-                        var keyArg = attribute.ConstructorArguments[0];
-                        if(!keyArg.IsNull && keyArg.Value is not null)
-                        {
-                            serviceKey = keyArg.GetPrimitiveConstantString();
-                        }
-                    }
-                    // [FromKeyedServices] found, but continue to check for [Inject] as well
-                    continue;
-                }
-
-                // Check for IocInjectAttribute/InjectAttribute (by name only, to support third-party attributes)
-                if(attrClass.Name is "IocInjectAttribute" or "InjectAttribute")
-                {
-                    hasInjectAttribute = true;
-                    // Only use [Inject] key if no [FromKeyedServices] key was found
-                    if(serviceKey is null)
-                    {
-                        var (key, _) = attribute.GetKey();
-                        serviceKey = key;
-                    }
-                }
-            }
-            return (serviceKey, hasInjectAttribute, hasServiceKeyAttribute);
-        }
-    }
-
-    extension(ITypeParameterSymbol typeParam)
-    {
-        /// <summary>
-        /// Creates TypeData for a type argument, with optional interface extraction.
-        /// </summary>
-        public (TypeData TypeData, ImmutableEquatableArray<TypeData>? AllInterfaces) CreateTypeDataForTypeArg(
-            ITypeSymbol? typeArg,
-            int depth)
-        {
-            if(typeArg is INamedTypeSymbol namedArg && typeArg.TypeKind != TypeKind.TypeParameter)
-            {
-                // For concrete types, recursively extract type parameters and interfaces
-                var typeData = namedArg.CreateBasicTypeData(depth + 1);
-                var allInterfaces = namedArg.AllInterfaces.Length > 0
-                    ? namedArg.AllInterfaces.Select(CreateInterfaceTypeData).ToImmutableEquatableArray()
-                    : null;
-                return (typeData, allInterfaces);
-            }
-
-            if(typeArg is not null)
-            {
-                var argName = typeArg.FullyQualifiedName;
-                var isTypeParam = typeArg.TypeKind == TypeKind.TypeParameter;
-                var typeData = new TypeData(
-                    argName,
-                    GetNameWithoutGeneric(argName),
-                    typeArg.ContainsGenericParameters,
-                    0,
-                    IsNestedOpenGeneric: false,
-                    IsTypeParameter: isTypeParam);
-                return (typeData, null);
-            }
-
-            // No type argument available, this is a type parameter placeholder
-            return (new TypeData(typeParam.Name, typeParam.Name, true, 0, IsNestedOpenGeneric: false, IsTypeParameter: true), null);
-
-            // Creates a simple TypeData for an interface type.
-            static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface) =>
-                new(
-                    iface.FullyQualifiedName,
-                    GetNameWithoutGeneric(iface.FullyQualifiedName),
-                    iface.ContainsGenericParameters,
-                    iface.Arity,
-                    false);
-        }
     }
 
     extension(AttributeData attributeData)
@@ -745,65 +369,6 @@ internal static class RoslynExtensions
             }
 
             return false;
-        }
-
-        /// <summary>
-        /// Gets an array of type symbols from a named argument.
-        /// </summary>
-        public ImmutableEquatableArray<TypeData> GetTypeArrayArgument(string name, bool extractConstructorParams = false)
-        {
-            foreach(var namedArg in attributeData.NamedArguments)
-            {
-                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
-                {
-                    List<TypeData> result = [];
-                    foreach(var value in namedArg.Value.Values)
-                    {
-                        if(value.Value is ITypeSymbol typeSymbol)
-                        {
-                            result.Add(typeSymbol.GetTypeData(extractConstructorParams));
-                        }
-                    }
-                    return result.ToImmutableEquatableArray();
-                }
-            }
-
-            return [];
-        }
-
-        /// <summary>
-        /// Gets an array of type symbols from an attribute constructor argument of type <c>params Type[]</c>.
-        /// This is the constructor-argument counterpart to <see cref="GetTypeArrayArgument"/>, and is used when
-        /// service types are supplied positionally to the attribute constructor instead of via a named <c>Type[]</c> argument.
-        /// </summary>
-        /// <remarks>
-        /// This method scans the attribute's constructor arguments for an array (or <c>params</c>) argument that contains
-        /// type values (for example, <c>params Type[] serviceTypes</c>) and converts those <see cref="ITypeSymbol"/> instances
-        /// to <see cref="TypeData"/>. It skips non-type arguments, such as <c>ServiceLifetime</c> enum values.
-        /// </remarks>
-        public ImmutableEquatableArray<TypeData> GetTypeArrayFromConstructorArgument(bool extractConstructorParams = false)
-        {
-            foreach(var ctorArg in attributeData.ConstructorArguments)
-            {
-                // Look for an array argument containing type values
-                if(ctorArg.Kind == TypedConstantKind.Array && !ctorArg.IsNull)
-                {
-                    List<TypeData> result = [];
-                    foreach(var value in ctorArg.Values)
-                    {
-                        if(value.Value is ITypeSymbol typeSymbol)
-                        {
-                            result.Add(typeSymbol.GetTypeData(extractConstructorParams));
-                        }
-                    }
-
-                    // Only return if we found type values
-                    if(result.Count > 0)
-                        return result.ToImmutableEquatableArray();
-                }
-            }
-
-            return [];
         }
 
         /// <summary>
@@ -914,12 +479,6 @@ internal static class RoslynExtensions
     extension(TypedConstant constant)
     {
         public string GetPrimitiveConstantString() => FormatPrimitiveConstant(constant.Type, constant.Value);
-    }
-
-    private static string GetNameWithoutGeneric(string typeName)
-    {
-        int angleIndex = typeName.IndexOf('<');
-        return angleIndex > 0 ? typeName[..angleIndex] : typeName;
     }
 
     public static string FormatPrimitiveConstant(ITypeSymbol? type, object? value)
@@ -1119,47 +678,8 @@ internal static class RoslynExtensions
         return false;
     }
 
-    /// <summary>
-    /// Collection type names (without generic part) that are compatible with IEnumerable&lt;T&gt;.
-    /// These types are resolved by DI as collections of the element type.
-    /// </summary>
-    private static readonly HashSet<string> s_enumerableCompatibleTypes = new(StringComparer.Ordinal)
-    {
-        "global::System.Collections.Generic.IEnumerable",
-        "global::System.Collections.Generic.ICollection",
-        "global::System.Collections.Generic.IList",
-        "global::System.Collections.Generic.IReadOnlyCollection",
-        "global::System.Collections.Generic.IReadOnlyList",
-        "global::System.Collections.Generic.List",
-        "global::System.Collections.Generic.ISet",
-        "global::System.Collections.Generic.HashSet",
-        "System.Collections.Generic.IEnumerable",
-        "System.Collections.Generic.ICollection",
-        "System.Collections.Generic.IList",
-        "System.Collections.Generic.IReadOnlyCollection",
-        "System.Collections.Generic.IReadOnlyList",
-        "System.Collections.Generic.List",
-        "System.Collections.Generic.ISet",
-        "System.Collections.Generic.HashSet",
-        "IEnumerable",
-        "ICollection",
-        "IList",
-        "IReadOnlyCollection",
-        "IReadOnlyList",
-        "List",
-        "ISet",
-        "HashSet"
-    };
-
-    /// <summary>
-    /// IEnumerable type names (without generic part).
-    /// </summary>
-    private static readonly HashSet<string> s_enumerableTypes = new(StringComparer.Ordinal)
-    {
-        "global::System.Collections.Generic.IEnumerable",
-        "System.Collections.Generic.IEnumerable",
-        "IEnumerable"
-    };
+    public static bool IsEnumerableType(string nameWithoutGeneric) =>
+        nameWithoutGeneric is "global::System.Collections.Generic.IEnumerable" or "System.Collections.Generic.IEnumerable" or "IEnumerable";
 
     /// <summary>
     /// Read-only collection type names (without generic part).
@@ -1174,88 +694,8 @@ internal static class RoslynExtensions
         "IReadOnlyCollection",
         "IReadOnlyList"
     };
-
-    /// <summary>
-    /// Mutable collection type names (without generic part).
-    /// These should be resolved using GetServices&lt;T&gt;().ToList().
-    /// </summary>
-    private static readonly HashSet<string> s_mutableCollectionTypes = new(StringComparer.Ordinal)
-    {
-        "global::System.Collections.Generic.ICollection",
-        "global::System.Collections.Generic.IList",
-        "global::System.Collections.Generic.List",
-        "System.Collections.Generic.ICollection",
-        "System.Collections.Generic.IList",
-        "System.Collections.Generic.List",
-        "ICollection",
-        "IList",
-        "List"
-    };
-
-    /// <summary>
-    /// Set type names (without generic part).
-    /// These should be resolved using GetServices&lt;T&gt;().ToHashSet().
-    /// </summary>
-    private static readonly HashSet<string> s_setTypes = new(StringComparer.Ordinal)
-    {
-        "global::System.Collections.Generic.ISet",
-        "global::System.Collections.Generic.HashSet",
-        "System.Collections.Generic.ISet",
-        "System.Collections.Generic.HashSet",
-        "ISet",
-        "HashSet"
-    };
-
-    /// <summary>
-    /// Checks if the given type name (without generic part) is compatible with IEnumerable&lt;T&gt;.
-    /// </summary>
-    public static bool IsEnumerableCompatibleType(string nameWithoutGeneric) =>
-        s_enumerableCompatibleTypes.Contains(nameWithoutGeneric);
-
-    /// <summary>
-    /// Gets the CollectionKind for the given type symbol using the type and its implemented interfaces.
-    /// Priority: Set > MutableCollection > ReadOnlyCollection > Enumerable > None.
-    /// </summary>
-    /// <param name="typeSymbol">The type symbol to check.</param>
-    /// <returns>The CollectionKind based on the type and its interfaces.</returns>
-    public static CollectionKind GetCollectionKind(INamedTypeSymbol typeSymbol)
-    {
-        var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
-
-        // Check the type itself first
-        if(s_setTypes.Contains(nameWithoutGeneric))
-            return CollectionKind.Set;
-
-        if(s_mutableCollectionTypes.Contains(nameWithoutGeneric))
-            return CollectionKind.MutableCollection;
-
-        if(s_readOnlyCollectionTypes.Contains(nameWithoutGeneric) || typeSymbol.TypeKind == TypeKind.Array)
-            return CollectionKind.ReadOnlyCollection;
-
-        if(s_enumerableTypes.Contains(nameWithoutGeneric))
-            return CollectionKind.Enumerable;
-
-        // Check implemented interfaces in a single pass, tracking the highest priority match
-        // Priority: Set > MutableCollection > ReadOnlyCollection > Enumerable
-        var bestMatch = CollectionKind.None;
-
-        foreach(var iface in typeSymbol.AllInterfaces)
-        {
-            var ifaceNameWithoutGeneric = GetNameWithoutGeneric(iface.FullyQualifiedName);
-
-            if(s_setTypes.Contains(ifaceNameWithoutGeneric))
-                return CollectionKind.Set; // Highest priority, return immediately
-
-            if(bestMatch < CollectionKind.MutableCollection && s_mutableCollectionTypes.Contains(ifaceNameWithoutGeneric))
-                bestMatch = CollectionKind.MutableCollection;
-            else if(bestMatch < CollectionKind.ReadOnlyCollection && s_readOnlyCollectionTypes.Contains(ifaceNameWithoutGeneric))
-                bestMatch = CollectionKind.ReadOnlyCollection;
-            else if(bestMatch < CollectionKind.Enumerable && s_enumerableTypes.Contains(ifaceNameWithoutGeneric))
-                bestMatch = CollectionKind.Enumerable;
-        }
-
-        return bestMatch;
-    }
+    public static bool IsReadOnlyCollectionType(string nameWithoutGeneric) =>
+        s_readOnlyCollectionTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
     /// Resolves the full access path of a symbol referenced in a nameof() expression.

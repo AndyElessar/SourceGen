@@ -617,8 +617,9 @@ partial class RegisterSourceGenerator
         List<ClosedGenericDependency> dependencies,
         HashSet<string> addedKeys)
     {
-        // First, check if this is a collection or array type (IEnumerable<T>, IList<T>, T[], etc.)
-        var elementType = paramType.TryGetEnumerableElementType();
+        // First, check if this is any IEnumerable<T> compatible type (IEnumerable<T>, IList<T>, ICollection<T>, T[], etc.)
+        // Use TryGetElementType with checkInterfaces: true to support all collection types for closed generic dependency extraction
+        var elementType = paramType.TryGetElementType(checkInterfaces: true);
         if(elementType is not null
             && elementType.GenericArity > 0
             && !elementType.IsOpenGeneric
@@ -638,7 +639,7 @@ partial class RegisterSourceGenerator
         if(paramType.GenericArity > 0 && !paramType.IsOpenGeneric && !paramType.IsNestedOpenGeneric)
         {
             // Add the original type as a dependency (skip arrays as they don't need registration)
-            if(!paramType.IsArrayType() && addedKeys.Add(paramType.Name))
+            if(!paramType.IsArrayType && addedKeys.Add(paramType.Name))
             {
                 dependencies.Add(new ClosedGenericDependency(
                     paramType.Name,

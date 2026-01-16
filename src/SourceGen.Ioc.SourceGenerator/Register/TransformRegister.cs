@@ -191,7 +191,7 @@ partial class RegisterSourceGenerator
 
             // Check if the member has IocInjectAttribute/InjectAttribute (by name only)
             var injectAttribute = member.GetAttributes()
-                .FirstOrDefault(attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
+                .FirstOrDefault(attr => attr.AttributeClass?.IsInject == true);
 
             if(injectAttribute is null)
                 continue;
@@ -265,14 +265,16 @@ partial class RegisterSourceGenerator
         var parameters = method.Parameters
             .Select(p =>
             {
-                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute) = p.GetServiceKeyAndAttributeInfo();
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo();
                 return new ParameterData(
                     p.Name,
                     p.Type.GetTypeData(),
                     IsOptional: p.HasExplicitDefaultValue || p.NullableAnnotation == NullableAnnotation.Annotated,
+                    HasDefaultValue: p.HasExplicitDefaultValue,
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
-                    HasServiceKeyAttribute: hasServiceKeyAttribute);
+                    HasServiceKeyAttribute: hasServiceKeyAttribute,
+                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute);
             })
             .ToImmutableEquatableArray();
 

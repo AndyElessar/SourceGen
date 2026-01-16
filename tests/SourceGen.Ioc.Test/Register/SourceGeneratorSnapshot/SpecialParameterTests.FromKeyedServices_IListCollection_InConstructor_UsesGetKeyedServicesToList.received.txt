@@ -16,8 +16,8 @@ namespace TestAssembly
         /// </summary>
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            services.AddSingleton<global::TestNamespace.ObjectService, global::TestNamespace.ObjectService>();
-            services.AddSingleton<global::TestNamespace.IObjectService, global::TestNamespace.ObjectService>();
+            services.AddKeyedSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>("special");
+            services.AddKeyedSingleton<global::TestNamespace.Dependency2, global::TestNamespace.Dependency2>("special");
             services.AddSingleton<global::TestNamespace.MyService, global::TestNamespace.MyService>();
             services.AddSingleton<global::TestNamespace.IMyService, global::TestNamespace.MyService>();
 

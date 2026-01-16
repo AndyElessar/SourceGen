@@ -19,10 +19,6 @@ namespace IocSample
             services.AddTransient<global::IocSample.Basic2, global::IocSample.Basic2>();
             services.AddTransient<global::IocSample.IBasic, global::IocSample.Basic2>();
             services.AddTransient<global::IocSample.IBasic2, global::IocSample.Basic2>();
-            services.AddTransient<global::IocSample.Default1, global::IocSample.Default1>();
-            services.AddTransient<global::IocSample.IDenpendency2, global::IocSample.Default1>();
-            services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();
-            services.AddScoped<global::IocSample.IDenpendency2, global::IocSample.Default2>();
             services.AddKeyedSingleton<global::IocSample.FactoryService>("Test", (global::System.IServiceProvider sp, object? key) => (global::IocSample.FactoryService)global::IocSample.Factory.Create());
             services.AddKeyedSingleton<global::IocSample.IFactoryService>("Test", (global::System.IServiceProvider sp, object? key) => global::IocSample.Factory.Create());
             services.AddSingleton<global::IocSample.InstanceService>(global::IocSample.InstanceService.Instance);

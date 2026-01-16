@@ -179,6 +179,18 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.");
 
+    /// <summary>
+    /// SGIOC015: Unresolvable Constructor Parameter - Constructor parameter is a built-in type that cannot be resolved from dependency injection.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnresolvableConstructorParameter = new(
+        id: "SGIOC015",
+        title: "Unresolvable Constructor Parameter",
+        messageFormat: "Constructor parameter '{0}' of type '{1}' cannot be resolved from dependency injection",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Built-in types cannot be resolved from the dependency injection container. Use [IocInject] with a factory, [FromKeyedServices], or provide a default value.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -194,7 +206,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedRegistration,
         DuplicatedDefaultSettings,
         ServiceKeyTypeMismatch,
-        ServiceKeyNotRegistered
+        ServiceKeyNotRegistered,
+        UnresolvableConstructorParameter
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -387,7 +400,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 {
                     hasFromKeyedServices = true;
                 }
-                else if(attrClass.Name is "IocInjectAttribute" or "InjectAttribute")
+                else if(attrClass.IsInject)
                 {
                     hasInject = true;
                     injectAttribute = attr;
@@ -417,7 +430,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Check if the member has IocInjectAttribute/InjectAttribute (by name only, matching TransformRegister behavior)
         var injectAttribute = member.GetAttributes()
-            .FirstOrDefault(static attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
+            .FirstOrDefault(static attr => attr.AttributeClass?.IsInject == true);
 
         if(injectAttribute is null)
             return;
@@ -528,8 +541,11 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
             var serviceInfo = kvp.Value;
 
-            // SGIOC013: Analyze ServiceKey parameter type mismatches
+            // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
             AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
+
+            // SGIOC015: Analyze unresolvable constructor parameters (built-in types without attributes)
+            AnalyzeUnresolvableConstructorParameters(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,
@@ -574,12 +590,96 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
             // Check if method has [IocInject] or [Inject] attribute
             var hasInjectAttribute = method.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.Name is "IocInjectAttribute" or "InjectAttribute");
+                .Any(static attr => attr.AttributeClass?.IsInject == true);
 
             if(!hasInjectAttribute)
                 continue;
 
             AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, keyTypeSymbol, hasKey, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// SGIOC015: Analyzes constructor parameters for unresolvable built-in types.
+    /// Reports error when a constructor parameter is a built-in type (int, string, byte[], etc.)
+    /// that cannot be resolved from dependency injection and does not have:
+    /// - [IocInject] attribute
+    /// - [ServiceKey] attribute
+    /// - [FromKeyedServices] attribute
+    /// - An explicit default value
+    /// </summary>
+    private static void AnalyzeUnresolvableConstructorParameters(
+        Action<Diagnostic> reportDiagnostic,
+        ServiceInfo serviceInfo,
+        CancellationToken cancellationToken)
+    {
+        var targetType = serviceInfo.Type;
+
+        // Skip if this service has a factory method or instance - no constructor resolution needed
+        if(serviceInfo.HasFactory || serviceInfo.HasInstance)
+            return;
+
+        // Get the constructor that would be used for DI
+        var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
+        if(constructor is null)
+            return;
+
+        foreach(var param in constructor.Parameters)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var paramType = param.Type;
+
+            // Check if the parameter type is a built-in type or collection of built-in types
+            if(!paramType.IsBuiltInTypeOrBuiltInCollection)
+                continue;
+
+            // Skip if parameter has an explicit default value
+            if(param.HasExplicitDefaultValue)
+                continue;
+
+            // Check for special attributes that would make this resolvable
+            bool hasSpecialAttribute = false;
+            foreach(var attribute in param.GetAttributes())
+            {
+                var attrClass = attribute.AttributeClass;
+                if(attrClass is null)
+                    continue;
+
+                var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
+
+                // [IocInject] or [Inject] - user explicitly handles this
+                if(attrClass.IsInject)
+                {
+                    hasSpecialAttribute = true;
+                    break;
+                }
+
+                // [ServiceKey] - injects the registration key
+                if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+                {
+                    hasSpecialAttribute = true;
+                    break;
+                }
+
+                // [FromKeyedServices] - MS.DI handles this automatically
+                if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+                {
+                    hasSpecialAttribute = true;
+                    break;
+                }
+            }
+
+            if(hasSpecialAttribute)
+                continue;
+
+            // Report SGIOC015: Unresolvable constructor parameter
+            var location = param.Locations.FirstOrDefault() ?? serviceInfo.Location;
+            reportDiagnostic(Diagnostic.Create(
+                UnresolvableConstructorParameter,
+                location,
+                param.Name,
+                paramType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
     }
 
@@ -690,7 +790,10 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // Get key type for SGIOC013/SGIOC014 analysis
             var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
 
-            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, hasKey);
+            // Check for Factory and Instance for SGIOC015 analysis
+            var (hasFactory, hasInstance) = HasFactoryOrInstance(attribute);
+
+            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
         }
 
         return syntaxTreesBuilder.ToImmutable();
@@ -807,9 +910,12 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             // Get key type for SGIOC013/SGIOC014 analysis
             var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
 
+            // Check for Factory and Instance for SGIOC015 analysis
+            var (hasFactory, hasInstance) = HasFactoryOrInstance(attribute);
+
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
-            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, keyTypeSymbol, hasKey);
+            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
         }
     }
 
@@ -915,6 +1021,33 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
+    /// Checks if the attribute has Factory or Instance specified.
+    /// </summary>
+    private static (bool HasFactory, bool HasInstance) HasFactoryOrInstance(AttributeData attribute)
+    {
+        bool hasFactory = false;
+        bool hasInstance = false;
+
+        foreach(var namedArg in attribute.NamedArguments)
+        {
+            if(namedArg.Key == "Factory" && !namedArg.Value.IsNull)
+            {
+                hasFactory = true;
+            }
+            else if(namedArg.Key == "Instance" && !namedArg.Value.IsNull)
+            {
+                hasInstance = true;
+            }
+
+            // Early exit if both found
+            if(hasFactory && hasInstance)
+                break;
+        }
+
+        return (hasFactory, hasInstance);
+    }
+
+    /// <summary>
     /// Registers a service and builds the service type index for fast lookups.
     /// </summary>
     private static void RegisterServiceWithIndex(
@@ -923,9 +1056,11 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         ServiceLifetime lifetime,
         Location? location,
         ITypeSymbol? keyTypeSymbol = null,
-        bool hasKey = false)
+        bool hasKey = false,
+        bool hasFactory = false,
+        bool hasInstance = false)
     {
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, keyTypeSymbol, hasKey);
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
 
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
             return; // Already registered
@@ -1606,8 +1741,23 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         /// Indicates whether a Key is specified (regardless of KeyType).
         /// </summary>
         public bool HasKey { get; }
+        /// <summary>
+        /// Indicates whether a Factory method is specified.
+        /// </summary>
+        public bool HasFactory { get; }
+        /// <summary>
+        /// Indicates whether an Instance is specified.
+        /// </summary>
+        public bool HasInstance { get; }
 
-        public ServiceInfo(INamedTypeSymbol type, ServiceLifetime lifetime, Location? location, ITypeSymbol? keyTypeSymbol = null, bool hasKey = false)
+        public ServiceInfo(
+            INamedTypeSymbol type,
+            ServiceLifetime lifetime,
+            Location? location,
+            ITypeSymbol? keyTypeSymbol = null,
+            bool hasKey = false,
+            bool hasFactory = false,
+            bool hasInstance = false)
         {
             Type = type;
             Lifetime = lifetime;
@@ -1615,6 +1765,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             FullyQualifiedName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             KeyTypeSymbol = keyTypeSymbol;
             HasKey = hasKey;
+            HasFactory = hasFactory;
+            HasInstance = hasInstance;
         }
     }
 }

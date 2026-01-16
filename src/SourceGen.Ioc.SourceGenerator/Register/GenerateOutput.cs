@@ -140,6 +140,14 @@ partial class RegisterSourceGenerator
             return;
         }
 
+        // Skip registration if constructor has unresolvable parameters
+        // (built-in types or collections of built-in types without [IocInject], [ServiceKey], [FromKeyedServices], or default value)
+        var constructorParameters = registration.ImplementationType.ConstructorParameters;
+        if(constructorParameters?.Any(static p => p.IsUnresolvable) == true)
+        {
+            return;
+        }
+
         // Check if service type is different from implementation type (registering interface/base class)
         bool isServiceTypeRegistration = serviceTypeName != implTypeName;
 
@@ -366,14 +374,15 @@ partial class RegisterSourceGenerator
 
         // Resolve constructor parameters
         var constructorParams = registration.ImplementationType.ConstructorParameters ?? [];
-        var constructorParamVars = new string[constructorParams.Length];
+        var constructorParamEntries = new List<(string Name, string? Value)>(constructorParams.Length);
         bool isKeyedRegistration = registration.Key is not null;
         int paramIndex = 0;
 
         foreach(var param in constructorParams)
         {
             var paramVar = $"p{paramIndex}";
-            constructorParamVars[paramIndex] = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+            var resolvedVar = WriteParameterResolution(writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+            constructorParamEntries.Add((param.Name, resolvedVar));
             paramIndex++;
         }
 
@@ -390,7 +399,7 @@ partial class RegisterSourceGenerator
 
         // Pre-allocate arrays based on counts
         var propertyInitializers = propertyFieldCount > 0 ? new string[propertyFieldCount] : [];
-        var methodCalls = methodCount > 0 ? new (string MethodName, string[] ParamVars)[methodCount] : [];
+        var methodCalls = methodCount > 0 ? new (string MethodName, string?[] ParamVars, string[] ParamNames)[methodCount] : [];
 
         // Process property/field injection parameters
         int propertyIndex = 0;
@@ -443,12 +452,14 @@ partial class RegisterSourceGenerator
                 continue;
 
             var methodParams = method.Parameters ?? [];
-            var methodParamVars = new string[methodParams.Length];
+            var methodParamVars = new string?[methodParams.Length];
+            var methodParamNames = new string[methodParams.Length];
             int methodParamIdx = 0;
 
             foreach(var param in methodParams)
             {
                 var paramVar = $"s0_m{memberParamIndex}";
+                methodParamNames[methodParamIdx] = param.Name;
 
                 if(method.Key is not null)
                 {
@@ -482,11 +493,12 @@ partial class RegisterSourceGenerator
                 memberParamIndex++;
             }
 
-            methodCalls[methodIndex++] = (method.Name, methodParamVars);
+            methodCalls[methodIndex++] = (method.Name, methodParamVars, methodParamNames);
         }
 
         // Create the instance with constructor and property initializers
-        var constructorArgs = string.Join(", ", constructorParamVars);
+        // Use named arguments if any parameter uses default value (value is null)
+        var constructorArgs = BuildArgumentList(constructorParamEntries);
 
         if(propertyInitializers.Length > 0)
         {
@@ -499,9 +511,14 @@ partial class RegisterSourceGenerator
         }
 
         // Call injection methods
-        foreach(var (methodName, methodParamVars) in methodCalls)
+        foreach(var (methodName, methodParamVars, methodParamNames) in methodCalls)
         {
-            var methodArgs = string.Join(", ", methodParamVars);
+            var methodEntries = new List<(string Name, string? Value)>(methodParamVars.Length);
+            for(int i = 0; i < methodParamVars.Length; i++)
+            {
+                methodEntries.Add((methodParamNames[i], methodParamVars[i]));
+            }
+            var methodArgs = BuildArgumentList(methodEntries);
             writer.WriteLine($"s0.{methodName}({methodArgs});");
         }
 
@@ -510,6 +527,50 @@ partial class RegisterSourceGenerator
 
         writer.Indentation--;
         writer.WriteLine("});");
+    }
+
+    /// <summary>
+    /// Builds an argument list string from a list of parameter entries.
+    /// Uses positional arguments when all values are present, or named arguments when any value is null (uses default value).
+    /// </summary>
+    /// <param name="entries">List of parameter name and value pairs.</param>
+    /// <returns>A comma-separated argument list string.</returns>
+    private static string BuildArgumentList(List<(string Name, string? Value)> entries)
+    {
+        // Check if any parameter uses default value
+        bool hasDefaultValue = false;
+        foreach(var (_, value) in entries)
+        {
+            if(value is null)
+            {
+                hasDefaultValue = true;
+                break;
+            }
+        }
+
+        if(!hasDefaultValue)
+        {
+            // All values present - use positional arguments
+            var values = new string[entries.Count];
+            for(int i = 0; i < entries.Count; i++)
+            {
+                values[i] = entries[i].Value!;
+            }
+
+            return string.Join(", ", values);
+        }
+
+        // Some values are null - use named arguments for non-null values only
+        var namedArgs = new List<string>(entries.Count);
+        foreach(var (name, value) in entries)
+        {
+            if(value is not null)
+            {
+                namedArgs.Add($"{name}: {value}");
+            }
+        }
+
+        return string.Join(", ", namedArgs);
     }
 
     /// <summary>
@@ -642,7 +703,9 @@ partial class RegisterSourceGenerator
                         // This is a dependency, resolve it from service provider
                         var paramVar = $"{currentVar}_p{paramIndex}";
                         bool isKeyedRegistration = registration.Key is not null;
-                        paramVars[paramVarIndex++] = WriteParameterResolution(writer, param, paramVar, paramTypeName, isKeyedRegistration, registration.Key);
+                        var resolvedVar = WriteParameterResolution(writer, param, paramVar, paramTypeName, isKeyedRegistration, registration.Key);
+                        // Use named argument if parameter uses default value (null means use default)
+                        paramVars[paramVarIndex++] = resolvedVar is not null ? resolvedVar : $"{param.Name}: default";
                         paramIndex++;
                     }
                 }
@@ -793,8 +856,8 @@ partial class RegisterSourceGenerator
     /// <param name="paramTypeName">The resolved parameter type name (for generic substitution).</param>
     /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
     /// <param name="registrationKey">The registration key for keyed services, used for [ServiceKey] parameter injection.</param>
-    /// <returns>The variable name or expression to use for this parameter.</returns>
-    private static string WriteParameterResolution(
+    /// <returns>The variable name or expression to use for this parameter, or null if the parameter should use its default value.</returns>
+    private static string? WriteParameterResolution(
         SourceWriter writer,
         ParameterData param,
         string paramVar,
@@ -802,6 +865,12 @@ partial class RegisterSourceGenerator
         bool isKeyedRegistration,
         string? registrationKey = null)
     {
+        // Skip built-in type parameters with default values - let them use their default value
+        if(param.HasDefaultValue && param.Type.IsBuiltInTypeOrBuiltInCollection)
+        {
+            return null;
+        }
+
         // Case 1: IServiceProvider - pass sp directly
         if(IsServiceProviderType(paramTypeName))
         {
@@ -888,7 +957,7 @@ partial class RegisterSourceGenerator
         string? serviceKey,
         bool isOptional = false)
     {
-        var elementType = type.TryGetEnumerableElementType();
+        var elementType = type.TryGetElementType();
         var isKeyed = serviceKey is not null;
 
         if(elementType is null)
@@ -933,18 +1002,6 @@ partial class RegisterSourceGenerator
                 else
                 {
                     writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToArray();");
-                }
-                break;
-
-            case CollectionKind.MutableCollection:
-                // ICollection<T>, IList<T>, List<T> - resolve as list
-                if(isKeyed)
-                {
-                    writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>({serviceKey}).ToList();");
-                }
-                else
-                {
-                    writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToList();");
                 }
                 break;
 

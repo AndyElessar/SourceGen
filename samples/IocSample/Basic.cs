@@ -1,4 +1,4 @@
-namespace IocSample;
+﻿namespace IocSample;
 
 public interface IBasic;
 public interface IBasic2;
@@ -20,7 +20,11 @@ public class Marker;
 [IocRegisterDefaults<IDenpendency2>(ServiceLifetime.Transient)]
 public interface IDenpendency2;
 [IocRegister]
-internal class Default1 : IDenpendency2;
+internal class Default1 : IDenpendency2
+{
+    [IocInject]
+    public string Test { get; init; }
+}
 [IocRegister(ServiceLifetime.Scoped)]
 internal class Default2 : IDenpendency2;
 

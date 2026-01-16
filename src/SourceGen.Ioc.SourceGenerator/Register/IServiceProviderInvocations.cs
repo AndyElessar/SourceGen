@@ -101,7 +101,7 @@ partial class RegisterSourceGenerator
         var typeData = namedTypeSymbol.CreateBasicTypeData();
 
         // Check if this is a collection type (IEnumerable<T>, IList<T>, etc.)
-        var elementType = typeData.TryGetCollectionElementType();
+        var elementType = typeData.TryGetElementType();
         if(elementType is not null
             && elementType.GenericArity > 0
             && !elementType.IsOpenGeneric

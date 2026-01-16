@@ -90,7 +90,7 @@ public class FactoryAndInstanceTests
 
             public static class MyServiceFactory
             {
-                public static IMyService Create(IServiceProvider sp, object key) => new MyService();
+                public static IMyService Create(IServiceProvider sp) => new MyService();
             }
             """;
 
@@ -361,7 +361,7 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Factory_WithOnlyKeyParameter_GeneratesKeyInvocation()
+    public async Task Factory_WithKeyedService_NoParameters_GeneratesDirectInvocation()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -380,7 +380,7 @@ public class FactoryAndInstanceTests
 
             public static class MyServiceFactory
             {
-                public static IMyService Create(object key) => new MyService();
+                public static IMyService Create() => new MyService();
             }
             """;
 

@@ -577,6 +577,7 @@ partial class RegisterSourceGenerator
             IsNestedOpenGeneric: false,
             IsTypeParameter: false, // Closed implementation types are not type parameters
             CollectionKind: CollectionKind.None,
+            IsBuiltInTypeOrBuiltInCollection: false, // Implementation types are not built-in types
             closedTypeParams,
             closedConstructorParams,
             openImplType.HasInjectConstructor);
@@ -621,6 +622,7 @@ partial class RegisterSourceGenerator
                 IsNestedOpenGeneric: false,
                 IsTypeParameter: false, // Closed service types are not type parameters
                 CollectionKind: CollectionKind.None,
+                IsBuiltInTypeOrBuiltInCollection: false, // Service types are not built-in types
                 SubstituteTypeParameters(openServiceType.TypeParameters, serviceTypeArgMap));
 
             result.Add(closedServiceType);
@@ -754,6 +756,7 @@ partial class RegisterSourceGenerator
             IsNestedOpenGeneric: false,
             IsTypeParameter: false, // Closed decorator types are not type parameters
             CollectionKind: CollectionKind.None,
+            IsBuiltInTypeOrBuiltInCollection: false, // Decorator types are not built-in types
             newTypeParams,
             closedConstructorParams);
     }

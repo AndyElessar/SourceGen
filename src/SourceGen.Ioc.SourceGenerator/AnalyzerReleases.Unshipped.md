@@ -16,3 +16,4 @@ SGIOC011 | Design | Warning | Duplicated Registration Detected - Same implementa
 SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.
 SGIOC013 | Usage | Error | Key type is unmatched - ServiceKeyAttribute parameter type does not match the registered key type.
 SGIOC014 | Usage | Error | Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.
+SGIOC015 | Design | Error | Unresolvable Constructor Parameter - Constructor contains built-in type that cannot be resolved from dependency injection.

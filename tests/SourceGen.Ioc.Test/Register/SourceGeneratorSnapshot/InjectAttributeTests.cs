@@ -615,8 +615,10 @@ public class InjectAttributeTests
     }
 
     [Test]
-    public async Task InjectAttribute_PropertyInjection_IListCollection_GeneratesGetServices()
+    public async Task InjectAttribute_PropertyInjection_IListCollection_NotRecognizedAsCollection()
     {
+        // IList<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -680,8 +682,10 @@ public class InjectAttributeTests
     }
 
     [Test]
-    public async Task InjectAttribute_PropertyInjection_IListCollectionWithKey_GeneratesGetKeyedServices()
+    public async Task InjectAttribute_PropertyInjection_IListCollectionWithKey_NotRecognizedAsCollection()
     {
+        // IList<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -713,8 +717,10 @@ public class InjectAttributeTests
     }
 
     [Test]
-    public async Task InjectAttribute_MethodInjection_IListCollection_GeneratesGetServices()
+    public async Task InjectAttribute_MethodInjection_IListCollection_NotRecognizedAsCollection()
     {
+        // IList<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -751,8 +757,10 @@ public class InjectAttributeTests
     }
 
     [Test]
-    public async Task InjectAttribute_MethodInjection_IListCollectionWithMethodKey_GeneratesGetKeyedServices()
+    public async Task InjectAttribute_MethodInjection_IListCollectionWithMethodKey_NotRecognizedAsCollection()
     {
+        // IList<T> is NOT recognized as a collection type for special injection handling
+        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;

@@ -47,3 +47,13 @@ Format: ID - Level - Category - Description
 
 - SGIOC014 - Error - Usage - Key does not exists
   - Report when `ServiceKeyAttribute` is mark on parameter, but there is no specified `Key` from `IoCRegisterAttribute` or `IoCRegisterForAttribute`.
+
+- SGIOC015 - Error - Design - Unresolvable Constructor Parameter
+  - Report when constructor contains a built-in type parameter (or collection of built-in types) that cannot be resolved by the service provider.
+  - Built-in types include: bool, char, byte, sbyte, int, uint, long, ulong, float, double, decimal, string, DateTime, Guid, TimeSpan, DateTimeOffset, DateOnly, TimeOnly, Uri, Type, Version, Half, Int128, UInt128.
+  - Exception: This diagnostic is NOT reported when the parameter has:
+    - `[IocInject]` attribute with a service key
+    - `[ServiceKey]` attribute
+    - `[FromKeyedServices]` attribute
+    - A default value specified in the constructor signature
+  - Exception: This diagnostic is NOT reported when the service registration uses `Factory` or `Instance` (since constructor resolution is bypassed).
