@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
 
-namespace SourceGen.Ioc.SourceGenerator.Register;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Analyzer for IoC registration attributes.

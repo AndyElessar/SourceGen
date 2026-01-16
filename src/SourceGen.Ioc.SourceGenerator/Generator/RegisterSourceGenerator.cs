@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Register;
+﻿namespace SourceGen.Ioc;
 
 /// <summary>
 /// Generates code to register types marked with SourceGen.Ioc.IocRegisterAttribute/SourceGen.Ioc.IocRegisterForAttribute

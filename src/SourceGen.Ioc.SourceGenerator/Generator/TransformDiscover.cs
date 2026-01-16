@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Register;
+﻿namespace SourceGen.Ioc;
 
 partial class RegisterSourceGenerator
 {

@@ -1,63 +1,67 @@
-﻿# Service collection register source generator
+# IServiceCollection register source generator
 
-This source generator automatically generates extension methods for registering services in `Microsoft.Extensions.DependencyInjection.Abstractions`.
+This source generator automatically generates extension methods for registering services in `Microsoft.Extensions.DependencyInjection.IServiceCollection`.
 
-## Collect information
+## Features
 
-1. Find classes marked with `SourceGen.Ioc.IocRegisterAttribute` and `SourceGen.Ioc.IocRegisterForAttribute`.
-
-2. Find `SourceGen.Ioc.IocRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
-
-3. Service registration settings to collect:
-    - Service type (from `TargetServiceType`, `ServiceTypes` or follow settings: `RegisterAllInterfaces`, `RegisterAllBaseClasses`; always register Implementation type itself)
-    - Implementation type (from `IocRegisterForAttribute.ImplementationType` or the class marked with `IocRegisterAttribute`) and its constructor's parameters
-    - Lifetime (from `IocRegisterAttribute` or default settings)
-    - Key (from `IocRegisterAttribute.Key`, `IocRegisterForAttribute.Key` or default settings)
-    - Decorators type (from `IocRegisterAttribute.Decorators`, `IocRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
-    - Tags (from `IocRegisterAttribute.Tags`, `IocRegisterForAttribute.Tags` or default settings)
-    - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory`)
-    - Instance (from `IocRegisterAttribute.Instance`, `IocRegisterForAttribute.Instance`)
-    - Project root namespace (from compilation options)
-    - Assembly name (from compilation options)
-    - Project properties: SourceGenIocName
-
-4. When `KeyType` is `KeyType.Value`, take `Key` as value, when `KeyType` is `KeyType.Csharp`, take `Key` as C# code snippet.
-    - `KeyType.Value`:
-      - Primitive types (int, string, bool, etc.) should be represented as itself (e.g., `42`, `"myString"`, `true`)
-      - Enum types should be represented as `EnumType.EnumValue`
-    - `KeyType.Csharp`:
-      - String should be represented literal (e.g. `"MyClass.MyStaticField"` => `Add*Key(MyClass.MyStaticField)`)
-      - Can use `nameof()` for compile-time safety (e.g. `nameof(MyClass.MyStaticField)` => `Add*Key(MyClass.MyStaticField)`)
-
-5. When Service type is generic type and Implementation type is closed type, make sure to register with closed generic type.
-
-6. When multiple default settings are found on an implementation type, use first setting by order:
-    1. The one directly on the implementation type
-    2. The one on the closest base class
-    3. The one on the first interface in `RegistrationData.AllInterfaces`
-
-    Generated code example:
+1. Basic:\
+    - Always register Implementation type itself.\
+    - When Service type is open generic type and Implementation type is closed type, make sure to register with closed generic type.
 
     ```csharp
-    namespace {ProjectRootNamespace};
+      #region Define:
+      public interface IMyService;
+      [IocRegister<IMyService>(ServiceLifetime.Transient)]
+      internal class MyServiceImplementation : IMyService;
 
-    public static class ServiceCollectionExtensions
-    {
-        public static IServiceCollection Add{ProjectName}(this IServiceCollection services)
-        {
-            services.AddTransient<IMyService, MyServiceImplementation>();
-            services.AddSingleton(typeof(IGenericService<>), typeof(GenericServiceImplementation<>));
-            services.AddScoped<IGenericService<string>, ClosedGenericServiceStringImplementation>();
-            services.AddKeyedTransient<IMyKeyedService, MyKeyedServiceImplementation1>("MyKey");
-            services.AddKeyedTransient<IMyKeyedService, MyKeyedServiceImplementation2>(MyEnum.EnumValue);
-            services.AddKeyedTransient<IMyKeyedService, MyKeyedServiceImplementation3>(MyClass.StaticValue);
-            
-            return services;
-        }
-    }
-    ```
+      public interface IGenericService<T>;
+      [IocRegister(ServiceLifetime.Singleton, typeof(IGenericService<>))]
+      internal class GenericServiceImplementation<T> : IGenericService<T>;
+      [IocRegister(ServiceLifetime.Scoped, typeof(IGenericService<>))]
+      internal class ClosedGenericServiceStringImplementation : IGenericService<string>;
 
-7. When `Decorators` is not empty, generate register code to handle decorator pattern:
+      public interface IMyKeyedService;
+      [IocRegister<IMyKeyedService>(ServiceLifetime.Transient, Key = "MyKey")]
+      public class MyKeyedServiceImplementation1;
+      [IocRegister<IMyKeyedService>(ServiceLifetime.Transient, Key = MyEnum.EnumValue)]
+      public class MyKeyedServiceImplementation2;
+      [IocRegister<IMyKeyedService>(ServiceLifetime.Transient, Key = nameof(MyClass.StaticValue), KeyType = KeyType.Csharp)]
+      public class MyKeyedServiceImplementation3;
+
+      public static class MyClass
+      {
+          public static Guid StaticValue => Guid.Newid();
+      }
+      #endregion
+
+      #region Generate:
+      namespace {ProjectRootNamespace};
+
+      public static class ServiceCollectionExtensions
+      {
+          public static IServiceCollection Add{ProjectName}(this IServiceCollection services)
+          {
+              //always register Implementation type itself
+              services.AddTransient<MyServiceImplementation, MyServiceImplementation>();
+              services.AddTransient<IMyService>(sp=>sp.GetRequiredService<MyServiceImplementation>());
+              services.AddSingleton(typeof(IGenericService<>), typeof(GenericServiceImplementation<>));
+              services.AddScoped<ClosedGenericServiceStringImplementation, ClosedGenericServiceStringImplementation>();
+              services.AddScoped<IGenericService<string>>(sp=>sp.GetRequiredService<ClosedGenericServiceStringImplementation>());
+              services.AddKeyedTransient<MyKeyedServiceImplementation1, MyKeyedServiceImplementation1>("MyKey");
+              services.AddKeyedTransient<IMyKeyedService>("MyKey", (sp, key)=>sp.GetKeyedService<MyKeyedServiceImplementation1>());
+              services.AddKeyedTransient<MyKeyedServiceImplementation2, MyKeyedServiceImplementation2>(MyEnum.EnumValue);
+              services.AddKeyedTransient<IMyKeyedService>(MyEnum.EnumValue, (sp, key)=>sp.GetKeyedService<MyKeyedServiceImplementation2>());
+              services.AddKeyedTransient<MyKeyedServiceImplementation3, MyKeyedServiceImplementation3>(MyClass.StaticValue);
+              services.AddKeyedTransient<IMyKeyedService>(MyClass.StaticValue, (sp, key)=>sp.GetKeyedService<MyKeyedServiceImplementation3>());
+              
+              return services;
+          }
+      }
+      #endregion
+      ```
+
+2. When `Decorators` is not empty, generate register code to handle decorator pattern:\
+    Only generate decorator when all type arguments constraints are satisfied.
 
     ```csharp
     #region Define:
@@ -179,9 +183,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-    Only generate decorator when all type arguments constraints are satisfied.
-
-8. When Tags is not empty, generate register extension methods to handle tags:
+3. When Tags is not empty, generate register extension methods to handle tags:
 
     ```csharp
     #region Define:
@@ -226,7 +228,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-9. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `IocInjectAttribute` or `InjectAttribute`, generate the necessary code to handle the injection.
+4. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `IocInjectAttribute` or `InjectAttribute`, generate the necessary code to handle the injection.
 
     Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
@@ -407,9 +409,9 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-10. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s and assembly's `IocRegisterDefaultSettingsAttribute` as default settings for current assembly.
+5. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s and assembly's `IocRegisterDefaultSettingsAttribute` as default settings for current assembly.
 
-11. When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate closed generic registration.
+6. When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate closed generic registration.
 
     ```csharp
     #region Define:
@@ -514,7 +516,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-12. Search code: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`;  
+7. Search code: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`;  
   If Type is closed generic from open generic registration, generate factory to register class.
 
     ```csharp
@@ -536,7 +538,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-13. Can define csproj property: SourceGenIocName, allow user control what method name will generate.  
+8. Can define csproj property: SourceGenIocName, allow user control what method name will generate.  
     - .csproj:
 
       ```xml
@@ -567,7 +569,7 @@ This source generator automatically generates extension methods for registering 
       }
       ```
 
-14. When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
+9. When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
 
     **Factory Method Parameter Analysis**:
     - If parameter type is `IServiceProvider`: Pass the service provider directly
@@ -597,7 +599,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-    **Keyed Factory with [ServiceKey] parameter**:
+    **Keyed Factory with `[ServiceKey]` parameter**:
 
     ```csharp
     #region Define:
@@ -644,7 +646,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-15. When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
+10. When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
 
     ```csharp
     #region Define:
@@ -664,7 +666,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-16. When `DiscoverAttribute` is exists, collect `DiscoverAttribute.ClosedGenericType` for generate factory code for open generic registrations.
+11. When `DiscoverAttribute` is exists, collect `DiscoverAttribute.ClosedGenericType` for generate factory code for open generic registrations.
 
     ```csharp
     #region Define:
