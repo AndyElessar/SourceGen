@@ -1,8 +1,6 @@
-﻿using System.IO.Abstractions;
-using System.Text.Json;
-using ConsoleAppFramework;
+﻿using System.Text.Json;
 
-namespace SourceGen.Ioc.Cli;
+namespace SourceGen.Ioc.Cli.Commands;
 
 internal sealed class CliSchemaCommand(
     CliSchemaData cliSchemaData,

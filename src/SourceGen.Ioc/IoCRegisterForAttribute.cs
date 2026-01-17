@@ -14,10 +14,10 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
     /// <summary>
     /// Initializes a new instance of the <see cref="IocRegisterForAttribute"/> class.
     /// </summary>
-    /// <param name="targetType">Specifies which type should be registered in the dependency injection container.</param>
+    /// <param name="implementationType">Specifies which type should be registered in the dependency injection container.</param>
     /// <param name="lifetime">Specifies the service lifetime for the registration.</param>
-    public IocRegisterForAttribute(Type targetType, ServiceLifetime lifetime)
-        : this(targetType)
+    public IocRegisterForAttribute(Type implementationType, ServiceLifetime lifetime)
+        : this(implementationType)
     {
         this.Lifetime = lifetime;
     }

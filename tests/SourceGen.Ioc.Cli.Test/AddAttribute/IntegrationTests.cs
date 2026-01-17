@@ -1,6 +1,7 @@
-using System.IO.Abstractions.TestingHelpers;
+﻿using System.IO.Abstractions.TestingHelpers;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
+using SourceGen.Ioc.Cli.Commands;
 
 namespace SourceGen.Ioc.Cli.Test.AddAttribute;
 
@@ -20,7 +21,7 @@ public partial class IntegrationTests
         fileSystem = new MockFileSystem();
         environmentProvider = new FakeEnvironmentProvider { CurrentDirectory = @"C:\TestDir" };
         logger = new FakeLogger<AddAttributeCommands>();
-        globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
         sut = new AddAttributeCommands(logger, globalOptions, fileSystem, environmentProvider);
     }
 
@@ -354,7 +355,7 @@ public partial class IntegrationTests
     public async Task AddAttribute_DryRun_DoesNotModifyFiles(CancellationToken ct)
     {
         // Arrange
-        var dryRunOptions = new GlobalOptions(DryRun: true, Verbose: false, LogFile: "");
+        var dryRunOptions = new GlobalOptions(DryRun: true, Verbose: false, LoggingFile: "");
         var dryRunSut = new AddAttributeCommands(logger, dryRunOptions, fileSystem, environmentProvider);
         fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
 

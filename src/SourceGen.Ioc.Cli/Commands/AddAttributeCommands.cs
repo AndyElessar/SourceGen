@@ -1,13 +1,5 @@
-﻿using System.Diagnostics;
-using System.IO.Abstractions;
-using System.Text.RegularExpressions;
-using ConsoleAppFramework;
-using Microsoft.Extensions.Logging;
-using ZLogger;
+﻿namespace SourceGen.Ioc.Cli.Commands;
 
-namespace SourceGen.Ioc.Cli;
-
-#pragma warning disable CA1822
 public sealed class AddAttributeCommands(
     ILogger<AddAttributeCommands> logger,
     GlobalOptions globalOptions,
@@ -19,9 +11,6 @@ public sealed class AddAttributeCommands(
     private readonly IFileSystem fileSystem = fileSystem;
     private readonly IEnvironmentProvider environmentProvider = environmentProvider;
 
-    private const string baseClassRegex_1 = @"(public|internal)\s+(?!static\s+).*class\s+(";
-    private const string baseClassRegex_2 = @")(?=\s|:|$)";
-
     /// <summary>
     /// Add attribute.
     /// </summary>
@@ -29,12 +18,12 @@ public sealed class AddAttributeCommands(
     /// <param name="filePattern">-f, File pattern to filter files.</param>
     /// <param name="searchSubDirectories">-s, Whether to search sub directories.</param>
     /// <param name="classNameRegex">-cn, Regex pattern to match class names.
-    ///                                   Full regex will be: "(public|internal)\s+(?!static\s+).*class\s+(classNameRegex)(?=\s|:|$)"</param>
+    ///                                   Full regex will be: "(public|internal)\s+(?!static\s+)[\w\s]*class\s+(classNameRegex)(?=\s|:|$)"</param>
     /// <param name="fullRegex">Full regex pattern to match file content.</param>
     /// <param name="attributeName">Name of the attribute to add, default is IocRegister</param>
     /// <param name="maxApply">-m, How many matches should apply, 0 means unlimited.</param>
     /// <returns></returns>
-    [Command("")]
+    [Command("add")]
     public async Task AddAttribute(
         string? target = null,
         string filePattern = "*.cs",
@@ -139,18 +128,6 @@ public sealed class AddAttributeCommands(
         appliedCount = result.AppliedCount;
         return (fileCount, appliedCount);
     }
-
-    public static Regex CreateFullMatchRegex(string fullRegex) =>
-        new Regex(
-            fullRegex,
-            RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.Multiline,
-            TimeSpan.FromMilliseconds(1000));
-
-    public static Regex CreateClassMatchRegex(string classNameRegex) =>
-        new Regex(
-            string.Concat(baseClassRegex_1, classNameRegex, baseClassRegex_2),
-            RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.Multiline,
-            TimeSpan.FromMilliseconds(1000));
 
     public static (int AppliedCount, string Result) MatchFileContent(
         Regex regex, string fileContent, int maxApply, int appliedCount, string attribute,

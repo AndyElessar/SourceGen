@@ -1,3 +1,5 @@
+﻿using SourceGen.Ioc.Cli.Commands;
+
 namespace SourceGen.Ioc.Cli.Test.AddAttribute;
 
 [Category(Constants.AddAttribute)]
@@ -10,7 +12,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_SimpleClassName_MatchesPublicClass()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public class MyClass { }";
 
         // Act
@@ -25,7 +27,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_SimpleClassName_MatchesInternalClass()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "internal class MyClass { }";
 
         // Act
@@ -40,7 +42,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_SimpleClassName_MatchesPartialClass()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public partial class MyClass { }";
 
         // Act
@@ -55,7 +57,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_SimpleClassName_MatchesSealedClass()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public sealed class MyClass { }";
 
         // Act
@@ -70,7 +72,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_SimpleClassName_DoesNotMatchStaticClass()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public static class MyClass { }";
 
         // Act
@@ -84,7 +86,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_SimpleClassName_MatchesClassWithBaseType()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public class MyClass : BaseClass { }";
 
         // Act
@@ -99,7 +101,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_RegexPattern_MatchesMultipleClasses()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex(@".*Handler");
+        var regex = CreateClassMatchRegex(@".*Handler");
         var content = """
             public class CommandHandler { }
             public class QueryHandler { }
@@ -117,7 +119,7 @@ public class UnitTests
     public async Task CreateClassMatchRegex_RegexPattern_MatchesSpecificPattern()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex(@"(Command|Query)Handler");
+        var regex = CreateClassMatchRegex(@"(Command|Query)Handler");
         var content = """
             public class CommandHandler { }
             public class QueryHandler { }
@@ -139,7 +141,7 @@ public class UnitTests
     public async Task CreateFullMatchRegex_CustomPattern_MatchesCorrectly()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateFullMatchRegex(@"class\s+\w+Service");
+        var regex = CreateFullMatchRegex(@"class\s+\w+Service");
         var content = "public class MyService { }";
 
         // Act
@@ -154,7 +156,7 @@ public class UnitTests
     public async Task CreateFullMatchRegex_MultilinePattern_MatchesAcrossLines()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateFullMatchRegex(@"^\s*public class");
+        var regex = CreateFullMatchRegex(@"^\s*public class");
         var content = """
             namespace Test;
             
@@ -176,9 +178,9 @@ public class UnitTests
     public async Task MatchFileContent_SingleMatch_AddsAttribute()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public class MyClass { }";
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -193,12 +195,12 @@ public class UnitTests
     public async Task MatchFileContent_MultipleMatches_AddsAttributeToAll()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex(@".*Handler");
+        var regex = CreateClassMatchRegex(@".*Handler");
         var content = """
             public class CommandHandler { }
             public class QueryHandler { }
             """;
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -214,13 +216,13 @@ public class UnitTests
     public async Task MatchFileContent_MaxApplyLimit_RespectsLimit()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex(@".*Handler");
+        var regex = CreateClassMatchRegex(@".*Handler");
         var content = """
             public class CommandHandler { }
             public class QueryHandler { }
             public class EventHandler { }
             """;
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -237,13 +239,13 @@ public class UnitTests
     public async Task MatchFileContent_WithExistingAppliedCount_RespectsRemainingLimit()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex(@".*Handler");
+        var regex = CreateClassMatchRegex(@".*Handler");
         var content = """
             public class CommandHandler { }
             public class QueryHandler { }
             public class EventHandler { }
             """;
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -260,9 +262,9 @@ public class UnitTests
     public async Task MatchFileContent_DryRun_DoesNotModifyContent()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public class MyClass { }";
-        var globalOptions = new GlobalOptions(DryRun: true, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: true, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -277,9 +279,9 @@ public class UnitTests
     public async Task MatchFileContent_NoMatch_ReturnsOriginalContent()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("NonExistentClass");
+        var regex = CreateClassMatchRegex("NonExistentClass");
         var content = "public class MyClass { }";
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -294,9 +296,9 @@ public class UnitTests
     public async Task MatchFileContent_CustomAttribute_UsesProvidedAttribute()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = "public class MyClass { }";
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(
@@ -311,7 +313,7 @@ public class UnitTests
     public async Task MatchFileContent_ComplexClassDeclaration_PreservesFormatting()
     {
         // Arrange
-        var regex = AddAttributeCommands.CreateClassMatchRegex("MyClass");
+        var regex = CreateClassMatchRegex("MyClass");
         var content = """
             namespace Test;
 
@@ -323,7 +325,7 @@ public class UnitTests
                 public void Dispose() { }
             }
             """;
-        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LogFile: "");
+        var globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
 
         // Act
         var (appliedCount, result) = AddAttributeCommands.MatchFileContent(

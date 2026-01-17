@@ -1,4 +1,4 @@
-namespace IocSample.Shared;
+﻿namespace IocSample.Shared;
 
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IQuery<TSelf, TResponse>;

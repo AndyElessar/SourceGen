@@ -1,9 +1,6 @@
-﻿using System.IO.Abstractions;
-using ConsoleAppFramework;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc.Cli;
-using ZLogger;
+using SourceGen.Ioc.Cli.Commands;
 
 var app = ConsoleApp.Create();
 app.ConfigureGlobalOptions((ref builder) =>
@@ -26,9 +23,9 @@ app.ConfigureGlobalOptions((ref builder) =>
         logging.ClearProviders();
         logging.AddZLoggerConsole();
 
-        if(!string.IsNullOrWhiteSpace(globalOptions.LogFile))
+        if(!string.IsNullOrWhiteSpace(globalOptions.LoggingFile))
         {
-            logging.AddZLoggerFile(globalOptions.LogFile);
+            logging.AddZLoggerFile(globalOptions.LoggingFile);
         }
 
         if(globalOptions.Verbose)
@@ -39,6 +36,7 @@ app.ConfigureGlobalOptions((ref builder) =>
 });
 
 app.Add<AddAttributeCommands>();
+app.Add<GenerateCommands>("generate");
 app.Add<CliSchemaCommand>();
 
 app.Run(args);

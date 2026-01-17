@@ -1,4 +1,4 @@
-# IServiceCollection register source generator
+﻿# IServiceCollection register source generator
 
 This source generator automatically generates extension methods for registering services in `Microsoft.Extensions.DependencyInjection.IServiceCollection`.
 
@@ -37,7 +37,7 @@ This source generator automatically generates extension methods for registering 
 ## Features
 
 1. Basic:
-    - Always register Implementation type itself.\
+    - Always register Implementation type itself.
     - When Service type is open generic type and Implementation type is closed type, make sure to register with closed generic type.
 
     ```csharp
