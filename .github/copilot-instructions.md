@@ -5,8 +5,9 @@ This repository contains C# Source Generator projects. Follow these instructions
 ## Project Overview
 
 - **SourceGen.Ioc.SourceGenerator**: Source Generator library targeting .NET Standard 2.0
-- **SourceGen.Ioc**: IoC (Inversion of Control) library targeting .NET 10
-- **SourceGen.Ioc.Cli**: Command-line tool for adding attributes
+- **SourceGen.Ioc**: IoC (Inversion of Control) library targeting .NET Standard 2.0 / .NET 10
+- **SourceGen.Ioc.Cli**: Command-line tool for adding attributes, generate attributes annotation in C# projects
+- **Tests**: Unit,Snapshot and benchmark tests for the Source Generator and CLI tool
 
 ## Project Requirements
 
@@ -24,10 +25,14 @@ When working on source generators, follow the best practices outlined here: [C# 
 src/
 ├── SourceGen.Ioc/                    # Main library, where attributes are defined
 ├── SourceGen.Ioc.Cli/                # CLI tool for adding attributes
-└── SourceGen.Ioc.SourceGenerator/    # Generator project
-    ├── Generators/                   # Generator implementations
+└── SourceGen.Ioc.SourceGenerator/    # Source Generator project
+    ├── Analyzer/                     # Roslyn analyzer implementations
+    │   └── SPEC.md                   # Analyzer specification document
+    ├── Generator/                    # Generator implementations
+    │   └── Spec/                     # Generator specification documents
     └── Models/                       # Data models for generation
 tests/
+├── SourceGen.Ioc.Benchmark/          # Benchmark tests
 ├── SourceGen.Ioc.Cli.Test/           # CLI unit tests
 └── SourceGen.Ioc.Test/               # Generator unit tests
 ```
