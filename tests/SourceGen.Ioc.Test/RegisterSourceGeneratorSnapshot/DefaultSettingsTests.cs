@@ -193,4 +193,139 @@ public class DefaultSettingsTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task DefaultSettings_Factory_AppliesFactoryFromDefaultSettings()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IMyHandler),
+                ServiceLifetime.Scoped,
+                Factory = nameof(TestNamespace.HandlerFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IMyHandler { void Handle(); }
+
+            public static class HandlerFactory
+            {
+                public static IMyHandler Create(IServiceProvider sp) => sp.GetRequiredService<MyHandlerImpl>();
+            }
+
+            // Should use Factory from DefaultSettings
+            [IocRegister(ServiceTypes = [typeof(IMyHandler)])]
+            public class MyHandlerImpl : IMyHandler
+            {
+                public void Handle() { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_Factory_ExplicitFactoryOverridesDefaultSettings()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IMyHandler),
+                ServiceLifetime.Scoped,
+                Factory = nameof(TestNamespace.DefaultFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IMyHandler { void Handle(); }
+
+            public static class DefaultFactory
+            {
+                public static IMyHandler Create(IServiceProvider sp) => sp.GetRequiredService<DefaultHandler>();
+            }
+
+            public static class SpecialFactory
+            {
+                public static IMyHandler Create(IServiceProvider sp) => new SpecialHandler();
+            }
+
+            // Should use Factory from DefaultSettings
+            [IocRegister(ServiceTypes = [typeof(IMyHandler)])]
+            public class DefaultHandler : IMyHandler
+            {
+                public void Handle() { }
+            }
+
+            // Should use explicit Factory, overriding DefaultSettings
+            [IocRegister(ServiceTypes = [typeof(IMyHandler)], Factory = nameof(SpecialFactory.Create))]
+            public class SpecialHandler : IMyHandler
+            {
+                public void Handle() { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_Factory_GenericInterface_AppliesFactory()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IRepository<>),
+                ServiceLifetime.Scoped,
+                Factory = nameof(TestNamespace.RepositoryFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { T Get(int id); }
+
+            public static class RepositoryFactory
+            {
+                public static object Create(IServiceProvider sp) => throw new NotImplementedException();
+            }
+
+            // Open generic registration - Factory from DefaultSettings will be applied
+            [IocRegister(ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T>
+            {
+                public T Get(int id) => default!;
+            }
+
+            // Entity type for closed generic discovery
+            public class Customer { public int Id { get; set; } }
+
+            // This service uses IRepository<Customer>, triggering closed generic registration
+            [IocRegister]
+            public class CustomerService
+            {
+                private readonly IRepository<Customer> _repository;
+
+                public CustomerService(IRepository<Customer> repository)
+                {
+                    _repository = repository;
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

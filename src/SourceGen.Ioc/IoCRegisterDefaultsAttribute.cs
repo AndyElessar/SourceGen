@@ -40,6 +40,9 @@ public sealed class IocRegisterDefaultsAttribute(Type targetServiceType, Service
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
+
+    /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
+    public string? Factory { get; init; }
 }
 
 #if NET7_0_OR_GREATER
@@ -75,6 +78,9 @@ public sealed class IocRegisterDefaultsAttribute<T>(ServiceLifetime lifetime) : 
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
+
+    /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
+    public string? Factory { get; init; }
 }
 
 #endif

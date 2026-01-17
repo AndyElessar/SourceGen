@@ -57,12 +57,16 @@ partial class RegisterSourceGenerator
             ? registration.TagOnly
             : (matchingDefault?.TagOnly ?? false);
 
+        // Factory: explicit registration Factory takes precedence over default settings
+        var factory = registration.Factory ?? matchingDefault?.Factory;
+
         // Create service registration models
         var serviceRegistrations = CreateServiceRegistrations(
             registration,
             serviceTypesToRegister,
             lifetime,
-            decorators);
+            decorators,
+            factory);
 
         // Create open generic entries for indexing (if applicable)
         var openGenericEntries = CreateOpenGenericEntries(
@@ -71,7 +75,8 @@ partial class RegisterSourceGenerator
             lifetime,
             decorators,
             tags,
-            tagOnly);
+            tagOnly,
+            factory);
 
         // Collect closed generic dependencies
         var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration);
@@ -222,7 +227,8 @@ partial class RegisterSourceGenerator
         RegistrationData registration,
         HashSet<TypeData> serviceTypesToRegister,
         ServiceLifetime lifetime,
-        ImmutableEquatableArray<TypeData> decorators)
+        ImmutableEquatableArray<TypeData> decorators,
+        FactoryMethodData? factory)
     {
         var implementationType = registration.ImplementationType;
         var isOpenGenericImplementation = implementationType.IsOpenGeneric;
@@ -261,7 +267,7 @@ partial class RegisterSourceGenerator
                 isOpenGenericImplementation,
                 filteredDecorators,
                 registration.InjectionMembers,
-                registration.Factory,
+                factory,
                 registration.Instance);
 
             registrations.Add(model);
@@ -496,7 +502,8 @@ partial class RegisterSourceGenerator
         ServiceLifetime lifetime,
         ImmutableEquatableArray<TypeData> decorators,
         ImmutableEquatableArray<string> tags,
-        bool tagOnly)
+        bool tagOnly,
+        FactoryMethodData? factory)
     {
         var implementationType = registration.ImplementationType;
 
@@ -517,7 +524,7 @@ partial class RegisterSourceGenerator
             tags,
             tagOnly,
             registration.InjectionMembers,
-            registration.Factory,
+            factory,
             registration.Instance);
 
         var entries = new List<OpenGenericEntry>();

@@ -988,8 +988,9 @@ internal static class TransformExtensions
         /// <summary>
         /// Extracts default settings from an IoCRegisterDefaultSettingsAttribute.
         /// </summary>
+        /// <param name="semanticModel">Optional semantic model for resolving Factory method data.</param>
         /// <returns>The default settings model, or null if the attribute data is invalid.</returns>
-        public DefaultSettingsModel? ExtractDefaultSettings()
+        public DefaultSettingsModel? ExtractDefaultSettings(SemanticModel? semanticModel = null)
         {
             if(attribute.ConstructorArguments.Length < 2)
                 return null;
@@ -1006,6 +1007,13 @@ internal static class TransformExtensions
             var tags = attribute.GetTags();
             var tagOnly = attribute.GetTagOnly();
 
+            // Get factory method data if semantic model is provided
+            FactoryMethodData? factory = null;
+            if(semanticModel is not null)
+            {
+                factory = attribute.GetFactoryMethodData(semanticModel);
+            }
+
             return new DefaultSettingsModel(
                 typeData,
                 (ServiceLifetime)lifetime,
@@ -1014,15 +1022,17 @@ internal static class TransformExtensions
                 serviceTypes,
                 decorators,
                 tags,
-                tagOnly);
+                tagOnly,
+                factory);
         }
 
         /// <summary>
         /// Extracts default settings from a generic IoCRegisterDefaultsAttribute (e.g., IoCRegisterDefaultsAttribute&lt;T&gt;).
         /// The target service type is specified via type parameter instead of constructor argument.
         /// </summary>
+        /// <param name="semanticModel">Optional semantic model for resolving Factory method data.</param>
         /// <returns>The default settings model, or null if the attribute data is invalid.</returns>
-        public DefaultSettingsModel? ExtractDefaultSettingsFromGenericAttribute()
+        public DefaultSettingsModel? ExtractDefaultSettingsFromGenericAttribute(SemanticModel? semanticModel = null)
         {
             var attrClass = attribute.AttributeClass;
             if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
@@ -1045,6 +1055,13 @@ internal static class TransformExtensions
             var tags = attribute.GetTags();
             var tagOnly = attribute.GetTagOnly();
 
+            // Get factory method data if semantic model is provided
+            FactoryMethodData? factory = null;
+            if(semanticModel is not null)
+            {
+                factory = attribute.GetFactoryMethodData(semanticModel);
+            }
+
             return new DefaultSettingsModel(
                 typeData,
                 (ServiceLifetime)lifetime,
@@ -1053,7 +1070,8 @@ internal static class TransformExtensions
                 serviceTypes,
                 decorators,
                 tags,
-                tagOnly);
+                tagOnly,
+                factory);
         }
     }
 

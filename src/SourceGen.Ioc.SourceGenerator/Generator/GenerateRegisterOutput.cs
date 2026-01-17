@@ -166,8 +166,9 @@ partial class RegisterSourceGenerator
         var implTypeName = registration.ImplementationType.Name;
 
         // Check if this registration uses Factory or Instance
-        bool hasFactory = registration.Factory is not null;
-        bool hasInstance = registration.Instance is not null;
+        // Note: Factory and Instance cannot be used with open generics - they require concrete types
+        bool hasFactory = registration.Factory is not null && !registration.IsOpenGeneric;
+        bool hasInstance = registration.Instance is not null && !registration.IsOpenGeneric;
 
         // Handle Factory registration first (takes precedence)
         if(hasFactory)

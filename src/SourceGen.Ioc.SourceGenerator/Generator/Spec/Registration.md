@@ -739,6 +739,96 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
+    **Factory in DefaultSettings**:
+
+    When `Factory` is specified in `IocRegisterDefaultsAttribute`, it applies as the default factory for all services implementing the target type. Explicit `Factory` specified in `IocRegisterAttribute` takes precedence over the default.
+
+    **Important**: When using Factory in DefaultSettings:
+    - The factory method must be compatible with all implementations that match the target service type
+    - The factory method should typically return the target service type (interface/base class)
+    - Factory is only applied when the registration doesn't have its own explicit Factory
+
+    ```csharp
+    #region Define:
+    public interface IMyHandler { void Handle(); }
+
+    // DefaultSettings with Factory - applies to all IMyHandler implementations
+    [assembly: IocRegisterDefaults(
+        typeof(IMyHandler),
+        ServiceLifetime.Scoped,
+        Factory = nameof(HandlerFactory.Create))]
+
+    public static class HandlerFactory
+    {
+        public static IMyHandler Create(IServiceProvider sp)
+        {
+            // Custom creation logic for all handlers
+            var handler = sp.GetRequiredService<MyHandlerImpl>();
+            // Additional setup...
+            return handler;
+        }
+    }
+
+    [IocRegister]
+    public class MyHandlerImpl : IMyHandler
+    {
+        public void Handle() { }
+    }
+
+    // This handler uses explicit Factory, overrides default
+    [IocRegister(Factory = nameof(SpecialHandlerFactory.Create))]
+    public class SpecialHandler : IMyHandler
+    {
+        public void Handle() { }
+    }
+
+    public static class SpecialHandlerFactory
+    {
+        public static IMyHandler Create(IServiceProvider sp) => new SpecialHandler();
+    }
+    #endregion
+
+    #region Generate:
+    // MyHandlerImpl uses Factory from DefaultSettings
+    services.AddScoped<IMyHandler>(sp => HandlerFactory.Create(sp));
+
+    // SpecialHandler uses its own explicit Factory
+    services.AddScoped<IMyHandler>(sp => SpecialHandlerFactory.Create(sp));
+    #endregion
+    ```
+
+    **Generic DefaultSettings with Factory**:
+
+    ```csharp
+    #region Define:
+    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
+
+    [assembly: IocRegisterDefaults<IRequestHandler<,>>(
+        ServiceLifetime.Singleton,
+        Factory = nameof(HandlerFactory.CreateHandler))]
+
+    public static class HandlerFactory
+    {
+        public static object CreateHandler(IServiceProvider sp, [ServiceKey] object? key)
+        {
+            // Factory for all IRequestHandler implementations
+            // Note: For generic handlers, factory typically creates the concrete handler
+            // and returns it as the interface type
+        }
+    }
+
+    [IocRegister]
+    public class QueryHandler : IRequestHandler<QueryRequest, QueryResponse>
+    {
+        public QueryResponse Handle(QueryRequest request) => new();
+    }
+    #endregion
+
+    #region Generate:
+    services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>(sp => HandlerFactory.CreateHandler(sp, null));
+    #endregion
+    ```
+
 10. When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
 
     ```csharp

@@ -7,7 +7,7 @@ partial class RegisterSourceGenerator
         foreach(var attr in ctx.Attributes)
         {
             // Use shared method from Constants to extract default settings
-            var data = attr.ExtractDefaultSettings();
+            var data = attr.ExtractDefaultSettings(ctx.SemanticModel);
 
             if(data is not null)
                 yield return data;
@@ -23,7 +23,7 @@ partial class RegisterSourceGenerator
         foreach(var attr in ctx.Attributes)
         {
             // Use shared method from Constants to extract default settings from generic attribute
-            var data = attr.ExtractDefaultSettingsFromGenericAttribute();
+            var data = attr.ExtractDefaultSettingsFromGenericAttribute(ctx.SemanticModel);
 
             if(data is not null)
                 yield return data;
