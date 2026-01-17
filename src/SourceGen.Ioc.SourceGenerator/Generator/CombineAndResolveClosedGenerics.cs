@@ -9,13 +9,13 @@ partial class RegisterSourceGenerator
     /// <param name="basicResults">The basic registration results from pipeline 1.</param>
     /// <param name="serviceProviderInvocations">Closed generic types from GetService/GetRequiredService invocations.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Service registrations grouped by method name.</returns>
-    private static ImmutableEquatableDictionary<string, ImmutableEquatableArray<ServiceRegistrationModel>> CombineAndResolveClosedGenerics(
+    /// <returns>Service registrations with tags for deferred method grouping.</returns>
+    private static ImmutableEquatableArray<ServiceRegistrationWithTags> CombineAndResolveClosedGenerics(
         in ImmutableArray<BasicRegistrationResult> basicResults,
         in ImmutableArray<ClosedGenericDependency> serviceProviderInvocations,
         CancellationToken ct)
     {
-        var methodGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
+        var registrations = new List<ServiceRegistrationWithTags>();
 
         // Use List to allow multiple implementations per service type key
         // (e.g., GenericRequestHandler<T> and GenericRequestHandler2<T> both implement IRequestHandler<,>)
@@ -27,18 +27,10 @@ partial class RegisterSourceGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            // Add service registrations to method groups
+            // Add service registrations with their tags
             foreach(var model in result.ServiceRegistrations)
             {
-                if(!result.TagOnly)
-                {
-                    AddToMethodGroup(methodGroups, DefaultMethodKey, model);
-                }
-
-                foreach(var tag in result.Tags)
-                {
-                    AddToMethodGroup(methodGroups, tag, model);
-                }
+                registrations.Add(new ServiceRegistrationWithTags(model, result.Tags, result.TagOnly));
             }
 
             // Index open generic entries - store ALL implementations per service type key
@@ -89,31 +81,11 @@ partial class RegisterSourceGenerator
             GenerateClosedGenericFactoryRegistrations(
                 openGenericIndex,
                 closedGenericDependencies,
-                methodGroups,
+                registrations,
                 ct);
         }
 
-        return methodGroups
-            .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
-            .ToImmutableEquatableDictionary(
-                static kvp => kvp.Key,
-                static kvp => kvp.Value.ToImmutableEquatableArray());
-    }
-
-    /// <summary>
-    /// Adds a registration model to the specified method group.
-    /// </summary>
-    private static void AddToMethodGroup(
-        Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
-        string methodKey,
-        ServiceRegistrationModel model)
-    {
-        if(!methodGroups.TryGetValue(methodKey, out var list))
-        {
-            list = [];
-            methodGroups[methodKey] = list;
-        }
-        list.Add(model);
+        return registrations.ToImmutableEquatableArray();
     }
 
     /// <summary>
@@ -122,7 +94,7 @@ partial class RegisterSourceGenerator
     private static void GenerateClosedGenericFactoryRegistrations(
         Dictionary<string, List<OpenGenericRegistrationInfo>> openGenericIndex,
         Dictionary<string, ClosedGenericDependency> closedGenericDependencies,
-        Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
+        List<ServiceRegistrationWithTags> registrations,
         CancellationToken ct)
     {
         if(openGenericIndex.Count == 0 || closedGenericDependencies.Count == 0)
@@ -135,13 +107,11 @@ partial class RegisterSourceGenerator
 
         // First, collect all existing registrations to avoid duplicates
         // This includes both implementation types and service types
-        foreach(var group in methodGroups.Values)
+        foreach(var regWithTags in registrations)
         {
-            foreach(var model in group)
-            {
-                generatedClosedGenerics.Add(model.ImplementationType.Name);
-                generatedClosedGenerics.Add(model.ServiceType.Name);
-            }
+            var model = regWithTags.Registration;
+            generatedClosedGenerics.Add(model.ImplementationType.Name);
+            generatedClosedGenerics.Add(model.ServiceType.Name);
         }
 
         foreach(var kvp in closedGenericDependencies)
@@ -171,7 +141,7 @@ partial class RegisterSourceGenerator
                 if(TryGenerateClosedGenericRegistration(
                     dependency.ClosedType,
                     openGenericInfo,
-                    methodGroups,
+                    registrations,
                     generatedClosedGenerics))
                 {
                     break; // Found a matching registration, stop searching
@@ -188,7 +158,7 @@ partial class RegisterSourceGenerator
     private static bool TryGenerateClosedGenericRegistration(
         TypeData closedServiceType,
         OpenGenericRegistrationInfo openGenericInfo,
-        Dictionary<string, List<ServiceRegistrationModel>> methodGroups,
+        List<ServiceRegistrationWithTags> registrations,
         HashSet<string> generatedClosedGenerics)
     {
         var openImplType = openGenericInfo.ImplementationType;
@@ -272,15 +242,8 @@ partial class RegisterSourceGenerator
             openGenericInfo.Factory,
             openGenericInfo.Instance);
 
-        // Add to method groups
-        if(!openGenericInfo.TagOnly)
-        {
-            AddToMethodGroup(methodGroups, DefaultMethodKey, implModel);
-        }
-        foreach(var tag in openGenericInfo.Tags)
-        {
-            AddToMethodGroup(methodGroups, tag, implModel);
-        }
+        // Add registration with tags
+        registrations.Add(new ServiceRegistrationWithTags(implModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
         generatedClosedGenerics.Add(closedImplType.Name);
 
         // Create registrations for each closed service type
@@ -321,14 +284,7 @@ partial class RegisterSourceGenerator
                 openGenericInfo.Factory,
                 openGenericInfo.Instance);
 
-            if(!openGenericInfo.TagOnly)
-            {
-                AddToMethodGroup(methodGroups, DefaultMethodKey, serviceModel);
-            }
-            foreach(var tag in openGenericInfo.Tags)
-            {
-                AddToMethodGroup(methodGroups, tag, serviceModel);
-            }
+            registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
             generatedClosedGenerics.Add(closedSvcType.Name);
         }
 

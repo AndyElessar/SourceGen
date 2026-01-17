@@ -258,7 +258,7 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             var ((registrations, assemblyName), msbuildProps) = source;
             // Use RootNamespace from MSBuild if available, otherwise fall back to assembly name
             var rootNamespace = msbuildProps.RootNamespace ?? assemblyName;
-            GenerateOutput(in ctx, registrations, rootNamespace, assemblyName, msbuildProps.CustomIocName);
+            GenerateRegisterOutput(in ctx, registrations, rootNamespace, assemblyName, msbuildProps.CustomIocName);
         });
     }
 }
