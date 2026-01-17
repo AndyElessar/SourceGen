@@ -963,7 +963,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             }
 
             // Get target type from attribute (constructor arg for non-generic, type parameter for generic)
-            var targetType = GetTargetTypeFromAttribute(attribute);
+            var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
             if(targetType is null)
                 continue;
 
@@ -982,7 +982,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
 
             // Check for Factory and Instance for SGIOC015 analysis
-            var (hasFactory, hasInstance) = HasFactoryOrInstance(attribute);
+            var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
             RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
         }
@@ -1021,7 +1021,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                 continue;
 
             // Get target type from attribute (constructor arg for non-generic, type parameter for generic)
-            var targetType = GetTargetTypeFromAttribute(attribute);
+            var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
             if(targetType is null)
                 continue;
 
@@ -1061,8 +1061,8 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
             if(isIoCRegisterFor)
             {
-                // Use helper method to get target type (supports both generic and non-generic variants)
-                var target = GetTargetTypeFromAttribute(attribute);
+                // Use extension method to get target type (supports both generic and non-generic variants)
+                var target = attribute.GetTargetTypeFromRegisterForAttribute();
                 if(target is null)
                     continue;
 
@@ -1102,7 +1102,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
 
             // Check for Factory and Instance for SGIOC015 analysis
-            var (hasFactory, hasInstance) = HasFactoryOrInstance(attribute);
+            var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
@@ -1182,60 +1182,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Check IoCRegisterForAttribute variants
         return comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute)
             || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute_T1);
-    }
-
-    /// <summary>
-    /// Gets the target type from an IoCRegisterForAttribute.
-    /// For non-generic variant, extracts from constructor argument.
-    /// For generic variant (IoCRegisterForAttribute&lt;T&gt;), extracts from type parameter.
-    /// </summary>
-    private static INamedTypeSymbol? GetTargetTypeFromAttribute(AttributeData attribute)
-    {
-        var attributeClass = attribute.AttributeClass;
-        if(attributeClass is null)
-            return null;
-
-        // For generic IoCRegisterForAttribute<T>, get T from type arguments
-        if(attributeClass.IsGenericType && attributeClass.TypeArguments.Length > 0)
-        {
-            return attributeClass.TypeArguments[0] as INamedTypeSymbol;
-        }
-
-        // For non-generic IoCRegisterForAttribute, get from constructor argument
-        if(attribute.ConstructorArguments.Length > 0 &&
-           attribute.ConstructorArguments[0].Value is INamedTypeSymbol targetType)
-        {
-            return targetType;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Checks if the attribute has Factory or Instance specified.
-    /// </summary>
-    private static (bool HasFactory, bool HasInstance) HasFactoryOrInstance(AttributeData attribute)
-    {
-        bool hasFactory = false;
-        bool hasInstance = false;
-
-        foreach(var namedArg in attribute.NamedArguments)
-        {
-            if(namedArg.Key == "Factory" && !namedArg.Value.IsNull)
-            {
-                hasFactory = true;
-            }
-            else if(namedArg.Key == "Instance" && !namedArg.Value.IsNull)
-            {
-                hasInstance = true;
-            }
-
-            // Early exit if both found
-            if(hasFactory && hasInstance)
-                break;
-        }
-
-        return (hasFactory, hasInstance);
     }
 
     /// <summary>

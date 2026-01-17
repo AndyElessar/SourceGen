@@ -688,6 +688,62 @@ internal static class TransformExtensions
             attribute.GetNamedArgument<bool>("TagOnly", false);
 
         /// <summary>
+        /// Checks if the attribute has Factory or Instance specified.
+        /// </summary>
+        /// <returns>A tuple indicating whether Factory and/or Instance are specified.</returns>
+        public (bool HasFactory, bool HasInstance) HasFactoryOrInstance()
+        {
+            bool hasFactory = false;
+            bool hasInstance = false;
+
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key == "Factory" && !namedArg.Value.IsNull)
+                {
+                    hasFactory = true;
+                }
+                else if(namedArg.Key == "Instance" && !namedArg.Value.IsNull)
+                {
+                    hasInstance = true;
+                }
+
+                // Early exit if both found
+                if(hasFactory && hasInstance)
+                    break;
+            }
+
+            return (hasFactory, hasInstance);
+        }
+
+        /// <summary>
+        /// Gets the target type from an IoCRegisterForAttribute.
+        /// For non-generic variant, extracts from constructor argument.
+        /// For generic variant (IoCRegisterForAttribute&lt;T&gt;), extracts from type parameter.
+        /// </summary>
+        /// <returns>The target type symbol, or null if not found.</returns>
+        public INamedTypeSymbol? GetTargetTypeFromRegisterForAttribute()
+        {
+            var attributeClass = attribute.AttributeClass;
+            if(attributeClass is null)
+                return null;
+
+            // For generic IoCRegisterForAttribute<T>, get T from type arguments
+            if(attributeClass.IsGenericType && attributeClass.TypeArguments.Length > 0)
+            {
+                return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+            }
+
+            // For non-generic IoCRegisterForAttribute, get from constructor argument
+            if(attribute.ConstructorArguments.Length > 0 &&
+               attribute.ConstructorArguments[0].Value is INamedTypeSymbol targetType)
+            {
+                return targetType;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Gets the Key information from the attribute (IoCRegisterAttribute or IoCRegisterForAttribute).
         /// </summary>
         /// <returns>
