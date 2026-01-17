@@ -95,6 +95,23 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Combine(defaultSettingsProvider_T1.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
+        // ========== IocRegisterDefaultsAttribute ImplementationTypes providers ==========
+        // IocRegisterDefaultsAttribute.ImplementationTypes (non-generic)
+        var defaultSettingsImplTypesProvider = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                Constants.IocRegisterDefaultsAttributeFullName,
+                predicate: static (_, _) => true,
+                transform: static (ctx, ct) => TransformDefaultSettingsImplementationTypes(ctx, ct))
+            .SelectMany(static (m, _) => m);
+
+        // IocRegisterDefaultsAttribute<T>.ImplementationTypes
+        var defaultSettingsImplTypesProvider_T1 = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                Constants.IocRegisterDefaultsAttributeFullName_T1,
+                predicate: static (_, _) => true,
+                transform: static (ctx, ct) => TransformDefaultSettingsImplementationTypesGeneric(ctx, ct))
+            .SelectMany(static (m, _) => m);
+
         // ========== IocImportModuleAttribute providers ==========
         // IocImportModuleAttribute (non-generic)
         var importedDefaultSettingsProvider = context.SyntaxProvider
@@ -220,6 +237,16 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Combine(combinedDefaultSettings)
             .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
 
+        // Process ImplementationTypes from IocRegisterDefaultsAttribute
+        // These registrations already have all settings applied from the defaults attribute
+        var basicRegistrationResults3 = defaultSettingsImplTypesProvider
+            .Combine(combinedDefaultSettings)
+            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+
+        var basicRegistrationResults3_T1 = defaultSettingsImplTypesProvider_T1
+            .Combine(combinedDefaultSettings)
+            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+
         // Collect all basic registration results
         var allBasicResults = basicRegistrationResults1
             .Collect()
@@ -234,6 +261,10 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Combine(basicRegistrationResults2.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
             .Combine(basicRegistrationResults2_T1.Collect())
+            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
+            .Combine(basicRegistrationResults3.Collect())
+            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
+            .Combine(basicRegistrationResults3_T1.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
         // ========== Pipeline 2: Combine results and resolve closed generics ==========

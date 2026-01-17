@@ -14,6 +14,16 @@ internal class MyService : IMyService;
 internal class MyService : IMyService;
 ```
 
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddSingleton<MyService, MyService>();
+services.AddSingleton<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+```
+
+</details>
+
 ## Specifying Lifetime
 
 ```csharp
@@ -30,6 +40,22 @@ internal class ScopedService : IService;
 internal class TransientService : IService;
 ```
 
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddSingleton<SingletonService, SingletonService>();
+services.AddSingleton<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<SingletonService>());
+
+services.AddScoped<ScopedService, ScopedService>();
+services.AddScoped<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ScopedService>());
+
+services.AddTransient<TransientService, TransientService>();
+services.AddTransient<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<TransientService>());
+```
+
+</details>
+
 ## Multiple Service Types
 
 Register a class under multiple service types:
@@ -44,6 +70,17 @@ internal class MultiService : IService1, IService2;
 internal class MultiService : IService1, IService2;
 ```
 
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddSingleton<MultiService, MultiService>();
+services.AddSingleton<IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MultiService>());
+services.AddSingleton<IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MultiService>());
+```
+
+</details>
+
 ## Register All Interfaces/Base Classes
 
 ```csharp
@@ -55,6 +92,23 @@ internal class MyService : IService1, IService2, IDisposable;
 [IocRegister(RegisterAllBaseClasses = true)]
 internal class DerivedService : BaseService;
 ```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+// RegisterAllInterfaces
+services.AddSingleton<MyService, MyService>();
+services.AddSingleton<IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddSingleton<IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddSingleton<IDisposable>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+
+// RegisterAllBaseClasses
+services.AddSingleton<DerivedService, DerivedService>();
+services.AddSingleton<BaseService>((global::System.IServiceProvider sp) => sp.GetRequiredService<DerivedService>());
+```
+
+</details>
 
 ## Registering External Types
 
@@ -69,6 +123,17 @@ Use `[IocRegisterFor<T>]` to register types you don't own:
 [IocRegisterFor<AnotherExternal>(ServiceTypes = [typeof(IExternal)])]
 public class RegistrationMarker;
 ```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddSingleton<ExternalService, ExternalService>();
+services.AddSingleton<AnotherExternal, AnotherExternal>();
+services.AddSingleton<IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<AnotherExternal>());
+```
+
+</details>
 
 ## Usage
 

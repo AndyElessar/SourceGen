@@ -706,6 +706,72 @@ internal static class TransformExtensions
             attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true);
 
         /// <summary>
+        /// Gets the ImplementationTypes array from the attribute.
+        /// Extracts implementation types with constructor parameters and hierarchy information,
+        /// using the same parsing logic as IocRegisterAttribute.
+        /// </summary>
+        public ImmutableEquatableArray<TypeData> GetImplementationTypes() =>
+            attribute.GetTypeArrayArgumentWithHierarchy("ImplementationTypes");
+
+        /// <summary>
+        /// Gets the ImplementationTypes array as INamedTypeSymbol from the attribute.
+        /// Used when full symbol access is needed for injection member extraction.
+        /// </summary>
+        public ImmutableEquatableArray<INamedTypeSymbol> GetImplementationTypeSymbols() =>
+            attribute.GetTypeSymbolsFromNamedArgument("ImplementationTypes");
+
+        /// <summary>
+        /// Gets an array of type symbols from a named argument.
+        /// Used when full symbol access is needed for further analysis.
+        /// </summary>
+        public ImmutableEquatableArray<INamedTypeSymbol> GetTypeSymbolsFromNamedArgument(string name)
+        {
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
+                {
+                    List<INamedTypeSymbol> result = [];
+                    foreach(var value in namedArg.Value.Values)
+                    {
+                        if(value.Value is INamedTypeSymbol namedTypeSymbol)
+                        {
+                            result.Add(namedTypeSymbol);
+                        }
+                    }
+                    return result.ToImmutableEquatableArray();
+                }
+            }
+
+            return [];
+        }
+
+        /// <summary>
+        /// Gets an array of type symbols from a named argument with full hierarchy extraction.
+        /// Used for ImplementationTypes where we need constructor params and all interfaces/base classes.
+        /// </summary>
+        public ImmutableEquatableArray<TypeData> GetTypeArrayArgumentWithHierarchy(string name)
+        {
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
+                {
+                    List<TypeData> result = [];
+                    foreach(var value in namedArg.Value.Values)
+                    {
+                        if(value.Value is INamedTypeSymbol namedTypeSymbol)
+                        {
+                            // Extract with constructor params and hierarchy, same as IocRegisterAttribute
+                            result.Add(namedTypeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true));
+                        }
+                    }
+                    return result.ToImmutableEquatableArray();
+                }
+            }
+
+            return [];
+        }
+
+        /// <summary>
         /// Gets the Tags array from the attribute.
         /// </summary>
         public ImmutableEquatableArray<string> GetTags()
@@ -1014,6 +1080,9 @@ internal static class TransformExtensions
                 factory = attribute.GetFactoryMethodData(semanticModel);
             }
 
+            // Get implementation types with constructor params and hierarchy (same as IocRegisterAttribute)
+            var implementationTypes = attribute.GetImplementationTypes();
+
             return new DefaultSettingsModel(
                 typeData,
                 (ServiceLifetime)lifetime,
@@ -1023,7 +1092,8 @@ internal static class TransformExtensions
                 decorators,
                 tags,
                 tagOnly,
-                factory);
+                factory,
+                implementationTypes);
         }
 
         /// <summary>
@@ -1062,6 +1132,9 @@ internal static class TransformExtensions
                 factory = attribute.GetFactoryMethodData(semanticModel);
             }
 
+            // Get implementation types with constructor params and hierarchy (same as IocRegisterAttribute)
+            var implementationTypes = attribute.GetImplementationTypes();
+
             return new DefaultSettingsModel(
                 typeData,
                 (ServiceLifetime)lifetime,
@@ -1071,7 +1144,8 @@ internal static class TransformExtensions
                 decorators,
                 tags,
                 tagOnly,
-                factory);
+                factory,
+                implementationTypes);
         }
     }
 

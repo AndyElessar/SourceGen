@@ -328,4 +328,185 @@ public class DefaultSettingsTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task DefaultSettings_ImplementationTypes_RegistersImplementationTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IMyService),
+                ServiceLifetime.Scoped,
+                ImplementationTypes = [typeof(TestNamespace.MyService), typeof(TestNamespace.AnotherService)])]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            // Registered directly via ImplementationTypes
+            public class MyService : IMyService { }
+
+            // Also registered directly via ImplementationTypes
+            public class AnotherService : IMyService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_ImplementationTypes_WithServiceTypes_RegistersAllServiceTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IBaseService),
+                ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(TestNamespace.ISecondaryService)],
+                ImplementationTypes = [typeof(TestNamespace.MyService)])]
+
+            namespace TestNamespace;
+
+            public interface IBaseService { }
+            public interface ISecondaryService { }
+
+            // Registered via ImplementationTypes, should also register ISecondaryService from ServiceTypes
+            public class MyService : IBaseService, ISecondaryService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_ImplementationTypes_WithDecorators_AppliesDecorators()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IMyService),
+                ServiceLifetime.Scoped,
+                Decorators = [typeof(TestNamespace.MyServiceDecorator)],
+                ImplementationTypes = [typeof(TestNamespace.MyService)])]
+
+            namespace TestNamespace;
+
+            public interface IMyService { void DoWork(); }
+
+            // Registered via ImplementationTypes with decorator
+            public class MyService : IMyService
+            {
+                public void DoWork() { }
+            }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                private readonly IMyService _inner = inner;
+                public void DoWork() => _inner.DoWork();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_ImplementationTypes_Generic_RegistersImplementationTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults<TestNamespace.IMyService>(
+                ServiceLifetime.Transient,
+                ImplementationTypes = [typeof(TestNamespace.MyService), typeof(TestNamespace.AnotherService)])]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            // Registered directly via ImplementationTypes in generic attribute
+            public class MyService : IMyService { }
+
+            // Also registered directly via ImplementationTypes in generic attribute
+            public class AnotherService : IMyService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_ImplementationTypes_WithTags_RegistersWithTags()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IMyService),
+                ServiceLifetime.Scoped,
+                Tags = ["Production"],
+                ImplementationTypes = [typeof(TestNamespace.ProductionService)])]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            // Registered via ImplementationTypes with Production tag
+            public class ProductionService : IMyService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task DefaultSettings_ImplementationTypes_WithConstructorDependencies_GeneratesFactoryMethod()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IMyService),
+                ServiceLifetime.Scoped,
+                ImplementationTypes = [typeof(TestNamespace.MyService)])]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IocRegister]
+            public class Dependency : IDependency { }
+
+            // Registered via ImplementationTypes with constructor dependency
+            public class MyService(IDependency dependency) : IMyService
+            {
+                private readonly IDependency _dependency = dependency;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

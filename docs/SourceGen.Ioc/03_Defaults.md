@@ -6,10 +6,12 @@ Use `[IocRegisterDefaults<T>]` to define default registration settings for all t
 
 ```csharp
 // All classes implementing IHandler will be registered as Transient by default
+// Automatically registered as IHandler
 [assembly: IocRegisterDefaults<IHandler>(ServiceLifetime.Transient)]
 
 public interface IHandler;
 
+// Need mark with [IocRegister]
 // Uses default lifetime (Transient) from IHandler
 [IocRegister]
 internal class MyHandler : IHandler;
@@ -19,17 +21,198 @@ internal class MyHandler : IHandler;
 internal class SingletonHandler : IHandler;
 ```
 
-## Default Service Types
+<details>
+<summary>Generated Code</summary>
 
 ```csharp
-[assembly: IocRegisterDefaults<IRepository>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository)])]
-
-public interface IRepository;
-
-// Automatically registered as IRepository
-[IocRegister]
-internal class UserRepository : IRepository;
+services.AddTransient<MyHandler, MyHandler>();
+services.AddTransient<IHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyHandler>());
+services.AddSingleton<SingletonHandler, SingletonHandler>();
+services.AddSingleton<IHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<SingletonHandler>());
 ```
+
+</details>
+
+## Multiple Service Types
+
+Use `ServiceTypes` register multiple service types:
+
+```csharp
+[assembly: IocRegisterDefaults<IMyService1>(
+  ServiceLifetime.Transient,
+  ServiceTypes = [typeof(IMyService2)])]
+
+public interface IMyService1;
+public interface IMyService2;
+
+[IocRegister]
+internal class MyService : IMyService1, IMyService2;
+```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddTransient<MyService, MyService>();
+services.AddTransient<IMyService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddSingleton<IMyService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+```
+
+</details>
+
+## Implementation Types
+
+Use `ImplementationTypes` to directly register implementation types without marking each one with `[IocRegister]`:
+
+```csharp
+[assembly: IocRegisterDefaults<IMyService>(
+    ServiceLifetime.Scoped,
+    ImplementationTypes = [typeof(MyService), typeof(AnotherService)])]
+
+public interface IMyService;
+
+// Registered directly via ImplementationTypes - no [IocRegister] needed
+public class MyService : IMyService;
+public class AnotherService : IMyService;
+```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddScoped<MyService, MyService>();
+services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddScoped<AnotherService, AnotherService>();
+services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<AnotherService>());
+```
+
+</details>
+
+### With Service Types
+
+Combine `ImplementationTypes` with `ServiceTypes` to register implementations for multiple service types:
+
+```csharp
+[assembly: IocRegisterDefaults<IBaseService>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(ISecondaryService)],
+    ImplementationTypes = [typeof(MyService)])]
+
+public interface IBaseService;
+public interface ISecondaryService;
+
+// Registered as IBaseService and ISecondaryService
+public class MyService : IBaseService, ISecondaryService;
+```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddSingleton<MyService, MyService>();
+services.AddSingleton<ISecondaryService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddSingleton<IBaseService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+```
+
+</details>
+
+### With Decorators
+
+Apply decorators to implementation types:
+
+```csharp
+[assembly: IocRegisterDefaults<IMyService>(
+    ServiceLifetime.Scoped,
+    Decorators = [typeof(LoggingDecorator)],
+    ImplementationTypes = [typeof(MyService)])]
+
+public interface IMyService { void DoWork(); }
+
+public class MyService : IMyService
+{
+    public void DoWork() { }
+}
+
+public class LoggingDecorator(IMyService inner) : IMyService
+{
+    public void DoWork()
+    {
+        Console.WriteLine("Before");
+        inner.DoWork();
+        Console.WriteLine("After");
+    }
+}
+```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddScoped<MyService, MyService>();
+services.AddScoped<IMyService>((IServiceProvider sp) =>
+{
+    var s0 = sp.GetRequiredService<MyService>();
+    var s1 = new LoggingDecorator(s0);
+    return s1;
+});
+```
+
+</details>
+
+### With Tags
+
+Use tags to control which registration methods include the implementation types:
+
+```csharp
+[assembly: IocRegisterDefaults<IMyService>(
+    ServiceLifetime.Scoped,
+    Tags = ["Production"],
+    ImplementationTypes = [typeof(ProductionService)])]
+
+[assembly: IocRegisterDefaults<IMyService>(
+    ServiceLifetime.Scoped,
+    Tags = ["Development"],
+    TagOnly = true,
+    ImplementationTypes = [typeof(MockService)])]
+
+public interface IMyService;
+
+public class ProductionService : IMyService;
+public class MockService : IMyService;
+
+// Generated methods:
+// - AddMyAssembly() includes ProductionService
+// - AddMyAssembly_Production() includes ProductionService
+// - AddMyAssembly_Development() includes MockService only
+```
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+public static IServiceCollection AddMyAssembly(this IServiceCollection services)
+{
+    services.AddScoped<ProductionService, ProductionService>();
+    services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ProductionService>());
+    return services;
+}
+
+public static IServiceCollection AddMyAssembly_Production(this IServiceCollection services)
+{
+    services.AddScoped<ProductionService, ProductionService>();
+    services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ProductionService>());
+    return services;
+}
+
+public static IServiceCollection AddMyAssembly_Development(this IServiceCollection services)
+{
+    services.AddScoped<MockService, MockService>();
+    services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MockService>());
+    return services;
+}
+```
+
+</details>
 
 ## Mark on assembly or marker type
 
