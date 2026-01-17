@@ -5,8 +5,11 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 ## Collection information
 
 1. Find classes marked with `SourceGen.Ioc.IocRegisterAttribute` and `SourceGen.Ioc.IocRegisterForAttribute`.
+    - `IocRegisterAttribute` supports generic versions: `IocRegisterAttribute<T>`, `IocRegisterAttribute<T1,T2>`, `IocRegisterAttribute<T1,T2,T3>`, `IocRegisterAttribute<T1,T2,T3,T4>`
+    - `IocRegisterForAttribute` supports generic version: `IocRegisterForAttribute<T>`
 
 2. Find `SourceGen.Ioc.IocRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
+    - Supports generic version: `IocRegisterDefaultsAttribute<T>`
 
 3. Service registration settings to collect:
     - Service type (from `TargetServiceType`, `ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`, `IocDiscoverAttribute`)
@@ -18,12 +21,13 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
     - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory`)
     - Instance (from `IocRegisterAttribute.Instance`, `IocRegisterForAttribute.Instance`)
     - `IServiceProvider` invocations: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`, collect type data from `T`, regarded as Service type
-    - Other assembly's setting from `IocImportModuleAttribute`
+    - Other assembly's setting from `IocImportModuleAttribute` (supports generic version: `IocImportModuleAttribute<T>`)
+    - `IocDiscoverAttribute` for explicit closed generic discovery (supports generic version: `IocDiscoverAttribute<T>`)
 
 4. Collect compilation info:
-    - Project root namespace (from compilation options)
+    - Project root namespace (from MSBuild `RootNamespace` property, fallback to assembly name)
     - Assembly name (from compilation options)
-    - Project properties: SourceGenIocName
+    - Project properties: `SourceGenIocName` (customize generated method name)
 
 ## Parse logic
 
@@ -40,7 +44,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
     2. The one on the closest base class
     3. The one on the first interface in `RegistrationData.AllInterfaces`
 
-3. `IocRegisterAttribute`, `InjectAttribute`:
+3. `IocInjectAttribute`, `InjectAttribute`:
     - Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
 4. Constructor selection order:

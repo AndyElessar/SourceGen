@@ -2,9 +2,41 @@
 
 This source generator automatically generates extension methods for registering services in `Microsoft.Extensions.DependencyInjection.IServiceCollection`.
 
+## Supported Attributes
+
+### Registration Attributes
+
+- `IocRegisterAttribute` - Non-generic version with optional `ServiceTypes` parameter
+- `IocRegisterAttribute<T>` - Generic version with single service type
+- `IocRegisterAttribute<T1,T2>` - Generic version with two service types
+- `IocRegisterAttribute<T1,T2,T3>` - Generic version with three service types
+- `IocRegisterAttribute<T1,T2,T3,T4>` - Generic version with four service types
+- `IocRegisterForAttribute` - Non-generic version for registering external types
+- `IocRegisterForAttribute<T>` - Generic version for registering external types
+
+### Default Settings Attributes
+
+- `IocRegisterDefaultsAttribute` - Non-generic version with `TargetType` parameter
+- `IocRegisterDefaultsAttribute<T>` - Generic version for default settings
+
+### Module Import Attributes
+
+- `IocImportModuleAttribute` - Non-generic version with `ModuleType` parameter
+- `IocImportModuleAttribute<T>` - Generic version for importing module settings
+
+### Discovery Attributes
+
+- `IocDiscoverAttribute` - Non-generic version with `ClosedGenericType` parameter
+- `IocDiscoverAttribute<T>` - Generic version for closed generic discovery
+
+### Injection Attributes
+
+- `IocInjectAttribute` - For field, property, method, or constructor parameter injection
+- `InjectAttribute` - Alternative name (compatible with other libraries like `Microsoft.AspNetCore.Components.InjectAttribute`)
+
 ## Features
 
-1. Basic:\
+1. Basic:
     - Always register Implementation type itself.\
     - When Service type is open generic type and Implementation type is closed type, make sure to register with closed generic type.
 
@@ -253,6 +285,17 @@ This source generator automatically generates extension methods for registering 
     - Built-in types without attributes and without default value: Skip (unresolvable)
     - Parameters with default values: See rule for optional parameters below
 
+    **Property/Field Analysis**:
+    Properties and fields marked with `[IocInject]` or `[Inject]` are analyzed for injection:
+    - Only non-static properties with a setter (`set` or `init`) are eligible
+    - Only non-static, non-readonly fields are eligible
+    - `[IocInject]` attribute with Key: Use keyed service resolution (`GetRequiredKeyedService<T>(key)` or `GetKeyedService<T>(key)`)
+    - `IServiceProvider` type: Pass the service provider directly
+    - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
+    - Built-in types without Key and without initializer: Skip (unresolvable)
+    - Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
+    - Property/Field with initializer: Treated as having a default value, use optional resolution
+
     **Optional Parameter Handling (constructor and method parameters)**:
     When a parameter has a default value:
     - If the type is a built-in type (int, string, etc.) or collection of built-in types: Skip (use default value)
@@ -391,6 +434,49 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
+    **Property and Field injection with nullable and keyed services**:
+
+    ```csharp
+    #region Define:
+    [IocRegister]
+    public class MyService : IMyService
+    {
+        // Required property injection with key
+        [IocInject(Key = "special")]
+        public IDependency Dep { get; init; }
+
+        // Nullable property injection (uses GetService instead of GetRequiredService)
+        [Inject]
+        public IOptionalDependency? OptionalDep { get; set; }
+
+        // Property with initializer (treated as optional)
+        [Inject]
+        public ILogger Logger { get; set; } = NullLogger.Instance;
+
+        // Field injection
+        [Inject]
+        private IServiceProvider _serviceProvider;
+    }
+    #endregion
+
+    #region Generate:
+    services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
+    {
+        var s0_dep = sp.GetRequiredKeyedService<IDependency>("special");
+        var s0_optDep = sp.GetService<IOptionalDependency>();
+        var s0_logger = sp.GetService<ILogger>();
+        var s0 = new MyService
+        {
+            Dep = s0_dep,
+            OptionalDep = s0_optDep,
+            Logger = s0_logger ?? NullLogger.Instance,
+            _serviceProvider = sp
+        };
+        return s0;
+    });
+    #endregion
+    ```
+
     MS.DI native handling example (no factory needed):
 
     ```csharp
@@ -409,7 +495,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-5. When a class marked with `ImportModuleAttribute`, generator will get `ImportModuleAttribute.ModuleType`'s and assembly's `IocRegisterDefaultSettingsAttribute` as default settings for current assembly.
+5. When a class marked with `IocImportModuleAttribute` (or `IocImportModuleAttribute<T>`), generator will get `IocImportModuleAttribute.ModuleType`'s (or `T` type's) assembly's `IocRegisterDefaultsAttribute` as default settings for current assembly.
 
 6. When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate closed generic registration.
 
@@ -538,14 +624,19 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-8. Can define csproj property: SourceGenIocName, allow user control what method name will generate.  
+8. MSBuild properties for customizing generated code:\
+    **RootNamespace**: Controls the namespace of generated extension class. If not set, falls back to assembly name.\
+    **SourceGenIocName**: Controls the method name suffix. If not set, uses assembly name.
+
     - .csproj:
 
       ```xml
       <PropertyGroup>
+          <RootNamespace>MyCompany.MyProject</RootNamespace>
           <SourceGenIocName>CustomName</SourceGenIocName>
       </PropertyGroup>
       <ItemGroup>
+          <CompilerVisibleProperty Include="RootNamespace" />
           <CompilerVisibleProperty Include="SourceGenIocName" />
       </ItemGroup>
       ```
@@ -553,6 +644,8 @@ This source generator automatically generates extension methods for registering 
     - generate:
 
       ```csharp
+      namespace MyCompany.MyProject;
+
       public static class ServiceCollectionExtensions
       {
           public static IServiceCollection AddCustomName(this IServiceCollection services)
@@ -666,7 +759,7 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-11. When `DiscoverAttribute` is exists, collect `DiscoverAttribute.ClosedGenericType` for generate factory code for open generic registrations.
+11. When `IocDiscoverAttribute` (or `IocDiscoverAttribute<T>`) is exists, collect `IocDiscoverAttribute.ClosedGenericType` (or `T`) for generate factory code for open generic registrations.
 
     ```csharp
     #region Define:
@@ -680,7 +773,10 @@ This source generator automatically generates extension methods for registering 
 
     public class ViewModel
     {
-      [Discover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+      // Non-generic version with type parameter
+      [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+      // Or generic version
+      // [IocDiscover<IRequestHandler<TestRequest<string>, List<string>>>]
       public void DoAction()
       {
         var response = Mediator.Send(new TestRequest<string>());
