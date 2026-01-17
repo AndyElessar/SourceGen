@@ -513,4 +513,252 @@ public class FactoryAndInstanceTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Factory_WithAdditionalDependency_GeneratesServiceResolution()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+            public class Logger : ILogger { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService
+            {
+                public MyService(ILogger logger) { }
+            }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, ILogger logger) => new MyService(logger);
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithMultipleAdditionalDependencies_GeneratesMultipleServiceResolutions()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+            public interface IConfiguration { }
+            public class Logger : ILogger { }
+            public class Configuration : IConfiguration { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Transient,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService
+            {
+                public MyService(ILogger logger, IConfiguration config) { }
+            }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, ILogger logger, IConfiguration config)
+                    => new MyService(logger, config);
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithOptionalAdditionalDependency_GeneratesGetService()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, ILogger? logger) => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithKeyedAdditionalDependency_GeneratesKeyedServiceResolution()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(
+                    IServiceProvider sp,
+                    [FromKeyedServices("main")] ILogger logger)
+                    => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithMixedParameters_GeneratesCorrectResolution()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+            public interface IConfiguration { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Scoped,
+                ServiceTypes = [typeof(IMyService)],
+                Key = "myKey",
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(
+                    IServiceProvider sp,
+                    [ServiceKey] string key,
+                    ILogger logger,
+                    [FromKeyedServices("config")] IConfiguration config)
+                    => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithDefaultValueParameter_GeneratesConditionalResolution()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+            public class DefaultLogger : ILogger { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                private static readonly ILogger _default = new DefaultLogger();
+                public static IMyService Create(IServiceProvider sp, ILogger logger = null) => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithCollectionParameter_GeneratesGetServicesResolution()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, IEnumerable<IHandler> handlers) => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

@@ -923,14 +923,14 @@ internal static class TransformExtensions
                     // Fallback: get path from nameof expression
                     var nameofPath = ResolveNameofExpression(nameofArgument, semanticModel)
                                      ?? nameofArgument.ToFullString().Trim();
-                    return new FactoryMethodData(nameofPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null);
+                    return new FactoryMethodData(nameofPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null, AdditionalParameters: []);
                 }
 
                 // String literal - cannot determine parameters, assume full signature
                 if(argument.Expression is LiteralExpressionSyntax literal &&
                    literal.Token.Value is string literalPath)
                 {
-                    return new FactoryMethodData(literalPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null);
+                    return new FactoryMethodData(literalPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null, AdditionalParameters: []);
                 }
             }
 
@@ -1082,12 +1082,14 @@ internal static class TransformExtensions
         /// Analyzes factory method parameters:
         /// - IServiceProvider: Will be passed the service provider directly
         /// - [ServiceKey] attribute: Will be passed the registration key value
+        /// - Other parameters: Will be resolved from the service provider using the same logic as [IocInject] methods
         /// </summary>
         public FactoryMethodData CreateFactoryMethodData()
         {
             var path = methodSymbol.FullAccessPath;
             bool hasServiceProvider = false;
             bool hasKey = false;
+            List<ParameterData>? additionalParameters = null;
 
             foreach(var param in methodSymbol.Parameters)
             {
@@ -1101,6 +1103,7 @@ internal static class TransformExtensions
                 }
 
                 // Check for [ServiceKey] attribute
+                bool hasServiceKeyAttribute = false;
                 foreach(var attribute in param.GetAttributes())
                 {
                     var attrClass = attribute.AttributeClass;
@@ -1110,16 +1113,42 @@ internal static class TransformExtensions
                     if(attrClass.Name == "ServiceKeyAttribute"
                         && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
                     {
+                        hasServiceKeyAttribute = true;
                         hasKey = true;
                         break;
                     }
                 }
+
+                // Skip [ServiceKey] parameters from additional parameters
+                if(hasServiceKeyAttribute)
+                    continue;
+
+                // Collect additional parameter info using the same logic as [IocInject] methods
+                var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo();
+                var parameterData = new ParameterData(
+                    param.Name,
+                    param.Type.GetTypeData(),
+                    IsNullable: param.NullableAnnotation == NullableAnnotation.Annotated,
+                    HasDefaultValue: param.HasExplicitDefaultValue,
+                    DefaultValue: param.HasExplicitDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue) : null,
+                    ServiceKey: serviceKey,
+                    HasInjectAttribute: hasInjectAttribute,
+                    HasServiceKeyAttribute: false, // Already handled above
+                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute);
+
+                additionalParameters ??= [];
+                additionalParameters.Add(parameterData);
             }
 
             // Always store the return type for runtime comparison
             var returnTypeName = methodSymbol.ReturnType.FullyQualifiedName;
 
-            return new FactoryMethodData(path, hasServiceProvider, hasKey, returnTypeName);
+            return new FactoryMethodData(
+                path,
+                hasServiceProvider,
+                hasKey,
+                returnTypeName,
+                additionalParameters?.ToImmutableEquatableArray() ?? []);
         }
     }
 

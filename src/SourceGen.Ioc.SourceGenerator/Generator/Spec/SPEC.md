@@ -13,12 +13,12 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 
 3. Service registration settings to collect:
     - Service type (from `TargetServiceType`, `ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`, `IocDiscoverAttribute`)
-    - Implementation type (from `IocRegisterForAttribute.ImplementationType` or the class marked with `IocRegisterAttribute`) and its constructor's parameters and members with `IocRegisterAttribute`, `InjectAttribute`
+    - Implementation type (from `IocRegisterForAttribute.ImplementationType`, the class marked with `IocRegisterAttribute` and `IocRegisterDefaultsAttribute.ImplementationTypes`) and its constructor's parameters and members with `IocRegisterAttribute`, `InjectAttribute`
     - Lifetime (from `IocRegisterAttribute`, `IocRegisterForAttribute` or default settings)
     - Key and KeyType (from `IocRegisterAttribute`, `IocRegisterForAttribute` or default settings)
     - Decorators type (from `IocRegisterAttribute.Decorators`, `IocRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
     - Tags and TagOnly (from `IocRegisterAttribute`, `IocRegisterForAttribute` or default settings)
-    - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory`)
+    - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory` or default settings)
     - Instance (from `IocRegisterAttribute.Instance`, `IocRegisterForAttribute.Instance`)
     - `IServiceProvider` invocations: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`, collect type data from `T`, regarded as Service type
     - Other assembly's setting from `IocImportModuleAttribute` (supports generic version: `IocImportModuleAttribute<T>`)

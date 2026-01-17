@@ -43,6 +43,11 @@ public sealed class IocRegisterDefaultsAttribute(Type targetServiceType, Service
 
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
+
+    /// <summary>
+    /// Gets implementation types to consider when applying the defaults.
+    /// </summary>
+    public Type[] ImplementationTypes { get; init; } = [];
 }
 
 #if NET7_0_OR_GREATER
@@ -81,6 +86,9 @@ public sealed class IocRegisterDefaultsAttribute<T>(ServiceLifetime lifetime) : 
 
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
+
+    /// <inheritdoc cref="IocRegisterDefaultsAttribute.ImplementationTypes"/>
+    public Type[] ImplementationTypes { get; init; } = [];
 }
 
 #endif

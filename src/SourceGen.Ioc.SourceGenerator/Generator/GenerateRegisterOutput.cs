@@ -281,6 +281,7 @@ partial class RegisterSourceGenerator
     ///   <item>IServiceProvider only: <c>services.AddSingleton&lt;IService&gt;(sp => Factory(sp));</c></item>
     ///   <item>object key only (keyed): <c>services.AddKeyedSingleton&lt;IService&gt;("key", (sp, key) => Factory(key));</c></item>
     ///   <item>Both (keyed): <c>services.AddKeyedSingleton&lt;IService&gt;("key", (sp, key) => Factory(sp, key));</c></item>
+    ///   <item>Additional parameters: resolved from IServiceProvider using the same logic as [IocInject] methods</item>
     /// </list>
     /// If the factory return type differs from the service type, adds a cast.
     /// </remarks>
@@ -293,7 +294,22 @@ partial class RegisterSourceGenerator
         // hasKey is only meaningful when registration has a key
         var hasKey = factory.HasKey && registration.Key is not null;
         var returnTypeName = factory.ReturnTypeName;
+        var additionalParameters = factory.AdditionalParameters;
+        bool isKeyedRegistration = registration.Key is not null;
 
+        // Check if we have additional parameters that need resolution
+        bool hasAdditionalParameters = additionalParameters.Length > 0;
+
+        if(hasAdditionalParameters)
+        {
+            // Use multi-line lambda format for readability
+            WriteFactoryMethodRegistrationWithAdditionalParams(
+                writer, registration, lifetime, serviceTypeName, factoryPath,
+                hasServiceProvider, hasKey, returnTypeName, additionalParameters, isKeyedRegistration);
+            return;
+        }
+
+        // Simple case: no additional parameters
         // Build factory invocation based on parameters
         string factoryInvocation = (hasServiceProvider, hasKey) switch
         {
@@ -316,14 +332,97 @@ partial class RegisterSourceGenerator
         }
         else if(hasServiceProvider)
         {
-            // Non-keyed registration with factory
+            // Non-keyed registration with factory that needs IServiceProvider
             writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {factoryInvocation});");
         }
         else
         {
-            // No parameters factory - direct invocation
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>({factoryInvocation});");
+            // No parameters factory - still need lambda for proper lifetime behavior (Transient/Scoped)
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {factoryInvocation});");
         }
+    }
+
+    /// <summary>
+    /// Writes factory method registration with additional parameters that need to be resolved from IServiceProvider.
+    /// </summary>
+    private static void WriteFactoryMethodRegistrationWithAdditionalParams(
+        SourceWriter writer,
+        ServiceRegistrationModel registration,
+        string lifetime,
+        string serviceTypeName,
+        string factoryPath,
+        bool hasServiceProvider,
+        bool hasKey,
+        string? returnTypeName,
+        ImmutableEquatableArray<ParameterData> additionalParameters,
+        bool isKeyedRegistration)
+    {
+        // Open the registration lambda
+        if(registration.Key is not null)
+        {
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
+        }
+        else
+        {
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
+        }
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // Resolve additional parameters using the same logic as [IocInject] methods
+        var paramVars = new List<string>(additionalParameters.Length);
+        int paramIndex = 0;
+        foreach(var param in additionalParameters)
+        {
+            var paramVar = $"f_p{paramIndex}";
+            var result = WriteParameterResolutionWithConditional(
+                writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+
+            // Use the resolved variable name or the parameter's default value if skipped
+            if(result.VarName is not null)
+            {
+                paramVars.Add(result.VarName);
+            }
+            else
+            {
+                // Parameter was skipped (built-in with default value) - use the default value expression
+                paramVars.Add(param.DefaultValue ?? "default");
+            }
+            paramIndex++;
+        }
+
+        // Build the factory invocation arguments
+        var args = new List<string>();
+
+        // Add IServiceProvider if needed
+        if(hasServiceProvider)
+        {
+            args.Add("sp");
+        }
+
+        // Add registration key if needed
+        if(hasKey)
+        {
+            args.Add(registration.Key!);
+        }
+
+        // Add resolved additional parameters
+        args.AddRange(paramVars);
+
+        // Build the factory invocation
+        var factoryInvocation = $"{factoryPath}({string.Join(", ", args)})";
+
+        // Add cast if return type differs from service type
+        if(returnTypeName is not null && returnTypeName != serviceTypeName)
+        {
+            factoryInvocation = $"({serviceTypeName}){factoryInvocation}";
+        }
+
+        writer.WriteLine($"return {factoryInvocation};");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
     }
 
     /// <summary>

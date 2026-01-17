@@ -23,8 +23,6 @@ namespace IocSample
             services.AddTransient<global::IocSample.IDenpendency2, global::IocSample.Default1>();
             services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();
             services.AddScoped<global::IocSample.IDenpendency2, global::IocSample.Default2>();
-            services.AddKeyedSingleton<global::IocSample.FactoryService>("Test", (global::System.IServiceProvider sp, object? key) => (global::IocSample.FactoryService)global::IocSample.Factory.Create());
-            services.AddKeyedSingleton<global::IocSample.IFactoryService>("Test", (global::System.IServiceProvider sp, object? key) => global::IocSample.Factory.Create());
             services.AddSingleton<global::IocSample.InstanceService>(global::IocSample.InstanceService.Instance);
             services.AddSingleton<global::IocSample.ViewModel, global::IocSample.ViewModel>();
             services.AddSingleton<global::IocSample.CustomMessenger, global::IocSample.CustomMessenger>();
@@ -55,6 +53,18 @@ namespace IocSample
             });
             services.AddScoped<global::IocSample.Basic, global::IocSample.Basic>();
             services.AddScoped<global::IocSample.IBasic, global::IocSample.Basic>();
+            services.AddKeyedTransient<global::IocSample.FactoryService>("Test", (global::System.IServiceProvider sp, object? key) =>
+            {
+                var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
+                return (global::IocSample.FactoryService)global::IocSample.Factory.Create(sp, "Test", f_p0);
+            });
+            services.AddKeyedTransient<global::IocSample.IFactoryService>("Test", (global::System.IServiceProvider sp, object? key) =>
+            {
+                var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
+                return global::IocSample.Factory.Create(sp, "Test", f_p0);
+            });
+            services.AddTransient<global::IocSample.FactoryService2>((global::System.IServiceProvider sp) => (global::IocSample.FactoryService2)global::IocSample.FactoryService2.Create());
+            services.AddTransient<global::IocSample.IFactoryService>((global::System.IServiceProvider sp) => global::IocSample.FactoryService2.Create());
             services.AddKeyedSingleton<global::IocSample.Dependency, global::IocSample.Dependency>("1");
             services.AddKeyedSingleton<global::IocSample.IDependency, global::IocSample.Dependency>("1");
             services.AddKeyedSingleton<global::IocSample.Dependency2, global::IocSample.Dependency2>("2");
