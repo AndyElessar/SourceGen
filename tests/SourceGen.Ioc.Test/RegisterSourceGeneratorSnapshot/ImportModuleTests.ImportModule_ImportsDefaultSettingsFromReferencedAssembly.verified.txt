@@ -17,7 +17,7 @@ namespace MainApp
         public static IServiceCollection AddMainApp_Mediator(this IServiceCollection services)
         {
             services.AddSingleton<global::MainApp.TestQueryHandler, global::MainApp.TestQueryHandler>();
-            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.TestQuery, string>, global::MainApp.TestQueryHandler>();
+            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.TestQuery, string>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.TestQueryHandler>());
 
             return services;
         }

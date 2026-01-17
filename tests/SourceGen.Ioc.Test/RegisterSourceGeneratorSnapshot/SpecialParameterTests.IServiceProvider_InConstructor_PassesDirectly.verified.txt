@@ -18,7 +18,7 @@ namespace TestAssembly
         {
             services.AddSingleton<global::TestNamespace.Dependency, global::TestNamespace.Dependency>();
             services.AddSingleton<global::TestNamespace.MyService, global::TestNamespace.MyService>();
-            services.AddSingleton<global::TestNamespace.IMyService, global::TestNamespace.MyService>();
+            services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
 
             return services;
         }

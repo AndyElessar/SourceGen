@@ -17,9 +17,9 @@ namespace MainApp
         public static IServiceCollection AddMainApp(this IServiceCollection services)
         {
             services.AddSingleton<global::MainApp.Service1Impl, global::MainApp.Service1Impl>();
-            services.AddSingleton<global::SharedModule1.IService1, global::MainApp.Service1Impl>();
+            services.AddSingleton<global::SharedModule1.IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.Service1Impl>());
             services.AddScoped<global::MainApp.Service2Impl, global::MainApp.Service2Impl>();
-            services.AddScoped<global::SharedModule2.IService2, global::MainApp.Service2Impl>();
+            services.AddScoped<global::SharedModule2.IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.Service2Impl>());
 
             return services;
         }

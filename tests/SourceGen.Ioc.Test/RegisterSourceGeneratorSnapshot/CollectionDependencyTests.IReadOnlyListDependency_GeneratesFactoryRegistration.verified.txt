@@ -25,7 +25,7 @@ namespace TestAssembly
                 return s0;
             });
             services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.TestEntity>, global::TestNamespace.Handler<global::TestNamespace.TestEntity>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>, global::TestNamespace.Handler<global::TestNamespace.TestEntity>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.TestEntity>>());
 
             return services;
         }

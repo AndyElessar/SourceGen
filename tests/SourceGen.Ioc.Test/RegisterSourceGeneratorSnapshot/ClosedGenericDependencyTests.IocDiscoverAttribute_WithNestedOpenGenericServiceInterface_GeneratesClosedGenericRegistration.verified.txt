@@ -18,7 +18,7 @@ namespace TestAssembly
         {
             services.AddSingleton(typeof(global::TestNamespace.GenericRequestHandler2<>), typeof(global::TestNamespace.GenericRequestHandler2<>));
             services.AddSingleton<global::TestNamespace.GenericRequestHandler2<global::TestNamespace.Entity2>, global::TestNamespace.GenericRequestHandler2<global::TestNamespace.Entity2>>();
-            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.GenericRequest2<global::TestNamespace.Entity2>, global::System.Collections.Generic.List<global::TestNamespace.Entity2>>, global::TestNamespace.GenericRequestHandler2<global::TestNamespace.Entity2>>();
+            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.GenericRequest2<global::TestNamespace.Entity2>, global::System.Collections.Generic.List<global::TestNamespace.Entity2>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.GenericRequestHandler2<global::TestNamespace.Entity2>>());
 
             return services;
         }

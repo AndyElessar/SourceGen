@@ -19,11 +19,11 @@ namespace TestAssembly
             services.AddSingleton(typeof(global::TestNamespace.GenericHandler<>), typeof(global::TestNamespace.GenericHandler<>));
             services.AddSingleton(typeof(global::TestNamespace.IHandler<>), typeof(global::TestNamespace.GenericHandler<>));
             services.AddSingleton<global::TestNamespace.GenericHandler<global::TestNamespace.Entity1>, global::TestNamespace.GenericHandler<global::TestNamespace.Entity1>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity1>, global::TestNamespace.GenericHandler<global::TestNamespace.Entity1>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity1>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.GenericHandler<global::TestNamespace.Entity1>>());
             services.AddSingleton<global::TestNamespace.GenericHandler<global::TestNamespace.Entity2>, global::TestNamespace.GenericHandler<global::TestNamespace.Entity2>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity2>, global::TestNamespace.GenericHandler<global::TestNamespace.Entity2>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity2>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.GenericHandler<global::TestNamespace.Entity2>>());
             services.AddSingleton<global::TestNamespace.GenericHandler<global::TestNamespace.Entity3>, global::TestNamespace.GenericHandler<global::TestNamespace.Entity3>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity3>, global::TestNamespace.GenericHandler<global::TestNamespace.Entity3>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity3>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.GenericHandler<global::TestNamespace.Entity3>>());
 
             return services;
         }

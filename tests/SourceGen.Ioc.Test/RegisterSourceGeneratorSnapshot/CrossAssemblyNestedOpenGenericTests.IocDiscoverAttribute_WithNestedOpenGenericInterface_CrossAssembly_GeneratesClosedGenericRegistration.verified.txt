@@ -28,7 +28,7 @@ namespace MainApp
         {
             services.AddSingleton(typeof(global::MainApp.GenericRequestHandler2<>), typeof(global::MainApp.GenericRequestHandler2<>));
             services.AddSingleton<global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>, global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>();
-            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.GenericRequest2<global::MainApp.Entity2>, global::System.Collections.Generic.List<global::MainApp.Entity2>>, global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>();
+            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.GenericRequest2<global::MainApp.Entity2>, global::System.Collections.Generic.List<global::MainApp.Entity2>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>());
 
             return services;
         }

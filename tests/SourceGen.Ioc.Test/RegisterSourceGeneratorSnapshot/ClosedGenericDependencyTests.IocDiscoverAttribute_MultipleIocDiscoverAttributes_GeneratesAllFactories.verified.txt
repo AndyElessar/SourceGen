@@ -18,11 +18,11 @@ namespace TestAssembly
         {
             services.AddSingleton(typeof(global::TestNamespace.TestRequestHandler<>), typeof(global::TestNamespace.TestRequestHandler<>));
             services.AddSingleton<global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity1>, global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity1>>();
-            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest<global::TestNamespace.Entity1>, global::System.Collections.Generic.List<global::TestNamespace.Entity1>>, global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity1>>();
+            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest<global::TestNamespace.Entity1>, global::System.Collections.Generic.List<global::TestNamespace.Entity1>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity1>>());
             services.AddSingleton<global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity2>, global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity2>>();
-            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest<global::TestNamespace.Entity2>, global::System.Collections.Generic.List<global::TestNamespace.Entity2>>, global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity2>>();
+            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest<global::TestNamespace.Entity2>, global::System.Collections.Generic.List<global::TestNamespace.Entity2>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.TestRequestHandler<global::TestNamespace.Entity2>>());
             services.AddSingleton<global::TestNamespace.TestRequestHandler<string>, global::TestNamespace.TestRequestHandler<string>>();
-            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest<string>, global::System.Collections.Generic.List<string>>, global::TestNamespace.TestRequestHandler<string>>();
+            services.AddSingleton<global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest<string>, global::System.Collections.Generic.List<string>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.TestRequestHandler<string>>());
 
             return services;
         }

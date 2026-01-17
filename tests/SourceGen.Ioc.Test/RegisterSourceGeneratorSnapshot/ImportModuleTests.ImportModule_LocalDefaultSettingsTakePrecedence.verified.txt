@@ -17,7 +17,7 @@ namespace MainApp
         public static IServiceCollection AddMainApp(this IServiceCollection services)
         {
             services.AddScoped<global::MainApp.MyService, global::MainApp.MyService>();
-            services.AddScoped<global::SharedModule.IService, global::MainApp.MyService>();
+            services.AddScoped<global::SharedModule.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.MyService>());
 
             return services;
         }

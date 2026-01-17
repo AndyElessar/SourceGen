@@ -19,9 +19,9 @@ namespace IocSample.Shared
             services.AddSingleton(typeof(global::IocSample.Shared.Logger<>), typeof(global::IocSample.Shared.Logger<>));
             services.AddSingleton(typeof(global::IocSample.Shared.ILogger<>), typeof(global::IocSample.Shared.Logger<>));
             services.AddSingleton<global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>, global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>>();
-            services.AddSingleton<global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>, global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>>();
+            services.AddSingleton<global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>>());
             services.AddSingleton<global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>, global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>>();
-            services.AddSingleton<global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>, global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>>();
+            services.AddSingleton<global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>>());
 
             return services;
         }

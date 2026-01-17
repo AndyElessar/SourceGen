@@ -17,9 +17,9 @@ namespace TestAssembly
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
             services.AddScoped<global::TestNamespace.MyService, global::TestNamespace.MyService>();
-            services.AddScoped<global::TestNamespace.IMyService, global::TestNamespace.MyService>();
+            services.AddScoped<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
             services.AddScoped<global::TestNamespace.AnotherService, global::TestNamespace.AnotherService>();
-            services.AddScoped<global::TestNamespace.IMyService, global::TestNamespace.AnotherService>();
+            services.AddScoped<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.AnotherService>());
 
             return services;
         }

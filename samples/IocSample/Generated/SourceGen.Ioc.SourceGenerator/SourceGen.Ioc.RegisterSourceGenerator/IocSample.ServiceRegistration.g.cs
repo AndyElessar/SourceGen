@@ -17,12 +17,12 @@ namespace IocSample
         public static IServiceCollection AddIocSample(this IServiceCollection services)
         {
             services.AddTransient<global::IocSample.Basic2, global::IocSample.Basic2>();
-            services.AddTransient<global::IocSample.IBasic, global::IocSample.Basic2>();
-            services.AddTransient<global::IocSample.IBasic2, global::IocSample.Basic2>();
+            services.AddTransient<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
+            services.AddTransient<global::IocSample.IBasic2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
             services.AddTransient<global::IocSample.Default1, global::IocSample.Default1>();
-            services.AddTransient<global::IocSample.IDenpendency2, global::IocSample.Default1>();
+            services.AddTransient<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default1>());
             services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();
-            services.AddScoped<global::IocSample.IDenpendency2, global::IocSample.Default2>();
+            services.AddScoped<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default2>());
             services.AddSingleton<global::IocSample.InstanceService>(global::IocSample.InstanceService.Instance);
             services.AddSingleton<global::IocSample.ViewModel, global::IocSample.ViewModel>();
             services.AddSingleton<global::IocSample.CustomMessenger, global::IocSample.CustomMessenger>();
@@ -52,7 +52,7 @@ namespace IocSample
                 return s0;
             });
             services.AddScoped<global::IocSample.Basic, global::IocSample.Basic>();
-            services.AddScoped<global::IocSample.IBasic, global::IocSample.Basic>();
+            services.AddScoped<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic>());
             services.AddKeyedTransient<global::IocSample.FactoryService>("Test", (global::System.IServiceProvider sp, object? key) =>
             {
                 var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
@@ -66,13 +66,13 @@ namespace IocSample
             services.AddTransient<global::IocSample.FactoryService2>((global::System.IServiceProvider sp) => (global::IocSample.FactoryService2)global::IocSample.FactoryService2.Create());
             services.AddTransient<global::IocSample.IFactoryService>((global::System.IServiceProvider sp) => global::IocSample.FactoryService2.Create());
             services.AddKeyedSingleton<global::IocSample.Dependency, global::IocSample.Dependency>("1");
-            services.AddKeyedSingleton<global::IocSample.IDependency, global::IocSample.Dependency>("1");
+            services.AddKeyedSingleton<global::IocSample.IDependency>("1", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency>(key));
             services.AddKeyedSingleton<global::IocSample.Dependency2, global::IocSample.Dependency2>("2");
-            services.AddKeyedSingleton<global::IocSample.IDependency, global::IocSample.Dependency2>("2");
+            services.AddKeyedSingleton<global::IocSample.IDependency>("2", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency2>(key));
             services.AddKeyedSingleton<global::IocSample.Dependency3, global::IocSample.Dependency3>("3");
-            services.AddKeyedSingleton<global::IocSample.IDependency, global::IocSample.Dependency3>("3");
+            services.AddKeyedSingleton<global::IocSample.IDependency>("3", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency3>(key));
             services.AddKeyedSingleton<global::IocSample.Keyed, global::IocSample.Keyed>("Key");
-            services.AddKeyedSingleton<global::IocSample.IKeyed, global::IocSample.Keyed>("Key");
+            services.AddKeyedSingleton<global::IocSample.IKeyed>("Key", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Keyed>(key));
             services.AddKeyedSingleton<global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) =>
             {
                 var s0_m0 = global::IocSample.KeyEnum.Key0;
@@ -82,12 +82,12 @@ namespace IocSample
             });
             services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedEnum>(key));
             services.AddKeyedSingleton<global::IocSample.KeyedCsharp, global::IocSample.KeyedCsharp>(global::IocSample.KeyedExtensions.Key);
-            services.AddKeyedSingleton<global::IocSample.IKeyed, global::IocSample.KeyedCsharp>(global::IocSample.KeyedExtensions.Key);
+            services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyedExtensions.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedCsharp>(key));
             services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.NestClassImpl, global::IocSample.TestNest.TestNestClass.NestClassImpl>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key);
-            services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.INestInterface, global::IocSample.TestNest.TestNestClass.NestClassImpl>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key);
+            services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.INestInterface>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.TestNest.TestNestClass.NestClassImpl>(key));
             services.AddSingleton<global::IocSample.External, global::IocSample.External>();
             services.AddTransient<global::IocSample.External2, global::IocSample.External2>();
-            services.AddTransient<global::IocSample.IExternal, global::IocSample.External2>();
+            services.AddTransient<global::IocSample.IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.External2>());
             services.AddSingleton<global::IocSample.Conflict, global::IocSample.Conflict>();
 
             return services;

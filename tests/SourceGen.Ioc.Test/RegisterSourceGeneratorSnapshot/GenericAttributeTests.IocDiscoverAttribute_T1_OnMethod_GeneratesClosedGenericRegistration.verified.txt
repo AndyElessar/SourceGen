@@ -19,7 +19,7 @@ namespace TestAssembly
             services.AddSingleton(typeof(global::TestNamespace.GenericHandler<>), typeof(global::TestNamespace.GenericHandler<>));
             services.AddSingleton(typeof(global::TestNamespace.IHandler<>), typeof(global::TestNamespace.GenericHandler<>));
             services.AddSingleton<global::TestNamespace.GenericHandler<global::TestNamespace.TestEntity>, global::TestNamespace.GenericHandler<global::TestNamespace.TestEntity>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>, global::TestNamespace.GenericHandler<global::TestNamespace.TestEntity>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.GenericHandler<global::TestNamespace.TestEntity>>());
 
             return services;
         }

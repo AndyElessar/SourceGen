@@ -17,9 +17,9 @@ namespace TestAssembly
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
             services.AddTransient<global::TestNamespace.MyService, global::TestNamespace.MyService>();
-            services.AddTransient<global::TestNamespace.IMyService, global::TestNamespace.MyService>();
+            services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
             services.AddTransient<global::TestNamespace.AnotherService, global::TestNamespace.AnotherService>();
-            services.AddTransient<global::TestNamespace.IMyService, global::TestNamespace.AnotherService>();
+            services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.AnotherService>());
 
             return services;
         }

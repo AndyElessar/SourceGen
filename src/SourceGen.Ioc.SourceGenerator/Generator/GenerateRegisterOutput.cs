@@ -229,10 +229,12 @@ partial class RegisterSourceGenerator
         // - Constructor parameters with special handling (see above)
         bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams;
 
-        if(needsFactoryConstruction && !registration.IsOpenGeneric && isServiceTypeRegistration)
+        // For non-open-generic, service type registrations (interface/base class):
+        // Always use forwarding to implementation type to ensure single instance per scope/lifetime
+        // This generates: sp => sp.GetRequiredService<ImplementationType>()
+        if(!registration.IsOpenGeneric && isServiceTypeRegistration)
         {
-            // Service type registration (interface/base class) where implementation is already registered with factory
-            // Just resolve the implementation from the service provider
+            // Service type registration (interface/base class) forwards to implementation
             WriteServiceTypeForwardingRegistration(writer, registration, lifetime);
             return;
         }

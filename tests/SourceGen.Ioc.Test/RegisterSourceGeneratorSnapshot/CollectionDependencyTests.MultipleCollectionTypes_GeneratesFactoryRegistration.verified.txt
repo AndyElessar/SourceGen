@@ -29,11 +29,11 @@ namespace TestAssembly
                 return s0;
             });
             services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Entity1>, global::TestNamespace.Handler<global::TestNamespace.Entity1>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity1>, global::TestNamespace.Handler<global::TestNamespace.Entity1>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity1>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Entity1>>());
             services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Entity2>, global::TestNamespace.Handler<global::TestNamespace.Entity2>>();
-            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity2>, global::TestNamespace.Handler<global::TestNamespace.Entity2>>();
+            services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity2>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Entity2>>());
             services.AddSingleton<global::TestNamespace.Validator<global::TestNamespace.Entity1>, global::TestNamespace.Validator<global::TestNamespace.Entity1>>();
-            services.AddSingleton<global::TestNamespace.IValidator<global::TestNamespace.Entity1>, global::TestNamespace.Validator<global::TestNamespace.Entity1>>();
+            services.AddSingleton<global::TestNamespace.IValidator<global::TestNamespace.Entity1>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Validator<global::TestNamespace.Entity1>>());
 
             return services;
         }
