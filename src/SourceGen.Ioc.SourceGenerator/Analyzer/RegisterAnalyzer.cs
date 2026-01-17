@@ -550,9 +550,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             AnalyzeDependencies(
                 context.ReportDiagnostic,
                 analyzerContext,
-                serviceInfo.Type,
-                serviceInfo.Lifetime,
-                serviceInfo.Location,
+                serviceInfo,
                 visited,
                 pathStack,
                 context.CancellationToken);
@@ -569,30 +567,22 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         ServiceInfo serviceInfo,
         CancellationToken cancellationToken)
     {
-        var targetType = serviceInfo.Type;
         var keyTypeSymbol = serviceInfo.KeyTypeSymbol;
         var hasKey = serviceInfo.HasKey;
 
-        // Check constructor parameters
-        var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
+        // Check constructor parameters (using cached constructor)
+        var constructor = serviceInfo.Constructor;
         if(constructor is not null)
         {
             AnalyzeServiceKeyParametersInMethod(reportDiagnostic, constructor.Parameters, keyTypeSymbol, hasKey, cancellationToken);
         }
 
-        // Check [Inject] method parameters
-        foreach(var member in targetType.GetMembers())
+        // Check [Inject] method parameters (using cached injected members)
+        foreach(var (member, _) in serviceInfo.InjectedMembers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if(member is not IMethodSymbol method)
-                continue;
-
-            // Check if method has [IocInject] or [Inject] attribute
-            var hasInjectAttribute = method.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.IsInject == true);
-
-            if(!hasInjectAttribute)
                 continue;
 
             AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, keyTypeSymbol, hasKey, cancellationToken);
@@ -612,22 +602,20 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         ServiceInfo serviceInfo,
         CancellationToken cancellationToken)
     {
-        var targetType = serviceInfo.Type;
-
         // Skip constructor analysis if this service has a factory method or instance - no constructor resolution needed
         // But still check injected properties/fields/methods
         if(!serviceInfo.HasFactory && !serviceInfo.HasInstance)
         {
-            // Analyze constructor parameters
-            var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
+            // Analyze constructor parameters (using cached constructor)
+            var constructor = serviceInfo.Constructor;
             if(constructor is not null)
             {
                 AnalyzeUnresolvableConstructorParameters(reportDiagnostic, constructor.Parameters, serviceInfo.Location, cancellationToken);
             }
         }
 
-        // Analyze injected properties, fields, and methods (always check regardless of Factory/Instance)
-        AnalyzeUnresolvableInjectedMembers(reportDiagnostic, targetType, serviceInfo.Location, cancellationToken);
+        // Analyze injected properties, fields, and methods (using cached injected members)
+        AnalyzeUnresolvableInjectedMembers(reportDiagnostic, serviceInfo, cancellationToken);
     }
 
     /// <summary>
@@ -670,23 +658,19 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Analyzes properties, fields, and methods with [IocInject] or [Inject] attribute for unresolvable built-in types.
+    /// Uses cached InjectedMembers from ServiceInfo to avoid repeated GetMembers() and attribute lookups.
     /// </summary>
     private static void AnalyzeUnresolvableInjectedMembers(
         Action<Diagnostic> reportDiagnostic,
-        INamedTypeSymbol targetType,
-        Location? serviceLocation,
+        ServiceInfo serviceInfo,
         CancellationToken cancellationToken)
     {
-        foreach(var member in targetType.GetMembers())
+        var serviceLocation = serviceInfo.Location;
+
+        // Use cached injected members
+        foreach(var (member, injectAttribute) in serviceInfo.InjectedMembers)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // Check for [IocInject] or [Inject] attribute
-            var injectAttribute = member.GetAttributes()
-                .FirstOrDefault(static attr => attr.AttributeClass?.IsInject == true);
-
-            if(injectAttribute is null)
-                continue;
 
             switch(member)
             {
@@ -1507,16 +1491,19 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeDependencies(
         Action<Diagnostic> reportDiagnostic,
         AnalyzerContext analyzerContext,
-        INamedTypeSymbol targetType,
-        ServiceLifetime currentLifetime,
-        Location? location,
+        ServiceInfo serviceInfo,
         HashSet<INamedTypeSymbol> visited,
         Stack<INamedTypeSymbol> pathStack,
         CancellationToken cancellationToken)
     {
-        var constructor = targetType.SpecifiedOrPrimaryOrMostParametersConstructor;
+        // Use cached constructor from ServiceInfo
+        var constructor = serviceInfo.Constructor;
         if(constructor is null)
             return;
+
+        var targetType = serviceInfo.Type;
+        var currentLifetime = serviceInfo.Lifetime;
+        var location = serviceInfo.Location;
 
         foreach(var parameter in constructor.Parameters)
         {
@@ -1886,6 +1873,14 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         /// Indicates whether an Instance is specified.
         /// </summary>
         public bool HasInstance { get; }
+        /// <summary>
+        /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
+        /// </summary>
+        public IMethodSymbol? Constructor { get; }
+        /// <summary>
+        /// Cached list of members with [IocInject] or [Inject] attribute to avoid repeated GetMembers() and attribute lookups.
+        /// </summary>
+        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers { get; }
 
         public ServiceInfo(
             INamedTypeSymbol type,
@@ -1904,6 +1899,12 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
             HasKey = hasKey;
             HasFactory = hasFactory;
             HasInstance = hasInstance;
+
+            // Cache constructor lookup
+            Constructor = type.SpecifiedOrPrimaryOrMostParametersConstructor;
+
+            // Cache injected members
+            InjectedMembers = [.. type.GetInjectedMembers()];
         }
     }
 }

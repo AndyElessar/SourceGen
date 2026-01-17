@@ -370,6 +370,54 @@ internal static class TransformExtensions
 
         public bool IsInject =>
             typeSymbol.Name is "IocInjectAttribute" or "InjectAttribute";
+
+        /// <summary>
+        /// Enumerates members (properties, fields, methods) marked with IocInjectAttribute/InjectAttribute.
+        /// This is a shared method used by both Analyzer (ServiceInfo) and Generator (RegistrationData).
+        /// </summary>
+        /// <remarks>
+        /// The method filters members based on:
+        /// - Non-static members only
+        /// - Properties with a setter
+        /// - Non-readonly fields
+        /// - Ordinary methods that return void and are not generic
+        /// </remarks>
+        /// <returns>
+        /// An enumerable of tuples containing the member symbol and its inject attribute.
+        /// Analyzer can use ISymbol directly; Generator can convert to InjectionMemberData.
+        /// </returns>
+        public IEnumerable<(ISymbol Member, AttributeData InjectAttribute)> GetInjectedMembers()
+        {
+            foreach(var member in typeSymbol.GetMembers())
+            {
+                // Skip static members
+                if(member.IsStatic)
+                    continue;
+
+                // Check if the member has IocInjectAttribute/InjectAttribute (by name only)
+                var injectAttribute = member.GetAttributes()
+                    .FirstOrDefault(static attr => attr.AttributeClass?.IsInject == true);
+
+                if(injectAttribute is null)
+                    continue;
+
+                // Validate member is injectable based on type
+                var isInjectable = member switch
+                {
+                    IPropertySymbol property => property.SetMethod is not null,
+                    IFieldSymbol field => !field.IsReadOnly,
+                    IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
+                        && method.ReturnsVoid
+                        && !method.IsGenericMethod,
+                    _ => false
+                };
+
+                if(isInjectable)
+                {
+                    yield return (member, injectAttribute);
+                }
+            }
+        }
     }
 
     extension(IParameterSymbol param)

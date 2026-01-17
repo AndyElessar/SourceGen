@@ -183,35 +183,16 @@ partial class RegisterSourceGenerator
     {
         List<InjectionMemberData>? injectionMembers = null;
 
-        foreach(var member in typeSymbol.GetMembers())
+        foreach(var (member, injectAttribute) in typeSymbol.GetInjectedMembers())
         {
-            // Skip static members
-            if(member.IsStatic)
-                continue;
-
-            // Check if the member has IocInjectAttribute/InjectAttribute (by name only)
-            var injectAttribute = member.GetAttributes()
-                .FirstOrDefault(attr => attr.AttributeClass?.IsInject == true);
-
-            if(injectAttribute is null)
-                continue;
-
             // Extract key information from IocInjectAttribute/InjectAttribute
             var (key, _) = injectAttribute.GetKey();
 
             InjectionMemberData? memberData = member switch
             {
-                IPropertySymbol property when property.SetMethod is not null =>
-                    CreatePropertyInjection(property, key),
-
-                IFieldSymbol field when !field.IsReadOnly =>
-                    CreateFieldInjection(field, key),
-
-                IMethodSymbol method when method.MethodKind == MethodKind.Ordinary
-                    && method.ReturnsVoid
-                    && !method.IsGenericMethod =>
-                    CreateMethodInjection(method, key),
-
+                IPropertySymbol property => CreatePropertyInjection(property, key),
+                IFieldSymbol field => CreateFieldInjection(field, key),
+                IMethodSymbol method => CreateMethodInjection(method, key),
                 _ => null
             };
 
