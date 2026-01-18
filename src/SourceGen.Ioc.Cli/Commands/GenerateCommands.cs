@@ -142,11 +142,11 @@ public sealed class GenerateCommands(
 
         var content = await fileSystem.File.ReadAllTextAsync(file, ct);
 
-        return MatchFileContent(regex, content, maxApply, classCount, logger, useClassNameExtraction);
+        return MatchFileContent(regex, content, maxApply, classCount, useClassNameExtraction, logger);
     }
 
     public static (int Count, List<string> Result) MatchFileContent(
-        Regex regex, string fileContent, int maxApply, int count, ILogger? logger, bool useClassNameExtraction = false)
+        Regex regex, string fileContent, int maxApply, int count, bool useClassNameExtraction, ILogger? logger = null)
     {
         int remainingCount = maxApply > 0 ? maxApply - count : int.MaxValue;
 

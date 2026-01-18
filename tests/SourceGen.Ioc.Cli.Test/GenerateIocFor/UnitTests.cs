@@ -15,7 +15,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -35,7 +35,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(3);
@@ -51,7 +51,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(0);
@@ -71,7 +71,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 2, count: 0, logger: null);
+            regex, content, maxApply: 2, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(2);
@@ -91,7 +91,7 @@ public class UnitTests
 
         // Act (already have 1, limit is 2)
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 2, count: 1, logger: null);
+            regex, content, maxApply: 2, count: 1, useClassNameExtraction: false);
 
         // Assert (should only add 1 more)
         await Assert.That(count).IsEqualTo(2);
@@ -107,7 +107,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -123,7 +123,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -139,7 +139,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(0);
@@ -155,7 +155,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -171,7 +171,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -187,7 +187,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -203,7 +203,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -223,7 +223,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
@@ -242,7 +242,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, logger: null);
+            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
 
         // Assert
         await Assert.That(count).IsEqualTo(2);
