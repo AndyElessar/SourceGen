@@ -8,6 +8,28 @@ partial class RegisterSourceGenerator
     private const string DefaultMethodKey = "";
 
     /// <summary>
+    /// Processes a single registration that comes from IocRegisterDefaultsAttribute.ImplementationTypes.
+    /// These registrations already have all settings explicitly set from the defaults attribute,
+    /// so no default settings lookup is needed.
+    /// </summary>
+    /// <param name="registration">The registration data to process.</param>
+    /// <returns>The processed registration result.</returns>
+    private static BasicRegistrationResult ProcessSingleRegistrationFromDefaults(RegistrationData registration)
+    {
+        // Use the explicit settings from the registration (already set from defaults attribute)
+        return ProcessRegistrationCore(
+            registration,
+            lifetime: registration.Lifetime,
+            registerAllInterfaces: registration.RegisterAllInterfaces,
+            registerAllBaseClasses: registration.RegisterAllBaseClasses,
+            decorators: registration.Decorators,
+            tags: registration.Tags,
+            tagOnly: registration.TagOnly,
+            factory: registration.Factory,
+            additionalServiceTypesFromDefaults: null);
+    }
+
+    /// <summary>
     /// Pipeline 1: Processes a single registration with default settings.
     /// This method can be cached per registration - only re-runs when the registration or default settings change.
     /// </summary>
@@ -18,10 +40,9 @@ partial class RegisterSourceGenerator
         RegistrationData registration,
         DefaultSettingsMap defaultSettings)
     {
-        // Reusable buffers
+        // Reusable buffers for default settings lookup
         var matchedDefaultIndices = new HashSet<int>();
         var matchedServiceTypes = new List<TypeData>();
-        var serviceTypesToRegister = new HashSet<TypeData>();
 
         // Find matching default settings from base classes and interfaces
         int bestDefaultIndex = FindMatchingDefaults(
@@ -35,15 +56,6 @@ partial class RegisterSourceGenerator
 
         // Merge settings (explicit > default > registration default)
         var (lifetime, registerAllInterfaces, registerAllBaseClasses) = MergeSettings(registration, matchingDefault);
-
-        // Collect all service types to register
-        CollectServiceTypes(
-            registration,
-            matchingDefault,
-            matchedServiceTypes,
-            registerAllInterfaces,
-            registerAllBaseClasses,
-            serviceTypesToRegister);
 
         var decorators = registration.Decorators.Length > 0
             ? registration.Decorators
@@ -59,6 +71,98 @@ partial class RegisterSourceGenerator
 
         // Factory: explicit registration Factory takes precedence over default settings
         var factory = registration.Factory ?? matchingDefault?.Factory;
+
+        // Collect additional service types from matching defaults
+        IEnumerable<TypeData>? additionalServiceTypes = null;
+        if(matchingDefault is not null || matchedServiceTypes.Count > 0)
+        {
+            additionalServiceTypes = GetAdditionalServiceTypesFromDefaults(matchingDefault, matchedServiceTypes);
+        }
+
+        return ProcessRegistrationCore(
+            registration,
+            lifetime,
+            registerAllInterfaces,
+            registerAllBaseClasses,
+            decorators,
+            tags,
+            tagOnly,
+            factory,
+            additionalServiceTypes);
+    }
+
+    /// <summary>
+    /// Gets additional service types from default settings and matched types.
+    /// </summary>
+    private static IEnumerable<TypeData> GetAdditionalServiceTypesFromDefaults(
+        DefaultSettingsModel? matchingDefault,
+        List<TypeData> matchedServiceTypes)
+    {
+        if(matchingDefault is not null)
+        {
+            foreach(var st in matchingDefault.ServiceTypes)
+            {
+                yield return st;
+            }
+        }
+
+        foreach(var matchedType in matchedServiceTypes)
+        {
+            yield return matchedType;
+        }
+    }
+
+    /// <summary>
+    /// Core processing logic for a single registration with resolved settings.
+    /// </summary>
+    private static BasicRegistrationResult ProcessRegistrationCore(
+        RegistrationData registration,
+        ServiceLifetime lifetime,
+        bool registerAllInterfaces,
+        bool registerAllBaseClasses,
+        ImmutableEquatableArray<TypeData> decorators,
+        ImmutableEquatableArray<string> tags,
+        bool tagOnly,
+        FactoryMethodData? factory,
+        IEnumerable<TypeData>? additionalServiceTypesFromDefaults)
+    {
+        var serviceTypesToRegister = new HashSet<TypeData>();
+
+        // Always register the implementation type itself
+        serviceTypesToRegister.Add(registration.ImplementationType);
+
+        // Add explicit service types from registration
+        foreach(var st in registration.ServiceTypes)
+        {
+            serviceTypesToRegister.Add(st);
+        }
+
+        // Add service types from default settings
+        if(additionalServiceTypesFromDefaults is not null)
+        {
+            foreach(var st in additionalServiceTypesFromDefaults)
+            {
+                serviceTypesToRegister.Add(st);
+            }
+        }
+
+        // Add all interfaces if requested
+        if(registerAllInterfaces)
+        {
+            foreach(var iface in registration.AllInterfaces)
+            {
+                serviceTypesToRegister.Add(iface);
+            }
+        }
+
+        // Add all base classes if requested
+        if(registerAllBaseClasses)
+        {
+            foreach(var baseClass in registration.AllBaseClasses)
+            {
+                serviceTypesToRegister.Add(baseClass);
+            }
+        }
 
         // Create service registration models
         var serviceRegistrations = CreateServiceRegistrations(
@@ -164,60 +268,6 @@ partial class RegisterSourceGenerator
             : (matchingDefault?.RegisterAllBaseClasses ?? registration.RegisterAllBaseClasses);
 
         return (lifetime, registerAllInterfaces, registerAllBaseClasses);
-    }
-
-    /// <summary>
-    /// Collects all service types to register based on settings.
-    /// </summary>
-    private static void CollectServiceTypes(
-        RegistrationData registration,
-        DefaultSettingsModel? matchingDefault,
-        List<TypeData> matchedServiceTypes,
-        bool registerAllInterfaces,
-        bool registerAllBaseClasses,
-        HashSet<TypeData> serviceTypesToRegister)
-    {
-        // Always register the implementation type itself
-        serviceTypesToRegister.Add(registration.ImplementationType);
-
-        // Add explicit service types from registration
-        foreach(var st in registration.ServiceTypes)
-        {
-            serviceTypesToRegister.Add(st);
-        }
-
-        // Add service types from default settings
-        if(matchingDefault is not null)
-        {
-            foreach(var st in matchingDefault.ServiceTypes)
-            {
-                serviceTypesToRegister.Add(st);
-            }
-        }
-
-        // Add matched interfaces/base classes from default settings lookup
-        foreach(var matchedType in matchedServiceTypes)
-        {
-            serviceTypesToRegister.Add(matchedType);
-        }
-
-        // Add all interfaces if requested
-        if(registerAllInterfaces)
-        {
-            foreach(var iface in registration.AllInterfaces)
-            {
-                serviceTypesToRegister.Add(iface);
-            }
-        }
-
-        // Add all base classes if requested
-        if(registerAllBaseClasses)
-        {
-            foreach(var baseClass in registration.AllBaseClasses)
-            {
-                serviceTypesToRegister.Add(baseClass);
-            }
-        }
     }
 
     /// <summary>
