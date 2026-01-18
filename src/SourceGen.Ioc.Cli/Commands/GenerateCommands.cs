@@ -22,7 +22,6 @@ public sealed class GenerateCommands(
     /// <param name="searchSubDirectories">-s, Whether to search sub directories.</param>
     /// <param name="classNameRegex">-cn, Regex pattern to match class names.
     ///                                   Full regex will be: "(public|internal)\s+(?!static\s+)[\w\s]*class\s+(classNameRegex)(?=\s|:|$)"</param>
-    /// <param name="fullRegex">Full regex pattern to match file content.</param>
     /// <param name="maxApply">-m, How many matches should apply, 0 means unlimited.</param>
     /// <param name="isGenericAttribute">-ig, Whether to generate generic attribute syntax.</param>
     /// <returns></returns>
@@ -33,7 +32,6 @@ public sealed class GenerateCommands(
         string filePattern = "*.cs",
         bool searchSubDirectories = false,
         string? classNameRegex = null,
-        string? fullRegex = null,
         int maxApply = 0,
         bool isGenericAttribute = false,
         CancellationToken ct = default)
@@ -50,27 +48,13 @@ public sealed class GenerateCommands(
             return;
         }
 
-        if(string.IsNullOrWhiteSpace(classNameRegex) && string.IsNullOrWhiteSpace(fullRegex))
+        if(string.IsNullOrWhiteSpace(classNameRegex))
         {
-            logger.ZLogError($"-cn|--class-name-regex and --full-regex can not all be empty! You must specify at least one.");
+            logger.ZLogError($"-cn|--class-name-regex can not be empty!");
             return;
         }
-        Regex regex;
-        if(!string.IsNullOrWhiteSpace(fullRegex))
-        {
-            regex = CreateFullMatchRegex(fullRegex);
-        }
-        else if(!string.IsNullOrWhiteSpace(classNameRegex))
-        {
-            regex = CreateClassMatchRegex(classNameRegex);
-        }
-        else
-        {
-            throw new UnreachableException();
-        }
 
-        // When using classNameRegex, we need to extract the class name from the match
-        bool useClassNameExtraction = !string.IsNullOrWhiteSpace(classNameRegex);
+        Regex regex = CreateClassMatchRegex(classNameRegex);
 
         int classCount = 0;
         List<string> collectedClasses = [];
@@ -84,7 +68,7 @@ public sealed class GenerateCommands(
 
             foreach(var file in files)
             {
-                var result = await ProcessFile(file, regex, maxApply, classCount, useClassNameExtraction, ct);
+                var result = await ProcessFile(file, regex, maxApply, classCount, ct);
                 collectedClasses.AddRange(result.Classes);
                 classCount = result.ClassCount;
                 if(maxApply > 0 && classCount >= maxApply)
@@ -96,7 +80,7 @@ public sealed class GenerateCommands(
         }
         else if(fileSystem.File.Exists(target))
         {
-            var result = await ProcessFile(target, regex, maxApply, classCount, useClassNameExtraction, ct);
+            var result = await ProcessFile(target, regex, maxApply, classCount, ct);
             collectedClasses.AddRange(result.Classes);
             classCount = result.ClassCount;
         }
@@ -130,7 +114,7 @@ public sealed class GenerateCommands(
         logger.ZLogInformation($"Generated file at: {outputPath}");
     }
 
-    private async Task<(int ClassCount, List<string> Classes)> ProcessFile(string file, Regex regex, int maxApply, int classCount, bool useClassNameExtraction, CancellationToken ct)
+    private async Task<(int ClassCount, List<string> Classes)> ProcessFile(string file, Regex regex, int maxApply, int classCount, CancellationToken ct)
     {
         logger.ZLogTrace($"Processing file: {file}");
 
@@ -142,16 +126,16 @@ public sealed class GenerateCommands(
 
         var content = await fileSystem.File.ReadAllTextAsync(file, ct);
 
-        return MatchFileContent(regex, content, maxApply, classCount, useClassNameExtraction, logger);
+        return MatchFileContent(regex, content, maxApply, classCount, logger);
     }
 
     public static (int Count, List<string> Result) MatchFileContent(
-        Regex regex, string fileContent, int maxApply, int count, bool useClassNameExtraction, ILogger? logger = null)
+        Regex regex, string fileContent, int maxApply, int count, ILogger? logger = null)
     {
         int remainingCount = maxApply > 0 ? maxApply - count : int.MaxValue;
 
         // Extract namespace from file content
-        string? ns = useClassNameExtraction ? ExtractNamespace(fileContent) : null;
+        string? ns = ExtractNamespace(fileContent);
         string prefix = ns is not null ? $"{ns}." : "";
 
         List<string> result = [];
@@ -164,16 +148,186 @@ public sealed class GenerateCommands(
             count++;
             remainingCount--;
 
-            // Extract only the class name when using class name extraction
-            string className = useClassNameExtraction
-                ? ExtractClassName(match)
-                : match.Value;
-
+            string className = ExtractClassName(match);
             string fullName = $"{prefix}{className}";
             logger?.ZLogTrace($"Matched class: {fullName}");
             result.Add(fullName);
         }
 
         return (count, result);
+    }
+
+
+
+    /// <summary>
+    /// Collect class and generate [IocRegisterDefaults] annotations.
+    /// </summary>
+    /// <param name="outputPath">-o, Output file path.</param>
+    /// <param name="target">-t, Target directory or file, default is current directory.</param>
+    /// <param name="filePattern">-f, File pattern to filter files.</param>
+    /// <param name="searchSubDirectories">-s, Whether to search sub directories.</param>
+    /// <param name="classNameRegex">-cn, Regex pattern to match class names.</param>
+    /// <param name="baseTypeRegex">-b, Regex pattern to match interface/base class.</param>
+    /// <param name="maxApply">-m, How many matches should apply, 0 means unlimited.</param>
+    /// <param name="isGenericAttribute">-ig, Whether to generate generic attribute syntax.</param>
+    /// <returns></returns>
+    [Command("ioc-defaults")]
+    public async Task GenerateIocRegisterDefaults(
+        string outputPath,
+        string? target = null,
+        string filePattern = "*.cs",
+        bool searchSubDirectories = false,
+        string? classNameRegex = null,
+        string? baseTypeRegex = null,
+        int maxApply = 0,
+        bool isGenericAttribute = false,
+        CancellationToken ct = default)
+    {
+        if(string.IsNullOrWhiteSpace(outputPath))
+        {
+            logger.ZLogError($"-o|--output-path can not be empty!");
+            return;
+        }
+
+        if(string.IsNullOrWhiteSpace(filePattern))
+        {
+            logger.ZLogError($"-f|--file-pattern can not be empty!");
+            return;
+        }
+
+        if(string.IsNullOrWhiteSpace(classNameRegex) || string.IsNullOrWhiteSpace(baseTypeRegex))
+        {
+            logger.ZLogError($"-cn|--class-name-regex and -b|--base-type-regex must both be specified!");
+            return;
+        }
+
+        Regex regex = CreateClassWithBaseTypeMatchRegex(classNameRegex, baseTypeRegex);
+
+        int classCount = 0;
+        // key = base Type, value = list of classes
+        Dictionary<string, List<string>> collected = [];
+        bool targetIsEmpty = string.IsNullOrWhiteSpace(target);
+        if(targetIsEmpty || fileSystem.Directory.Exists(target))
+        {
+            var files = fileSystem.Directory.EnumerateFiles(
+                targetIsEmpty ? environmentProvider.CurrentDirectory : target!,
+                filePattern,
+                searchSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+
+            foreach(var file in files)
+            {
+                classCount = await ProcessFileForDefaults(file, regex, maxApply, classCount, collected, ct);
+
+                if(maxApply > 0 && classCount >= maxApply)
+                {
+                    logger.ZLogInformation($"Reached the --maxApply:{maxApply} limit. Stopping further processing.");
+                    break;
+                }
+            }
+        }
+        else if(fileSystem.File.Exists(target))
+        {
+            classCount = await ProcessFileForDefaults(target, regex, maxApply, classCount, collected, ct);
+        }
+        else
+        {
+            logger.ZLogError($"Target path does not exist: {target}");
+            return;
+        }
+
+        logger.ZLogInformation($"Total class count: {classCount}");
+
+        StringBuilder sb = new();
+        sb.AppendLine("// <auto-generated />");
+        sb.AppendLine("using SourceGen.Ioc;");
+        foreach(var (b, cs) in collected)
+        {
+            var typeofList = string.Join(", ", cs.Select(c => $"typeof({c})"));
+            if(isGenericAttribute)
+                sb.AppendLine($"[assembly: IocRegisterDefaults<{b}>(ImplementationTypes = [{typeofList}])]");
+            else
+                sb.AppendLine($"[assembly: IocRegisterDefaults(typeof({b}), ImplementationTypes = [{typeofList}])]");
+        }
+        sb.AppendLine();
+
+        if(globalOptions.DryRun)
+        {
+            logger.ZLogInformation($"[Dry Run] Generated file content:{environmentProvider.NewLine}{sb.ToString()}");
+            return;
+        }
+
+        await fileSystem.File.WriteAllTextAsync(outputPath, sb.ToString(), ct);
+        logger.ZLogInformation($"Generated file at: {outputPath}");
+    }
+
+    private async Task<int> ProcessFileForDefaults(
+        string file,
+        Regex regex,
+        int maxApply,
+        int classCount,
+        Dictionary<string, List<string>> collected,
+        CancellationToken ct)
+    {
+        logger.ZLogTrace($"Processing file: {file}");
+
+        if(!fileSystem.File.Exists(file))
+        {
+            logger.ZLogWarning($"File not found: {file}");
+            return classCount;
+        }
+
+        var content = await fileSystem.File.ReadAllTextAsync(file, ct);
+
+        return MatchFileContentForDefaults(regex, content, maxApply, classCount, collected, logger);
+    }
+
+    /// <summary>
+    /// Matches file content and extracts class names grouped by their base types.
+    /// </summary>
+    /// <param name="regex">The regex to match class declarations with base types.</param>
+    /// <param name="fileContent">The file content to search.</param>
+    /// <param name="maxApply">Maximum number of matches to apply (0 = unlimited).</param>
+    /// <param name="count">Current count of matches.</param>
+    /// <param name="collected">Dictionary to collect results (key = base type, value = list of implementation types).</param>
+    /// <param name="logger">Optional logger for trace output.</param>
+    /// <returns>The updated count of matches.</returns>
+    public static int MatchFileContentForDefaults(
+        Regex regex,
+        string fileContent,
+        int maxApply,
+        int count,
+        Dictionary<string, List<string>> collected,
+        ILogger? logger = null)
+    {
+        int remainingCount = maxApply > 0 ? maxApply - count : int.MaxValue;
+
+        // Extract namespace from file content
+        string? ns = ExtractNamespace(fileContent);
+        string prefix = ns is not null ? $"{ns}." : "";
+
+        var ms = regex.Matches(fileContent);
+        foreach(Match match in ms)
+        {
+            if(remainingCount <= 0)
+                break;
+
+            count++;
+            remainingCount--;
+
+            var (className, baseType) = ExtractClassAndBaseType(match);
+            string fullClassName = $"{prefix}{className}";
+
+            logger?.ZLogTrace($"Matched class: {fullClassName} -> {baseType}");
+
+            if(!collected.TryGetValue(baseType, out var list))
+            {
+                list = [];
+                collected[baseType] = list;
+            }
+
+            list.Add(fullClassName);
+        }
+
+        return count;
     }
 }

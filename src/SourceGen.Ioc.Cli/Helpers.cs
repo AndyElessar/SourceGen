@@ -57,4 +57,46 @@ public static partial class Helpers
             ? match.Groups[1].Value
             : null;
     }
+
+    // Matches: (public|internal) [modifiers] class ClassName : BaseType
+    // Group 1: access modifier (public|internal)
+    // Group 2: class name
+    // Group 3: base type (interface or base class)
+    private const string classWithBaseTypeRegex_1 = @"(public|internal)\s+(?!static\s+)[\w\s]*class\s+(";
+    private const string classWithBaseTypeRegex_2 = @")\s*:\s*(?:[^,{\n]+,\s*)*(";
+    private const string classWithBaseTypeRegex_3 = @")(?=\s*[,{]|$)";
+
+    /// <summary>
+    /// Creates a regex to match class declarations with a specific base type/interface.
+    /// </summary>
+    /// <param name="classNameRegex">Regex pattern to match class names.</param>
+    /// <param name="baseTypeRegex">Regex pattern to match the base type or interface.</param>
+    /// <returns>A compiled regex that matches class declarations inheriting/implementing the specified base type.</returns>
+    public static Regex CreateClassWithBaseTypeMatchRegex(string classNameRegex, string baseTypeRegex)
+    {
+        // Replace .* and .+ with \w* and \w+ to ensure names only contain identifier characters
+        var sanitizedClassPattern = classNameRegex
+            .Replace(".*", @"\w*")
+            .Replace(".+", @"\w+");
+
+        var sanitizedBaseTypePattern = baseTypeRegex
+            .Replace(".*", @"[\w.<>]*")
+            .Replace(".+", @"[\w.<>]+");
+
+        return new Regex(
+            string.Concat(classWithBaseTypeRegex_1, sanitizedClassPattern, classWithBaseTypeRegex_2, sanitizedBaseTypePattern, classWithBaseTypeRegex_3),
+            RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.Multiline,
+            TimeSpan.FromMilliseconds(1000));
+    }
+
+    /// <summary>
+    /// Extracts class name and base type from a regex match that used CreateClassWithBaseTypeMatchRegex.
+    /// The class name is captured in group 2, the base type is captured in group 3.
+    /// </summary>
+    /// <param name="match">The regex match result.</param>
+    /// <returns>A tuple containing the class name and base type.</returns>
+    public static (string ClassName, string BaseType) ExtractClassAndBaseType(Match match) =>
+        match.Groups.Count > 3 && match.Groups[2].Success && match.Groups[3].Success
+            ? (match.Groups[2].Value, match.Groups[3].Value)
+            : (match.Value, string.Empty);
 }

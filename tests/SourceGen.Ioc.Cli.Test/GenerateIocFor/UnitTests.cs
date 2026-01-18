@@ -15,11 +15,11 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result).Contains("public class MyClass");
+        await Assert.That(result).Contains("MyClass");
     }
 
     [Test]
@@ -35,7 +35,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(3);
@@ -51,7 +51,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(0);
@@ -71,7 +71,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 2, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 2, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(2);
@@ -91,27 +91,11 @@ public class UnitTests
 
         // Act (already have 1, limit is 2)
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 2, count: 1, useClassNameExtraction: false);
+            regex, content, maxApply: 2, count: 1);
 
         // Assert (should only add 1 more)
         await Assert.That(count).IsEqualTo(2);
         await Assert.That(result.Count).IsEqualTo(1);
-    }
-
-    [Test]
-    public async Task MatchFileContent_MatchesPublicClass()
-    {
-        // Arrange
-        var regex = CreateClassMatchRegex("MyClass");
-        var content = "public class MyClass { }";
-
-        // Act
-        var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
-
-        // Assert
-        await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).Contains("public class MyClass");
     }
 
     [Test]
@@ -123,11 +107,11 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).Contains("internal class MyClass");
+        await Assert.That(result[0]).IsEqualTo("MyClass");
     }
 
     [Test]
@@ -139,7 +123,7 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(0);
@@ -155,11 +139,11 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).Contains("public sealed class MyClass");
+        await Assert.That(result[0]).IsEqualTo("MyClass");
     }
 
     [Test]
@@ -171,83 +155,27 @@ public class UnitTests
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).Contains("public partial class MyClass");
+        await Assert.That(result[0]).IsEqualTo("MyClass");
     }
 
     [Test]
-    public async Task MatchFileContent_MatchesClassWithBaseType()
+    public async Task MatchFileContent_MatchesClassWithInheritance()
     {
         // Arrange
         var regex = CreateClassMatchRegex("MyClass");
-        var content = "public class MyClass : BaseClass { }";
+        var content = "public class MyClass : BaseClass, IInterface1, IInterface2 { }";
 
         // Act
         var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
+            regex, content, maxApply: 0, count: 0);
 
         // Assert
         await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).Contains("public class MyClass");
-    }
-
-    [Test]
-    public async Task MatchFileContent_MatchesClassWithInterfaces()
-    {
-        // Arrange
-        var regex = CreateClassMatchRegex("MyClass");
-        var content = "public class MyClass : IInterface1, IInterface2 { }";
-
-        // Act
-        var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
-
-        // Assert
-        await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).Contains("public class MyClass");
-    }
-
-    #endregion
-
-    #region FullRegex Tests
-
-    [Test]
-    public async Task MatchFileContent_FullRegex_MatchesCustomPattern()
-    {
-        // Arrange
-        var regex = CreateFullMatchRegex(@"\w+Service");
-        var content = "public class MyService { }";
-
-        // Act
-        var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
-
-        // Assert
-        await Assert.That(count).IsEqualTo(1);
-        await Assert.That(result[0]).IsEqualTo("MyService");
-    }
-
-    [Test]
-    public async Task MatchFileContent_FullRegex_MatchesMultiplePatterns()
-    {
-        // Arrange
-        var regex = CreateFullMatchRegex(@"\w+Service");
-        var content = """
-            public class MyService { }
-            public class YourService { }
-            """;
-
-        // Act
-        var (count, result) = GenerateCommands.MatchFileContent(
-            regex, content, maxApply: 0, count: 0, useClassNameExtraction: false);
-
-        // Assert
-        await Assert.That(count).IsEqualTo(2);
-        await Assert.That(result).Contains("MyService");
-        await Assert.That(result).Contains("YourService");
+        await Assert.That(result[0]).IsEqualTo("MyClass");
     }
 
     #endregion

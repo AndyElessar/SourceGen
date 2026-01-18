@@ -8,4 +8,5 @@ internal static class Constants
 
     public const string AddAttribute = "AddAttributeCommands";
     public const string GenerateIocFor = "GenerateIocForCommands";
+    public const string GenerateIocDefaults = "GenerateIocDefaultsCommands";
 }
