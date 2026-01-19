@@ -27,7 +27,7 @@ public class RootNamespaceTests
             ["build_property.RootNamespace"] = "MyCustom.Root.Namespace"
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -50,7 +50,7 @@ public class RootNamespaceTests
             public class MyService : IMyService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "MyAssembly.Name");
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -78,7 +78,7 @@ public class RootNamespaceTests
             ["build_property.RootNamespace"] = ""
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "FallbackAssembly",
             analyzerConfigOptions: analyzerConfigOptions);
@@ -108,7 +108,7 @@ public class RootNamespaceTests
             ["build_property.SourceGenIocName"] = "MyServices"
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -136,7 +136,7 @@ public class RootNamespaceTests
             ["build_property.RootNamespace"] = "My-Project.Root_Namespace"
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -166,7 +166,7 @@ public class RootNamespaceTests
 
         // Assembly name is different from RootNamespace
         // Namespace should use RootNamespace, but method name should use assembly name
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "MyAssembly",
             analyzerConfigOptions: analyzerConfigOptions);

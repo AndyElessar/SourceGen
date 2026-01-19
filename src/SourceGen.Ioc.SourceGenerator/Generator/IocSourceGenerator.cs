@@ -5,7 +5,7 @@
 /// in Microsoft.Extensions.DependencyInjection container.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
+public sealed partial class IocSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {

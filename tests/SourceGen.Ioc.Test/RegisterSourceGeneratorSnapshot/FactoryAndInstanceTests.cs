@@ -32,7 +32,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -62,7 +62,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -92,7 +92,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -122,7 +122,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -153,7 +153,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -180,7 +180,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -207,7 +207,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -235,7 +235,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -266,7 +266,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -296,7 +296,7 @@ public class FactoryAndInstanceTests
             public static class ServiceConfigurator { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -327,7 +327,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -355,7 +355,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -384,7 +384,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource).UseParameters(lifetime);
@@ -415,7 +415,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -446,7 +446,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -477,7 +477,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -508,7 +508,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -544,7 +544,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -583,7 +583,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -615,7 +615,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -650,7 +650,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -689,7 +689,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -723,7 +723,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -756,7 +756,7 @@ public class FactoryAndInstanceTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -795,7 +795,7 @@ public class FactoryAndInstanceTests
             public sealed class App { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -837,7 +837,7 @@ public class FactoryAndInstanceTests
             public sealed class App { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -878,7 +878,7 @@ public class FactoryAndInstanceTests
             public sealed class App { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -926,7 +926,7 @@ public class FactoryAndInstanceTests
             public sealed class App { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -969,7 +969,7 @@ public class FactoryAndInstanceTests
             public sealed class App { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

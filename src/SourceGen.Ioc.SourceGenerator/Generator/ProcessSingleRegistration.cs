@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     /// <summary>
     /// Key for the default registration method (services not excluded from default).

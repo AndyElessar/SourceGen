@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     private static RegistrationData? TransformRegister(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {

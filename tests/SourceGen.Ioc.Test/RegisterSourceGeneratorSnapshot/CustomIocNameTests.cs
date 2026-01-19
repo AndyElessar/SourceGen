@@ -27,7 +27,7 @@ public class CustomIocNameTests
             ["build_property.SourceGenIocName"] = "CustomName"
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -62,7 +62,7 @@ public class CustomIocNameTests
             ["build_property.SourceGenIocName"] = "MyModule"
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -90,7 +90,7 @@ public class CustomIocNameTests
             ["build_property.SourceGenIocName"] = "My-Special.Name 123"
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -113,7 +113,7 @@ public class CustomIocNameTests
             public class MyService : IMyService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "MyProject.Services");
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
@@ -143,7 +143,7 @@ public class CustomIocNameTests
             ["build_property.SourceGenIocName"] = iocNameValue
         };
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "FallbackAssembly",
             analyzerConfigOptions: analyzerConfigOptions);

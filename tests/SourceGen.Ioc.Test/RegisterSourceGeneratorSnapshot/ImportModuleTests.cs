@@ -54,7 +54,7 @@ public class ImportModuleTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -98,7 +98,7 @@ public class ImportModuleTests
             public sealed class MyService : IService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -156,7 +156,7 @@ public class ImportModuleTests
             public sealed class Service2Impl : IService2 { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             mainSource,
             "MainApp",
             [shared1Compilation.ToMetadataReference(), shared2Compilation.ToMetadataReference()]);
@@ -212,7 +212,7 @@ public class ImportModuleTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

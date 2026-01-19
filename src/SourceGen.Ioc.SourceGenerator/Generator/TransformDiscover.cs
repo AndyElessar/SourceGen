@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     /// <summary>
     /// Transforms DiscoverAttribute to extract closed generic type information for factory registration generation.

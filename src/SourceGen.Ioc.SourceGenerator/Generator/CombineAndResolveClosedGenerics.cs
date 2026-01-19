@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     /// <summary>
     /// Pipeline 2: Combines all basic registration results and resolves closed generic dependencies.

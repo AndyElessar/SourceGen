@@ -25,7 +25,7 @@ public class TagsTests
             public class MyTaggedService : IMyTaggedService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -49,7 +49,7 @@ public class TagsTests
             public class MyTaggedService : IMyTaggedService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -81,7 +81,7 @@ public class TagsTests
             public class MyTaggedService2 : IMyTaggedService2 { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -125,7 +125,7 @@ public class TagsTests
             public class BothTagsService : IBothTagsService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

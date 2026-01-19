@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     private static bool PredicateInvocations(SyntaxNode node) =>
         node is InvocationExpressionSyntax

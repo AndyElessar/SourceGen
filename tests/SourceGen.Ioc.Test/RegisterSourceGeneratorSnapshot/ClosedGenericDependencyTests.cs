@@ -46,7 +46,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -131,7 +131,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -165,7 +165,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -202,7 +202,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -290,7 +290,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -346,7 +346,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -386,7 +386,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -429,7 +429,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -469,7 +469,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -508,7 +508,7 @@ public class ClosedGenericDependencyTests
             public class DiscoverMarker { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -573,7 +573,7 @@ public class ClosedGenericDependencyTests
             public class DiscoverMarker { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -613,7 +613,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -647,7 +647,7 @@ public class ClosedGenericDependencyTests
             public class Entity2 { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -672,7 +672,7 @@ public class ClosedGenericDependencyTests
             public class DiscoverMarker { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -699,7 +699,7 @@ public class ClosedGenericDependencyTests
             public class DiscoverMarker { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -757,7 +757,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -815,7 +815,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -860,7 +860,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -919,7 +919,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -990,7 +990,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -1043,7 +1043,7 @@ public class ClosedGenericDependencyTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

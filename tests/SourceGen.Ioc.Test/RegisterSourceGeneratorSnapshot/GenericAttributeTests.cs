@@ -24,7 +24,7 @@ public class GenericAttributeTests
             public class MyService : IMyService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -45,7 +45,7 @@ public class GenericAttributeTests
             public class MyService : IMyService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -70,7 +70,7 @@ public class GenericAttributeTests
             public class ExternalService : IExternalService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -92,7 +92,7 @@ public class GenericAttributeTests
             public sealed class Module;
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -119,7 +119,7 @@ public class GenericAttributeTests
             public class MyService : IBaseService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -149,7 +149,7 @@ public class GenericAttributeTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -190,7 +190,7 @@ public class GenericAttributeTests
             public sealed class MyService : ISharedService { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -222,7 +222,7 @@ public class GenericAttributeTests
             public sealed class Startup;
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -252,7 +252,7 @@ public class GenericAttributeTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -283,7 +283,7 @@ public class GenericAttributeTests
             public sealed class Startup;
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -314,7 +314,7 @@ public class GenericAttributeTests
             public class Service2 : ISecond { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

@@ -81,7 +81,7 @@ public class CrossAssemblyNestedOpenGenericTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
@@ -159,7 +159,7 @@ public class CrossAssemblyNestedOpenGenericTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
@@ -235,7 +235,7 @@ public class CrossAssemblyNestedOpenGenericTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
@@ -321,7 +321,7 @@ public class CrossAssemblyNestedOpenGenericTests
             }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);

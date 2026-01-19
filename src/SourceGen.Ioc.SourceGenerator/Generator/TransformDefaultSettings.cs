@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     /// <summary>
     /// Transforms IoCRegisterDefaultsAttribute to extract default settings and implementation type registrations.

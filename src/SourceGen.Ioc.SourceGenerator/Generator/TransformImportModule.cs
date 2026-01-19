@@ -1,6 +1,6 @@
 ﻿namespace SourceGen.Ioc;
 
-partial class RegisterSourceGenerator
+partial class IocSourceGenerator
 {
     /// <summary>
     /// Transforms ImportModuleAttribute to extract default settings from the referenced module's assembly.
