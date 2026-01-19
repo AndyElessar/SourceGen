@@ -21,6 +21,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
     - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory` or default settings)
     - Instance (from `IocRegisterAttribute.Instance`, `IocRegisterForAttribute.Instance`)
     - `IServiceProvider` invocations: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`, collect type data from `T`, regarded as Service type
+    - Generic factory method's type parameter hint (from `IocGenericFactoryAttribute`)
     - Other assembly's setting from `IocImportModuleAttribute` (supports generic version: `IocImportModuleAttribute<T>`)
     - `IocDiscoverAttribute` for explicit closed generic discovery (supports generic version: `IocDiscoverAttribute<T>`)
 
@@ -75,6 +76,33 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
     - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Extract data of `T`, regarded as Service type
     - Built-in types without Key and without default value: Skip (unresolvable)
     - Nullable Annotation: assign a resolved nullable value
+
+7. Generic factory method type parameter mapping:
+    - Collect type array in `IocGenericFactoryAttribute`
+    - The first type is the service type going to map, it can't be unbound generic type, type parameter must be filled with a type for placeholder
+    - Following types is mapping to generic factory method's type parameter in order, the type should be able to match the first type's placeholder
+
+    ```csharp
+    // Service type is IRequestHandler<>, has 1 type parameter
+    [IocRegisterDefaults(typeof(IRequestHandler<>), Factory = nameof(FactoryContainer.Create))]
+    public class FactoryContainer
+    {   //                                              ┌--------------┐ "int" is a placeholder, make sure placeholders is unique
+        //                                              │              │ in the context of the generic type mapping.
+        //                                              ↓              ↓
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+        public static Create<T>()=>new Handler<T>();
+    }
+
+    // Service type is IRequestHandler<,>, has 2 type parameter
+    [IocRegisterDefaults(typeof(IRequestHandler<,>), Factory = nameof(FactoryContainer.Create))]
+    public class FactoryContainer
+    {   //                                              ┌----------------------------------------┐
+        //                                              │                                        │
+        //                                              ↓                                        ↓
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>, decimal>), typeof(decimal), typeof(int))]
+        public static Create<T1, T2>()=>new Handler<T1, T2>();//↑                ↑
+    }                                                         //└----------------┘
+    ```
 
 ## Generators
 

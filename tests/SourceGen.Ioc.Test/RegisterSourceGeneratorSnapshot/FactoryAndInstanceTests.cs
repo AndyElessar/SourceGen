@@ -761,4 +761,217 @@ public class FactoryAndInstanceTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task GenericFactory_SingleTypeParameter_GeneratesGenericFactoryCall()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            // Use open generic as the target type for default settings
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create))]
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            // Implementation without explicit ServiceTypes - let defaults match
+            [IocRegister]
+            public class Handler<T> : IRequestHandler<Task<T>> { }
+
+            public class Entity { }
+
+            [IocDiscover<IRequestHandler<Task<Entity>>>]
+            public sealed class App { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task GenericFactory_TwoTypeParameters_GeneratesGenericFactoryCall()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TRequest, TResponse> { }
+
+            // Use open generic as the target type for default settings
+            [IocRegisterDefaults(typeof(IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create))]
+            public static class FactoryContainer
+            {
+                // Use different placeholder types: int for T1, decimal for T2
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(int), typeof(decimal))]
+                public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>() => throw new NotImplementedException();
+            }
+
+            // Handler with 2 type parameters implementing 2 type param interface
+            [IocRegister(ServiceTypes = [typeof(IRequestHandler<,>)])]
+            public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
+
+            public class Entity { }
+            public class Dto { }
+
+            [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+            public sealed class App { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task GenericFactory_WithServiceProvider_GeneratesGenericFactoryCallWithSp()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            // Use open generic as the target type for default settings
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create))]
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>(IServiceProvider sp) => throw new NotImplementedException();
+            }
+
+            [IocRegister]
+            public class Handler<T> : IRequestHandler<Task<T>>
+            {
+                public Handler(IServiceProvider sp) { }
+            }
+
+            public class Entity { }
+
+            [IocDiscover<IRequestHandler<Task<Entity>>>]
+            public sealed class App { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task GenericFactory_TwoTypeParameters_ReversedMapping_GeneratesGenericFactoryCall()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TRequest, TResponse> { }
+
+            // Use open generic as the target type for default settings
+            [IocRegisterDefaults(typeof(IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create))]
+            public static class FactoryContainer
+            {
+                // First placeholder (int) maps to T2, second placeholder (decimal) maps to T1
+                // This means when we discover IRequestHandler<Task<Entity>, List<Dto>>:
+                //   - Task<Entity> matches Task<int> -> T2 = Entity
+                //   - List<Dto> matches List<decimal> -> T1 = Dto
+                // So the factory call should be Create<Dto, Entity>()
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(decimal), typeof(int))]
+                public static IRequestHandler<Task<T2>, List<T1>> Create<T1, T2>() => throw new NotImplementedException();
+            }
+
+            // Handler with 2 type parameters implementing 2 type param interface
+            [IocRegister(ServiceTypes = [typeof(IRequestHandler<,>)])]
+            public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
+
+            public class Entity { }
+            public class Dto { }
+
+            // Discover IRequestHandler<Task<Entity>, List<Dto>>
+            // With reversed mapping: T1 = Dto, T2 = Entity
+            [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+            public sealed class App { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task GenericFactory_TwoTypeParameters_SamePlaceholderType_DoesNotGenerateRegistration()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TRequest, TResponse> { }
+
+            // Use open generic as the target type for default settings
+            [IocRegisterDefaults(typeof(IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create))]
+            public static class FactoryContainer
+            {
+                // Both placeholders use int - this is invalid and should not generate registration
+                // because we cannot distinguish which type argument maps to T1 vs T2
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<int>>), typeof(int), typeof(int))]
+                public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>() => throw new NotImplementedException();
+            }
+
+            // Handler with 2 type parameters implementing 2 type param interface
+            [IocRegister(ServiceTypes = [typeof(IRequestHandler<,>)])]
+            public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
+
+            public class Entity { }
+            public class Dto { }
+
+            [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+            public sealed class App { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

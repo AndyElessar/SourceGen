@@ -882,3 +882,37 @@ This source generator automatically generates extension methods for registering 
     });
     #endregion
     ```
+
+12. When registrations is specified `IocRegisterAttribute.Factory` and factory method is generic and mark with `[IocGenericFactory]`
+
+    ```csharp
+    #region Define:
+    // Service type is IRequestHandler<>, has 1 type parameter
+    [IocRegisterDefaults(typeof(IRequestHandler<>), Factory = nameof(FactoryContainer.Create))]
+    public class FactoryContainer
+    {   //                                              ┌--------------┐ "int" is a placeholder, make sure placeholders is unique
+        //                                              │              │ in the context of the generic type mapping.
+        //                                              ↓              ↓
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+        public static Create<T>() => new Handler<T>();
+    }
+    #endregion
+    #region Generate:
+    service.AddSingleton<IRequestHandler<Task<Entity>>>(sp => FactoryContainer.Create<Entity>())
+    #endregion
+
+    #region Define:
+    // Service type is IRequestHandler<,>, has 2 type parameter
+    [IocRegisterDefaults(typeof(IRequestHandler<,>), Factory = nameof(FactoryContainer.Create))]
+    public class FactoryContainer
+    {   //                                              ┌----------------------------------------┐
+        //                                              │                                        │
+        //                                              ↓                                        ↓
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>, decimal>), typeof(decimal), typeof(int))]
+        public static Create<T1, T2>()=>new Handler<T1, T2>();//↑                ↑
+    }                                                         //└----------------┘
+    #endregion
+    #region Generate:
+    service.AddSingleton<IRequestHandler<Task<Entity>>, Dto>(sp => FactoryContainer.Create<Dto, Entity>())
+    #endregion
+    ```

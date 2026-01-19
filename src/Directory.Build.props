@@ -9,12 +9,14 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Description>Dependency injection source generator for C#</Description>
     <Authors>Andy Elessar</Authors>
     <Copyright>2026</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>source generator, dependency injection, decorator pattern</PackageTags>
     <PackageOutputPath>$(RepoRoot)artifacts/</PackageOutputPath>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/AndyElessar/SourceGen</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/AndyElessar/SourceGen.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <!-- Source Link support -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>

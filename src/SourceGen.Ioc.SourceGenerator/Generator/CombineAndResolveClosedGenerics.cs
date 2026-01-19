@@ -164,25 +164,29 @@ partial class RegisterSourceGenerator
         var openImplType = openGenericInfo.ImplementationType;
 
         // Find the matching open service type to build the type argument map
-        // First, check in ServiceTypes
+        // Prefer AllInterfaces over ServiceTypes because AllInterfaces contains
+        // the actual interface as implemented (e.g., IRequestHandler<Task<T1>, List<T2>>)
+        // while ServiceTypes may contain the open generic definition (e.g., IRequestHandler<TRequest, TResponse>)
         TypeData? matchingOpenServiceType = null;
-        foreach(var serviceType in openGenericInfo.ServiceTypes)
+
+        // First, check in AllInterfaces (for nested open generics - this is the preferred match)
+        foreach(var iface in openGenericInfo.AllInterfaces)
         {
-            if(serviceType.NameWithoutGeneric == closedServiceType.NameWithoutGeneric)
+            if(iface.NameWithoutGeneric == closedServiceType.NameWithoutGeneric)
             {
-                matchingOpenServiceType = serviceType;
+                matchingOpenServiceType = iface;
                 break;
             }
         }
 
-        // If not found in ServiceTypes, check in AllInterfaces (for nested open generics)
+        // If not found in AllInterfaces, check in ServiceTypes
         if(matchingOpenServiceType is null)
         {
-            foreach(var iface in openGenericInfo.AllInterfaces)
+            foreach(var serviceType in openGenericInfo.ServiceTypes)
             {
-                if(iface.NameWithoutGeneric == closedServiceType.NameWithoutGeneric)
+                if(serviceType.NameWithoutGeneric == closedServiceType.NameWithoutGeneric)
                 {
-                    matchingOpenServiceType = iface;
+                    matchingOpenServiceType = serviceType;
                     break;
                 }
             }
@@ -229,6 +233,11 @@ partial class RegisterSourceGenerator
             serviceTypeArgMap,
             implTypeArgMap);
 
+        // For generic factory methods (with [IocGenericFactory]), factory is only applicable to service types
+        // because generic type mapping requires matching service type template.
+        // For regular factories, apply to both implementation and service types.
+        var implFactory = openGenericInfo.Factory?.TypeParameterCount > 0 ? null : openGenericInfo.Factory;
+
         // Create registration for the implementation type itself
         var implModel = new ServiceRegistrationModel(
             closedImplType,
@@ -239,7 +248,7 @@ partial class RegisterSourceGenerator
             IsOpenGeneric: false,
             [],
             openGenericInfo.InjectionMembers,
-            openGenericInfo.Factory,
+            Factory: implFactory,
             openGenericInfo.Instance);
 
         // Add registration with tags
@@ -570,6 +579,14 @@ partial class RegisterSourceGenerator
                 closedServiceTypeName = SubstituteTypeArguments(closedServiceTypeName, implTypeArgMap);
             }
 
+            // Skip if the substitution didn't fully resolve the type (still contains type parameters)
+            // This happens when ServiceTypes contains pure open generics like IRequestHandler<TRequest, TResponse>
+            // and the type parameter names don't match the implementation's type parameters
+            if(StillContainsUnresolvedTypeParameters(closedServiceTypeName, openServiceType))
+            {
+                continue;
+            }
+
             var closedServiceType = new TypeData(
                 closedServiceTypeName,
                 openServiceType.NameWithoutGeneric,
@@ -588,7 +605,44 @@ partial class RegisterSourceGenerator
     }
 
     /// <summary>
+    /// Checks if the substituted type name still contains unresolved type parameters.
+    /// This happens when the original type has type parameters that weren't in the substitution map.
+    /// </summary>
+    private static bool StillContainsUnresolvedTypeParameters(string closedTypeName, TypeData openServiceType)
+    {
+        // If the type parameters are null or empty, it's not a generic type to begin with
+        var typeParams = openServiceType.TypeParameters;
+        if(typeParams is null || typeParams.Length == 0)
+        {
+            return false;
+        }
+
+        // Check if any of the original type parameter names still appear in the closed type name
+        // This indicates incomplete substitution
+        foreach(var typeParam in typeParams)
+        {
+            var paramTypeName = typeParam.Type.Name;
+            // Check if this type parameter is a simple type parameter (not a generic type)
+            // and still appears in the closed type name
+            if(typeParam.Type.IsTypeParameter || (typeParam.Type.IsOpenGeneric && typeParam.Type.GenericArity == 0))
+            {
+                // Check if the parameter name still appears between < and > or < and ,
+                if(closedTypeName.Contains($"<{paramTypeName}>") ||
+                   closedTypeName.Contains($"<{paramTypeName},") ||
+                   closedTypeName.Contains($", {paramTypeName}>") ||
+                   closedTypeName.Contains($", {paramTypeName},"))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Substitutes type parameters in TypeParameter array with actual types.
+    /// Recursively processes nested type parameters for generic types like Task&lt;T&gt;.
     /// </summary>
     private static ImmutableEquatableArray<TypeParameter>? SubstituteTypeParameters(
         ImmutableEquatableArray<TypeParameter>? typeParams,
@@ -602,12 +656,28 @@ partial class RegisterSourceGenerator
         var result = new List<TypeParameter>(typeParams.Length);
         foreach(var param in typeParams)
         {
-            var newTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
-            var newType = param.Type with { Name = newTypeName, IsOpenGeneric = false };
-            result.Add(param with { Type = newType });
+            var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
+            result.Add(param with { Type = substitutedType });
         }
 
         return result.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Recursively substitutes type arguments in a TypeData, including nested type parameters.
+    /// For example, Task&lt;T&gt; with T -> Entity becomes Task&lt;Entity&gt; with proper TypeParameters.
+    /// </summary>
+    private static TypeData SubstituteTypeData(TypeData typeData, TypeArgMap typeArgMap)
+    {
+        var newTypeName = SubstituteTypeArguments(typeData.Name, typeArgMap);
+        var newTypeParams = SubstituteTypeParameters(typeData.TypeParameters, typeArgMap);
+
+        return typeData with
+        {
+            Name = newTypeName,
+            IsOpenGeneric = false,
+            TypeParameters = newTypeParams
+        };
     }
 
     /// <summary>

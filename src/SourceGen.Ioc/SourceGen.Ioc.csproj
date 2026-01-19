@@ -7,11 +7,9 @@
     <EnablePackageValidation>false</EnablePackageValidation>
     <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
     <!-- NuGet Package Metadata -->
+    <Description>Dependency injection source generator</Description>
+    <PackageTags>SourceGen, sourcegenerator, generator, dependencyinjection, di, ioc, decorator</PackageTags>
     <PackageId>SourceGen.Ioc</PackageId>
-    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/AndyElessar/SourceGen</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/AndyElessar/SourceGen.git</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>

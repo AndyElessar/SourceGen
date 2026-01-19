@@ -191,6 +191,30 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Built-in types cannot be resolved from the dependency injection container. Use [IocInject] with a service key, [FromKeyedServices], or provide a default value.");
 
+    /// <summary>
+    /// SGIOC016: Factory Method is unmatched - Generic factory method does not have [IocGenericFactory] attribute.
+    /// </summary>
+    public static readonly DiagnosticDescriptor GenericFactoryMissingAttribute = new(
+        id: "SGIOC016",
+        title: "Factory Method is unmatched",
+        messageFormat: "Generic factory method '{0}' must be marked with [IocGenericFactory] attribute to specify type parameter mapping",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When using a generic factory method, you must mark it with [IocGenericFactory] attribute to specify how service type placeholders map to factory method type parameters.");
+
+    /// <summary>
+    /// SGIOC017: Generic Factory Method's type parameters are duplicated - Placeholder types in [IocGenericFactory] must be unique.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicatedGenericFactoryPlaceholders = new(
+        id: "SGIOC017",
+        title: "Generic Factory Method's type parameters are duplicated",
+        messageFormat: "[IocGenericFactory] has duplicated placeholder type '{0}'; each placeholder type must be unique",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The placeholder types in [IocGenericFactory] (from second to last) must be unique. Duplicated types make it impossible to distinguish which type argument maps to which factory method type parameter.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -207,7 +231,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedDefaultSettings,
         ServiceKeyTypeMismatch,
         ServiceKeyNotRegistered,
-        UnresolvableMember
+        UnresolvableMember,
+        GenericFactoryMissingAttribute,
+        DuplicatedGenericFactoryPlaceholders
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -289,6 +315,9 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC008: Analyze Factory and Instance members specified via nameof()
         // Using RegisterSyntaxNodeAction to avoid RS1030 warning (do not use Compilation.GetSemanticModel)
         context.RegisterSyntaxNodeAction(ctx => AnalyzeFactoryAndInstanceOnAttribute(ctx, analyzerContext), SyntaxKind.Attribute);
+
+        // SGIOC017: Analyze [IocGenericFactory] attribute for duplicated placeholder types
+        context.RegisterSymbolAction(AnalyzeIocGenericFactoryAttribute, SymbolKind.Method);
 
         // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
         context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
@@ -1145,7 +1174,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Checks if the attribute class is any IoC registration attribute variant (IoCRegisterAttribute or IoCRegisterForAttribute).
+    /// Checks if the attribute class is any IoC registration attribute variant (IoCRegisterAttribute, IoCRegisterForAttribute, or IoCRegisterDefaultsAttribute).
     /// </summary>
     private static bool IsIoCRegistrationAttribute(INamedTypeSymbol attributeClass, AnalyzerContext analyzerContext)
     {
@@ -1164,8 +1193,28 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         }
 
         // Check IoCRegisterForAttribute variants
-        return comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute_T1);
+        if(comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterForAttribute_T1))
+        {
+            return true;
+        }
+
+        // Check IoCRegisterDefaultsAttribute variants
+        return comparer.Equals(typeToCompare, analyzerContext.IoCRegisterDefaultsAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterDefaultsAttribute_T1);
+    }
+
+    /// <summary>
+    /// Checks if the attribute class is any IoCRegisterDefaultsAttribute variant (non-generic or generic).
+    /// </summary>
+    private static bool IsIoCRegisterDefaultsAttribute(INamedTypeSymbol attributeClass, AnalyzerContext analyzerContext)
+    {
+        // For generic types, get the original unbound definition for comparison
+        var typeToCompare = attributeClass.IsGenericType ? attributeClass.OriginalDefinition : attributeClass;
+        var comparer = SymbolEqualityComparer.Default;
+
+        return comparer.Equals(typeToCompare, analyzerContext.IoCRegisterDefaultsAttribute)
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterDefaultsAttribute_T1);
     }
 
     /// <summary>
@@ -1310,14 +1359,23 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         var location = attributeSyntax.GetLocation();
 
-        // SGIOC010: Check if both Factory and Instance are specified
-        AnalyzeFactoryAndInstanceConflict(context, argumentList, location);
+        // Check if this is IoCRegisterDefaultsAttribute (which only has Factory, not Instance)
+        var isDefaultsAttribute = IsIoCRegisterDefaultsAttribute(attributeClass, analyzerContext);
 
-        // Check Factory member
+        // SGIOC010: Check if both Factory and Instance are specified (only for IoCRegister/IoCRegisterFor)
+        if(!isDefaultsAttribute)
+        {
+            AnalyzeFactoryAndInstanceConflict(context, argumentList, location);
+        }
+
+        // Check Factory member (SGIOC008)
         AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Factory");
 
-        // Check Instance member
-        AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Instance");
+        // Check Instance member (SGIOC008) - only for IoCRegister/IoCRegisterFor
+        if(!isDefaultsAttribute)
+        {
+            AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Instance");
+        }
     }
 
     /// <summary>
@@ -1400,6 +1458,29 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
                     errorReason));
             }
 
+            // SGIOC016: Check if Factory method is generic but missing [IocGenericFactory] attribute
+            if(memberKind == "Factory" && symbol is IMethodSymbol methodSymbol && methodSymbol.TypeParameters.Length > 0)
+            {
+                // Check if the method has [IocGenericFactory] attribute
+                var hasIocGenericFactory = false;
+                foreach(var attr in methodSymbol.GetAttributes())
+                {
+                    if(attr.AttributeClass?.ToDisplayString() == Constants.IocGenericFactoryAttributeFullName)
+                    {
+                        hasIocGenericFactory = true;
+                        break;
+                    }
+                }
+
+                if(!hasIocGenericFactory)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        GenericFactoryMissingAttribute,
+                        location,
+                        methodSymbol.Name));
+                }
+            }
+
             return;
         }
     }
@@ -1441,6 +1522,64 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         }
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// SGIOC017: Analyzes [IocGenericFactory] attribute for duplicated placeholder types.
+    /// Reports error when placeholder types (from second to last in the type array) are duplicated.
+    /// </summary>
+    private static void AnalyzeIocGenericFactoryAttribute(SymbolAnalysisContext context)
+    {
+        if(context.Symbol is not IMethodSymbol methodSymbol)
+            return;
+
+        // Find [IocGenericFactory] attribute
+        AttributeData? genericFactoryAttr = null;
+        foreach(var attr in methodSymbol.GetAttributes())
+        {
+            if(attr.AttributeClass?.ToDisplayString() == Constants.IocGenericFactoryAttributeFullName)
+            {
+                genericFactoryAttr = attr;
+                break;
+            }
+        }
+
+        if(genericFactoryAttr is null)
+            return;
+
+        // Extract type array from constructor argument
+        // [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int), typeof(decimal))]
+        if(genericFactoryAttr.ConstructorArguments.Length == 0)
+            return;
+
+        var firstArg = genericFactoryAttr.ConstructorArguments[0];
+        if(firstArg.Kind != TypedConstantKind.Array || firstArg.Values.IsDefaultOrEmpty)
+            return;
+
+        var typeArray = firstArg.Values;
+        if(typeArray.Length < 2)
+            return; // Need at least service type template and one placeholder
+
+        // Check for duplicates in placeholder types (from index 1 to end)
+        var seenTypes = new HashSet<string>(StringComparer.Ordinal);
+        for(int i = 1; i < typeArray.Length; i++)
+        {
+            if(typeArray[i].Value is ITypeSymbol placeholderType)
+            {
+                var typeName = placeholderType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                if(!seenTypes.Add(typeName))
+                {
+                    // Duplicate found
+                    var location = genericFactoryAttr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        DuplicatedGenericFactoryPlaceholders,
+                        location,
+                        placeholderType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                    return; // Report once per attribute
+                }
+            }
+        }
     }
 
     /// <summary>

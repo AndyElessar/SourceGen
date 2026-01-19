@@ -54,7 +54,7 @@ public class SGIOC010Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010").ToList();
+        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010");
 
         await Assert.That(sgioc010).Count().IsEqualTo(0);
     }
@@ -78,7 +78,7 @@ public class SGIOC010Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010").ToList();
+        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010");
 
         await Assert.That(sgioc010).Count().IsEqualTo(0);
     }
@@ -105,7 +105,7 @@ public class SGIOC010Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010").ToList();
+        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010");
 
         await Assert.That(sgioc010).Count().IsEqualTo(1);
     }
@@ -135,7 +135,7 @@ public class SGIOC010Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010").ToList();
+        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010");
 
         await Assert.That(sgioc010).Count().IsEqualTo(1);
     }
@@ -164,7 +164,7 @@ public class SGIOC010Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010").ToList();
+        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010");
 
         await Assert.That(sgioc010).Count().IsEqualTo(1);
     }
@@ -185,7 +185,7 @@ public class SGIOC010Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010").ToList();
+        var sgioc010 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC010");
 
         await Assert.That(sgioc010).Count().IsEqualTo(0);
     }

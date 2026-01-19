@@ -54,7 +54,7 @@ public class SGIOC006Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006");
 
         await Assert.That(sgioc006).Count().IsEqualTo(0);
     }
@@ -78,7 +78,7 @@ public class SGIOC006Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006");
 
         await Assert.That(sgioc006).Count().IsEqualTo(0);
     }
@@ -102,7 +102,7 @@ public class SGIOC006Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006");
 
         await Assert.That(sgioc006).Count().IsEqualTo(0);
     }
@@ -129,7 +129,7 @@ public class SGIOC006Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006").ToList();
+        var sgioc006 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC006");
 
         await Assert.That(sgioc006).Count().IsEqualTo(2);
     }

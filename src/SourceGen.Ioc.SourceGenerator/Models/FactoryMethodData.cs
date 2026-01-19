@@ -8,9 +8,13 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// <param name="HasKey">Whether the factory method has a parameter marked with [ServiceKey] attribute.</param>
 /// <param name="ReturnTypeName">The fully qualified return type name of the factory method, used for casting if different from service type.</param>
 /// <param name="AdditionalParameters">Parameters that need to be resolved from the service provider (excluding IServiceProvider and [ServiceKey] parameters).</param>
+/// <param name="GenericTypeMapping">The generic type mapping for generic factory methods marked with [IocGenericFactory], or null if not a generic factory.</param>
+/// <param name="TypeParameterCount">The number of type parameters on the generic factory method.</param>
 internal sealed record class FactoryMethodData(
     string Path,
     bool HasServiceProvider,
     bool HasKey,
     string? ReturnTypeName,
-    ImmutableEquatableArray<ParameterData> AdditionalParameters);
+    ImmutableEquatableArray<ParameterData> AdditionalParameters,
+    GenericFactoryTypeMapping? GenericTypeMapping = null,
+    int TypeParameterCount = 0);

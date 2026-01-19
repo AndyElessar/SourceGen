@@ -76,7 +76,15 @@ Report when `FromKeyedServicesAttribute` and `IocInjectAttribute`/`InjectAttribu
 
 ### SGIOC007 - Error - Usage - Invalid Attribute Usage
 
-Report when `InjectAttribute` is mark on static member, or member can not assign/invoke (private setter, setter not exists, private field, readonly field, private method), or mark on method and it is not return void.
+Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
+
+- static member
+- private setter
+- setter not exists
+- private field
+- readonly field
+- private method
+- method is not return void.
 
 **Analysis:**
 
@@ -91,11 +99,11 @@ Report when `InjectAttribute` is mark on static member, or member can not assign
 
 ### SGIOC008 - Error - Usage - Invalid Attribute Usage
 
-Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Factory` or `Instance` and use nameof(), but field/property/method in nameof() is not static or is inaccessible.
+Report when `IoCRegisterAttribute`/`IoCRegisterForAttribute`/`IoCRegisterDefaultsAttribute` has specify `Factory` or `Instance` and use nameof(), but field/property/method in nameof() is not static or is inaccessible.
 
 **Analysis:**
 
-- Checks the `Factory` or `Instance` parameter of `[IoCRegister]` or `[IoCRegisterFor]` attributes.
+- Checks the `Factory` or `Instance` parameter of `[IoCRegister]`/`[IoCRegisterFor]`/`[IoCRegisterDefaults]` attributes.
 - When `nameof()` is used to specify a member, resolves that member symbol.
 - Reports when:
   - Member is not static.
@@ -201,3 +209,33 @@ Built-in types include: bool, char, byte, sbyte, int, uint, long, ulong, float, 
 - Property/field has: `[IocInject]`/`[Inject]` with service key specified.
 - Method parameter has: `[IocInject]` with key, `[FromKeyedServices]`, or default value.
 - Service registration uses `Factory` or `Instance` (constructor analysis is skipped).
+
+---
+
+### SGIOC016 - Error - Design - Factory Method is unmatched
+
+Report when:
+
+- `[IocRegister]`/`[IoCRegisterFor]`/`[IoCRegisterDefaults]` has specificed `Factory` but the factory method is generic and does not mark with `[IocGenericFactory]`.
+
+**Analysis:**
+
+- Checks Factory member specified via `nameof()` on `[IocRegister]`, `[IoCRegisterFor]`, or `[IoCRegisterDefaults]` attributes.
+- When the Factory references a method symbol, checks if the method is generic (has type parameters).
+- If the method is generic, checks if it has `[IocGenericFactory]` attribute.
+- Reports when the factory method is generic but does not have `[IocGenericFactory]` attribute.
+
+---
+
+### SGIOC017 - Error - Design - Generic Factory Method's type parameters are duplicated
+
+Report when:
+
+- `[IocGenericFactory]`'s type parameters from second to end have duplicated types, they must be unique.
+
+**Analysis:**
+
+- Checks methods marked with `[IocGenericFactory]` attribute.
+- Extracts the type array from the attribute's constructor arguments.
+- Starting from the second type (index 1), checks if any type appears more than once.
+- Reports when duplicate placeholder types are found, as each type must uniquely map to a factory method type parameter.

@@ -217,7 +217,7 @@ public class DefaultSettingsTests
             }
 
             // Should use Factory from DefaultSettings
-            [IocRegister(ServiceTypes = [typeof(IMyHandler)])]
+            [IocRegister]
             public class MyHandlerImpl : IMyHandler
             {
                 public void Handle() { }
@@ -258,14 +258,14 @@ public class DefaultSettingsTests
             }
 
             // Should use Factory from DefaultSettings
-            [IocRegister(ServiceTypes = [typeof(IMyHandler)])]
+            [IocRegister]
             public class DefaultHandler : IMyHandler
             {
                 public void Handle() { }
             }
 
             // Should use explicit Factory, overriding DefaultSettings
-            [IocRegister(ServiceTypes = [typeof(IMyHandler)], Factory = nameof(SpecialFactory.Create))]
+            [IocRegister(Factory = nameof(SpecialFactory.Create))]
             public class SpecialHandler : IMyHandler
             {
                 public void Handle() { }
@@ -301,7 +301,7 @@ public class DefaultSettingsTests
             }
 
             // Open generic registration - Factory from DefaultSettings will be applied
-            [IocRegister(ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegister]
             public class Repository<T> : IRepository<T>
             {
                 public T Get(int id) => default!;

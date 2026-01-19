@@ -284,6 +284,7 @@ partial class RegisterSourceGenerator
     ///   <item>object key only (keyed): <c>services.AddKeyedSingleton&lt;IService&gt;("key", (sp, key) => Factory(key));</c></item>
     ///   <item>Both (keyed): <c>services.AddKeyedSingleton&lt;IService&gt;("key", (sp, key) => Factory(sp, key));</c></item>
     ///   <item>Additional parameters: resolved from IServiceProvider using the same logic as [IocInject] methods</item>
+    ///   <item>Generic factory with [IocGenericFactory]: <c>services.AddSingleton&lt;IHandler&lt;Request&gt;&gt;(sp => Factory&lt;Request&gt;(sp));</c></item>
     /// </list>
     /// If the factory return type differs from the service type, adds a cast.
     /// </remarks>
@@ -299,6 +300,16 @@ partial class RegisterSourceGenerator
         var additionalParameters = factory.AdditionalParameters;
         bool isKeyedRegistration = registration.Key is not null;
 
+        // Build generic type arguments for generic factory methods
+        var genericTypeArgs = BuildGenericFactoryTypeArgs(factory, registration.ServiceType);
+
+        // If factory is generic but we couldn't resolve type arguments (e.g., duplicate placeholder types),
+        // skip this registration entirely
+        if(factory.TypeParameterCount > 0 && genericTypeArgs is null)
+        {
+            return;
+        }
+
         // Check if we have additional parameters that need resolution
         bool hasAdditionalParameters = additionalParameters.Length > 0;
 
@@ -307,18 +318,19 @@ partial class RegisterSourceGenerator
             // Use multi-line lambda format for readability
             WriteFactoryMethodRegistrationWithAdditionalParams(
                 writer, registration, lifetime, serviceTypeName, factoryPath,
-                hasServiceProvider, hasKey, returnTypeName, additionalParameters, isKeyedRegistration);
+                hasServiceProvider, hasKey, returnTypeName, additionalParameters, isKeyedRegistration, genericTypeArgs);
             return;
         }
 
         // Simple case: no additional parameters
-        // Build factory invocation based on parameters
+        // Build factory invocation with optional generic type arguments
+        var factoryCallPath = genericTypeArgs is not null ? $"{factoryPath}<{genericTypeArgs}>" : factoryPath;
         string factoryInvocation = (hasServiceProvider, hasKey) switch
         {
-            (true, true) => $"{factoryPath}(sp, {registration.Key})",
-            (true, false) => $"{factoryPath}(sp)",
-            (false, true) => $"{factoryPath}({registration.Key})",
-            (false, false) => $"{factoryPath}()"
+            (true, true) => $"{factoryCallPath}(sp, {registration.Key})",
+            (true, false) => $"{factoryCallPath}(sp)",
+            (false, true) => $"{factoryCallPath}({registration.Key})",
+            (false, false) => $"{factoryCallPath}()"
         };
 
         // Add cast if return type differs from service type
@@ -357,7 +369,8 @@ partial class RegisterSourceGenerator
         bool hasKey,
         string? returnTypeName,
         ImmutableEquatableArray<ParameterData> additionalParameters,
-        bool isKeyedRegistration)
+        bool isKeyedRegistration,
+        string? genericTypeArgs = null)
     {
         // Open the registration lambda
         if(registration.Key is not null)
@@ -412,8 +425,9 @@ partial class RegisterSourceGenerator
         // Add resolved additional parameters
         args.AddRange(paramVars);
 
-        // Build the factory invocation
-        var factoryInvocation = $"{factoryPath}({string.Join(", ", args)})";
+        // Build the factory invocation with optional generic type arguments
+        var factoryCallPath = genericTypeArgs is not null ? $"{factoryPath}<{genericTypeArgs}>" : factoryPath;
+        var factoryInvocation = $"{factoryCallPath}({string.Join(", ", args)})";
 
         // Add cast if return type differs from service type
         if(returnTypeName is not null && returnTypeName != serviceTypeName)
@@ -1449,4 +1463,112 @@ partial class RegisterSourceGenerator
     /// </summary>
     private static bool IsServiceProviderType(string typeName) =>
         typeName is "global::System.IServiceProvider" or "System.IServiceProvider" or "IServiceProvider";
+
+    /// <summary>
+    /// Builds the generic type arguments string for a generic factory method.
+    /// Uses the <see cref="GenericFactoryTypeMapping"/> to map placeholder types in the service type template
+    /// to the actual types from the closed service type.
+    /// </summary>
+    /// <param name="factory">The factory method data containing the generic type mapping.</param>
+    /// <param name="closedServiceType">The closed service type to extract type arguments from.</param>
+    /// <returns>The generic type arguments string (e.g., "Entity, Dto"), or null if not a generic factory.</returns>
+    /// <example>
+    /// Given:
+    /// - ServiceTypeTemplate: IRequestHandler&lt;Task&lt;int&gt;&gt;
+    /// - PlaceholderToTypeParamMap: { "int" -> 0 }
+    /// - ClosedServiceType: IRequestHandler&lt;Task&lt;Entity&gt;&gt;
+    /// Returns: "Entity"
+    /// </example>
+    private static string? BuildGenericFactoryTypeArgs(FactoryMethodData factory, TypeData closedServiceType)
+    {
+        var mapping = factory.GenericTypeMapping;
+        if(mapping is null || factory.TypeParameterCount == 0)
+        {
+            return null;
+        }
+
+        var template = mapping.ServiceTypeTemplate;
+        var placeholderMap = mapping.PlaceholderToTypeParamMap;
+
+        // Build a map from placeholder types to actual types by comparing template with closed service type
+        var placeholderToActualType = new Dictionary<string, string>(StringComparer.Ordinal);
+        ExtractPlaceholderMappings(template, closedServiceType, placeholderToActualType);
+
+        // Build type arguments array in the order of factory method's type parameters
+        var typeArgs = new string[factory.TypeParameterCount];
+        foreach(var kvp in placeholderMap)
+        {
+            var placeholderTypeName = kvp.Key;
+            var typeParamIndex = kvp.Value;
+
+            if(typeParamIndex < 0 || typeParamIndex >= typeArgs.Length)
+            {
+                continue;
+            }
+
+            if(placeholderToActualType.TryGetValue(placeholderTypeName, out var actualTypeName))
+            {
+                typeArgs[typeParamIndex] = actualTypeName;
+            }
+        }
+
+        // Validate all type arguments are filled
+        foreach(var arg in typeArgs)
+        {
+            if(string.IsNullOrEmpty(arg))
+            {
+                return null; // Missing type argument, cannot generate generic call
+            }
+        }
+
+        return string.Join(", ", typeArgs);
+    }
+
+    /// <summary>
+    /// Recursively extracts mappings from placeholder types in the template to actual types in the closed type.
+    /// </summary>
+    private static void ExtractPlaceholderMappings(
+        TypeData template,
+        TypeData closed,
+        Dictionary<string, string> placeholderToActualType)
+    {
+        // If base type names don't match, can't extract mappings
+        if(template.NameWithoutGeneric != closed.NameWithoutGeneric)
+        {
+            return;
+        }
+
+        var templateParams = template.TypeParameters;
+        var closedParams = closed.TypeParameters;
+
+        if(templateParams is null || closedParams is null)
+        {
+            return;
+        }
+
+        if(templateParams.Length != closedParams.Length)
+        {
+            return;
+        }
+
+        for(int i = 0; i < templateParams.Length; i++)
+        {
+            var templateParamType = templateParams[i].Type;
+            var closedParamType = closedParams[i].Type;
+
+            // If the template param is a simple type (no nested type parameters),
+            // it's a placeholder that maps to the closed param type
+            if(templateParamType.TypeParameters is null || templateParamType.TypeParameters.Length == 0)
+            {
+                // Map the template type name to the closed type name
+                // e.g., "global::System.Int32" -> "global::TestNamespace.Entity"
+                placeholderToActualType[templateParamType.Name] = closedParamType.Name;
+            }
+            else
+            {
+                // Nested generic type, recurse
+                ExtractPlaceholderMappings(templateParamType, closedParamType, placeholderToActualType);
+            }
+        }
+    }
 }

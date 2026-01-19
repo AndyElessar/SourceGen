@@ -128,7 +128,7 @@ public class SGIOC008Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008");
 
         await Assert.That(sgioc008).Count().IsEqualTo(0);
     }
@@ -158,7 +158,7 @@ public class SGIOC008Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008");
 
         await Assert.That(sgioc008).Count().IsEqualTo(0);
     }
@@ -189,7 +189,7 @@ public class SGIOC008Tests
 
         // String paths are not validated by the analyzer - they are validated at runtime
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008");
 
         await Assert.That(sgioc008).Count().IsEqualTo(0);
     }
@@ -304,7 +304,7 @@ public class SGIOC008Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008");
 
         await Assert.That(sgioc008).Count().IsEqualTo(0);
     }
@@ -331,7 +331,7 @@ public class SGIOC008Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008");
 
         await Assert.That(sgioc008).Count().IsEqualTo(0);
     }
@@ -359,7 +359,7 @@ public class SGIOC008Tests
 
         // String paths are not validated by the analyzer - they are validated at runtime
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008");
 
         await Assert.That(sgioc008).Count().IsEqualTo(0);
     }

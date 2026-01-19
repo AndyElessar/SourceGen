@@ -85,7 +85,7 @@ public class SGIOC009Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009").ToList();
+        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009");
 
         await Assert.That(sgioc009).Count().IsEqualTo(0);
     }
@@ -112,7 +112,7 @@ public class SGIOC009Tests
 
         // Default lifetime is Singleton, so no diagnostic
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009").ToList();
+        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009");
 
         await Assert.That(sgioc009).Count().IsEqualTo(0);
     }
@@ -171,7 +171,7 @@ public class SGIOC009Tests
 
         // Factory with Transient is allowed - only Instance requires Singleton
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009").ToList();
+        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009");
 
         await Assert.That(sgioc009).Count().IsEqualTo(0);
     }
@@ -298,7 +298,7 @@ public class SGIOC009Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009").ToList();
+        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009");
 
         await Assert.That(sgioc009).Count().IsEqualTo(0);
     }

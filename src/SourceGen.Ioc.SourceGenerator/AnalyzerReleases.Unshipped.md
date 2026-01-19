@@ -17,3 +17,5 @@ SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same tar
 SGIOC013 | Usage | Error | Key type is unmatched - ServiceKeyAttribute parameter type does not match the registered key type.
 SGIOC014 | Usage | Error | Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.
 SGIOC015 | Design | Error | Unresolvable Constructor Parameter - Constructor contains built-in type that cannot be resolved from dependency injection.
+SGIOC016 | Design | Error | Factory Method is unmatched - Generic factory method does not have IocGenericFactoryAttribute.
+SGIOC017 | Design | Error | Generic Factory Method's type parameters are duplicated - Placeholder types in IocGenericFactoryAttribute must be unique.

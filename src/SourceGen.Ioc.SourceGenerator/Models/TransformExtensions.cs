@@ -1157,6 +1157,7 @@ internal static class TransformExtensions
         /// - IServiceProvider: Will be passed the service provider directly
         /// - [ServiceKey] attribute: Will be passed the registration key value
         /// - Other parameters: Will be resolved from the service provider using the same logic as [IocInject] methods
+        /// Also extracts [IocGenericFactory] attribute if present for generic factory method support.
         /// </summary>
         public FactoryMethodData CreateFactoryMethodData()
         {
@@ -1217,12 +1218,112 @@ internal static class TransformExtensions
             // Always store the return type for runtime comparison
             var returnTypeName = methodSymbol.ReturnType.FullyQualifiedName;
 
+            // Extract [IocGenericFactory] attribute if present
+            var genericTypeMapping = methodSymbol.ExtractGenericFactoryMapping();
+            var typeParameterCount = methodSymbol.TypeParameters.Length;
+
             return new FactoryMethodData(
                 path,
                 hasServiceProvider,
                 hasKey,
                 returnTypeName,
-                additionalParameters?.ToImmutableEquatableArray() ?? []);
+                additionalParameters?.ToImmutableEquatableArray() ?? [],
+                genericTypeMapping,
+                typeParameterCount);
+        }
+
+        /// <summary>
+        /// Extracts [IocGenericFactory] attribute from the method symbol and builds the type mapping.
+        /// </summary>
+        public GenericFactoryTypeMapping? ExtractGenericFactoryMapping()
+        {
+            // Only applicable to generic methods
+            if(methodSymbol.TypeParameters.Length == 0)
+            {
+                return null;
+            }
+
+            // Find [IocGenericFactory] attribute
+            AttributeData? genericFactoryAttr = null;
+            foreach(var attr in methodSymbol.GetAttributes())
+            {
+                var attrClass = attr.AttributeClass;
+                if(attrClass is null)
+                    continue;
+
+                var fullName = attrClass.ToDisplayString();
+                if(fullName == Constants.IocGenericFactoryAttributeFullName)
+                {
+                    genericFactoryAttr = attr;
+                    break;
+                }
+            }
+
+            if(genericFactoryAttr is null)
+            {
+                return null;
+            }
+
+            // Extract GenericTypeMap array from constructor argument
+            // [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+            // - First type: service type template with placeholders
+            // - Following types: map to factory method type parameters in order
+            if(genericFactoryAttr.ConstructorArguments.Length == 0)
+            {
+                return null;
+            }
+
+            var firstArg = genericFactoryAttr.ConstructorArguments[0];
+            if(firstArg.Kind != TypedConstantKind.Array || firstArg.Values.IsDefaultOrEmpty)
+            {
+                return null;
+            }
+
+            var typeArray = firstArg.Values;
+            if(typeArray.Length < 2)
+            {
+                return null; // Need at least service type template and one placeholder mapping
+            }
+
+            // First type is the service type template
+            if(typeArray[0].Value is not INamedTypeSymbol serviceTypeTemplate)
+            {
+                return null;
+            }
+
+            var serviceTypeTemplateData = serviceTypeTemplate.GetTypeData();
+
+            // Build placeholder to type parameter index map
+            // Following types (index 1, 2, ...) map to factory method's type parameters (index 0, 1, ...)
+            var placeholderMap = new Dictionary<string, int>(StringComparer.Ordinal);
+            var expectedPlaceholderCount = typeArray.Length - 1;
+            for(int i = 1; i < typeArray.Length; i++)
+            {
+                if(typeArray[i].Value is ITypeSymbol placeholderType)
+                {
+                    var placeholderTypeName = placeholderType.FullyQualifiedName;
+
+                    // If the same placeholder type is used multiple times, the mapping is invalid
+                    // because we cannot distinguish which type argument maps to which type parameter
+                    if(placeholderMap.ContainsKey(placeholderTypeName))
+                    {
+                        return null;
+                    }
+
+                    // Map placeholder type to factory method's type parameter index (0-based)
+                    placeholderMap[placeholderTypeName] = i - 1;
+                }
+            }
+
+            // All placeholder types must be unique and present
+            if(placeholderMap.Count != expectedPlaceholderCount)
+            {
+                return null;
+            }
+
+            return new GenericFactoryTypeMapping(
+                serviceTypeTemplateData,
+                placeholderMap.ToImmutableEquatableDictionary());
         }
     }
 

@@ -1,5 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
+  
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <!-- dotnet tool configuration -->
@@ -7,11 +7,9 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>sourcegen-ioc</ToolCommandName>
     <!-- NuGet Package Metadata -->
+    <Description>SourceGen.Ioc CLI tool</Description>
+    <PackageTags>SourceGen, sourcegenerator, generator, dependencyinjection, di, ioc, commandline, cli</PackageTags>
     <PackageId>SourceGen.Ioc.Cli</PackageId>
-    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/AndyElessar/SourceGen</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/AndyElessar/SourceGen.git</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
