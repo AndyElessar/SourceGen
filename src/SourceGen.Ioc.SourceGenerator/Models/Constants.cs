@@ -4,9 +4,6 @@ internal static class Constants
 {
     public const string IocRegisterAttributeFullName = "SourceGen.Ioc.IocRegisterAttribute";
     public const string IocRegisterAttributeFullName_T1 = "SourceGen.Ioc.IocRegisterAttribute`1";
-    public const string IocRegisterAttributeFullName_T2 = "SourceGen.Ioc.IocRegisterAttribute`2";
-    public const string IocRegisterAttributeFullName_T3 = "SourceGen.Ioc.IocRegisterAttribute`3";
-    public const string IocRegisterAttributeFullName_T4 = "SourceGen.Ioc.IocRegisterAttribute`4";
     public const string IocRegisterForAttributeFullName = "SourceGen.Ioc.IocRegisterForAttribute";
     public const string IocRegisterForAttributeFullName_T1 = "SourceGen.Ioc.IocRegisterForAttribute`1";
     public const string IocRegisterDefaultsAttributeFullName = "SourceGen.Ioc.IocRegisterDefaultsAttribute";

@@ -41,7 +41,7 @@ SourceGen.Ioc is a C# source generator that extends the capabilities of `Microso
 
 |Attribute|Description|
 |:---|:---|
-|`[IocRegister]`<br/>`[IocRegister<T>]`<br/>`[IocRegister<T,T>]`<br/>`[IocRegister<T,T,T>]`<br/>`[IocRegister<T,T,T,T>]`|Mark a class for DI registration|
+|`[IocRegister]`<br/>`[IocRegister<T>]`|Mark a class for DI registration|
 |`[IocRegisterFor]`<br/>`[IocRegisterFor<T>]`|Register an external type|
 |`[IocRegisterDefaults]`<br/>`[IocRegisterDefaults<T>]`|Define default settings for types implementing T|
 |`[IocInject]`|Mark property/field/method/constructor for injection, or parameter for keyed services|

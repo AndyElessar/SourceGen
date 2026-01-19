@@ -57,7 +57,7 @@ internal class TransientService : IService;
 ### Multiple Service Types
 
 ```csharp
-[IocRegister<IService1, IService2>]
+[IocRegister(ServiceTypes = [typeof(IService1), typeof(IService2)])]
 internal class MultiService : IService1, IService2;
 ```
 

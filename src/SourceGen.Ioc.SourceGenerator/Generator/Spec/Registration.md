@@ -8,9 +8,6 @@ This source generator automatically generates extension methods for registering 
 
 - `IocRegisterAttribute` - Non-generic version with optional `ServiceTypes` parameter
 - `IocRegisterAttribute<T>` - Generic version with single service type
-- `IocRegisterAttribute<T1,T2>` - Generic version with two service types
-- `IocRegisterAttribute<T1,T2,T3>` - Generic version with three service types
-- `IocRegisterAttribute<T1,T2,T3,T4>` - Generic version with four service types
 - `IocRegisterForAttribute` - Non-generic version for registering external types
 - `IocRegisterForAttribute<T>` - Generic version for registering external types
 

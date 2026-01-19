@@ -28,33 +28,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // IocRegisterAttribute<T1, T2>
-        var registerProvider_T2 = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocRegisterAttributeFullName_T2,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
-            .Where(static m => m is not null)
-            .Select(static (m, _) => m!);
-
-        // IocRegisterAttribute<T1, T2, T3>
-        var registerProvider_T3 = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocRegisterAttributeFullName_T3,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
-            .Where(static m => m is not null)
-            .Select(static (m, _) => m!);
-
-        // IocRegisterAttribute<T1, T2, T3, T4>
-        var registerProvider_T4 = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocRegisterAttributeFullName_T4,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformRegisterGeneric(ctx, ct))
-            .Where(static m => m is not null)
-            .Select(static (m, _) => m!);
-
         // ========== IocRegisterForAttribute providers ==========
         // IocRegisterForAttribute (non-generic)
         var registerForProvider = context.SyntaxProvider
@@ -213,18 +186,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
             .Combine(combinedDefaultSettings)
             .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
 
-        var basicRegistrationResults1_T2 = registerProvider_T2
-            .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
-
-        var basicRegistrationResults1_T3 = registerProvider_T3
-            .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
-
-        var basicRegistrationResults1_T4 = registerProvider_T4
-            .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
-
         var basicRegistrationResults2 = registerForProvider
             .Combine(combinedDefaultSettings)
             .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
@@ -243,12 +204,6 @@ public sealed partial class RegisterSourceGenerator : IIncrementalGenerator
         var allBasicResults = basicRegistrationResults1
             .Collect()
             .Combine(basicRegistrationResults1_T1.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
-            .Combine(basicRegistrationResults1_T2.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
-            .Combine(basicRegistrationResults1_T3.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
-            .Combine(basicRegistrationResults1_T4.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
             .Combine(basicRegistrationResults2.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right))

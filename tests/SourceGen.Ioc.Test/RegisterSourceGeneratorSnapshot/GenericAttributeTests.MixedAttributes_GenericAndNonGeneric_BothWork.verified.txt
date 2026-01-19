@@ -20,9 +20,6 @@ namespace TestAssembly
             services.AddSingleton<global::TestNamespace.IFirst>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Service1>());
             services.AddScoped<global::TestNamespace.Service2, global::TestNamespace.Service2>();
             services.AddScoped<global::TestNamespace.ISecond>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Service2>());
-            services.AddTransient<global::TestNamespace.Service3, global::TestNamespace.Service3>();
-            services.AddTransient<global::TestNamespace.IFirst>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Service3>());
-            services.AddTransient<global::TestNamespace.IThird>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Service3>());
 
             return services;
         }

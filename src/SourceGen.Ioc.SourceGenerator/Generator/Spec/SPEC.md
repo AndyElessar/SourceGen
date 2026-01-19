@@ -5,7 +5,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 ## Collection information
 
 1. Find classes marked with `SourceGen.Ioc.IocRegisterAttribute` and `SourceGen.Ioc.IocRegisterForAttribute`.
-    - `IocRegisterAttribute` supports generic versions: `IocRegisterAttribute<T>`, `IocRegisterAttribute<T1,T2>`, `IocRegisterAttribute<T1,T2,T3>`, `IocRegisterAttribute<T1,T2,T3,T4>`
+    - `IocRegisterAttribute` supports generic version: `IocRegisterAttribute<T>`
     - `IocRegisterForAttribute` supports generic version: `IocRegisterForAttribute<T>`
 
 2. Find `SourceGen.Ioc.IocRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.

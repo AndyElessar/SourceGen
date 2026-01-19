@@ -35,29 +35,6 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC001_IoCRegisterAttribute_T2_AbstractClass_ReportsDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IFirst { }
-            public interface ISecond { }
-
-            [IocRegister<IFirst, ISecond>(ServiceLifetime.Singleton)]
-            public abstract class AbstractService : IFirst, ISecond { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc001 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC001").ToList();
-
-        await Assert.That(sgioc001).Count().IsEqualTo(1);
-        await Assert.That(sgioc001[0].GetMessage()).Contains("AbstractService").And.Contains("abstract");
-    }
-
-    [Test]
     public async Task SGIOC001_IocRegisterForAttribute_T1_PrivateTargetType_ReportsDiagnostic()
     {
         const string source = """
@@ -204,7 +181,7 @@ public class GenericAttributeAnalyzerTests
     }
 
     [Test]
-    public async Task SGIOC004_IoCRegisterAttribute_T2_SingletonDependsOnTransient_ReportsDiagnostic()
+    public async Task SGIOC004_IoCRegisterAttribute_T1_SingletonDependsOnTransient_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;

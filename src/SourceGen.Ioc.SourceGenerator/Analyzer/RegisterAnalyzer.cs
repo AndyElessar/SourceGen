@@ -250,9 +250,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         // Get attribute type symbols for faster lookup (including generic variants)
         var iocRegisterAttribute = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName);
         var iocRegisterAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T1);
-        var iocRegisterAttribute_T2 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T2);
-        var iocRegisterAttribute_T3 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T3);
-        var iocRegisterAttribute_T4 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T4);
         var iocRegisterForAttribute = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName);
         var iocRegisterForAttribute_T1 = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName_T1);
         var iocRegisterDefaultsAttribute = context.Compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName);
@@ -260,10 +257,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Check if any IoC attribute is available
         var hasAnyIoCRegisterAttribute = iocRegisterAttribute is not null
-            || iocRegisterAttribute_T1 is not null
-            || iocRegisterAttribute_T2 is not null
-            || iocRegisterAttribute_T3 is not null
-            || iocRegisterAttribute_T4 is not null;
+            || iocRegisterAttribute_T1 is not null;
         var hasAnyIoCRegisterForAttribute = iocRegisterForAttribute is not null
             || iocRegisterForAttribute_T1 is not null;
 
@@ -284,9 +278,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
         var analyzerContext = new AnalyzerContext(
             iocRegisterAttribute,
             iocRegisterAttribute_T1,
-            iocRegisterAttribute_T2,
-            iocRegisterAttribute_T3,
-            iocRegisterAttribute_T4,
             iocRegisterForAttribute,
             iocRegisterForAttribute_T1,
             iocRegisterDefaultsAttribute,
@@ -1141,10 +1132,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Check IoCRegisterAttribute variants (non-generic and generic)
         if(comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T1)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T2)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T3)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T4))
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T1))
         {
             return true;
         }
@@ -1184,10 +1172,7 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Check IoCRegisterAttribute variants
         if(comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T1)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T2)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T3)
-            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T4))
+            || comparer.Equals(typeToCompare, analyzerContext.IoCRegisterAttribute_T1))
         {
             return true;
         }
@@ -1936,9 +1921,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     private sealed class AnalyzerContext(
         INamedTypeSymbol? iocRegisterAttribute,
         INamedTypeSymbol? iocRegisterAttribute_T1,
-        INamedTypeSymbol? iocRegisterAttribute_T2,
-        INamedTypeSymbol? iocRegisterAttribute_T3,
-        INamedTypeSymbol? iocRegisterAttribute_T4,
         INamedTypeSymbol? iocRegisterForAttribute,
         INamedTypeSymbol? iocRegisterForAttribute_T1,
         INamedTypeSymbol? iocRegisterDefaultsAttribute,
@@ -1951,9 +1933,6 @@ public sealed class RegisterAnalyzer : DiagnosticAnalyzer
     {
         public INamedTypeSymbol? IoCRegisterAttribute { get; } = iocRegisterAttribute;
         public INamedTypeSymbol? IoCRegisterAttribute_T1 { get; } = iocRegisterAttribute_T1;
-        public INamedTypeSymbol? IoCRegisterAttribute_T2 { get; } = iocRegisterAttribute_T2;
-        public INamedTypeSymbol? IoCRegisterAttribute_T3 { get; } = iocRegisterAttribute_T3;
-        public INamedTypeSymbol? IoCRegisterAttribute_T4 { get; } = iocRegisterAttribute_T4;
         public INamedTypeSymbol? IoCRegisterForAttribute { get; } = iocRegisterForAttribute;
         public INamedTypeSymbol? IoCRegisterForAttribute_T1 { get; } = iocRegisterForAttribute_T1;
         public INamedTypeSymbol? IoCRegisterDefaultsAttribute { get; } = iocRegisterDefaultsAttribute;

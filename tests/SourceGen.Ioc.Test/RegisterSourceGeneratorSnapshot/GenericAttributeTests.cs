@@ -31,75 +31,6 @@ public class GenericAttributeTests
     }
 
     [Test]
-    public async Task IoCRegisterAttribute_T2_GeneratesCorrectRegistration()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IFirst { }
-            public interface ISecond { }
-
-            [IocRegister<IFirst, ISecond>(ServiceLifetime.Scoped)]
-            public class MultiService : IFirst, ISecond { }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    public async Task IoCRegisterAttribute_T3_GeneratesCorrectRegistration()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IFirst { }
-            public interface ISecond { }
-            public interface IThird { }
-
-            [IocRegister<IFirst, ISecond, IThird>(ServiceLifetime.Transient)]
-            public class TripleService : IFirst, ISecond, IThird { }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
-    public async Task IoCRegisterAttribute_T4_GeneratesCorrectRegistration()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IFirst { }
-            public interface ISecond { }
-            public interface IThird { }
-            public interface IFourth { }
-
-            [IocRegister<IFirst, ISecond, IThird, IFourth>(ServiceLifetime.Singleton)]
-            public class QuadService : IFirst, ISecond, IThird, IFourth { }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
     public async Task IoCRegisterAttribute_T1_WithKey_GeneratesKeyedRegistration()
     {
         const string source = """
@@ -373,7 +304,6 @@ public class GenericAttributeTests
 
             public interface IFirst { }
             public interface ISecond { }
-            public interface IThird { }
 
             // Non-generic version
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFirst)])]
@@ -382,10 +312,6 @@ public class GenericAttributeTests
             // Generic version with 1 type parameter
             [IocRegister<ISecond>(ServiceLifetime.Scoped)]
             public class Service2 : ISecond { }
-
-            // Generic version with 2 type parameters
-            [IocRegister<IFirst, IThird>(ServiceLifetime.Transient)]
-            public class Service3 : IFirst, IThird { }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<RegisterSourceGenerator>(source);
