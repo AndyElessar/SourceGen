@@ -15,4 +15,23 @@
     <Folder Include="BenchmarkDotNet.Artifacts\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Benchmarks\Switch_Vs_FrozenDictionaryBenchmark.Generated.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Switch_Vs_FrozenDictionaryBenchmark.Generated.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Benchmarks\Switch_Vs_FrozenDictionaryBenchmark.Generated.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Switch_Vs_FrozenDictionaryBenchmark.Generated.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
 </Project>
