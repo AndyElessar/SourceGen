@@ -45,6 +45,17 @@ tests/
 - Use nullable reference types (`#nullable enable`)
 - Follow .NET naming conventions
 
+## Testing
+
+- **ALWAYS use the VS Code `runTests` tool** to run tests instead of terminal commands
+- If terminal is required, use TUnit's correct command format:
+  ```powershell
+  # TUnit uses 'dotnet run' with --treenode-filter, NOT 'dotnet test'
+  dotnet run --project path/to/TestProject.csproj -- --treenode-filter "/*/*/TestClass/*"
+  ```
+- Never use `dotnet test` with `--filter` for TUnit projects
+- Test projects use TUnit framework - see [TUnit Best Practices](./prompts/csharp-tunit.prompt.md)
+
 ## Reference
 
 - [C# Best Practices](./instructions/csharp.instructions.md)

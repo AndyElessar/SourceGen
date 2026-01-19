@@ -1,6 +1,6 @@
 ---
 agent: 'agent'
-tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'read/problems', 'search']
+tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'read/problems', 'search', 'execute/runTests']
 description: 'Get best practices for TUnit unit testing, including data-driven tests'
 ---
 
@@ -13,8 +13,20 @@ Your goal is to help me write effective unit tests with TUnit, covering both sta
 - Use a separate test project with naming convention `[ProjectName].Tests`
 - Reference TUnit package and TUnit.Assertions for fluent assertions
 - Create test classes that match the classes being tested (e.g., `CalculatorTests` for `Calculator`)
-- Use .NET SDK test commands: `dotnet test` for running tests
 - TUnit requires .NET 8.0 or higher
+
+## Running Tests
+
+- **ALWAYS prefer using VS Code's `runTests` tool** instead of terminal commands
+- If terminal is required, TUnit uses `dotnet run` (NOT `dotnet test`):
+  ```powershell
+  # Correct: Use dotnet run with --treenode-filter
+  dotnet run --project path/to/TestProject.csproj -- --treenode-filter "/*/*/TestClass/*"
+  
+  # WRONG: Do NOT use dotnet test with --filter
+  # dotnet test --filter "ClassName=TestClass"  # This is incorrect for TUnit!
+  ```
+- Never use VSTest filter syntax (`--filter`) with TUnit projects
 
 ## Test Structure
 
