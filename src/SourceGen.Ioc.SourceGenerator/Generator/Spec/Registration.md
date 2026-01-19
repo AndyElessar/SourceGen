@@ -34,6 +34,10 @@ This source generator automatically generates extension methods for registering 
 - `IocInjectAttribute` - For field, property, method, or constructor parameter injection
 - `InjectAttribute` - Alternative name (compatible with other libraries like `Microsoft.AspNetCore.Components.InjectAttribute`)
 
+### Generic Factory Attributes
+
+- `IocGenericFactoryAttribute` - Map closed generic service type to generic factory method's type parameters
+
 ## Features
 
 1. Basic:
@@ -883,36 +887,218 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-12. When registrations is specified `IocRegisterAttribute.Factory` and factory method is generic and mark with `[IocGenericFactory]`
+12. When registrations is specified `IocRegisterAttribute.Factory` or `IocRegisterDefaultsAttribute.Factory` and factory method is generic, the method must be marked with `[IocGenericFactory]` attribute to provide type parameter mapping information.
+
+    **Purpose**: When a generic factory method is used with open generic service registration, the generator needs to know how to map the actual type arguments from the discovered closed generic type to the factory method's type parameters.
+
+    **Attribute Signature**:
+
+    ```csharp
+    [IocGenericFactory(params Type[] genericTypeMap)]
+    ```
+
+    **Parameters**:
+    - First type: Service type template with placeholder types (e.g., `IRequestHandler<Task<int>>`)
+    - Following types: Placeholder types that correspond to factory method's type parameters in order
+
+    **Rules**:
+    - The factory method must have the same number of type parameters as placeholder types provided
+    - Each placeholder type should be unique - duplicate placeholders cannot be distinguished and will not generate registration
+    - The service type template must match the structure of the open generic service type in the `IocRegisterDefaults`
+    - If `[IocGenericFactory]` is missing on a generic factory method, SGIOC016 diagnostic is reported
+
+    **Single Type Parameter Example**:
 
     ```csharp
     #region Define:
+    public interface IRequestHandler<TResponse> { }
+
     // Service type is IRequestHandler<>, has 1 type parameter
-    [IocRegisterDefaults(typeof(IRequestHandler<>), Factory = nameof(FactoryContainer.Create))]
-    public class FactoryContainer
-    {   //                                              ┌--------------┐ "int" is a placeholder, make sure placeholders is unique
-        //                                              │              │ in the context of the generic type mapping.
+    [IocRegisterDefaults(typeof(IRequestHandler<>),
+        ServiceLifetime.Singleton,
+        Factory = nameof(FactoryContainer.Create))]
+    public static class FactoryContainer
+    {
+        // Template: IRequestHandler<Task<int>> where int is placeholder for T
+        //                                              ┌──────────────┐
+        //                                              │              │int = T (index 0)
         //                                              ↓              ↓
         [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
-        public static Create<T>() => new Handler<T>();
+        public static IRequestHandler<Task<T>> Create<T>() => new Handler<T>();
     }
-    #endregion
-    #region Generate:
-    service.AddSingleton<IRequestHandler<Task<Entity>>>(sp => FactoryContainer.Create<Entity>())
+
+    [IocRegister]
+    public class Handler<T> : IRequestHandler<Task<T>> { }
+
+    public class Entity { }
+
+    // Discover IRequestHandler<Task<Entity>>
+    [IocDiscover<IRequestHandler<Task<Entity>>>]
+    public sealed class App { }
     #endregion
 
-    #region Define:
-    // Service type is IRequestHandler<,>, has 2 type parameter
-    [IocRegisterDefaults(typeof(IRequestHandler<,>), Factory = nameof(FactoryContainer.Create))]
-    public class FactoryContainer
-    {   //                                              ┌----------------------------------------┐
-        //                                              │                                        │
-        //                                              ↓                                        ↓
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>, decimal>), typeof(decimal), typeof(int))]
-        public static Create<T1, T2>()=>new Handler<T1, T2>();//↑                ↑
-    }                                                         //└----------------┘
-    #endregion
     #region Generate:
-    service.AddSingleton<IRequestHandler<Task<Entity>>, Dto>(sp => FactoryContainer.Create<Dto, Entity>())
+    // Type mapping: Task<Entity> matches Task<int> template
+    // → int placeholder maps to Entity
+    // → T = Entity
+    services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
+        (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>());
+    #endregion
+    ```
+
+    **Two Type Parameters Example**:
+
+    ```csharp
+    #region Define:
+    public interface IRequestHandler<TRequest, TResponse> { }
+
+    // Service type is IRequestHandler<,>, has 2 type parameters
+    [IocRegisterDefaults(typeof(IRequestHandler<,>),
+        ServiceLifetime.Singleton,
+        Factory = nameof(FactoryContainer.Create))]
+    public static class FactoryContainer
+    {
+        // Template: IRequestHandler<Task<int>, List<decimal>>
+        // int = T1 (index 0), decimal = T2 (index 1)
+        //                                              ┌─────────────────────────────┐
+        //                                              │            ┌────────────────┼──────────────┐
+        //                                              ↓            ↓                ↓              ↓
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(int), typeof(decimal))]
+        public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>()
+            => new Handler<T1, T2>();
+    }
+
+    [IocRegister(ServiceTypes = [typeof(IRequestHandler<,>)])]
+    public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
+
+    public class Entity { }
+    public class Dto { }
+
+    // Discover IRequestHandler<Task<Entity>, List<Dto>>
+    [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+    public sealed class App { }
+    #endregion
+
+    #region Generate:
+    // Type mapping:
+    // - Task<Entity> matches Task<int> → int = Entity → T1 = Entity
+    // - List<Dto> matches List<decimal> → decimal = Dto → T2 = Dto
+    services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
+        (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>());
+    #endregion
+    ```
+
+    **Reversed Mapping Example** (type parameter order differs from service type order):
+
+    ```csharp
+    #region Define:
+    public interface IRequestHandler<TRequest, TResponse> { }
+
+    [IocRegisterDefaults(typeof(IRequestHandler<,>),
+        ServiceLifetime.Singleton,
+        Factory = nameof(FactoryContainer.Create))]
+    public static class FactoryContainer
+    {
+        // REVERSED: First placeholder (int) maps to T2, second placeholder (decimal) maps to T1
+        // decimal = T1, int = T2                       ┌────────────────────────────────────────────┐
+        //                                              │            ┌─────────────────┐             │
+        //                                              ↓            ↓                 ↓             ↓
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(decimal), typeof(int))]
+        public static IRequestHandler<Task<T2>, List<T1>> Create<T1, T2>()
+            => new Handler<T1, T2>();
+    }
+
+    public class Entity { }
+    public class Dto { }
+
+    // Discover IRequestHandler<Task<Entity>, List<Dto>>
+    [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+    public sealed class App { }
+    #endregion
+
+    #region Generate:
+    // Type mapping:
+    // - Task<Entity> matches Task<int> → int = Entity → T2 = Entity
+    // - List<Dto> matches List<decimal> → decimal = Dto → T1 = Dto
+    // Note: Create<T1, T2> so call is Create<Dto, Entity>
+    services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
+        (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>());
+    #endregion
+    ```
+
+    **With IServiceProvider Parameter**:
+
+    ```csharp
+    #region Define:
+    public interface IRequestHandler<TResponse> { }
+
+    [IocRegisterDefaults(typeof(IRequestHandler<>),
+        ServiceLifetime.Singleton,
+        Factory = nameof(FactoryContainer.Create))]
+    public static class FactoryContainer
+    {
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+        public static IRequestHandler<Task<T>> Create<T>(IServiceProvider sp)
+            => new Handler<T>(sp);
+    }
+
+    public class Entity { }
+
+    [IocDiscover<IRequestHandler<Task<Entity>>>]
+    public sealed class App { }
+    #endregion
+
+    #region Generate:
+    // Factory method receives IServiceProvider
+    services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
+        (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp));
+    #endregion
+    ```
+
+    **Invalid: Duplicate Placeholder Types** (registration is NOT generated):
+
+    ```csharp
+    #region Define:
+    public interface IRequestHandler<TRequest, TResponse> { }
+
+    [IocRegisterDefaults(typeof(IRequestHandler<,>),
+        ServiceLifetime.Singleton,
+        Factory = nameof(FactoryContainer.Create))]
+    public static class FactoryContainer
+    {
+        // INVALID: Both placeholders use int - cannot distinguish which maps to T1 vs T2
+        [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<int>>), typeof(int), typeof(int))]
+        public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>()
+            => throw new NotImplementedException();
+    }
+
+    public class Entity { }
+    public class Dto { }
+
+    [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+    public sealed class App { }
+    #endregion
+
+    #region Generate:
+    // NO factory registration is generated because placeholders are not unique
+    // Only the implementation type itself is registered
+    services.AddSingleton<Handler<Entity, Dto>, Handler<Entity, Dto>>();
+    #endregion
+    ```
+
+    **Missing Attribute Diagnostic** (SGIOC016):
+
+    When a generic factory method is referenced by `IocRegisterDefaults.Factory` or `IocRegister.Factory` but does not have `[IocGenericFactory]` attribute, the analyzer reports SGIOC016 diagnostic:
+
+    ```csharp
+    #region Define:
+    [IocRegisterDefaults(typeof(IRequestHandler<>),
+        ServiceLifetime.Singleton,
+        Factory = nameof(FactoryContainer.Create))] // ← SGIOC016 reported here
+    public static class FactoryContainer
+    {
+        // Missing [IocGenericFactory] attribute on generic factory method
+        public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+    }
     #endregion
     ```
