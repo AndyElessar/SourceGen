@@ -611,30 +611,48 @@ internal static class RoslynExtensions
 
     public static string GetSafeNamespace(string name) => string.IsNullOrWhiteSpace(name) ? "Generated" : name;
 
-    public static string GetSafeMethodName(string name)
+    /// <summary>
+    /// Converts a string to a safe C# identifier.
+    /// Removes all <c>global::</c> prefixes and replaces non-identifier characters with underscores.
+    /// Uses stack allocation for small strings to reduce heap allocations.
+    /// </summary>
+    /// <param name="name">The name to convert.</param>
+    /// <param name="fallback">The fallback value if name is null or whitespace. Default is "Generated".</param>
+    /// <returns>A safe C# identifier.</returns>
+    public static string GetSafeIdentifier(string name, string fallback = "Generated")
     {
         if(string.IsNullOrWhiteSpace(name))
-            return "Generated";
+            return fallback;
 
-        StringBuilder builder = new(name.Length + 1);
-        for(int i = 0; i < name.Length; i++)
+        // Remove all global:: prefixes (not just the first one, e.g., in generic types)
+        var processedName = name.Replace("global::", "");
+
+        ReadOnlySpan<char> nameSpan = processedName.AsSpan();
+
+        // Check if first char is digit (needs underscore prefix)
+        var needsPrefix = nameSpan.Length > 0 && char.IsDigit(nameSpan[0]);
+        var maxLength = nameSpan.Length + (needsPrefix ? 1 : 0);
+
+        // Use stackalloc for small strings (up to 256 chars), otherwise use array pool
+        const int StackAllocThreshold = 256;
+        Span<char> buffer = maxLength <= StackAllocThreshold
+            ? stackalloc char[StackAllocThreshold]
+            : new char[maxLength];
+
+        var writeIndex = 0;
+
+        if(needsPrefix)
         {
-            char ch = name[i];
-            if(i == 0 && char.IsDigit(ch))
-            {
-                builder.Append('_');
-            }
-
-            if(char.IsLetterOrDigit(ch) || ch == '_')
-            {
-                builder.Append(ch);
-            }
-            else
-            {
-                builder.Append('_');
-            }
+            buffer[writeIndex++] = '_';
         }
-        return builder.ToString();
+
+        for(var i = 0; i < nameSpan.Length; i++)
+        {
+            var ch = nameSpan[i];
+            buffer[writeIndex++] = char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_';
+        }
+
+        return buffer[..writeIndex].ToString();
     }
 
     /// <summary>
@@ -921,6 +939,8 @@ internal static class RoslynExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
+    #endregion
+
     /// <summary>
     /// Converts a parameter's explicit default value to its C# code representation.
     /// </summary>
@@ -947,6 +967,4 @@ internal static class RoslynExtensions
             _ => value.ToString()!
         };
     }
-
-    #endregion
 }

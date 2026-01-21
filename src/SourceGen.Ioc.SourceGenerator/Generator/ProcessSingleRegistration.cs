@@ -126,10 +126,11 @@ partial class IocSourceGenerator
         FactoryMethodData? factory,
         IEnumerable<TypeData>? additionalServiceTypesFromDefaults)
     {
-        var serviceTypesToRegister = new HashSet<TypeData>();
-
-        // Always register the implementation type itself
-        serviceTypesToRegister.Add(registration.ImplementationType);
+        var serviceTypesToRegister = new HashSet<TypeData>
+        {
+            // Always register the implementation type itself
+            registration.ImplementationType
+        };
 
         // Add explicit service types from registration
         foreach(var st in registration.ServiceTypes)
@@ -306,7 +307,12 @@ partial class IocSourceGenerator
             }
 
             // Filter decorators based on type parameter constraints
-            var filteredDecorators = FilterDecorators(decorators, serviceType, decoratorFilterCache);
+            // When serviceType == implementationType (self-registration), decorators cannot be applied
+            // because decorators return the interface type, not the implementation type
+            var isSelfRegistration = serviceType.Name == implementationType.Name;
+            var filteredDecorators = isSelfRegistration
+                ? []
+                : FilterDecorators(decorators, serviceType, decoratorFilterCache);
 
             var model = new ServiceRegistrationModel(
                 serviceType,
@@ -362,7 +368,7 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Filters decorators.
+    /// Filters and closes decorators for a specific service type.
     /// Uses the service type's generic base name as cache key for similar types.
     /// </summary>
     private static ImmutableEquatableArray<TypeData> FilterDecorators(
@@ -382,8 +388,8 @@ partial class IocSourceGenerator
             return decorators;
         }
 
-        // Use NameWithoutGeneric + arity as cache key for similar generic types
-        var cacheKey = $"{serviceType.NameWithoutGeneric}`{serviceType.GenericArity}";
+        // Use full service type name as cache key (includes specific type arguments)
+        var cacheKey = serviceType.Name;
 
         // Check cache first
         if(cache is not null && cache.TryGetValue(cacheKey, out var cached))
@@ -393,12 +399,38 @@ partial class IocSourceGenerator
 
         var interfaceNameSet = BuildInterfaceNameSet(serviceTypeParams);
 
-        var result = FilterDecoratorsCore(decorators, serviceTypeParams, interfaceNameSet);
+        var filtered = FilterDecoratorsCore(decorators, serviceTypeParams, interfaceNameSet);
+
+        // Substitute type parameters in decorators to close open generic decorators
+        var result = SubstituteDecoratorsTypeParams(filtered, serviceTypeParams);
 
         // Store in cache
         cache?.Add(cacheKey, result);
 
         return result;
+    }
+
+    /// <summary>
+    /// Substitutes type parameters in decorators using the service type's type parameters.
+    /// This closes open generic decorators to match the specific service type.
+    /// </summary>
+    private static ImmutableEquatableArray<TypeData> SubstituteDecoratorsTypeParams(
+        ImmutableEquatableArray<TypeData> decorators,
+        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
+    {
+        if(decorators.Length == 0)
+        {
+            return decorators;
+        }
+
+        var result = new List<TypeData>(decorators.Length);
+        foreach(var decorator in decorators)
+        {
+            var closed = SubstituteDecoratorTypeParams(decorator, serviceTypeParams);
+            result.Add(closed);
+        }
+
+        return result.ToImmutableEquatableArray();
     }
 
     /// <summary>
@@ -614,17 +646,19 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collects closed generic dependencies from a registration's constructor parameters and injection members.
+    /// Collects closed generic dependencies from a registration's constructor parameters, injection members, and factory method parameters.
     /// </summary>
     private static ImmutableEquatableArray<ClosedGenericDependency> CollectClosedGenericDependenciesFromRegistration(
         RegistrationData registration)
     {
         var constructorParams = registration.ImplementationType.ConstructorParameters;
         var injectionMembers = registration.InjectionMembers;
+        var factoryParams = registration.Factory?.AdditionalParameters;
 
-        // Early exit if no constructor params and no injection members
+        // Early exit if no constructor params, no injection members, and no factory params
         if((constructorParams is null || constructorParams.Length == 0)
-            && injectionMembers.Length == 0)
+            && injectionMembers.Length == 0
+            && (factoryParams is null || factoryParams.Length == 0))
         {
             return [];
         }
@@ -657,6 +691,15 @@ partial class IocSourceGenerator
                 {
                     CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
                 }
+            }
+        }
+
+        // Collect from factory method's additional parameters
+        if(factoryParams is not null)
+        {
+            foreach(var param in factoryParams)
+            {
+                CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
             }
         }
 

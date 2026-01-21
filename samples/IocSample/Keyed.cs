@@ -1,4 +1,4 @@
-namespace IocSample;
+﻿namespace IocSample;
 
 public interface IKeyed;
 
@@ -25,7 +25,7 @@ public static class KeyedExtensions
     public static readonly Guid Key = Guid.CreateVersion7();
 }
 [IocRegister<IKeyed>(Key = nameof(KeyedExtensions.Key), KeyType = KeyType.Csharp)]
-internal class KeyedCsharp : IKeyed
+internal class KeyedCsharp([IocInject(Key = "Key")] IKeyed keyed) : IKeyed
 {
-
+    private readonly IKeyed keyed = keyed;
 }

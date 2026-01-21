@@ -11,10 +11,10 @@ namespace SourceGen.Ioc.Test.Helpers;
 public static class SourceGeneratorTestHelper
 {
     /// <summary>
-    /// Gets the parse options for the latest C# language version with SOURCEGEN preprocessor definition.
+    /// Gets the parse options for the latest C# language version with SOURCEGEN and NET7_0_OR_GREATER preprocessor definitions.
     /// </summary>
     public static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
-        .WithPreprocessorSymbols("SOURCEGEN");
+        .WithPreprocessorSymbols("SOURCEGEN", "NET7_0_OR_GREATER");
 
     /// <summary>
     /// Gets the metadata reference for the SourceGen.Ioc assembly containing attribute definitions.
@@ -29,6 +29,13 @@ public static class SourceGeneratorTestHelper
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceLifetime).Assembly.Location);
 
     /// <summary>
+    /// Gets the metadata reference for the Microsoft.Extensions.DependencyInjection assembly.
+    /// This is needed to detect IServiceProviderFactory support.
+    /// </summary>
+    public static readonly MetadataReference DiReference =
+        MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions).Assembly.Location);
+
+    /// <summary>
     /// Gets the base metadata references from the current AppDomain assemblies,
     /// including IoC attributes and DI abstractions.
     /// </summary>
@@ -38,8 +45,36 @@ public static class SourceGeneratorTestHelper
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
             .Select(a => MetadataReference.CreateFromFile(a.Location))
+            .Cast<MetadataReference>()
+            .ToList();
+
+        // Ensure ValueTask is available (from System.Threading.Tasks.Extensions or System.Runtime)
+        var valueTaskAssembly = typeof(ValueTask).Assembly;
+        if(!string.IsNullOrEmpty(valueTaskAssembly.Location))
+        {
+            references.Add(MetadataReference.CreateFromFile(valueTaskAssembly.Location));
+        }
+
+        return [.. references, IocAttributeReference, DiAbstractionsReference, DiReference];
+    }
+
+    /// <summary>
+    /// Gets the base metadata references WITHOUT the full Microsoft.Extensions.DependencyInjection package.
+    /// Use this to test scenarios where IServiceProviderFactory should not be generated.
+    /// </summary>
+    public static readonly ImmutableArray<MetadataReference> BaseReferencesWithoutDI = CreateBaseReferencesWithoutDI();
+    private static ImmutableArray<MetadataReference> CreateBaseReferencesWithoutDI()
+    {
+        // Filter out the full DI package (but keep Abstractions)
+        var diAssemblyName = typeof(Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions).Assembly.GetName().Name;
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+            .Where(a => a.GetName().Name != diAssemblyName)
+            .Select(a => MetadataReference.CreateFromFile(a.Location))
             .Cast<MetadataReference>();
 
+        // Only include Abstractions, not the full DI package
         return [.. references, IocAttributeReference, DiAbstractionsReference];
     }
 
@@ -83,6 +118,81 @@ public static class SourceGeneratorTestHelper
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
 
         return driver.GetRunResult().Results.Single();
+    }
+
+    /// <summary>
+    /// Runs the source generator with custom base references.
+    /// Use this to test scenarios with different reference configurations.
+    /// </summary>
+    /// <param name="source">The source code to compile.</param>
+    /// <param name="references">The metadata references to use for compilation.</param>
+    /// <param name="assemblyName">The assembly name for the compilation.</param>
+    public static GeneratorRunResult RunGeneratorWithReferences<TGenerator>(
+        string source,
+        ImmutableArray<MetadataReference> references,
+        string assemblyName = "TestAssembly")
+        where TGenerator : IIncrementalGenerator, new()
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
+
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        ThrowIfCompilationHasErrors(compilation);
+
+        var generator = new TGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+
+        return driver.GetRunResult().Results.Single();
+    }
+
+    /// <summary>
+    /// Runs the source generator on multiple assemblies where the last assembly references all previous ones.
+    /// This simulates cross-assembly scenarios where one assembly imports from others.
+    /// Assemblies are compiled in order, allowing later ones to reference earlier ones.
+    /// The last assembly in the array is treated as the main assembly.
+    /// </summary>
+    /// <param name="assemblies">Assemblies to compile in order. The last one is the main assembly that references all others.</param>
+    /// <returns>The generator run result for the main (last) assembly.</returns>
+    public static GeneratorRunResult RunGeneratorWithDependencies<TGenerator>(
+        params (string Source, string AssemblyName)[] assemblies)
+        where TGenerator : IIncrementalGenerator, new()
+    {
+        if(assemblies.Length == 0)
+            throw new ArgumentException("At least one assembly must be provided.", nameof(assemblies));
+
+        var compiledReferences = new List<MetadataReference>();
+        var lastResult = default(GeneratorRunResult);
+
+        // Compile each assembly in order (allowing later ones to reference earlier ones)
+        for(var i = 0; i < assemblies.Length; i++)
+        {
+            var (source, assemblyName) = assemblies[i];
+            var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
+            var compilation = CSharpCompilation.Create(
+                assemblyName,
+                [syntaxTree],
+                BaseReferences.AddRange(compiledReferences),
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+            ThrowIfCompilationHasErrors(compilation);
+
+            var generator = new TGenerator();
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
+            driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+
+            ThrowIfCompilationHasErrors((CSharpCompilation)outputCompilation);
+
+            lastResult = driver.GetRunResult().Results.Single();
+            compiledReferences.Add(outputCompilation.ToMetadataReference());
+        }
+
+        return lastResult;
     }
 
     private static void ThrowIfCompilationHasErrors(CSharpCompilation compilation)

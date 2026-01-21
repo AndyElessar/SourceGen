@@ -1048,4 +1048,167 @@ public class ClosedGenericDependencyTests
 
         await Verify(generatedSource);
     }
+
+    /// <summary>
+    /// Tests that closed generic dependencies in Factory method's additional parameters are discovered.
+    /// When a Factory method has parameters that are closed generic types, the generator should
+    /// automatically create factory registrations for those closed generic types.
+    /// </summary>
+    [Test]
+    public async Task Factory_WithClosedGenericParameter_GeneratesClosedGenericRegistration()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? GetById(int id);
+            }
+
+            [IocRegister]
+            public sealed class Repository<T> : IRepository<T>
+            {
+                public T? GetById(int id) => default;
+            }
+
+            public class Customer { }
+
+            public interface ICustomerService { }
+
+            // This class uses Factory with closed generic parameter IRepository<Customer>
+            // The generator should discover IRepository<Customer> from the factory's additional parameters
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(ICustomerService)],
+                Factory = nameof(CustomerServiceFactory.Create))]
+            public class CustomerService : ICustomerService { }
+
+            public static class CustomerServiceFactory
+            {
+                public static ICustomerService Create(IServiceProvider sp, IRepository<Customer> customerRepo)
+                    => new CustomerService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests that multiple closed generic dependencies in Factory method's additional parameters are all discovered.
+    /// </summary>
+    [Test]
+    public async Task Factory_WithMultipleClosedGenericParameters_GeneratesAllClosedGenericRegistrations()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IRepository<>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>
+            {
+                T? GetById(int id);
+            }
+
+            [IocRegister]
+            public sealed class Repository<T> : IRepository<T>
+            {
+                public T? GetById(int id) => default;
+            }
+
+            public class Customer { }
+            public class Order { }
+            public class Product { }
+
+            public interface IAggregateService { }
+
+            // This class uses Factory with multiple closed generic parameters
+            // The generator should discover IRepository<Customer>, IRepository<Order>, and IRepository<Product>
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IAggregateService)],
+                Factory = nameof(AggregateServiceFactory.Create))]
+            public class AggregateService : IAggregateService { }
+
+            public static class AggregateServiceFactory
+            {
+                public static IAggregateService Create(
+                    IServiceProvider sp,
+                    IRepository<Customer> customerRepo,
+                    IRepository<Order> orderRepo,
+                    IRepository<Product> productRepo)
+                    => new AggregateService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests that closed generic collection parameters in Factory method are also discovered.
+    /// </summary>
+    [Test]
+    public async Task Factory_WithClosedGenericCollectionParameter_GeneratesClosedGenericRegistration()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IHandler<>), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>
+            {
+                void Handle(T item);
+            }
+
+            [IocRegister]
+            public sealed class Handler<T> : IHandler<T>
+            {
+                public void Handle(T item) { }
+            }
+
+            public class Event { }
+
+            public interface IEventProcessor { }
+
+            // This class uses Factory with IEnumerable<IHandler<Event>> parameter
+            // The generator should discover IHandler<Event> from the collection's element type
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IEventProcessor)],
+                Factory = nameof(EventProcessorFactory.Create))]
+            public class EventProcessor : IEventProcessor { }
+
+            public static class EventProcessorFactory
+            {
+                public static IEventProcessor Create(IServiceProvider sp, IEnumerable<IHandler<Event>> handlers)
+                    => new EventProcessor();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

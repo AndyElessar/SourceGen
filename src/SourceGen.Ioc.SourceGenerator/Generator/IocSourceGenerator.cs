@@ -148,9 +148,17 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Combine(discoverProvider_T1.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // Get assembly name from compilation
-        var assemblyNameProvider = context.CompilationProvider
-            .Select(static (compilation, _) => compilation.AssemblyName ?? "Generated");
+        // Get compilation info (assembly name and DI package reference)
+        var compilationInfoProvider = context.CompilationProvider
+            .Select(static (compilation, _) =>
+            {
+                var assemblyName = compilation.AssemblyName ?? "Generated";
+                // Detect if Microsoft.Extensions.DependencyInjection package is referenced
+                // by checking for ServiceCollectionContainerBuilderExtensions type
+                var hasDIPackage = compilation.GetTypeByMetadataName(
+                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is not null;
+                return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
+            });
 
         // Get MSBuild properties from analyzer config options
         var msbuildPropertiesProvider = context.AnalyzerConfigOptionsProvider
@@ -223,18 +231,45 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Combine(combinedClosedGenericDependencies)
             .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left, in source.Right, ct));
 
-        // Combine service registrations with assembly name and MSBuild properties
+        // Combine service registrations with compilation info and MSBuild properties
         var combined = serviceRegistrations
-            .Combine(assemblyNameProvider)
+            .Combine(compilationInfoProvider)
             .Combine(msbuildPropertiesProvider);
 
         // Generate output
         context.RegisterSourceOutput(combined, static (ctx, source) =>
         {
-            var ((registrations, assemblyName), msbuildProps) = source;
+            var ((registrations, compilationInfo), msbuildProps) = source;
             // Use RootNamespace from MSBuild if available, otherwise fall back to assembly name
-            var rootNamespace = msbuildProps.RootNamespace ?? assemblyName;
-            GenerateRegisterOutput(in ctx, registrations, rootNamespace, assemblyName, msbuildProps.CustomIocName);
+            var rootNamespace = msbuildProps.RootNamespace ?? compilationInfo.AssemblyName;
+            GenerateRegisterOutput(in ctx, registrations, rootNamespace, compilationInfo.AssemblyName, msbuildProps.CustomIocName);
+        });
+
+        // ========== Container Pipeline ==========
+        // IocContainerAttribute provider
+        var containerProvider = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                Constants.IocContainerAttributeFullName,
+                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                transform: static (ctx, ct) => TransformContainer(ctx, ct))
+            .Where(static m => m is not null)
+            .Select(static (m, _) => m!);
+
+        // Combine container with existing serviceRegistrations and group them
+        var containerWithGroups = containerProvider
+            .Combine(serviceRegistrations)
+            .Select(static (source, _) => GroupRegistrationsForContainer(source.Left, source.Right));
+
+        // Combine with compilation info and MSBuild properties
+        var containerWithCompilationInfo = containerWithGroups
+            .Combine(compilationInfoProvider)
+            .Combine(msbuildPropertiesProvider);
+
+        // Generate Container output (separate from Registration output)
+        context.RegisterSourceOutput(containerWithCompilationInfo, static (ctx, source) =>
+        {
+            var ((containerWithGroups, compilationInfo), msbuildProps) = source;
+            GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
         });
     }
 }

@@ -37,6 +37,11 @@ internal sealed record class TypeData(
     /// </summary>
     public bool IsNonEnumerableCollection =>
         CollectionKind is not CollectionKind.None and not CollectionKind.Enumerable;
+
+    /// <summary>
+    /// Gets whether is a closed generic (has type arguments but is not an open generic).
+    /// </summary>
+    public bool IsClosedGeneric => !IsOpenGeneric && Name != NameWithoutGeneric;
 }
 
 /// <summary>

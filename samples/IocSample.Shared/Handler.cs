@@ -1,15 +1,16 @@
-﻿namespace IocSample.Shared;
-
-public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
-public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IQuery<TSelf, TResponse>;
-
-[IocRegisterDefaults(
+﻿[assembly: IocRegisterDefaults(
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>), typeof(HandlerDecorator3<,>)],
     TagOnly = true,
     Tags = ["Mediator"]
 )]
+
+namespace IocSample.Shared;
+
+public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+public interface IQuery<TSelf, TResponse> : IRequest<TSelf, TResponse> where TSelf : IQuery<TSelf, TResponse>;
+
 public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
 {
     TResponse Handle(TRequest request);

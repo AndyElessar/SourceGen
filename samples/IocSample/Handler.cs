@@ -1,9 +1,6 @@
-using IocSample.Shared;
+﻿using IocSample.Shared;
 
 namespace IocSample;
-
-[IocImportModule(typeof(IRequestHandler<,>))]
-public sealed class Module;
 
 public sealed record TestQuery(string Name) : IQuery<TestQuery, string>;
 

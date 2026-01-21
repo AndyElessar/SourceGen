@@ -2,107 +2,153 @@
 
 Source generators based on `Microsoft.Extensions.DependencyInjection.Abstractions`.
 
-## Collection information
+## Collecting Information
 
-1. Find classes marked with `SourceGen.Ioc.IocRegisterAttribute` and `SourceGen.Ioc.IocRegisterForAttribute`.
-    - `IocRegisterAttribute` supports generic version: `IocRegisterAttribute<T>`
-    - `IocRegisterForAttribute` supports generic version: `IocRegisterForAttribute<T>`
+### 1. Registration Attributes
 
-2. Find `SourceGen.Ioc.IocRegisterDefaultsAttribute`. If exists, apply its settings as defaults to classes that step 1 finds, unless they override with their own attributes.
-    - Supports generic version: `IocRegisterDefaultsAttribute<T>`
+|Attribute|Purpose|Generic Version|
+|:--------|:------|:--------------|
+|`IocRegisterAttribute`|Mark class for registration|`IocRegisterAttribute<T>`|
+|`IocRegisterForAttribute`|Register external types|`IocRegisterForAttribute<T>`|
+|`IocRegisterDefaultsAttribute`|Default settings for registrations|`IocRegisterDefaultsAttribute<T>`|
+|`IocImportModuleAttribute`|Import other assembly's settings|`IocImportModuleAttribute<T>`|
+|`IocDiscoverAttribute`|Explicit closed generic discovery|`IocDiscoverAttribute<T>`|
+|`IocGenericFactoryAttribute`|Generic factory type mapping|—|
 
-3. Service registration settings to collect:
-    - Service type (from `TargetServiceType`, `ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`, `IocDiscoverAttribute`)
-    - Implementation type (from `IocRegisterForAttribute.ImplementationType`, the class marked with `IocRegisterAttribute` and `IocRegisterDefaultsAttribute.ImplementationTypes`) and its constructor's parameters and members with `IocRegisterAttribute`, `InjectAttribute`
-    - Lifetime (from `IocRegisterAttribute`, `IocRegisterForAttribute` or default settings)
-    - Key and KeyType (from `IocRegisterAttribute`, `IocRegisterForAttribute` or default settings)
-    - Decorators type (from `IocRegisterAttribute.Decorators`, `IocRegisterForAttribute.Decorators` or default settings) and its constructor's parameters and its type arguments constraints
-    - Tags and TagOnly (from `IocRegisterAttribute`, `IocRegisterForAttribute` or default settings)
-    - Factory (from `IocRegisterAttribute.Factory`, `IocRegisterForAttribute.Factory` or default settings)
-    - Instance (from `IocRegisterAttribute.Instance`, `IocRegisterForAttribute.Instance`)
-    - `IServiceProvider` invocations: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`, collect type data from `T`, regarded as Service type
-    - Generic factory method's type parameter hint (from `IocGenericFactoryAttribute`)
-    - Other assembly's setting from `IocImportModuleAttribute` (supports generic version: `IocImportModuleAttribute<T>`)
-    - `IocDiscoverAttribute` for explicit closed generic discovery (supports generic version: `IocDiscoverAttribute<T>`)
+### 2. Registration Properties
 
-4. Collect compilation info:
-    - Project root namespace (from MSBuild `RootNamespace` property, fallback to assembly name)
-    - Assembly name (from compilation options)
-    - Project properties: `SourceGenIocName` (customize generated method name)
+|Property|Source|
+|:-------|:-----|
+|Service Type|`TargetServiceType`, `ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`|
+|Implementation Type|`IocRegisterForAttribute.ImplementationType`, marked class, defaults `ImplementationTypes`|
+|Lifetime|Attribute → defaults → `Scoped`|
+|Key / KeyType|Attribute → defaults|
+|Decorators|`Decorators` property (with constructor params and type constraints)|
+|Tags / TagOnly|Attribute → defaults|
+|Factory|`Factory` property (method path, supports generic mapping)|
+|Instance|`Instance` property (static instance path, e.g., `"MyService.Default"`)|
+|ValidOpenGenericServiceTypes|Set of valid open generic service type names for constraint checking|
 
-## Parse logic
+### 3. Type Hierarchy Collection
 
-1. When `KeyType` is `KeyType.Value`, take `Key` as value, when `KeyType` is `KeyType.Csharp`, take `Key` as C# code snippet.
-    - `KeyType.Value`:
-      - Primitive types (int, string, bool, etc.) should be represented as itself (e.g., `42`, `"myString"`, `true`)
-      - Enum types should be represented as `EnumType.EnumValue`
-    - `KeyType.Csharp`:
-      - String should be represented literal (e.g. `"MyClass.MyStaticField"` => `Add*Key(MyClass.MyStaticField)`)
-      - Can use `nameof()` for compile-time safety (e.g. `nameof(MyClass.MyStaticField)` => `Add*Key(MyClass.MyStaticField)`)
+|Data|Description|
+|:---|:----------|
+|`AllInterfaces`|All interfaces implemented by the type|
+|`AllBaseClasses`|All base classes (excluding `System.Object`)|
+|`TypeParameters`|Generic type parameters with constraints|
+|`ConstructorParameters`|Constructor parameters (for decorators)|
+|`CollectionKind`|`None`, `Enumerable`, or `ReadOnlyCollection`|
 
-2. When multiple default settings are found on an implementation type, use first setting by order:
-    1. The one directly on the implementation type
-    2. The one on the closest base class
-    3. The one on the first interface in `RegistrationData.AllInterfaces`
+### 4. Injection Members
 
-3. `IocInjectAttribute`, `InjectAttribute`:
-    - Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
+|Member Type|Resolution|
+|:----------|:---------|
+|Property|With `[IocInject]`/`[Inject]`, set via object initializer|
+|Field|With `[IocInject]`/`[Inject]`, set via object initializer|
+|Method|With `[IocInject]`/`[Inject]`, called after construction|
 
-4. Constructor selection order:
-    1. With `[IocInject]`
-    2. Primary constructor
-    3. Constructor have most paramters
+### 5. IServiceProvider Invocations
 
-5. Constructor and Method Parameter Analysis:
-    - `[ServiceKey]` attribute: Inject the registration key (or default if non-keyed)
-    - `[FromKeyedServices]` attribute: Use keyed service resolution
-    - `[IocInject]` attribute with Key: Use keyed service resolution
-    - `IServiceProvider` type: Pass the service provider directly
-    - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Extract data of `T`, regarded as Service type
-    - Built-in types without attributes and without default value: Skip (unresolvable)
-    - Parameters with default values: See rule for optional parameters below
+Collect service types from invocations: `GetService<T>`, `GetRequiredService<T>`, `GetKeyedService<T>`, `GetRequiredKeyedService<T>`, `GetServices<T>`, `GetKeyedServices<T>` (and non-generic overloads)
 
-    **Optional Parameter Handling**:
-    When a parameter has a default value:
-    - If the type is a built-in type (int, string, etc.) or collection of built-in types: Skip (use default value)
-    - If the type is resolvable from DI: Use conditionally assign:
-      - If the resolved value is not null: Use the resolved value
-      - If the resolved value is null: Do not specify the argument (use default value)
+### 6. Compilation Info
 
-6. Property Analysis:
-    - Only analyze property with `IocRegisterAttribute` and `InjectAttribute`
-    - With Key: Use keyed service resolution
-    - `IServiceProvider` type: Pass the service provider directly
-    - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Extract data of `T`, regarded as Service type
-    - Built-in types without Key and without default value: Skip (unresolvable)
-    - Nullable Annotation: assign a resolved nullable value
+|Property|Source|
+|:-------|:-----|
+|Root Namespace|MSBuild `RootNamespace` (fallback: assembly name)|
+|Assembly Name|Compilation options|
+|Custom Method Name|`SourceGenIocName` MSBuild property|
 
-7. Generic factory method type parameter mapping:
-    - Collect type array in `IocGenericFactoryAttribute`
-    - The first type is the service type going to map, it can't be unbound generic type, type parameter must be filled with a type for placeholder
-    - Following types is mapping to generic factory method's type parameter in order, the type should be able to match the first type's placeholder
+## Parse Logic
 
-    ```csharp
-    // Service type is IRequestHandler<>, has 1 type parameter
-    [IocRegisterDefaults(typeof(IRequestHandler<>), Factory = nameof(FactoryContainer.Create))]
-    public class FactoryContainer
-    {   //                                              ┌--------------┐ "int" is a placeholder, make sure placeholders is unique
-        //                                              │              │ in the context of the generic type mapping.
-        //                                              ↓              ↓
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
-        public static Create<T>()=>new Handler<T>();
-    }
+### 1. Key Interpretation
 
-    // Service type is IRequestHandler<,>, has 2 type parameter
-    [IocRegisterDefaults(typeof(IRequestHandler<,>), Factory = nameof(FactoryContainer.Create))]
-    public class FactoryContainer
-    {   //                                              ┌----------------------------------------┐
-        //                                              │                                        │
-        //                                              ↓                                        ↓
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>, decimal>), typeof(decimal), typeof(int))]
-        public static Create<T1, T2>()=>new Handler<T1, T2>();//↑                ↑
-    }                                                         //└----------------┘
-    ```
+|KeyType|Behavior|Example|
+|:------|:-------|:------|
+|`Value`|Use literal value|`42`, `"myString"`, `MyEnum.Value`|
+|`Csharp`|Evaluate as C# expression|`MyClass.StaticField`, `nameof(...)`|
+
+### 2. Default Settings Priority
+
+When multiple defaults match an implementation type:
+
+1. Directly on implementation type
+2. On closest base class
+3. On first interface in `AllInterfaces`
+
+### 3. Settings Merge Order
+
+`Explicit attribute` → `Matching defaults` → `Registration default`
+
+### 4. Inject Attribute Matching
+
+Match by name only: `IocInjectAttribute` or `InjectAttribute`  
+(Supports third-party attributes like `Microsoft.AspNetCore.Components.InjectAttribute`)
+
+### 5. Constructor Selection
+
+|Priority|Condition|
+|-------:|:--------|
+|1|Marked with `[IocInject]`|
+|2|Primary constructor|
+|3|Constructor with most parameters|
+
+### 6. Parameter Resolution
+
+|Condition|Action|
+|:--------|:-----|
+|`[ServiceKey]` attribute|Inject registration key|
+|`[FromKeyedServices]` or `[IocInject(Key=...)]`|Keyed service resolution|
+|`IServiceProvider` type|Pass provider directly|
+|Collection types (`IEnumerable<T>`, `T[]`, etc.)|Extract `T` as service type|
+|Built-in type¹ without attribute/default|Skip (unresolvable)|
+|Has default value + resolvable type|Use resolved value if non-null, else use default|
+|Has default value + built-in type|Skip (use default)|
+
+¹ Built-in types: primitives (`int`, `string`, `bool`, etc.), `DateTime`, `Guid`, `TimeSpan`, `Uri`, `Type`
+
+### 7. Property/Field Injection
+
+Only members with `[IocInject]` or `[Inject]`:
+
+|Condition|Behavior|
+|:--------|:-------|
+|With `Key`|Keyed service resolution|
+|`IServiceProvider`|Pass provider directly|
+|Collection types|Extract inner type as service|
+|Nullable type|Assign resolved nullable value|
+|Has default value|Use resolved if non-null|
+
+### 8. Collection Kind Resolution
+
+|`CollectionKind`|Types|Resolution|
+|:---------------|:----|:---------|
+|`Enumerable`|`IEnumerable<T>`|MS.DI native support|
+|`ReadOnlyCollection`|`IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `T[]`|`GetServices<T>().ToArray()`|
+
+### 9. Generic Factory Type Mapping
+
+`IocGenericFactoryAttribute` maps service type parameters to factory method type parameters:
+
+```csharp
+// Single type parameter: IRequestHandler<>
+[IocRegisterDefaults(typeof(IRequestHandler<>), Factory = nameof(Create))]
+public class FactoryContainer
+{
+    // typeof(int) is placeholder, maps to T
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+    public static IRequestHandler<T> Create<T>() => new Handler<T>();
+}
+
+// Multiple type parameters: IRequestHandler<,>
+[IocRegisterDefaults(typeof(IRequestHandler<,>), Factory = nameof(Create))]
+public class FactoryContainer
+{
+    // decimal → T1, int → T2
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>, decimal>), typeof(decimal), typeof(int))]
+    public static IRequestHandler<T1, T2> Create<T1, T2>() => new Handler<T1, T2>();
+}
+```
 
 ## Generators
 

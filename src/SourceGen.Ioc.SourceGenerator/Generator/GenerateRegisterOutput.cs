@@ -25,8 +25,8 @@ partial class IocSourceGenerator
     {
         // Use custom IoC name if provided, otherwise use assembly name
         var methodBaseName = !string.IsNullOrWhiteSpace(customIocName)
-            ? GetSafeMethodName(customIocName!)
-            : GetSafeMethodName(assemblyName);
+            ? GetSafeIdentifier(customIocName!)
+            : GetSafeIdentifier(assemblyName);
 
         // Use Dictionary<string, SourceWriter> to write registrations directly grouped by method name
         // This avoids building intermediate data structures and minimizes loop iterations
@@ -94,7 +94,7 @@ partial class IocSourceGenerator
             else
             {
                 // Tag-specific method
-                var safeTagName = GetSafeMethodName(methodKey);
+                var safeTagName = GetSafeIdentifier(methodKey);
                 WriteMethodWrapper(mainWriter, methodBodyWriter, $"{methodBaseName}_{safeTagName}", $"Registers all services tagged with '{methodKey}'.");
             }
         }

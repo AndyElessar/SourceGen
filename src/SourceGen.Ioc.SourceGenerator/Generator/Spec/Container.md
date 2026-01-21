@@ -12,36 +12,16 @@ The container generator creates a `partial class` that implements multiple DI-re
 
 - `IocContainerAttribute` - Trigger generator to generate an IoC Container on a partial class
 
-### Registration Attributes
+### Related Attributes
 
-- `IocRegisterAttribute` - Non-generic version with optional `ServiceTypes` parameter
-- `IocRegisterAttribute<T>` - Generic version with single service type
-- `IocRegisterForAttribute` - Non-generic version for registering external types
-- `IocRegisterForAttribute<T>` - Generic version for registering external types
+The container uses registrations from the following attributes. See [Registration.md](Registration.md) for details:
 
-### Default Settings Attributes
-
-- `IocRegisterDefaultsAttribute` - Non-generic version with `TargetType` parameter
-- `IocRegisterDefaultsAttribute<T>` - Generic version for default settings
-
-### Module Import Attributes
-
-- `IocImportModuleAttribute` - Non-generic version with `ModuleType` parameter
-- `IocImportModuleAttribute<T>` - Generic version for importing module settings
-
-### Discovery Attributes
-
-- `IocDiscoverAttribute` - Non-generic version with `ClosedGenericType` parameter
-- `IocDiscoverAttribute<T>` - Generic version for closed generic discovery
-
-### Injection Attributes
-
-- `IocInjectAttribute` - For field, property, method, or constructor parameter injection
-- `InjectAttribute` - Alternative name (compatible with other libraries like `Microsoft.AspNetCore.Components.InjectAttribute`)
-
-### Generic Factory Attributes
-
-- `IocGenericFactoryAttribute` - Map closed generic service type to generic factory method's type parameters
+- **Registration**: `IocRegisterAttribute`, `IocRegisterForAttribute`
+- **Defaults**: `IocRegisterDefaultsAttribute`
+- **Module Import**: `IocImportModuleAttribute`
+- **Discovery**: `IocDiscoverAttribute`
+- **Injection**: `IocInjectAttribute`, `InjectAttribute`
+- **Generic Factory**: `IocGenericFactoryAttribute`
 
 ## Generated Interfaces
 
@@ -49,15 +29,15 @@ The generated container implements the following interfaces:
 
 |Interface|Purpose|
 |:---|:---|
-|`IIocContainer`|SourceGen.Ioc container interface, exposes service registry|
+|`IIocContainer<TContainer>`|SourceGen.Ioc generic container interface, exposes service registry with container-typed resolvers|
 |`IServiceProvider`|Standard .NET service provider|
 |`IKeyedServiceProvider`|Keyed service resolution (.NET 8+)|
 |`IServiceProviderIsService`|Service availability checking|
 |`IServiceProviderIsKeyedService`|Keyed service availability checking|
 |`ISupportRequiredService`|Required service resolution|
 |`IServiceScopeFactory`|Create service scopes|
-|`IAsyncServiceScope`|Async scope support|
-|`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `ResolveIServiceCollection = true`)|
+|`IServiceScope`|Represents a service scope (container is its own scope)|
+|`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `ResolveIServiceCollection = true` AND DI package is referenced)|
 |`IDisposable`|Synchronous disposal|
 |`IAsyncDisposable`|Asynchronous disposal|
 
@@ -109,27 +89,29 @@ public partial class AppContainer;
 
 using System;
 using System.Collections.Frozen;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
 
-partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvider,
+partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvider, IKeyedServiceProvider,
     IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService,
-    IServiceScopeFactory, IAsyncServiceScope, IServiceProviderFactory<IServiceCollection>,
-    IDisposable, IAsyncDisposable
+    IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    // Thread-safe singleton storage
-    private MyDependency? _myDependency;
-    private MyService? _myService;
+    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::AppContainer, object>> _serviceResolvers;
+
+    #region Constructors
 
     /// <summary>
     /// Creates a new standalone container without external service provider fallback.
     /// </summary>
-    public AppContainer() : this(null) { }
+    public AppContainer() : this((IServiceProvider?)null) { }
 
     /// <summary>
     /// Creates a new container with optional fallback to external service provider.
@@ -138,10 +120,10 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
     public AppContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        _serviceResolvers = GetLocalServices().ToFrozenDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+        _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
-    // Private constructor for scoped instances
     private AppContainer(AppContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
@@ -149,24 +131,30 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
         // Copy singleton references from parent
         _myDependency = parent._myDependency;
         _myService = parent._myService;
-        // Share the same service resolvers dictionary
         _serviceResolvers = parent._serviceResolvers;
     }
 
+    #endregion
+
     #region Service Resolution
 
-    private MyDependency GetMyDependency()
+    private global::MyDependency? _myDependency;
+    private global::MyDependency GetMyDependency()
     {
-        if (_myDependency is not null) return _myDependency;
-        var instance = new MyDependency();
+        if(_myDependency is not null) return _myDependency;
+
+        var instance = new global::MyDependency();
+
         return Interlocked.CompareExchange(ref _myDependency, instance, null) ?? instance;
     }
 
-    private MyService GetMyService()
+    private global::MyService? _myService;
+    private global::MyService GetMyService()
     {
-        if (_myService is not null) return _myService;
-        var p0 = GetMyDependency();
-        var instance = new MyService(p0);
+        if(_myService is not null) return _myService;
+
+        var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
+
         return Interlocked.CompareExchange(ref _myService, instance, null) ?? instance;
     }
 
@@ -176,13 +164,12 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
 
     public object? GetService(Type serviceType)
     {
-        // Built-in services
-        if (serviceType == typeof(IServiceProvider)) return this;
-        if (serviceType == typeof(IServiceScopeFactory)) return this;
+        if(serviceType == typeof(IServiceProvider)) return this;
+        if(serviceType == typeof(IServiceScopeFactory)) return this;
+        if(serviceType == typeof(AppContainer)) return this;
 
-        // Lookup in FrozenDictionary
-        if (_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
-            return resolver();
+        if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
+            return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
     }
@@ -194,18 +181,16 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
         var key = serviceKey ?? KeyedService.AnyKey;
-        if (_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
-            return resolver();
 
-        return _fallbackProvider is IKeyedServiceProvider keyed
-            ? keyed.GetKeyedService(serviceType, serviceKey)
-            : null;
+        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+            return resolver(this);
+
+        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
     {
-        return GetKeyedService(serviceType, serviceKey)
-            ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
+        return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
     }
 
     #endregion
@@ -214,8 +199,7 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
 
     public object GetRequiredService(Type serviceType)
     {
-        return GetService(serviceType)
-            ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
+        return GetService(serviceType) ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
     }
 
     #endregion
@@ -224,11 +208,11 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
 
     public bool IsService(Type serviceType)
     {
-        if (serviceType == typeof(IServiceProvider)) return true;
-        if (serviceType == typeof(IServiceScopeFactory)) return true;
+        if(serviceType == typeof(IServiceProvider)) return true;
+        if(serviceType == typeof(IServiceScopeFactory)) return true;
+        if(serviceType == typeof(AppContainer)) return true;
 
-        if (_serviceResolvers.ContainsKey((serviceType, KeyedService.AnyKey)))
-            return true;
+        if(_serviceResolvers.ContainsKey((serviceType, KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -236,11 +220,10 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
     public bool IsKeyedService(Type serviceType, object? serviceKey)
     {
         var key = serviceKey ?? KeyedService.AnyKey;
-        if (_serviceResolvers.ContainsKey((serviceType, key)))
-            return true;
 
-        return _fallbackProvider is IServiceProviderIsKeyedService isKeyed
-            && isKeyed.IsKeyedService(serviceType, serviceKey);
+        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+
+        return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
 
     #endregion
@@ -257,29 +240,28 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
 
     #region IIocContainer
 
-    // For simple containers without module imports, _serviceResolvers can be built
-    // from a static array in the constructor. For containers with module imports,
-    // services from imported modules are combined at runtime.
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::AppContainer, object>>> Services => _serviceResolvers;
 
-    private readonly FrozenDictionary<(Type, object), Func<object>> _serviceResolvers;
-
-    // Static array of local service registrations (built into FrozenDictionary in constructor)
-    private KeyValuePair<(Type, object), Func<object>>[] GetLocalServices() =>
+    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
     [
-        // Key is KeyedService.AnyKey for non-keyed services
-        new((typeof(MyDependency), KeyedService.AnyKey), GetMyDependency),
-        new((typeof(IMyDependency), KeyedService.AnyKey), GetMyDependency),
-        new((typeof(MyService), KeyedService.AnyKey), GetMyService),
-        new((typeof(IMyService), KeyedService.AnyKey), GetMyService),
+        new((typeof(global::MyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
+        new((typeof(global::IMyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
+        new((typeof(global::MyService), KeyedService.AnyKey), static c => c.GetMyService()),
+        new((typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
     ];
 
     #endregion
 
     #region IServiceProviderFactory<IServiceCollection>
 
+    /// <summary>
+    /// Creates a new container builder (returns the same IServiceCollection).
+    /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    /// <summary>
+    /// Creates the service provider from the built IServiceCollection.
+    /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = containerBuilder.BuildServiceProvider();
@@ -292,29 +274,39 @@ partial class AppContainer : IIocContainer, IServiceProvider, IKeyedServiceProvi
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        if (!_isRootScope) return; // Only root scope disposes singletons
+        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        // Dispose singleton services in reverse registration order
-        (_myService as IDisposable)?.Dispose();
-        (_myDependency as IDisposable)?.Dispose();
+        if(!_isRootScope)
+        {
+            return;
+        }
+
+        DisposeService(_myService);
+        DisposeService(_myDependency);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        if (!_isRootScope) return;
+        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        // Async dispose singleton services in reverse registration order
-        if (_myService is IAsyncDisposable asyncMyService)
-            await asyncMyService.DisposeAsync();
-        else if (_myService is IDisposable myService)
-            myService.Dispose();
+        if(!_isRootScope)
+        {
+            return;
+        }
 
-        if (_myDependency is IAsyncDisposable asyncMyDep)
-            await asyncMyDep.DisposeAsync();
-        else if (_myDependency is IDisposable myDep)
-            myDep.Dispose();
+        await DisposeServiceAsync(_myService);
+        await DisposeServiceAsync(_myDependency);
+    }
+
+    private static async ValueTask DisposeServiceAsync(object? service)
+    {
+        if(service is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
+        else if(service is IDisposable disposable) disposable.Dispose();
+    }
+
+    private static void DisposeService(object? service)
+    {
+        if(service is IDisposable disposable) disposable.Dispose();
     }
 
     #endregion
@@ -350,33 +342,6 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    // Singleton - stored in root, shared across scopes
-    private SingletonService? _singletonService;
-
-    // Scoped - stored in each scope instance
-    private ScopedService? _scopedService;
-
-    // Transient - no storage, created every time
-
-    private SingletonService GetSingletonService()
-    {
-        if (_singletonService is not null) return _singletonService;
-        var instance = new SingletonService();
-        return Interlocked.CompareExchange(ref _singletonService, instance, null) ?? instance;
-    }
-
-    private ScopedService GetScopedService()
-    {
-        if (_scopedService is not null) return _scopedService;
-        var instance = new ScopedService();
-        return Interlocked.CompareExchange(ref _scopedService, instance, null) ?? instance;
-    }
-
-    private TransientService GetTransientService()
-    {
-        return new TransientService();
-    }
-
     private AppContainer(AppContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
@@ -384,7 +349,40 @@ partial class AppContainer
         // Copy only singleton references from parent
         _singletonService = parent._singletonService;
         // _scopedService is NOT copied - each scope has its own
+        _serviceResolvers = parent._serviceResolvers;
     }
+
+    #region Service Resolution
+
+    // Singleton - stored in root, shared across scopes
+    private global::SingletonService? _singletonService;
+    private global::SingletonService GetSingletonService()
+    {
+        if(_singletonService is not null) return _singletonService;
+
+        var instance = new global::SingletonService();
+
+        return Interlocked.CompareExchange(ref _singletonService, instance, null) ?? instance;
+    }
+
+    // Scoped - stored in each scope instance
+    private global::ScopedService? _scopedService;
+    private global::ScopedService GetScopedService()
+    {
+        if(_scopedService is not null) return _scopedService;
+
+        var instance = new global::ScopedService();
+
+        return Interlocked.CompareExchange(ref _scopedService, instance, null) ?? instance;
+    }
+
+    // Transient - no storage, created every time
+    private global::TransientService GetTransientService()
+    {
+        return new global::TransientService();
+    }
+
+    #endregion
 }
 #endregion
 ```
@@ -417,6 +415,8 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
+    // Note: In actual generated code, fields are placed above their resolver methods.
+    // This example focuses on the GetKeyedService implementation.
     private MemoryCache? _memoryCache;
     private RedisCache? _redisCache;
     private DistributedCache? _distributedCache;
@@ -494,23 +494,27 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private MyService GetMyService()
+    // Field and lock for complex initialization (property/method injection)
+    private global::MyService? _myService;
+    private readonly Lock _myServiceLock = new();
+    private global::MyService GetMyService()
     {
-        if (_myService is not null) return _myService;
+        if(_myService is not null) return _myService;
 
-        var p0 = GetDependency();
-        var p1 = GetKeyedService(typeof(ISpecial), "special") as ISpecial
-            ?? throw new InvalidOperationException("...");
-
-        var instance = new MyService(p0, p1)
+        lock(_myServiceLock)
         {
-            Logger = GetLogger(),
-            Config = GetKeyedService(typeof(IConfiguration), "config") as IConfiguration
-        };
+            if(_myService is not null) return _myService;
 
-        instance.Initialize(GetInitializer(), null);
+            var instance = new global::MyService((global::IDependency)GetRequiredService(typeof(global::IDependency)), (global::ISpecial)GetRequiredKeyedService(typeof(global::ISpecial), "special"))
+            {
+                Logger = (global::ILogger)GetRequiredService(typeof(global::ILogger)),
+                Config = GetKeyedService(typeof(global::IConfiguration), "config") as global::IConfiguration,
+            };
+            instance.Initialize((global::IInitializer)GetRequiredService(typeof(global::IInitializer)), null);
 
-        return Interlocked.CompareExchange(ref _myService, instance, null) ?? instance;
+            _myService = instance;
+            return instance;
+        }
     }
 }
 #endregion
@@ -518,9 +522,9 @@ partial class AppContainer
 
 ### 5. Decorator Pattern Support
 
-Decorators are resolved in the correct order.
+Decorators are resolved in the correct order. When decorators are present, the field type is the service type (interface) rather than the implementation type.
 
-> **Note**: The `GetService` snippet below shows `UseSwitchStatement = true` style. The decorator resolution logic (`GetDecoratedHandler`) remains the same regardless of the resolution strategy.
+> **Note**: The `GetService` snippet below shows `UseSwitchStatement = true` style. The decorator resolution logic (`GetHandler`) remains the same regardless of the resolution strategy.
 
 ```csharp
 #region Define:
@@ -539,35 +543,42 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    // Inner handler (not exposed as IHandler)
-    private Handler? _handler;
-
-    // Decorated handler (exposed as IHandler)
-    private IHandler? _decoratedHandler;
-
-    private Handler GetHandler() => /* basic resolution */;
-
-    private IHandler GetDecoratedHandler()
-    {
-        if (_decoratedHandler is not null) return _decoratedHandler;
-
-        var inner = GetHandler();
-
-        // Apply decorators from innermost to outermost
-        // Order in attribute: [LoggingDecorator, CachingDecorator]
-        // Wrapping order: LoggingDecorator(CachingDecorator(Handler))
-        var d1 = new CachingDecorator(inner, GetCache());
-        var d2 = new LoggingDecorator(d1, GetLogger());
-
-        return Interlocked.CompareExchange(ref _decoratedHandler, d2, null) ?? d2;
-    }
-
     public object? GetService(Type serviceType)
     {
-        if (serviceType == typeof(Handler)) return GetHandler();
-        if (serviceType == typeof(IHandler)) return GetDecoratedHandler();
+        if(serviceType == typeof(Handler)) return GetHandler();
+        if(serviceType == typeof(IHandler)) return GetHandler();
         // ...
     }
+
+    #region Service Resolution
+
+    // Field and lock are placed directly above the resolver method for better readability
+    // Field type is IHandler (service type) when decorators are present
+    private global::IHandler? _handler;
+    private readonly Lock _handlerLock = new();
+    private global::IHandler GetHandler()
+    {
+        if(_handler is not null) return _handler;
+
+        lock(_handlerLock)
+        {
+            if(_handler is not null) return _handler;
+
+            // Create the inner implementation
+            global::IHandler instance = new global::Handler();
+
+            // Apply decorators in order
+            // Order in attribute: [LoggingDecorator, CachingDecorator]
+            // Wrapping order: CachingDecorator(LoggingDecorator(Handler))
+            instance = new global::LoggingDecorator(instance, (global::ILogger)GetRequiredService(typeof(global::ILogger)));
+            instance = new global::CachingDecorator(instance, (global::ICache)GetRequiredService(typeof(global::ICache)));
+
+            _handler = instance;
+            return instance;
+        }
+    }
+
+    #endregion
 }
 #endregion
 ```
@@ -576,7 +587,7 @@ partial class AppContainer
 
 Import registrations from other containers marked with `IocImportModuleAttribute`. By default, the container uses `FrozenDictionary` to combine services from all sources.
 
-#### Default: FrozenDictionary
+#### FrozenDictionary
 
 The `IIocContainer.Services` property from imported modules is used to build the combined dictionary at runtime:
 
@@ -597,40 +608,52 @@ public partial class AppContainer;
 #endregion
 
 #region Generate:
-partial class AppContainer : IIocContainer, IServiceProvider, /* ... */
+partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvider, /* ... */
 {
-    private readonly SharedModule1 _sharedModule1;
-    private readonly SharedModule2 _sharedModule2;
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<object>> _serviceResolvers;
+    private readonly global::SharedModule1 _sharedModule1;
+    private readonly global::SharedModule2 _sharedModule2;
+    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::AppContainer, object>> _serviceResolvers;
 
-    public AppContainer() : this(null) { }
+    public AppContainer() : this((IServiceProvider?)null) { }
 
     public AppContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        _sharedModule1 = new SharedModule1(fallbackProvider);
-        _sharedModule2 = new SharedModule2(fallbackProvider);
+        _sharedModule1 = new global::SharedModule1(fallbackProvider);
+        _sharedModule2 = new global::SharedModule2(fallbackProvider);
 
         // Build FrozenDictionary from local services and imported modules
+        // Module resolvers are wrapped to pass the correct module instance
         // Local services take precedence (added last, will override imported)
-        _serviceResolvers = _sharedModule1.Services
-            .Concat(_sharedModule2.Services)
+        _serviceResolvers = _sharedModule1.Services.Select(static kvp => 
+                new KeyValuePair<(Type, object), Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
+            .Concat(_sharedModule2.Services.Select(static kvp => 
+                new KeyValuePair<(Type, object), Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
             .Concat(_localServices)
-            .ToFrozenDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            .ToFrozenDictionary();
     }
 
-    // Local services array
-    private static readonly KeyValuePair<(Type, object), Func<object>>[] _localServices =
+    private AppContainer(AppContainer parent)
+    {
+        _fallbackProvider = parent._fallbackProvider;
+        _isRootScope = false;
+        // Create scopes for imported modules (so their scoped services are properly isolated)
+        _sharedModule1 = (global::SharedModule1)parent._sharedModule1.CreateScope().ServiceProvider;
+        _sharedModule2 = (global::SharedModule2)parent._sharedModule2.CreateScope().ServiceProvider;
+        _serviceResolvers = parent._serviceResolvers;
+    }
+
+    // Local services array with container-typed resolvers
+    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
     [
-        new((typeof(ILocalService1), KeyedService.AnyKey), () => GetLocalService1()),
-        new((typeof(ILocalService2), KeyedService.AnyKey), () => GetLocalService2()),
+        new((typeof(global::ILocalService1), KeyedService.AnyKey), static c => c.GetLocalService1()),
+        new((typeof(global::ILocalService2), KeyedService.AnyKey), static c => c.GetLocalService2()),
         // ... more local services
     ];
 
     #region IIocContainer
 
-    // Expose combined services from all sources
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::AppContainer, object>>> Services => _serviceResolvers;
 
     #endregion
 
@@ -638,8 +661,12 @@ partial class AppContainer : IIocContainer, IServiceProvider, /* ... */
 
     public object? GetService(Type serviceType)
     {
-        if (_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
-            return resolver();
+        if(serviceType == typeof(IServiceProvider)) return this;
+        if(serviceType == typeof(IServiceScopeFactory)) return this;
+        if(serviceType == typeof(AppContainer)) return this;
+
+        if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
+            return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
     }
@@ -651,12 +678,11 @@ partial class AppContainer : IIocContainer, IServiceProvider, /* ... */
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
         var key = serviceKey ?? KeyedService.AnyKey;
-        if (_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
-            return resolver();
 
-        return _fallbackProvider is IKeyedServiceProvider keyed
-            ? keyed.GetKeyedService(serviceType, serviceKey)
-            : null;
+        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+            return resolver(this);
+
+        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     #endregion
@@ -731,22 +757,29 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private IConnection? _connection;
-    private IConnection? _defaultConnection;
+    #region Service Resolution
 
-    private IConnection GetConnection()
+    private global::IConnection? _connection;
+    private global::IConnection GetConnection()
     {
-        if (_connection is not null) return _connection;
-        var instance = ConnectionFactory.Create(this);
+        if(_connection is not null) return _connection;
+
+        var instance = (global::IConnection)global::ConnectionFactory.Create(this);
+
         return Interlocked.CompareExchange(ref _connection, instance, null) ?? instance;
     }
 
-    private IConnection GetDefaultConnection()
+    private global::IConnection? _defaultConnection;
+    private global::IConnection GetDefaultConnection()
     {
-        if (_defaultConnection is not null) return _defaultConnection;
-        var instance = ConnectionFactory.Default;
+        if(_defaultConnection is not null) return _defaultConnection;
+
+        var instance = global::ConnectionFactory.Default;
+
         return Interlocked.CompareExchange(ref _defaultConnection, instance, null) ?? instance;
     }
+
+    #endregion
 }
 #endregion
 ```
@@ -774,30 +807,37 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private Repository<User>? _repositoryUser;
-    private Repository<Order>? _repositoryOrder;
+    #region Service Resolution
 
-    private Repository<User> GetRepositoryUser()
+    private global::Repository<global::User>? _repositoryUser;
+    private global::Repository<global::User> GetRepositoryUser()
     {
-        if (_repositoryUser is not null) return _repositoryUser;
-        var instance = new Repository<User>();
+        if(_repositoryUser is not null) return _repositoryUser;
+
+        var instance = new global::Repository<global::User>();
+
         return Interlocked.CompareExchange(ref _repositoryUser, instance, null) ?? instance;
     }
 
-    private Repository<Order> GetRepositoryOrder()
+    private global::Repository<global::Order>? _repositoryOrder;
+    private global::Repository<global::Order> GetRepositoryOrder()
     {
-        if (_repositoryOrder is not null) return _repositoryOrder;
-        var instance = new Repository<Order>();
+        if(_repositoryOrder is not null) return _repositoryOrder;
+
+        var instance = new global::Repository<global::Order>();
+
         return Interlocked.CompareExchange(ref _repositoryOrder, instance, null) ?? instance;
     }
+
+    #endregion
 
     public object? GetService(Type serviceType)
     {
         // Closed generic resolution
-        if (serviceType == typeof(IRepository<User>)) return GetRepositoryUser();
-        if (serviceType == typeof(IRepository<Order>)) return GetRepositoryOrder();
-        if (serviceType == typeof(Repository<User>)) return GetRepositoryUser();
-        if (serviceType == typeof(Repository<Order>)) return GetRepositoryOrder();
+        if(serviceType == typeof(global::IRepository<global::User>)) return GetRepositoryUser();
+        if(serviceType == typeof(global::IRepository<global::Order>)) return GetRepositoryOrder();
+        if(serviceType == typeof(global::Repository<global::User>)) return GetRepositoryUser();
+        if(serviceType == typeof(global::Repository<global::Order>)) return GetRepositoryOrder();
         // ...
     }
 }
@@ -806,9 +846,9 @@ partial class AppContainer
 
 ### 9. Collection Resolution
 
-Support for `IEnumerable<T>` and other collection types.
+Support for `IEnumerable<T>` resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localServices`.
 
-> **Note**: The `GetService` snippet below shows `UseSwitchStatement = true` style for clarity.
+> **Note**: Collection resolution only generates for service types with multiple distinct implementations (excluding self-registrations).
 
 ```csharp
 #region Define:
@@ -827,28 +867,45 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private IPlugin[]? _allPlugins;
+    #region Service Resolution
 
-    private IEnumerable<IPlugin> GetAllPlugins()
+    private global::Plugin1? _plugin1;
+    private global::Plugin1 GetPlugin1()
     {
-        if (_allPlugins is not null) return _allPlugins;
+        if(_plugin1 is not null) return _plugin1;
 
-        var plugins = new IPlugin[]
-        {
-            GetPlugin1(),
-            GetPlugin2()
-        };
+        var instance = new global::Plugin1();
 
-        return Interlocked.CompareExchange(ref _allPlugins, plugins, null) ?? plugins;
+        return Interlocked.CompareExchange(ref _plugin1, instance, null) ?? instance;
     }
 
-    public object? GetService(Type serviceType)
+    private global::Plugin2? _plugin2;
+    private global::Plugin2 GetPlugin2()
     {
-        if (serviceType == typeof(IEnumerable<IPlugin>)) return GetAllPlugins();
-        if (serviceType == typeof(IPlugin[])) return GetAllPlugins().ToArray();
-        if (serviceType == typeof(IReadOnlyList<IPlugin>)) return GetAllPlugins().ToArray();
-        // ...
+        if(_plugin2 is not null) return _plugin2;
+
+        var instance = new global::Plugin2();
+
+        return Interlocked.CompareExchange(ref _plugin2, instance, null) ?? instance;
     }
+
+    // Collection resolver for IEnumerable<IPlugin>
+    private global::System.Collections.Generic.IEnumerable<global::IPlugin> GetAllIPlugin() =>
+    [
+        GetPlugin1(),
+        GetPlugin2(),
+    ];
+
+    #endregion
+
+    // Registered in _localServices
+    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
+    [
+        new((typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
+        new((typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
+        new((typeof(global::Plugin2), KeyedService.AnyKey), static c => c.GetPlugin2()),
+        new((typeof(global::System.Collections.Generic.IEnumerable<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPlugin()),
+    ];
 }
 #endregion
 ```
@@ -871,17 +928,25 @@ public partial class StandaloneContainer;
 partial class StandaloneContainer
 {
     // No fallback provider field
-    // No constructor with IServiceProvider parameter
 
-    public StandaloneContainer() { }
+    #region Constructors
+
+    public StandaloneContainer()
+    {
+        _serviceResolvers = _localServices.ToFrozenDictionary();
+    }
+
+    #endregion
 
     public object? GetService(Type serviceType)
     {
-        // Local resolution only
-        if (serviceType == typeof(IMyService)) return GetMyService();
-        // ...
+        if(serviceType == typeof(IServiceProvider)) return this;
+        if(serviceType == typeof(IServiceScopeFactory)) return this;
+        if(serviceType == typeof(StandaloneContainer)) return this;
 
-        // No fallback - return null for unknown services
+        if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
+            return resolver(this);
+
         return null;
     }
 }
@@ -909,7 +974,7 @@ public partial class ExplicitContainer;
 
 ### IServiceProviderFactory Implementation
 
-When `ResolveIServiceCollection = true`, the container implements `IServiceProviderFactory<IServiceCollection>` to integrate with ASP.NET Core and other hosts:
+When `ResolveIServiceCollection = true` **AND** the `Microsoft.Extensions.DependencyInjection` package is referenced, the container implements `IServiceProviderFactory<IServiceCollection>` to integrate with ASP.NET Core and other hosts:
 
 ```csharp
 #region Define:
@@ -961,29 +1026,28 @@ var host = Host.CreateDefaultBuilder(args)
 
 ## Thread Safety
 
-All service resolution is thread-safe using `Interlocked.CompareExchange`:
+All service resolution is thread-safe using `Interlocked.CompareExchange`. Service fields are placed directly above their resolver methods for better readability:
 
 ```csharp
-private MyService GetMyService()
+private global::MyService? _myService;
+private global::MyService GetMyService()
 {
-    if (_myService is not null) return _myService;
+    if(_myService is not null) return _myService;
 
-    // Create instance (may happen multiple times under race condition)
-    var instance = new MyService(/* ... */);
+    var instance = new global::MyService(/* ... */);
 
-    // Only one thread wins, others get the winner's instance
     return Interlocked.CompareExchange(ref _myService, instance, null) ?? instance;
 }
 ```
 
-For complex initialization (property/method injection), use double-check locking:
+For complex initialization (property/method injection or decorators), use double-check locking:
 
 ```csharp
-// After .NET 9 / C# 13, use System.Threading.Lock for better performance
-// Before that, use standard object lock
-private readonly System.Threading.Lock _myServiceLock = new();
-
-private MyService GetMyServiceWithInjection()
+// Field and lock placed directly above the resolver method
+// Uses System.Threading.Lock (.NET 9+) for better performance
+private global::MyService? _myService;
+private readonly Lock _myServiceLock = new();
+private global::MyService GetMyService()
 {
     if(_myService is not null) return _myService;
 
@@ -991,9 +1055,9 @@ private MyService GetMyServiceWithInjection()
     {
         if(_myService is not null) return _myService;
 
-        var instance = new MyService(/* ... */)
+        var instance = new global::MyService(/* ... */)
         {
-            Property = GetDependency()
+            Property = (global::IDependency)GetRequiredService(typeof(global::IDependency)),
         };
         instance.Initialize(/* ... */);
 
@@ -1026,29 +1090,49 @@ Services are disposed in reverse registration order:
 3. Imported module containers
 
 ```csharp
+public void Dispose()
+{
+    if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+    if(!_isRootScope)
+    {
+        DisposeService(_scopedService2);
+        DisposeService(_scopedService1);
+        _sharedModule.Dispose();
+        return;
+    }
+
+    DisposeService(_singletonService2);
+    DisposeService(_singletonService1);
+    _sharedModule.Dispose();
+}
+
 public async ValueTask DisposeAsync()
 {
-    if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+    if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-    // Dispose scoped services first (if this is a scope)
-    // ...
+    if(!_isRootScope)
+    {
+        await DisposeServiceAsync(_scopedService2);
+        await DisposeServiceAsync(_scopedService1);
+        await _sharedModule.DisposeAsync();
+        return;
+    }
 
-    if (!_isRootScope) return;
-
-    // Dispose singletons in reverse order
-    await DisposeServiceAsync(_lastRegistered);
-    await DisposeServiceAsync(_firstRegistered);
-
-    // Dispose imported modules
+    await DisposeServiceAsync(_singletonService2);
+    await DisposeServiceAsync(_singletonService1);
     await _sharedModule.DisposeAsync();
 }
 
 private static async ValueTask DisposeServiceAsync(object? service)
 {
-    if (service is IAsyncDisposable asyncDisposable)
-        await asyncDisposable.DisposeAsync();
-    else if (service is IDisposable disposable)
-        disposable.Dispose();
+    if(service is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
+    else if(service is IDisposable disposable) disposable.Dispose();
+}
+
+private static void DisposeService(object? service)
+{
+    if(service is IDisposable disposable) disposable.Dispose();
 }
 ```
 
@@ -1063,90 +1147,22 @@ All service lookups use a composite key `(Type ServiceType, object Key)`:
 
 This unified key structure allows both keyed and non-keyed services to be stored in the same dictionary.
 
-### Default: FrozenDictionary
+### Resolution Strategy Comparison
 
-By default, the container uses `FrozenDictionary<(Type ServiceType, object Key), Func<object>>` for service resolution:
+|Strategy|Default|When to Use|
+|:---|:---|:---|
+|`FrozenDictionary`|✓|Most cases, O(1) lookup|
+|`UseSwitchStatement`||Small service counts (≤ 50), may have better JIT optimization|
 
-```csharp
-// Service resolvers dictionary with (ServiceType, Key) as composite key
-// Non-keyed services use KeyedService.AnyKey as the key
-private readonly FrozenDictionary<(Type ServiceType, object Key), Func<object>> _serviceResolvers;
-
-public AppContainer(IServiceProvider? fallbackProvider)
-{
-    _fallbackProvider = fallbackProvider;
-    
-    // Build from local services array
-    _serviceResolvers = _localServices.ToFrozenDictionary(
-        kvp => kvp.Key,
-        kvp => kvp.Value);
-}
-
-private static readonly KeyValuePair<(Type, object), Func<object>>[] _localServices =
-[
-    // Non-keyed services use KeyedService.AnyKey
-    new((typeof(IService1), KeyedService.AnyKey), GetService1),
-    new((typeof(IService2), KeyedService.AnyKey), GetService2),
-    // Keyed services use actual key
-    new((typeof(ICache), "memory"), GetMemoryCache),
-    new((typeof(ICache), "redis"), GetRedisCache),
-    // ... more services
-];
-
-public object? GetService(Type serviceType)
-{
-    if (_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
-        return resolver();
-
-    return _fallbackProvider?.GetService(serviceType);
-}
-
-public object? GetKeyedService(Type serviceType, object? serviceKey)
-{
-    var key = serviceKey ?? KeyedService.AnyKey;
-    if (_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
-        return resolver();
-
-    return _fallbackProvider is IKeyedServiceProvider keyed
-        ? keyed.GetKeyedService(serviceType, serviceKey)
-        : null;
-}
-```
-
-### UseSwitchStatement = true
-
-When `UseSwitchStatement` is set to `true`, the container uses cascading `if` statements or `switch` expressions instead. This is only beneficial for small service counts (≤ 50):
-
-```csharp
-public object? GetService(Type serviceType)
-{
-    if (serviceType == typeof(IService1)) return GetService1();
-    if (serviceType == typeof(IService2)) return GetService2();
-    // ...
-    return _fallbackProvider?.GetService(serviceType);
-}
-
-public object? GetKeyedService(Type serviceType, object? serviceKey)
-{
-    var key = serviceKey ?? KeyedService.AnyKey;
-    
-    if (serviceType == typeof(ICache))
-    {
-        return key switch
-        {
-            "memory" => GetMemoryCache(),
-            "redis" => GetRedisCache(),
-            _ => null
-        };
-    }
-    
-    return _fallbackProvider is IKeyedServiceProvider keyed
-        ? keyed.GetKeyedService(serviceType, serviceKey)
-        : null;
-}
-```
+See [Basic Container Generation](#1-basic-container-generation) for FrozenDictionary examples and [Keyed Service Support](#3-keyed-service-support) for switch statement examples.
 
 ## Implementation Requirements
+
+### Output File Naming
+
+The generated container source file is named: `{ClassName}.Container.g.cs`
+
+For example, a container class `AppContainer` will generate `AppContainer.Container.g.cs`.
 
 ### Source Generator Architecture
 
@@ -1160,14 +1176,16 @@ IocSourceGenerator.cs
 │   │   ├── RegisterForAttribute providers
 │   │   ├── DefaultSettings providers
 │   │   └── ImportModule providers
-│   └── Container pipeline (NEW)
+│   └── Container pipeline
 │       ├── ContainerAttribute provider
 │       ├── Combine with serviceRegistrations
+│       ├── GroupRegistrationsForContainer
 │       └── RegisterSourceOutput for Container
-├── TransformRegister.cs (existing)
-├── TransformContainer.cs (NEW)
-├── GenerateRegisterOutput.cs (existing)
-└── GenerateContainerOutput.cs (NEW)
+├── TransformRegister.cs
+├── TransformContainer.cs
+├── GroupRegistrationsForContainer.cs
+├── GenerateRegisterOutput.cs
+└── GenerateContainerOutput.cs
 ```
 
 ### Pipeline Design
@@ -1184,134 +1202,101 @@ var containerProvider = context.SyntaxProvider
     .Where(static m => m is not null)
     .Select(static (m, _) => m!);
 
-// Combine container with existing serviceRegistrations
-var containerWithRegistrations = containerProvider
+// Combine container with existing serviceRegistrations and group them
+var containerWithGroups = containerProvider
     .Combine(serviceRegistrations)
-    .Combine(assemblyNameProvider)
+    .Select(static (source, _) => GroupRegistrationsForContainer(source.Left, source.Right));
+
+// Combine with compilation info and MSBuild properties
+var containerWithCompilationInfo = containerWithGroups
+    .Combine(compilationInfoProvider)
     .Combine(msbuildPropertiesProvider);
 
 // Generate Container output (separate from Registration output)
-context.RegisterSourceOutput(containerWithRegistrations, static (ctx, source) =>
+context.RegisterSourceOutput(containerWithCompilationInfo, static (ctx, source) =>
 {
-    var (((container, registrations), assemblyName), msbuildProps) = source;
-    GenerateContainerOutput(ctx, container, registrations, assemblyName, msbuildProps);
+    var ((containerWithGroups, compilationInfo), msbuildProps) = source;
+    GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
 });
 ```
 
-### Required Models
+### Target Framework Requirements
 
-#### ContainerModel
-
-```csharp
-/// <summary>
-/// Represents a container class marked with [IocContainer].
-/// </summary>
-/// <param name="ContainerTypeName">Fully qualified type name of the container class.</param>
-/// <param name="ContainerNamespace">Namespace of the container class.</param>
-/// <param name="ClassName">Simple class name without namespace.</param>
-/// <param name="ResolveIServiceCollection">Whether to support external IServiceProvider fallback.</param>
-/// <param name="ExplicitOnly">Whether to only include explicitly marked registrations.</param>
-/// <param name="UseSwitchStatement">Whether to use switch statement instead of FrozenDictionary.</param>
-/// <param name="ImportedModules">Types of imported module containers.</param>
-/// <param name="ExplicitRegistrations">Registrations explicitly marked on the container class (for ExplicitOnly mode).</param>
-internal sealed record class ContainerModel(
-    string ContainerTypeName,
-    string ContainerNamespace,
-    string ClassName,
-    bool ResolveIServiceCollection,
-    bool ExplicitOnly,
-    bool UseSwitchStatement,
-    ImmutableEquatableArray<TypeData> ImportedModules,
-    ImmutableEquatableArray<RegistrationData> ExplicitRegistrations);
-```
-
-### Required Constants
-
-```csharp
-// In Constants.cs
-public const string IocContainerAttributeFullName = "SourceGen.Ioc.IocContainerAttribute";
-```
-
-### Target Framework Conditional Compilation
-
-The generated code must adapt to the consuming project's target framework:
-
-#### FrozenDictionary Availability
-
-|Target Framework|FrozenDictionary|Fallback|
-|:---|:---|:---|
-|.NET 8+|✅ Built-in|N/A|
-|.NET Standard 2.0 with `System.Collections.Immutable` 8.0+|✅ Package|N/A|
-|.NET Standard 2.0 without package|❌|`Dictionary<TKey, TValue>`|
-
-#### Generated Code Strategy
-
-Always generate `FrozenDictionary` and ensure `SourceGen.Ioc.csproj` includes a conditional package reference:
-
-```xml
-<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-  <PackageReference Include="System.Collections.Immutable" Version="10.0.0" />
-</ItemGroup>
-```
+The generated code requires .NET 8.0 or later.
 
 ### File Organization
 
 ```filetree
 src/SourceGen.Ioc.SourceGenerator/
 ├── Generator/
-│   ├── IocSourceGenerator.cs          # Main generator with both pipelines
-│   ├── TransformRegister.cs           # (existing)
-│   ├── TransformContainer.cs          # NEW: Transform [IocContainer]
-│   ├── GenerateRegisterOutput.cs      # (existing)
-│   ├── GenerateContainerOutput.cs     # NEW: Generate container code
+│   ├── IocSourceGenerator.cs              # Main generator with both pipelines
+│   ├── TransformRegister.cs               # Transform [IocRegister*] attributes
+│   ├── TransformContainer.cs              # Transform [IocContainer]
+│   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation
+│   ├── GenerateRegisterOutput.cs          # Generate registration code
+│   ├── GenerateContainerOutput.cs         # Generate container code
 │   └── Spec/
-│       ├── Registration.md            # (existing)
-│       └── Container.md               # This specification
+│       ├── Registration.md                # Registration specification
+│       └── Container.md                   # This specification
 ├── Models/
-│   ├── ContainerModel.cs              # NEW: Container data model
-│   ├── ServiceRegistrationModel.cs    # (existing, reused)
-│   ├── TypeData.cs                    # (existing, reused)
+│   ├── ContainerModel.cs                  # Container data model
+│   ├── ContainerWithGroups.cs             # Container with pre-computed groups
+│   ├── ServiceRegistrationModel.cs        # Service registration model
+│   ├── TypeData.cs                        # Type information model
 │   └── ...
 └── Analyzer/
-    └── SPEC.md                        # Analyzer specifications
+    └── SPEC.md                            # Analyzer specifications
 ```
 
 ### Data Flow
 
-```chart
-┌─────────────────────────────────────────────────────────────────────┐
-│                    IocSourceGenerator.Initialize()                  │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌─────────────────────┐  ┌──────────────────────────────────────┐  │
-│  │[IocRegister]        │─▶│                                      │  │
-│  └─────────────────────┘  │                                      │  │
-│  ┌─────────────────────┐  │      serviceRegistrations            │  │
-│  │[IocRegisterFor]     │─▶│   ImmutableEquatableArray<           │  │
-│  └─────────────────────┘  │     ServiceRegistrationWithTags>     │  │
-│  ┌─────────────────────┐  │                                      │  │
-│  │[IocRegisterDefaults]│─▶│                                      │  │
-│  └─────────────────────┘  └──────────────┬───────────────────────┘  │
-│                                          │                          │
-│  ┌──────────────────┐                    │                          │
-│  │  [IocContainer]  │────────────┐       │                          │
-│  └──────────────────┘            │       │                          │
-│           │                      │       │                          │
-│           ▼                      ▼       ▼                          │
-│  ┌──────────────────┐     ┌───────────────────────────┐             │
-│  │  ContainerModel  │────▶│          Combine          │             │
-│  └──────────────────┘     └───────────────────────────┘             │
-│                                           │                         │
-│                           ┌───────────────┴───────────────┐         │
-│                           │                               │         │
-│                           ▼                               ▼         │
-│              ┌───────────────────────┐     ┌───────────────────────┐│
-│              │GenerateRegisterOutput │     │GenerateContainerOutput││
-│              │ (.ServiceRegistration │     │ (.Container.g.cs)     ││
-│              │  .g.cs)               │     │                       ││
-│              └───────────────────────┘     └───────────────────────┘│
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph IocSourceGenerator.Initialize
+        subgraph Attribute Providers
+            IocRegister["[IocRegister]"]
+            IocRegisterFor["[IocRegisterFor]"]
+            IocRegisterDefaults["[IocRegisterDefaults]"]
+            IocDiscover["[IocDiscover]"]
+            IocContainer["[IocContainer]"]
+        end
+
+        subgraph Registration Pipeline
+            allBasicResults["allBasicResults<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
+            combinedClosedGenericDependencies["combinedClosedGenericDependencies<br/>(Invocations + Discover)"]
+            CombineResolve["CombineAndResolveClosedGenerics"]
+            serviceRegistrations["serviceRegistrations<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
+        end
+
+        subgraph Container Pipeline
+            ContainerModel["ContainerModel"]
+            CombineGroup["Combine & Group<br/>(GroupRegistrationsForContainer)"]
+            ContainerWithGroups["ContainerWithGroups"]
+        end
+
+        subgraph Output Generation
+            GenerateRegisterOutput["GenerateRegisterOutput<br/>(.ServiceRegistration.g.cs)"]
+            GenerateContainerOutput["GenerateContainerOutput<br/>(.Container.g.cs)"]
+        end
+
+        IocRegister --> allBasicResults
+        IocRegisterFor --> allBasicResults
+        IocRegisterDefaults --> allBasicResults
+
+        IocDiscover --> combinedClosedGenericDependencies
+
+        allBasicResults --> CombineResolve
+        combinedClosedGenericDependencies --> CombineResolve
+        CombineResolve --> serviceRegistrations
+
+        IocContainer --> ContainerModel
+        ContainerModel --> CombineGroup
+        serviceRegistrations --> CombineGroup
+        CombineGroup --> ContainerWithGroups
+
+        serviceRegistrations --> GenerateRegisterOutput
+        ContainerWithGroups --> GenerateContainerOutput
+    end
 ```
 
 ### Generation Logic
@@ -1323,48 +1308,6 @@ When `ExplicitOnly = true`, only include registrations that are:
 1. Directly marked on the container class via `[IocRegisterFor]`
 2. Included via `[IocRegisterDefaults]` on the container class
 3. Imported via `[IocImportModule]` on the container class
-
-```csharp
-private static ImmutableEquatableArray<ServiceRegistrationModel> FilterRegistrations(
-    ContainerModel container,
-    ImmutableEquatableArray<ServiceRegistrationWithTags> allRegistrations)
-{
-    if (!container.ExplicitOnly)
-    {
-        // Include all registrations from the assembly
-        return allRegistrations.Select(r => r.Registration).ToImmutableEquatableArray();
-    }
-
-    // Only include explicit registrations from the container class
-    return container.ExplicitRegistrations
-        .Select(ProcessRegistration)
-        .ToImmutableEquatableArray();
-}
-```
-
-#### Service Resolution Strategy Selection
-
-The generator selects the service resolution strategy based on the `UseSwitchStatement` option:
-
-```csharp
-private static void GenerateServiceResolution(
-    SourceWriter writer,
-    ContainerModel container,
-    ImmutableEquatableArray<ServiceRegistrationModel> registrations,
-    ImmutableEquatableArray<TypeData> importedModules)
-{
-    if (container.UseSwitchStatement)
-    {
-        // Use cascading if/switch statements
-        GenerateCascadingIfResolution(writer, registrations);
-    }
-    else
-    {
-        // Default: Use FrozenDictionary for optimal lookup performance
-        GenerateFrozenDictionaryResolution(writer, registrations, importedModules);
-    }
-}
-```
 
 ### Analyzer Diagnostics
 

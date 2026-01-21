@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="TUnit" />
     <PackageReference Include="Verify.TUnit" />
@@ -18,6 +19,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" />
     <ProjectReference Include="..\..\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="ContainerSourceGeneratorSnapshot\" />
   </ItemGroup>
 
 </Project>
