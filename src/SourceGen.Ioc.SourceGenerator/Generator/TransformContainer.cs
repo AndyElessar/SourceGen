@@ -31,6 +31,7 @@ partial class IocSourceGenerator
         var resolveIServiceCollection = true;
         var explicitOnly = false;
         var useSwitchStatement = false;
+        ImmutableEquatableArray<string>? includeTags = null;
 
         foreach(var namedArg in attributeData.NamedArguments)
         {
@@ -44,6 +45,16 @@ partial class IocSourceGenerator
                 case "ExplicitOnly":
                     if(namedArg.Value.Value is bool explicitValue)
                         explicitOnly = explicitValue;
+                    break;
+
+                case "IncludeTags":
+                    if(!namedArg.Value.IsNull && namedArg.Value.Values.Length > 0)
+                    {
+                        includeTags = namedArg.Value.Values
+                            .Where(static v => v.Value is string)
+                            .Select(static v => (string)v.Value!)
+                            .ToImmutableEquatableArray();
+                    }
                     break;
 
                 case "UseSwitchStatement":
@@ -74,6 +85,7 @@ partial class IocSourceGenerator
             className,
             resolveIServiceCollection,
             explicitOnly,
+            includeTags ?? [],
             useSwitchStatement,
             importedModules,
             explicitRegistrations);

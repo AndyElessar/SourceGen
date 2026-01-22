@@ -114,4 +114,74 @@ public class ContainerOptionsTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithIncludeTags_OnlyIncludesMatchingTaggedServices()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFeature1Service { }
+            public interface IFeature2Service { }
+            public interface IFeature3Service { }
+            public interface INoTagService { }
+
+            // This should be included (has matching tag "Feature1")
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFeature1Service)], Tags = ["Feature1"])]
+            public class Feature1Service : IFeature1Service { }
+
+            // This should be included (has matching tag "Feature2")
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFeature2Service)], Tags = ["Feature2", "Feature3"])]
+            public class Feature2Service : IFeature2Service { }
+
+            // This should NOT be included (no matching tag)
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFeature3Service)], Tags = ["Feature3"])]
+            public class Feature3Service : IFeature3Service { }
+
+            // This should NOT be included (no tags defined)
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INoTagService)])]
+            public class NoTagService : INoTagService { }
+
+            [IocContainer(IncludeTags = ["Feature1", "Feature2"])]
+            public partial class FeatureContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithExplicitOnlyAndIncludeTags_ExplicitOnlyTakesPrecedence()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IExplicitService { }
+            public interface ITaggedService { }
+
+            // This should NOT be included (not explicitly on container, even though it has a matching tag)
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ITaggedService)], Tags = ["Feature1"])]
+            public class TaggedService : ITaggedService { }
+
+            // This should be included (explicit on container)
+            public class ExplicitService : IExplicitService { }
+
+            [IocContainer(ExplicitOnly = true, IncludeTags = ["Feature1"])]
+            [IocRegisterFor(typeof(ExplicitService), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitService)])]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }

@@ -21,6 +21,11 @@ public sealed class IocContainerAttribute : Attribute
     public bool ExplicitOnly { get; init; }
 
     /// <summary>
+    /// Gets a set of tags to include services annotated with.
+    /// </summary>
+    public string[] IncludeTags { get; init; } = [];
+
+    /// <summary>
     /// Gets a value indicating whether a switch statement should be used in code generation.
     /// </summary>
     /// <remarks>

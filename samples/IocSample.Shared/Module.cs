@@ -1,4 +1,4 @@
 ﻿namespace IocSample.Shared;
 
-[IocContainer(UseSwitchStatement = true)]
+[IocContainer]
 public sealed partial class SharedModule;

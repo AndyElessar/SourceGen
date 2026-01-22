@@ -47,6 +47,7 @@ The generated container implements the following interfaces:
 [IocContainer(
     ResolveIServiceCollection = true,  // Allow fallback to IServiceCollection and implement IServiceProviderFactory
     ExplicitOnly = false,              // Only register explicitly marked services
+    IncludeTags = ["Tag1", "Tag2"],    // Only include services with specified tags
     UseSwitchStatement = false         // Use FrozenDictionary by default; set true to use switch statement
 )]
 public partial class MyContainer;
@@ -56,7 +57,10 @@ public partial class MyContainer;
 |:---|:---|:---|
 |`ResolveIServiceCollection`|`true`|When true, unknown dependencies fallback to external IServiceProvider and implement `IServiceProviderFactory<IServiceCollection>`|
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
+|`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50).|
+
+> **Priority**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
 
 ## Features
 
@@ -972,6 +976,41 @@ public partial class ExplicitContainer;
 #endregion
 ```
 
+### IncludeTags
+
+When `IncludeTags` is non-empty, the container only includes services that have at least one matching tag. Services without any tags or with non-matching tags are excluded.
+
+> **Note**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
+
+```csharp
+#region Define:
+// This IS registered (has matching tag "Feature1")
+[IocRegister<IService1>(ServiceLifetime.Singleton, Tags = ["Feature1"])]
+public class Service1 : IService1;
+
+// This IS registered (has matching tag "Feature2")
+[IocRegister<IService2>(ServiceLifetime.Singleton, Tags = ["Feature2", "Feature3"])]
+public class Service2 : IService2;
+
+// This is NOT registered (no matching tag)
+[IocRegister<IService3>(ServiceLifetime.Singleton, Tags = ["Feature3"])]
+public class Service3 : IService3;
+
+// This is NOT registered (no tags defined)
+[IocRegister<IService4>(ServiceLifetime.Singleton)]
+public class Service4 : IService4;
+
+[IocContainer(IncludeTags = ["Feature1", "Feature2"])]
+public partial class FeatureContainer;
+#endregion
+```
+
+**Use Cases**:
+
+1. **Feature Flags**: Include/exclude features at compile time based on build configurations
+2. **Module Separation**: Create specialized containers for different deployment scenarios
+3. **Testing**: Create test containers with only specific tagged services
+
 ### IServiceProviderFactory Implementation
 
 When `ResolveIServiceCollection = true` **AND** the `Microsoft.Extensions.DependencyInjection` package is referenced, the container implements `IServiceProviderFactory<IServiceCollection>` to integrate with ASP.NET Core and other hosts:
@@ -1308,6 +1347,23 @@ When `ExplicitOnly = true`, only include registrations that are:
 1. Directly marked on the container class via `[IocRegisterFor]`
 2. Included via `[IocRegisterDefaults]` on the container class
 3. Imported via `[IocImportModule]` on the container class
+
+#### Service Filtering for IncludeTags Mode
+
+When `IncludeTags` is non-empty (and `ExplicitOnly = false`), apply tag filtering:
+
+1. Include services where `Tags` has at least one element in common with `IncludeTags`
+2. Exclude services with empty `Tags` array
+3. Exclude services where `Tags` has no intersection with `IncludeTags`
+4. Services from imported modules via `[IocImportModule]` are NOT filtered by `IncludeTags` (they are included as-is)
+
+**Filtering Priority**:
+
+```markdown
+ExplicitOnly = true  →  Only explicit registrations (IncludeTags ignored)
+ExplicitOnly = false AND IncludeTags non-empty  →  Tag filtering applied
+ExplicitOnly = false AND IncludeTags empty  →  All registrations included
+```
 
 ### Analyzer Diagnostics
 

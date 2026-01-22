@@ -20,35 +20,47 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Filters registrations based on the container's ExplicitOnly setting.
+    /// Filters registrations based on the container's ExplicitOnly and IncludeTags settings.
+    /// Priority: ExplicitOnly > IncludeTags > All registrations.
     /// </summary>
     private static ImmutableEquatableArray<ServiceRegistrationModel> FilterRegistrationsForContainer(
         ContainerModel container,
         ImmutableEquatableArray<ServiceRegistrationWithTags> allRegistrations)
     {
-        if(!container.ExplicitOnly)
+        // ExplicitOnly takes precedence over IncludeTags
+        if(container.ExplicitOnly)
         {
-            // Include all registrations from the assembly
+            // Only include explicit registrations from the container class
+            var builder = new List<ServiceRegistrationModel>();
+
+            foreach(var explicitReg in container.ExplicitRegistrations)
+            {
+                // Convert RegistrationData to ServiceRegistrationModel
+                // For explicit registrations, we process them with default settings
+                var processed = ProcessExplicitRegistrationForContainer(explicitReg);
+                if(processed is not null)
+                {
+                    builder.Add(processed);
+                }
+            }
+
+            return builder.ToImmutableEquatableArray();
+        }
+
+        // Apply IncludeTags filtering if specified
+        if(container.IncludeTags.Length > 0)
+        {
+            // Only include services that have at least one matching tag
             return allRegistrations
+                .Where(r => r.Tags.Length > 0 && r.Tags.Any(tag => container.IncludeTags.Contains(tag, StringComparer.Ordinal)))
                 .Select(static r => r.Registration)
                 .ToImmutableEquatableArray();
         }
 
-        // Only include explicit registrations from the container class
-        var builder = new List<ServiceRegistrationModel>();
-
-        foreach(var explicitReg in container.ExplicitRegistrations)
-        {
-            // Convert RegistrationData to ServiceRegistrationModel
-            // For explicit registrations, we process them with default settings
-            var processed = ProcessExplicitRegistrationForContainer(explicitReg);
-            if(processed is not null)
-            {
-                builder.Add(processed);
-            }
-        }
-
-        return builder.ToImmutableEquatableArray();
+        // Include all registrations from the assembly
+        return allRegistrations
+            .Select(static r => r.Registration)
+            .ToImmutableEquatableArray();
     }
 
     /// <summary>
