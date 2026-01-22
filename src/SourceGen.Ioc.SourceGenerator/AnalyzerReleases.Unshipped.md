@@ -19,3 +19,5 @@ SGIOC014 | Usage | Error | Key does not exist - ServiceKeyAttribute is marked on
 SGIOC015 | Design | Error | Unresolvable Constructor Parameter - Constructor contains built-in type that cannot be resolved from dependency injection.
 SGIOC016 | Design | Error | Factory Method is unmatched - Generic factory method does not have IocGenericFactoryAttribute.
 SGIOC017 | Design | Error | Generic Factory Method's type parameters are duplicated - Placeholder types in IocGenericFactoryAttribute must be unique.
+SGIOC018 | Design | Error | Unable to resolve service - A dependency cannot be resolved when ResolveIServiceCollection is false.
+SGIOC019 | Usage | Error | Container class must be partial - The class marked with IocContainerAttribute must be declared as partial.

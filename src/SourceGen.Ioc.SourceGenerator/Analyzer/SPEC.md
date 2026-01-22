@@ -239,3 +239,36 @@ Report when:
 - Extracts the type array from the attribute's constructor arguments.
 - Starting from the second type (index 1), checks if any type appears more than once.
 - Reports when duplicate placeholder types are found, as each type must uniquely map to a factory method type parameter.
+
+---
+
+### SGIOC018 - Error - Design - Unable to resolve service
+
+Report when a container has `ResolveIServiceCollection = false` and a constructor dependency cannot be resolved from registered services.
+
+**Analysis:**
+
+- Applies only when `[IocContainer(ResolveIServiceCollection = false)]` is used.
+- Analyzes all registered services in the container scope.
+- For each service's dependencies:
+  - Constructor parameters: Checks if the dependency type is registered in the container.
+  - Properties/Fields with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.
+  - Method parameters with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.
+  - Checks if the dependency type is a built-in service type (e.g., `IServiceProvider`, `IServiceScopeFactory`).
+- Reports when a dependency cannot be resolved and there is no fallback to external `IServiceProvider`.
+
+**Message format:** `Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`
+
+---
+
+### SGIOC019 - Error - Usage - Container class must be partial
+
+Report when a class marked with `[IocContainer]` is not declared as `partial`.
+
+**Analysis:**
+
+- Checks the syntax declaration of classes marked with `[IocContainer]` attribute.
+- Verifies that the class has the `partial` modifier.
+- Reports when the `partial` modifier is missing.
+
+**Message format:** `Container class '{ClassName}' must be declared as partial.`
