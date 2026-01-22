@@ -58,9 +58,11 @@ public partial class MyContainer;
 |`ResolveIServiceCollection`|`true`|When true, unknown dependencies fallback to external IServiceProvider and implement `IServiceProviderFactory<IServiceCollection>`|
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
-|`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50).|
+|`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|
 
 > **Priority**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
+>
+> **Priority**: `IocImportModule` takes precedence over `UseSwitchStatement`. When there are imported modules, `UseSwitchStatement` is ignored and `FrozenDictionary` is always used.
 
 ## Features
 
@@ -696,11 +698,18 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
 #### UseSwitchStatement = true
 
-When `UseSwitchStatement` is set to `true`, the container uses cascading calls to imported modules instead:
+When `UseSwitchStatement` is set to `true`, the container uses cascading `if` statements instead of `FrozenDictionary` for service resolution. This may provide better JIT optimization for small service counts (≤ 50).
+
+> [!NOTE]
+> When there are imported modules (`IocImportModuleAttribute`), `UseSwitchStatement` is **ignored** and `FrozenDictionary` is always used, because combining services from multiple sources requires dictionary-based lookup.
 
 ```csharp
 #region Define:
-[IocImportModule<SharedModule>]
+public interface ILocalService { }
+
+[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILocalService)])]
+public class LocalService : ILocalService { }
+
 [IocContainer(UseSwitchStatement = true)]
 public partial class AppContainer;
 #endregion
@@ -708,27 +717,45 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private readonly SharedModule _sharedModule;
-
-    public AppContainer(IServiceProvider? fallbackProvider)
-    {
-        _fallbackProvider = fallbackProvider;
-        _sharedModule = new SharedModule(fallbackProvider);
-    }
+    // No _serviceResolvers field when UseSwitchStatement = true
 
     public object? GetService(Type serviceType)
     {
-        // Try local services first
-        if (serviceType == typeof(ILocalService)) return GetLocalService();
-        // ... more local services
+        if(serviceType == typeof(IServiceProvider)) return this;
+        if(serviceType == typeof(IServiceScopeFactory)) return this;
+        if(serviceType == typeof(AppContainer)) return this;
 
-        // Try imported modules
-        var moduleResult = _sharedModule.GetService(serviceType);
-        if (moduleResult is not null) return moduleResult;
+        // Cascading if statements instead of dictionary lookup
+        if(serviceType == typeof(global::LocalService)) return GetLocalService();
+        if(serviceType == typeof(global::ILocalService)) return GetLocalService();
 
-        // Fallback to external provider
         return _fallbackProvider?.GetService(serviceType);
     }
+
+    public bool IsService(Type serviceType)
+    {
+        if(serviceType == typeof(IServiceProvider)) return true;
+        if(serviceType == typeof(IServiceScopeFactory)) return true;
+        if(serviceType == typeof(AppContainer)) return true;
+
+        if(serviceType == typeof(global::LocalService)) return true;
+        if(serviceType == typeof(global::ILocalService)) return true;
+
+        return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
+    }
+
+    #region IIocContainer
+
+    // Services property returns _localServices when UseSwitchStatement = true
+    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::AppContainer, object>>> Services => _localServices;
+
+    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
+    [
+        new((typeof(global::LocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
+        new((typeof(global::ILocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
+    ];
+
+    #endregion
 }
 #endregion
 ```
@@ -1190,8 +1217,8 @@ This unified key structure allows both keyed and non-keyed services to be stored
 
 |Strategy|Default|When to Use|
 |:---|:---|:---|
-|`FrozenDictionary`|✓|Most cases, O(1) lookup|
-|`UseSwitchStatement`||Small service counts (≤ 50), may have better JIT optimization|
+|`FrozenDictionary`|✓|Most cases, O(1) lookup. **Always used when there are imported modules.**|
+|`UseSwitchStatement`||Small service counts (≤ 50), may have better JIT optimization. **Ignored when there are imported modules.**|
 
 See [Basic Container Generation](#1-basic-container-generation) for FrozenDictionary examples and [Keyed Service Support](#3-keyed-service-support) for switch statement examples.
 

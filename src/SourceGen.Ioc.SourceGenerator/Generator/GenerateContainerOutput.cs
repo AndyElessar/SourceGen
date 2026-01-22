@@ -34,8 +34,12 @@ partial class IocSourceGenerator
         // Only generate if ResolveIServiceCollection is true AND the DI package is referenced
         var canGenerateServiceProviderFactory = container.ResolveIServiceCollection && hasDIPackage;
 
+        // Effective UseSwitchStatement: when there are imported modules, always use FrozenDictionary
+        // because combining services from multiple sources requires dictionary-based lookup
+        var effectiveUseSwitchStatement = container.UseSwitchStatement && container.ImportedModules.Length == 0;
+
         WriteContainerHeader(writer);
-        WriteContainerNamespaceAndClass(writer, container, groups, canGenerateServiceProviderFactory);
+        WriteContainerNamespaceAndClass(writer, container, groups, canGenerateServiceProviderFactory, effectiveUseSwitchStatement);
 
         return writer.ToString();
     }
@@ -66,7 +70,8 @@ partial class IocSourceGenerator
         SourceWriter writer,
         ContainerModel container,
         ContainerRegistrationGroups groups,
-        bool canGenerateServiceProviderFactory)
+        bool canGenerateServiceProviderFactory,
+        bool effectiveUseSwitchStatement)
     {
         // Write namespace if not global
         bool hasNamespace = !string.IsNullOrEmpty(container.ContainerNamespace);
@@ -85,31 +90,31 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Write fields
-        WriteContainerFields(writer, container, groups);
+        WriteContainerFields(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write constructors
-        WriteContainerConstructors(writer, container, groups);
+        WriteContainerConstructors(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write service resolver methods
         WriteServiceResolverMethods(writer, container, groups);
 
         // Write IServiceProvider implementation
-        WriteIServiceProviderImplementation(writer, container, groups);
+        WriteIServiceProviderImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write IKeyedServiceProvider implementation
-        WriteIKeyedServiceProviderImplementation(writer, container, groups);
+        WriteIKeyedServiceProviderImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write ISupportRequiredService implementation
         WriteISupportRequiredServiceImplementation(writer, container);
 
         // Write IServiceProviderIsService implementation
-        WriteIServiceProviderIsServiceImplementation(writer, container, groups);
+        WriteIServiceProviderIsServiceImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write IServiceScopeFactory implementation
         WriteIServiceScopeFactoryImplementation(writer, container);
 
         // Write IIocContainer implementation
-        WriteIIocContainerImplementation(writer, container, groups);
+        WriteIIocContainerImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write IServiceProviderFactory implementation (if DI package is available)
         if(canGenerateServiceProviderFactory)
@@ -155,7 +160,8 @@ partial class IocSourceGenerator
     private static void WriteContainerFields(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool effectiveUseSwitchStatement)
     {
         // Fallback provider field (if ResolveIServiceCollection is enabled)
         if(container.ResolveIServiceCollection)
@@ -169,7 +175,7 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // Service resolver dictionary
-        if(!container.UseSwitchStatement)
+        if(!effectiveUseSwitchStatement)
         {
             writer.WriteLine($"private readonly FrozenDictionary<(Type ServiceType, object Key), Func<{container.ContainerTypeName}, object>> _serviceResolvers;");
             writer.WriteLine();
@@ -215,7 +221,8 @@ partial class IocSourceGenerator
     private static void WriteContainerConstructors(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool effectiveUseSwitchStatement)
     {
         writer.WriteLine("#region Constructors");
         writer.WriteLine();
@@ -234,7 +241,7 @@ partial class IocSourceGenerator
             writer.WriteLine($"public {container.ClassName}()");
             writer.WriteLine("{");
             writer.Indentation++;
-            WriteConstructorBody(writer, container, groups, hasParameter: false);
+            WriteConstructorBody(writer, container, groups, hasParameter: false, effectiveUseSwitchStatement);
             writer.Indentation--;
             writer.WriteLine("}");
         }
@@ -251,7 +258,7 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
             writer.WriteLine("_fallbackProvider = fallbackProvider;");
-            WriteConstructorBody(writer, container, groups, hasParameter: true);
+            WriteConstructorBody(writer, container, groups, hasParameter: true, effectiveUseSwitchStatement);
             writer.Indentation--;
             writer.WriteLine("}");
             writer.WriteLine();
@@ -281,7 +288,7 @@ partial class IocSourceGenerator
         }
 
         // Because resolvers are static, they can be reused from parent
-        if(!container.UseSwitchStatement)
+        if(!effectiveUseSwitchStatement)
         {
             writer.WriteLine("_serviceResolvers = parent._serviceResolvers;");
         }
@@ -301,7 +308,8 @@ partial class IocSourceGenerator
         SourceWriter writer,
         ContainerModel container,
         ContainerRegistrationGroups groups,
-        bool hasParameter)
+        bool hasParameter,
+        bool effectiveUseSwitchStatement)
     {
         // Initialize imported modules
         foreach(var module in container.ImportedModules)
@@ -318,7 +326,7 @@ partial class IocSourceGenerator
         }
 
         // Build FrozenDictionary
-        if(!container.UseSwitchStatement)
+        if(!effectiveUseSwitchStatement)
         {
             writer.WriteLine();
             if(container.ImportedModules.Length > 0)
@@ -889,7 +897,8 @@ partial class IocSourceGenerator
     private static void WriteIServiceProviderImplementation(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool effectiveUseSwitchStatement)
     {
         writer.WriteLine("#region IServiceProvider");
         writer.WriteLine();
@@ -904,7 +913,7 @@ partial class IocSourceGenerator
         writer.WriteLine($"if(serviceType == typeof({container.ClassName})) return this;");
         writer.WriteLine();
 
-        if(container.UseSwitchStatement)
+        if(effectiveUseSwitchStatement)
         {
             // Cascading if statements - registrations already filtered (no open generics)
             foreach(var kvp in groups.ByServiceTypeAndKey)
@@ -952,7 +961,8 @@ partial class IocSourceGenerator
     private static void WriteIKeyedServiceProviderImplementation(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool effectiveUseSwitchStatement)
     {
         writer.WriteLine("#region IKeyedServiceProvider");
         writer.WriteLine();
@@ -964,7 +974,7 @@ partial class IocSourceGenerator
         writer.WriteLine("var key = serviceKey ?? KeyedService.AnyKey;");
         writer.WriteLine();
 
-        if(container.UseSwitchStatement)
+        if(effectiveUseSwitchStatement)
         {
             // Use pre-computed hasKeyedServices flag
             if(groups.HasKeyedServices)
@@ -1071,7 +1081,8 @@ partial class IocSourceGenerator
     private static void WriteIServiceProviderIsServiceImplementation(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool effectiveUseSwitchStatement)
     {
         writer.WriteLine("#region IServiceProviderIsService");
         writer.WriteLine();
@@ -1086,7 +1097,7 @@ partial class IocSourceGenerator
         writer.WriteLine($"if(serviceType == typeof({container.ClassName})) return true;");
         writer.WriteLine();
 
-        if(container.UseSwitchStatement)
+        if(effectiveUseSwitchStatement)
         {
             foreach(var serviceType in groups.AllServiceTypes)
             {
@@ -1120,7 +1131,7 @@ partial class IocSourceGenerator
 
         writer.WriteLine("var key = serviceKey ?? KeyedService.AnyKey;");
 
-        if(!container.UseSwitchStatement)
+        if(!effectiveUseSwitchStatement)
         {
             writer.WriteLine();
             writer.WriteLine("if(_serviceResolvers.ContainsKey((serviceType, key))) return true;");
@@ -1170,12 +1181,13 @@ partial class IocSourceGenerator
     private static void WriteIIocContainerImplementation(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool effectiveUseSwitchStatement)
     {
         writer.WriteLine("#region IIocContainer");
         writer.WriteLine();
 
-        if(container.UseSwitchStatement)
+        if(effectiveUseSwitchStatement)
         {
             writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<{container.ContainerTypeName}, object>>> Services => _localServices;");
         }

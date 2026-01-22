@@ -170,4 +170,48 @@ public class ModuleImportContainerTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithImportedModule_UseSwitchStatementIgnored_UsesFrozenDictionary()
+    {
+        // Dependency assembly (SharedLib) - simulates a separate NuGet package or class library
+        const string sharedLibSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace SharedLib;
+
+            public interface ISharedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ISharedService)])]
+            public class SharedService : ISharedService { }
+
+            [IocContainer]
+            public partial class SharedModule { }
+            """;
+
+        // Main assembly (MainApp) - imports the SharedModule with UseSwitchStatement = true
+        // UseSwitchStatement should be ignored because there are imported modules
+        const string mainAppSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace MainApp;
+
+            public interface ILocalService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILocalService)])]
+            public class LocalService : ILocalService { }
+
+            [IocImportModule<SharedLib.SharedModule>]
+            [IocContainer(UseSwitchStatement = true)]
+            public partial class AppContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }
