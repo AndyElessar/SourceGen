@@ -8,11 +8,13 @@ partial class IocSourceGenerator
     /// </summary>
     /// <param name="basicResults">The basic registration results from pipeline 1.</param>
     /// <param name="serviceProviderInvocations">Closed generic types from GetService/GetRequiredService invocations.</param>
+    /// <param name="factoryBasedOpenGenericEntries">Open generic entries from IocRegisterDefaults with Factory (without explicit implementation types).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Service registrations with tags for deferred method grouping.</returns>
     private static ImmutableEquatableArray<ServiceRegistrationWithTags> CombineAndResolveClosedGenerics(
         in ImmutableArray<BasicRegistrationResult> basicResults,
         in ImmutableArray<ClosedGenericDependency> serviceProviderInvocations,
+        in ImmutableArray<OpenGenericEntry> factoryBasedOpenGenericEntries,
         CancellationToken ct)
     {
         var registrations = new List<ServiceRegistrationWithTags>();
@@ -59,6 +61,21 @@ partial class IocSourceGenerator
                         closedGenericDependencies[dep.ClosedTypeName] = dep;
                     }
                 }
+            }
+        }
+
+        // Index factory-based open generic entries from IocRegisterDefaults with Factory
+        if(factoryBasedOpenGenericEntries.Length > 0)
+        {
+            openGenericIndex ??= new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
+            foreach(var entry in factoryBasedOpenGenericEntries)
+            {
+                if(!openGenericIndex.TryGetValue(entry.ServiceTypeKey, out var list))
+                {
+                    list = [];
+                    openGenericIndex[entry.ServiceTypeKey] = list;
+                }
+                list.Add(entry.RegistrationInfo);
             }
         }
 
@@ -163,6 +180,12 @@ partial class IocSourceGenerator
     {
         var openImplType = openGenericInfo.ImplementationType;
 
+        // Check if this is a factory-only registration (no explicit implementation type)
+        // In this case, ImplementationType equals ServiceType (set in CreateOpenGenericEntriesFromDefaultSettings)
+        var isFactoryOnlyRegistration = openGenericInfo.Factory is not null &&
+            openImplType.NameWithoutGeneric == openGenericInfo.ServiceTypes[0].NameWithoutGeneric &&
+            openGenericInfo.AllInterfaces.Length == 0;
+
         // Find the matching open service type to build the type argument map
         // Prefer AllInterfaces over ServiceTypes because AllInterfaces contains
         // the actual interface as implemented (e.g., IRequestHandler<Task<T1>, List<T2>>)
@@ -205,6 +228,17 @@ partial class IocSourceGenerator
         if(serviceTypeArgMap.IsDefaultOrEmpty)
         {
             return false; // Cannot build substitution map - type structure incompatible
+        }
+
+        // For factory-only registrations, we only generate service type registrations
+        // since there's no explicit implementation type to register
+        if(isFactoryOnlyRegistration)
+        {
+            return TryGenerateFactoryOnlyRegistration(
+                closedServiceType,
+                openGenericInfo,
+                registrations,
+                generatedClosedGenerics);
         }
 
         // Build mapping from open implementation type params to closed type args
@@ -296,6 +330,54 @@ partial class IocSourceGenerator
             registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
             generatedClosedGenerics.Add(closedSvcType.Name);
         }
+
+        return true; // Successfully generated registration
+    }
+
+    /// <summary>
+    /// Generates a factory-only closed generic registration.
+    /// This is used when IocRegisterDefaults has a Factory but no explicit ImplementationType.
+    /// Only generates service type registration using the factory method.
+    /// </summary>
+    private static bool TryGenerateFactoryOnlyRegistration(
+        TypeData closedServiceType,
+        OpenGenericRegistrationInfo openGenericInfo,
+        List<ServiceRegistrationWithTags> registrations,
+        HashSet<string> generatedClosedGenerics)
+    {
+        // Skip if already registered
+        if(generatedClosedGenerics.Contains(closedServiceType.Name))
+        {
+            return true; // Already registered, consider it success
+        }
+
+        // Skip nested open generic or open generic service types
+        if(closedServiceType.IsNestedOpenGeneric || closedServiceType.IsOpenGeneric)
+        {
+            return false;
+        }
+
+        // Process decorators for this specific service type
+        var serviceTypeDecorators = ProcessDecoratorsForServiceType(
+            openGenericInfo.Decorators,
+            closedServiceType);
+
+        // For factory-only registration, both ServiceType and ImplementationType are the same (the service type)
+        // The factory method will create the actual instance
+        var serviceModel = new ServiceRegistrationModel(
+            closedServiceType,
+            closedServiceType, // Use service type as implementation type since factory creates the instance
+            openGenericInfo.Lifetime,
+            openGenericInfo.Key,
+            openGenericInfo.KeyType,
+            IsOpenGeneric: false,
+            serviceTypeDecorators,
+            openGenericInfo.InjectionMembers,
+            openGenericInfo.Factory,
+            openGenericInfo.Instance);
+
+        registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
+        generatedClosedGenerics.Add(closedServiceType.Name);
 
         return true; // Successfully generated registration
     }

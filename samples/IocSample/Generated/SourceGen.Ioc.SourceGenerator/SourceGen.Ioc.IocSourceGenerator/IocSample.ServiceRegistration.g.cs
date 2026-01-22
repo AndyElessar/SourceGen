@@ -94,6 +94,11 @@ namespace IocSample
             services.AddTransient<global::IocSample.External2, global::IocSample.External2>();
             services.AddTransient<global::IocSample.IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.External2>());
             services.AddSingleton<global::IocSample.Conflict, global::IocSample.Conflict>();
+            services.AddTransient<global::IocSample.Default3, global::IocSample.Default3>();
+            services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default3>());
+            services.AddTransient<global::IocSample.Default4, global::IocSample.Default4>();
+            services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default4>());
+            services.AddSingleton<global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>>((global::System.IServiceProvider sp) => (global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>)global::IocSample.GenericFactory.Create<decimal>());
 
             return services;
         }

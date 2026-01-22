@@ -24,6 +24,13 @@ internal class Default1 : IDenpendency2;
 [IocRegister(ServiceLifetime.Scoped)]
 internal class Default2 : IDenpendency2;
 
+[IocRegisterDefaults<IDenpendency3>(
+    ServiceLifetime.Transient,
+    ImplementationTypes = [typeof(Default3), typeof(Default4)])]
+public interface IDenpendency3;
+internal class Default3 : IDenpendency3;
+internal class Default4 : IDenpendency3;
+
 //[IocRegister]
 public abstract class AbstractClass
 {

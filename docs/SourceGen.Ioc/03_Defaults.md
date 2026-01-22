@@ -243,6 +243,52 @@ public sealed class SharedMarker;
 public sealed class Module;
 ```
 
+## Registration Priority
+
+When multiple registration mechanisms are available, the following priority order applies:
+
+|Priority|Mechanism|Description|
+|:-:|:-|:-|
+|1|`[IocRegister]`|Explicit attribute on implementation type|
+|2|`ImplementationTypes`|Closed generics specified in `IocRegisterDefaults`|
+|3|`Factory`|Factory method for discovered types via `IocDiscover`|
+
+### Example: Factory with ImplementationTypes
+
+When both `Factory` and `ImplementationTypes` are specified:
+
+```csharp
+[assembly: IocRegisterDefaults(
+    typeof(IRequestHandler<>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(HandlerFactory.Create),
+    ImplementationTypes = [typeof(EntityHandler)])]
+
+public interface IRequestHandler<TResponse>;
+
+public static class HandlerFactory
+{
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+    public static IRequestHandler<Task<T>> Create<T>() => new DefaultHandler<T>();
+}
+
+// Specified in ImplementationTypes - uses constructor (new EntityHandler())
+public class EntityHandler : IRequestHandler<Task<Entity>>;
+
+// Not in ImplementationTypes - uses Factory (HandlerFactory.Create<User>())
+public class UserHandler : IRequestHandler<Task<User>>;
+
+[IocDiscover<IRequestHandler<Task<Entity>>>]  // → new EntityHandler()
+[IocDiscover<IRequestHandler<Task<User>>>]    // → HandlerFactory.Create<User>()
+[IocContainer]
+public partial class AppContainer;
+```
+
+This allows you to:
+
+- **Explicitly control** specific implementations via `ImplementationTypes`
+- **Fallback to Factory** for types not covered by `ImplementationTypes`
+
 ## Diagnostics
 
 |ID|Severity|Description|

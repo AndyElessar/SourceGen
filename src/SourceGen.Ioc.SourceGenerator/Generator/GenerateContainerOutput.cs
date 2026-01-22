@@ -829,7 +829,11 @@ partial class IocSourceGenerator
             args.Add(BuildParameterForContainer(param, reg));
         }
 
-        return $"{factory.Path}({string.Join(", ", args)})";
+        // Handle generic factory methods with [IocGenericFactory] attribute
+        var genericTypeArgs = BuildGenericFactoryTypeArgs(factory, reg.ServiceType);
+        var factoryCallPath = genericTypeArgs is not null ? $"{factory.Path}<{genericTypeArgs}>" : factory.Path;
+
+        return $"{factoryCallPath}({string.Join(", ", args)})";
     }
 
     /// <summary>

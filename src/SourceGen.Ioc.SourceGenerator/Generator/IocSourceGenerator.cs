@@ -81,6 +81,12 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .SelectMany(static (results, _) => results
                 .SelectMany(static r => r.ImplementationTypeRegistrations));
 
+        // Pipeline 3: Extract OpenGenericEntries from results (for factory-based open generic registrations)
+        var factoryBasedOpenGenericEntries = allDefaultSettingsResults
+            .SelectMany(static (results, _) => results
+                .SelectMany(static r => r.OpenGenericEntries))
+            .Collect();
+
         // ========== IocImportModuleAttribute providers ==========
         // IocImportModuleAttribute (non-generic)
         var importedDefaultSettingsProvider = context.SyntaxProvider
@@ -229,7 +235,8 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
 
         var serviceRegistrations = allBasicResults
             .Combine(combinedClosedGenericDependencies)
-            .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left, in source.Right, ct));
+            .Combine(factoryBasedOpenGenericEntries)
+            .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left.Left, in source.Left.Right, in source.Right, ct));
 
         // Combine service registrations with compilation info and MSBuild properties
         var combined = serviceRegistrations

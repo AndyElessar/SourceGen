@@ -21,6 +21,7 @@ internal static class Constants
     public const string KeyedService = "KeyedService";
     public const string DisposableService = "DisposableService";
     public const string GenericService = "GenericService";
+    public const string GenericFactory = "GenericFactory";
     public const string ContainerOptions = "ContainerOptions";
 
     public const string SGIOC001 = "SGIOC001";

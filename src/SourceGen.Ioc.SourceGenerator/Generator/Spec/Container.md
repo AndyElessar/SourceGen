@@ -1,4 +1,4 @@
-# IServiceProvider Container Source Generator
+# Container Source Generator
 
 This source generator automatically generates a compile-time IoC container based on `Ioc*` attributes. The generated container provides high-performance dependency injection without runtime reflection.
 

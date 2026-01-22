@@ -18,8 +18,9 @@ partial class IocSourceGenerator
 
             var implementationTypeSymbols = attr.GetImplementationTypeSymbols();
             var registrations = CreateRegistrationsFromImplementationTypes(implementationTypeSymbols, defaultSettings, ctx.SemanticModel, ct);
+            var openGenericEntries = CreateOpenGenericEntriesFromDefaultSettings(defaultSettings);
 
-            yield return new DefaultSettingsResult(defaultSettings, registrations);
+            yield return new DefaultSettingsResult(defaultSettings, registrations, openGenericEntries);
         }
     }
 
@@ -39,9 +40,52 @@ partial class IocSourceGenerator
 
             var implementationTypeSymbols = attr.GetImplementationTypeSymbols();
             var registrations = CreateRegistrationsFromImplementationTypes(implementationTypeSymbols, defaultSettings, ctx.SemanticModel, ct);
+            var openGenericEntries = CreateOpenGenericEntriesFromDefaultSettings(defaultSettings);
 
-            yield return new DefaultSettingsResult(defaultSettings, registrations);
+            yield return new DefaultSettingsResult(defaultSettings, registrations, openGenericEntries);
         }
+    }
+
+    /// <summary>
+    /// Creates OpenGenericEntry from DefaultSettings when it has a Factory and the TargetServiceType is open generic.
+    /// This enables factory-based registration discovery without requiring explicit implementation types.
+    /// </summary>
+    private static ImmutableEquatableArray<OpenGenericEntry> CreateOpenGenericEntriesFromDefaultSettings(
+        DefaultSettingsModel defaultSettings)
+    {
+        // Only create entries when:
+        // 1. Factory is specified
+        // 2. TargetServiceType is open generic (not nested)
+        if(defaultSettings.Factory is null)
+        {
+            return [];
+        }
+
+        var targetServiceType = defaultSettings.TargetServiceType;
+        if(!targetServiceType.IsOpenGeneric || targetServiceType.IsNestedOpenGeneric)
+        {
+            return [];
+        }
+
+        // Create a factory-only OpenGenericRegistrationInfo
+        // For factory-only registrations, we use the service type as the "implementation type"
+        // since the factory will create the actual instance
+        var info = new OpenGenericRegistrationInfo(
+            ImplementationType: targetServiceType, // Use service type as placeholder
+            ServiceTypes: [targetServiceType],
+            AllInterfaces: [], // No interfaces for factory-only
+            defaultSettings.Lifetime,
+            Key: null,
+            KeyType: 0,
+            defaultSettings.Decorators,
+            defaultSettings.Tags,
+            defaultSettings.TagOnly,
+            InjectionMembers: [],
+            defaultSettings.Factory,
+            Instance: null);
+
+        var entry = new OpenGenericEntry(targetServiceType.NameWithoutGeneric, info);
+        return [entry];
     }
 
     /// <summary>
@@ -86,11 +130,30 @@ partial class IocSourceGenerator
             implementationType.AllInterfaces ?? [],
             implementationType.AllBaseClasses ?? []);
 
-        // Combine TargetServiceType with additional ServiceTypes
-        // Order: ServiceTypes first, then TargetServiceType (to match ProcessSingleRegistration behavior)
-        var serviceTypes = defaultSettings.ServiceTypes.Length > 0
-            ? defaultSettings.ServiceTypes.Append(defaultSettings.TargetServiceType).ToImmutableEquatableArray()
-            : [defaultSettings.TargetServiceType];
+        // Determine service types based on whether implementation is open or closed generic
+        ImmutableEquatableArray<TypeData> serviceTypes;
+
+        if(implementationType.IsOpenGeneric)
+        {
+            // For open generic implementations, use the original open generic service types
+            serviceTypes = defaultSettings.ServiceTypes.Length > 0
+                ? defaultSettings.ServiceTypes.Append(defaultSettings.TargetServiceType).ToImmutableEquatableArray()
+                : [defaultSettings.TargetServiceType];
+        }
+        else
+        {
+            // For closed generic implementations (e.g., Handler<Entity>), find matching closed service types
+            // from the implementation's interfaces/base classes
+            serviceTypes = FindClosedServiceTypesFromImplementation(
+                implementationType,
+                defaultSettings.TargetServiceType,
+                defaultSettings.ServiceTypes);
+        }
+
+        // For closed generic implementations (e.g., Handler<Entity>), do NOT inherit Factory from defaults
+        // Factory should only be used for IocDiscover-based registrations, not explicit ImplementationTypes
+        // Priority: [IocRegister] > ImplementationTypes > Factory
+        var factory = implementationType.IsOpenGeneric ? defaultSettings.Factory : null;
 
         // Use settings from DefaultSettingsModel
         // These registrations have "explicit" settings from the DefaultSettingsAttribute
@@ -110,7 +173,77 @@ partial class IocSourceGenerator
             defaultSettings.Tags,
             defaultSettings.TagOnly,
             injectionMembers,
-            defaultSettings.Factory,
+            factory,
             Instance: null);
+    }
+
+    /// <summary>
+    /// Finds closed service types from an implementation type that match the open generic target service types.
+    /// For example, if targetServiceType is IRequestHandler&lt;&gt; and implementation implements IRequestHandler&lt;Task&lt;Entity&gt;&gt;,
+    /// this returns [IRequestHandler&lt;Task&lt;Entity&gt;&gt;].
+    /// </summary>
+    private static ImmutableEquatableArray<TypeData> FindClosedServiceTypesFromImplementation(
+        TypeData implementationType,
+        TypeData targetServiceType,
+        ImmutableEquatableArray<TypeData> additionalServiceTypes)
+    {
+        var result = new List<TypeData>();
+        var targetNameWithoutGeneric = targetServiceType.NameWithoutGeneric;
+
+        // Search in all interfaces for matching closed service types
+        if(implementationType.AllInterfaces is not null)
+        {
+            foreach(var iface in implementationType.AllInterfaces)
+            {
+                if(iface.NameWithoutGeneric == targetNameWithoutGeneric && !iface.IsOpenGeneric)
+                {
+                    result.Add(iface);
+                }
+            }
+        }
+
+        // Search in all base classes for matching closed service types
+        if(implementationType.AllBaseClasses is not null)
+        {
+            foreach(var baseClass in implementationType.AllBaseClasses)
+            {
+                if(baseClass.NameWithoutGeneric == targetNameWithoutGeneric && !baseClass.IsOpenGeneric)
+                {
+                    result.Add(baseClass);
+                }
+            }
+        }
+
+        // Also search for additional service types
+        foreach(var additionalType in additionalServiceTypes)
+        {
+            var additionalNameWithoutGeneric = additionalType.NameWithoutGeneric;
+
+            if(implementationType.AllInterfaces is not null)
+            {
+                foreach(var iface in implementationType.AllInterfaces)
+                {
+                    if(iface.NameWithoutGeneric == additionalNameWithoutGeneric && !iface.IsOpenGeneric)
+                    {
+                        result.Add(iface);
+                    }
+                }
+            }
+
+            if(implementationType.AllBaseClasses is not null)
+            {
+                foreach(var baseClass in implementationType.AllBaseClasses)
+                {
+                    if(baseClass.NameWithoutGeneric == additionalNameWithoutGeneric && !baseClass.IsOpenGeneric)
+                    {
+                        result.Add(baseClass);
+                    }
+                }
+            }
+        }
+
+        return result.Count > 0
+            ? result.ToImmutableEquatableArray()
+            : [];
     }
 }
