@@ -1397,4 +1397,5 @@ ExplicitOnly = false AND IncludeTags empty  →  All registrations included
 |ID|Severity|Message|Trigger|
 |:---|:---|:---|:---|
 |`SGIOC018`|Error|Unable to resolve service '{ServiceType}' for container '{ContainerType}'|Unresolvable dependency when `ResolveIServiceCollection = false`|
-|`SGIOC019`|Error|Container class '{ClassName}' must be declared as partial|Missing `partial` keyword|
+|`SGIOC019`|Error|Container class '{ClassName}' must be declared as partial and cannot be static|Missing `partial` keyword or has `static` modifier|
+|`SGIOC020`|Warning|Container '{ContainerType}' specifies UseSwitchStatement = true but has imported modules|`UseSwitchStatement = true` with `[IocImportModule]`|

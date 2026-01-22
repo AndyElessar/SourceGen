@@ -136,6 +136,21 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
+    /// Checks if an attribute class is any IocImportModuleAttribute variant.
+    /// </summary>
+    /// <param name="attributeClass">The attribute class to check.</param>
+    /// <param name="attributeSymbols">The attribute symbols context.</param>
+    /// <returns>True if the attribute is an IocImportModuleAttribute.</returns>
+    public static bool IsIocImportModuleAttribute(INamedTypeSymbol? attributeClass, IoCAttributeSymbols attributeSymbols)
+    {
+        if (attributeClass is null)
+            return false;
+
+        return IsAttributeMatch(attributeClass, attributeSymbols.IocImportModuleAttribute)
+            || IsAttributeMatch(attributeClass, attributeSymbols.IocImportModuleAttribute_T1);
+    }
+
+    /// <summary>
     /// Checks if an attribute class matches any IoC attribute variant (IoCRegister, IoCRegisterFor, or IoCRegisterDefaults).
     /// </summary>
     /// <param name="attributeClass">The attribute class to check.</param>
@@ -552,6 +567,8 @@ internal sealed class IoCAttributeSymbols
     public INamedTypeSymbol? IocRegisterForAttribute_T1 { get; }
     public INamedTypeSymbol? IocRegisterDefaultsAttribute { get; }
     public INamedTypeSymbol? IocRegisterDefaultsAttribute_T1 { get; }
+    public INamedTypeSymbol? IocImportModuleAttribute { get; }
+    public INamedTypeSymbol? IocImportModuleAttribute_T1 { get; }
 
     public IoCAttributeSymbols(Compilation compilation)
     {
@@ -562,6 +579,8 @@ internal sealed class IoCAttributeSymbols
         IocRegisterForAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName_T1);
         IocRegisterDefaultsAttribute = compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName);
         IocRegisterDefaultsAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName_T1);
+        IocImportModuleAttribute = compilation.GetTypeByMetadataName(Constants.IocImportModuleAttributeFullName);
+        IocImportModuleAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocImportModuleAttributeFullName_T1);
     }
 
     /// <summary>

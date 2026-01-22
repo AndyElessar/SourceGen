@@ -24,21 +24,34 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
-    /// SGIOC019: Container class must be partial - The class marked with [IocContainer] is missing the partial modifier.
+    /// SGIOC019: Container class must be partial and cannot be static - The class marked with [IocContainer] is missing the partial modifier or is static.
     /// </summary>
-    public static readonly DiagnosticDescriptor ContainerMustBePartial = new(
+    public static readonly DiagnosticDescriptor ContainerMustBePartialAndNotStatic = new(
         id: "SGIOC019",
-        title: "Container class must be partial",
-        messageFormat: "Container class '{0}' must be declared as partial",
+        title: "Container class must be partial and cannot be static",
+        messageFormat: "Container class '{0}' must be declared as partial and cannot be static",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A class marked with [IocContainer] must be declared as partial to allow source generation.");
+        description: "A class marked with [IocContainer] must be declared as partial to allow source generation and cannot be static.");
+
+    /// <summary>
+    /// SGIOC020: UseSwitchStatement should not be true when importing modules - The setting is ignored when there are imported modules.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UseSwitchStatementIgnoredWithImportedModules = new(
+        id: "SGIOC020",
+        title: "UseSwitchStatement is ignored when importing modules",
+        messageFormat: "Container '{0}' specifies UseSwitchStatement = true but has imported modules; the setting will be ignored and FrozenDictionary will be used instead",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "When a container has one or more [IocImportModule] attributes, UseSwitchStatement is ignored and FrozenDictionary is always used for service resolution.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         UnableToResolveService,
-        ContainerMustBePartial
+        ContainerMustBePartialAndNotStatic,
+        UseSwitchStatementIgnoredWithImportedModules
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -67,7 +80,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             registeredServiceTypes,
             containersWithNoFallback);
 
-        // SGIOC019: Check for partial modifier on container classes
+        // SGIOC019: Check for partial modifier and static modifier on container classes
         // Also collect containers with ResolveIServiceCollection = false for SGIOC018
         context.RegisterSymbolAction(ctx => AnalyzeContainerClass(ctx, analyzerContext), SymbolKind.NamedType);
 
@@ -79,7 +92,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Analyzes container classes for SGIOC019 (partial modifier) and collects containers for SGIOC018.
+    /// Analyzes container classes for SGIOC019 (partial modifier and static modifier) and collects containers for SGIOC018.
     /// </summary>
     private static void AnalyzeContainerClass(SymbolAnalysisContext context, ContainerAnalyzerContext analyzerContext)
     {
@@ -93,7 +106,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         if (containerAttribute is null)
             return;
 
-        // SGIOC019: Check for partial modifier
+        // SGIOC019: Check for partial modifier and static modifier
         foreach (var syntaxRef in typeSymbol.DeclaringSyntaxReferences)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -102,13 +115,16 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             if (syntax is not ClassDeclarationSyntax classDeclaration)
                 continue;
 
-            if (!classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+            var hasPartial = classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword);
+            var hasStatic = classDeclaration.Modifiers.Any(SyntaxKind.StaticKeyword);
+
+            if (!hasPartial || hasStatic)
             {
                 var location = containerAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
                     ?? classDeclaration.Identifier.GetLocation();
 
                 context.ReportDiagnostic(Diagnostic.Create(
-                    ContainerMustBePartial,
+                    ContainerMustBePartialAndNotStatic,
                     location,
                     typeSymbol.Name));
             }
@@ -116,18 +132,43 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
         // Collect containers with ResolveIServiceCollection = false for SGIOC018
         var resolveIServiceCollection = true;
+        var useSwitchStatement = false;
         foreach (var namedArg in containerAttribute.NamedArguments)
         {
             if (namedArg.Key is "ResolveIServiceCollection" && namedArg.Value.Value is bool resolveValue)
             {
                 resolveIServiceCollection = resolveValue;
-                break;
+            }
+            else if (namedArg.Key is "UseSwitchStatement" && namedArg.Value.Value is bool switchValue)
+            {
+                useSwitchStatement = switchValue;
             }
         }
 
         if (!resolveIServiceCollection)
         {
             analyzerContext.ContainersWithNoFallback.Add(typeSymbol);
+        }
+
+        // SGIOC020: Check for UseSwitchStatement = true with imported modules
+        if (useSwitchStatement)
+        {
+            var hasImportedModules = typeSymbol.GetAttributes()
+                .Any(attr => AnalyzerHelpers.IsIocImportModuleAttribute(attr.AttributeClass, analyzerContext.AttributeSymbols));
+
+            if (hasImportedModules)
+            {
+                var location = containerAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
+                    ?? typeSymbol.Locations.FirstOrDefault();
+
+                if (location is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        UseSwitchStatementIgnoredWithImportedModules,
+                        location,
+                        typeSymbol.Name));
+                }
+            }
         }
     }
 

@@ -261,14 +261,34 @@ Report when a container has `ResolveIServiceCollection = false` and a constructo
 
 ---
 
-### SGIOC019 - Error - Usage - Container class must be partial
+### SGIOC019 - Error - Usage - Container class must be partial and can not be static
 
-Report when a class marked with `[IocContainer]` is not declared as `partial`.
+Report when a class marked with `[IocContainer]` is not declared as `partial` or is declared as `static`.
 
 **Analysis:**
 
 - Checks the syntax declaration of classes marked with `[IocContainer]` attribute.
 - Verifies that the class has the `partial` modifier.
-- Reports when the `partial` modifier is missing.
+- Verifies that the class does not have the `static` modifier.
+- Reports when the `partial` modifier is missing or the `static` modifier is present.
 
 **Message format:** `Container class '{ClassName}' must be declared as partial.`
+
+---
+
+### SGIOC020 - Warning - Usage - UseSwitchStatement is ignored when importing modules
+
+Report when a class marked with `[IocContainer]` specifies `UseSwitchStatement = true` and has one or more `[IocImportModule]` attributes.
+
+**Analysis:**
+
+- Checks classes marked with `[IocContainer]` attribute.
+- Retrieves the `UseSwitchStatement` property value from the attribute (defaults to `false`).
+- Scans the class for `[IocImportModule]` or `[IocImportModule<T>]` attributes.
+- Reports when `UseSwitchStatement = true` is explicitly set and at least one import module attribute exists.
+
+**Rationale:**
+
+When a container imports modules, service registrations come from multiple sources at runtime. The switch statement optimization requires all service types to be known at compile time, which is not possible with imported modules. Therefore, `UseSwitchStatement` is silently ignored and `FrozenDictionary` is used instead.
+
+**Message format:** `Container '{ContainerType}' specifies UseSwitchStatement = true but has imported modules; the setting will be ignored and FrozenDictionary will be used instead.`

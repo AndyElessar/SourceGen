@@ -43,4 +43,5 @@ internal static class Constants
     public const string SGIOC017 = "SGIOC017";
     public const string SGIOC018 = "SGIOC018";
     public const string SGIOC019 = "SGIOC019";
+    public const string SGIOC020 = "SGIOC020";
 }

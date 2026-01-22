@@ -1,7 +1,7 @@
 namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC019: Container class must be declared as partial.
+/// Tests for SGIOC019: Container class must be declared as partial and cannot be static.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC019)]
@@ -24,7 +24,7 @@ public class SGIOC019Tests
         var sgioc019 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC019").ToList();
 
         await Assert.That(sgioc019).Count().IsEqualTo(1);
-        await Assert.That(sgioc019[0].GetMessage()).Contains("TestContainer").And.Contains("partial");
+        await Assert.That(sgioc019[0].GetMessage()).Contains("TestContainer").And.Contains("partial").And.Contains("static");
     }
 
     [Test]
@@ -148,5 +148,45 @@ public class SGIOC019Tests
         var sgioc019 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC019");
 
         await Assert.That(sgioc019).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC019_StaticContainerClass_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocContainer]
+            public static partial class StaticContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc019 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC019").ToList();
+
+        await Assert.That(sgioc019).Count().IsEqualTo(1);
+        await Assert.That(sgioc019[0].GetMessage()).Contains("StaticContainer").And.Contains("static");
+    }
+
+    [Test]
+    public async Task SGIOC019_StaticNonPartialContainerClass_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocContainer]
+            public static class StaticNonPartialContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc019 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC019").ToList();
+
+        await Assert.That(sgioc019).Count().IsEqualTo(1);
+        await Assert.That(sgioc019[0].GetMessage()).Contains("StaticNonPartialContainer");
     }
 }
