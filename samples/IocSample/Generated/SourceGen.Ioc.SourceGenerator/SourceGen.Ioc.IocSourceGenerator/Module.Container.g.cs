@@ -45,6 +45,9 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
+        _iocSample_Singleton = parent._iocSample_Singleton;
+        _iocSample_Circular1 = parent._iocSample_Circular1;
+        _iocSample_Circular2 = parent._iocSample_Circular2;
         _iocSample_InstanceService = parent._iocSample_InstanceService;
         _iocSample_TestQueryHandler = parent._iocSample_TestQueryHandler;
         _iocSample_ViewModel = parent._iocSample_ViewModel;
@@ -74,6 +77,36 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     #endregion
 
     #region Service Resolution
+
+    private global::IocSample.Singleton? _iocSample_Singleton;
+    private global::IocSample.Singleton GetIocSample_Singleton()
+    {
+        if(_iocSample_Singleton is not null) return _iocSample_Singleton;
+
+        var instance = new global::IocSample.Singleton((global::IocSample.Transient)GetRequiredService(typeof(global::IocSample.Transient)), (global::IocSample.Scoped)GetRequiredService(typeof(global::IocSample.Scoped)));
+
+        return Interlocked.CompareExchange(ref _iocSample_Singleton, instance, null) ?? instance;
+    }
+
+    private global::IocSample.Circular1? _iocSample_Circular1;
+    private global::IocSample.Circular1 GetIocSample_Circular1()
+    {
+        if(_iocSample_Circular1 is not null) return _iocSample_Circular1;
+
+        var instance = new global::IocSample.Circular1((global::IocSample.Circular2)GetRequiredService(typeof(global::IocSample.Circular2)));
+
+        return Interlocked.CompareExchange(ref _iocSample_Circular1, instance, null) ?? instance;
+    }
+
+    private global::IocSample.Circular2? _iocSample_Circular2;
+    private global::IocSample.Circular2 GetIocSample_Circular2()
+    {
+        if(_iocSample_Circular2 is not null) return _iocSample_Circular2;
+
+        var instance = new global::IocSample.Circular2((global::IocSample.Circular1)GetRequiredService(typeof(global::IocSample.Circular1)));
+
+        return Interlocked.CompareExchange(ref _iocSample_Circular2, instance, null) ?? instance;
+    }
 
     private global::IocSample.InstanceService? _iocSample_InstanceService;
     private global::IocSample.InstanceService GetIocSample_InstanceService()
@@ -407,6 +440,16 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         return Interlocked.CompareExchange(ref _iocSample_Default2, instance, null) ?? instance;
     }
 
+    private global::IocSample.Scoped? _iocSample_Scoped;
+    private global::IocSample.Scoped GetIocSample_Scoped()
+    {
+        if(_iocSample_Scoped is not null) return _iocSample_Scoped;
+
+        var instance = new global::IocSample.Scoped((global::IocSample.Transient)GetRequiredService(typeof(global::IocSample.Transient)));
+
+        return Interlocked.CompareExchange(ref _iocSample_Scoped, instance, null) ?? instance;
+    }
+
     private global::IocSample.Basic? _iocSample_Basic;
     private global::IocSample.Basic GetIocSample_Basic()
     {
@@ -425,6 +468,11 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     private global::IocSample.Default1 GetIocSample_Default1()
     {
         return new global::IocSample.Default1();
+    }
+
+    private global::IocSample.Transient GetIocSample_Transient()
+    {
+        return new global::IocSample.Transient();
     }
 
     private global::IocSample.FactoryService GetIocSample_FactoryService__Test_()
@@ -567,6 +615,11 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         new((typeof(global::IocSample.Default1), KeyedService.AnyKey), static c => c.GetIocSample_Default1()),
         new((typeof(global::IocSample.IDenpendency2), KeyedService.AnyKey), static c => c.GetIocSample_Default2()),
         new((typeof(global::IocSample.Default2), KeyedService.AnyKey), static c => c.GetIocSample_Default2()),
+        new((typeof(global::IocSample.Transient), KeyedService.AnyKey), static c => c.GetIocSample_Transient()),
+        new((typeof(global::IocSample.Scoped), KeyedService.AnyKey), static c => c.GetIocSample_Scoped()),
+        new((typeof(global::IocSample.Singleton), KeyedService.AnyKey), static c => c.GetIocSample_Singleton()),
+        new((typeof(global::IocSample.Circular1), KeyedService.AnyKey), static c => c.GetIocSample_Circular1()),
+        new((typeof(global::IocSample.Circular2), KeyedService.AnyKey), static c => c.GetIocSample_Circular2()),
         new((typeof(global::IocSample.InstanceService), KeyedService.AnyKey), static c => c.GetIocSample_InstanceService()),
         new((typeof(global::IocSample.TestQueryHandler), KeyedService.AnyKey), static c => c.GetIocSample_TestQueryHandler()),
         new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string>), KeyedService.AnyKey), static c => c.GetIocSample_TestQueryHandler()),
@@ -648,6 +701,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         if(!_isRootScope)
         {
             DisposeService(_iocSample_Basic);
+            DisposeService(_iocSample_Scoped);
             DisposeService(_iocSample_Default2);
             _iocSample_Shared_SharedModule.Dispose();
             return;
@@ -675,6 +729,9 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         DisposeService(_iocSample_ViewModel);
         DisposeService(_iocSample_TestQueryHandler);
         DisposeService(_iocSample_InstanceService);
+        DisposeService(_iocSample_Circular2);
+        DisposeService(_iocSample_Circular1);
+        DisposeService(_iocSample_Singleton);
         _iocSample_Shared_SharedModule.Dispose();
     }
 
@@ -685,6 +742,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_iocSample_Basic);
+            await DisposeServiceAsync(_iocSample_Scoped);
             await DisposeServiceAsync(_iocSample_Default2);
             await _iocSample_Shared_SharedModule.DisposeAsync();
             return;
@@ -712,6 +770,9 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         await DisposeServiceAsync(_iocSample_ViewModel);
         await DisposeServiceAsync(_iocSample_TestQueryHandler);
         await DisposeServiceAsync(_iocSample_InstanceService);
+        await DisposeServiceAsync(_iocSample_Circular2);
+        await DisposeServiceAsync(_iocSample_Circular1);
+        await DisposeServiceAsync(_iocSample_Singleton);
         await _iocSample_Shared_SharedModule.DisposeAsync();
     }
 
