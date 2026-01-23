@@ -163,7 +163,7 @@ partial class IocSourceGenerator
         ContainerRegistrationGroups groups,
         bool effectiveUseSwitchStatement)
     {
-        // Fallback provider field (if ResolveIServiceCollection is enabled)
+        // Fallback provider field (only if ResolveIServiceCollection is enabled)
         if(container.ResolveIServiceCollection)
         {
             writer.WriteLine("private readonly IServiceProvider? _fallbackProvider;");
@@ -231,7 +231,11 @@ partial class IocSourceGenerator
         writer.WriteLine("/// <summary>");
         writer.WriteLine("/// Creates a new standalone container without external service provider fallback.");
         writer.WriteLine("/// </summary>");
-        if(container.ResolveIServiceCollection)
+
+        // Need fallback provider constructor if ResolveIServiceCollection is enabled
+        var needsFallbackProvider = container.ResolveIServiceCollection;
+
+        if(needsFallbackProvider)
         {
             writer.WriteLine($"public {container.ClassName}() : this((IServiceProvider?)null) {{ }}");
         }
@@ -248,7 +252,7 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // Constructor with fallback provider (if enabled)
-        if(container.ResolveIServiceCollection)
+        if(needsFallbackProvider)
         {
             writer.WriteLine("/// <summary>");
             writer.WriteLine("/// Creates a new container with optional fallback to external service provider.");
@@ -268,7 +272,7 @@ partial class IocSourceGenerator
         writer.WriteLine($"private {container.ClassName}({container.ClassName} parent)");
         writer.WriteLine("{");
         writer.Indentation++;
-        if(container.ResolveIServiceCollection)
+        if(needsFallbackProvider)
         {
             writer.WriteLine("_fallbackProvider = parent._fallbackProvider;");
         }
@@ -930,7 +934,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine("if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))");
+            writer.WriteLine("if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))");
             writer.Indentation++;
             writer.WriteLine("return resolver(this);");
             writer.Indentation--;
@@ -938,7 +942,7 @@ partial class IocSourceGenerator
         }
 
         // Fallback
-        if(container.ResolveIServiceCollection || groups.HasOpenGenerics)
+        if(container.ResolveIServiceCollection)
         {
             writer.WriteLine("return _fallbackProvider?.GetService(serviceType);");
         }
@@ -971,7 +975,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine("var key = serviceKey ?? KeyedService.AnyKey;");
+        writer.WriteLine("var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;");
         writer.WriteLine();
 
         if(effectiveUseSwitchStatement)
@@ -994,7 +998,7 @@ partial class IocSourceGenerator
                 }
 
                 // Fallback in switch default case
-                if(container.ResolveIServiceCollection || groups.HasOpenGenerics)
+                if(container.ResolveIServiceCollection)
                 {
                     writer.WriteLine("_ => _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null");
                 }
@@ -1009,7 +1013,7 @@ partial class IocSourceGenerator
             else
             {
                 // No keyed services, just return fallback
-                if(container.ResolveIServiceCollection || groups.HasOpenGenerics)
+                if(container.ResolveIServiceCollection)
                 {
                     writer.WriteLine("return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
                 }
@@ -1028,7 +1032,7 @@ partial class IocSourceGenerator
             writer.WriteLine();
 
             // Fallback
-            if(container.ResolveIServiceCollection || groups.HasOpenGenerics)
+            if(container.ResolveIServiceCollection)
             {
                 writer.WriteLine("return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
             }
@@ -1107,11 +1111,11 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine("if(_serviceResolvers.ContainsKey((serviceType, KeyedService.AnyKey))) return true;");
+            writer.WriteLine("if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;");
             writer.WriteLine();
         }
 
-        if(container.ResolveIServiceCollection || groups.HasOpenGenerics)
+        if(container.ResolveIServiceCollection)
         {
             writer.WriteLine("return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);");
         }
@@ -1129,7 +1133,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine("var key = serviceKey ?? KeyedService.AnyKey;");
+        writer.WriteLine("var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;");
 
         if(!effectiveUseSwitchStatement)
         {
@@ -1139,7 +1143,7 @@ partial class IocSourceGenerator
 
         writer.WriteLine();
 
-        if(container.ResolveIServiceCollection || groups.HasOpenGenerics)
+        if(container.ResolveIServiceCollection)
         {
             writer.WriteLine("return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);");
         }
@@ -1206,7 +1210,7 @@ partial class IocSourceGenerator
         foreach(var kvp in groups.ByServiceTypeAndKey)
         {
             var cached = kvp.Value[^1]; // Last wins
-            var keyExpr = kvp.Key.Key ?? "KeyedService.AnyKey";
+            var keyExpr = kvp.Key.Key ?? "global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey";
             writer.WriteLine($"new((typeof({kvp.Key.ServiceType}), {keyExpr}), static c => c.{cached.ResolverMethodName}()),");
         }
 
@@ -1214,7 +1218,7 @@ partial class IocSourceGenerator
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
             var methodName = GetCollectionResolverMethodName(serviceType);
-            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), KeyedService.AnyKey), static c => c.{methodName}()),");
+            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.{methodName}()),");
         }
 
         writer.Indentation--;

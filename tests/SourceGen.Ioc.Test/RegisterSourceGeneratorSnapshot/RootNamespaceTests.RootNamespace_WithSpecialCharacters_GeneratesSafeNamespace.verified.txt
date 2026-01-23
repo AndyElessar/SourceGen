@@ -4,7 +4,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 
-namespace My-Project.Root_Namespace
+namespace My_Project.Root_Namespace
 {
     /// <summary>
     /// Extension methods for registering services from TestAssembly.

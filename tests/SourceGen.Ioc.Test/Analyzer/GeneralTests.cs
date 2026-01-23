@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Analyzer;
+namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// General tests for RegisterAnalyzer that don't belong to a specific diagnostic code.

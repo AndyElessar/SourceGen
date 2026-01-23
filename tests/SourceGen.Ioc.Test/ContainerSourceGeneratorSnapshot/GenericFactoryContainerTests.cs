@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.ContainerSourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.ContainerSourceGeneratorSnapshot;
 
 /// <summary>
 /// Snapshot tests for generic factory container generation.
@@ -46,6 +46,7 @@ public class GenericFactoryContainerTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -92,6 +93,7 @@ public class GenericFactoryContainerTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -133,6 +135,7 @@ public class GenericFactoryContainerTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -184,6 +187,7 @@ public class GenericFactoryContainerTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -229,6 +233,7 @@ public class GenericFactoryContainerTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -271,7 +276,7 @@ public class GenericFactoryContainerTests
             public partial class TestContainer { }
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);        await result.VerifyCompilableAsync();        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -315,6 +320,7 @@ public class GenericFactoryContainerTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);

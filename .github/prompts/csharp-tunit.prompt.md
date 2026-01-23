@@ -1,6 +1,6 @@
 ---
 agent: 'agent'
-tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'read/problems', 'search', 'execute/runTests']
+tools: ['execute/testFailure', 'execute/getTerminalOutput', 'execute/runInTerminal', 'execute/runTests', 'read/problems', 'read/readFile', 'edit/createDirectory', 'edit/createFile', 'edit/editFiles', 'search', 'web', 'microsoftdocs/mcp/*', 'agent', 'todo']
 description: 'Get best practices for TUnit unit testing, including data-driven tests'
 ---
 

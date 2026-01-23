@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for the SourceGenIocName MSBuild property feature.
@@ -30,6 +30,7 @@ public class CustomIocNameTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -65,6 +66,7 @@ public class CustomIocNameTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -93,6 +95,7 @@ public class CustomIocNameTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -116,6 +119,7 @@ public class CustomIocNameTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "MyProject.Services");
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -147,6 +151,7 @@ public class CustomIocNameTests
             source,
             assemblyName: "FallbackAssembly",
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource).UseParameters(iocNameValue);

@@ -16,8 +16,8 @@ namespace TestAssembly
         /// </summary>
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            services.AddSingleton<global::TestNamespace.MyService>(MyService.Default);
-            services.AddSingleton<global::TestNamespace.IMyService>(MyService.Default);
+            services.AddSingleton<global::TestNamespace.MyService>(TestNamespace.MyService.Default);
+            services.AddSingleton<global::TestNamespace.IMyService>(TestNamespace.MyService.Default);
 
             return services;
         }

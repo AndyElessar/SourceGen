@@ -6,6 +6,86 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace SourceGen.Ioc.Test.Helpers;
 
 /// <summary>
+/// Result of running a source generator, including the generated sources and output compilation.
+/// </summary>
+/// <param name="Result">The generator run result containing generated sources.</param>
+/// <param name="OutputCompilation">The compilation after the generator has run, including generated sources.</param>
+public readonly record struct GeneratorTestResult(GeneratorRunResult Result, Compilation OutputCompilation)
+{
+    /// <summary>
+    /// Gets all generated source texts from the generator run result.
+    /// </summary>
+    public IEnumerable<(string HintName, string SourceText)> GeneratedSources =>
+        Result.GeneratedSources.Select(s => (s.HintName, s.SourceText.ToString()));
+
+    /// <summary>
+    /// Gets a single generated source by hint name.
+    /// </summary>
+    public string? GetGeneratedSource(string hintNameContains) =>
+        Result.GeneratedSources
+            .FirstOrDefault(s => s.HintName.Contains(hintNameContains))
+            .SourceText?.ToString();
+
+    /// <summary>
+    /// Verifies that the output compilation has no errors.
+    /// Uses TUnit assertions to report compilation errors with generated source code for debugging.
+    /// </summary>
+    public async Task VerifyCompilableAsync()
+    {
+        var errors = OutputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+
+        if(errors.Length > 0)
+        {
+            var errorMessages = string.Join(Environment.NewLine, errors.Select(e => e.ToString()));
+
+            // Include generated source code in the error message for debugging
+            var generatedSourcesText = string.Join(
+                Environment.NewLine + new string('=', 80) + Environment.NewLine,
+                Result.GeneratedSources.Select(s =>
+                    $"// File: {s.HintName}{Environment.NewLine}{AddLineNumbers(s.SourceText.ToString())}"));
+
+            var message = $"Generated code has compilation errors:{Environment.NewLine}" +
+                $"{errorMessages}{Environment.NewLine}{Environment.NewLine}" +
+                $"Generated source code:{Environment.NewLine}" +
+                $"{new string('=', 80)}{Environment.NewLine}" +
+                $"{generatedSourcesText}";
+
+            await Assert.That(errors).IsEmpty().Because(message);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the output compilation has at least one error.
+    /// Uses TUnit assertions to verify compilation failure.
+    /// </summary>
+    public async Task VerifyHasCompilationErrorsAsync()
+    {
+        var errors = OutputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error);
+
+        await Assert.That(errors).IsNotEmpty().Because("Expected compilation errors but the generated code compiled successfully.");
+    }
+
+    /// <summary>
+    /// Gets compilation errors from the output compilation.
+    /// </summary>
+    public IReadOnlyList<Diagnostic> GetCompilationErrors() =>
+        [.. OutputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)];
+
+    private static string AddLineNumbers(string source)
+    {
+        var lines = source.Split('\n');
+        var maxLineNumberWidth = lines.Length.ToString().Length;
+        return string.Join(
+            Environment.NewLine,
+            lines.Select((line, index) =>
+                $"{(index + 1).ToString().PadLeft(maxLineNumberWidth)} | {line.TrimEnd('\r')}"));
+    }
+}
+
+/// <summary>
 /// Helper class for testing source generators.
 /// </summary>
 public static class SourceGeneratorTestHelper
@@ -85,7 +165,7 @@ public static class SourceGeneratorTestHelper
     /// <param name="assemblyName">The assembly name for the compilation.</param>
     /// <param name="additionalReferences">Optional additional metadata references.</param>
     /// <param name="analyzerConfigOptions">Optional analyzer config options (e.g., MSBuild properties).</param>
-    public static GeneratorRunResult RunGenerator<TGenerator>(
+    public static GeneratorTestResult RunGenerator<TGenerator>(
         string source,
         string assemblyName = "TestAssembly",
         IEnumerable<MetadataReference>? additionalReferences = null,
@@ -115,9 +195,9 @@ public static class SourceGeneratorTestHelper
             driver = driver.WithUpdatedAnalyzerConfigOptions(optionsProvider);
         }
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
-        return driver.GetRunResult().Results.Single();
+        return new GeneratorTestResult(driver.GetRunResult().Results.Single(), outputCompilation);
     }
 
     /// <summary>
@@ -127,7 +207,7 @@ public static class SourceGeneratorTestHelper
     /// <param name="source">The source code to compile.</param>
     /// <param name="references">The metadata references to use for compilation.</param>
     /// <param name="assemblyName">The assembly name for the compilation.</param>
-    public static GeneratorRunResult RunGeneratorWithReferences<TGenerator>(
+    public static GeneratorTestResult RunGeneratorWithReferences<TGenerator>(
         string source,
         ImmutableArray<MetadataReference> references,
         string assemblyName = "TestAssembly")
@@ -146,9 +226,9 @@ public static class SourceGeneratorTestHelper
         var generator = new TGenerator();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
-        return driver.GetRunResult().Results.Single();
+        return new GeneratorTestResult(driver.GetRunResult().Results.Single(), outputCompilation);
     }
 
     /// <summary>
@@ -159,7 +239,7 @@ public static class SourceGeneratorTestHelper
     /// </summary>
     /// <param name="assemblies">Assemblies to compile in order. The last one is the main assembly that references all others.</param>
     /// <returns>The generator run result for the main (last) assembly.</returns>
-    public static GeneratorRunResult RunGeneratorWithDependencies<TGenerator>(
+    public static GeneratorTestResult RunGeneratorWithDependencies<TGenerator>(
         params (string Source, string AssemblyName)[] assemblies)
         where TGenerator : IIncrementalGenerator, new()
     {
@@ -167,7 +247,7 @@ public static class SourceGeneratorTestHelper
             throw new ArgumentException("At least one assembly must be provided.", nameof(assemblies));
 
         var compiledReferences = new List<MetadataReference>();
-        var lastResult = default(GeneratorRunResult);
+        GeneratorTestResult lastResult = default;
 
         // Compile each assembly in order (allowing later ones to reference earlier ones)
         for(var i = 0; i < assemblies.Length; i++)
@@ -188,7 +268,7 @@ public static class SourceGeneratorTestHelper
 
             ThrowIfCompilationHasErrors((CSharpCompilation)outputCompilation);
 
-            lastResult = driver.GetRunResult().Results.Single();
+            lastResult = new GeneratorTestResult(driver.GetRunResult().Results.Single(), outputCompilation);
             compiledReferences.Add(outputCompilation.ToMetadataReference());
         }
 
@@ -209,23 +289,16 @@ public static class SourceGeneratorTestHelper
     }
 
     /// <summary>
-    /// Gets all generated source texts from the generator run result.
+    /// Gets all generated source texts from the generator test result.
     /// </summary>
-    public static IEnumerable<(string HintName, string SourceText)> GetGeneratedSources(GeneratorRunResult result)
-    {
-        return result.GeneratedSources
-            .Select(s => (s.HintName, s.SourceText.ToString()));
-    }
+    public static IEnumerable<(string HintName, string SourceText)> GetGeneratedSources(GeneratorTestResult result) =>
+        result.GeneratedSources;
 
     /// <summary>
     /// Gets a single generated source by hint name.
     /// </summary>
-    public static string? GetGeneratedSource(GeneratorRunResult result, string hintNameContains)
-    {
-        return result.GeneratedSources
-            .FirstOrDefault(s => s.HintName.Contains(hintNameContains))
-            .SourceText?.ToString();
-    }
+    public static string? GetGeneratedSource(GeneratorTestResult result, string hintNameContains) =>
+        result.GetGeneratedSource(hintNameContains);
 
     /// <summary>
     /// Runs the analyzer and returns the diagnostics.

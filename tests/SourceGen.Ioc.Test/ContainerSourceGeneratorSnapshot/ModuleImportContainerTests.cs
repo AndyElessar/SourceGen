@@ -46,6 +46,7 @@ public class ModuleImportContainerTests
 
         var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
             (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -106,6 +107,7 @@ public class ModuleImportContainerTests
 
         var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
             (sharedLib1Source, "SharedLib1"), (sharedLib2Source, "SharedLib2"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -166,6 +168,7 @@ public class ModuleImportContainerTests
 
         var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
             (levelCSource, "LevelC"), (levelBSource, "LevelB"), (levelASource, "LevelA"));
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
@@ -210,6 +213,7 @@ public class ModuleImportContainerTests
 
         var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
             (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);

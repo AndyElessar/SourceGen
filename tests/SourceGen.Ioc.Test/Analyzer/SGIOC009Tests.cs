@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Analyzer;
+namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC009: Invalid Attribute Usage - Instance is specified but Lifetime is not Singleton.

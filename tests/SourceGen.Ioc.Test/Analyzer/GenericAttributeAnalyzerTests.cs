@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Analyzer;
+namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for analyzer support of generic attribute variants (IoCRegisterAttribute&lt;T&gt;, IocRegisterForAttribute&lt;T&gt;, etc.).

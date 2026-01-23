@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Analyzer;
+namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC015: Unresolvable Constructor Parameter - Constructor contains built-in type

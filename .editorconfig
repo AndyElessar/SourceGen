@@ -1,21 +1,51 @@
-﻿# MSBuild project files
+﻿root = true
+
+# MSBuild project files
 [*]
 spelling_exclusion_path = exclusion.dic
 
 [*.{csproj,vbproj,vcxproj,vcxproj.filters,proj,projitems,shproj,msbuildproj,props,targets}]
-indent_size = 2
+indent_size = 4
 indent_style = space
+end_of_line = crlf
+tab_width = 4
 
 [*.json]
 indent_size = 2
 indent_style = space
 
 [*.cs]
-
-# 縮排和間距
 indent_size = 4
 indent_style = space
 tab_width = 4
+end_of_line = crlf
+insert_final_newline = true
+
+dotnet_property_generation_behavior = prefer_auto_properties
+dotnet_sort_system_directives_first = true
+
+csharp_space_after_cast = false
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_after_comma = true
+csharp_space_after_dot = false
+csharp_space_after_keywords_in_control_flow_statements = false
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_around_declaration_statements = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_before_comma = false
+csharp_space_before_dot = false
+csharp_space_before_open_square_brackets = false
+csharp_space_before_semicolon_in_for_statement = false
+csharp_space_between_empty_square_brackets = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_space_between_square_brackets = false
 
 # SA1200: Using directives should be placed correctly
 dotnet_diagnostic.SA1200.severity = silent

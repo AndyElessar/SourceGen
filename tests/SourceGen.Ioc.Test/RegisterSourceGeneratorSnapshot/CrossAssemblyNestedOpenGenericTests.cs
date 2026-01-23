@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for cross-assembly scenarios with nested open generic interfaces.
@@ -85,6 +85,7 @@ public class CrossAssemblyNestedOpenGenericTests
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -163,6 +164,7 @@ public class CrossAssemblyNestedOpenGenericTests
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -239,6 +241,7 @@ public class CrossAssemblyNestedOpenGenericTests
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -325,6 +328,7 @@ public class CrossAssemblyNestedOpenGenericTests
             mainSource,
             "MainApp",
             [sharedCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

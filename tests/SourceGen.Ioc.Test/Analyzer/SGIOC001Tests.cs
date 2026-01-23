@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Analyzer;
+namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC001: Invalid type for IoC registration (private/abstract).

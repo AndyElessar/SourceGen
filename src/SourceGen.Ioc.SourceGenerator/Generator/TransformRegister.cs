@@ -70,7 +70,9 @@ partial class IocSourceGenerator
 
     private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel? semanticModel = null)
     {
-        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+        // Pass semanticModel to GetTypeData for proper nameof() expression resolution in constructor parameter keys
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel);
+
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
@@ -89,7 +91,7 @@ partial class IocSourceGenerator
         }
 
         // Extract injection members (properties, fields, methods marked with IocInjectAttribute/InjectAttribute)
-        var injectionMembers = ExtractInjectionMembers(typeSymbol);
+        var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
         var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
@@ -125,7 +127,9 @@ partial class IocSourceGenerator
         AttributeData attributeData,
         SemanticModel? semanticModel = null)
     {
-        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+        // Pass semanticModel to GetTypeData for proper nameof() expression resolution in constructor parameter keys
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel);
+
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
@@ -147,7 +151,7 @@ partial class IocSourceGenerator
         }
 
         // Extract injection members (properties, fields, methods marked with InjectAttribute)
-        var injectionMembers = ExtractInjectionMembers(typeSymbol);
+        var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
         var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
@@ -178,21 +182,22 @@ partial class IocSourceGenerator
     /// Extracts injection members (properties, fields, methods) marked with IocInjectAttribute/InjectAttribute.
     /// </summary>
     /// <param name="typeSymbol">The type symbol to extract injection members from.</param>
+    /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
     /// <returns>An array of injection member data.</returns>
-    private static ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembers(INamedTypeSymbol typeSymbol)
+    private static ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembers(INamedTypeSymbol typeSymbol, SemanticModel? semanticModel = null)
     {
         List<InjectionMemberData>? injectionMembers = null;
 
         foreach(var (member, injectAttribute) in typeSymbol.GetInjectedMembers())
         {
             // Extract key information from IocInjectAttribute/InjectAttribute
-            var (key, _) = injectAttribute.GetKey();
+            var (key, _) = injectAttribute.GetKey(semanticModel);
 
             InjectionMemberData? memberData = member switch
             {
                 IPropertySymbol property => CreatePropertyInjection(property, key),
                 IFieldSymbol field => CreateFieldInjection(field, key),
-                IMethodSymbol method => CreateMethodInjection(method, key),
+                IMethodSymbol method => CreateMethodInjection(method, key, semanticModel),
                 _ => null
             };
 
@@ -326,12 +331,15 @@ partial class IocSourceGenerator
     /// <summary>
     /// Creates injection data for a method.
     /// </summary>
-    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key)
+    /// <param name="method">The method symbol to create injection data for.</param>
+    /// <param name="key">The key for keyed service resolution from [IocInject] attribute.</param>
+    /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
+    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel = null)
     {
         var parameters = method.Parameters
             .Select(p =>
             {
-                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo();
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo(semanticModel);
                 return new ParameterData(
                     p.Name,
                     p.Type.GetTypeData(),

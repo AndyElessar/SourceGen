@@ -123,7 +123,7 @@ partial class IocSourceGenerator
         var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
 
         // Extract injection members (properties, fields, methods marked with IocInjectAttribute/InjectAttribute)
-        var injectionMembers = ExtractInjectionMembers(typeSymbol);
+        var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
         var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(

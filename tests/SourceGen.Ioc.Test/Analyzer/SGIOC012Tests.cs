@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.Analyzer;
+namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC012: Duplicated IocRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.

@@ -16,8 +16,8 @@ namespace TestAssembly
         /// </summary>
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            services.AddKeyedSingleton<global::TestNamespace.KeyedService, global::TestNamespace.KeyedService>(KeyHolder.Key);
-            services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(KeyHolder.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService>(key));
+            services.AddKeyedSingleton<global::TestNamespace.KeyedService, global::TestNamespace.KeyedService>(global::TestNamespace.KeyHolder.Key);
+            services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(global::TestNamespace.KeyHolder.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService>(key));
             services.AddKeyedSingleton<global::TestNamespace.KeyedService2, global::TestNamespace.KeyedService2>(global::TestNamespace.KeyHolder.Key);
             services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(global::TestNamespace.KeyHolder.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService2>(key));
 

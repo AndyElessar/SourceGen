@@ -294,8 +294,7 @@ partial class IocSourceGenerator
         var factory = registration.Factory!;
         var factoryPath = factory.Path;
         var hasServiceProvider = factory.HasServiceProvider;
-        // hasKey is only meaningful when registration has a key
-        var hasKey = factory.HasKey && registration.Key is not null;
+        var hasKey = factory.HasKey;
         var returnTypeName = factory.ReturnTypeName;
         var additionalParameters = factory.AdditionalParameters;
         bool isKeyedRegistration = registration.Key is not null;
@@ -325,7 +324,9 @@ partial class IocSourceGenerator
         // Simple case: no additional parameters
         // Build factory invocation with optional generic type arguments
         var factoryCallPath = genericTypeArgs is not null ? $"{factoryPath}<{genericTypeArgs}>" : factoryPath;
-        string factoryInvocation = (hasServiceProvider, hasKey) switch
+        // Only pass key if factory has key parameter AND registration provides a key
+        var shouldPassKey = hasKey && registration.Key is not null;
+        string factoryInvocation = (hasServiceProvider, shouldPassKey) switch
         {
             (true, true) => $"{factoryCallPath}(sp, {registration.Key})",
             (true, false) => $"{factoryCallPath}(sp)",
@@ -417,9 +418,9 @@ partial class IocSourceGenerator
         }
 
         // Add registration key if needed
-        if(hasKey)
+        if(hasKey && registration.Key is not null)
         {
-            args.Add(registration.Key!);
+            args.Add(registration.Key);
         }
 
         // Add resolved additional parameters

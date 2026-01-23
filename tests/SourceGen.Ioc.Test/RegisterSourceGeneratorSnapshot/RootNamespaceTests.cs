@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for the RootNamespace MSBuild property feature.
@@ -30,6 +30,7 @@ public class RootNamespaceTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -53,6 +54,7 @@ public class RootNamespaceTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             assemblyName: "MyAssembly.Name");
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -82,6 +84,7 @@ public class RootNamespaceTests
             source,
             assemblyName: "FallbackAssembly",
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -111,6 +114,7 @@ public class RootNamespaceTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -139,6 +143,7 @@ public class RootNamespaceTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);
@@ -170,6 +175,7 @@ public class RootNamespaceTests
             source,
             assemblyName: "MyAssembly",
             analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

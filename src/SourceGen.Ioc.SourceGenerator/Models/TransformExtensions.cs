@@ -42,10 +42,13 @@ internal static class TransformExtensions
         /// </summary>
         /// <param name="extractConstructorParams">Whether to extract constructor parameters recursively.</param>
         /// <param name="extractHierarchy">Whether to extract all interfaces and base classes.</param>
+        /// <param name="visited">Set of visited types to prevent infinite recursion during constructor parameter extraction.</param>
+        /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions. Only used for top-level extraction, not passed to recursive calls.</param>
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
             bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null)
+            HashSet<INamedTypeSymbol>? visited = null,
+            SemanticModel? semanticModel = null)
         {
             visited = extractConstructorParams
                 ? (visited ?? new(SymbolEqualityComparer.Default))
@@ -65,7 +68,10 @@ internal static class TransformExtensions
             bool hasInjectConstructor = false;
             if(extractConstructorParams && visited is not null)
             {
-                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(visited);
+                // Pass semanticModel only for top-level extraction
+                // Recursive calls from within ExtractConstructorParametersWithInfo do not receive semanticModel
+                // to avoid cross-compilation-unit issues and stack overflow
+                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(visited, semanticModel);
             }
 
             // Extract hierarchy (interfaces and base classes) if requested
@@ -82,7 +88,7 @@ internal static class TransformExtensions
             var collectionKind = typeSymbol.CollectionKind;
 
             // Check if this is a built-in type or collection of built-in types
-            var isBuiltInTypeOrBuiltInCollection = ((ITypeSymbol)typeSymbol).IsBuiltInTypeOrBuiltInCollection;
+            var isBuiltInTypeOrBuiltInCollection = typeSymbol.IsBuiltInTypeOrBuiltInCollection;
 
             return new TypeData(
                 typeName,
@@ -283,9 +289,12 @@ internal static class TransformExtensions
         /// <summary>
         /// Extracts constructor parameters from a type and indicates whether the constructor was selected by [Inject] attribute.
         /// </summary>
+        /// <param name="visited">Set of visited types to prevent infinite recursion.</param>
+        /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions in service keys. Only used for top-level extraction, not passed to recursive calls.</param>
         /// <returns>A tuple containing the constructor parameters and whether the constructor has [Inject] attribute.</returns>
         public (ImmutableEquatableArray<ParameterData> Parameters, bool HasInjectConstructor) ExtractConstructorParametersWithInfo(
-            HashSet<INamedTypeSymbol>? visited = null)
+            HashSet<INamedTypeSymbol>? visited = null,
+            SemanticModel? semanticModel = null)
         {
             // Check if we've already visited this type to prevent infinite recursion
             if(visited is not null && !visited.Add(typeSymbol))
@@ -328,7 +337,8 @@ internal static class TransformExtensions
                 var hasDefaultValue = param.HasExplicitDefaultValue;
 
                 // Check for [FromKeyedServices], [Inject], or [ServiceKey] attribute
-                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo();
+                // SemanticModel is used to resolve nameof() expressions for top-level parameters
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
 
                 // Get the C# code representation of the default value
                 var defaultValue = hasDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue) : null;
@@ -430,7 +440,7 @@ internal static class TransformExtensions
         /// HasFromKeyedServicesAttribute indicates the parameter is marked with [FromKeyedServices] from Microsoft.Extensions.DependencyInjection.
         /// </summary>
         /// <returns>A tuple containing the service key (if any), whether the parameter has [Inject] attribute, [ServiceKey] attribute, and [FromKeyedServices] attribute.</returns>
-        public (string? ServiceKey, bool HasInjectAttribute, bool HasServiceKeyAttribute, bool HasFromKeyedServicesAttribute) GetServiceKeyAndAttributeInfo()
+        public (string? ServiceKey, bool HasInjectAttribute, bool HasServiceKeyAttribute, bool HasFromKeyedServicesAttribute) GetServiceKeyAndAttributeInfo(SemanticModel? semanticModel = null)
         {
             string? serviceKey = null;
             bool hasInjectAttribute = false;
@@ -477,7 +487,7 @@ internal static class TransformExtensions
                     // Only use [Inject] key if no [FromKeyedServices] key was found
                     if(serviceKey is null)
                     {
-                        var (key, _) = attribute.GetKey();
+                        var (key, _) = attribute.GetKey(semanticModel);
                         serviceKey = key;
                     }
                 }

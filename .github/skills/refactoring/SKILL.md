@@ -3,6 +3,8 @@ name: refactoring
 description: Guide for refactoring code to improve its structure and readability without changing its external behavior. Use this when you need to improve existing code.
 ---
 
+# Refactoring
+
 To refactor code effectively, follow these steps:
 
 1. **Identify the Code to Refactor**: Determine which parts of the codebase need improvement. Look for code that is hard to read, has duplicated logic, or does not follow best practices.

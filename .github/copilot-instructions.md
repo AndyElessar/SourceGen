@@ -54,6 +54,7 @@ tests/
   dotnet run --project path/to/TestProject.csproj -- --treenode-filter "/*/*/TestClass/*"
   ```
 - Never use `dotnet test` with `--filter` for TUnit projects
+- If facing issue where don't know is design decision or test failure, **ask user for clarification**
 - Test projects use TUnit framework - see [TUnit Best Practices](./prompts/csharp-tunit.prompt.md)
 
 ## Reference
