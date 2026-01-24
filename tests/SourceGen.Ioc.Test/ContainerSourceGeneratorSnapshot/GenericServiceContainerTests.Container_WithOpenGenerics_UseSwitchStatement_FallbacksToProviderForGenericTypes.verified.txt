@@ -41,7 +41,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         if(_testNamespace_UserService is not null) return _testNamespace_UserService;
 
-        var instance = new global::TestNamespace.UserService((global::TestNamespace.IRepository<global::TestNamespace.User>)GetRequiredService(typeof(global::TestNamespace.IRepository<global::TestNamespace.User>)));
+        var instance = new global::TestNamespace.UserService(GetTestNamespace_Repository_TestNamespace_User_());
 
         return Interlocked.CompareExchange(ref _testNamespace_UserService, instance, null) ?? instance;
     }

@@ -14,6 +14,7 @@
 /// <param name="TypeParameters">The generic type parameters with their names, resolved types, implemented interfaces, and constraints.</param>
 /// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
 /// <param name="HasInjectConstructor">Whether the type's constructor was selected by [Inject] attribute (requires factory method for proper instantiation).</param>
+/// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection. Only populated for decorators when extractInjectionMembers is true.</param>
 /// <param name="AllInterfaces">All interfaces implemented by the type. Only populated when extractHierarchy is true.</param>
 /// <param name="AllBaseClasses">All base classes of the type (excluding System.Object). Only populated when extractHierarchy is true.</param>
 internal sealed record class TypeData(
@@ -28,6 +29,7 @@ internal sealed record class TypeData(
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
 {

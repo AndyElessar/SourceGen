@@ -183,8 +183,9 @@ partial class IocSourceGenerator
             tagOnly,
             factory);
 
-        // Collect closed generic dependencies
-        var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration);
+        // Collect closed generic dependencies from constructor parameters, injection members, factory params,
+        // and also from closed decorators' constructor parameters
+        var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration, serviceRegistrations);
 
         return new BasicRegistrationResult(
             serviceRegistrations,
@@ -646,19 +647,44 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collects closed generic dependencies from a registration's constructor parameters, injection members, and factory method parameters.
+    /// Collects closed generic dependencies from a registration's constructor parameters, injection members,
+    /// factory method parameters, and closed decorators' constructor parameters and injection members.
     /// </summary>
     private static ImmutableEquatableArray<ClosedGenericDependency> CollectClosedGenericDependenciesFromRegistration(
-        RegistrationData registration)
+        RegistrationData registration,
+        ImmutableEquatableArray<ServiceRegistrationModel> serviceRegistrations)
     {
         var constructorParams = registration.ImplementationType.ConstructorParameters;
         var injectionMembers = registration.InjectionMembers;
         var factoryParams = registration.Factory?.AdditionalParameters;
 
-        // Early exit if no constructor params, no injection members, and no factory params
+        // Check if we have any decorators with constructor parameters or injection members in the service registrations
+        var hasDecoratorDependencies = false;
+        foreach(var reg in serviceRegistrations)
+        {
+            foreach(var decorator in reg.Decorators)
+            {
+                // Check constructor parameters (> 1 because first param is the decorated service)
+                if(decorator.ConstructorParameters is { Length: > 1 })
+                {
+                    hasDecoratorDependencies = true;
+                    break;
+                }
+                // Check injection members
+                if(decorator.InjectionMembers is { Length: > 0 })
+                {
+                    hasDecoratorDependencies = true;
+                    break;
+                }
+            }
+            if(hasDecoratorDependencies) break;
+        }
+
+        // Early exit if no constructor params, no injection members, no factory params, and no decorator dependencies
         if((constructorParams is null || constructorParams.Length == 0)
             && injectionMembers.Length == 0
-            && (factoryParams is null || factoryParams.Length == 0))
+            && (factoryParams is null || factoryParams.Length == 0)
+            && !hasDecoratorDependencies)
         {
             return [];
         }
@@ -700,6 +726,45 @@ partial class IocSourceGenerator
             foreach(var param in factoryParams)
             {
                 CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+            }
+        }
+
+        // Collect from closed decorators' constructor parameters and injection members
+        // These are decorators that have been closed (type parameters substituted) for specific service types
+        foreach(var reg in serviceRegistrations)
+        {
+            foreach(var decorator in reg.Decorators)
+            {
+                // Collect from constructor parameters (skip first parameter - it's the decorated service)
+                if(decorator.ConstructorParameters is { Length: > 0 })
+                {
+                    foreach(var param in decorator.ConstructorParameters.Skip(1))
+                    {
+                        CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                    }
+                }
+
+                // Collect from injection members (properties, fields, methods with [Inject] attribute)
+                if(decorator.InjectionMembers is { Length: > 0 })
+                {
+                    foreach(var member in decorator.InjectionMembers)
+                    {
+                        // For properties and fields, check the member type
+                        if(member.Type is not null)
+                        {
+                            CollectClosedGenericDependencyFromType(member.Type, dependencies, addedKeys);
+                        }
+
+                        // For methods, check each parameter type
+                        if(member.Parameters is not null)
+                        {
+                            foreach(var param in member.Parameters)
+                            {
+                                CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                            }
+                        }
+                    }
+                }
             }
         }
 

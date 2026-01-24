@@ -1235,4 +1235,156 @@ public class ClosedGenericDependencyTests
 
         await Verify(generatedSource);
     }
+
+    /// <summary>
+    /// Tests that closed generic dependencies in decorator's [IocInject] property are discovered.
+    /// When a decorator has a property with [IocInject] attribute that depends on a closed generic type,
+    /// the generator should automatically create factory registrations for that closed generic type.
+    /// </summary>
+    [Test]
+    public async Task DecoratorInjectionProperty_ClosedGenericDependency_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.LoggingDecorator<,>)])]
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>
+            {
+                void Log(string msg);
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>
+            {
+                public void Log(string msg) => System.Console.WriteLine(msg);
+            }
+
+            public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+            public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
+
+            [IocRegister]
+            public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>
+            {
+                public List<T> Handle(TestRequest<T> request) => [];
+            }
+
+            // Decorator with [IocInject] property that depends on a closed generic type
+            // This decorator uses property injection for ILogger<LoggingDecorator<TRequest, TResponse>>
+            public class LoggingDecorator<TRequest, TResponse>(
+                IRequestHandler<TRequest, TResponse> inner
+            ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+            {
+                [IocInject]
+                public ILogger<LoggingDecorator<TRequest, TResponse>>? Logger { get; set; }
+
+                public TResponse Handle(TRequest request)
+                {
+                    Logger?.Log("Before");
+                    var result = inner.Handle(request);
+                    Logger?.Log("After");
+                    return result;
+                }
+            }
+
+            // This triggers the closed generic resolution for IRequestHandler<TestRequest<string>, List<string>>
+            // The decorator's injection property should also trigger ILogger<LoggingDecorator<TestRequest<string>, List<string>>> resolution
+            [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+            public class DiscoverMarker { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    /// <summary>
+    /// Tests that closed generic dependencies in decorator's [IocInject] method parameters are discovered.
+    /// </summary>
+    [Test]
+    public async Task DecoratorInjectionMethod_ClosedGenericDependency_GeneratesFactoryRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.CachingDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface ICache<T>
+            {
+                T? Get(string key);
+                void Set(string key, T value);
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ICache<>)])]
+            public sealed class MemoryCache<T> : ICache<T>
+            {
+                private readonly Dictionary<string, T> _cache = [];
+                public T? Get(string key) => _cache.TryGetValue(key, out var value) ? value : default;
+                public void Set(string key, T value) => _cache[key] = value;
+            }
+
+            public interface IHandler<T>
+            {
+                void Handle(T item);
+            }
+
+            [IocRegister]
+            public class Handler<T> : IHandler<T>
+            {
+                public void Handle(T item) { }
+            }
+
+            // Decorator with [IocInject] method that depends on a closed generic type
+            public class CachingDecorator<T>(IHandler<T> inner) : IHandler<T>
+            {
+                private ICache<T>? cache;
+
+                [IocInject]
+                public void Initialize(ICache<T> cache)
+                {
+                    this.cache = cache;
+                }
+
+                public void Handle(T item)
+                {
+                    // Use cache...
+                    inner.Handle(item);
+                }
+            }
+
+            public class Event { }
+
+            // This triggers the closed generic resolution for IHandler<Event>
+            // The decorator's injection method should also trigger ICache<Event> resolution
+            [IocDiscover(typeof(IHandler<Event>))]
+            public class DiscoverMarker { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

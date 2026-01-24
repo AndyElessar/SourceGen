@@ -55,7 +55,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
 
     private global::MainApp.Consumer GetMainApp_Consumer()
     {
-        return new global::MainApp.Consumer((global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>)GetRequiredService(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>)));
+        return new global::MainApp.Consumer(GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_());
     }
 
     private global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1> GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()

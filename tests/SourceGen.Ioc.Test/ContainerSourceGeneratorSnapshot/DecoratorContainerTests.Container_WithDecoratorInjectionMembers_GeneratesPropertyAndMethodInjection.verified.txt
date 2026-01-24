@@ -42,6 +42,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
+        _testNamespace_MemoryCache = parent._testNamespace_MemoryCache;
         _testNamespace_Logger = parent._testNamespace_Logger;
         _serviceResolvers = parent._serviceResolvers;
     }
@@ -49,6 +50,16 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #endregion
 
     #region Service Resolution
+
+    private global::TestNamespace.MemoryCache? _testNamespace_MemoryCache;
+    private global::TestNamespace.MemoryCache GetTestNamespace_MemoryCache()
+    {
+        if(_testNamespace_MemoryCache is not null) return _testNamespace_MemoryCache;
+
+        var instance = new global::TestNamespace.MemoryCache();
+
+        return Interlocked.CompareExchange(ref _testNamespace_MemoryCache, instance, null) ?? instance;
+    }
 
     private global::TestNamespace.Logger? _testNamespace_Logger;
     private global::TestNamespace.Logger GetTestNamespace_Logger()
@@ -60,20 +71,24 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         return Interlocked.CompareExchange(ref _testNamespace_Logger, instance, null) ?? instance;
     }
 
-    private global::TestNamespace.MyService? _testNamespace_MyService;
-    private readonly Lock _testNamespace_MyServiceLock = new();
-    private global::TestNamespace.MyService GetTestNamespace_MyService()
+    private global::TestNamespace.IHandler? _testNamespace_Handler;
+    private readonly Lock _testNamespace_HandlerLock = new();
+    private global::TestNamespace.IHandler GetTestNamespace_Handler()
     {
-        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+        if(_testNamespace_Handler is not null) return _testNamespace_Handler;
 
-        lock(_testNamespace_MyServiceLock)
+        lock(_testNamespace_HandlerLock)
         {
-            if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+            if(_testNamespace_Handler is not null) return _testNamespace_Handler;
 
-            var instance = new global::TestNamespace.MyService();
-            instance.Initialize(GetTestNamespace_Logger());
+            global::TestNamespace.IHandler instance = new global::TestNamespace.Handler();
 
-            _testNamespace_MyService = instance;
+            var decorator0 = new global::TestNamespace.CachingDecorator(instance);
+            decorator0.Cache = GetTestNamespace_MemoryCache();
+            decorator0.SetLogger(GetTestNamespace_Logger());
+            instance = decorator0;
+
+            _testNamespace_Handler = instance;
             return instance;
         }
     }
@@ -164,10 +179,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
+        new((typeof(global::TestNamespace.MemoryCache), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MemoryCache()),
+        new((typeof(global::TestNamespace.ICache), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MemoryCache()),
         new((typeof(global::TestNamespace.Logger), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Logger()),
         new((typeof(global::TestNamespace.ILogger), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Logger()),
-        new((typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
-        new((typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new((typeof(global::TestNamespace.Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler()),
+        new((typeof(global::TestNamespace.IHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler()),
     ];
 
     #endregion
@@ -198,11 +215,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            DisposeService(_testNamespace_MyService);
+            DisposeService(_testNamespace_Handler);
             return;
         }
 
         DisposeService(_testNamespace_Logger);
+        DisposeService(_testNamespace_MemoryCache);
     }
 
     public async ValueTask DisposeAsync()
@@ -211,11 +229,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_testNamespace_MyService);
+            await DisposeServiceAsync(_testNamespace_Handler);
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_Logger);
+        await DisposeServiceAsync(_testNamespace_MemoryCache);
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

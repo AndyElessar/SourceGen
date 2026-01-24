@@ -92,12 +92,13 @@ partial class IocSourceGenerator
             }
         }
 
-        // Generate factory registrations only when both dictionaries have data
-        if(openGenericIndex is not null && closedGenericDependencies is not null)
+        // Generate factory registrations when we have open generics to potentially close
+        // Even if there are no direct closed generic dependencies, decorators may have closed generic dependencies
+        if(openGenericIndex is not null)
         {
             GenerateClosedGenericFactoryRegistrations(
                 openGenericIndex,
-                closedGenericDependencies,
+                closedGenericDependencies ?? new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal),
                 registrations,
                 ct);
         }
@@ -107,6 +108,7 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Generates factory registrations for closed generic types that depend on open generic registrations.
+    /// Iteratively processes dependencies including those from decorator constructor parameters.
     /// </summary>
     private static void GenerateClosedGenericFactoryRegistrations(
         Dictionary<string, List<OpenGenericRegistrationInfo>> openGenericIndex,
@@ -114,7 +116,8 @@ partial class IocSourceGenerator
         List<ServiceRegistrationWithTags> registrations,
         CancellationToken ct)
     {
-        if(openGenericIndex.Count == 0 || closedGenericDependencies.Count == 0)
+        // No open generics to close - nothing to do
+        if(openGenericIndex.Count == 0)
         {
             return;
         }
@@ -131,12 +134,28 @@ partial class IocSourceGenerator
             generatedClosedGenerics.Add(model.ServiceType.Name);
         }
 
-        foreach(var kvp in closedGenericDependencies)
+        // Use a queue for iterative processing of dependencies
+        var pendingDependencies = new Queue<ClosedGenericDependency>(closedGenericDependencies.Values);
+        var processedDependencies = new HashSet<string>(StringComparer.Ordinal);
+
+        // No dependencies to process - nothing to do
+        if(pendingDependencies.Count == 0)
+        {
+            return;
+        }
+
+        while(pendingDependencies.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
 
-            var closedTypeName = kvp.Key;
-            var dependency = kvp.Value;
+            var dependency = pendingDependencies.Dequeue();
+            var closedTypeName = dependency.ClosedTypeName;
+
+            // Skip if already processed
+            if(!processedDependencies.Add(closedTypeName))
+            {
+                continue;
+            }
 
             // Check if the open generic version is registered
             if(!openGenericIndex.TryGetValue(dependency.OpenGenericKey, out var openGenericInfoList))
@@ -149,6 +168,9 @@ partial class IocSourceGenerator
             {
                 continue;
             }
+
+            // Track registration count before generating
+            var registrationCountBefore = registrations.Count;
 
             // Try each open generic registration to find one that matches the closed type structure
             foreach(var openGenericInfo in openGenericInfoList)
@@ -164,7 +186,102 @@ partial class IocSourceGenerator
                     break; // Found a matching registration, stop searching
                 }
             }
+
+            // Collect new dependencies from newly generated registrations (including decorator parameters)
+            for(var i = registrationCountBefore; i < registrations.Count; i++)
+            {
+                var newReg = registrations[i].Registration;
+
+                // Collect from decorator constructor parameters
+                foreach(var decorator in newReg.Decorators)
+                {
+                    if(decorator.ConstructorParameters is { Length: > 0 })
+                    {
+                        // Skip first parameter (it's the decorated service)
+                        foreach(var param in decorator.ConstructorParameters.Skip(1))
+                        {
+                            CollectNewDependencyFromType(
+                                param.Type,
+                                pendingDependencies,
+                                processedDependencies,
+                                generatedClosedGenerics);
+                        }
+                    }
+
+                    // Collect from decorator injection members (properties, fields, methods with [IocInject] attribute)
+                    if(decorator.InjectionMembers is { Length: > 0 })
+                    {
+                        foreach(var member in decorator.InjectionMembers)
+                        {
+                            // For properties and fields, check the member type
+                            if(member.Type is not null)
+                            {
+                                CollectNewDependencyFromType(
+                                    member.Type,
+                                    pendingDependencies,
+                                    processedDependencies,
+                                    generatedClosedGenerics);
+                            }
+
+                            // For methods, check each parameter type
+                            if(member.Parameters is not null)
+                            {
+                                foreach(var param in member.Parameters)
+                                {
+                                    CollectNewDependencyFromType(
+                                        param.Type,
+                                        pendingDependencies,
+                                        processedDependencies,
+                                        generatedClosedGenerics);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Collect from constructor parameters
+                if(newReg.ImplementationType.ConstructorParameters is { Length: > 0 })
+                {
+                    foreach(var param in newReg.ImplementationType.ConstructorParameters)
+                    {
+                        CollectNewDependencyFromType(
+                            param.Type,
+                            pendingDependencies,
+                            processedDependencies,
+                            generatedClosedGenerics);
+                    }
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// Collects a new closed generic dependency from a type and adds it to the pending queue.
+    /// </summary>
+    private static void CollectNewDependencyFromType(
+        TypeData paramType,
+        Queue<ClosedGenericDependency> pendingDependencies,
+        HashSet<string> processedDependencies,
+        HashSet<string> generatedClosedGenerics)
+    {
+        // Skip if not a closed generic type
+        if(paramType.GenericArity == 0 || paramType.IsOpenGeneric || paramType.IsNestedOpenGeneric)
+        {
+            return;
+        }
+
+        // Skip if already processed or registered
+        if(processedDependencies.Contains(paramType.Name) || generatedClosedGenerics.Contains(paramType.Name))
+        {
+            return;
+        }
+
+        // Add as a new dependency to process
+        var dependency = new ClosedGenericDependency(
+            paramType.Name,
+            paramType,
+            paramType.NameWithoutGeneric);
+        pendingDependencies.Enqueue(dependency);
     }
 
     /// <summary>
@@ -803,7 +920,7 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Substitutes type parameters in a decorator and processes its constructor parameters.
+    /// Substitutes type parameters in a decorator and processes its constructor parameters and injection members.
     /// </summary>
     private static TypeData SubstituteDecoratorTypeParams(
         TypeData decorator,
@@ -842,15 +959,30 @@ partial class IocSourceGenerator
             var newParams = new List<ParameterData>(constructorParams.Length);
             foreach(var param in constructorParams)
             {
-                var newParamTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
-                var newParamType = param.Type with
+                // Use SubstituteTypeData to recursively substitute type parameters
+                // This ensures nested generics like ILogger<HandlerDecorator1<TRequest, TResponse>>
+                // get their TypeParameters correctly substituted
+                var newParamType = SubstituteTypeData(param.Type, typeArgMap) with
                 {
-                    Name = newParamTypeName,
-                    IsOpenGeneric = false
+                    IsNestedOpenGeneric = false
                 };
                 newParams.Add(param with { Type = newParamType });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
+        }
+
+        // Substitute in injection members (properties, fields, methods with [IocInject] attributes)
+        var injectionMembers = decorator.InjectionMembers;
+        ImmutableEquatableArray<InjectionMemberData>? closedInjectionMembers = null;
+        if(injectionMembers is not null && injectionMembers.Length > 0)
+        {
+            var newMembers = new List<InjectionMemberData>(injectionMembers.Length);
+            foreach(var member in injectionMembers)
+            {
+                var newMember = SubstituteInjectionMember(member, typeArgMap);
+                newMembers.Add(newMember);
+            }
+            closedInjectionMembers = newMembers.ToImmutableEquatableArray();
         }
 
         // Substitute in type parameters
@@ -866,6 +998,44 @@ partial class IocSourceGenerator
             CollectionKind: CollectionKind.None,
             IsBuiltInTypeOrBuiltInCollection: false, // Decorator types are not built-in types
             newTypeParams,
-            closedConstructorParams);
+            closedConstructorParams,
+            HasInjectConstructor: false,
+            closedInjectionMembers);
+    }
+
+    /// <summary>
+    /// Substitutes type parameters in an injection member.
+    /// </summary>
+    private static InjectionMemberData SubstituteInjectionMember(
+        InjectionMemberData member,
+        TypeArgMap typeArgMap)
+    {
+        // For properties and fields, substitute the member type
+        TypeData? newType = null;
+        if(member.Type is not null)
+        {
+            newType = SubstituteTypeData(member.Type, typeArgMap) with
+            {
+                IsNestedOpenGeneric = false
+            };
+        }
+
+        // For methods, substitute each parameter type
+        ImmutableEquatableArray<ParameterData>? newParams = null;
+        if(member.Parameters is not null && member.Parameters.Length > 0)
+        {
+            var paramList = new List<ParameterData>(member.Parameters.Length);
+            foreach(var param in member.Parameters)
+            {
+                var newParamType = SubstituteTypeData(param.Type, typeArgMap) with
+                {
+                    IsNestedOpenGeneric = false
+                };
+                paramList.Add(param with { Type = newParamType });
+            }
+            newParams = paramList.ToImmutableEquatableArray();
+        }
+
+        return member with { Type = newType, Parameters = newParams };
     }
 }

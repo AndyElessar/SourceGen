@@ -383,7 +383,7 @@ partial class IocSourceGenerator
         {
             if(!writtenMethods.Add(cached.ResolverMethodName))
                 continue;
-            WriteServiceResolverMethod(writer, container, cached);
+            WriteServiceResolverMethod(writer, container, cached, groups);
             writer.WriteLine();
         }
 
@@ -391,7 +391,7 @@ partial class IocSourceGenerator
         {
             if(!writtenMethods.Add(cached.ResolverMethodName))
                 continue;
-            WriteServiceResolverMethod(writer, container, cached);
+            WriteServiceResolverMethod(writer, container, cached, groups);
             writer.WriteLine();
         }
 
@@ -399,7 +399,7 @@ partial class IocSourceGenerator
         {
             if(!writtenMethods.Add(cached.ResolverMethodName))
                 continue;
-            WriteServiceResolverMethod(writer, container, cached);
+            WriteServiceResolverMethod(writer, container, cached, groups);
             writer.WriteLine();
         }
 
@@ -450,7 +450,8 @@ partial class IocSourceGenerator
     private static void WriteServiceResolverMethod(
         SourceWriter writer,
         ContainerModel container,
-        CachedRegistration cached)
+        CachedRegistration cached,
+        ContainerRegistrationGroups groups)
     {
         var reg = cached.Registration;
         var methodName = cached.ResolverMethodName;
@@ -474,16 +475,16 @@ partial class IocSourceGenerator
 
                 if(hasInjectionMembers || hasDecorators)
                 {
-                    WriteResolverMethodWithLock(writer, methodName, returnType, fieldName, reg, hasFactory, hasInstance, hasDecorators);
+                    WriteResolverMethodWithLock(writer, methodName, returnType, fieldName, reg, hasFactory, hasInstance, hasDecorators, groups);
                 }
                 else
                 {
-                    WriteResolverMethodWithInterlocked(writer, methodName, returnType, fieldName, reg, hasFactory, hasInstance);
+                    WriteResolverMethodWithInterlocked(writer, methodName, returnType, fieldName, reg, hasFactory, hasInstance, groups);
                 }
                 break;
 
             case ServiceLifetime.Transient:
-                WriteTransientResolverMethod(writer, methodName, returnType, reg, hasFactory, hasInstance, hasDecorators);
+                WriteTransientResolverMethod(writer, methodName, returnType, reg, hasFactory, hasInstance, hasDecorators, groups);
                 break;
         }
     }
@@ -498,7 +499,8 @@ partial class IocSourceGenerator
         string fieldName,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance)
+        bool hasInstance,
+        ContainerRegistrationGroups groups)
     {
         writer.WriteLine($"private {returnType} {methodName}()");
         writer.WriteLine("{");
@@ -508,7 +510,7 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // Create instance
-        WriteInstanceCreation(writer, "instance", reg, hasFactory, hasInstance);
+        WriteInstanceCreation(writer, "instance", reg, hasFactory, hasInstance, groups);
         writer.WriteLine();
 
         writer.WriteLine($"return Interlocked.CompareExchange(ref {fieldName}, instance, null) ?? instance;");
@@ -528,7 +530,8 @@ partial class IocSourceGenerator
         ServiceRegistrationModel reg,
         bool hasFactory,
         bool hasInstance,
-        bool hasDecorators)
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
     {
         writer.WriteLine($"private {returnType} {methodName}()");
         writer.WriteLine("{");
@@ -547,13 +550,13 @@ partial class IocSourceGenerator
         // Create instance with injection
         // When decorators are present, use ServiceType for variable declaration
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
-        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, hasInstance, variableType);
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, hasInstance, variableType, groups);
 
         // Apply decorators if any
         if(hasDecorators)
         {
             writer.WriteLine();
-            WriteDecoratorApplication(writer, "instance", reg);
+            WriteDecoratorApplication(writer, "instance", reg, groups);
         }
 
         writer.WriteLine();
@@ -578,7 +581,8 @@ partial class IocSourceGenerator
         ServiceRegistrationModel reg,
         bool hasFactory,
         bool hasInstance,
-        bool hasDecorators)
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
     {
         writer.WriteLine($"private {returnType} {methodName}()");
         writer.WriteLine("{");
@@ -588,20 +592,20 @@ partial class IocSourceGenerator
         {
             // When decorators are present, use ServiceType for variable declaration
             var variableType = hasDecorators ? reg.ServiceType.Name : null;
-            WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, hasInstance, variableType);
+            WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, hasInstance, variableType, groups);
 
             // Apply decorators if any
             if(hasDecorators)
             {
                 writer.WriteLine();
-                WriteDecoratorApplication(writer, "instance", reg);
+                WriteDecoratorApplication(writer, "instance", reg, groups);
             }
 
             writer.WriteLine("return instance;");
         }
         else
         {
-            var instanceCreation = BuildInstanceCreationInline(reg, hasFactory, hasInstance);
+            var instanceCreation = BuildInstanceCreationInline(reg, hasFactory, hasInstance, groups);
             writer.WriteLine($"return {instanceCreation};");
         }
 
@@ -617,7 +621,8 @@ partial class IocSourceGenerator
         string varName,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance)
+        bool hasInstance,
+        ContainerRegistrationGroups groups)
     {
         if(hasInstance)
         {
@@ -628,14 +633,14 @@ partial class IocSourceGenerator
         if(hasFactory)
         {
             var factory = reg.Factory!;
-            var factoryCall = BuildFactoryCallForContainer(factory, reg);
+            var factoryCall = BuildFactoryCallForContainer(factory, reg, groups);
             // Cast to implementation type if factory returns a different type
             writer.WriteLine($"var {varName} = ({reg.ImplementationType.Name}){factoryCall};");
             return;
         }
 
         // Constructor invocation
-        var args = BuildConstructorArgumentsString(reg);
+        var args = BuildConstructorArgumentsString(reg, groups);
         writer.WriteLine($"var {varName} = new {reg.ImplementationType.Name}({args});");
     }
 
@@ -649,7 +654,8 @@ partial class IocSourceGenerator
         ServiceRegistrationModel reg,
         bool hasFactory,
         bool hasInstance,
-        string? variableType = null)
+        string? variableType,
+        ContainerRegistrationGroups groups)
     {
         // Use explicit type when provided (for decorator scenarios), otherwise use 'var'
         var typeDeclaration = variableType ?? "var";
@@ -661,7 +667,7 @@ partial class IocSourceGenerator
         else if(hasFactory)
         {
             var factory = reg.Factory!;
-            var factoryCall = BuildFactoryCallForContainer(factory, reg);
+            var factoryCall = BuildFactoryCallForContainer(factory, reg, groups);
             // Cast to implementation type if factory returns a different type
             writer.WriteLine($"{typeDeclaration} {varName} = ({reg.ImplementationType.Name}){factoryCall};");
         }
@@ -685,7 +691,7 @@ partial class IocSourceGenerator
                 }
             }
 
-            var args = BuildConstructorArgumentsString(reg);
+            var args = BuildConstructorArgumentsString(reg, groups);
 
             if(properties is { Count: > 0 })
             {
@@ -695,7 +701,7 @@ partial class IocSourceGenerator
 
                 foreach(var prop in properties)
                 {
-                    var resolveCall = BuildServiceResolutionCallForContainer(prop.Type!, prop.Key, prop.IsNullable);
+                    var resolveCall = BuildServiceResolutionCallForContainer(prop.Type!, prop.Key, prop.IsNullable, groups);
                     writer.WriteLine($"{prop.Name} = {resolveCall},");
                 }
 
@@ -715,7 +721,7 @@ partial class IocSourceGenerator
                     var methodArgs = "";
                     if(method.Parameters is { Length: > 0 })
                     {
-                        var argsList = method.Parameters.Select(p => BuildParameterForContainer(p, reg));
+                        var argsList = method.Parameters.Select(p => BuildParameterForContainer(p, reg, groups));
                         methodArgs = string.Join(", ", argsList);
                     }
                     writer.WriteLine($"{varName}.{method.Name}({methodArgs});");
@@ -732,7 +738,8 @@ partial class IocSourceGenerator
     private static void WriteDecoratorApplication(
         SourceWriter writer,
         string varName,
-        ServiceRegistrationModel reg)
+        ServiceRegistrationModel reg,
+        ContainerRegistrationGroups groups)
     {
         // Decorators array is in order from outermost to innermost,
         // we iterate in reverse order for building the chain from inner to outer
@@ -740,6 +747,8 @@ partial class IocSourceGenerator
         for(int i = decorators.Length - 1; i >= 0; i--)
         {
             var decorator = decorators[i];
+            var hasInjectionMembers = decorator.InjectionMembers is { Length: > 0 };
+
             // Build decorator constructor arguments
             // First parameter is always the inner instance (the decorated service)
             var decoratorArgs = new List<string> { varName };
@@ -750,14 +759,86 @@ partial class IocSourceGenerator
                 // Skip the first parameter (it's the inner/decorated service)
                 foreach(var param in decorator.ConstructorParameters.Skip(1))
                 {
-                    var resolveCall = BuildServiceResolutionCallForContainer(param.Type, param.ServiceKey, param.IsNullable);
+                    var resolveCall = BuildServiceResolutionCallForContainer(param.Type, param.ServiceKey, param.IsNullable, groups);
                     decoratorArgs.Add(resolveCall);
                 }
             }
 
             var argsString = string.Join(", ", decoratorArgs);
-            writer.WriteLine($"{varName} = new {decorator.Name}({argsString});");
+
+            if(hasInjectionMembers)
+            {
+                // When decorator has injection members, use a temporary variable with concrete type
+                // to allow accessing the decorator's properties/methods before assigning to interface variable
+                var decoratorVarName = $"decorator{decorators.Length - 1 - i}";
+                writer.WriteLine($"var {decoratorVarName} = new {decorator.Name}({argsString});");
+
+                // Apply injection members to the concrete decorator variable
+                WriteDecoratorInjectionMembersForContainer(writer, decoratorVarName, decorator, reg, groups);
+
+                // Assign to the interface variable
+                writer.WriteLine($"{varName} = {decoratorVarName};");
+            }
+            else
+            {
+                // No injection members, directly assign to the interface variable
+                writer.WriteLine($"{varName} = new {decorator.Name}({argsString});");
+            }
         }
+    }
+
+    /// <summary>
+    /// Writes injection member assignments for a decorator instance in Container mode.
+    /// Handles property injection, field injection, and method injection for decorators.
+    /// </summary>
+    private static void WriteDecoratorInjectionMembersForContainer(
+        SourceWriter writer,
+        string varName,
+        TypeData decorator,
+        ServiceRegistrationModel reg,
+        ContainerRegistrationGroups groups)
+    {
+        var injectionMembers = decorator.InjectionMembers;
+        if(injectionMembers is null or { Length: 0 })
+            return;
+
+        foreach(var member in injectionMembers)
+        {
+            switch(member.MemberType)
+            {
+                case InjectionMemberType.Property:
+                case InjectionMemberType.Field:
+                    if(member.Type is not null)
+                    {
+                        var resolveCall = BuildServiceResolutionCallForContainer(member.Type, member.Key, member.IsNullable, groups);
+                        writer.WriteLine($"{varName}.{member.Name} = {resolveCall};");
+                    }
+                    break;
+
+                case InjectionMemberType.Method:
+                    var methodArgs = "";
+                    if(member.Parameters is { Length: > 0 })
+                    {
+                        var argsList = member.Parameters.Select(p => BuildParameterForInjectionMethod(p, reg, groups));
+                        methodArgs = string.Join(", ", argsList);
+                    }
+                    writer.WriteLine($"{varName}.{member.Name}({methodArgs});");
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a single parameter for injection method (handles IServiceProvider and service resolution).
+    /// </summary>
+    private static string BuildParameterForInjectionMethod(ParameterData param, ServiceRegistrationModel reg, ContainerRegistrationGroups groups)
+    {
+        if(param.Type.Name == "System.IServiceProvider" || param.Type.Name == "global::System.IServiceProvider")
+        {
+            return "this";
+        }
+
+        return BuildServiceResolutionCallForContainer(param.Type, param.ServiceKey, param.IsOptional, groups);
     }
 
     /// <summary>
@@ -766,7 +847,8 @@ partial class IocSourceGenerator
     private static string BuildInstanceCreationInline(
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance)
+        bool hasInstance,
+        ContainerRegistrationGroups groups)
     {
         if(hasInstance)
         {
@@ -776,19 +858,19 @@ partial class IocSourceGenerator
         if(hasFactory)
         {
             var factory = reg.Factory!;
-            var factoryCall = BuildFactoryCallForContainer(factory, reg);
+            var factoryCall = BuildFactoryCallForContainer(factory, reg, groups);
             // Cast to implementation type if factory returns a different type
             return $"({reg.ImplementationType.Name}){factoryCall}";
         }
 
-        var args = BuildConstructorArgumentsString(reg);
+        var args = BuildConstructorArgumentsString(reg, groups);
         return $"new {reg.ImplementationType.Name}({args})";
     }
 
     /// <summary>
     /// Builds constructor arguments as a string.
     /// </summary>
-    private static string BuildConstructorArgumentsString(ServiceRegistrationModel reg)
+    private static string BuildConstructorArgumentsString(ServiceRegistrationModel reg, ContainerRegistrationGroups groups)
     {
         var parameters = reg.ImplementationType.ConstructorParameters;
         if(parameters is null or { Length: 0 })
@@ -797,7 +879,7 @@ partial class IocSourceGenerator
         var args = new List<string>();
         foreach(var param in parameters)
         {
-            args.Add(BuildParameterForContainer(param, reg));
+            args.Add(BuildParameterForContainer(param, reg, groups));
         }
 
         return string.Join(", ", args);
@@ -807,7 +889,7 @@ partial class IocSourceGenerator
     /// Builds a single parameter for container (constructor, method injection, or factory).
     /// Handles [ServiceKey], IServiceProvider, and regular service resolution.
     /// </summary>
-    private static string BuildParameterForContainer(ParameterData param, ServiceRegistrationModel reg)
+    private static string BuildParameterForContainer(ParameterData param, ServiceRegistrationModel reg, ContainerRegistrationGroups groups)
     {
         if(param.HasServiceKeyAttribute)
         {
@@ -821,13 +903,13 @@ partial class IocSourceGenerator
         }
 
         var key = param.ServiceKey ?? (param.HasFromKeyedServicesAttribute ? param.ServiceKey : null);
-        return BuildServiceResolutionCallForContainer(param.Type, key, param.IsOptional);
+        return BuildServiceResolutionCallForContainer(param.Type, key, param.IsOptional, groups);
     }
 
     /// <summary>
     /// Builds a factory method call string for container.
     /// </summary>
-    private static string BuildFactoryCallForContainer(FactoryMethodData factory, ServiceRegistrationModel reg)
+    private static string BuildFactoryCallForContainer(FactoryMethodData factory, ServiceRegistrationModel reg, ContainerRegistrationGroups groups)
     {
         var args = new List<string>();
 
@@ -843,7 +925,7 @@ partial class IocSourceGenerator
 
         foreach(var param in factory.AdditionalParameters)
         {
-            args.Add(BuildParameterForContainer(param, reg));
+            args.Add(BuildParameterForContainer(param, reg, groups));
         }
 
         // Handle generic factory methods with [IocGenericFactory] attribute
@@ -854,20 +936,44 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Builds a service resolution call for container (GetService, GetRequiredService, etc.).
+    /// Builds a service resolution call for container (direct call or GetService/GetRequiredService).
+    /// When the dependency is registered in the same container, calls the resolver method directly.
     /// </summary>
-    private static string BuildServiceResolutionCallForContainer(TypeData type, string? key, bool isOptional)
+    private static string BuildServiceResolutionCallForContainer(
+        TypeData type,
+        string? key,
+        bool isOptional,
+        ContainerRegistrationGroups groups)
     {
-        // Collection types
+        // Collection types - use collection resolver method if available
         if(type.CollectionKind != CollectionKind.None)
         {
             var elementType = ExtractElementTypeForContainer(type);
+
+            // Keyed collection services - fallback to GetKeyedServices (no direct call support yet)
             if(key is not null)
             {
                 return $"GetKeyedServices<{elementType}>({key})";
             }
+
+            // Check if we have a collection resolver for this element type
+            if(groups.CollectionRegistrations.ContainsKey(elementType))
+            {
+                var methodName = GetCollectionResolverMethodName(elementType);
+                return $"{methodName}()";
+            }
+
             return $"GetServices<{elementType}>()";
         }
+
+        // Try to find direct resolver in this container
+        if(groups.ByServiceTypeAndKey.TryGetValue((type.Name, key), out var registrations))
+        {
+            var cached = registrations[^1]; // Last wins
+            return $"{cached.ResolverMethodName}()";
+        }
+
+        // Fallback to GetService/GetRequiredService for dependencies not in this container
 
         // Keyed services
         if(key is not null)

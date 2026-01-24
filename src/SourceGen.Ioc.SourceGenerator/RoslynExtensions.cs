@@ -214,10 +214,11 @@ internal static class RoslynExtensions
 
         /// <summary>
         /// Gets the type parameters source for this type symbol.
-        /// For unbound generic types, returns parameters from the original definition.
+        /// For unbound generic types and constructed generic types, returns parameters from the original definition.
+        /// This allows matching type parameter names (TRequest, TResponse) with type arguments (TestRequest, List&lt;string&gt;).
         /// </summary>
         public ImmutableArray<ITypeParameterSymbol> TypeParametersSource =>
-            typeSymbol.IsUnboundGenericType
+            typeSymbol.IsGenericType
                 ? typeSymbol.OriginalDefinition?.TypeParameters ?? typeSymbol.TypeParameters
                 : typeSymbol.TypeParameters;
 
