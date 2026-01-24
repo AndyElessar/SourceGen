@@ -5,9 +5,14 @@ This repository contains C# Source Generator projects. Follow these instructions
 ## Project Overview
 
 - **SourceGen.Ioc.SourceGenerator**: Source Generator library targeting .NET Standard 2.0
-- **SourceGen.Ioc**: IoC (Inversion of Control) library targeting .NET Standard 2.0 / .NET 10
+- **SourceGen.Ioc**: IoC (Inversion of Control) library targeting .NET 10
 - **SourceGen.Ioc.Cli**: Command-line tool for adding attributes, generate attributes annotation in C# projects
-- **Tests**: Unit,Snapshot and benchmark tests for the Source Generator and CLI tool
+- **Tests**:
+  - **SourceGen.Ioc.Test**: Unit and snapshot tests for the Source Generator
+  - **SourceGen.Ioc.Cli.Test**: CLI unit tests
+  - **SourceGen.Ioc.Benchmark**: Benchmark tests
+  - **SourceGen.Ioc.TestAot**: AOT integration tests (validates Native AOT compatibility)
+  - **SourceGen.Ioc.TestCase**: Shared test case code
 
 ## Project Requirements
 
@@ -34,7 +39,11 @@ src/
 tests/
 ├── SourceGen.Ioc.Benchmark/          # Benchmark tests
 ├── SourceGen.Ioc.Cli.Test/           # CLI unit tests
-└── SourceGen.Ioc.Test/               # Generator unit tests
+├── SourceGen.Ioc.Test/               # Generator unit tests
+├── SourceGen.Ioc.TestAot/            # AOT integration tests
+│   ├── TestCase/                     # Test modules and classes
+│   └── Tests/                        # TUnit test files
+└── SourceGen.Ioc.TestCase/           # Shared test case code
 ```
 
 ## Code Style
@@ -56,6 +65,30 @@ tests/
 - Never use `dotnet test` with `--filter` for TUnit projects
 - If facing issue where don't know is design decision or test failure, **ask user for clarification**
 - Test projects use TUnit framework - see [TUnit Best Practices](./prompts/csharp-tunit.prompt.md)
+
+## AOT Testing
+
+The `SourceGen.Ioc.TestAot` project validates that the Source Generator produces Native AOT compatible code.
+
+**Important**: This project requires AOT publishing before running tests.
+
+### Running AOT Tests
+
+1. **Publish the AOT executable first**:
+   ```powershell
+   dotnet publish tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
+   ```
+
+2. **Run the published executable**:
+   ```powershell
+   # Windows
+   .\tests\SourceGen.Ioc.TestAot\bin\Release\net10.0\win-x64\publish\SourceGen.Ioc.TestAot.exe
+   
+   # Or use dotnet run (will trigger publish automatically)
+   dotnet run --project tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
+   ```
+
+> **Note**: Do NOT use the VS Code `runTests` tool for AOT tests. AOT tests must be published and executed as native binaries to properly validate AOT compatibility.
 
 ## Reference
 

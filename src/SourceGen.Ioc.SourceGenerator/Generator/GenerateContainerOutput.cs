@@ -726,15 +726,20 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Writes decorator application code.
-    /// Decorators are applied in order, wrapping the instance.
+    /// Decorators are applied in reverse order (from innermost to outermost),
+    /// matching the behavior of Register mode.
     /// </summary>
     private static void WriteDecoratorApplication(
         SourceWriter writer,
         string varName,
         ServiceRegistrationModel reg)
     {
-        foreach(var decorator in reg.Decorators)
+        // Decorators array is in order from outermost to innermost,
+        // we iterate in reverse order for building the chain from inner to outer
+        var decorators = reg.Decorators;
+        for(int i = decorators.Length - 1; i >= 0; i--)
         {
+            var decorator = decorators[i];
             // Build decorator constructor arguments
             // First parameter is always the inner instance (the decorated service)
             var decoratorArgs = new List<string> { varName };

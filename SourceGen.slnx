@@ -58,9 +58,12 @@
     <Project Path="src/SourceGen.Ioc.SourceGenerator/SourceGen.Ioc.SourceGenerator.csproj" Id="e66a64bb-4183-4c30-a816-70949c20f0d4" />
     <Project Path="src/SourceGen.Ioc/SourceGen.Ioc.csproj" Id="cd7c687f-e209-41e9-827a-da3d19babf64" />
   </Folder>
+  <Folder Name="/tests/" />
   <Folder Name="/tests/Ioc/">
     <Project Path="tests/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj" Id="b7c2e8a3-1f4d-4a9e-b5c6-d8e9f0a1b2c3" />
     <Project Path="tests/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj" Id="2cfa6123-d7a5-4815-aefb-fb1295acf950" />
     <Project Path="tests/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj" Id="e7497f6b-c4d9-4ffe-852d-ba670719088f" />
+    <Project Path="tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj" />
+    <Project Path="tests/SourceGen.Ioc.TestCase/SourceGen.Ioc.TestCase.csproj" />
   </Folder>
 </Solution>

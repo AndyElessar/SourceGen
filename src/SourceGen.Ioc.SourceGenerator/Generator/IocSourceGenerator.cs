@@ -88,8 +88,9 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Collect();
 
         // ========== IocImportModuleAttribute providers ==========
+        // Transform IocImportModuleAttribute to get both DefaultSettings and OpenGenericEntries in a single pass
         // IocImportModuleAttribute (non-generic)
-        var importedDefaultSettingsProvider = context.SyntaxProvider
+        var importModuleResultProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocImportModuleAttributeFullName,
                 predicate: static (_, _) => true,
@@ -97,18 +98,30 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .SelectMany(static (m, _) => m);
 
         // IocImportModuleAttribute<T>
-        var importedDefaultSettingsProvider_T1 = context.SyntaxProvider
+        var importModuleResultProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocImportModuleAttributeFullName_T1,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformImportModuleGeneric(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // Combine all imported default settings providers
-        var allImportedDefaultSettings = importedDefaultSettingsProvider
+        // Combine all import module result providers
+        var allImportModuleResults = importModuleResultProvider
             .Collect()
-            .Combine(importedDefaultSettingsProvider_T1.Collect())
+            .Combine(importModuleResultProvider_T1.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+
+        // Pipeline 1: Extract DefaultSettingsModel from ImportModuleResult (for imported default settings)
+        var allImportedDefaultSettings = allImportModuleResults
+            .SelectMany(static (results, _) => results
+                .SelectMany(static r => r.DefaultSettings))
+            .Collect();
+
+        // Pipeline 2: Extract OpenGenericEntries from ImportModuleResult (for cross-assembly open generic discovery)
+        var allImportedOpenGenerics = allImportModuleResults
+            .SelectMany(static (results, _) => results
+                .SelectMany(static r => r.OpenGenericEntries))
+            .Collect();
 
         // Combine default settings from current assembly and imported modules
         // Current assembly settings take precedence over imported settings
@@ -233,9 +246,14 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Combine(allDiscoverProviders)
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
+        // Combine factory-based open generics with imported open generics from other assemblies
+        var allOpenGenericEntries = factoryBasedOpenGenericEntries
+            .Combine(allImportedOpenGenerics)
+            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+
         var serviceRegistrations = allBasicResults
             .Combine(combinedClosedGenericDependencies)
-            .Combine(factoryBasedOpenGenericEntries)
+            .Combine(allOpenGenericEntries)
             .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left.Left, in source.Left.Right, in source.Right, ct));
 
         // Combine service registrations with compilation info and MSBuild properties

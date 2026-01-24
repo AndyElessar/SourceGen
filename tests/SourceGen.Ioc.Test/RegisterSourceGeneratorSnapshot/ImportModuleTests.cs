@@ -221,4 +221,63 @@ public class ImportModuleTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task ImportModule_WithOpenGenericRegistration_GeneratesClosedTypes()
+    {
+        // Create a shared module with open generic registration using IocRegisterFor
+        const string sharedSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace SharedModule;
+
+            public interface IHandler<TRequest, TResponse>
+            {
+                TResponse Handle(TRequest request);
+            }
+
+            public class GenericHandler<TRequest, TResponse> : IHandler<TRequest, TResponse>
+            {
+                public TResponse Handle(TRequest request) => default!;
+            }
+
+            [IocRegisterFor(typeof(GenericHandler<,>), ServiceLifetime.Transient, ServiceTypes = [typeof(IHandler<,>)])]
+            [IocContainer(ExplicitOnly = true)]
+            public sealed partial class SharedOpenGenericModule;
+            """;
+
+        // Create the shared compilation and run generator to produce SharedOpenGenericModule.Container
+        var sharedResult = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(sharedSource, "SharedModule");
+        var sharedCompilation = sharedResult.OutputCompilation;
+
+        // Create the main assembly that imports the module and uses closed types
+        const string mainSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using SharedModule;
+
+            namespace MainApp;
+
+            public record Request1(string Value);
+            public record Response1(string Result);
+
+            // Service that depends on closed generic type - should trigger discovery
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer(IHandler<Request1, Response1> handler)
+            {
+                public IHandler<Request1, Response1> Handler => handler;
+            }
+
+            [IocImportModule<SharedOpenGenericModule>]
+            [IocContainer]
+            public sealed partial class MainContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "MainContainer.Container");
+
+        await Verify(generatedSource);
+    }
 }

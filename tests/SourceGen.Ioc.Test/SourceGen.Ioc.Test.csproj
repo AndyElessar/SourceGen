@@ -21,8 +21,4 @@
     <ProjectReference Include="..\..\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="ContainerSourceGeneratorSnapshot\" />
-  </ItemGroup>
-
 </Project>

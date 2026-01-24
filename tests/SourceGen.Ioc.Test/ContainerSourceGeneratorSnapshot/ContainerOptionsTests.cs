@@ -161,6 +161,32 @@ public class ContainerOptionsTests
     }
 
     [Test]
+    public async Task Container_WithExplicitOnlyMode_GenericAttributeWorks()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            // This should be included (explicit on container via generic IocRegisterFor<T>)
+            public class MyService : IMyService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithExplicitOnlyAndIncludeTags_ExplicitOnlyTakesPrecedence()
     {
         const string source = """

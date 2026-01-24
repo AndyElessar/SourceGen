@@ -18,6 +18,8 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     private readonly bool _isRootScope = true;
     private int _disposed;
 
+    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::IocSample.Shared.SharedModule, object>> _serviceResolvers;
+
     #region Constructors
 
     /// <summary>
@@ -32,6 +34,8 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     public SharedModule(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
+
+        _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
     private SharedModule(SharedModule parent)
@@ -43,6 +47,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         _iocSample_Shared_TestRequest3Handler = parent._iocSample_Shared_TestRequest3Handler;
         _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ = parent._iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
         _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = parent._iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
+        _serviceResolvers = parent._serviceResolvers;
     }
 
     #endregion
@@ -140,16 +145,8 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(SharedModule)) return this;
 
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>)) return GetIocSample_Shared_TestHandler();
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>)) return GetIocSample_Shared_TestHandler();
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>)) return GetIocSample_Shared_TestRequest2Handler();
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>)) return GetIocSample_Shared_TestRequest2Handler();
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>)) return GetIocSample_Shared_TestRequest3Handler();
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>)) return GetIocSample_Shared_TestRequest3Handler();
-        if(serviceType == typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>)) return GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_();
-        if(serviceType == typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>)) return GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_();
-        if(serviceType == typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>)) return GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
-        if(serviceType == typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>)) return GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
+        if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+            return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
     }
@@ -160,7 +157,10 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? KeyedService.AnyKey;
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+
+        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+            return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
@@ -189,23 +189,16 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(SharedModule)) return true;
 
-        if(serviceType == typeof(global::IocSample.Shared.TestHandler)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.TestRequest2Handler)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.TestRequest3Handler)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>)) return true;
-        if(serviceType == typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>)) return true;
+        if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
 
     public bool IsKeyedService(Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? KeyedService.AnyKey;
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+
+        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -224,20 +217,20 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::IocSample.Shared.SharedModule, object>>> Services => _localServices;
+    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::IocSample.Shared.SharedModule, object>>> Services => _serviceResolvers;
 
     private static readonly KeyValuePair<(Type, object), Func<global::IocSample.Shared.SharedModule, object>>[] _localServices =
     [
-        new((typeof(global::IocSample.Shared.TestHandler), KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
-        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
-        new((typeof(global::IocSample.Shared.TestRequest2Handler), KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
-        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
-        new((typeof(global::IocSample.Shared.TestRequest3Handler), KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
-        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>), KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
+        new((typeof(global::IocSample.Shared.TestHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
+        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
+        new((typeof(global::IocSample.Shared.TestRequest2Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
+        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
+        new((typeof(global::IocSample.Shared.TestRequest3Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
+        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
+        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
+        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
+        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
+        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
     ];
 
     #endregion

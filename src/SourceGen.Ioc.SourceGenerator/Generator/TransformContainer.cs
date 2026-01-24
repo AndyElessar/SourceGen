@@ -109,6 +109,15 @@ partial class IocSourceGenerator
             if(fullName.StartsWith("global::", StringComparison.Ordinal))
                 fullName = fullName[8..];
 
+            // For generic types, use metadata name format for comparison
+            var metadataName = attrClass.IsGenericType
+                ? attrClass.OriginalDefinition.MetadataName
+                : attrClass.MetadataName;
+            var metadataNamespace = attrClass.ContainingNamespace?.ToDisplayString() ?? "";
+            var originalFullName = string.IsNullOrEmpty(metadataNamespace)
+                ? metadataName
+                : $"{metadataNamespace}.{metadataName}";
+
             if(fullName == Constants.IocImportModuleAttributeFullName)
             {
                 // Non-generic: ModuleType is in constructor argument
@@ -118,8 +127,7 @@ partial class IocSourceGenerator
                     modules.Add(moduleType.GetTypeData());
                 }
             }
-            else if(fullName == Constants.IocImportModuleAttributeFullName_T1 ||
-                    (attrClass.IsGenericType && attrClass.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Contains("IocImportModuleAttribute")))
+            else if(originalFullName == Constants.IocImportModuleAttributeFullName_T1)
             {
                 // Generic: ModuleType is the type argument
                 if(attrClass.IsGenericType && attrClass.TypeArguments.Length > 0 &&
@@ -153,11 +161,14 @@ partial class IocSourceGenerator
             if(fullName.StartsWith("global::", StringComparison.Ordinal))
                 fullName = fullName[8..];
 
-            var originalFullName = attrClass.IsGenericType
-                ? attrClass.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                : fullName;
-            if(originalFullName.StartsWith("global::", StringComparison.Ordinal))
-                originalFullName = originalFullName[8..];
+            // For generic types, use metadata name format (e.g., IocRegisterForAttribute`1) for comparison
+            var metadataName = attrClass.IsGenericType
+                ? attrClass.OriginalDefinition.MetadataName
+                : attrClass.MetadataName;
+            var metadataNamespace = attrClass.ContainingNamespace?.ToDisplayString() ?? "";
+            var originalFullName = string.IsNullOrEmpty(metadataNamespace)
+                ? metadataName
+                : $"{metadataNamespace}.{metadataName}";
 
             // Handle IocRegisterForAttribute (non-generic)
             if(fullName == Constants.IocRegisterForAttributeFullName)

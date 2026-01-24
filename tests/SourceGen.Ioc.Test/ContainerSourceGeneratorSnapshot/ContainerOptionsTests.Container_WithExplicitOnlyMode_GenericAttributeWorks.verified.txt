@@ -12,36 +12,37 @@ using SourceGen.Ioc;
 
 namespace TestNamespace;
 
-partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
+partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::TestNamespace.TestContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::TestNamespace.ExplicitContainer, object>> _serviceResolvers;
 
     #region Constructors
 
     /// <summary>
     /// Creates a new standalone container without external service provider fallback.
     /// </summary>
-    public TestContainer() : this((IServiceProvider?)null) { }
+    public ExplicitContainer() : this((IServiceProvider?)null) { }
 
     /// <summary>
     /// Creates a new container with optional fallback to external service provider.
     /// </summary>
     /// <param name="fallbackProvider">Optional external service provider for unknown dependencies.</param>
-    public TestContainer(IServiceProvider? fallbackProvider)
+    public ExplicitContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
 
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
-    private TestContainer(TestContainer parent)
+    private ExplicitContainer(ExplicitContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
+        _testNamespace_MyService = parent._testNamespace_MyService;
         _serviceResolvers = parent._serviceResolvers;
     }
 
@@ -49,24 +50,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.IHandler? _testNamespace_Handler;
-    private readonly Lock _testNamespace_HandlerLock = new();
-    private global::TestNamespace.IHandler GetTestNamespace_Handler()
+    private global::TestNamespace.MyService? _testNamespace_MyService;
+    private global::TestNamespace.MyService GetTestNamespace_MyService()
     {
-        if(_testNamespace_Handler is not null) return _testNamespace_Handler;
+        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        lock(_testNamespace_HandlerLock)
-        {
-            if(_testNamespace_Handler is not null) return _testNamespace_Handler;
+        var instance = new global::TestNamespace.MyService();
 
-            global::TestNamespace.IHandler instance = new global::TestNamespace.Handler();
-
-            instance = new global::TestNamespace.CachingDecorator(instance);
-            instance = new global::TestNamespace.LoggingDecorator(instance);
-
-            _testNamespace_Handler = instance;
-            return instance;
-        }
+        return Interlocked.CompareExchange(ref _testNamespace_MyService, instance, null) ?? instance;
     }
 
     #endregion
@@ -77,7 +68,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         if(serviceType == typeof(IServiceProvider)) return this;
         if(serviceType == typeof(IServiceScopeFactory)) return this;
-        if(serviceType == typeof(TestContainer)) return this;
+        if(serviceType == typeof(ExplicitContainer)) return this;
 
         if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
@@ -121,7 +112,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         if(serviceType == typeof(IServiceProvider)) return true;
         if(serviceType == typeof(IServiceScopeFactory)) return true;
-        if(serviceType == typeof(TestContainer)) return true;
+        if(serviceType == typeof(ExplicitContainer)) return true;
 
         if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
@@ -141,7 +132,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IServiceScopeFactory
 
-    public IServiceScope CreateScope() => new TestContainer(this);
+    public IServiceScope CreateScope() => new ExplicitContainer(this);
 
     public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
@@ -151,12 +142,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::TestNamespace.TestContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::TestNamespace.ExplicitContainer, object>>> Services => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.ExplicitContainer, object>>[] _localServices =
     [
-        new((typeof(global::TestNamespace.Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler()),
-        new((typeof(global::TestNamespace.IHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler()),
+        new((typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new((typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
     ];
 
     #endregion
@@ -174,7 +165,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = containerBuilder.BuildServiceProvider();
-        return new TestContainer(fallbackProvider);
+        return new ExplicitContainer(fallbackProvider);
     }
 
     #endregion
@@ -187,10 +178,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            DisposeService(_testNamespace_Handler);
             return;
         }
 
+        DisposeService(_testNamespace_MyService);
     }
 
     public async ValueTask DisposeAsync()
@@ -199,10 +190,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_testNamespace_Handler);
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_MyService);
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

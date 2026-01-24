@@ -23,11 +23,6 @@ namespace IocSample
             services.AddTransient<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default1>());
             services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();
             services.AddScoped<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default2>());
-            services.AddTransient<global::IocSample.Transient, global::IocSample.Transient>();
-            services.AddScoped<global::IocSample.Scoped, global::IocSample.Scoped>();
-            services.AddSingleton<global::IocSample.Singleton, global::IocSample.Singleton>();
-            services.AddSingleton<global::IocSample.Circular1, global::IocSample.Circular1>();
-            services.AddSingleton<global::IocSample.Circular2, global::IocSample.Circular2>();
             services.AddSingleton<global::IocSample.InstanceService>(global::IocSample.InstanceService.Instance);
             services.AddSingleton<global::IocSample.ViewModel, global::IocSample.ViewModel>();
             services.AddSingleton<global::IocSample.CustomMessenger, global::IocSample.CustomMessenger>();
