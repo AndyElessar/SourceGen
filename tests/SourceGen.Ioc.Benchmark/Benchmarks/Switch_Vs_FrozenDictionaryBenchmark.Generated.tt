@@ -1,4 +1,4 @@
-<#@ template debug="false" hostspecific="false" language="C#" #>
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
 <#@ assembly name="System.Core" #>
 <#@ output extension=".cs" #>
 <#
@@ -30,14 +30,14 @@ public static partial class GeneratedTestData
 foreach (var count in itemCounts)
 {
 #>
-    public static Type[] TestTypes<#= count #> { get; } =
+    public static (Type, object)[] TestTypes<#= count #> { get; } =
     [
 <#
     for (int i = 0; i < count; i++)
     {
         var comma = i < count - 1 ? "," : "";
 #>
-        typeof(TestType<#= i #>)<#= comma #>
+        (typeof(TestType<#= i #>), <#= i #>)<#= comma #>
 <#
     }
 #>
@@ -60,13 +60,13 @@ public static partial class GeneratedSwitchLookup
 foreach (var count in itemCounts)
 {
 #>
-    public static Func<object>? Lookup<#= count #>(Type type) => type switch
+    public static Func<object>? Lookup<#= count #>((Type, object) val) => val switch
     {
 <#
     for (int i = 0; i < count; i++)
     {
 #>
-        _ when type == typeof(TestType<#= i #>) => DefaultFactory,
+        var (type, key) when type == typeof(TestType<#= i #>) && Equals(key, <#= i #>) => DefaultFactory,
 <#
     }
 #>

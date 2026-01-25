@@ -17,7 +17,7 @@
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <!-- Testing dependencies -->
     <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.1.0" />
-    <PackageVersion Include="TUnit" Version="1.11.64" />
+    <PackageVersion Include="TUnit" Version="1.12.43" />
     <PackageVersion Include="Verify.TUnit" Version="31.9.4" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->

@@ -4,7 +4,7 @@ using BenchmarkDotNet.Configs;
 namespace SourceGen.Ioc.Benchmark.Benchmarks;
 
 /// <summary>
-/// Benchmark comparing switch expression vs FrozenDictionary for Type-based lookups.
+/// Benchmark comparing switch expression vs FrozenDictionary for (Type, object) based lookups.
 /// <para>
 /// Tests the performance difference between:
 /// <list type="bullet">
@@ -19,11 +19,11 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 public class Switch_Vs_FrozenDictionaryBenchmark
 {
     // FrozenDictionary instances
-    private FrozenDictionary<Type, Func<object>> _frozenDict10 = null!;
-    private FrozenDictionary<Type, Func<object>> _frozenDict25 = null!;
-    private FrozenDictionary<Type, Func<object>> _frozenDict50 = null!;
-    private FrozenDictionary<Type, Func<object>> _frozenDict75 = null!;
-    private FrozenDictionary<Type, Func<object>> _frozenDict100 = null!;
+    private FrozenDictionary<(Type, object), Func<object>> _frozenDict10 = null!;
+    private FrozenDictionary<(Type, object), Func<object>> _frozenDict25 = null!;
+    private FrozenDictionary<(Type, object), Func<object>> _frozenDict50 = null!;
+    private FrozenDictionary<(Type, object), Func<object>> _frozenDict75 = null!;
+    private FrozenDictionary<(Type, object), Func<object>> _frozenDict100 = null!;
 
     // Random lookup indices for realistic access patterns
     private int[] _randomIndices10 = null!;
@@ -53,14 +53,14 @@ public class Switch_Vs_FrozenDictionaryBenchmark
         _randomIndices100 = [.. Enumerable.Range(0, LookupIterations).Select(_ => random.Next(100))];
     }
 
-    private static FrozenDictionary<Type, Func<object>> BuildFrozenDictionary(Type[] types)
+    private static FrozenDictionary<(Type, object), Func<object>> BuildFrozenDictionary((Type, object)[] vals)
     {
-        var dict = new Dictionary<Type, Func<object>>();
+        var dict = new Dictionary<(Type, object), Func<object>>();
         Func<object> factory = static () => new object();
 
-        foreach (var type in types)
+        foreach (var val in vals)
         {
-            dict[type] = factory;
+            dict[val] = factory;
         }
 
         return dict.ToFrozenDictionary();
