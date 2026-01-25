@@ -178,7 +178,7 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task KeyedService_WithUnresolvableObjectParameter_SkipsRegistration()
+    public async Task KeyedService_WithBuiltInTypeParameter_UsesDefaultValue()
     {
         const string source = """
             using System;
@@ -193,7 +193,7 @@ public class SpecialParameterTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
             public class ObjectService : IObjectService { }
 
-            // This service should be skipped because 'object someData' cannot be resolved from DI
+            // This service uses 'object someData' which will be resolved as default(object)
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "myServiceKey")]
             public class MyService(object someData) : IMyService
             {
@@ -209,7 +209,7 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task NonKeyedService_WithUnresolvableObjectParameter_SkipsRegistration()
+    public async Task NonKeyedService_WithBuiltInTypeParameter_UsesDefaultValue()
     {
         const string source = """
             using System;
@@ -224,7 +224,7 @@ public class SpecialParameterTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IObjectService)])]
             public class ObjectService : IObjectService { }
 
-            // This service should be skipped because 'object key' without [ServiceKey] cannot be resolved from DI
+            // This service uses 'object key' without [ServiceKey] which will be resolved as default(object)
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService(object key) : IMyService
             {

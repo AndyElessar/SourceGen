@@ -206,14 +206,6 @@ partial class IocSourceGenerator
             return;
         }
 
-        // Skip registration if constructor has unresolvable parameters
-        // (built-in types or collections of built-in types without [IocInject], [ServiceKey], [FromKeyedServices], or default value)
-        var constructorParameters = registration.ImplementationType.ConstructorParameters;
-        if(constructorParameters?.Any(static p => p.IsUnresolvable) == true)
-        {
-            return;
-        }
-
         // Check if service type is different from implementation type (registering interface/base class)
         bool isServiceTypeRegistration = serviceTypeName != implTypeName;
 

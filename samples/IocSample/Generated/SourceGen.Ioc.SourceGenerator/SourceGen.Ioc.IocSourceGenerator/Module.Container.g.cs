@@ -62,6 +62,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _iocSample_KeyedEnum_IocSample_KeyEnum_Key0 = parent._iocSample_KeyedEnum_IocSample_KeyEnum_Key0;
         _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key = parent._iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key;
         _iocSample_External = parent._iocSample_External;
+        _string = parent._string;
         _iocSample_Conflict = parent._iocSample_Conflict;
         _iocSample_GenericRequestHandler_IocSample_Entity_ = parent._iocSample_GenericRequestHandler_IocSample_Entity_;
         _iocSample_GenericRequestHandler2_IocSample_Entity3_ = parent._iocSample_GenericRequestHandler2_IocSample_Entity3_;
@@ -260,6 +261,16 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         return Interlocked.CompareExchange(ref _iocSample_External, instance, null) ?? instance;
     }
 
+    private string? _string;
+    private string Getstring()
+    {
+        if(_string is not null) return _string;
+
+        var instance = global::IocSample.Default3.ConnectionString;
+
+        return Interlocked.CompareExchange(ref _string, instance, null) ?? instance;
+    }
+
     private global::IocSample.Conflict? _iocSample_Conflict;
     private global::IocSample.Conflict GetIocSample_Conflict()
     {
@@ -452,7 +463,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     private global::IocSample.Default3 GetIocSample_Default3()
     {
-        return new global::IocSample.Default3();
+        return new global::IocSample.Default3(Getstring());
     }
 
     private global::IocSample.Default4 GetIocSample_Default4()
@@ -600,6 +611,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         new((typeof(global::IocSample.External), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_External()),
         new((typeof(global::IocSample.External2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_External2()),
         new((typeof(global::IocSample.IExternal), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_External2()),
+        new((typeof(string), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.Getstring()),
         new((typeof(global::IocSample.Conflict), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Conflict()),
         new((typeof(global::IocSample.Default3), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default3()),
         new((typeof(global::IocSample.IDenpendency3), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default4()),
@@ -664,6 +676,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         DisposeService(_iocSample_GenericRequestHandler2_IocSample_Entity3_);
         DisposeService(_iocSample_GenericRequestHandler_IocSample_Entity_);
         DisposeService(_iocSample_Conflict);
+        DisposeService(_string);
         DisposeService(_iocSample_External);
         DisposeService(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key);
         DisposeService(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0);
@@ -701,6 +714,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         await DisposeServiceAsync(_iocSample_GenericRequestHandler2_IocSample_Entity3_);
         await DisposeServiceAsync(_iocSample_GenericRequestHandler_IocSample_Entity_);
         await DisposeServiceAsync(_iocSample_Conflict);
+        await DisposeServiceAsync(_string);
         await DisposeServiceAsync(_iocSample_External);
         await DisposeServiceAsync(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key);
         await DisposeServiceAsync(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0);

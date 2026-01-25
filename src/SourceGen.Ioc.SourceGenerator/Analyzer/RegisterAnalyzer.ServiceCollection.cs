@@ -57,7 +57,7 @@ public sealed partial class RegisterAnalyzer
             // Get key type for SGIOC013/SGIOC014 analysis
             var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
 
-            // Check for Factory and Instance for SGIOC015 analysis
+            // Check for Factory and Instance (used by ServiceInfo)
             var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
             RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
@@ -177,7 +177,7 @@ public sealed partial class RegisterAnalyzer
             // Get key type for SGIOC013/SGIOC014 analysis
             var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
 
-            // Check for Factory and Instance for SGIOC015 analysis
+            // Check for Factory and Instance (used by ServiceInfo)
             var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
             // Register service with index for faster lookup

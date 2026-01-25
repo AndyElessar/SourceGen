@@ -299,7 +299,7 @@ internal static class AnalyzerHelpers
     {
         var paramType = param.Type;
 
-        // Skip built-in types (handled by SGIOC015)
+        // Skip built-in types (resolved as default values)
         if (paramType.IsBuiltInTypeOrBuiltInCollection)
             return true;
 
@@ -438,120 +438,6 @@ public static (bool IsInvalid, string? Reason) GetRegistrationInvalidReason(INam
         return (true, "abstract");
 
     return (false, null);
-}
-
-/// <summary>
-/// Checks if a constructor parameter is a built-in type that cannot be resolved from DI.
-/// Returns true if the parameter is unresolvable (built-in type without special handling).
-/// </summary>
-/// <param name="param">The parameter to check.</param>
-/// <returns>True if the parameter is a built-in type that cannot be resolved.</returns>
-public static bool IsBuiltInUnresolvableParameter(IParameterSymbol param)
-{
-    var paramType = param.Type;
-
-    // Check if the parameter type is a built-in type or collection of built-in types
-    if (!paramType.IsBuiltInTypeOrBuiltInCollection)
-        return false;
-
-    // Skip if parameter has an explicit default value
-    if (param.HasExplicitDefaultValue)
-        return false;
-
-    // Check for special attributes that would make this resolvable
-    if (HasResolvableAttribute(param.GetAttributes()))
-        return false;
-
-    return true;
-}
-
-/// <summary>
-/// Checks if a property with [IocInject] is a built-in type that cannot be resolved from DI.
-/// Returns true if the property is unresolvable (built-in type without a service key).
-/// </summary>
-/// <param name="property">The property to check.</param>
-/// <param name="injectAttribute">The inject attribute on the property.</param>
-/// <returns>True if the property is a built-in type that cannot be resolved.</returns>
-public static bool IsBuiltInUnresolvableProperty(IPropertySymbol property, AttributeData injectAttribute)
-{
-    var memberType = property.Type;
-
-    // Check if the member type is a built-in type or collection of built-in types
-    if (!memberType.IsBuiltInTypeOrBuiltInCollection)
-        return false;
-
-    // Check if [IocInject] or [Inject] has a Key specified - this makes it resolvable
-    var (key, _) = injectAttribute.GetKey();
-    if (key is not null)
-        return false;
-
-    return true;
-}
-
-/// <summary>
-/// Checks if a field with [IocInject] is a built-in type that cannot be resolved from DI.
-/// Returns true if the field is unresolvable (built-in type without a service key).
-/// </summary>
-/// <param name="field">The field to check.</param>
-/// <param name="injectAttribute">The inject attribute on the field.</param>
-/// <returns>True if the field is a built-in type that cannot be resolved.</returns>
-public static bool IsBuiltInUnresolvableField(IFieldSymbol field, AttributeData injectAttribute)
-{
-    var memberType = field.Type;
-
-    // Check if the member type is a built-in type or collection of built-in types
-    if (!memberType.IsBuiltInTypeOrBuiltInCollection)
-        return false;
-
-    // Check if [IocInject] or [Inject] has a Key specified - this makes it resolvable
-    var (key, _) = injectAttribute.GetKey();
-    if (key is not null)
-        return false;
-
-    return true;
-}
-
-/// <summary>
-/// Checks if a method parameter with [IocInject] is a built-in type that cannot be resolved from DI.
-/// Returns true if the parameter is unresolvable (built-in type without special handling).
-/// </summary>
-/// <param name="param">The parameter to check.</param>
-/// <returns>True if the parameter is a built-in type that cannot be resolved.</returns>
-public static bool IsBuiltInUnresolvableMethodParameter(IParameterSymbol param)
-{
-    var paramType = param.Type;
-
-    // Check if the parameter type is a built-in type or collection of built-in types
-    if (!paramType.IsBuiltInTypeOrBuiltInCollection)
-        return false;
-
-    // Skip if parameter has an explicit default value
-    if (param.HasExplicitDefaultValue)
-        return false;
-
-    // Check for special attributes on the parameter that would make this resolvable
-    foreach (var attribute in param.GetAttributes())
-    {
-        var attrClass = attribute.AttributeClass;
-        if (attrClass is null)
-            continue;
-
-        var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
-
-        // [IocInject] or [Inject] with Key - check if it has a key
-        if (attrClass.IsInject)
-        {
-            var (key, _) = attribute.GetKey();
-            if (key is not null)
-                return false;
-        }
-
-        // [FromKeyedServices] - MS.DI handles this automatically
-        if (attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
-            return false;
-    }
-
-    return true;
 }
 }
 

@@ -93,6 +93,8 @@ namespace IocSample
             services.AddSingleton<global::IocSample.External, global::IocSample.External>();
             services.AddTransient<global::IocSample.External2, global::IocSample.External2>();
             services.AddTransient<global::IocSample.IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.External2>());
+            services.AddSingleton<string>(global::IocSample.Default3.ConnectionString);
+            services.AddSingleton<string>(global::IocSample.Default3.ConnectionString2);
             services.AddSingleton<global::IocSample.Conflict, global::IocSample.Conflict>();
             services.AddTransient<global::IocSample.Default3, global::IocSample.Default3>();
             services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default3>());

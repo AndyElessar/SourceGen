@@ -278,8 +278,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                         AnalyzeParameterDependencies(context, analyzerContext, containerSymbol, method.Parameters);
                         break;
 
-                    // IFieldSymbol is skipped - fields don't have resolvable types in DI context
-                    // (built-in types are handled by SGIOC015, non-built-in types would be handled like properties)
+                    // IFieldSymbol - analyze field dependencies like properties
                     case IFieldSymbol field:
                         AnalyzeFieldDependency(context, analyzerContext, containerSymbol, field, injectAttribute);
                         break;

@@ -32,17 +32,4 @@ internal sealed record class ParameterData(
     /// Whether the default value is null. Only meaningful when HasDefaultValue is true.
     /// </summary>
     public bool DefaultValueIsNull => HasDefaultValue && DefaultValue is null;
-    /// <summary>
-    /// Determines whether this parameter is unresolvable from dependency injection.
-    /// A parameter is unresolvable if:
-    /// - Its type is a built-in type or collection of built-in types
-    /// - It does not have [IocInject], [ServiceKey], or [FromKeyedServices] attribute
-    /// - It does not have a default value
-    /// </summary>
-    public bool IsUnresolvable =>
-        Type.IsBuiltInTypeOrBuiltInCollection &&
-        !HasInjectAttribute &&
-        !HasServiceKeyAttribute &&
-        !HasFromKeyedServicesAttribute &&
-        !HasDefaultValue;
 }

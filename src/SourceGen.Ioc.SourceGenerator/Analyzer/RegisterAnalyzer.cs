@@ -175,21 +175,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         title: "Key does not exist",
         messageFormat: "[ServiceKey] parameter '{0}' is used but no Key is specified in [IoCRegister] or [IoCRegisterFor] attribute",
         category: Constants.Category_Usage,
-        defaultSeverity: DiagnosticSeverity.Error,
+        defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.");
-
-    /// <summary>
-    /// SGIOC015: Unresolvable Member - Constructor parameter or injected property/field is a built-in type that cannot be resolved from dependency injection.
-    /// </summary>
-    public static readonly DiagnosticDescriptor UnresolvableMember = new(
-        id: "SGIOC015",
-        title: "Unresolvable Member",
-        messageFormat: "{0} '{1}' of type '{2}' cannot be resolved from dependency injection",
-        category: Constants.Category_Design,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "Built-in types cannot be resolved from the dependency injection container. Use [IocInject] with a service key, [FromKeyedServices], or provide a default value.");
 
     /// <summary>
     /// SGIOC016: Factory Method is unmatched - Generic factory method does not have [IocGenericFactory] attribute.
@@ -231,7 +219,6 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedDefaultSettings,
         ServiceKeyTypeMismatch,
         ServiceKeyNotRegistered,
-        UnresolvableMember,
         GenericFactoryMissingAttribute,
         DuplicatedGenericFactoryPlaceholders
     ];
@@ -330,9 +317,6 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
             // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
             AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
-
-            // SGIOC015: Analyze unresolvable members (constructor parameters and injected properties/fields with built-in types)
-            AnalyzeUnresolvableMembers(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,

@@ -175,7 +175,7 @@ Report when `ServiceKeyAttribute` is mark on parameter, but the key type is not 
 
 ---
 
-### SGIOC014 - Error - Usage - Key does not exists
+### SGIOC014 - Warning - Usage - Key does not exists
 
 Report when `ServiceKeyAttribute` is mark on parameter, but there is no specified `Key` from `IoCRegisterAttribute` or `IoCRegisterForAttribute`.
 
@@ -187,28 +187,7 @@ Report when `ServiceKeyAttribute` is mark on parameter, but there is no specifie
 
 ---
 
-### SGIOC015 - Error - Design - Unresolvable Member
-
-Report when:
-
-- Constructor contains a built-in type parameter (or collection of built-in types) that cannot be resolved by the service provider.
-- Property or Field with `[IocInject]` or `[Inject]` attribute has a built-in type (or collection of built-in types) that cannot be resolved by the service provider.
-- Method with `[IocInject]` or `[Inject]` attribute has a parameter of built-in type (or collection of built-in types) that cannot be resolved by the service provider.
-
-Built-in types include: bool, char, byte, sbyte, int, uint, long, ulong, float, double, decimal, string, DateTime, Guid, TimeSpan, DateTimeOffset, DateOnly, TimeOnly, Uri, Type, Version, Half, Int128, UInt128.
-
-**Analysis:**
-
-- Collects `HasFactory` and `HasInstance` state from service registrations.
-- Checks constructor parameters, `[Inject]` properties/fields, and `[Inject]` method parameters for their types.
-- Reports when the type is a built-in type (or collection of built-in types) and cannot be resolved.
-
-**Exceptions (when NOT reported):**
-
-- Constructor parameter has: `[IocInject]` with key, `[ServiceKey]`, `[FromKeyedServices]`, or default value.
-- Property/field has: `[IocInject]`/`[Inject]` with service key specified.
-- Method parameter has: `[IocInject]` with key, `[FromKeyedServices]`, or default value.
-- Service registration uses `Factory` or `Instance` (constructor analysis is skipped).
+### SGIOC015
 
 ---
 
