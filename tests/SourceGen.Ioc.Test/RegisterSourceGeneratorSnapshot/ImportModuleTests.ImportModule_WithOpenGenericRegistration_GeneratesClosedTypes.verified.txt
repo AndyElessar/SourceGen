@@ -38,7 +38,10 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
         _fallbackProvider = fallbackProvider;
         _sharedModule_SharedOpenGenericModule = new global::SharedModule.SharedOpenGenericModule(fallbackProvider);
 
-        _serviceResolvers = _sharedModule_SharedOpenGenericModule.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.MainContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule_SharedOpenGenericModule))).Concat(_localServices).ToFrozenDictionary();
+        _serviceResolvers =
+        _sharedModule_SharedOpenGenericModule.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.MainContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule_SharedOpenGenericModule)))
+            .Concat(_localServices)
+            .ToFrozenDictionary();
     }
 
     private MainContainer(MainContainer parent)

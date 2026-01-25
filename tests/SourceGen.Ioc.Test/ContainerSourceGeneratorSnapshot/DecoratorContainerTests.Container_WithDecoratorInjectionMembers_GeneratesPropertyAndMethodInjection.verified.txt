@@ -83,8 +83,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
             global::TestNamespace.IHandler instance = new global::TestNamespace.Handler();
 
-            var decorator0 = new global::TestNamespace.CachingDecorator(instance);
-            decorator0.Cache = GetTestNamespace_MemoryCache();
+            var decorator0 = new global::TestNamespace.CachingDecorator(instance)
+            {
+                Cache = GetTestNamespace_MemoryCache(),
+            };
             decorator0.SetLogger(GetTestNamespace_Logger());
             instance = decorator0;
 

@@ -40,7 +40,11 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
         _sharedLib1_SharedModule1 = new global::SharedLib1.SharedModule1(fallbackProvider);
         _sharedLib2_SharedModule2 = new global::SharedLib2.SharedModule2(fallbackProvider);
 
-        _serviceResolvers = _sharedLib1_SharedModule1.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib1_SharedModule1))).Concat(_sharedLib2_SharedModule2.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib2_SharedModule2)))).Concat(_localServices).ToFrozenDictionary();
+        _serviceResolvers =
+        _sharedLib1_SharedModule1.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib1_SharedModule1)))
+            .Concat(_sharedLib2_SharedModule2.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib2_SharedModule2))))
+            .Concat(_localServices)
+            .ToFrozenDictionary();
     }
 
     private AppContainer(AppContainer parent)

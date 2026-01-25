@@ -90,7 +90,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Write fields
-        WriteContainerFields(writer, container, groups, effectiveUseSwitchStatement);
+        WriteContainerFields(writer, container, effectiveUseSwitchStatement);
 
         // Write constructors
         WriteContainerConstructors(writer, container, groups, effectiveUseSwitchStatement);
@@ -160,7 +160,6 @@ partial class IocSourceGenerator
     private static void WriteContainerFields(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups,
         bool effectiveUseSwitchStatement)
     {
         // Fallback provider field (only if ResolveIServiceCollection is enabled)
@@ -291,7 +290,7 @@ partial class IocSourceGenerator
             writer.WriteLine($"{fieldName} = ({module.Name})parent.{fieldName}.CreateScope().ServiceProvider;");
         }
 
-        // Because resolvers are static, they can be reused from parent
+        // Because resolvers are immutable per container, they can be reused from parent
         if(!effectiveUseSwitchStatement)
         {
             writer.WriteLine("_serviceResolvers = parent._serviceResolvers;");
@@ -336,27 +335,27 @@ partial class IocSourceGenerator
             if(container.ImportedModules.Length > 0)
             {
                 // Combine with imported modules - wrap module resolvers to pass the correct module instance
-                var sb = new StringBuilder();
-                sb.Append("_serviceResolvers = ");
+                writer.WriteLine("_serviceResolvers =");
 
-                bool first = true;
+                var isFirst = true;
                 foreach(var module in container.ImportedModules)
                 {
                     var fieldName = GetModuleFieldName(module.Name);
-                    // Wrap each module's Services to call resolver with the module instance instead of this container
-                    if(first)
+                    var source = $"{fieldName}.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
+
+                    if(isFirst)
                     {
-                        sb.Append($"{fieldName}.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))");
-                        first = false;
+                        writer.WriteLine(source);
+                        isFirst = false;
                     }
                     else
                     {
-                        sb.Append($".Concat({fieldName}.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))))");
+                        writer.WriteLine($"    .Concat({source})");
                     }
                 }
 
-                sb.Append(".Concat(_localServices).ToFrozenDictionary();");
-                writer.WriteLine(sb.ToString());
+                writer.WriteLine("    .Concat(_localServices)");
+                writer.WriteLine("    .ToFrozenDictionary();");
             }
             else
             {
@@ -379,29 +378,9 @@ partial class IocSourceGenerator
         var writtenMethods = new HashSet<string>();
 
         // All registrations are already filtered (no open generics)
-        foreach(var cached in groups.Singletons)
-        {
-            if(!writtenMethods.Add(cached.ResolverMethodName))
-                continue;
-            WriteServiceResolverMethod(writer, container, cached, groups);
-            writer.WriteLine();
-        }
-
-        foreach(var cached in groups.Scoped)
-        {
-            if(!writtenMethods.Add(cached.ResolverMethodName))
-                continue;
-            WriteServiceResolverMethod(writer, container, cached, groups);
-            writer.WriteLine();
-        }
-
-        foreach(var cached in groups.Transients)
-        {
-            if(!writtenMethods.Add(cached.ResolverMethodName))
-                continue;
-            WriteServiceResolverMethod(writer, container, cached, groups);
-            writer.WriteLine();
-        }
+        WriteServiceResolverGroup(writer, groups.Singletons, writtenMethods, groups);
+        WriteServiceResolverGroup(writer, groups.Scoped, writtenMethods, groups);
+        WriteServiceResolverGroup(writer, groups.Transients, writtenMethods, groups);
 
         // Write collection resolver methods for IEnumerable<T> support
         foreach(var serviceType in groups.CollectionServiceTypes)
@@ -412,6 +391,24 @@ partial class IocSourceGenerator
 
         writer.WriteLine("#endregion");
         writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes resolver methods for a group of registrations, ensuring unique method names.
+    /// </summary>
+    private static void WriteServiceResolverGroup(
+        SourceWriter writer,
+        IEnumerable<CachedRegistration> registrations,
+        HashSet<string> writtenMethods,
+        ContainerRegistrationGroups groups)
+    {
+        foreach(var cached in registrations)
+        {
+            if(!writtenMethods.Add(cached.ResolverMethodName))
+                continue;
+            WriteServiceResolverMethod(writer, cached, groups);
+            writer.WriteLine();
+        }
     }
 
     /// <summary>
@@ -449,7 +446,6 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteServiceResolverMethod(
         SourceWriter writer,
-        ContainerModel container,
         CachedRegistration cached,
         ContainerRegistrationGroups groups)
     {
@@ -771,10 +767,7 @@ partial class IocSourceGenerator
                 // When decorator has injection members, use a temporary variable with concrete type
                 // to allow accessing the decorator's properties/methods before assigning to interface variable
                 var decoratorVarName = $"decorator{decorators.Length - 1 - i}";
-                writer.WriteLine($"var {decoratorVarName} = new {decorator.Name}({argsString});");
-
-                // Apply injection members to the concrete decorator variable
-                WriteDecoratorInjectionMembersForContainer(writer, decoratorVarName, decorator, reg, groups);
+                WriteDecoratorCreationWithInjection(writer, decoratorVarName, decorator, argsString, reg, groups);
 
                 // Assign to the interface variable
                 writer.WriteLine($"{varName} = {decoratorVarName};");
@@ -788,19 +781,26 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes injection member assignments for a decorator instance in Container mode.
-    /// Handles property injection, field injection, and method injection for decorators.
+    /// Writes decorator creation with object initializer for property/field injection,
+    /// and method calls for method injection.
     /// </summary>
-    private static void WriteDecoratorInjectionMembersForContainer(
+    private static void WriteDecoratorCreationWithInjection(
         SourceWriter writer,
         string varName,
         TypeData decorator,
+        string argsString,
         ServiceRegistrationModel reg,
         ContainerRegistrationGroups groups)
     {
         var injectionMembers = decorator.InjectionMembers;
         if(injectionMembers is null or { Length: 0 })
+        {
+            writer.WriteLine($"var {varName} = new {decorator.Name}({argsString});");
             return;
+        }
+
+        var propertyAssignments = new List<string>();
+        var methodInvocations = new List<string>();
 
         foreach(var member in injectionMembers)
         {
@@ -811,7 +811,7 @@ partial class IocSourceGenerator
                     if(member.Type is not null)
                     {
                         var resolveCall = BuildServiceResolutionCallForContainer(member.Type, member.Key, member.IsNullable, groups);
-                        writer.WriteLine($"{varName}.{member.Name} = {resolveCall};");
+                        propertyAssignments.Add($"{member.Name} = {resolveCall},");
                     }
                     break;
 
@@ -822,9 +822,33 @@ partial class IocSourceGenerator
                         var argsList = member.Parameters.Select(p => BuildParameterForInjectionMethod(p, reg, groups));
                         methodArgs = string.Join(", ", argsList);
                     }
-                    writer.WriteLine($"{varName}.{member.Name}({methodArgs});");
+                    methodInvocations.Add($"{varName}.{member.Name}({methodArgs});");
                     break;
             }
+        }
+
+        if(propertyAssignments.Count > 0)
+        {
+            writer.WriteLine($"var {varName} = new {decorator.Name}({argsString})");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            foreach(var assignment in propertyAssignments)
+            {
+                writer.WriteLine(assignment);
+            }
+
+            writer.Indentation--;
+            writer.WriteLine("};");
+        }
+        else
+        {
+            writer.WriteLine($"var {varName} = new {decorator.Name}({argsString});");
+        }
+
+        foreach(var invocation in methodInvocations)
+        {
+            writer.WriteLine(invocation);
         }
     }
 
@@ -887,7 +911,7 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Builds a single parameter for container (constructor, method injection, or factory).
-    /// Handles [ServiceKey], IServiceProvider, and regular service resolution.
+    /// Handles [ServiceKey], [FromKeyedServices], IServiceProvider, and regular service resolution.
     /// </summary>
     private static string BuildParameterForContainer(ParameterData param, ServiceRegistrationModel reg, ContainerRegistrationGroups groups)
     {
@@ -902,7 +926,7 @@ partial class IocSourceGenerator
             return "this";
         }
 
-        var key = param.ServiceKey ?? (param.HasFromKeyedServicesAttribute ? param.ServiceKey : null);
+        var key = param.ServiceKey;
         return BuildServiceResolutionCallForContainer(param.Type, key, param.IsOptional, groups);
     }
 

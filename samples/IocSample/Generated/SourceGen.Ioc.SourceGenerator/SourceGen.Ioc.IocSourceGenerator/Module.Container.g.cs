@@ -38,7 +38,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _fallbackProvider = fallbackProvider;
         _iocSample_Shared_SharedModule = new global::IocSample.Shared.SharedModule(fallbackProvider);
 
-        _serviceResolvers = _iocSample_Shared_SharedModule.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::IocSample.Module, object>>(kvp.Key, c => kvp.Value(c._iocSample_Shared_SharedModule))).Concat(_localServices).ToFrozenDictionary();
+        _serviceResolvers =
+        _iocSample_Shared_SharedModule.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::IocSample.Module, object>>(kvp.Key, c => kvp.Value(c._iocSample_Shared_SharedModule)))
+            .Concat(_localServices)
+            .ToFrozenDictionary();
     }
 
     private Module(Module parent)
