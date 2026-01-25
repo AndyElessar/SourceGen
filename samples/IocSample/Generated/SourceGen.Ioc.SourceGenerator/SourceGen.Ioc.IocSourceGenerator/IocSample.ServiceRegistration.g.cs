@@ -31,8 +31,8 @@ namespace IocSample
                 var p0 = sp.GetRequiredService<global::IocSample.CustomMessenger>();
                 var s0_p0 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>();
                 var s0_p1 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>();
-                var s0 = new global::IocSample.ViewModel2(p0) { Handler = s0_p0, Handler2 = s0_p1 };
                 var s0_m2 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>();
+                var s0 = new global::IocSample.ViewModel2(p0) { Handler = s0_p0, Handler2 = s0_p1 };
                 s0.Initialize(s0_m2);
                 return s0;
             });
@@ -40,8 +40,8 @@ namespace IocSample
             {
                 var p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("1");
                 var s0_p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("2");
-                var s0 = new global::IocSample.DependentClass(p0) { Dependency2 = s0_p0 };
                 var s0_m1 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("3");
+                var s0 = new global::IocSample.DependentClass(p0) { Dependency2 = s0_p0 };
                 s0.Initialize(s0_m1);
                 return s0;
             });
@@ -75,8 +75,8 @@ namespace IocSample
             services.AddKeyedSingleton<global::IocSample.IKeyed>("Key", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Keyed>(key));
             services.AddKeyedSingleton<global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) =>
             {
-                var s0 = new global::IocSample.KeyedEnum();
                 var s0_m0 = global::IocSample.KeyEnum.Key0;
+                var s0 = new global::IocSample.KeyedEnum();
                 s0.Init(s0_m0);
                 return s0;
             });

@@ -109,6 +109,24 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Writes the start of a service registration lambda for keyed or non-keyed registrations.
+    /// </summary>
+    private static void WriteServiceRegistrationLambdaStart(
+        SourceWriter writer,
+        string lifetime,
+        string serviceTypeName,
+        string? registrationKey)
+    {
+        if(registrationKey is not null)
+        {
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registrationKey}, (global::System.IServiceProvider sp, object? key) =>");
+            return;
+        }
+
+        writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
+    }
+
+    /// <summary>
     /// Gets or creates a SourceWriter for a specific method key.
     /// The writer is pre-configured with the indentation level for method body content.
     /// </summary>
@@ -140,14 +158,14 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;
 
-        // The methodBodyWriter has line-by-line output without indentation.
-        // We need to write each line with proper indentation from mainWriter.
+        // The methodBodyWriter contains preformatted lines without indentation.
+        // Write as-is; registration lines do not rely on indentation.
         var methodBody = methodBodyWriter.ToString();
         if(!string.IsNullOrEmpty(methodBody))
         {
             // Trim trailing newlines to avoid extra blank lines with indentation
             methodBody = methodBody.TrimEnd('\r', '\n');
-            // Write each line with proper indentation
+            // Write the preformatted block
             mainWriter.WriteLine(methodBody);
         }
 
@@ -330,39 +348,17 @@ partial class IocSourceGenerator
         }
 
         // Simple case: no additional parameters
-        // Build factory invocation with optional generic type arguments
-        var factoryCallPath = genericTypeArgs is not null ? $"{factoryPath}<{genericTypeArgs}>" : factoryPath;
-        // Only pass key if factory has key parameter AND registration provides a key
-        var shouldPassKey = hasKey && registration.Key is not null;
-        string factoryInvocation = (hasServiceProvider, shouldPassKey) switch
-        {
-            (true, true) => $"{factoryCallPath}(sp, {registration.Key})",
-            (true, false) => $"{factoryCallPath}(sp)",
-            (false, true) => $"{factoryCallPath}({registration.Key})",
-            (false, false) => $"{factoryCallPath}()"
-        };
+        var factoryInvocation = BuildFactoryInvocation(
+            factoryPath,
+            genericTypeArgs,
+            hasServiceProvider,
+            hasKey,
+            registration.Key,
+            [],
+            returnTypeName,
+            serviceTypeName);
 
-        // Add cast if return type differs from service type
-        if(returnTypeName is not null && returnTypeName != serviceTypeName)
-        {
-            factoryInvocation = $"({serviceTypeName}){factoryInvocation}";
-        }
-
-        if(registration.Key is not null)
-        {
-            // Keyed registration with factory
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) => {factoryInvocation});");
-        }
-        else if(hasServiceProvider)
-        {
-            // Non-keyed registration with factory that needs IServiceProvider
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {factoryInvocation});");
-        }
-        else
-        {
-            // No parameters factory - still need lambda for proper lifetime behavior (Transient/Scoped)
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {factoryInvocation});");
-        }
+        WriteFactoryRegistrationLine(writer, lifetime, serviceTypeName, registration.Key, factoryInvocation);
     }
 
     /// <summary>
@@ -382,14 +378,7 @@ partial class IocSourceGenerator
         string? genericTypeArgs = null)
     {
         // Open the registration lambda
-        if(registration.Key is not null)
-        {
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
-        }
-        else
-        {
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
-        }
+        WriteServiceRegistrationLambdaStart(writer, lifetime, serviceTypeName, registration.Key);
 
         writer.WriteLine("{");
         writer.Indentation++;
@@ -400,54 +389,87 @@ partial class IocSourceGenerator
         foreach(var param in additionalParameters)
         {
             var paramVar = $"f_p{paramIndex}";
-            var result = WriteParameterResolutionWithConditional(
-                writer, param, paramVar, param.Type.Name, isKeyedRegistration, registration.Key);
+            var varName = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration, registration.Key);
 
-            // Use the resolved variable name or the parameter's default value if skipped
-            if(result.VarName is not null)
-            {
-                paramVars.Add(result.VarName);
-            }
-            else
-            {
-                // Parameter was skipped (built-in with default value) - use the default value expression
-                paramVars.Add(param.DefaultValue ?? "default");
-            }
+            // Use the resolved variable name
+            paramVars.Add(varName);
             paramIndex++;
         }
 
-        // Build the factory invocation arguments
-        var args = new List<string>();
-
-        // Add IServiceProvider if needed
-        if(hasServiceProvider)
-        {
-            args.Add("sp");
-        }
-
-        // Add registration key if needed
-        if(hasKey && registration.Key is not null)
-        {
-            args.Add(registration.Key);
-        }
-
-        // Add resolved additional parameters
-        args.AddRange(paramVars);
-
-        // Build the factory invocation with optional generic type arguments
-        var factoryCallPath = genericTypeArgs is not null ? $"{factoryPath}<{genericTypeArgs}>" : factoryPath;
-        var factoryInvocation = $"{factoryCallPath}({string.Join(", ", args)})";
-
-        // Add cast if return type differs from service type
-        if(returnTypeName is not null && returnTypeName != serviceTypeName)
-        {
-            factoryInvocation = $"({serviceTypeName}){factoryInvocation}";
-        }
+        var factoryInvocation = BuildFactoryInvocation(
+            factoryPath,
+            genericTypeArgs,
+            hasServiceProvider,
+            hasKey,
+            registration.Key,
+            paramVars,
+            returnTypeName,
+            serviceTypeName);
 
         writer.WriteLine($"return {factoryInvocation};");
 
         writer.Indentation--;
         writer.WriteLine("});");
+    }
+
+    /// <summary>
+    /// Builds the factory invocation expression with optional generic arguments, service provider, key, and additional parameters.
+    /// Adds a cast when the factory return type differs from the service type.
+    /// </summary>
+    private static string BuildFactoryInvocation(
+        string factoryPath,
+        string? genericTypeArgs,
+        bool hasServiceProvider,
+        bool hasKey,
+        string? registrationKey,
+        List<string> additionalArgs,
+        string? returnTypeName,
+        string serviceTypeName)
+    {
+        var args = new List<string>(additionalArgs.Count + 2);
+        if(hasServiceProvider)
+        {
+            args.Add("sp");
+        }
+
+        if(hasKey && registrationKey is not null)
+        {
+            args.Add(registrationKey);
+        }
+
+        if(additionalArgs.Count > 0)
+        {
+            args.AddRange(additionalArgs);
+        }
+
+        var factoryCallPath = genericTypeArgs is not null ? $"{factoryPath}<{genericTypeArgs}>" : factoryPath;
+        var factoryInvocation = $"{factoryCallPath}({string.Join(", ", args)})";
+
+        if(returnTypeName is not null && returnTypeName != serviceTypeName)
+        {
+            factoryInvocation = $"({serviceTypeName}){factoryInvocation}";
+        }
+
+        return factoryInvocation;
+    }
+
+    /// <summary>
+    /// Writes a factory registration line for keyed or non-keyed services.
+    /// </summary>
+    private static void WriteFactoryRegistrationLine(
+        SourceWriter writer,
+        string lifetime,
+        string serviceTypeName,
+        string? registrationKey,
+        string factoryInvocation)
+    {
+        if(registrationKey is not null)
+        {
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registrationKey}, (global::System.IServiceProvider sp, object? key) => {factoryInvocation});");
+            return;
+        }
+
+        writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {factoryInvocation});");
     }
 
     /// <summary>
@@ -499,12 +521,14 @@ partial class IocSourceGenerator
         if(registration.Key is not null)
         {
             // Keyed registration - forward to keyed implementation
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<{implTypeName}>(key));");
+            var requiredCall = BuildServiceCall("GetRequiredKeyedService", implTypeName, "key");
+            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) => {requiredCall});");
         }
         else
         {
             // Non-keyed registration - forward to implementation
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => sp.GetRequiredService<{implTypeName}>());");
+            var requiredCall = BuildServiceCall("GetRequiredService", implTypeName, serviceKey: null);
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) => {requiredCall});");
         }
     }
 
@@ -537,16 +561,7 @@ partial class IocSourceGenerator
         var injectionMembers = registration.InjectionMembers;
 
         // Build the factory lambda
-        if(registration.Key is not null)
-        {
-            // Keyed registration with injection
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
-        }
-        else
-        {
-            // Non-keyed registration with injection
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
-        }
+        WriteServiceRegistrationLambdaStart(writer, lifetime, serviceTypeName, registration.Key);
 
         writer.WriteLine("{");
         writer.Indentation++;
@@ -571,203 +586,7 @@ partial class IocSourceGenerator
         writer.WriteLine("});");
     }
 
-    /// <summary>
-    /// Writes conditional construction code when some constructor parameters need conditional handling.
-    /// Generates code like:
-    /// <code>
-    /// var s0 = p0 is not null ? new MyService(optDep: p0) : new MyService();
-    /// </code>
-    /// For multiple conditional parameters, uses nested ternary or if-else blocks.
-    /// </summary>
-    private static void WriteConditionalConstruction(
-        SourceWriter writer,
-        string implTypeName,
-        List<(string Name, string? Value, bool NeedsConditional)> paramEntries,
-        string[] propertyInitializers)
-    {
-        var conditionalParams = paramEntries.Where(e => e.NeedsConditional && e.Value is not null).ToList();
-        var initializerPart = propertyInitializers.Length > 0
-            ? $" {{ {string.Join(", ", propertyInitializers)} }}"
-            : "";
-
-        if(conditionalParams.Count == 1)
-        {
-            // Single conditional parameter - use simple ternary
-            var condParam = conditionalParams[0];
-            var withArgsEntries = paramEntries.Select(e => (e.Name, e.NeedsConditional ? e.Value : e.Value, false)).ToList();
-            var withoutArgsEntries = paramEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false)).ToList();
-
-            var withArgs = BuildArgumentListFromEntries(withArgsEntries);
-            var withoutArgs = BuildArgumentListFromEntries(withoutArgsEntries);
-
-            writer.WriteLine($"var s0 = {condParam.Value} is not null ? new {implTypeName}({withArgs}){initializerPart} : new {implTypeName}({withoutArgs}){initializerPart};");
-        }
-        else
-        {
-            // Multiple conditional parameters - generate if-else chain
-            // Build all possible combinations would be exponential, so we use a simpler approach:
-            // Check each conditional param and add to args if not null
-            writer.WriteLine($"{implTypeName} s0;");
-
-            // Generate condition check
-            var conditions = conditionalParams.Select(p => $"{p.Value} is not null").ToList();
-            var allCondition = string.Join(" && ", conditions);
-
-            // Generate the "all not null" case
-            writer.WriteLine($"if ({allCondition})");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            var allArgs = BuildArgumentListFromEntries(paramEntries.Select(e => (e.Name, e.Value, false)).ToList());
-            writer.WriteLine($"s0 = new {implTypeName}({allArgs}){initializerPart};");
-            writer.Indentation--;
-            writer.WriteLine("}");
-
-            // Generate the "fallback" case (only non-conditional params)
-            writer.WriteLine("else");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            var fallbackArgs = BuildArgumentListFromEntries(paramEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false)).ToList());
-            writer.WriteLine($"s0 = new {implTypeName}({fallbackArgs}){initializerPart};");
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-    }
-
-    /// <summary>
-    /// Writes conditional method call when some parameters need conditional handling.
-    /// </summary>
-    private static void WriteConditionalMethodCall(
-        SourceWriter writer,
-        string methodName,
-        string?[] paramVars,
-        string[] paramNames,
-        bool[] needsConditional)
-    {
-        var conditionalIndices = new List<int>();
-        for(int i = 0; i < needsConditional.Length; i++)
-        {
-            if(needsConditional[i] && paramVars[i] is not null)
-            {
-                conditionalIndices.Add(i);
-            }
-        }
-
-        if(conditionalIndices.Count == 1)
-        {
-            // Single conditional parameter - use simple if
-            var idx = conditionalIndices[0];
-            var condVar = paramVars[idx]!;
-
-            writer.WriteLine($"if ({condVar} is not null)");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            var withArgs = BuildMethodArgumentList(paramVars, paramNames, i => true);
-            writer.WriteLine($"s0.{methodName}({withArgs});");
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine("else");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            var withoutArgs = BuildMethodArgumentList(paramVars, paramNames, i => !needsConditional[i]);
-            writer.WriteLine($"s0.{methodName}({withoutArgs});");
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-        else
-        {
-            // Multiple conditional parameters
-            var conditions = conditionalIndices.Select(i => $"{paramVars[i]} is not null").ToList();
-            var allCondition = string.Join(" && ", conditions);
-
-            writer.WriteLine($"if ({allCondition})");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            var allArgs = BuildMethodArgumentList(paramVars, paramNames, i => true);
-            writer.WriteLine($"s0.{methodName}({allArgs});");
-            writer.Indentation--;
-            writer.WriteLine("}");
-
-            writer.WriteLine("else");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            var fallbackArgs = BuildMethodArgumentList(paramVars, paramNames, i => !needsConditional[i]);
-            writer.WriteLine($"s0.{methodName}({fallbackArgs});");
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-    }
-
-    /// <summary>
-    /// Writes conditional method call targeting a specific instance variable.
-    /// Mirrors WriteConditionalMethodCall but allows custom target variable name.
-    /// </summary>
-    private static void WriteConditionalMethodCallForInstance(
-        SourceWriter writer,
-        string targetVar,
-        string methodName,
-        string?[] paramVars,
-        string[] paramNames,
-        bool[] needsConditional)
-    {
-        var conditionalIndices = new List<int>();
-        for(int i = 0; i < needsConditional.Length; i++)
-        {
-            if(needsConditional[i] && paramVars[i] is not null)
-            {
-                conditionalIndices.Add(i);
-            }
-        }
-
-        if(conditionalIndices.Count == 1)
-        {
-            var idx = conditionalIndices[0];
-            var condVar = paramVars[idx]!;
-
-            writer.WriteLine($"if ({condVar} is not null)");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            var withArgs = BuildMethodArgumentList(paramVars, paramNames, i => true);
-            writer.WriteLine($"{targetVar}.{methodName}({withArgs});");
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine("else");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            var withoutArgs = BuildMethodArgumentList(paramVars, paramNames, i => !needsConditional[i]);
-            writer.WriteLine($"{targetVar}.{methodName}({withoutArgs});");
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-        else
-        {
-            var conditions = conditionalIndices.Select(i => $"{paramVars[i]} is not null").ToList();
-            var allCondition = string.Join(" && ", conditions);
-
-            writer.WriteLine($"if ({allCondition})");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            var allArgs = BuildMethodArgumentList(paramVars, paramNames, i => true);
-            writer.WriteLine($"{targetVar}.{methodName}({allArgs});");
-            writer.Indentation--;
-            writer.WriteLine("}");
-
-            writer.WriteLine("else");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            var fallbackArgs = BuildMethodArgumentList(paramVars, paramNames, i => !needsConditional[i]);
-            writer.WriteLine($"{targetVar}.{methodName}({fallbackArgs});");
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-    }
+    
 
     /// <summary>
     /// Shared helper to construct an instance and apply property/field/method injection with conditional handling.
@@ -800,389 +619,229 @@ partial class IocSourceGenerator
             else
             {
                 var varName = decoratedPrevVar is not null ? $"{instanceVarName}_p{paramIndex}" : $"p{paramIndex}";
-                var result = WriteParameterResolutionWithConditional(writer, param, varName, resolvedTypeName, isKeyedRegistration, registrationKey);
-                constructorParamEntries.Add((param.Name, result.VarName, result.NeedsConditional));
+                var resolvedVar = ResolveParamAndEmitVar(writer, param, varName, isKeyedRegistration, registrationKey);
+                constructorParamEntries.Add((param.Name, resolvedVar, false));
                 paramIndex++;
             }
         }
 
-        bool isDecorator = decoratedPrevVar is not null;
-
         if(constructorParamEntries.Any(e => e.NeedsConditional))
         {
-            var conditionalParams = constructorParamEntries.Where(e => e.NeedsConditional && e.Value is not null).ToList();
+            var conditionalParams = constructorParamEntries.Where(e => e.NeedsConditional && e.Value is not null).ToArray();
             var initializerPart = "";
-            if(conditionalParams.Count == 1)
+            if(conditionalParams.Length == 1)
             {
                 var condParam = conditionalParams[0];
-                var withArgs = BuildArgumentListFromEntries(constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? e.Value : e.Value, false)).ToList());
-                var withoutArgs = BuildArgumentListFromEntries(constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false)).ToList());
-                writer.WriteLine($"var {instanceVarName} = {condParam.Value} is not null ? new {implTypeName}({withArgs}){initializerPart} : new {implTypeName}({withoutArgs}){initializerPart};");
+                var withArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? e.Value : e.Value, false))]);
+                var withoutArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false))]);
+                var withInvocation = BuildConstructorInvocation(implTypeName, withArgs, initializerPart);
+                var withoutInvocation = BuildConstructorInvocation(implTypeName, withoutArgs, initializerPart);
+                writer.WriteLine($"var {instanceVarName} = {condParam.Value} is not null ? {withInvocation} : {withoutInvocation};");
             }
             else
             {
-                var conditions = conditionalParams.Select(p => $"{p.Value} is not null").ToList();
+                var conditions = conditionalParams.Select(p => $"{p.Value} is not null").ToArray();
                 var allCondition = string.Join(" && ", conditions);
                 writer.WriteLine($"{implTypeName} {instanceVarName};");
                 writer.WriteLine($"if ({allCondition})");
                 writer.WriteLine("{");
                 writer.Indentation++;
-                var allArgs = BuildArgumentListFromEntries(constructorParamEntries.Select(e => (e.Name, e.Value, false)).ToList());
-                writer.WriteLine($"{instanceVarName} = new {implTypeName}({allArgs}){initializerPart};");
+                var allArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.Value, false))]);
+                var allInvocation = BuildConstructorInvocation(implTypeName, allArgs, initializerPart);
+                writer.WriteLine($"{instanceVarName} = {allInvocation};");
                 writer.Indentation--;
                 writer.WriteLine("}");
                 writer.WriteLine("else");
                 writer.WriteLine("{");
                 writer.Indentation++;
-                var fallbackArgs = BuildArgumentListFromEntries(constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false)).ToList());
-                writer.WriteLine($"{instanceVarName} = new {implTypeName}({fallbackArgs}){initializerPart};");
+                var fallbackArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false))]);
+                var fallbackInvocation = BuildConstructorInvocation(implTypeName, fallbackArgs, initializerPart);
+                writer.WriteLine($"{instanceVarName} = {fallbackInvocation};");
                 writer.Indentation--;
                 writer.WriteLine("}");
             }
         }
         else
         {
-            if(!isDecorator)
+            // Unified construction behavior for both decorator and non-decorator cases
+            EmitConstruction(
+                writer,
+                instanceVarName,
+                implTypeName,
+                constructorParamEntries,
+                injectionMembers,
+                isKeyedRegistration,
+                registrationKey,
+                memberTypeNameResolver);
+        }
+
+    }
+
+    private static void EmitConstruction(
+        SourceWriter writer,
+        string instanceVarName,
+        string implTypeName,
+        List<(string Name, string? Value, bool NeedsConditional)> constructorParamEntries,
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers,
+        bool isKeyedRegistration,
+        string? registrationKey,
+        Func<TypeData, string>? memberTypeNameResolver)
+    {
+        // Resolve property/field injection parameters
+        int pfCount = injectionMembers.Count(m => m.MemberType is InjectionMemberType.Property or InjectionMemberType.Field);
+        var preProps = pfCount > 0 ? new (string Name, string ParamVar)[pfCount] : [];
+        int idx = 0;
+        int pfIdxCounter = 0;
+        foreach(var m in injectionMembers)
+        {
+            if(m.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                continue;
+            var varN = $"{instanceVarName}_p{pfIdxCounter}";
+            var mt = m.Type;
+            var mtName = mt is null ? "object" : (memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name);
+            bool hasNonNullDefault = m.HasDefaultValue && !m.DefaultValueIsNull;
+            ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue);
+            preProps[idx++] = (m.Name, varN);
+            pfIdxCounter++;
+        }
+
+        // Resolve method parameters before instance creation (unified for both decorator and non-decorator)
+        var methodParamResolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
+        int memberParamIndex = pfIdxCounter;
+        foreach(var method in injectionMembers)
+        {
+            if(method.MemberType != InjectionMemberType.Method)
+                continue;
+            var mParams = method.Parameters ?? [];
+            var mVars = new string?[mParams.Length];
+            var mNames = new string[mParams.Length];
+            int mi = 0;
+            foreach(var p in mParams)
             {
-                // Non-decorator: resolve properties first, then method parameters, then construct instance
-                int pfCount = injectionMembers.Count(m => m.MemberType is InjectionMemberType.Property or InjectionMemberType.Field);
-                var preProps = pfCount > 0 ? new (string Name, string ParamVar, bool NeedsConditional)[pfCount] : [];
-                int idx = 0;
-                int pfIdxCounter = 0;
-                foreach(var m in injectionMembers)
+                var pVar = $"{instanceVarName}_m{memberParamIndex}";
+                mNames[mi] = p.Name;
+                if(method.Key is not null)
                 {
-                    if(m.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
-                        continue;
-                    var varN = $"{instanceVarName}_p{pfIdxCounter}";
-                    var mt = m.Type;
-                    var mtName = mt is null ? "object" : (memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name);
-                    bool needsCond = m.HasDefaultValue && !m.DefaultValueIsNull;
-                    if(m.Key is not null)
-                    {
-                        if(mt?.CollectionKind is not null and not CollectionKind.None)
-                            WriteCollectionResolution(writer, mt, varN, m.Key, m.IsNullable);
-                        else if(needsCond)
-                            writer.WriteLine($"var {varN} = sp.GetKeyedService<{mtName}>({m.Key});");
-                        else
-                        {
-                            var getKeyed = m.IsNullable ? "GetKeyedService" : "GetRequiredKeyedService";
-                            writer.WriteLine($"var {varN} = sp.{getKeyed}<{mtName}>({m.Key});");
-                        }
-                    }
-                    else
-                    {
-                        if(mt?.CollectionKind is not null and not CollectionKind.None)
-                            WriteCollectionResolution(writer, mt, varN, serviceKey: null, m.IsNullable);
-                        else if(needsCond)
-                            writer.WriteLine($"var {varN} = sp.GetService<{mtName}>();");
-                        else
-                        {
-                            var getSvc = m.IsNullable ? "GetService" : "GetRequiredService";
-                            writer.WriteLine($"var {varN} = sp.{getSvc}<{mtName}>();");
-                        }
-                    }
-                    preProps[idx++] = (m.Name, varN, needsCond);
-                    pfIdxCounter++;
-                }
-
-                var methodParamResolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames, bool[] NeedsConditional)>();
-                int memberParamIndex = pfIdxCounter;
-                foreach(var method in injectionMembers)
-                {
-                    if(method.MemberType != InjectionMemberType.Method)
-                        continue;
-                    var mParams = method.Parameters ?? [];
-                    var mVars = new string?[mParams.Length];
-                    var mNames = new string[mParams.Length];
-                    var mConds = new bool[mParams.Length];
-                    int mi = 0;
-                    foreach(var p in mParams)
-                    {
-                        var pVar = $"{instanceVarName}_m{memberParamIndex}";
-                        mNames[mi] = p.Name;
-                        var rpName = memberTypeNameResolver is not null ? memberTypeNameResolver(p.Type) : p.Type.Name;
-                        if(method.Key is not null)
-                        {
-                            if(IsServiceProviderType(p.Type.Name))
-                            {
-                                mVars[mi] = "sp";
-                                mConds[mi] = false;
-                            }
-                            else if(p.HasServiceKeyAttribute)
-                            {
-                                mVars[mi] = WriteServiceKeyParameterResolution(writer, pVar, rpName, isKeyedRegistration, registrationKey);
-                                mConds[mi] = false;
-                            }
-                            else if(p.Type.CollectionKind is not CollectionKind.None)
-                            {
-                                WriteCollectionResolution(writer, p.Type, pVar, method.Key);
-                                mVars[mi] = pVar;
-                                mConds[mi] = false;
-                            }
-                            else if(p.HasDefaultValue && !p.Type.IsBuiltInTypeOrBuiltInCollection && !p.DefaultValueIsNull)
-                            {
-                                writer.WriteLine($"var {pVar} = sp.GetKeyedService<{rpName}>({method.Key});");
-                                mVars[mi] = pVar;
-                                mConds[mi] = true;
-                            }
-                            else if(p.HasDefaultValue && p.Type.IsBuiltInTypeOrBuiltInCollection)
-                            {
-                                mVars[mi] = null;
-                                mConds[mi] = false;
-                            }
-                            else if(p.HasDefaultValue && p.DefaultValueIsNull)
-                            {
-                                writer.WriteLine($"var {pVar} = sp.GetKeyedService<{rpName}>({method.Key});");
-                                mVars[mi] = pVar;
-                                mConds[mi] = false;
-                            }
-                            else
-                            {
-                                writer.WriteLine($"var {pVar} = sp.GetRequiredKeyedService<{rpName}>({method.Key});");
-                                mVars[mi] = pVar;
-                                mConds[mi] = false;
-                            }
-                            mi++;
-                        }
-                        else
-                        {
-                            var res = WriteParameterResolutionWithConditional(writer, p, pVar, rpName, isKeyedRegistration, registrationKey);
-                            mVars[mi] = res.VarName;
-                            mConds[mi] = res.NeedsConditional;
-                            mi++;
-                        }
-                        memberParamIndex++;
-                    }
-                    methodParamResolutions.Add((method.Name, mVars, mNames, mConds));
-                }
-
-                var unconditionalPropertyInits = preProps.Where(p => !p.NeedsConditional).Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
-                var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
-                if(unconditionalPropertyInits.Length > 0)
-                {
-                    var initializerList = string.Join(", ", unconditionalPropertyInits);
-                    writer.WriteLine($"var {instanceVarName} = new {implTypeName}({constructorArgs}) {{ {initializerList} }};");
+                    mVars[mi] = ResolveMethodParameterWithKey(
+                        writer,
+                        p,
+                        pVar,
+                        method.Key,
+                        isKeyedRegistration,
+                        registrationKey,
+                        memberTypeNameResolver);
                 }
                 else
                 {
-                    writer.WriteLine($"var {instanceVarName} = new {implTypeName}({constructorArgs});");
+                    var resolvedVar = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey);
+                    mVars[mi] = resolvedVar;
                 }
-
-                foreach(var (propName, paramVar, needsConditional) in preProps.Where(p => p.NeedsConditional))
-                {
-                    writer.WriteLine($"if ({paramVar} is not null)");
-                    writer.WriteLine("{");
-                    writer.Indentation++;
-                    writer.WriteLine($"{instanceVarName}.{propName} = {paramVar};");
-                    writer.Indentation--;
-                    writer.WriteLine("}");
-                }
-
-                // Call methods
-                foreach(var (mName, mVars, mNames, mConds) in methodParamResolutions)
-                {
-                    bool anyCond = mConds.Any(c => c);
-                    if(anyCond)
-                    {
-                        WriteConditionalMethodCallForInstance(writer, instanceVarName, mName, mVars, mNames, mConds);
-                    }
-                    else
-                    {
-                        var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
-                        for(int i = 0; i < mVars.Length; i++)
-                            entries.Add((mNames[i], mVars[i], false));
-                        var args = BuildArgumentListFromEntries(entries);
-                        writer.WriteLine($"{instanceVarName}.{mName}({args});");
-                    }
-                }
+                mi++;
+                memberParamIndex++;
             }
-            else
-            {
-                // Decorator simple construction
-                var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
-                writer.WriteLine($"var {instanceVarName} = new {implTypeName}({constructorArgs});");
+            methodParamResolutions.Add((method.Name, mVars, mNames));
+        }
 
-                // Resolve properties then assign
-                int memberParamIndex = 0;
-                foreach(var member in injectionMembers)
-                {
-                    if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
-                        continue;
-                    var paramVar = $"{instanceVarName}_p{memberParamIndex}";
-                    var mt = member.Type;
-                    var mtName = mt is null ? "object" : (memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name);
-                    bool needsCond = member.HasDefaultValue && !member.DefaultValueIsNull;
-                    if(member.Key is not null)
-                    {
-                        if(mt?.CollectionKind is not null and not CollectionKind.None)
-                            WriteCollectionResolution(writer, mt, paramVar, member.Key, member.IsNullable);
-                        else if(needsCond)
-                            writer.WriteLine($"var {paramVar} = sp.GetKeyedService<{mtName}>({member.Key});");
-                        else
-                        {
-                            var getKeyedServiceMethod = member.IsNullable ? "GetKeyedService" : "GetRequiredKeyedService";
-                            writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{mtName}>({member.Key});");
-                        }
-                    }
-                    else
-                    {
-                        if(mt?.CollectionKind is not null and not CollectionKind.None)
-                            WriteCollectionResolution(writer, mt, paramVar, serviceKey: null, member.IsNullable);
-                        else if(needsCond)
-                            writer.WriteLine($"var {paramVar} = sp.GetService<{mtName}>();");
-                        else
-                        {
-                            var getServiceMethod = member.IsNullable ? "GetService" : "GetRequiredService";
-                            writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{mtName}>();");
-                        }
-                    }
-                    if(needsCond)
-                    {
-                        writer.WriteLine($"if ({paramVar} is not null)");
-                        writer.WriteLine("{");
-                        writer.Indentation++;
-                        writer.WriteLine($"{instanceVarName}.{member.Name} = {paramVar};");
-                        writer.Indentation--;
-                        writer.WriteLine("}");
-                    }
-                    else
-                    {
-                        writer.WriteLine($"{instanceVarName}.{member.Name} = {paramVar};");
-                    }
-                    memberParamIndex++;
-                }
+        // Property/field values are resolved upfront; include all properties in the object initializer
+        var propertyInits = preProps.Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
+        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
+        var initializerPart = propertyInits.Length > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : "";
+        var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
+        writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
 
-                // Resolve and call methods
-                int mMemberParamIdx = 0;
-                foreach(var method in injectionMembers)
-                {
-                    if(method.MemberType != InjectionMemberType.Method)
-                        continue;
-                    var methodParams = method.Parameters ?? [];
-                    var methodParamVars = new string?[methodParams.Length];
-                    var methodParamNames = new string[methodParams.Length];
-                    var methodNeedsConditional = new bool[methodParams.Length];
-                    int mi = 0;
-                    foreach(var p in methodParams)
-                    {
-                        var pVar = $"{instanceVarName}_m{mMemberParamIdx}";
-                        methodParamNames[mi] = p.Name;
-                        var rpName = memberTypeNameResolver is not null ? memberTypeNameResolver(p.Type) : p.Type.Name;
-                        if(method.Key is not null)
-                        {
-                            if(IsServiceProviderType(p.Type.Name))
-                            {
-                                methodParamVars[mi] = "sp";
-                                methodNeedsConditional[mi] = false;
-                            }
-                            else if(p.HasServiceKeyAttribute)
-                            {
-                                methodParamVars[mi] = WriteServiceKeyParameterResolution(writer, pVar, rpName, isKeyedRegistration, registrationKey);
-                                methodNeedsConditional[mi] = false;
-                            }
-                            else if(p.Type.CollectionKind is not CollectionKind.None)
-                            {
-                                WriteCollectionResolution(writer, p.Type, pVar, method.Key);
-                                methodParamVars[mi] = pVar;
-                                methodNeedsConditional[mi] = false;
-                            }
-                            else if(p.HasDefaultValue && !p.Type.IsBuiltInTypeOrBuiltInCollection && !p.DefaultValueIsNull)
-                            {
-                                writer.WriteLine($"var {pVar} = sp.GetKeyedService<{rpName}>({method.Key});");
-                                methodParamVars[mi] = pVar;
-                                methodNeedsConditional[mi] = true;
-                            }
-                            else if(p.HasDefaultValue && p.Type.IsBuiltInTypeOrBuiltInCollection)
-                            {
-                                methodParamVars[mi] = null;
-                                methodNeedsConditional[mi] = false;
-                            }
-                            else if(p.HasDefaultValue && p.DefaultValueIsNull)
-                            {
-                                writer.WriteLine($"var {pVar} = sp.GetKeyedService<{rpName}>({method.Key});");
-                                methodParamVars[mi] = pVar;
-                                methodNeedsConditional[mi] = false;
-                            }
-                            else
-                            {
-                                writer.WriteLine($"var {pVar} = sp.GetRequiredKeyedService<{rpName}>({method.Key});");
-                                methodParamVars[mi] = pVar;
-                                methodNeedsConditional[mi] = false;
-                            }
-                            mi++;
-                        }
-                        else
-                        {
-                            var res2 = WriteParameterResolutionWithConditional(writer, p, pVar, rpName, isKeyedRegistration, registrationKey);
-                            methodParamVars[mi] = res2.VarName;
-                            methodNeedsConditional[mi] = res2.NeedsConditional;
-                            mi++;
-                        }
-                        mMemberParamIdx++;
-                    }
-                    bool any = methodNeedsConditional.Any(c => c);
-                    if(any)
-                    {
-                        WriteConditionalMethodCallForInstance(writer, instanceVarName, method.Name, methodParamVars, methodParamNames, methodNeedsConditional);
-                    }
-                    else
-                    {
-                        var entries = new List<(string Name, string? Value, bool NeedsConditional)>(methodParamVars.Length);
-                        for(int i = 0; i < methodParamVars.Length; i++)
-                            entries.Add((methodParamNames[i], methodParamVars[i], false));
-                        var args = BuildArgumentListFromEntries(entries);
-                        writer.WriteLine($"{instanceVarName}.{method.Name}({args});");
-                    }
-                }
-            }
+        // Call methods
+        foreach(var (mName, mVars, mNames) in methodParamResolutions)
+        {
+            var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
+            for(int i = 0; i < mVars.Length; i++)
+                entries.Add((mNames[i], mVars[i], false));
+            var args = BuildArgumentListFromEntries([.. entries]);
+            writer.WriteLine($"{instanceVarName}.{mName}({args});");
         }
     }
 
     /// <summary>
-    /// Builds a method argument list based on which parameters to include.
+    /// Builds a constructor invocation expression with an optional initializer.
     /// </summary>
-    private static string BuildMethodArgumentList(string?[] paramVars, string[] paramNames, Func<int, bool> includeParam)
+    private static string BuildConstructorInvocation(string implTypeName, string args, string initializerPart) =>
+        $"new {implTypeName}({args}){initializerPart}";
+
+    /// <summary>
+    /// Resolves a property or field injection value and emits its variable declaration.
+    /// </summary>
+    private static void ResolveMemberValue(
+        SourceWriter writer,
+        TypeData? memberType,
+        string memberTypeName,
+        string paramVar,
+        string? serviceKey,
+        bool isNullable,
+        bool hasNonNullDefault,
+        string? defaultValue)
     {
-        bool hasExcluded = false;
-        for(int i = 0; i < paramVars.Length; i++)
+        if(memberType?.CollectionKind is not null and not CollectionKind.None)
         {
-            if(!includeParam(i) || paramVars[i] is null)
-            {
-                hasExcluded = true;
-                break;
-            }
+            WriteCollectionResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable);
+            return;
         }
 
-        if(!hasExcluded)
+        if(hasNonNullDefault)
         {
-            // All parameters included - use positional
-            var values = new List<string>(paramVars.Length);
-            for(int i = 0; i < paramVars.Length; i++)
-            {
-                if(paramVars[i] is not null)
-                {
-                    values.Add(paramVars[i]!);
-                }
-            }
-            return string.Join(", ", values);
+            var defExpr = defaultValue ?? "default";
+            var svcCall = BuildServiceCall(serviceKey is not null ? "GetKeyedService" : "GetService", memberTypeName, serviceKey);
+            writer.WriteLine($"var {paramVar} = {svcCall} ?? {defExpr};");
+            return;
         }
 
-        // Some parameters excluded - use named arguments for included ones
-        var namedArgs = new List<string>(paramVars.Length);
-        for(int i = 0; i < paramVars.Length; i++)
-        {
-            if(includeParam(i) && paramVars[i] is not null)
-            {
-                namedArgs.Add($"{paramNames[i]}: {paramVars[i]}");
-            }
-        }
-        return string.Join(", ", namedArgs);
+        var methodName = isNullable
+            ? (serviceKey is not null ? "GetKeyedService" : "GetService")
+            : (serviceKey is not null ? "GetRequiredKeyedService" : "GetRequiredService");
+        var call = BuildServiceCall(methodName, memberTypeName, serviceKey);
+        writer.WriteLine($"var {paramVar} = {call};");
     }
+
+    /// <summary>
+    /// Resolves a keyed method parameter and emits its variable declaration.
+    /// </summary>
+    private static string? ResolveMethodParameterWithKey(
+        SourceWriter writer,
+        ParameterData param,
+        string paramVar,
+        string methodKey,
+        bool isKeyedRegistration,
+        string? registrationKey,
+        Func<TypeData, string>? typeNameResolver)
+    {
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, methodKey, isOptional: false, typeNameResolver, out var resolvedVar))
+        {
+            return resolvedVar!;
+        }
+
+        if(param.HasDefaultValue && param.Type.IsBuiltInTypeOrBuiltInCollection)
+        {
+            return null;
+        }
+
+        var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
+        if(param.HasDefaultValue && !param.Type.IsBuiltInTypeOrBuiltInCollection)
+        {
+            var defExpr = param.DefaultValue ?? "default";
+            var svcCall = BuildServiceCall("GetKeyedService", resolvedTypeName, methodKey);
+            writer.WriteLine($"var {paramVar} = {svcCall} ?? {defExpr};");
+            return paramVar;
+        }
+
+        var requiredCall = BuildServiceCall("GetRequiredKeyedService", resolvedTypeName, methodKey);
+        writer.WriteLine($"var {paramVar} = {requiredCall};");
+        return paramVar;
+    }
+
+
 
     /// <summary>
     /// Builds an argument list from entries with conditional flag.
     /// </summary>
-    private static string BuildArgumentListFromEntries(List<(string Name, string? Value, bool NeedsConditional)> entries)
+    private static string BuildArgumentListFromEntries((string Name, string? Value, bool NeedsConditional)[] entries)
     {
         // Check if any parameter uses default value
         bool hasDefaultValue = entries.Any(e => e.Value is null);
@@ -1194,7 +853,7 @@ partial class IocSourceGenerator
         }
 
         // Some values are null - use named arguments for non-null values only
-        var namedArgs = entries.Where(e => e.Value is not null).Select(e => $"{e.Name}: {e.Value}").ToList();
+        var namedArgs = entries.Where(e => e.Value is not null).Select(e => $"{e.Name}: {e.Value}");
         return string.Join(", ", namedArgs);
     }
 
@@ -1264,14 +923,7 @@ partial class IocSourceGenerator
         // Build service type names set for IsServiceParameter check
         var serviceTypeNames = BuildServiceTypeNames(registration);
 
-        if(registration.Key is not null)
-        {
-            writer.WriteLine($"services.AddKeyed{lifetime}<{serviceTypeName}>({registration.Key}, (global::System.IServiceProvider sp, object? key) =>");
-        }
-        else
-        {
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>((global::System.IServiceProvider sp) =>");
-        }
+        WriteServiceRegistrationLambdaStart(writer, lifetime, serviceTypeName, registration.Key);
 
         writer.WriteLine("{");
         writer.Indentation++;
@@ -1312,8 +964,8 @@ partial class IocSourceGenerator
                 isKeyedRegistration: isKeyedRegistration,
                 registrationKey: registration.Key,
                 serviceTypeNames: serviceTypeNames,
-                ctorTypeNameResolver: (TypeData t) => decorator.IsOpenGeneric && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
-                memberTypeNameResolver: (TypeData t) => decorator.IsOpenGeneric && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
+                ctorTypeNameResolver: t => decorator.IsOpenGeneric && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
+                memberTypeNameResolver: t => decorator.IsOpenGeneric && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
                 decoratedPrevVar: prevVar);
         }
 
@@ -1448,110 +1100,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Result of parameter resolution containing the variable name and whether it needs conditional handling.
-    /// </summary>
-    /// <param name="VarName">The variable name or expression to use for this parameter, or null if the parameter should use its default value.</param>
-    /// <param name="NeedsConditional">Whether this parameter needs conditional handling (only use if not null).</param>
-    private readonly record struct ParameterResolutionResult(string? VarName, bool NeedsConditional = false);
-
-    /// <summary>
-    /// Writes parameter resolution code and returns the variable name to use.
-    /// Handles special cases: IServiceProvider, [FromKeyedServices], [Inject] with key, [ServiceKey], and keyed service key parameter.
-    /// </summary>
-    /// <param name="writer">The source writer.</param>
-    /// <param name="param">The parameter data.</param>
-    /// <param name="paramVar">The variable name for this parameter.</param>
-    /// <param name="paramTypeName">The resolved parameter type name (for generic substitution).</param>
-    /// <param name="isKeyedRegistration">Whether this is a keyed service registration.</param>
-    /// <param name="registrationKey">The registration key for keyed services, used for [ServiceKey] parameter injection.</param>
-    /// <returns>The variable name or expression to use for this parameter, or null if the parameter should use its default value.</returns>
-    private static string? WriteParameterResolution(
-        SourceWriter writer,
-        ParameterData param,
-        string paramVar,
-        string paramTypeName,
-        bool isKeyedRegistration,
-        string? registrationKey = null)
-    {
-        var result = WriteParameterResolutionWithConditional(writer, param, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
-        return result.VarName;
-    }
-
-    /// <summary>
-    /// Writes parameter resolution code and returns the result with conditional handling information.
-    /// </summary>
-    private static ParameterResolutionResult WriteParameterResolutionWithConditional(
-        SourceWriter writer,
-        ParameterData param,
-        string paramVar,
-        string paramTypeName,
-        bool isKeyedRegistration,
-        string? registrationKey = null)
-    {
-        // Skip built-in type parameters with default values - let them use their default value
-        if(param.HasDefaultValue && param.Type.IsBuiltInTypeOrBuiltInCollection)
-        {
-            return new ParameterResolutionResult(null, false);
-        }
-
-        // Case 1: IServiceProvider - pass sp directly
-        if(IsServiceProviderType(paramTypeName))
-        {
-            return new ParameterResolutionResult("sp", false);
-        }
-
-        // Case 2: [ServiceKey] attribute - inject the registration key
-        // Must check before collection resolution since string implements IEnumerable<char>
-        if(param.HasServiceKeyAttribute)
-        {
-            var keyVar = WriteServiceKeyParameterResolution(writer, paramVar, paramTypeName, isKeyedRegistration, registrationKey);
-            return new ParameterResolutionResult(keyVar, false);
-        }
-
-        // Case 3: Non-IEnumerable collection types (IList<T>, T[], IReadOnlyList<T>, etc.)
-        // OR IEnumerable<T> without [FromKeyedServices] key (MS.DI can handle [FromKeyedServices] + IEnumerable<T> automatically)
-        // Use CollectionKind to determine resolution method
-        var collectionKind = param.Type.CollectionKind;
-        var needsManualCollectionResolution = collectionKind is not CollectionKind.None &&
-            (collectionKind is not CollectionKind.Enumerable || param.ServiceKey is null);
-
-        if(needsManualCollectionResolution)
-        {
-            WriteCollectionResolution(writer, param.Type, paramVar, param.ServiceKey, param.IsOptional);
-            return new ParameterResolutionResult(paramVar, false);
-        }
-
-        // Case 4: [FromKeyedServices] or [Inject] attribute with key - use the specified key
-        if(param.ServiceKey is not null)
-        {
-            // For optional parameters with default values (non-null default), use GetService and conditional handling
-            // If default value is null, GetService returning null is equivalent to using default, so no conditional needed
-            if(param.HasDefaultValue && !param.DefaultValueIsNull)
-            {
-                writer.WriteLine($"var {paramVar} = sp.GetKeyedService<{paramTypeName}>({param.ServiceKey});");
-                return new ParameterResolutionResult(paramVar, true);
-            }
-
-            var getKeyedServiceMethod = param.IsOptional ? "GetKeyedService" : "GetRequiredKeyedService";
-            writer.WriteLine($"var {paramVar} = sp.{getKeyedServiceMethod}<{paramTypeName}>({param.ServiceKey});");
-            return new ParameterResolutionResult(paramVar, false);
-        }
-
-        // Case 5: Parameter with default value (resolvable type) - use GetService and conditional handling
-        // If default value is null, GetService returning null is equivalent to using default, so no conditional needed
-        if(param.HasDefaultValue && !param.DefaultValueIsNull)
-        {
-            writer.WriteLine($"var {paramVar} = sp.GetService<{paramTypeName}>();");
-            return new ParameterResolutionResult(paramVar, true);
-        }
-
-        // Default: resolve from service provider
-        var getServiceMethod = param.IsOptional ? "GetService" : "GetRequiredService";
-        writer.WriteLine($"var {paramVar} = sp.{getServiceMethod}<{paramTypeName}>();");
-        return new ParameterResolutionResult(paramVar, false);
-    }
-
-    /// <summary>
     /// Writes parameter resolution code for [ServiceKey] attribute.
     /// When the service is registered as keyed, injects the registration key with appropriate type casting.
     /// When the service is not keyed, injects null.
@@ -1582,6 +1130,54 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Resolve a parameter and emit its variable declaration.
+    /// Produces lines like:
+    /// var p = sp.GetService<T>() ?? <default>;
+    /// var p = sp.GetKeyedService<T>(key) ?? <default>;
+    /// var p = default(int); // for built-in types without [ServiceKey]
+    /// or returns "sp" for IServiceProvider parameters (no var emitted).
+    /// </summary>
+    private static string ResolveParamAndEmitVar(
+        SourceWriter writer,
+        ParameterData param,
+        string paramVar,
+        bool isKeyedRegistration,
+        string? registrationKey = null)
+    {
+        var paramTypeName = param.Type.Name;
+
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, param.ServiceKey, param.IsOptional, typeNameResolver: null, out var resolvedVar))
+        {
+            return resolvedVar!;
+        }
+
+        // Case: Built-in type (no [ServiceKey]) - use default expression, do not call sp
+        if(param.Type.IsBuiltInTypeOrBuiltInCollection && !param.HasServiceKeyAttribute)
+        {
+            var defaultExpr = param.HasDefaultValue ? (param.DefaultValue ?? $"default({param.Type.Name})") : $"default({param.Type.Name})";
+            writer.WriteLine($"var {paramVar} = {defaultExpr};");
+            return paramVar;
+        }
+
+        // General case: if the parameter is optional (HasDefaultValue or IsOptional), use GetService + ?? default; otherwise use GetRequiredService
+        if(param.HasDefaultValue || param.IsOptional)
+        {
+            var methodName = param.ServiceKey is not null ? "GetKeyedService" : "GetService";
+            var svcCall = BuildServiceCall(methodName, paramTypeName, param.ServiceKey);
+            var defExpr = param.HasDefaultValue ? (param.DefaultValue ?? "default") : "default";
+            writer.WriteLine($"var {paramVar} = {svcCall} ?? {defExpr};");
+            return paramVar;
+        }
+        else
+        {
+            var methodName = param.ServiceKey is not null ? "GetRequiredKeyedService" : "GetRequiredService";
+            var svcCall = BuildServiceCall(methodName, paramTypeName, param.ServiceKey);
+            writer.WriteLine($"var {paramVar} = {svcCall};");
+            return paramVar;
+        }
+    }
+
+    /// <summary>
     /// Writes collection resolution code for constructor parameters and injection members.
     /// Handles all collection types including IEnumerable&lt;T&gt;, IList&lt;T&gt;, T[], IReadOnlyList&lt;T&gt;, etc.
     /// </summary>
@@ -1606,12 +1202,14 @@ partial class IocSourceGenerator
             if(isKeyed)
             {
                 var method = isOptional ? "GetKeyedService" : "GetRequiredKeyedService";
-                writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>({serviceKey});");
+                var call = BuildServiceCall(method, type.Name, serviceKey);
+                writer.WriteLine($"var {paramVar} = {call};");
             }
             else
             {
                 var method = isOptional ? "GetService" : "GetRequiredService";
-                writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>();");
+                var call = BuildServiceCall(method, type.Name, serviceKey: null);
+                writer.WriteLine($"var {paramVar} = {call};");
             }
             return;
         }
@@ -1625,11 +1223,13 @@ partial class IocSourceGenerator
                 // IEnumerable<T> - use GetServices directly
                 if(isKeyed)
                 {
-                    writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>({serviceKey});");
+                    var call = BuildServiceCall("GetKeyedServices", elementTypeName, serviceKey);
+                    writer.WriteLine($"var {paramVar} = {call};");
                 }
                 else
                 {
-                    writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>();");
+                    var call = BuildServiceCall("GetServices", elementTypeName, serviceKey: null);
+                    writer.WriteLine($"var {paramVar} = {call};");
                 }
                 break;
 
@@ -1637,11 +1237,13 @@ partial class IocSourceGenerator
                 // IReadOnlyCollection<T>, IReadOnlyList<T>, T[] - resolve as array
                 if(isKeyed)
                 {
-                    writer.WriteLine($"var {paramVar} = sp.GetKeyedServices<{elementTypeName}>({serviceKey}).ToArray();");
+                    var call = BuildServiceCall("GetKeyedServices", elementTypeName, serviceKey);
+                    writer.WriteLine($"var {paramVar} = {call}.ToArray();");
                 }
                 else
                 {
-                    writer.WriteLine($"var {paramVar} = sp.GetServices<{elementTypeName}>().ToArray();");
+                    var call = BuildServiceCall("GetServices", elementTypeName, serviceKey: null);
+                    writer.WriteLine($"var {paramVar} = {call}.ToArray();");
                 }
                 break;
 
@@ -1650,15 +1252,64 @@ partial class IocSourceGenerator
                 if(isKeyed)
                 {
                     var method = isOptional ? "GetKeyedService" : "GetRequiredKeyedService";
-                    writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>({serviceKey});");
+                    var call = BuildServiceCall(method, type.Name, serviceKey);
+                    writer.WriteLine($"var {paramVar} = {call};");
                 }
                 else
                 {
                     var method = isOptional ? "GetService" : "GetRequiredService";
-                    writer.WriteLine($"var {paramVar} = sp.{method}<{type.Name}>();");
+                    var call = BuildServiceCall(method, type.Name, serviceKey: null);
+                    writer.WriteLine($"var {paramVar} = {call};");
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// Builds a service resolution call for keyed or non-keyed services.
+    /// </summary>
+    private static string BuildServiceCall(string methodName, string typeName, string? serviceKey) =>
+        serviceKey is not null
+            ? $"sp.{methodName}<{typeName}>({serviceKey})"
+            : $"sp.{methodName}<{typeName}>()";
+
+    /// <summary>
+    /// Attempts to resolve common parameter cases and emit any required variable declarations.
+    /// Returns true when a resolution was produced.
+    /// </summary>
+    private static bool TryResolveCommonParameter(
+        SourceWriter writer,
+        ParameterData param,
+        string paramVar,
+        bool isKeyedRegistration,
+        string? registrationKey,
+        string? serviceKey,
+        bool isOptional,
+        Func<TypeData, string>? typeNameResolver,
+        out string? resolvedVar)
+    {
+        if(IsServiceProviderType(param.Type.Name))
+        {
+            resolvedVar = "sp";
+            return true;
+        }
+
+        var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
+        if(param.HasServiceKeyAttribute)
+        {
+            resolvedVar = WriteServiceKeyParameterResolution(writer, paramVar, resolvedTypeName, isKeyedRegistration, registrationKey);
+            return true;
+        }
+
+        if(param.Type.CollectionKind is not CollectionKind.None)
+        {
+            WriteCollectionResolution(writer, param.Type, paramVar, serviceKey, isOptional);
+            resolvedVar = paramVar;
+            return true;
+        }
+
+        resolvedVar = null;
+        return false;
     }
 
     /// <summary>

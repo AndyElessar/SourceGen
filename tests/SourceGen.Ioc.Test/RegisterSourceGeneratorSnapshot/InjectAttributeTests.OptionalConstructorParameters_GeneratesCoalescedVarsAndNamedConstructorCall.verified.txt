@@ -16,11 +16,13 @@ namespace TestAssembly
         /// </summary>
         public static IServiceCollection AddTestAssembly(this IServiceCollection services)
         {
-            services.AddKeyedSingleton<global::TestNamespace.SpecialDependency, global::TestNamespace.SpecialDependency>("special");
+            services.AddSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>();
+            services.AddSingleton<global::TestNamespace.Dependency2, global::TestNamespace.Dependency2>();
             services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
             {
-                var p0 = sp.GetKeyedService<global::TestNamespace.IDependency>("special") ?? default;
-                var s0 = new global::TestNamespace.MyService(p0);
+                var p0 = sp.GetService<global::TestNamespace.IDependency1>() ?? default;
+                var p1 = sp.GetService<global::TestNamespace.IDependency2>() ?? default;
+                var s0 = new global::TestNamespace.MyService(p0, p1);
                 return s0;
             });
             services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());

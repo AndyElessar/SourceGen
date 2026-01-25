@@ -424,6 +424,38 @@ public class InjectAttributeTests
     }
 
     [Test]
+    public async Task OptionalConstructorParameters_GeneratesCoalescedVarsAndNamedConstructorCall()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency1 { }
+            public interface IDependency2 { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Dependency1 : IDependency1 { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Dependency2 : IDependency2 { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService(IDependency1? dep1 = null, IDependency2? dep2 = null) : IMyService
+            {
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task InjectAttribute_OptionalConstructorParameterWithKey_GeneratesGetKeyedService()
     {
         const string source = """

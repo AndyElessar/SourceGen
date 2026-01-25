@@ -19,7 +19,7 @@ namespace TestAssembly
             services.AddSingleton<global::TestNamespace.Dependency, global::TestNamespace.Dependency>();
             services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
             {
-                var s0_m0 = sp.GetService<global::TestNamespace.IDependency>();
+                var s0_m0 = sp.GetService<global::TestNamespace.IDependency>() ?? default;
                 var s0 = new global::TestNamespace.MyService();
                 s0.Initialize(s0_m0);
                 return s0;
