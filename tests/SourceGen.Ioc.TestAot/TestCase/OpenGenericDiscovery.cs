@@ -37,17 +37,9 @@ public sealed class ServiceLocatorB(IServiceProvider serviceProvider)
 #region Discovery Method 3: [IocDiscover] Attribute
 
 /// <summary>
-/// Module that explicitly discovers IHandler&lt;RequestC, ResponseC&gt; using [IocDiscover] attribute.
+/// Discovers IHandler&lt;RequestC, ResponseC&gt; using [IocDiscover] attribute.
 /// </summary>
 [IocDiscover<IHandler<RequestC, ResponseC>>]
-[IocContainer(ExplicitOnly = true)]
-public sealed partial class DiscoveryModuleC;
+public sealed class Marker;
 
 #endregion
-
-/// <summary>
-/// Aggregated module for all open generic discovery test cases.
-/// </summary>
-[IocImportModule<DiscoveryModuleC>]
-[IocContainer(ExplicitOnly = true)]
-public sealed partial class OpenGenericDiscoveryModule;

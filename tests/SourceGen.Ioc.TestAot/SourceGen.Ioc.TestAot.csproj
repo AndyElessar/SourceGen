@@ -1,5 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Import the props file to define SOURCEGEN_IOC constant (simulating PackageReference behavior) -->
+  <Import Project="..\..\src\SourceGen.Ioc\build\SourceGen.Ioc.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
