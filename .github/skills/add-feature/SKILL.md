@@ -7,6 +7,17 @@ description: Guide for adding new features according to specifications. Use this
 
 To add new features according to specifications, follow these steps:
 
+Task Progress:
+
+- [ ] Step 1: Clarify the Specification
+- [ ] Step 2: Update the Specification
+- [ ] Step 3: Plan the Implementation
+- [ ] Step 4: Write Tests
+- [ ] Step 5: Implement the Feature
+- [ ] Step 6: Verify Tests
+- [ ] Step 7: Review and Refactor
+- [ ] Step 8: Document the Feature
+
 1. **Clarify the Specification**: Clarify any ambiguities in the specification. Ensure you understand the requirements, constraints, and expected outcomes. If anything in the specification is unclear, ask questions to clarify before proceeding.
 
 2. **Update the Specification**: If the feature requires changes to the specification, update it accordingly. Ensure that the specification accurately reflects the new feature's requirements.

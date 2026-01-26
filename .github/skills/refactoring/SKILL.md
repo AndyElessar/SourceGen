@@ -7,6 +7,15 @@ description: Guide for refactoring code to improve its structure and readability
 
 To refactor code effectively, follow these steps:
 
+Task Progress:
+
+- [ ] Step 1: Identify the Code to Refactor
+- [ ] Step 2: Understand the Existing Behavior
+- [ ] Step 3: Plan the Refactoring
+- [ ] Step 4: Make Incremental Changes
+- [ ] Step 5: Review and Test
+- [ ] Step 6: Document the Changes
+
 1. **Identify the Code to Refactor**: Determine which parts of the codebase need improvement. Look for code that is hard to read, has duplicated logic, or does not follow best practices.
 
 2. **Understand the Existing Behavior**: Before making any changes, ensure you fully understand how the existing code works. Write tests if necessary to capture the current behavior.

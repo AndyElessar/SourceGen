@@ -7,6 +7,16 @@ description: Guide for designing new features according to request. Use this whe
 
 To design new features according to request, follow these steps:
 
+Task Progress:
+
+- [ ] Step 1: Understand the Feature Request
+- [ ] Step 2: Research and Gather Information
+- [ ] Step 3: Create a Design Plan
+- [ ] Step 4: Review the Design
+- [ ] Step 5: Refine the Design
+- [ ] Step 6: Write the Specification
+- [ ] Step 7: Submit for Approval
+
 1. **Understand the Feature Request**: Carefully read the feature request to understand the requirements and objectives. Identify any constraints or specific needs outlined in the request. If anything in the request is unclear, ask questions to clarify before proceeding.
 
 2. **Research and Gather Information**: Conduct research to gather relevant information that will inform your design. This may include studying similar features, user needs, and technical considerations.

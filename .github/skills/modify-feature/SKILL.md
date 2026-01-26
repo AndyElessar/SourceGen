@@ -7,6 +7,18 @@ description: Guide for modifying existing features according to updated specific
 
 To modify existing features according to updated specifications, follow these steps:
 
+Task Progress:
+
+- [ ] Step 1: Review the Updated Specification
+- [ ] Step 2: Assess the Current Implementation
+- [ ] Step 3: Update the Specification
+- [ ] Step 4: Plan the Modifications
+- [ ] Step 5: Update Tests
+- [ ] Step 6: Implement the Changes
+- [ ] Step 7: Verify Tests
+- [ ] Step 8: Review and Refactor
+- [ ] Step 9: Document the Changes
+
 1. **Review the Updated Specification**: Carefully read the updated specification to understand the changes required. Identify what aspects of the existing feature need to be modified. If anything in the specification is unclear, ask questions to clarify before proceeding.
 
 2. **Assess the Current Implementation**: Analyze the current implementation of the feature. Determine how the existing code aligns with the updated specification and identify the areas that need modification.
