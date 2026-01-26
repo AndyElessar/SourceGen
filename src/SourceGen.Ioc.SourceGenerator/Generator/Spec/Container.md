@@ -1282,30 +1282,6 @@ The generated container source file is named: `{ClassName}.Container.g.cs`
 
 For example, a container class `AppContainer` will generate `AppContainer.Container.g.cs`.
 
-### Source Generator Architecture
-
-The Container generator is implemented as part of `IocSourceGenerator` using the Incremental Generator pattern. It adds a new pipeline and output alongside the existing Registration generator.
-
-```filetree
-IocSourceGenerator.cs
-├── Initialize() - Main pipeline configuration
-│   ├── Existing Registration pipelines
-│   │   ├── RegisterAttribute providers
-│   │   ├── RegisterForAttribute providers
-│   │   ├── DefaultSettings providers
-│   │   └── ImportModule providers
-│   └── Container pipeline
-│       ├── ContainerAttribute provider
-│       ├── Combine with serviceRegistrations
-│       ├── GroupRegistrationsForContainer
-│       └── RegisterSourceOutput for Container
-├── TransformRegister.cs
-├── TransformContainer.cs
-├── GroupRegistrationsForContainer.cs
-├── GenerateRegisterOutput.cs
-└── GenerateContainerOutput.cs
-```
-
 ### Pipeline Design
 
 ```csharp
@@ -1336,85 +1312,6 @@ context.RegisterSourceOutput(containerWithCompilationInfo, static (ctx, source) 
     var ((containerWithGroups, compilationInfo), msbuildProps) = source;
     GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
 });
-```
-
-### Target Framework Requirements
-
-The generated code requires .NET 8.0 or later.
-
-### File Organization
-
-```filetree
-src/SourceGen.Ioc.SourceGenerator/
-├── Generator/
-│   ├── IocSourceGenerator.cs              # Main generator with both pipelines
-│   ├── TransformRegister.cs               # Transform [IocRegister*] attributes
-│   ├── TransformContainer.cs              # Transform [IocContainer]
-│   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation
-│   ├── GenerateRegisterOutput.cs          # Generate registration code
-│   ├── GenerateContainerOutput.cs         # Generate container code
-│   └── Spec/
-│       ├── Registration.md                # Registration specification
-│       └── Container.md                   # This specification
-├── Models/
-│   ├── ContainerModel.cs                  # Container data model
-│   ├── ContainerWithGroups.cs             # Container with pre-computed groups
-│   ├── ServiceRegistrationModel.cs        # Service registration model
-│   ├── TypeData.cs                        # Type information model
-│   └── ...
-└── Analyzer/
-    └── SPEC.md                            # Analyzer specifications
-```
-
-### Data Flow
-
-```mermaid
-flowchart TB
-    subgraph IocSourceGenerator.Initialize
-        subgraph Attribute Providers
-            IocRegister["[IocRegister]"]
-            IocRegisterFor["[IocRegisterFor]"]
-            IocRegisterDefaults["[IocRegisterDefaults]"]
-            IocDiscover["[IocDiscover]"]
-            IocContainer["[IocContainer]"]
-        end
-
-        subgraph Registration Pipeline
-            allBasicResults["allBasicResults<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
-            combinedClosedGenericDependencies["combinedClosedGenericDependencies<br/>(Invocations + Discover)"]
-            CombineResolve["CombineAndResolveClosedGenerics"]
-            serviceRegistrations["serviceRegistrations<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
-        end
-
-        subgraph Container Pipeline
-            ContainerModel["ContainerModel"]
-            CombineGroup["Combine & Group<br/>(GroupRegistrationsForContainer)"]
-            ContainerWithGroups["ContainerWithGroups"]
-        end
-
-        subgraph Output Generation
-            GenerateRegisterOutput["GenerateRegisterOutput<br/>(.ServiceRegistration.g.cs)"]
-            GenerateContainerOutput["GenerateContainerOutput<br/>(.Container.g.cs)"]
-        end
-
-        IocRegister --> allBasicResults
-        IocRegisterFor --> allBasicResults
-        IocRegisterDefaults --> allBasicResults
-
-        IocDiscover --> combinedClosedGenericDependencies
-
-        allBasicResults --> CombineResolve
-        combinedClosedGenericDependencies --> CombineResolve
-        CombineResolve --> serviceRegistrations
-
-        IocContainer --> ContainerModel
-        ContainerModel --> CombineGroup
-        serviceRegistrations --> CombineGroup
-        CombineGroup --> ContainerWithGroups
-
-        serviceRegistrations --> GenerateRegisterOutput
-        ContainerWithGroups --> GenerateContainerOutput
-    end
 ```
 
 ### Generation Logic

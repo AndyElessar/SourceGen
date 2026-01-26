@@ -101,11 +101,6 @@ Match by name only: `IocInjectAttribute` or `InjectAttribute`
 |`[FromKeyedServices]` or `[IocInject(Key=...)]`|Keyed service resolution|
 |`IServiceProvider` type|Pass provider directly|
 |Collection types (`IEnumerable<T>`, `T[]`, etc.)|Extract `T` as service type|
-|Built-in type¹ without attribute/default|Skip (unresolvable)|
-|Has default value + resolvable type|Use resolved value if non-null, else use default|
-|Has default value + built-in type|Skip (use default)|
-
-¹ Built-in types: primitives (`int`, `string`, `bool`, etc.), `DateTime`, `Guid`, `TimeSpan`, `Uri`, `Type`
 
 ### 7. Property/Field Injection
 
@@ -123,7 +118,7 @@ Only members with `[IocInject]` or `[Inject]`:
 
 |`CollectionKind`|Types|Resolution|
 |:---------------|:----|:---------|
-|`Enumerable`|`IEnumerable<T>`|MS.DI native support|
+|`Enumerable`|`IEnumerable<T>`|MS.E.DI native support|
 |`ReadOnlyCollection`|`IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `T[]`|`GetServices<T>().ToArray()`|
 
 ### 9. Generic Factory Type Mapping
@@ -157,3 +152,109 @@ public class FactoryContainer
 
 2. Container generator: generate container that implement `IServiceProvider`.\
 [Container features spec](Container.md)
+
+## Implementation Requirements
+
+### Source Generator Architecture
+
+Implemented at `IocSourceGenerator`, using the Incremental Generator pattern.
+
+```filetree
+IocSourceGenerator.cs
+├── Initialize() - Main pipeline configuration
+│   ├── Existing Registration pipelines
+│   │   ├── RegisterAttribute providers
+│   │   ├── RegisterForAttribute providers
+│   │   ├── DefaultSettings providers
+│   │   └── ImportModule providers
+│   └── Container pipeline
+│       ├── ContainerAttribute provider
+│       ├── Combine with serviceRegistrations
+│       ├── GroupRegistrationsForContainer
+│       └── RegisterSourceOutput for Container
+├── TransformRegister.cs
+├── TransformContainer.cs
+├── GroupRegistrationsForContainer.cs
+├── GenerateRegisterOutput.cs
+└── GenerateContainerOutput.cs
+```
+
+### Target Framework Requirements
+
+The generated code requires .NET 10.0 or later.
+
+### File Organization
+
+```filetree
+src/SourceGen.Ioc.SourceGenerator/
+├── Generator/
+│   ├── IocSourceGenerator.cs              # Main generator with both pipelines
+│   ├── TransformRegister.cs               # Transform [IocRegister*] attributes
+│   ├── TransformContainer.cs              # Transform [IocContainer]
+│   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation
+│   ├── GenerateRegisterOutput.cs          # Generate registration code
+│   ├── GenerateContainerOutput.cs         # Generate container code
+│   └── Spec/
+│       ├── Registration.md                # Registration specification
+│       └── Container.md                   # Container specification
+│       └── SPEC.md                        # Generators specification (this file)
+├── Models/
+│   ├── ContainerModel.cs                  # Container data model
+│   ├── ContainerWithGroups.cs             # Container with pre-computed groups
+│   ├── ServiceRegistrationModel.cs        # Service registration model
+│   ├── TypeData.cs                        # Type information model
+│   └── ...
+└── Analyzer/
+    └── SPEC.md                            # Analyzer specifications
+```
+
+### Data Flow
+
+```mermaid
+flowchart TB
+    subgraph IocSourceGenerator.Initialize
+        subgraph Attribute Providers
+            IocRegister["[IocRegister]"]
+            IocRegisterFor["[IocRegisterFor]"]
+            IocRegisterDefaults["[IocRegisterDefaults]"]
+            IocDiscover["[IocDiscover]"]
+            IocContainer["[IocContainer]"]
+        end
+
+        subgraph Registration Pipeline
+            allBasicResults["allBasicResults<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
+            combinedClosedGenericDependencies["combinedClosedGenericDependencies<br/>(Invocations + Discover)"]
+            CombineResolve["CombineAndResolveClosedGenerics"]
+            serviceRegistrations["serviceRegistrations<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
+        end
+
+        subgraph Container Pipeline
+            ContainerModel["ContainerModel"]
+            CombineGroup["Combine & Group<br/>(GroupRegistrationsForContainer)"]
+            ContainerWithGroups["ContainerWithGroups"]
+        end
+
+        subgraph Output Generation
+            GenerateRegisterOutput["GenerateRegisterOutput<br/>(.ServiceRegistration.g.cs)"]
+            GenerateContainerOutput["GenerateContainerOutput<br/>(.Container.g.cs)"]
+        end
+
+        IocRegister --> allBasicResults
+        IocRegisterFor --> allBasicResults
+        IocRegisterDefaults --> allBasicResults
+
+        IocDiscover --> combinedClosedGenericDependencies
+
+        allBasicResults --> CombineResolve
+        combinedClosedGenericDependencies --> CombineResolve
+        CombineResolve --> serviceRegistrations
+
+        IocContainer --> ContainerModel
+        ContainerModel --> CombineGroup
+        serviceRegistrations --> CombineGroup
+        CombineGroup --> ContainerWithGroups
+
+        serviceRegistrations --> GenerateRegisterOutput
+        ContainerWithGroups --> GenerateContainerOutput
+    end
+```

@@ -15,9 +15,9 @@ A C# source generator that extends the capabilities of `Microsoft.Extensions.Dep
 
 ### Why Use SourceGen.Ioc?
 
-Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.DI`:
+Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.E.DI`:
 
-|Feature|MS.DI|SourceGen.Ioc|
+|Feature|MS.E.DI|SourceGen.Ioc|
 |:-|:-|:-|
 |Open Generic|Runtime resolution only|Auto-discovers closed types from usage|
 |Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[IocDiscover]` attribute|
@@ -28,7 +28,7 @@ Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.DI`:
 
 1. **Open Generic Auto-Discovery** - Automatically discovers closed generic types from constructor/property/method injection and `IServiceProvider.GetService<T>()` invocations
 
-2. **Nested Open Generic Support** - Supports nested open generic service interfaces (e.g., `IHandler<Request<T>, List<T>>`) that `MS.DI` cannot resolve at runtime
+2. **Nested Open Generic Support** - Supports nested open generic service interfaces (e.g., `IHandler<Request<T>, List<T>>`) that `MS.E.DI` cannot resolve at runtime
 
 3. **Compile-time Analyzers** - Detects lifetime conflicts (e.g., Singleton depending on Scoped) and circular dependencies at compile time, not runtime
 

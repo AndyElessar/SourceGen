@@ -7,7 +7,7 @@ SourceGen.Ioc is a C# source generator that extends the capabilities of `Microso
 ### Better Generic support
 
 - **Open Generic Auto-Discovery** - Automatically discovers closed generic types from constructor/property/method injection and `IServiceProvider` invocations
-- **Nested Open Generic Support** - Supports nested open generic service interfaces (e.g., `IHandler<Request<T>, Response<T>>`) that `MS.DI` cannot resolve at runtime, with both auto-discovery and manual `[Discover]` attribute
+- **Nested Open Generic Support** - Supports nested open generic service interfaces (e.g., `IHandler<Request<T>, Response<T>>`) that `MS.E.DI` cannot resolve at runtime, with both auto-discovery and manual `[Discover]` attribute
 
 ### Compile-time Safety
 

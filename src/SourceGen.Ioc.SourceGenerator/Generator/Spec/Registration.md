@@ -266,12 +266,12 @@ This source generator automatically generates extension methods for registering 
     Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
     **Important**: Factory method registration is only generated when necessary. The following cases require factory method:
-    - Constructor parameter has `[IocInject]` attribute (SourceGen.Ioc-specific, MS.DI cannot handle)
+    - Constructor parameter has `[IocInject]` attribute (SourceGen.Ioc-specific, MS.E.DI cannot handle)
     - Field/Property/Method has `[IocInject]` attribute
     - Decorator pattern is used
     - Factory or Instance is specified
 
-    The following cases are handled natively by MS.DI and do **NOT** require factory method:
+    The following cases are handled natively by MS.E.DI and do **NOT** require factory method:
     - `[FromKeyedServices]` attribute on constructor parameters
     - `[ServiceKey]` attribute on constructor parameters
     - `IServiceProvider` parameter in constructor
@@ -478,19 +478,19 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-    MS.DI native handling example (no factory needed):
+    MS.E.DI native handling example (no factory needed):
 
     ```csharp
     #region Define:
     [IocRegister<IMyService>]
     public class MyService(
-        [FromKeyedServices("special")] IDependency dep,  // MS.DI handles [FromKeyedServices]
-        IServiceProvider sp                              // MS.DI handles IServiceProvider
+        [FromKeyedServices("special")] IDependency dep,  // MS.E.DI handles [FromKeyedServices]
+        IServiceProvider sp                              // MS.E.DI handles IServiceProvider
     ) : IMyService;
     #endregion
 
     #region Generate:
-    // Simple type-based registration - MS.DI handles the special parameters automatically
+    // Simple type-based registration - MS.E.DI handles the special parameters automatically
     services.AddSingleton<MyService, MyService>();
     services.AddSingleton<IMyService, MyService>();
     #endregion

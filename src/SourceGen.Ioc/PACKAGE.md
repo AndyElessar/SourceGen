@@ -4,7 +4,7 @@ A C# source generator that extends the capabilities of `Microsoft.Extensions.Dep
 
 ## Why Use SourceGen.Ioc?
 
-|Feature|MS.DI|SourceGen.Ioc|
+|Feature|MS.E.DI|SourceGen.Ioc|
 |:-|:-|:-|
 |Open Generic|Runtime resolution only|Auto-discovers closed types from usage|
 |Nested Open Generic|❌ Not supported|✅ Supported by auto-discovery and manual `[IocDiscover]` attribute|
