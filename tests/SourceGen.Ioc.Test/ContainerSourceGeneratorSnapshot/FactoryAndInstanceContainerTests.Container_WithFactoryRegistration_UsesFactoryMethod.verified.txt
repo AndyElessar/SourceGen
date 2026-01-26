@@ -51,13 +51,25 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Connection? _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
+    private readonly SemaphoreSlim _testNamespace_Connection_TestNamespace_ConnectionFactory_CreateSemaphore = new(1, 1);
     private global::TestNamespace.Connection GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()
     {
-        if(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create is not null) return _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
+        if (_testNamespace_Connection_TestNamespace_ConnectionFactory_Create is not null) return _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
 
-        var instance = (global::TestNamespace.Connection)global::TestNamespace.ConnectionFactory.Create(this);
+        _testNamespace_Connection_TestNamespace_ConnectionFactory_CreateSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_Connection_TestNamespace_ConnectionFactory_Create is not null) return _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Connection_TestNamespace_ConnectionFactory_Create, instance, null) ?? instance;
+            var instance = (global::TestNamespace.Connection)global::TestNamespace.ConnectionFactory.Create(this);
+
+            _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Connection_TestNamespace_ConnectionFactory_CreateSemaphore.Release();
+        }
     }
 
     #endregion
@@ -182,6 +194,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create);
+        _testNamespace_Connection_TestNamespace_ConnectionFactory_CreateSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -194,6 +207,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create);
+        _testNamespace_Connection_TestNamespace_ConnectionFactory_CreateSemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

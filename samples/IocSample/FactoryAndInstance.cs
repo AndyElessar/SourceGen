@@ -1,17 +1,16 @@
-﻿[assembly: IocRegisterDefaults<IFactoryService>(ServiceLifetime.Scoped, Factory = nameof(Factory.Create))]
-
-namespace IocSample;
+﻿namespace IocSample;
 
 public interface IFactoryService;
 
-[IocRegister<IFactoryService>(Key = "Test")]
+[IocRegister<IFactoryService>]
 internal sealed class FactoryService : IFactoryService
 {
 }
 
+[IocRegisterDefaults<IFactoryService>(ServiceLifetime.Scoped, Factory = nameof(Factory.Create))]
 public sealed class Factory
 {
-    public static IFactoryService Create(IServiceProvider sp, [ServiceKey] string key, IInstance inst)
+    public static IFactoryService Create(IServiceProvider sp, IInstance inst)
     {
         return new FactoryService();
     }

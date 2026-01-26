@@ -22,17 +22,17 @@ public interface ITransientService
     Guid InstanceId { get; }
 }
 
-internal sealed class SingletonService : ISingletonService
+public sealed class SingletonService : ISingletonService
 {
     public Guid InstanceId { get; } = Guid.NewGuid();
 }
 
-internal sealed class ScopedService : IScopedService
+public sealed class ScopedService : IScopedService
 {
     public Guid InstanceId { get; } = Guid.NewGuid();
 }
 
-internal sealed class TransientService : ITransientService
+public sealed class TransientService : ITransientService
 {
     public Guid InstanceId { get; } = Guid.NewGuid();
 }

@@ -42,6 +42,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
+        _testNamespace_MyService = parent._testNamespace_MyService;
         _serviceResolvers = parent._serviceResolvers;
     }
 
@@ -49,48 +50,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler1? _testNamespace_Handler1__handler_1_;
-    private readonly SemaphoreSlim _testNamespace_Handler1__handler_1_Semaphore = new(1, 1);
-    private global::TestNamespace.Handler1 GetTestNamespace_Handler1__handler_1_()
+    private global::TestNamespace.MyService? _testNamespace_MyService;
+    private global::TestNamespace.MyService GetTestNamespace_MyService()
     {
-        if (_testNamespace_Handler1__handler_1_ is not null) return _testNamespace_Handler1__handler_1_;
+        if (_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        _testNamespace_Handler1__handler_1_Semaphore.Wait();
-        try
-        {
-            if (_testNamespace_Handler1__handler_1_ is not null) return _testNamespace_Handler1__handler_1_;
+        var instance = new global::TestNamespace.MyService();
 
-            var instance = new global::TestNamespace.Handler1("handler-1");
-
-            _testNamespace_Handler1__handler_1_ = instance;
-            return instance;
-        }
-        finally
-        {
-            _testNamespace_Handler1__handler_1_Semaphore.Release();
-        }
-    }
-
-    private global::TestNamespace.Handler2? _testNamespace_Handler2__handler_2_;
-    private readonly SemaphoreSlim _testNamespace_Handler2__handler_2_Semaphore = new(1, 1);
-    private global::TestNamespace.Handler2 GetTestNamespace_Handler2__handler_2_()
-    {
-        if (_testNamespace_Handler2__handler_2_ is not null) return _testNamespace_Handler2__handler_2_;
-
-        _testNamespace_Handler2__handler_2_Semaphore.Wait();
-        try
-        {
-            if (_testNamespace_Handler2__handler_2_ is not null) return _testNamespace_Handler2__handler_2_;
-
-            var instance = new global::TestNamespace.Handler2("handler-2");
-
-            _testNamespace_Handler2__handler_2_ = instance;
-            return instance;
-        }
-        finally
-        {
-            _testNamespace_Handler2__handler_2_Semaphore.Release();
-        }
+        _testNamespace_MyService = instance;
+        return instance;
     }
 
     #endregion
@@ -179,10 +147,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new((typeof(global::TestNamespace.Handler1), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
-        new((typeof(global::TestNamespace.IHandler), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
-        new((typeof(global::TestNamespace.Handler2), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
-        new((typeof(global::TestNamespace.IHandler), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
+        new((typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new((typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
     ];
 
     #endregion
@@ -213,13 +179,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            DisposeService(_testNamespace_Handler2__handler_2_);
-            _testNamespace_Handler2__handler_2_Semaphore.Dispose();
-            DisposeService(_testNamespace_Handler1__handler_1_);
-            _testNamespace_Handler1__handler_1_Semaphore.Dispose();
             return;
         }
 
+        DisposeService(_testNamespace_MyService);
     }
 
     public async ValueTask DisposeAsync()
@@ -228,13 +191,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_testNamespace_Handler2__handler_2_);
-            _testNamespace_Handler2__handler_2_Semaphore.Dispose();
-            await DisposeServiceAsync(_testNamespace_Handler1__handler_1_);
-            _testNamespace_Handler1__handler_1_Semaphore.Dispose();
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_MyService);
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

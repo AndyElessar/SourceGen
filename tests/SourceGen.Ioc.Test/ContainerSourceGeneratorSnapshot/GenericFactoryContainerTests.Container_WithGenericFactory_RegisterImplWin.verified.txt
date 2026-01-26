@@ -54,43 +54,91 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Handler<global::TestNamespace.Entity>? _testNamespace_Handler_TestNamespace_Entity_;
+    private readonly SemaphoreSlim _testNamespace_Handler_TestNamespace_Entity_Semaphore = new(1, 1);
     private global::TestNamespace.Handler<global::TestNamespace.Entity> GetTestNamespace_Handler_TestNamespace_Entity_()
     {
-        if(_testNamespace_Handler_TestNamespace_Entity_ is not null) return _testNamespace_Handler_TestNamespace_Entity_;
+        if (_testNamespace_Handler_TestNamespace_Entity_ is not null) return _testNamespace_Handler_TestNamespace_Entity_;
 
-        var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity>();
+        _testNamespace_Handler_TestNamespace_Entity_Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_Handler_TestNamespace_Entity_ is not null) return _testNamespace_Handler_TestNamespace_Entity_;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Handler_TestNamespace_Entity_, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity>();
+
+            _testNamespace_Handler_TestNamespace_Entity_ = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Handler_TestNamespace_Entity_Semaphore.Release();
+        }
     }
 
     private global::TestNamespace.Handler<global::TestNamespace.Entity>? _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
+    private readonly SemaphoreSlim _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateSemaphore = new(1, 1);
     private global::TestNamespace.Handler<global::TestNamespace.Entity> GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()
     {
-        if(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
+        if (_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
 
-        var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
+        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create, instance, null) ?? instance;
+            var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
+
+            _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateSemaphore.Release();
+        }
     }
 
     private global::TestNamespace.Handler<global::TestNamespace.Entity2>? _testNamespace_Handler_TestNamespace_Entity2_;
+    private readonly SemaphoreSlim _testNamespace_Handler_TestNamespace_Entity2_Semaphore = new(1, 1);
     private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetTestNamespace_Handler_TestNamespace_Entity2_()
     {
-        if(_testNamespace_Handler_TestNamespace_Entity2_ is not null) return _testNamespace_Handler_TestNamespace_Entity2_;
+        if (_testNamespace_Handler_TestNamespace_Entity2_ is not null) return _testNamespace_Handler_TestNamespace_Entity2_;
 
-        var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity2>();
+        _testNamespace_Handler_TestNamespace_Entity2_Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_Handler_TestNamespace_Entity2_ is not null) return _testNamespace_Handler_TestNamespace_Entity2_;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Handler_TestNamespace_Entity2_, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity2>();
+
+            _testNamespace_Handler_TestNamespace_Entity2_ = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Handler_TestNamespace_Entity2_Semaphore.Release();
+        }
     }
 
     private global::TestNamespace.Handler<global::TestNamespace.Entity2>? _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
+    private readonly SemaphoreSlim _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateSemaphore = new(1, 1);
     private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()
     {
-        if(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
+        if (_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
 
-        var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity2>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
+        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create, instance, null) ?? instance;
+            var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity2>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
+
+            _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateSemaphore.Release();
+        }
     }
 
     private global::TestNamespace.Handler<global::TestNamespace.Entity>[] GetAllTestNamespace_Handler_TestNamespace_Entity_Array() =>
@@ -237,9 +285,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create);
+        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateSemaphore.Dispose();
         DisposeService(_testNamespace_Handler_TestNamespace_Entity2_);
+        _testNamespace_Handler_TestNamespace_Entity2_Semaphore.Dispose();
         DisposeService(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create);
+        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateSemaphore.Dispose();
         DisposeService(_testNamespace_Handler_TestNamespace_Entity_);
+        _testNamespace_Handler_TestNamespace_Entity_Semaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -252,9 +304,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create);
+        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateSemaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity2_);
+        _testNamespace_Handler_TestNamespace_Entity2_Semaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create);
+        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateSemaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity_);
+        _testNamespace_Handler_TestNamespace_Entity_Semaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

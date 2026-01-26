@@ -37,23 +37,47 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.UserService? _testNamespace_UserService;
+    private readonly SemaphoreSlim _testNamespace_UserServiceSemaphore = new(1, 1);
     private global::TestNamespace.UserService GetTestNamespace_UserService()
     {
-        if(_testNamespace_UserService is not null) return _testNamespace_UserService;
+        if (_testNamespace_UserService is not null) return _testNamespace_UserService;
 
-        var instance = new global::TestNamespace.UserService(GetTestNamespace_Repository_TestNamespace_User_());
+        _testNamespace_UserServiceSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_UserService is not null) return _testNamespace_UserService;
 
-        return Interlocked.CompareExchange(ref _testNamespace_UserService, instance, null) ?? instance;
+            var instance = new global::TestNamespace.UserService(GetTestNamespace_Repository_TestNamespace_User_());
+
+            _testNamespace_UserService = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_UserServiceSemaphore.Release();
+        }
     }
 
     private global::TestNamespace.Repository<global::TestNamespace.User>? _testNamespace_Repository_TestNamespace_User_;
+    private readonly SemaphoreSlim _testNamespace_Repository_TestNamespace_User_Semaphore = new(1, 1);
     private global::TestNamespace.Repository<global::TestNamespace.User> GetTestNamespace_Repository_TestNamespace_User_()
     {
-        if(_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
+        if (_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
 
-        var instance = new global::TestNamespace.Repository<global::TestNamespace.User>();
+        _testNamespace_Repository_TestNamespace_User_Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Repository_TestNamespace_User_, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Repository<global::TestNamespace.User>();
+
+            _testNamespace_Repository_TestNamespace_User_ = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Repository_TestNamespace_User_Semaphore.Release();
+        }
     }
 
     #endregion
@@ -159,10 +183,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_Repository_TestNamespace_User_);
+            _testNamespace_Repository_TestNamespace_User_Semaphore.Dispose();
             return;
         }
 
         DisposeService(_testNamespace_UserService);
+        _testNamespace_UserServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -172,10 +198,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_Repository_TestNamespace_User_);
+            _testNamespace_Repository_TestNamespace_User_Semaphore.Dispose();
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_UserService);
+        _testNamespace_UserServiceSemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

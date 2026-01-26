@@ -52,14 +52,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>? _testNamespace_TestHandler;
-    private readonly Lock _testNamespace_TestHandlerLock = new();
+    private readonly SemaphoreSlim _testNamespace_TestHandlerSemaphore = new(1, 1);
     private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> GetTestNamespace_TestHandler()
     {
-        if(_testNamespace_TestHandler is not null) return _testNamespace_TestHandler;
+        if (_testNamespace_TestHandler is not null) return _testNamespace_TestHandler;
 
-        lock(_testNamespace_TestHandlerLock)
+        _testNamespace_TestHandlerSemaphore.Wait();
+        try
         {
-            if(_testNamespace_TestHandler is not null) return _testNamespace_TestHandler;
+            if (_testNamespace_TestHandler is not null) return _testNamespace_TestHandler;
 
             global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> instance = new global::TestNamespace.TestHandler();
 
@@ -68,16 +69,32 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             _testNamespace_TestHandler = instance;
             return instance;
         }
+        finally
+        {
+            _testNamespace_TestHandlerSemaphore.Release();
+        }
     }
 
     private global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>? _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
+    private readonly SemaphoreSlim _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Semaphore = new(1, 1);
     private global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>> GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___()
     {
-        if(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ is not null) return _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
+        if (_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ is not null) return _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
 
-        var instance = new global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>();
+        _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ is not null) return _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>();
+
+            _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Semaphore.Release();
+        }
     }
 
     #endregion
@@ -204,7 +221,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___);
+        _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Semaphore.Dispose();
         DisposeService(_testNamespace_TestHandler);
+        _testNamespace_TestHandlerSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -217,7 +236,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___);
+        _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Semaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_TestHandler);
+        _testNamespace_TestHandlerSemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

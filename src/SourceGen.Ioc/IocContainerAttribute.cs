@@ -32,4 +32,9 @@ public sealed class IocContainerAttribute : Attribute
     /// Only less than 50 services will get performance benefit from using switch statement.
     /// </remarks>
     public bool UseSwitchStatement { get; init; }
+
+    /// <summary>
+    /// Gets the thread safety strategy for the generated container.
+    /// </summary>
+    public ThreadSafeStrategy ThreadSafeStrategy { get; init; } = ThreadSafeStrategy.SemaphoreSlim;
 }

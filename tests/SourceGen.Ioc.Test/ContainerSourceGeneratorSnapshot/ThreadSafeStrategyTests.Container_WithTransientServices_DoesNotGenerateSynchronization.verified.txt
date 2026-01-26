@@ -49,48 +49,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler1? _testNamespace_Handler1__handler_1_;
-    private readonly SemaphoreSlim _testNamespace_Handler1__handler_1_Semaphore = new(1, 1);
-    private global::TestNamespace.Handler1 GetTestNamespace_Handler1__handler_1_()
+    private global::TestNamespace.TransientService GetTestNamespace_TransientService()
     {
-        if (_testNamespace_Handler1__handler_1_ is not null) return _testNamespace_Handler1__handler_1_;
-
-        _testNamespace_Handler1__handler_1_Semaphore.Wait();
-        try
-        {
-            if (_testNamespace_Handler1__handler_1_ is not null) return _testNamespace_Handler1__handler_1_;
-
-            var instance = new global::TestNamespace.Handler1("handler-1");
-
-            _testNamespace_Handler1__handler_1_ = instance;
-            return instance;
-        }
-        finally
-        {
-            _testNamespace_Handler1__handler_1_Semaphore.Release();
-        }
-    }
-
-    private global::TestNamespace.Handler2? _testNamespace_Handler2__handler_2_;
-    private readonly SemaphoreSlim _testNamespace_Handler2__handler_2_Semaphore = new(1, 1);
-    private global::TestNamespace.Handler2 GetTestNamespace_Handler2__handler_2_()
-    {
-        if (_testNamespace_Handler2__handler_2_ is not null) return _testNamespace_Handler2__handler_2_;
-
-        _testNamespace_Handler2__handler_2_Semaphore.Wait();
-        try
-        {
-            if (_testNamespace_Handler2__handler_2_ is not null) return _testNamespace_Handler2__handler_2_;
-
-            var instance = new global::TestNamespace.Handler2("handler-2");
-
-            _testNamespace_Handler2__handler_2_ = instance;
-            return instance;
-        }
-        finally
-        {
-            _testNamespace_Handler2__handler_2_Semaphore.Release();
-        }
+        return new global::TestNamespace.TransientService();
     }
 
     #endregion
@@ -179,10 +140,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new((typeof(global::TestNamespace.Handler1), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
-        new((typeof(global::TestNamespace.IHandler), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
-        new((typeof(global::TestNamespace.Handler2), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
-        new((typeof(global::TestNamespace.IHandler), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
+        new((typeof(global::TestNamespace.TransientService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_TransientService()),
+        new((typeof(global::TestNamespace.ITransientService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_TransientService()),
     ];
 
     #endregion
@@ -213,10 +172,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            DisposeService(_testNamespace_Handler2__handler_2_);
-            _testNamespace_Handler2__handler_2_Semaphore.Dispose();
-            DisposeService(_testNamespace_Handler1__handler_1_);
-            _testNamespace_Handler1__handler_1_Semaphore.Dispose();
             return;
         }
 
@@ -228,10 +183,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_testNamespace_Handler2__handler_2_);
-            _testNamespace_Handler2__handler_2_Semaphore.Dispose();
-            await DisposeServiceAsync(_testNamespace_Handler1__handler_1_);
-            _testNamespace_Handler1__handler_1_Semaphore.Dispose();
             return;
         }
 

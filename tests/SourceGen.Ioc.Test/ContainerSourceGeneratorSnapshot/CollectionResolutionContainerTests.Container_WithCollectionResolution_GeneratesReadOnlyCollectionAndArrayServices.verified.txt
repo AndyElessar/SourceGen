@@ -52,23 +52,47 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Handler1? _testNamespace_Handler1;
+    private readonly SemaphoreSlim _testNamespace_Handler1Semaphore = new(1, 1);
     private global::TestNamespace.Handler1 GetTestNamespace_Handler1()
     {
-        if(_testNamespace_Handler1 is not null) return _testNamespace_Handler1;
+        if (_testNamespace_Handler1 is not null) return _testNamespace_Handler1;
 
-        var instance = new global::TestNamespace.Handler1();
+        _testNamespace_Handler1Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_Handler1 is not null) return _testNamespace_Handler1;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Handler1, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Handler1();
+
+            _testNamespace_Handler1 = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Handler1Semaphore.Release();
+        }
     }
 
     private global::TestNamespace.Handler2? _testNamespace_Handler2;
+    private readonly SemaphoreSlim _testNamespace_Handler2Semaphore = new(1, 1);
     private global::TestNamespace.Handler2 GetTestNamespace_Handler2()
     {
-        if(_testNamespace_Handler2 is not null) return _testNamespace_Handler2;
+        if (_testNamespace_Handler2 is not null) return _testNamespace_Handler2;
 
-        var instance = new global::TestNamespace.Handler2();
+        _testNamespace_Handler2Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_Handler2 is not null) return _testNamespace_Handler2;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Handler2, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Handler2();
+
+            _testNamespace_Handler2 = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_Handler2Semaphore.Release();
+        }
     }
 
     private global::TestNamespace.IHandler[] GetAllTestNamespace_IHandlerArray() =>
@@ -204,7 +228,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_Handler2);
+        _testNamespace_Handler2Semaphore.Dispose();
         DisposeService(_testNamespace_Handler1);
+        _testNamespace_Handler1Semaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -217,7 +243,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_Handler2);
+        _testNamespace_Handler2Semaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Handler1);
+        _testNamespace_Handler1Semaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

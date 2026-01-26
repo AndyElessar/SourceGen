@@ -52,34 +52,59 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.MemoryCache? _testNamespace_MemoryCache;
+    private readonly SemaphoreSlim _testNamespace_MemoryCacheSemaphore = new(1, 1);
     private global::TestNamespace.MemoryCache GetTestNamespace_MemoryCache()
     {
-        if(_testNamespace_MemoryCache is not null) return _testNamespace_MemoryCache;
+        if (_testNamespace_MemoryCache is not null) return _testNamespace_MemoryCache;
 
-        var instance = new global::TestNamespace.MemoryCache();
+        _testNamespace_MemoryCacheSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_MemoryCache is not null) return _testNamespace_MemoryCache;
 
-        return Interlocked.CompareExchange(ref _testNamespace_MemoryCache, instance, null) ?? instance;
+            var instance = new global::TestNamespace.MemoryCache();
+
+            _testNamespace_MemoryCache = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_MemoryCacheSemaphore.Release();
+        }
     }
 
     private global::TestNamespace.Logger? _testNamespace_Logger;
+    private readonly SemaphoreSlim _testNamespace_LoggerSemaphore = new(1, 1);
     private global::TestNamespace.Logger GetTestNamespace_Logger()
     {
-        if(_testNamespace_Logger is not null) return _testNamespace_Logger;
+        if (_testNamespace_Logger is not null) return _testNamespace_Logger;
 
-        var instance = new global::TestNamespace.Logger();
+        _testNamespace_LoggerSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_Logger is not null) return _testNamespace_Logger;
 
-        return Interlocked.CompareExchange(ref _testNamespace_Logger, instance, null) ?? instance;
+            var instance = new global::TestNamespace.Logger();
+
+            _testNamespace_Logger = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_LoggerSemaphore.Release();
+        }
     }
 
     private global::TestNamespace.IHandler? _testNamespace_Handler;
-    private readonly Lock _testNamespace_HandlerLock = new();
+    private readonly SemaphoreSlim _testNamespace_HandlerSemaphore = new(1, 1);
     private global::TestNamespace.IHandler GetTestNamespace_Handler()
     {
-        if(_testNamespace_Handler is not null) return _testNamespace_Handler;
+        if (_testNamespace_Handler is not null) return _testNamespace_Handler;
 
-        lock(_testNamespace_HandlerLock)
+        _testNamespace_HandlerSemaphore.Wait();
+        try
         {
-            if(_testNamespace_Handler is not null) return _testNamespace_Handler;
+            if (_testNamespace_Handler is not null) return _testNamespace_Handler;
 
             global::TestNamespace.IHandler instance = new global::TestNamespace.Handler();
 
@@ -92,6 +117,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
             _testNamespace_Handler = instance;
             return instance;
+        }
+        finally
+        {
+            _testNamespace_HandlerSemaphore.Release();
         }
     }
 
@@ -218,11 +247,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_Handler);
+            _testNamespace_HandlerSemaphore.Dispose();
             return;
         }
 
         DisposeService(_testNamespace_Logger);
+        _testNamespace_LoggerSemaphore.Dispose();
         DisposeService(_testNamespace_MemoryCache);
+        _testNamespace_MemoryCacheSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -232,11 +264,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_Handler);
+            _testNamespace_HandlerSemaphore.Dispose();
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_Logger);
+        _testNamespace_LoggerSemaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_MemoryCache);
+        _testNamespace_MemoryCacheSemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

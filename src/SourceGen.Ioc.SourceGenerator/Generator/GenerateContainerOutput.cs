@@ -98,7 +98,7 @@ partial class IocSourceGenerator
         WriteContainerConstructors(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write service resolver methods
-        WriteServiceResolverMethods(writer, groups);
+        WriteServiceResolverMethods(writer, container.ThreadSafeStrategy, groups);
 
         // Write IServiceProvider implementation
         WriteIServiceProviderImplementation(writer, container, groups, effectiveUseSwitchStatement);
@@ -196,23 +196,38 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes a service instance field and optional lock for a single registration.
+    /// Writes a service instance field and synchronization field based on ThreadSafeStrategy.
     /// </summary>
     private static void WriteServiceInstanceField(
         SourceWriter writer,
+        ThreadSafeStrategy strategy,
         ServiceRegistrationModel reg,
         string fieldName,
-        bool hasDecorators,
-        bool hasInjectionMembers)
+        bool hasDecorators)
     {
         // When there are decorators, field type is ServiceType (interface), otherwise ImplementationType
         var typeName = hasDecorators ? reg.ServiceType.Name : reg.ImplementationType.Name;
         writer.WriteLine($"private {typeName}? {fieldName};");
 
-        // Add lock for complex initialization (property/method injection or decorators)
-        if(hasInjectionMembers || hasDecorators)
+        // Generate synchronization field based on strategy
+        switch(strategy)
         {
-            writer.WriteLine($"private readonly Lock {fieldName}Lock = new();");
+            case ThreadSafeStrategy.None:
+                // No synchronization field needed
+                break;
+
+            case ThreadSafeStrategy.Lock:
+                writer.WriteLine($"private readonly Lock {fieldName}Lock = new();");
+                break;
+
+            case ThreadSafeStrategy.SemaphoreSlim:
+                writer.WriteLine($"private readonly SemaphoreSlim {fieldName}Semaphore = new(1, 1);");
+                break;
+
+            case ThreadSafeStrategy.SpinLock:
+                // SpinLock must NOT be readonly because Enter/Exit mutate it
+                writer.WriteLine($"private SpinLock {fieldName}SpinLock = new(false);");
+                break;
         }
     }
 
@@ -376,6 +391,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteServiceResolverMethods(
         SourceWriter writer,
+        ThreadSafeStrategy strategy,
         ContainerRegistrationGroups groups)
     {
         writer.WriteLine("#region Service Resolution");
@@ -384,9 +400,9 @@ partial class IocSourceGenerator
         var writtenMethods = new HashSet<string>();
 
         // All registrations are already filtered (no open generics)
-        WriteServiceResolverGroup(writer, groups.Singletons, writtenMethods, groups);
-        WriteServiceResolverGroup(writer, groups.Scoped, writtenMethods, groups);
-        WriteServiceResolverGroup(writer, groups.Transients, writtenMethods, groups);
+        WriteServiceResolverGroup(writer, strategy, groups.Singletons, writtenMethods, groups);
+        WriteServiceResolverGroup(writer, strategy, groups.Scoped, writtenMethods, groups);
+        WriteServiceResolverGroup(writer, strategy, groups.Transients, writtenMethods, groups);
 
         // Write array resolver methods for IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[] support
         foreach(var serviceType in groups.CollectionServiceTypes)
@@ -404,6 +420,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteServiceResolverGroup(
         SourceWriter writer,
+        ThreadSafeStrategy strategy,
         IEnumerable<CachedRegistration> registrations,
         HashSet<string> writtenMethods,
         ContainerRegistrationGroups groups)
@@ -412,7 +429,7 @@ partial class IocSourceGenerator
         {
             if(!writtenMethods.Add(cached.ResolverMethodName))
                 continue;
-            WriteServiceResolverMethod(writer, cached, groups);
+            WriteServiceResolverMethod(writer, strategy, cached, groups);
             writer.WriteLine();
         }
     }
@@ -468,6 +485,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteServiceResolverMethod(
         SourceWriter writer,
+        ThreadSafeStrategy strategy,
         CachedRegistration cached,
         ContainerRegistrationGroups groups)
     {
@@ -478,7 +496,6 @@ partial class IocSourceGenerator
         // Check if factory or instance registration
         bool hasFactory = reg.Factory is not null;
         bool hasInstance = reg.Instance is not null;
-        bool hasInjectionMembers = reg.InjectionMembers.Length > 0;
         bool hasDecorators = reg.Decorators.Length > 0;
 
         // Return type: if there are decorators, return the ServiceType (interface), otherwise ImplementationType
@@ -496,17 +513,11 @@ partial class IocSourceGenerator
         {
             case ServiceLifetime.Singleton:
             case ServiceLifetime.Scoped:
-                // Write field and lock above the resolver method for better readability
-                WriteServiceInstanceField(writer, reg, fieldName, hasDecorators, hasInjectionMembers);
+                // Write field and synchronization field above the resolver method for better readability
+                WriteServiceInstanceField(writer, strategy, reg, fieldName, hasDecorators);
 
-                if(hasInjectionMembers || hasDecorators)
-                {
-                    WriteResolverMethodWithLock(writer, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
-                }
-                else
-                {
-                    WriteResolverMethodWithInterlocked(writer, methodName, returnType, fieldName, reg, hasFactory, groups);
-                }
+                // Write resolver method based on thread-safe strategy
+                WriteResolverMethodWithThreadSafety(writer, strategy, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
                 break;
 
             case ServiceLifetime.Transient:
@@ -529,39 +540,11 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes resolver method using Interlocked.CompareExchange for thread safety.
+    /// Writes resolver method based on the specified thread-safety strategy.
     /// </summary>
-    private static void WriteResolverMethodWithInterlocked(
+    private static void WriteResolverMethodWithThreadSafety(
         SourceWriter writer,
-        string methodName,
-        string returnType,
-        string fieldName,
-        ServiceRegistrationModel reg,
-        bool hasFactory,
-        ContainerRegistrationGroups groups)
-    {
-        writer.WriteLine($"private {returnType} {methodName}()");
-        writer.WriteLine("{");
-        writer.Indentation++;
-
-        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
-        writer.WriteLine();
-
-        // Create instance
-        WriteInstanceCreation(writer, "instance", reg, hasFactory, groups);
-        writer.WriteLine();
-
-        writer.WriteLine($"return Interlocked.CompareExchange(ref {fieldName}, instance, null) ?? instance;");
-
-        writer.Indentation--;
-        writer.WriteLine("}");
-    }
-
-    /// <summary>
-    /// Writes resolver method using lock for complex initialization.
-    /// </summary>
-    private static void WriteResolverMethodWithLock(
-        SourceWriter writer,
+        ThreadSafeStrategy strategy,
         string methodName,
         string returnType,
         string fieldName,
@@ -574,22 +557,47 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
+        // Early return check (common to all strategies)
+        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
         writer.WriteLine();
 
-        writer.WriteLine($"lock({fieldName}Lock)");
-        writer.WriteLine("{");
-        writer.Indentation++;
+        switch(strategy)
+        {
+            case ThreadSafeStrategy.None:
+                WriteResolverBodyNone(writer, fieldName, reg, hasFactory, hasDecorators, groups);
+                break;
 
-        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
-        writer.WriteLine();
+            case ThreadSafeStrategy.Lock:
+                WriteResolverBodyLock(writer, fieldName, reg, hasFactory, hasDecorators, groups);
+                break;
 
-        // Create instance with injection
-        // When decorators are present, use ServiceType for variable declaration
+            case ThreadSafeStrategy.SemaphoreSlim:
+                WriteResolverBodySemaphoreSlim(writer, fieldName, reg, hasFactory, hasDecorators, groups);
+                break;
+
+            case ThreadSafeStrategy.SpinLock:
+                WriteResolverBodySpinLock(writer, fieldName, reg, hasFactory, hasDecorators, groups);
+                break;
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes resolver body for ThreadSafeStrategy.None (no synchronization).
+    /// </summary>
+    private static void WriteResolverBodyNone(
+        SourceWriter writer,
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
         WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
 
-        // Apply decorators if any
         if(hasDecorators)
         {
             writer.WriteLine();
@@ -597,13 +605,126 @@ partial class IocSourceGenerator
         }
 
         writer.WriteLine();
+        writer.WriteLine($"{fieldName} = instance;");
+        writer.WriteLine("return instance;");
+    }
 
+    /// <summary>
+    /// Writes resolver body for ThreadSafeStrategy.Lock (using lock statement).
+    /// </summary>
+    private static void WriteResolverBodyLock(
+        SourceWriter writer,
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        writer.WriteLine($"lock ({fieldName}Lock)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine();
+
+        var variableType = hasDecorators ? reg.ServiceType.Name : null;
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
+
+        if(hasDecorators)
+        {
+            writer.WriteLine();
+            WriteDecoratorApplication(writer, "instance", reg, groups);
+        }
+
+        writer.WriteLine();
         writer.WriteLine($"{fieldName} = instance;");
         writer.WriteLine("return instance;");
 
         writer.Indentation--;
         writer.WriteLine("}");
+    }
 
+    /// <summary>
+    /// Writes resolver body for ThreadSafeStrategy.SemaphoreSlim.
+    /// </summary>
+    private static void WriteResolverBodySemaphoreSlim(
+        SourceWriter writer,
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        writer.WriteLine($"{fieldName}Semaphore.Wait();");
+        writer.WriteLine("try");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine();
+
+        var variableType = hasDecorators ? reg.ServiceType.Name : null;
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
+
+        if(hasDecorators)
+        {
+            writer.WriteLine();
+            WriteDecoratorApplication(writer, "instance", reg, groups);
+        }
+
+        writer.WriteLine();
+        writer.WriteLine($"{fieldName} = instance;");
+        writer.WriteLine("return instance;");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("finally");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"{fieldName}Semaphore.Release();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes resolver body for ThreadSafeStrategy.SpinLock.
+    /// </summary>
+    private static void WriteResolverBodySpinLock(
+        SourceWriter writer,
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        writer.WriteLine("bool lockTaken = false;");
+        writer.WriteLine("try");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine($"{fieldName}SpinLock.Enter(ref lockTaken);");
+        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine();
+
+        var variableType = hasDecorators ? reg.ServiceType.Name : null;
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
+
+        if(hasDecorators)
+        {
+            writer.WriteLine();
+            WriteDecoratorApplication(writer, "instance", reg, groups);
+        }
+
+        writer.WriteLine();
+        writer.WriteLine($"{fieldName} = instance;");
+        writer.WriteLine("return instance;");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("finally");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if (lockTaken) {fieldName}SpinLock.Exit();".Replace("{fieldName}", fieldName));
         writer.Indentation--;
         writer.WriteLine("}");
     }
@@ -647,30 +768,6 @@ partial class IocSourceGenerator
         writer.WriteLine("return instance;");
         writer.Indentation--;
         writer.WriteLine("}");
-    }
-
-    /// <summary>
-    /// Writes instance creation code.
-    /// </summary>
-    private static void WriteInstanceCreation(
-        SourceWriter writer,
-        string varName,
-        ServiceRegistrationModel reg,
-        bool hasFactory,
-        ContainerRegistrationGroups groups)
-    {
-        if(hasFactory)
-        {
-            var factory = reg.Factory!;
-            var factoryCall = BuildFactoryCallForContainer(factory, reg, groups);
-            // Cast to implementation type if factory returns a different type
-            writer.WriteLine($"var {varName} = ({reg.ImplementationType.Name}){factoryCall};");
-            return;
-        }
-
-        // Constructor invocation
-        var args = BuildConstructorArgumentsString(reg, groups);
-        writer.WriteLine($"var {varName} = new {reg.ImplementationType.Name}({args});");
     }
 
     /// <summary>
@@ -1509,7 +1606,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        WriteDisposalCalls(writer, groups.ReversedScopedForDisposal, container.ImportedModules, isAsync);
+        WriteDisposalCalls(writer, groups.ReversedScopedForDisposal, container.ImportedModules, container.ThreadSafeStrategy, isAsync);
         writer.WriteLine("return;");
 
         writer.Indentation--;
@@ -1517,7 +1614,7 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // Root scope disposal
-        WriteDisposalCalls(writer, groups.ReversedSingletonsForDisposal, container.ImportedModules, isAsync);
+        WriteDisposalCalls(writer, groups.ReversedSingletonsForDisposal, container.ImportedModules, container.ThreadSafeStrategy, isAsync);
     }
 
     /// <summary>
@@ -1527,6 +1624,7 @@ partial class IocSourceGenerator
         SourceWriter writer,
         IEnumerable<CachedRegistration> services,
         ImmutableEquatableArray<TypeData> modules,
+        ThreadSafeStrategy strategy,
         bool isAsync)
     {
         var (serviceMethod, moduleMethod) = isAsync
@@ -1540,6 +1638,12 @@ partial class IocSourceGenerator
                 continue;
 
             writer.WriteLine($"{serviceMethod}({cached.FieldName});");
+
+            // Dispose SemaphoreSlim if using SemaphoreSlim strategy
+            if(strategy == ThreadSafeStrategy.SemaphoreSlim)
+            {
+                writer.WriteLine($"{cached.FieldName}Semaphore.Dispose();");
+            }
         }
 
         foreach(var module in modules)

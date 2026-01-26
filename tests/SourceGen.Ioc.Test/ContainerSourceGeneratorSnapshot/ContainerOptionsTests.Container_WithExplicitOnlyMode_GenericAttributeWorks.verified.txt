@@ -51,13 +51,25 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
     #region Service Resolution
 
     private global::TestNamespace.MyService? _testNamespace_MyService;
+    private readonly SemaphoreSlim _testNamespace_MyServiceSemaphore = new(1, 1);
     private global::TestNamespace.MyService GetTestNamespace_MyService()
     {
-        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+        if (_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        var instance = new global::TestNamespace.MyService();
+        _testNamespace_MyServiceSemaphore.Wait();
+        try
+        {
+            if (_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        return Interlocked.CompareExchange(ref _testNamespace_MyService, instance, null) ?? instance;
+            var instance = new global::TestNamespace.MyService();
+
+            _testNamespace_MyService = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_MyServiceSemaphore.Release();
+        }
     }
 
     #endregion
@@ -182,6 +194,7 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
         }
 
         DisposeService(_testNamespace_MyService);
+        _testNamespace_MyServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -194,6 +207,7 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
         }
 
         await DisposeServiceAsync(_testNamespace_MyService);
+        _testNamespace_MyServiceSemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

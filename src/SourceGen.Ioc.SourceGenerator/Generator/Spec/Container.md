@@ -48,7 +48,8 @@ The generated container implements the following interfaces:
     ResolveIServiceCollection = true,  // Allow fallback to IServiceCollection and implement IServiceProviderFactory
     ExplicitOnly = false,              // Only register explicitly marked services
     IncludeTags = ["Tag1", "Tag2"],    // Only include services with specified tags
-    UseSwitchStatement = false         // Use FrozenDictionary by default; set true to use switch statement
+    UseSwitchStatement = false,        // Use FrozenDictionary by default; set true to use switch statement
+    ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim  // Thread safety strategy for singleton/scoped resolution
 )]
 public partial class MyContainer;
 ```
@@ -59,10 +60,148 @@ public partial class MyContainer;
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|
+|`ThreadSafeStrategy`|`SemaphoreSlim`|Thread safety strategy for singleton and scoped service resolution. See [ThreadSafeStrategy](#threadsafestrategy) for details.|
 
 > **Priority**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
 >
 > **Priority**: `IocImportModule` takes precedence over `UseSwitchStatement`. When there are imported modules, `UseSwitchStatement` is ignored and `FrozenDictionary` is always used.
+
+### ThreadSafeStrategy
+
+The `ThreadSafeStrategy` enum controls how the container ensures thread-safe initialization of singleton and scoped services. This only affects services with `Singleton` or `Scoped` lifetime; `Transient` services always create new instances without caching.
+
+|Strategy|Description|Use Case|
+|:---|:---|:---|
+|`None`|No thread safety. Direct field assignment without synchronization.|Single-threaded applications or when external synchronization is guaranteed. **Warning**: May create multiple instances in multi-threaded scenarios.|
+|`Lock`|Uses `lock` statement with double-checked locking pattern.|General-purpose thread safety with balanced performance.|
+|`SemaphoreSlim`|Uses `SemaphoreSlim` with double-checked locking pattern. **(Default)**|Recommended for most scenarios. Slightly lower contention than `Lock`.|
+|`SpinLock`|Uses `SpinLock` with double-checked locking pattern.|High-performance scenarios with very short initialization times. Not recommended for I/O-bound initialization.|
+
+#### Generated Code Examples
+
+##### ThreadSafeStrategy.None
+
+No synchronization primitives. Simple but not thread-safe:
+
+```csharp
+private global::MyService? _myService;
+private global::MyService GetMyService()
+{
+    if (_myService is not null) return _myService;
+
+    var instance = new global::MyService();
+    _myService = instance;
+    return instance;
+}
+```
+
+##### ThreadSafeStrategy.Lock
+
+Uses `Lock` class with double-checked locking:
+
+```csharp
+private global::MyService? _myService;
+private readonly Lock _myServiceLock = new();
+private global::MyService GetMyService()
+{
+    if (_myService is not null) return _myService;
+
+    lock (_myServiceLock)
+    {
+        if (_myService is not null) return _myService;
+
+        var instance = new global::MyService();
+        _myService = instance;
+        return instance;
+    }
+}
+```
+
+##### ThreadSafeStrategy.SemaphoreSlim (Default)
+
+Uses `SemaphoreSlim` with double-checked locking:
+
+```csharp
+private global::MyService? _myService;
+private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
+private global::MyService GetMyService()
+{
+    if (_myService is not null) return _myService;
+
+    _myServiceSemaphore.Wait();
+    try
+    {
+        if (_myService is not null) return _myService;
+
+        var instance = new global::MyService();
+        _myService = instance;
+        return instance;
+    }
+    finally
+    {
+        _myServiceSemaphore.Release();
+    }
+}
+```
+
+##### ThreadSafeStrategy.SpinLock
+
+Uses `SpinLock` with double-checked locking. Note that `SpinLock` is a struct and must not be readonly:
+
+```csharp
+private global::MyService? _myService;
+private SpinLock _myServiceSpinLock = new(false);
+private global::MyService GetMyService()
+{
+    if (_myService is not null) return _myService;
+
+    bool lockTaken = false;
+    try
+    {
+        _myServiceSpinLock.Enter(ref lockTaken);
+        if (_myService is not null) return _myService;
+
+        var instance = new global::MyService();
+        _myService = instance;
+        return instance;
+    }
+    finally
+    {
+        if (lockTaken) _myServiceSpinLock.Exit();
+    }
+}
+```
+
+#### Field Generation by Strategy
+
+Each strategy generates different synchronization fields:
+
+|Strategy|Instance Field|Synchronization Field|Disposed|
+|:---|:---|:---|:---|
+|`None`|`private T? _field;`|None|N/A|
+|`Lock`|`private T? _field;`|`private readonly Lock _fieldLock = new();`|No (no unmanaged resources)|
+|`SemaphoreSlim`|`private T? _field;`|`private readonly SemaphoreSlim _fieldSemaphore = new(1, 1);`|**Yes** (in `Dispose`/`DisposeAsync`)|
+|`SpinLock`|`private T? _field;`|`private SpinLock _fieldSpinLock = new(false);` (not readonly)|No (value type)|
+
+#### Scope Constructor Behavior
+
+When creating a child scope, synchronization fields are NOT copied from parent. Each scope has its own synchronization primitives for scoped services:
+
+```csharp
+private AppContainer(AppContainer parent)
+{
+    _fallbackProvider = parent._fallbackProvider;
+    _isRootScope = false;
+
+    // Copy singleton instance references from parent
+    _singletonService = parent._singletonService;
+
+    // Singleton synchronization fields are NOT copied (parent already initialized)
+    // Scoped fields are fresh for each scope (both instance and sync fields)
+
+    _serviceResolvers = parent._serviceResolvers;
+}
+```
 
 ## Features
 
@@ -145,23 +284,45 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     #region Service Resolution
 
     private global::MyDependency? _myDependency;
+    private readonly SemaphoreSlim _myDependencySemaphore = new(1, 1);
     private global::MyDependency GetMyDependency()
     {
-        if(_myDependency is not null) return _myDependency;
+        if (_myDependency is not null) return _myDependency;
 
-        var instance = new global::MyDependency();
+        _myDependencySemaphore.Wait();
+        try
+        {
+            if (_myDependency is not null) return _myDependency;
 
-        return Interlocked.CompareExchange(ref _myDependency, instance, null) ?? instance;
+            var instance = new global::MyDependency();
+            _myDependency = instance;
+            return instance;
+        }
+        finally
+        {
+            _myDependencySemaphore.Release();
+        }
     }
 
     private global::MyService? _myService;
+    private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
     private global::MyService GetMyService()
     {
-        if(_myService is not null) return _myService;
+        if (_myService is not null) return _myService;
 
-        var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
+        _myServiceSemaphore.Wait();
+        try
+        {
+            if (_myService is not null) return _myService;
 
-        return Interlocked.CompareExchange(ref _myService, instance, null) ?? instance;
+            var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
+            _myService = instance;
+            return instance;
+        }
+        finally
+        {
+            _myServiceSemaphore.Release();
+        }
     }
 
     #endregion
@@ -288,7 +449,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         }
 
         DisposeService(_myService);
+        _myServiceSemaphore.Dispose();  // SemaphoreSlim disposed with service
         DisposeService(_myDependency);
+        _myDependencySemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -301,7 +464,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         }
 
         await DisposeServiceAsync(_myService);
+        _myServiceSemaphore.Dispose();  // SemaphoreSlim disposed with service
         await DisposeServiceAsync(_myDependency);
+        _myDependencySemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)
@@ -372,24 +537,46 @@ partial class AppContainer
 
     // Singleton - stored in root, shared across scopes
     private global::SingletonService? _singletonService;
+    private readonly SemaphoreSlim _singletonServiceSemaphore = new(1, 1);
     private global::SingletonService GetSingletonService()
     {
-        if(_singletonService is not null) return _singletonService;
+        if (_singletonService is not null) return _singletonService;
 
-        var instance = new global::SingletonService();
+        _singletonServiceSemaphore.Wait();
+        try
+        {
+            if (_singletonService is not null) return _singletonService;
 
-        return Interlocked.CompareExchange(ref _singletonService, instance, null) ?? instance;
+            var instance = new global::SingletonService();
+            _singletonService = instance;
+            return instance;
+        }
+        finally
+        {
+            _singletonServiceSemaphore.Release();
+        }
     }
 
     // Scoped - stored in each scope instance
     private global::ScopedService? _scopedService;
+    private readonly SemaphoreSlim _scopedServiceSemaphore = new(1, 1);
     private global::ScopedService GetScopedService()
     {
-        if(_scopedService is not null) return _scopedService;
+        if (_scopedService is not null) return _scopedService;
 
-        var instance = new global::ScopedService();
+        _scopedServiceSemaphore.Wait();
+        try
+        {
+            if (_scopedService is not null) return _scopedService;
 
-        return Interlocked.CompareExchange(ref _scopedService, instance, null) ?? instance;
+            var instance = new global::ScopedService();
+            _scopedService = instance;
+            return instance;
+        }
+        finally
+        {
+            _scopedServiceSemaphore.Release();
+        }
     }
 
     // Transient - no storage, created every time
@@ -815,13 +1002,24 @@ partial class AppContainer
 
     // Factory registration (Singleton) - uses field for caching
     private global::IConnection? _connection;
+    private readonly SemaphoreSlim _connectionSemaphore = new(1, 1);
     private global::IConnection GetConnection()
     {
-        if(_connection is not null) return _connection;
+        if (_connection is not null) return _connection;
 
-        var instance = (global::IConnection)global::ConnectionFactory.Create(this);
+        _connectionSemaphore.Wait();
+        try
+        {
+            if (_connection is not null) return _connection;
 
-        return Interlocked.CompareExchange(ref _connection, instance, null) ?? instance;
+            var instance = (global::IConnection)global::ConnectionFactory.Create(this);
+            _connection = instance;
+            return instance;
+        }
+        finally
+        {
+            _connectionSemaphore.Release();
+        }
     }
 
     // Instance registration - directly returns the static instance, no field needed
@@ -874,23 +1072,45 @@ partial class AppContainer
     #region Service Resolution
 
     private global::Repository<global::User>? _repositoryUser;
+    private readonly SemaphoreSlim _repositoryUserSemaphore = new(1, 1);
     private global::Repository<global::User> GetRepositoryUser()
     {
-        if(_repositoryUser is not null) return _repositoryUser;
+        if (_repositoryUser is not null) return _repositoryUser;
 
-        var instance = new global::Repository<global::User>();
+        _repositoryUserSemaphore.Wait();
+        try
+        {
+            if (_repositoryUser is not null) return _repositoryUser;
 
-        return Interlocked.CompareExchange(ref _repositoryUser, instance, null) ?? instance;
+            var instance = new global::Repository<global::User>();
+            _repositoryUser = instance;
+            return instance;
+        }
+        finally
+        {
+            _repositoryUserSemaphore.Release();
+        }
     }
 
     private global::Repository<global::Order>? _repositoryOrder;
+    private readonly SemaphoreSlim _repositoryOrderSemaphore = new(1, 1);
     private global::Repository<global::Order> GetRepositoryOrder()
     {
-        if(_repositoryOrder is not null) return _repositoryOrder;
+        if (_repositoryOrder is not null) return _repositoryOrder;
 
-        var instance = new global::Repository<global::Order>();
+        _repositoryOrderSemaphore.Wait();
+        try
+        {
+            if (_repositoryOrder is not null) return _repositoryOrder;
 
-        return Interlocked.CompareExchange(ref _repositoryOrder, instance, null) ?? instance;
+            var instance = new global::Repository<global::Order>();
+            _repositoryOrder = instance;
+            return instance;
+        }
+        finally
+        {
+            _repositoryOrderSemaphore.Release();
+        }
     }
 
     #endregion
@@ -943,23 +1163,45 @@ partial class AppContainer
     #region Service Resolution
 
     private global::Plugin1? _plugin1;
+    private readonly SemaphoreSlim _plugin1Semaphore = new(1, 1);
     private global::Plugin1 GetPlugin1()
     {
-        if(_plugin1 is not null) return _plugin1;
+        if (_plugin1 is not null) return _plugin1;
 
-        var instance = new global::Plugin1();
+        _plugin1Semaphore.Wait();
+        try
+        {
+            if (_plugin1 is not null) return _plugin1;
 
-        return Interlocked.CompareExchange(ref _plugin1, instance, null) ?? instance;
+            var instance = new global::Plugin1();
+            _plugin1 = instance;
+            return instance;
+        }
+        finally
+        {
+            _plugin1Semaphore.Release();
+        }
     }
 
     private global::Plugin2? _plugin2;
+    private readonly SemaphoreSlim _plugin2Semaphore = new(1, 1);
     private global::Plugin2 GetPlugin2()
     {
-        if(_plugin2 is not null) return _plugin2;
+        if (_plugin2 is not null) return _plugin2;
 
-        var instance = new global::Plugin2();
+        _plugin2Semaphore.Wait();
+        try
+        {
+            if (_plugin2 is not null) return _plugin2;
 
-        return Interlocked.CompareExchange(ref _plugin2, instance, null) ?? instance;
+            var instance = new global::Plugin2();
+            _plugin2 = instance;
+            return instance;
+        }
+        finally
+        {
+            _plugin2Semaphore.Release();
+        }
     }
 
     // Collection resolver for IEnumerable<IPlugin>
@@ -1144,34 +1386,48 @@ var host = Host.CreateDefaultBuilder(args)
 
 ## Thread Safety
 
-All service resolution is thread-safe using `Interlocked.CompareExchange`. Service fields are placed directly above their resolver methods for better readability:
+Service resolution is thread-safe by default using `SemaphoreSlim` with double-checked locking pattern. The strategy can be configured via `ThreadSafeStrategy` property on `[IocContainer]` attribute.
+
+See [ThreadSafeStrategy](#threadsafestrategy) for all available strategies and their generated code examples.
+
+**Default (SemaphoreSlim)**:
 
 ```csharp
 private global::MyService? _myService;
+private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
 private global::MyService GetMyService()
 {
-    if(_myService is not null) return _myService;
+    if (_myService is not null) return _myService;
 
-    var instance = new global::MyService(/* ... */);
+    _myServiceSemaphore.Wait();
+    try
+    {
+        if (_myService is not null) return _myService;
 
-    return Interlocked.CompareExchange(ref _myService, instance, null) ?? instance;
+        var instance = new global::MyService(/* ... */);
+        _myService = instance;
+        return instance;
+    }
+    finally
+    {
+        _myServiceSemaphore.Release();
+    }
 }
 ```
 
-For complex initialization (property/method injection or decorators), use double-check locking:
+For complex initialization (property/method injection or decorators), the same strategy is used with additional initialization steps inside the synchronized block:
 
 ```csharp
-// Field and lock placed directly above the resolver method
-// Uses System.Threading.Lock (.NET 9+) for better performance
 private global::MyService? _myService;
-private readonly Lock _myServiceLock = new();
+private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
 private global::MyService GetMyService()
 {
-    if(_myService is not null) return _myService;
+    if (_myService is not null) return _myService;
 
-    lock(_myServiceLock)
+    _myServiceSemaphore.Wait();
+    try
     {
-        if(_myService is not null) return _myService;
+        if (_myService is not null) return _myService;
 
         var instance = new global::MyService(/* ... */)
         {
@@ -1181,6 +1437,10 @@ private global::MyService GetMyService()
 
         _myService = instance;
         return instance;
+    }
+    finally
+    {
+        _myServiceSemaphore.Release();
     }
 }
 ```
@@ -1205,7 +1465,10 @@ Services are disposed in reverse registration order:
 
 1. Scoped services (when scope is disposed)
 2. Singleton services (when root container is disposed)
-3. Imported module containers
+3. SemaphoreSlim synchronization primitives (when `ThreadSafeStrategy.SemaphoreSlim` is used)
+4. Imported module containers
+
+> **Note**: When using `ThreadSafeStrategy.SemaphoreSlim`, the generated `SemaphoreSlim` fields are disposed along with each service to prevent resource leaks.
 
 ```csharp
 public void Dispose()
@@ -1215,13 +1478,17 @@ public void Dispose()
     if(!_isRootScope)
     {
         DisposeService(_scopedService2);
+        _scopedService2Semaphore.Dispose();  // SemaphoreSlim disposed with service
         DisposeService(_scopedService1);
+        _scopedService1Semaphore.Dispose();
         _sharedModule.Dispose();
         return;
     }
 
     DisposeService(_singletonService2);
+    _singletonService2Semaphore.Dispose();  // SemaphoreSlim disposed with service
     DisposeService(_singletonService1);
+    _singletonService1Semaphore.Dispose();
     _sharedModule.Dispose();
 }
 
@@ -1232,13 +1499,17 @@ public async ValueTask DisposeAsync()
     if(!_isRootScope)
     {
         await DisposeServiceAsync(_scopedService2);
+        _scopedService2Semaphore.Dispose();  // SemaphoreSlim disposed with service
         await DisposeServiceAsync(_scopedService1);
+        _scopedService1Semaphore.Dispose();
         await _sharedModule.DisposeAsync();
         return;
     }
 
     await DisposeServiceAsync(_singletonService2);
+    _singletonService2Semaphore.Dispose();  // SemaphoreSlim disposed with service
     await DisposeServiceAsync(_singletonService1);
+    _singletonService1Semaphore.Dispose();
     await _sharedModule.DisposeAsync();
 }
 

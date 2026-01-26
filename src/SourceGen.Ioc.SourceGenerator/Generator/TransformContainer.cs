@@ -31,6 +31,7 @@ partial class IocSourceGenerator
         var resolveIServiceCollection = true;
         var explicitOnly = false;
         var useSwitchStatement = false;
+        var threadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim;
         ImmutableEquatableArray<string>? includeTags = null;
 
         foreach(var namedArg in attributeData.NamedArguments)
@@ -61,6 +62,11 @@ partial class IocSourceGenerator
                     if(namedArg.Value.Value is bool switchValue)
                         useSwitchStatement = switchValue;
                     break;
+
+                case "ThreadSafeStrategy":
+                    if(namedArg.Value.Value is int strategyValue)
+                        threadSafeStrategy = (ThreadSafeStrategy)strategyValue;
+                    break;
             }
         }
 
@@ -87,6 +93,7 @@ partial class IocSourceGenerator
             explicitOnly,
             includeTags ?? [],
             useSwitchStatement,
+            threadSafeStrategy,
             importedModules,
             explicitRegistrations);
     }
