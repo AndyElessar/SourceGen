@@ -40,4 +40,71 @@ public class CollectionResolutionContainerTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithCollectionResolution_GeneratesReadOnlyCollectionAndArrayServices()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)])]
+            public class Handler1 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)])]
+            public class Handler2 : IHandler { }
+
+            [IocDiscover<IEnumerable<IHandler>>]
+            [IocDiscover<IReadOnlyCollection<IHandler>>]
+            [IocDiscover<IReadOnlyList<IHandler>>]
+            [IocDiscover<IHandler[]>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithMultipleInstanceRegistrations_GeneratesEnumerableForSameType()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public static class ConnectionStrings
+            {
+                public const string Primary = "Server=primary;Database=Db;";
+                public const string Secondary = "Server=secondary;Database=Db;";
+                public const string Backup = "Server=backup;Database=Db;";
+            }
+
+            [IocRegisterFor<string>(ServiceLifetime.Singleton, Instance = nameof(ConnectionStrings.Primary))]
+            [IocRegisterFor<string>(ServiceLifetime.Singleton, Instance = nameof(ConnectionStrings.Secondary))]
+            [IocRegisterFor<string>(ServiceLifetime.Singleton, Instance = nameof(ConnectionStrings.Backup))]
+            public class Marker { }
+
+            [IocDiscover<IEnumerable<string>>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }

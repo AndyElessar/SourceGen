@@ -1,4 +1,4 @@
-﻿[assembly: IocRegisterDefaults<IFactoryService>(ServiceLifetime.Transient, Factory = nameof(Factory.Create))]
+﻿[assembly: IocRegisterDefaults<IFactoryService>(ServiceLifetime.Scoped, Factory = nameof(Factory.Create))]
 
 namespace IocSample;
 

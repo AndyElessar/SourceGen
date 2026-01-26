@@ -13,10 +13,12 @@ To add new features according to specifications, follow these steps:
 
 3. **Plan the Implementation**: Break down the feature into smaller tasks. Create a plan that outlines how you will implement each part of the feature.
 
-4. **Implement the Feature**: Follow your plan to write the code for the new feature. Ensure you adhere to the specification and maintain code quality.
+4. **Write Tests**: Create unit tests, integration tests, or any other necessary tests to verify that the feature works as intended. Ensure that your tests cover all aspects of the specification.
 
-5. **Write Tests**: Create unit tests, integration tests, or any other necessary tests to verify that the feature works as intended. Ensure that your tests cover all aspects of the specification.
+5. **Implement the Feature**: Follow your plan to write the code for the new feature. Ensure you adhere to the specification and maintain code quality.
 
-6. **Review and Refactor**: Review your code for any potential improvements. Refactor if necessary to enhance readability, performance, or maintainability.
+6. **Verify Tests**: Run the tests you created earlier to ensure that the feature works as expected. Fix any issues that arise during testing.
 
-7. **Document the Feature**: Update any relevant documentation to include information about the new feature. This may include code comments, user guides, or API documentation.
+7. **Review and Refactor**: Review your code for any potential improvements. Refactor if necessary to enhance readability, performance, or maintainability.
+
+8. **Document the Feature**: Update any relevant documentation to include information about the new feature. This may include code comments, user guides, or API documentation.

@@ -42,7 +42,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = parent._testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
         _serviceResolvers = parent._serviceResolvers;
     }
 
@@ -50,15 +49,18 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>? _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create()
-    {
-        if(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create is not null) return _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
+    private string Getstring_TestNamespace_ConnectionStrings_Primary() => global::TestNamespace.ConnectionStrings.Primary;
 
-        var instance = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Dto, global::TestNamespace.Entity>();
+    private string Getstring_TestNamespace_ConnectionStrings_Secondary() => global::TestNamespace.ConnectionStrings.Secondary;
 
-        return Interlocked.CompareExchange(ref _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create, instance, null) ?? instance;
-    }
+    private string Getstring_TestNamespace_ConnectionStrings_Backup() => global::TestNamespace.ConnectionStrings.Backup;
+
+    private string[] GetAllstringArray() =>
+        [
+            Getstring_TestNamespace_ConnectionStrings_Primary(),
+            Getstring_TestNamespace_ConnectionStrings_Secondary(),
+            Getstring_TestNamespace_ConnectionStrings_Backup(),
+        ];
 
     #endregion
 
@@ -146,7 +148,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new((typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create()),
+        new((typeof(string), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.Getstring_TestNamespace_ConnectionStrings_Backup()),
+        new((typeof(global::System.Collections.Generic.IEnumerable<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
+        new((typeof(global::System.Collections.Generic.IReadOnlyCollection<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
+        new((typeof(global::System.Collections.Generic.IReadOnlyList<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
+        new((typeof(string[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
     ];
 
     #endregion
@@ -180,7 +186,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             return;
         }
 
-        DisposeService(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create);
     }
 
     public async ValueTask DisposeAsync()
@@ -192,7 +197,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create);
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

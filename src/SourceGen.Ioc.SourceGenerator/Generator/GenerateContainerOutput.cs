@@ -280,8 +280,13 @@ partial class IocSourceGenerator
         writer.WriteLine("_isRootScope = false;");
 
         // Copy singleton references from parent (already filtered for non-open-generics)
+        // Skip instance registrations as they don't have fields
         foreach(var cached in groups.Singletons)
         {
+            // Instance registrations don't have fields, skip them
+            if(cached.Registration.Instance is not null)
+                continue;
+
             writer.WriteLine($"{cached.FieldName} = parent.{cached.FieldName};");
         }
 
@@ -383,10 +388,10 @@ partial class IocSourceGenerator
         WriteServiceResolverGroup(writer, groups.Scoped, writtenMethods, groups);
         WriteServiceResolverGroup(writer, groups.Transients, writtenMethods, groups);
 
-        // Write collection resolver methods for IEnumerable<T> support
+        // Write array resolver methods for IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[] support
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
-            WriteCollectionResolverMethod(writer, serviceType, groups);
+            WriteArrayResolverMethod(writer, serviceType, groups);
             writer.WriteLine();
         }
 
@@ -413,18 +418,34 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes a collection resolver method for IEnumerable&lt;T&gt; service resolution.
+    /// Writes an array resolver method for IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[] resolution.
     /// </summary>
-    private static void WriteCollectionResolverMethod(
+    private static void WriteArrayResolverMethod(
         SourceWriter writer,
         string serviceType,
         ContainerRegistrationGroups groups)
     {
-        var methodName = GetCollectionResolverMethodName(serviceType);
-        var returnType = $"global::System.Collections.Generic.IEnumerable<{serviceType}>";
+        var methodName = GetArrayResolverMethodName(serviceType);
+        var returnType = $"{serviceType}[]";
 
         // Use pre-computed collection registrations (already filtered for non-open-generics)
         if(!groups.CollectionRegistrations.TryGetValue(serviceType, out var registrations))
+            return;
+
+        // Deduplicate resolver method names to avoid calling the same resolver multiple times
+        var uniqueResolvers = new HashSet<string>();
+        var resolverMethods = new List<string>();
+
+        foreach(var cached in registrations)
+        {
+            if(uniqueResolvers.Add(cached.ResolverMethodName))
+            {
+                resolverMethods.Add(cached.ResolverMethodName);
+            }
+        }
+
+        // Only generate collection if there are multiple unique resolvers
+        if(resolverMethods.Count < 2)
             return;
 
         writer.WriteLine($"private {returnType} {methodName}() =>");
@@ -432,9 +453,9 @@ partial class IocSourceGenerator
         writer.WriteLine("[");
         writer.Indentation++;
 
-        foreach(var cached in registrations)
+        foreach(var resolverMethod in resolverMethods)
         {
-            writer.WriteLine($"{cached.ResolverMethodName}(),");
+            writer.WriteLine($"{resolverMethod}(),");
         }
 
         writer.Indentation--;
@@ -463,6 +484,14 @@ partial class IocSourceGenerator
         // Return type: if there are decorators, return the ServiceType (interface), otherwise ImplementationType
         var returnType = hasDecorators ? reg.ServiceType.Name : reg.ImplementationType.Name;
 
+        // Instance registration: directly return the instance without field caching
+        // The instance is already externally managed, no need for field storage
+        if(hasInstance)
+        {
+            WriteInstanceResolverMethod(writer, methodName, returnType, reg);
+            return;
+        }
+
         switch(reg.Lifetime)
         {
             case ServiceLifetime.Singleton:
@@ -472,18 +501,31 @@ partial class IocSourceGenerator
 
                 if(hasInjectionMembers || hasDecorators)
                 {
-                    WriteResolverMethodWithLock(writer, methodName, returnType, fieldName, reg, hasFactory, hasInstance, hasDecorators, groups);
+                    WriteResolverMethodWithLock(writer, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
                 }
                 else
                 {
-                    WriteResolverMethodWithInterlocked(writer, methodName, returnType, fieldName, reg, hasFactory, hasInstance, groups);
+                    WriteResolverMethodWithInterlocked(writer, methodName, returnType, fieldName, reg, hasFactory, groups);
                 }
                 break;
 
             case ServiceLifetime.Transient:
-                WriteTransientResolverMethod(writer, methodName, returnType, reg, hasFactory, hasInstance, hasDecorators, groups);
+                WriteTransientResolverMethod(writer, methodName, returnType, reg, hasFactory, hasDecorators, groups);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Writes a simple resolver method for instance registrations.
+    /// Instance registrations directly return the pre-existing instance without field caching.
+    /// </summary>
+    private static void WriteInstanceResolverMethod(
+        SourceWriter writer,
+        string methodName,
+        string returnType,
+        ServiceRegistrationModel reg)
+    {
+        writer.WriteLine($"private {returnType} {methodName}() => {reg.Instance};");
     }
 
     /// <summary>
@@ -496,7 +538,6 @@ partial class IocSourceGenerator
         string fieldName,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance,
         ContainerRegistrationGroups groups)
     {
         writer.WriteLine($"private {returnType} {methodName}()");
@@ -507,7 +548,7 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // Create instance
-        WriteInstanceCreation(writer, "instance", reg, hasFactory, hasInstance, groups);
+        WriteInstanceCreation(writer, "instance", reg, hasFactory, groups);
         writer.WriteLine();
 
         writer.WriteLine($"return Interlocked.CompareExchange(ref {fieldName}, instance, null) ?? instance;");
@@ -526,7 +567,6 @@ partial class IocSourceGenerator
         string fieldName,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance,
         bool hasDecorators,
         ContainerRegistrationGroups groups)
     {
@@ -547,7 +587,7 @@ partial class IocSourceGenerator
         // Create instance with injection
         // When decorators are present, use ServiceType for variable declaration
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
-        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, hasInstance, variableType, groups);
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
 
         // Apply decorators if any
         if(hasDecorators)
@@ -577,7 +617,6 @@ partial class IocSourceGenerator
         string returnType,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance,
         bool hasDecorators,
         ContainerRegistrationGroups groups)
     {
@@ -588,7 +627,7 @@ partial class IocSourceGenerator
         // Simple case: no injection members and no decorators
         if(reg.InjectionMembers.Length == 0 && !hasDecorators)
         {
-            var instanceCreation = BuildInstanceCreationInline(reg, hasFactory, hasInstance, groups);
+            var instanceCreation = BuildInstanceCreationInline(reg, hasFactory, groups);
             writer.WriteLine($"return {instanceCreation};");
             writer.Indentation--;
             writer.WriteLine("}");
@@ -597,7 +636,7 @@ partial class IocSourceGenerator
 
         // Complex case: has injection members or decorators
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
-        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, hasInstance, variableType, groups);
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
 
         if(hasDecorators)
         {
@@ -618,15 +657,8 @@ partial class IocSourceGenerator
         string varName,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance,
         ContainerRegistrationGroups groups)
     {
-        if(hasInstance)
-        {
-            writer.WriteLine($"var {varName} = {reg.Instance};");
-            return;
-        }
-
         if(hasFactory)
         {
             var factory = reg.Factory!;
@@ -650,17 +682,10 @@ partial class IocSourceGenerator
         string varName,
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance,
         string? variableType,
         ContainerRegistrationGroups groups)
     {
         var typeDeclaration = variableType ?? "var";
-
-        if(hasInstance)
-        {
-            writer.WriteLine($"{typeDeclaration} {varName} = {reg.Instance};");
-            return;
-        }
 
         if(hasFactory)
         {
@@ -917,12 +942,8 @@ partial class IocSourceGenerator
     private static string BuildInstanceCreationInline(
         ServiceRegistrationModel reg,
         bool hasFactory,
-        bool hasInstance,
         ContainerRegistrationGroups groups)
     {
-        if(hasInstance)
-            return reg.Instance!;
-
         if(hasFactory)
         {
             var factoryCall = BuildFactoryCallForContainer(reg.Factory!, reg, groups);
@@ -1022,7 +1043,7 @@ partial class IocSourceGenerator
             // Check if we have a collection resolver for this element type
             if(groups.CollectionRegistrations.ContainsKey(elementType))
             {
-                var methodName = GetCollectionResolverMethodName(elementType);
+                var methodName = GetArrayResolverMethodName(elementType);
                 return $"{methodName}()";
             }
 
@@ -1388,11 +1409,14 @@ partial class IocSourceGenerator
             writer.WriteLine($"new((typeof({kvp.Key.ServiceType}), {keyExpr}), static c => c.{cached.ResolverMethodName}()),");
         }
 
-        // Add IEnumerable<T> entries for collection service types
+        // Add IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[] entries for collection service types
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
-            var methodName = GetCollectionResolverMethodName(serviceType);
+            var methodName = GetArrayResolverMethodName(serviceType);
             writer.WriteLine($"new((typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new((typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
         }
 
         writer.Indentation--;
@@ -1511,6 +1535,10 @@ partial class IocSourceGenerator
 
         foreach(var cached in services)
         {
+            // Skip instance registrations - they are externally managed and should not be disposed by the container
+            if(cached.Registration.Instance is not null)
+                continue;
+
             writer.WriteLine($"{serviceMethod}({cached.FieldName});");
         }
 
@@ -1547,12 +1575,12 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Gets the collection resolver method name for IEnumerable&lt;T&gt; resolution.
+    /// Gets the array resolver method name for IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[] resolution.
     /// </summary>
-    private static string GetCollectionResolverMethodName(string serviceType)
+    private static string GetArrayResolverMethodName(string serviceType)
     {
         var baseName = GetSafeIdentifier(serviceType);
-        return $"GetAll{baseName}";
+        return $"GetAll{baseName}Array";
     }
 
     /// <summary>

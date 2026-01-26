@@ -330,6 +330,16 @@ The container supports all three service lifetimes:
 |Scoped|Scope-local field|New instance per scope|
 |Transient|None|New instance per resolution|
 
+**Special Cases for Factory and Instance Registrations**:
+
+|Registration Type|Lifetime|Has Field|Disposed by Container|
+|:---|:---|:---|:---|
+|Factory|Singleton/Scoped|Yes|Yes|
+|Factory|Transient|No|No|
+|Instance|Any|No|No|
+
+> **Note**: Instance registrations are pre-existing static instances managed externally. They don't need field caching (the instance already exists) and should NOT be disposed by the container.
+
 ```csharp
 #region Define:
 [IocRegister<ISingleton>(ServiceLifetime.Singleton)]
@@ -764,6 +774,9 @@ partial class AppContainer
 
 Support for custom factory methods and static instances:
 
+- **Factory Registration**: Uses field caching for Singleton/Scoped lifetimes to ensure the same instance is returned. Transient factories create a new instance each call.
+- **Instance Registration**: Directly returns the pre-existing static instance without field caching. Instance registrations are externally managed and not disposed by the container.
+
 ```csharp
 #region Define:
 public interface IConnection;
@@ -788,8 +801,19 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
+    private AppContainer(AppContainer parent)
+    {
+        _fallbackProvider = parent._fallbackProvider;
+        _isRootScope = false;
+        // Copy only factory-based singleton fields from parent
+        // Instance registrations don't have fields, no need to copy
+        _connection = parent._connection;
+        _serviceResolvers = parent._serviceResolvers;
+    }
+
     #region Service Resolution
 
+    // Factory registration (Singleton) - uses field for caching
     private global::IConnection? _connection;
     private global::IConnection GetConnection()
     {
@@ -800,14 +824,23 @@ partial class AppContainer
         return Interlocked.CompareExchange(ref _connection, instance, null) ?? instance;
     }
 
-    private global::IConnection? _defaultConnection;
-    private global::IConnection GetDefaultConnection()
+    // Instance registration - directly returns the static instance, no field needed
+    // The instance is externally managed and will NOT be disposed by the container
+    private global::IConnection GetDefaultConnection() => global::ConnectionFactory.Default;
+
+    #endregion
+
+    #region Disposal
+
+    public void Dispose()
     {
-        if(_defaultConnection is not null) return _defaultConnection;
+        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        var instance = global::ConnectionFactory.Default;
+        if(!_isRootScope) return;
 
-        return Interlocked.CompareExchange(ref _defaultConnection, instance, null) ?? instance;
+        // Only dispose factory-created instances
+        // Instance registrations are NOT disposed (externally managed)
+        DisposeService(_connection);
     }
 
     #endregion
@@ -877,7 +910,16 @@ partial class AppContainer
 
 ### 9. Collection Resolution
 
-Support for `IEnumerable<T>` resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localServices`.
+Support for collection resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localServices`.
+
+**Supported Collection Types**:
+
+|Type|Resolution Method|Notes|
+|:---|:---|:---|
+|`IEnumerable<T>`|Returns collection expression|Standard MS.DI pattern|
+|`IReadOnlyCollection<T>`|Returns array|Supports `Count` property|
+|`IReadOnlyList<T>`|Returns array|Supports indexer access|
+|`T[]`|Returns array|Native array type|
 
 > **Note**: Collection resolution only generates for service types with multiple distinct implementations (excluding self-registrations).
 
@@ -927,6 +969,13 @@ partial class AppContainer
         GetPlugin2(),
     ];
 
+    // Array resolver for IReadOnlyCollection<T>, IReadOnlyList<T>, T[]
+    private global::IPlugin[] GetAllIPluginArray() =>
+    [
+        GetPlugin1(),
+        GetPlugin2(),
+    ];
+
     #endregion
 
     // Registered in _localServices
@@ -936,6 +985,9 @@ partial class AppContainer
         new((typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
         new((typeof(global::Plugin2), KeyedService.AnyKey), static c => c.GetPlugin2()),
         new((typeof(global::System.Collections.Generic.IEnumerable<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPlugin()),
+        new((typeof(global::System.Collections.Generic.IReadOnlyCollection<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        new((typeof(global::System.Collections.Generic.IReadOnlyList<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        new((typeof(global::IPlugin[]), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
     ];
 }
 #endregion

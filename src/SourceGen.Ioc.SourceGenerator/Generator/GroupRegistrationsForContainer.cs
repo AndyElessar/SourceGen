@@ -100,10 +100,10 @@ partial class IocSourceGenerator
         var allServiceTypes = new HashSet<string>();
 
         // Track unique implementations per lifetime using Dictionary instead of List + index tracking.
-        // Key: (ImplementationName, ServiceKey), Value: (CachedRegistration, HasDecorators)
-        var singletonMap = new Dictionary<(string ImplName, string? Key), (CachedRegistration Cached, bool HasDecorators)>();
-        var scopedMap = new Dictionary<(string ImplName, string? Key), (CachedRegistration Cached, bool HasDecorators)>();
-        var transientMap = new Dictionary<(string ImplName, string? Key), (CachedRegistration Cached, bool HasDecorators)>();
+        // Key: (ImplementationName, ServiceKey, InstanceOrFactory), Value: (CachedRegistration, HasDecorators)
+        var singletonMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (CachedRegistration Cached, bool HasDecorators)>();
+        var scopedMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (CachedRegistration Cached, bool HasDecorators)>();
+        var transientMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (CachedRegistration Cached, bool HasDecorators)>();
 
         var hasOpenGenerics = false;
         var hasKeyedServices = false;
@@ -150,7 +150,9 @@ partial class IocSourceGenerator
             allServiceTypes.Add(reg.ImplementationType.Name);
 
             // Group by lifetime - prefer registration with decorators for field generation
-            var lifetimeKey = (reg.ImplementationType.Name, reg.Key);
+            // Include Instance or Factory in the key to distinguish multiple instance/factory registrations
+            var instanceOrFactory = reg.Instance ?? reg.Factory?.Path;
+            var lifetimeKey = (reg.ImplementationType.Name, reg.Key, instanceOrFactory);
             var hasDecorators = reg.Decorators.Length > 0;
 
             var targetMap = reg.Lifetime switch
@@ -177,31 +179,24 @@ partial class IocSourceGenerator
         var scoped = scopedMap.Values.Select(static v => v.Cached).ToList();
         var transients = transientMap.Values.Select(static v => v.Cached).ToList();
 
-        // Collect service types with multiple implementations for IEnumerable<T> resolution
+        // Collect service types with multiple registrations for IEnumerable<T> resolution
         var collectionServiceTypes = new List<string>();
         var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<CachedRegistration>>();
 
         foreach(var kvp in byServiceTypeAndKey)
         {
-            // Only include non-keyed service types with multiple distinct implementations
+            // Include non-keyed service types with multiple registrations
             if(kvp.Key.Key is null && kvp.Value.Count > 1)
             {
-                // Count distinct implementation types using HashSet to avoid LINQ
-                var distinctImplementations = new HashSet<string>();
-                var hasSelfRegistrationOnly = true;
-
+                // Deduplicate resolver method names to count unique implementations
+                var uniqueResolvers = new HashSet<string>();
                 foreach(var cached in kvp.Value)
                 {
-                    distinctImplementations.Add(cached.Registration.ImplementationType.Name);
-                    if(cached.Registration.ServiceType.Name != cached.Registration.ImplementationType.Name)
-                    {
-                        hasSelfRegistrationOnly = false;
-                    }
+                    uniqueResolvers.Add(cached.ResolverMethodName);
                 }
 
-                // Only generate collection if there are multiple distinct implementations
-                // AND not all are self-registrations
-                if(distinctImplementations.Count > 1 && !hasSelfRegistrationOnly)
+                // Only generate collection if there are multiple unique resolvers
+                if(uniqueResolvers.Count > 1)
                 {
                     collectionServiceTypes.Add(kvp.Key.ServiceType);
                     collectionRegistrations[kvp.Key.ServiceType] = kvp.Value.ToImmutableEquatableArray();
@@ -265,12 +260,33 @@ partial class IocSourceGenerator
         var lowerFirstChar = char.ToLowerInvariant(baseName[0]);
         var restOfName = baseName[1..];
 
+        // Handle keyed services
         if(reg.Key is not null)
         {
             var safeKey = GetSafeIdentifier(reg.Key);
             return (
                 $"_{lowerFirstChar}{restOfName}_{safeKey}",
                 $"Get{baseName}_{safeKey}"
+            );
+        }
+
+        // Handle instance registrations - include instance name in the method name
+        if(reg.Instance is not null)
+        {
+            var safeInstance = GetSafeIdentifier(reg.Instance);
+            return (
+                $"_{lowerFirstChar}{restOfName}_{safeInstance}",
+                $"Get{baseName}_{safeInstance}"
+            );
+        }
+
+        // Handle factory registrations - include factory path in the method name
+        if(reg.Factory is not null)
+        {
+            var safeFactory = GetSafeIdentifier(reg.Factory.Path);
+            return (
+                $"_{lowerFirstChar}{restOfName}_{safeFactory}",
+                $"Get{baseName}_{safeFactory}"
             );
         }
 
