@@ -36,5 +36,5 @@ public sealed class IocContainerAttribute : Attribute
     /// <summary>
     /// Gets the thread safety strategy for the generated container.
     /// </summary>
-    public ThreadSafeStrategy ThreadSafeStrategy { get; init; } = ThreadSafeStrategy.SemaphoreSlim;
+    public ThreadSafeStrategy ThreadSafeStrategy { get; init; } = ThreadSafeStrategy.Lock;
 }

@@ -1,6 +1,4 @@
-using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace SourceGen.Ioc.Benchmark.Benchmarks;
 
@@ -21,6 +19,7 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 [CategoriesColumn]
 public class ThreadSafeStrategyBenchmark
 {
+    private ServiceProvider _serviceProvider = null!;
     private BenchmarkContainerNone _containerNone = null!;
     private BenchmarkContainerLock _containerLock = null!;
     private BenchmarkContainerSemaphoreSlim _containerSemaphoreSlim = null!;
@@ -29,12 +28,17 @@ public class ThreadSafeStrategyBenchmark
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _serviceProvider = new ServiceCollection()
+            .AddSingleton<ISingletonBenchmarkService, SingletonBenchmarkService>()
+            .BuildServiceProvider();
+
         _containerNone = new BenchmarkContainerNone();
         _containerLock = new BenchmarkContainerLock();
         _containerSemaphoreSlim = new BenchmarkContainerSemaphoreSlim();
         _containerSpinLock = new BenchmarkContainerSpinLock();
 
         // Warm up - pre-resolve singleton instances
+        _ = _serviceProvider.GetRequiredService<ISingletonBenchmarkService>();
         _ = _containerNone.GetRequiredService<ISingletonBenchmarkService>();
         _ = _containerLock.GetRequiredService<ISingletonBenchmarkService>();
         _ = _containerSemaphoreSlim.GetRequiredService<ISingletonBenchmarkService>();
@@ -44,6 +48,7 @@ public class ThreadSafeStrategyBenchmark
     [GlobalCleanup]
     public void GlobalCleanup()
     {
+        _serviceProvider.Dispose();
         _containerNone.Dispose();
         _containerLock.Dispose();
         _containerSemaphoreSlim.Dispose();
@@ -53,6 +58,12 @@ public class ThreadSafeStrategyBenchmark
     #region Single-threaded Resolution (after initialization)
 
     [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark(Baseline = true)]
+    public ISingletonBenchmarkService Resolve_MSDI()
+    {
+        return _serviceProvider.GetRequiredService<ISingletonBenchmarkService>();
+    }
+
+    [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark]
     public ISingletonBenchmarkService Resolve_None()
     {
         return _containerNone.GetRequiredService<ISingletonBenchmarkService>();
@@ -83,10 +94,22 @@ public class ThreadSafeStrategyBenchmark
     private const int ConcurrentTasks = 16;
 
     [BenchmarkCategory("Resolve_Concurrent"), Benchmark(Baseline = true)]
+    public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_MSDI()
+    {
+        var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
+        for(var i = 0; i < ConcurrentTasks; i++)
+        {
+            tasks[i] = Task.Run(() => _serviceProvider.GetRequiredService<ISingletonBenchmarkService>());
+        }
+
+        return await Task.WhenAll(tasks);
+    }
+
+    [BenchmarkCategory("Resolve_Concurrent"), Benchmark]
     public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_None()
     {
         var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
-        for (var i = 0; i < ConcurrentTasks; i++)
+        for(var i = 0; i < ConcurrentTasks; i++)
         {
             tasks[i] = Task.Run(() => _containerNone.GetRequiredService<ISingletonBenchmarkService>());
         }
@@ -98,7 +121,7 @@ public class ThreadSafeStrategyBenchmark
     public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_Lock()
     {
         var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
-        for (var i = 0; i < ConcurrentTasks; i++)
+        for(var i = 0; i < ConcurrentTasks; i++)
         {
             tasks[i] = Task.Run(() => _containerLock.GetRequiredService<ISingletonBenchmarkService>());
         }
@@ -110,7 +133,7 @@ public class ThreadSafeStrategyBenchmark
     public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_SemaphoreSlim()
     {
         var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
-        for (var i = 0; i < ConcurrentTasks; i++)
+        for(var i = 0; i < ConcurrentTasks; i++)
         {
             tasks[i] = Task.Run(() => _containerSemaphoreSlim.GetRequiredService<ISingletonBenchmarkService>());
         }
@@ -122,7 +145,7 @@ public class ThreadSafeStrategyBenchmark
     public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_SpinLock()
     {
         var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
-        for (var i = 0; i < ConcurrentTasks; i++)
+        for(var i = 0; i < ConcurrentTasks; i++)
         {
             tasks[i] = Task.Run(() => _containerSpinLock.GetRequiredService<ISingletonBenchmarkService>());
         }
@@ -135,6 +158,16 @@ public class ThreadSafeStrategyBenchmark
     #region First-time Initialization (cold start)
 
     [BenchmarkCategory("FirstInit"), Benchmark(Baseline = true)]
+    public ISingletonBenchmarkService FirstInit_MSDI()
+    {
+        using var serviceProvider = new ServiceCollection()
+            .AddSingleton<ISingletonBenchmarkService, SingletonBenchmarkService>()
+            .BuildServiceProvider();
+
+        return serviceProvider.GetRequiredService<ISingletonBenchmarkService>();
+    }
+
+    [BenchmarkCategory("FirstInit"), Benchmark]
     public ISingletonBenchmarkService FirstInit_None()
     {
         using var container = new BenchmarkContainerNone();
