@@ -30,28 +30,28 @@ partial class IocSourceGenerator
             ? GetSafeIdentifier(customIocName!)
             : GetSafeIdentifier(assemblyName);
 
-        // Use Dictionary<string, SourceWriter> to write registrations directly grouped by method name
-        // This avoids building intermediate data structures and minimizes loop iterations
-        var methodWriters = new Dictionary<string, SourceWriter>(StringComparer.Ordinal);
+        // Group registrations by their tag conditions for generating conditional blocks
+        // Key: sorted comma-separated tags (empty string for no tags)
+        // Value: list of registrations
+        var tagGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
 
-        // Single pass: iterate once through all registrations, writing directly to method-specific SourceWriters
         foreach(var regWithTags in registrations)
         {
             var registration = regWithTags.Registration;
+            var tags = regWithTags.Tags;
 
-            // Write to default method if not tag-only
-            if(!regWithTags.TagOnly)
+            // Create a key based on sorted tags
+            var tagKey = tags.Length > 0
+                ? string.Join(",", tags.OrderBy(static t => t, StringComparer.Ordinal))
+                : string.Empty;
+
+            if(!tagGroups.TryGetValue(tagKey, out var group))
             {
-                var writer = GetOrCreateMethodWriter(methodWriters, DefaultMethodKey);
-                WriteRegistration(writer, registration);
+                group = new List<ServiceRegistrationModel>();
+                tagGroups[tagKey] = group;
             }
 
-            // Write to each tag-specific method
-            foreach(var tag in regWithTags.Tags)
-            {
-                var writer = GetOrCreateMethodWriter(methodWriters, tag);
-                WriteRegistration(writer, registration);
-            }
+            group.Add(registration);
         }
 
         // Build the final output
@@ -61,6 +61,7 @@ partial class IocSourceGenerator
         mainWriter.WriteLine(NullableEnable);
         mainWriter.WriteLine();
         mainWriter.WriteLine("using Microsoft.Extensions.DependencyInjection;");
+        mainWriter.WriteLine("using System.Collections.Generic;");
         mainWriter.WriteLine("using System.Linq;");
         mainWriter.WriteLine();
 
@@ -75,31 +76,55 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;
 
-        // Output methods in sorted order for deterministic output
-        bool isFirst = true;
-        foreach(var kvp in methodWriters.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
-        {
-            var methodKey = kvp.Key;
-            var methodBodyWriter = kvp.Value;
+        // Generate single method with tags parameter
+        mainWriter.WriteLine("/// <summary>");
+        mainWriter.WriteLine("/// Registers services. Services with tags are only registered when matching tags are passed.");
+        mainWriter.WriteLine("/// </summary>");
+        mainWriter.WriteLine("/// <param name=\"services\">The service collection.</param>");
+        mainWriter.WriteLine("/// <param name=\"tags\">Optional tags to filter which services to register.</param>");
+        mainWriter.WriteLine($"public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection Add{methodBaseName}(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)");
+        mainWriter.WriteLine("{");
+        mainWriter.Indentation++;
 
-            if(!isFirst)
+        // Write registrations grouped by tag conditions
+        // Sort groups for deterministic output: no tags first, then by tag key
+        var sortedGroups = tagGroups
+            .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
+            .ToList();
+
+        bool isFirstGroup = true;
+        foreach(var kvp in sortedGroups)
+        {
+            var groupKey = kvp.Key;
+            var groupRegistrations = kvp.Value;
+
+            var tagList = string.IsNullOrEmpty(groupKey)
+                ? []
+                : groupKey.Split(',');
+
+            if(!isFirstGroup)
             {
                 mainWriter.WriteLine();
             }
-            isFirst = false;
+            isFirstGroup = false;
 
-            if(string.IsNullOrEmpty(methodKey))
+            if(tagList.Length == 0)
             {
-                // Default method
-                WriteMethodWrapper(mainWriter, methodBodyWriter, methodBaseName, "Registers all default services.");
+                // No tags - only register when no tags passed (mutually exclusive model)
+                WriteNoTagConditionalBlock(mainWriter, groupRegistrations);
             }
             else
             {
-                // Tag-specific method
-                var safeTagName = GetSafeIdentifier(methodKey);
-                WriteMethodWrapper(mainWriter, methodBodyWriter, $"{methodBaseName}_{safeTagName}", $"Registers all services tagged with '{methodKey}'.");
+                // Has tags - only register when tags match
+                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations);
             }
         }
+
+        mainWriter.WriteLine();
+        mainWriter.WriteLine("return services;");
+
+        mainWriter.Indentation--;
+        mainWriter.WriteLine("}");
 
         mainWriter.Indentation--;
         mainWriter.WriteLine("}");
@@ -108,6 +133,64 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("}");
 
         return mainWriter.ToString();
+    }
+
+    /// <summary>
+    /// Writes a group of registrations without any conditional wrapper.
+    /// </summary>
+    private static void WriteRegistrationGroup(SourceWriter writer, List<ServiceRegistrationModel> registrations)
+    {
+        foreach(var registration in registrations)
+        {
+            WriteRegistration(writer, registration);
+        }
+    }
+
+    /// <summary>
+    /// Writes a conditional block for tag-based registration.
+    /// Services with tags are only registered when the passed tags match.
+    /// </summary>
+    private static void WriteConditionalTagBlock(
+        SourceWriter writer,
+        string[] tags,
+        List<ServiceRegistrationModel> registrations)
+    {
+        // Build the condition - only register when tags match
+        var tagConditions = tags.Select(static tag => $"tags.Contains(\"{tag}\")");
+        var condition = string.Join(" || ", tagConditions);
+
+        writer.WriteLine($"if ({condition})");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        foreach(var registration in registrations)
+        {
+            WriteRegistration(writer, registration);
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes a conditional block for services without tags.
+    /// Services without tags are only registered when no tags are passed (mutually exclusive model).
+    /// </summary>
+    private static void WriteNoTagConditionalBlock(
+        SourceWriter writer,
+        List<ServiceRegistrationModel> registrations)
+    {
+        writer.WriteLine("if (!tags.Any())");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        foreach(var registration in registrations)
+        {
+            WriteRegistration(writer, registration);
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
     }
 
     /// <summary>
@@ -126,57 +209,6 @@ partial class IocSourceGenerator
         }
 
         writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
-    }
-
-    /// <summary>
-    /// Gets or creates a SourceWriter for a specific method key.
-    /// The writer is pre-configured with the indentation level for method body content.
-    /// </summary>
-    private static SourceWriter GetOrCreateMethodWriter(Dictionary<string, SourceWriter> methodWriters, string methodKey)
-    {
-        if(!methodWriters.TryGetValue(methodKey, out var writer))
-        {
-            writer = new SourceWriter();
-            // No need to set indentation since we write line by line without wrapping
-            methodWriters[methodKey] = writer;
-        }
-
-        return writer;
-    }
-
-    /// <summary>
-    /// Writes the method wrapper around the pre-generated registration code.
-    /// </summary>
-    private static void WriteMethodWrapper(
-        SourceWriter mainWriter,
-        SourceWriter methodBodyWriter,
-        string methodName,
-        string summary)
-    {
-        mainWriter.WriteLine("/// <summary>");
-        mainWriter.WriteLine($"/// {summary}");
-        mainWriter.WriteLine("/// </summary>");
-        mainWriter.WriteLine($"public static IServiceCollection Add{methodName}(this IServiceCollection services)");
-        mainWriter.WriteLine("{");
-        mainWriter.Indentation++;
-
-        // The methodBodyWriter contains preformatted lines without indentation.
-        // Write as-is; registration lines do not rely on indentation.
-        var methodBody = methodBodyWriter.ToString();
-        if(!string.IsNullOrEmpty(methodBody))
-        {
-            // Trim trailing newlines to avoid extra blank lines with indentation
-            methodBody = methodBody.TrimEnd('\r', '\n');
-            // Write the preformatted block
-            mainWriter.WriteLine(methodBody);
-        }
-
-        // Add blank line before return statement
-        mainWriter.WriteLine();
-        mainWriter.WriteLine("return services;");
-
-        mainWriter.Indentation--;
-        mainWriter.WriteLine("}");
     }
 
     private static void WriteRegistration(SourceWriter writer, ServiceRegistrationModel registration)

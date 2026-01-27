@@ -16,7 +16,6 @@
 /// <param name="ValidOpenGenericServiceTypes">Set of valid open generic service type names (without generic parameters) that can be properly registered.</param>
 /// <param name="Decorators">The decorator types to apply, in order from outermost to innermost.</param>
 /// <param name="Tags">The collection of tags associated with this registration.</param>
-/// <param name="TagOnly">Whether this registration should only appear in tagged extension methods.</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection.</param>
 /// <param name="Factory">The factory method data to use for creating instances, or null if not specified.</param>
 /// <param name="Instance">The static instance path to use for singleton registration (e.g., "MyService.Default").</param>
@@ -34,7 +33,6 @@ internal sealed record class RegistrationData(
     ImmutableEquatableSet<string> ValidOpenGenericServiceTypes,
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
-    bool TagOnly,
     ImmutableEquatableArray<InjectionMemberData> InjectionMembers,
     FactoryMethodData? Factory,
     string? Instance)

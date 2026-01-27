@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,19 +13,24 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddKeyedSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>("special");
-            services.AddKeyedSingleton<global::TestNamespace.Dependency2, global::TestNamespace.Dependency2>("special");
-            services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
+            if (!tags.Any())
             {
-                var s0_p0 = sp.GetKeyedServices<global::TestNamespace.IDependency>("special");
-                var s0 = new global::TestNamespace.MyService() { Dependencies = s0_p0 };
-                return s0;
-            });
-            services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
+                services.AddKeyedSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>("special");
+                services.AddKeyedSingleton<global::TestNamespace.Dependency2, global::TestNamespace.Dependency2>("special");
+                services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
+                {
+                    var s0_p0 = sp.GetKeyedServices<global::TestNamespace.IDependency>("special");
+                    var s0 = new global::TestNamespace.MyService() { Dependencies = s0_p0 };
+                    return s0;
+                });
+                services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
+            }
 
             return services;
         }

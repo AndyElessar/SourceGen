@@ -32,7 +32,7 @@ partial class IocSourceGenerator
             // Add service registrations with their tags
             foreach(var model in result.ServiceRegistrations)
             {
-                registrations.Add(new ServiceRegistrationWithTags(model, result.Tags, result.TagOnly));
+                registrations.Add(new ServiceRegistrationWithTags(model, result.Tags));
             }
 
             // Index open generic entries - store ALL implementations per service type key
@@ -403,7 +403,7 @@ partial class IocSourceGenerator
             openGenericInfo.Instance);
 
         // Add registration with tags
-        registrations.Add(new ServiceRegistrationWithTags(implModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
+        registrations.Add(new ServiceRegistrationWithTags(implModel, openGenericInfo.Tags));
         generatedClosedGenerics.Add(closedImplType.Name);
 
         // Create registrations for each closed service type
@@ -444,7 +444,7 @@ partial class IocSourceGenerator
                 openGenericInfo.Factory,
                 openGenericInfo.Instance);
 
-            registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
+            registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags));
             generatedClosedGenerics.Add(closedSvcType.Name);
         }
 
@@ -493,7 +493,7 @@ partial class IocSourceGenerator
             openGenericInfo.Factory,
             openGenericInfo.Instance);
 
-        registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags, openGenericInfo.TagOnly));
+        registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags));
         generatedClosedGenerics.Add(closedServiceType.Name);
 
         return true; // Successfully generated registration

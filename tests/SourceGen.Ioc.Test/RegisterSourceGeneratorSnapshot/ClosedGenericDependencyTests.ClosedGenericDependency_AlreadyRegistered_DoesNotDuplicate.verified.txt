@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,14 +13,19 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddSingleton(typeof(global::TestNamespace.TestHandler<>), typeof(global::TestNamespace.TestHandler<>));
-            services.AddSingleton<global::TestNamespace.TestHandlerTestEntity, global::TestNamespace.TestHandlerTestEntity>();
-            services.AddSingleton<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.TestHandlerTestEntity>());
-            services.AddSingleton<global::TestNamespace.ViewModel, global::TestNamespace.ViewModel>();
+            if (!tags.Any())
+            {
+                services.AddSingleton(typeof(global::TestNamespace.TestHandler<>), typeof(global::TestNamespace.TestHandler<>));
+                services.AddSingleton<global::TestNamespace.TestHandlerTestEntity, global::TestNamespace.TestHandlerTestEntity>();
+                services.AddSingleton<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.TestHandlerTestEntity>());
+                services.AddSingleton<global::TestNamespace.ViewModel, global::TestNamespace.ViewModel>();
+            }
 
             return services;
         }

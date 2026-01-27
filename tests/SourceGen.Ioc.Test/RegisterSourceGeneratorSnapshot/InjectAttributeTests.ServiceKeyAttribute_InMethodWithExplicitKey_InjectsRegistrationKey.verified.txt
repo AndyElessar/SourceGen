@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,19 +13,24 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddKeyedSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>("dep1");
-            services.AddKeyedSingleton<global::TestNamespace.MyService>("ServiceKey", (global::System.IServiceProvider sp, object? key) =>
+            if (!tags.Any())
             {
-                var s0_m0 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency>("dep1");
-                var s0_m1 = "ServiceKey";
-                var s0 = new global::TestNamespace.MyService();
-                s0.Initialize(s0_m0, s0_m1);
-                return s0;
-            });
+                services.AddKeyedSingleton<global::TestNamespace.Dependency1, global::TestNamespace.Dependency1>("dep1");
+                services.AddKeyedSingleton<global::TestNamespace.MyService>("ServiceKey", (global::System.IServiceProvider sp, object? key) =>
+                {
+                    var s0_m0 = sp.GetRequiredKeyedService<global::TestNamespace.IDependency>("dep1");
+                    var s0_m1 = "ServiceKey";
+                    var s0 = new global::TestNamespace.MyService();
+                    s0.Initialize(s0_m0, s0_m1);
+                    return s0;
+                });
+            }
 
             return services;
         }

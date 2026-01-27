@@ -48,9 +48,6 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
     /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
-    public bool TagOnly { get; init; }
-
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
@@ -108,9 +105,6 @@ public sealed class IocRegisterForAttribute<T> : Attribute
 
     /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
-
-    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
-    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];

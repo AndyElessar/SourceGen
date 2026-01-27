@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,32 +13,37 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddSingleton(typeof(global::TestNamespace.Repository<>), typeof(global::TestNamespace.Repository<>));
-            services.AddSingleton(typeof(global::TestNamespace.IRepository<>), typeof(global::TestNamespace.Repository<>));
-            services.AddSingleton<global::TestNamespace.AggregateService>((global::System.IServiceProvider sp) =>
+            if (!tags.Any())
             {
-                var f_p0 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Customer>>();
-                var f_p1 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Order>>();
-                var f_p2 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Product>>();
-                return (global::TestNamespace.AggregateService)global::TestNamespace.AggregateServiceFactory.Create(sp, f_p0, f_p1, f_p2);
-            });
-            services.AddSingleton<global::TestNamespace.IAggregateService>((global::System.IServiceProvider sp) =>
-            {
-                var f_p0 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Customer>>();
-                var f_p1 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Order>>();
-                var f_p2 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Product>>();
-                return global::TestNamespace.AggregateServiceFactory.Create(sp, f_p0, f_p1, f_p2);
-            });
-            services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Customer>, global::TestNamespace.Repository<global::TestNamespace.Customer>>();
-            services.AddSingleton<global::TestNamespace.IRepository<global::TestNamespace.Customer>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Customer>>());
-            services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Order>, global::TestNamespace.Repository<global::TestNamespace.Order>>();
-            services.AddSingleton<global::TestNamespace.IRepository<global::TestNamespace.Order>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Order>>());
-            services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Product>, global::TestNamespace.Repository<global::TestNamespace.Product>>();
-            services.AddSingleton<global::TestNamespace.IRepository<global::TestNamespace.Product>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Product>>());
+                services.AddSingleton(typeof(global::TestNamespace.Repository<>), typeof(global::TestNamespace.Repository<>));
+                services.AddSingleton(typeof(global::TestNamespace.IRepository<>), typeof(global::TestNamespace.Repository<>));
+                services.AddSingleton<global::TestNamespace.AggregateService>((global::System.IServiceProvider sp) =>
+                {
+                    var f_p0 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Customer>>();
+                    var f_p1 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Order>>();
+                    var f_p2 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Product>>();
+                    return (global::TestNamespace.AggregateService)global::TestNamespace.AggregateServiceFactory.Create(sp, f_p0, f_p1, f_p2);
+                });
+                services.AddSingleton<global::TestNamespace.IAggregateService>((global::System.IServiceProvider sp) =>
+                {
+                    var f_p0 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Customer>>();
+                    var f_p1 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Order>>();
+                    var f_p2 = sp.GetRequiredService<global::TestNamespace.IRepository<global::TestNamespace.Product>>();
+                    return global::TestNamespace.AggregateServiceFactory.Create(sp, f_p0, f_p1, f_p2);
+                });
+                services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Customer>, global::TestNamespace.Repository<global::TestNamespace.Customer>>();
+                services.AddSingleton<global::TestNamespace.IRepository<global::TestNamespace.Customer>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Customer>>());
+                services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Order>, global::TestNamespace.Repository<global::TestNamespace.Order>>();
+                services.AddSingleton<global::TestNamespace.IRepository<global::TestNamespace.Order>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Order>>());
+                services.AddSingleton<global::TestNamespace.Repository<global::TestNamespace.Product>, global::TestNamespace.Repository<global::TestNamespace.Product>>();
+                services.AddSingleton<global::TestNamespace.IRepository<global::TestNamespace.Product>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Product>>());
+            }
 
             return services;
         }

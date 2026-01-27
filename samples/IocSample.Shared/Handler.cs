@@ -2,7 +2,6 @@
     typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>), typeof(HandlerDecorator3<,>)],
-    TagOnly = true,
     Tags = ["Mediator"]
 )]
 

@@ -140,7 +140,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The same implementation type with the same key and at least one overlapping tag is registered multiple times. When TagOnly=false, an empty tag is added for comparison. Only the last registration will be effective.");
+        description: "The same implementation type with the same key and at least one overlapping tag is registered multiple times. Only the last registration will be effective.");
 
     /// <summary>
     /// SGIOC012: Duplicated IoCRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.
@@ -152,7 +152,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The same target type with at least one overlapping tag has multiple IoCRegisterDefaultsAttribute definitions. When TagOnly=false, an empty tag is added for comparison. Only the first definition will be used.",
+        description: "The same target type with at least one overlapping tag has multiple IoCRegisterDefaultsAttribute definitions. Only the first definition will be used.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>

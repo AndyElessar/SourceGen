@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace IocSample
@@ -12,168 +13,168 @@ namespace IocSample
     public static class IocSampleServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddIocSample(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddIocSample(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddTransient<global::IocSample.Basic2, global::IocSample.Basic2>();
-            services.AddTransient<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
-            services.AddTransient<global::IocSample.IBasic2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
-            services.AddTransient<global::IocSample.Default1, global::IocSample.Default1>();
-            services.AddTransient<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default1>());
-            services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();
-            services.AddScoped<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default2>());
-            services.AddSingleton<global::IocSample.InstanceService>(global::IocSample.InstanceService.Instance);
-            services.AddSingleton<global::IocSample.ViewModel, global::IocSample.ViewModel>();
-            services.AddSingleton<global::IocSample.CustomMessenger, global::IocSample.CustomMessenger>();
-            services.AddSingleton<global::IocSample.ViewModel2>((global::System.IServiceProvider sp) =>
+            if (!tags.Any())
             {
-                var p0 = sp.GetRequiredService<global::IocSample.CustomMessenger>();
-                var s0_p0 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>();
-                var s0_p1 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>();
-                var s0_m2 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>();
-                var s0 = new global::IocSample.ViewModel2(p0) { Handler = s0_p0, Handler2 = s0_p1 };
-                s0.Initialize(s0_m2);
-                return s0;
-            });
-            services.AddSingleton<global::IocSample.DependentClass>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("1");
-                var s0_p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("2");
-                var s0_m1 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("3");
-                var s0 = new global::IocSample.DependentClass(p0) { Dependency2 = s0_p0 };
-                s0.Initialize(s0_m1);
-                return s0;
-            });
-            services.AddSingleton<global::IocSample.DependentClass2>((global::System.IServiceProvider sp) =>
-            {
-                var p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("1");
-                var s0 = new global::IocSample.DependentClass2(p0);
-                return s0;
-            });
-            services.AddScoped<global::IocSample.Basic, global::IocSample.Basic>();
-            services.AddScoped<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic>());
-            services.AddScoped<global::IocSample.FactoryService>((global::System.IServiceProvider sp) =>
-            {
-                var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
-                return (global::IocSample.FactoryService)global::IocSample.Factory.Create(sp, f_p0);
-            });
-            services.AddScoped<global::IocSample.IFactoryService>((global::System.IServiceProvider sp) =>
-            {
-                var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
-                return global::IocSample.Factory.Create(sp, f_p0);
-            });
-            services.AddScoped<global::IocSample.FactoryService2>((global::System.IServiceProvider sp) => (global::IocSample.FactoryService2)global::IocSample.FactoryService2.Create());
-            services.AddScoped<global::IocSample.IFactoryService>((global::System.IServiceProvider sp) => global::IocSample.FactoryService2.Create());
-            services.AddKeyedSingleton<global::IocSample.Dependency, global::IocSample.Dependency>("1");
-            services.AddKeyedSingleton<global::IocSample.IDependency>("1", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency>(key));
-            services.AddKeyedSingleton<global::IocSample.Dependency2, global::IocSample.Dependency2>("2");
-            services.AddKeyedSingleton<global::IocSample.IDependency>("2", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency2>(key));
-            services.AddKeyedSingleton<global::IocSample.Dependency3, global::IocSample.Dependency3>("3");
-            services.AddKeyedSingleton<global::IocSample.IDependency>("3", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency3>(key));
-            services.AddKeyedSingleton<global::IocSample.Keyed, global::IocSample.Keyed>("Key");
-            services.AddKeyedSingleton<global::IocSample.IKeyed>("Key", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Keyed>(key));
-            services.AddKeyedSingleton<global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) =>
-            {
-                var s0_m0 = global::IocSample.KeyEnum.Key0;
-                var s0 = new global::IocSample.KeyedEnum();
-                s0.Init(s0_m0);
-                return s0;
-            });
-            services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedEnum>(key));
-            services.AddKeyedSingleton<global::IocSample.KeyedCsharp>(global::IocSample.KeyedExtensions.Key, (global::System.IServiceProvider sp, object? key) =>
-            {
-                var p0 = sp.GetRequiredKeyedService<global::IocSample.IKeyed>("Key");
-                var s0 = new global::IocSample.KeyedCsharp(p0);
-                return s0;
-            });
-            services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyedExtensions.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedCsharp>(key));
-            services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.NestClassImpl, global::IocSample.TestNest.TestNestClass.NestClassImpl>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key);
-            services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.INestInterface>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.TestNest.TestNestClass.NestClassImpl>(key));
-            services.AddSingleton<global::IocSample.External, global::IocSample.External>();
-            services.AddTransient<global::IocSample.External2, global::IocSample.External2>();
-            services.AddTransient<global::IocSample.IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.External2>());
-            services.AddSingleton<global::IocSample.Conflict, global::IocSample.Conflict>();
-            services.AddTransient<global::IocSample.Default3, global::IocSample.Default3>();
-            services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default3>());
-            services.AddTransient<global::IocSample.Default4, global::IocSample.Default4>();
-            services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default4>());
-            services.AddSingleton<global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>>((global::System.IServiceProvider sp) => (global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>)global::IocSample.GenericFactory.Create<decimal>());
+                services.AddTransient<global::IocSample.Basic2, global::IocSample.Basic2>();
+                services.AddTransient<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
+                services.AddTransient<global::IocSample.IBasic2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
+                services.AddTransient<global::IocSample.Default1, global::IocSample.Default1>();
+                services.AddTransient<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default1>());
+                services.AddScoped<global::IocSample.Default2, global::IocSample.Default2>();
+                services.AddScoped<global::IocSample.IDenpendency2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default2>());
+                services.AddSingleton<global::IocSample.InstanceService>(global::IocSample.InstanceService.Instance);
+                services.AddSingleton<global::IocSample.ViewModel, global::IocSample.ViewModel>();
+                services.AddSingleton<global::IocSample.CustomMessenger, global::IocSample.CustomMessenger>();
+                services.AddSingleton<global::IocSample.ViewModel2>((global::System.IServiceProvider sp) =>
+                {
+                    var p0 = sp.GetRequiredService<global::IocSample.CustomMessenger>();
+                    var s0_p0 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>();
+                    var s0_p1 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>();
+                    var s0_m2 = sp.GetRequiredService<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>();
+                    var s0 = new global::IocSample.ViewModel2(p0) { Handler = s0_p0, Handler2 = s0_p1 };
+                    s0.Initialize(s0_m2);
+                    return s0;
+                });
+                services.AddSingleton<global::IocSample.DependentClass>((global::System.IServiceProvider sp) =>
+                {
+                    var p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("1");
+                    var s0_p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("2");
+                    var s0_m1 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("3");
+                    var s0 = new global::IocSample.DependentClass(p0) { Dependency2 = s0_p0 };
+                    s0.Initialize(s0_m1);
+                    return s0;
+                });
+                services.AddSingleton<global::IocSample.DependentClass2>((global::System.IServiceProvider sp) =>
+                {
+                    var p0 = sp.GetRequiredKeyedService<global::IocSample.IDependency>("1");
+                    var s0 = new global::IocSample.DependentClass2(p0);
+                    return s0;
+                });
+                services.AddScoped<global::IocSample.Basic, global::IocSample.Basic>();
+                services.AddScoped<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic>());
+                services.AddScoped<global::IocSample.FactoryService>((global::System.IServiceProvider sp) =>
+                {
+                    var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
+                    return (global::IocSample.FactoryService)global::IocSample.Factory.Create(sp, f_p0);
+                });
+                services.AddScoped<global::IocSample.IFactoryService>((global::System.IServiceProvider sp) =>
+                {
+                    var f_p0 = sp.GetRequiredService<global::IocSample.IInstance>();
+                    return global::IocSample.Factory.Create(sp, f_p0);
+                });
+                services.AddScoped<global::IocSample.FactoryService2>((global::System.IServiceProvider sp) => (global::IocSample.FactoryService2)global::IocSample.FactoryService2.Create());
+                services.AddScoped<global::IocSample.IFactoryService>((global::System.IServiceProvider sp) => global::IocSample.FactoryService2.Create());
+                services.AddKeyedSingleton<global::IocSample.Dependency, global::IocSample.Dependency>("1");
+                services.AddKeyedSingleton<global::IocSample.IDependency>("1", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency>(key));
+                services.AddKeyedSingleton<global::IocSample.Dependency2, global::IocSample.Dependency2>("2");
+                services.AddKeyedSingleton<global::IocSample.IDependency>("2", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency2>(key));
+                services.AddKeyedSingleton<global::IocSample.Dependency3, global::IocSample.Dependency3>("3");
+                services.AddKeyedSingleton<global::IocSample.IDependency>("3", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Dependency3>(key));
+                services.AddKeyedSingleton<global::IocSample.Keyed, global::IocSample.Keyed>("Key");
+                services.AddKeyedSingleton<global::IocSample.IKeyed>("Key", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.Keyed>(key));
+                services.AddKeyedSingleton<global::IocSample.KeyedEnum>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) =>
+                {
+                    var s0_m0 = global::IocSample.KeyEnum.Key0;
+                    var s0 = new global::IocSample.KeyedEnum();
+                    s0.Init(s0_m0);
+                    return s0;
+                });
+                services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedEnum>(key));
+                services.AddKeyedSingleton<global::IocSample.KeyedCsharp>(global::IocSample.KeyedExtensions.Key, (global::System.IServiceProvider sp, object? key) =>
+                {
+                    var p0 = sp.GetRequiredKeyedService<global::IocSample.IKeyed>("Key");
+                    var s0 = new global::IocSample.KeyedCsharp(p0);
+                    return s0;
+                });
+                services.AddKeyedSingleton<global::IocSample.IKeyed>(global::IocSample.KeyedExtensions.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.KeyedCsharp>(key));
+                services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.NestClassImpl, global::IocSample.TestNest.TestNestClass.NestClassImpl>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key);
+                services.AddKeyedTransient<global::IocSample.TestNest.TestNestClass.INestInterface>(global::IocSample.TestNest.TestNestClass.NestClassImpl.Key, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::IocSample.TestNest.TestNestClass.NestClassImpl>(key));
+                services.AddSingleton<global::IocSample.External, global::IocSample.External>();
+                services.AddTransient<global::IocSample.External2, global::IocSample.External2>();
+                services.AddTransient<global::IocSample.IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.External2>());
+                services.AddSingleton<global::IocSample.Conflict, global::IocSample.Conflict>();
+                services.AddTransient<global::IocSample.Default3, global::IocSample.Default3>();
+                services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default3>());
+                services.AddTransient<global::IocSample.Default4, global::IocSample.Default4>();
+                services.AddTransient<global::IocSample.IDenpendency3>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Default4>());
+                services.AddSingleton<global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>>((global::System.IServiceProvider sp) => (global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>)global::IocSample.GenericFactory.Create<decimal>());
+            }
 
-            return services;
-        }
-
-        /// <summary>
-        /// Registers all services tagged with 'Mediator'.
-        /// </summary>
-        public static IServiceCollection AddIocSample_Mediator(this IServiceCollection services)
-        {
-            services.AddSingleton<global::IocSample.TestQueryHandler, global::IocSample.TestQueryHandler>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string>>((global::System.IServiceProvider sp) =>
+            if (tags.Contains("Mediator"))
             {
-                var s0 = sp.GetRequiredService<global::IocSample.TestQueryHandler>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator3<global::IocSample.TestQuery, string>(s0);
-                var s2 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.TestQuery, string>(s1);
-                var s3_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.TestQuery, string>>>();
-                var s3 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.TestQuery, string>(s2, s3_p0);
-                return s3;
-            });
-            services.AddSingleton(typeof(global::IocSample.GenericRequestHandler<>), typeof(global::IocSample.GenericRequestHandler<>));
-            services.AddSingleton(typeof(global::IocSample.GenericRequestHandler2<>), typeof(global::IocSample.GenericRequestHandler2<>));
-            services.AddSingleton<global::IocSample.GenericRequestHandler<global::IocSample.Entity>, global::IocSample.GenericRequestHandler<global::IocSample.Entity>>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler<global::IocSample.Entity>>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s0);
-                var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>>();
-                var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s1, s2_p0);
-                return s2;
-            });
-            services.AddSingleton<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>, global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s0);
-                var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>>();
-                var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s1, s2_p0);
-                return s2;
-            });
-            services.AddSingleton<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>, global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s0);
-                var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>>();
-                var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s1, s2_p0);
-                return s2;
-            });
-            services.AddSingleton<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>, global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s0);
-                var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>>();
-                var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s1, s2_p0);
-                return s2;
-            });
-            services.AddSingleton<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>, global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s0);
-                var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>>();
-                var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s1, s2_p0);
-                return s2;
-            });
-            services.AddSingleton<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>, global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>();
-            services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>((global::System.IServiceProvider sp) =>
-            {
-                var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>();
-                var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s0);
-                var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>>();
-                var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s1, s2_p0);
-                return s2;
-            });
+                services.AddSingleton<global::IocSample.TestQueryHandler, global::IocSample.TestQueryHandler>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.TestQueryHandler>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator3<global::IocSample.TestQuery, string>(s0);
+                    var s2 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.TestQuery, string>(s1);
+                    var s3_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.TestQuery, string>>>();
+                    var s3 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.TestQuery, string>(s2, s3_p0);
+                    return s3;
+                });
+                services.AddSingleton(typeof(global::IocSample.GenericRequestHandler<>), typeof(global::IocSample.GenericRequestHandler<>));
+                services.AddSingleton(typeof(global::IocSample.GenericRequestHandler2<>), typeof(global::IocSample.GenericRequestHandler2<>));
+                services.AddSingleton<global::IocSample.GenericRequestHandler<global::IocSample.Entity>, global::IocSample.GenericRequestHandler<global::IocSample.Entity>>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler<global::IocSample.Entity>>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s0);
+                    var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>>();
+                    var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s1, s2_p0);
+                    return s2;
+                });
+                services.AddSingleton<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>, global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s0);
+                    var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>>();
+                    var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s1, s2_p0);
+                    return s2;
+                });
+                services.AddSingleton<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>, global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s0);
+                    var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>>();
+                    var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s1, s2_p0);
+                    return s2;
+                });
+                services.AddSingleton<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>, global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s0);
+                    var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>>>();
+                    var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(s1, s2_p0);
+                    return s2;
+                });
+                services.AddSingleton<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>, global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s0);
+                    var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>>>();
+                    var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(s1, s2_p0);
+                    return s2;
+                });
+                services.AddSingleton<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>, global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>();
+                services.AddSingleton<global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>((global::System.IServiceProvider sp) =>
+                {
+                    var s0 = sp.GetRequiredService<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>();
+                    var s1 = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s0);
+                    var s2_p0 = sp.GetRequiredService<global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>>>();
+                    var s2 = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(s1, s2_p0);
+                    return s2;
+                });
+            }
 
             return services;
         }

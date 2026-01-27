@@ -35,9 +35,6 @@ public sealed class IocRegisterDefaultsAttribute(Type targetServiceType, Service
     /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
 
-    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
-    public bool TagOnly { get; init; }
-
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
@@ -77,9 +74,6 @@ public sealed class IocRegisterDefaultsAttribute<T>(ServiceLifetime lifetime) : 
 
     /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
-
-    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
-    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];

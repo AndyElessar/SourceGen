@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,13 +13,18 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddSingleton<global::TestNamespace.Dependency, global::TestNamespace.Dependency>();
-            services.AddSingleton<global::TestNamespace.MyService, global::TestNamespace.MyService>();
-            services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
+            if (!tags.Any())
+            {
+                services.AddSingleton<global::TestNamespace.Dependency, global::TestNamespace.Dependency>();
+                services.AddSingleton<global::TestNamespace.MyService, global::TestNamespace.MyService>();
+                services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
+            }
 
             return services;
         }

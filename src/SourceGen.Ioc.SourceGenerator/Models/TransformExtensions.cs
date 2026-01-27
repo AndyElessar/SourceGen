@@ -839,12 +839,6 @@ internal static class TransformExtensions
         }
 
         /// <summary>
-        /// Gets the TagOnly value from the attribute.
-        /// </summary>
-        public bool GetTagOnly() =>
-            attribute.GetNamedArgument<bool>("TagOnly", false);
-
-        /// <summary>
         /// Checks if the attribute has Factory or Instance specified.
         /// </summary>
         /// <returns>A tuple indicating whether Factory and/or Instance are specified.</returns>
@@ -1114,7 +1108,6 @@ internal static class TransformExtensions
             var typeData = targetServiceType.GetTypeData();
             var decorators = attribute.GetDecorators();
             var tags = attribute.GetTags();
-            var tagOnly = attribute.GetTagOnly();
 
             // Get factory method data if semantic model is provided
             FactoryMethodData? factory = null;
@@ -1134,7 +1127,6 @@ internal static class TransformExtensions
                 serviceTypes,
                 decorators,
                 tags,
-                tagOnly,
                 factory,
                 implementationTypes);
         }
@@ -1166,7 +1158,6 @@ internal static class TransformExtensions
             var typeData = targetServiceType.GetTypeData();
             var decorators = attribute.GetDecorators();
             var tags = attribute.GetTags();
-            var tagOnly = attribute.GetTagOnly();
 
             // Get factory method data if semantic model is provided
             FactoryMethodData? factory = null;
@@ -1186,7 +1177,6 @@ internal static class TransformExtensions
                 serviceTypes,
                 decorators,
                 tags,
-                tagOnly,
                 factory,
                 implementationTypes);
         }

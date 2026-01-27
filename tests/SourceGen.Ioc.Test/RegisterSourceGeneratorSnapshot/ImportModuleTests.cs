@@ -22,8 +22,7 @@ public class ImportModuleTests
             [IocRegisterDefaults(
                 typeof(IRequestHandler<,>),
                 ServiceLifetime.Singleton,
-                Tags = ["Mediator"],
-                TagOnly = true
+                Tags = ["Mediator"]
             )]
             public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
             {

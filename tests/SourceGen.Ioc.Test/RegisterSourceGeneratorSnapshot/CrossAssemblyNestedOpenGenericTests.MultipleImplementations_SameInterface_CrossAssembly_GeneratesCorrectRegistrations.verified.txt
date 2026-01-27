@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace MainApp
@@ -12,26 +13,26 @@ namespace MainApp
     public static class MainAppServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddMainApp(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddMainApp(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddSingleton<global::MainApp.Mediator, global::MainApp.Mediator>();
+            if (!tags.Any())
+            {
+                services.AddSingleton<global::MainApp.Mediator, global::MainApp.Mediator>();
+            }
 
-            return services;
-        }
-
-        /// <summary>
-        /// Registers all services tagged with 'Mediator'.
-        /// </summary>
-        public static IServiceCollection AddMainApp_Mediator(this IServiceCollection services)
-        {
-            services.AddSingleton(typeof(global::MainApp.GenericRequestHandler1<>), typeof(global::MainApp.GenericRequestHandler1<>));
-            services.AddSingleton(typeof(global::MainApp.GenericRequestHandler2<>), typeof(global::MainApp.GenericRequestHandler2<>));
-            services.AddSingleton<global::MainApp.GenericRequestHandler1<global::MainApp.Entity1>, global::MainApp.GenericRequestHandler1<global::MainApp.Entity1>>();
-            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.GenericRequest1<global::MainApp.Entity1>, global::System.Collections.Generic.List<global::MainApp.Entity1>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.GenericRequestHandler1<global::MainApp.Entity1>>());
-            services.AddSingleton<global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>, global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>();
-            services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.GenericRequest2<global::MainApp.Entity2>, global::System.Collections.Generic.List<global::MainApp.Entity2>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>());
+            if (tags.Contains("Mediator"))
+            {
+                services.AddSingleton(typeof(global::MainApp.GenericRequestHandler1<>), typeof(global::MainApp.GenericRequestHandler1<>));
+                services.AddSingleton(typeof(global::MainApp.GenericRequestHandler2<>), typeof(global::MainApp.GenericRequestHandler2<>));
+                services.AddSingleton<global::MainApp.GenericRequestHandler1<global::MainApp.Entity1>, global::MainApp.GenericRequestHandler1<global::MainApp.Entity1>>();
+                services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.GenericRequest1<global::MainApp.Entity1>, global::System.Collections.Generic.List<global::MainApp.Entity1>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.GenericRequestHandler1<global::MainApp.Entity1>>());
+                services.AddSingleton<global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>, global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>();
+                services.AddSingleton<global::SharedModule.IRequestHandler<global::MainApp.GenericRequest2<global::MainApp.Entity2>, global::System.Collections.Generic.List<global::MainApp.Entity2>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MainApp.GenericRequestHandler2<global::MainApp.Entity2>>());
+            }
 
             return services;
         }

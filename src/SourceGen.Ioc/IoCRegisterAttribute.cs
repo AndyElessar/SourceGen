@@ -78,15 +78,8 @@ public sealed class IocRegisterAttribute : Attribute
     public Type[] Decorators { get; init; } = [];
 
     /// <summary>
-    /// Gets a value indicating whether this registration should only appear in tagged extension methods.
-    /// When <see langword="true"/>, this service is excluded from the default registration method
-    /// and will only be registered in tag-specific methods defined by <see cref="Tags"/>.
-    /// </summary>
-    public bool TagOnly { get; init; }
-
-    /// <summary>
     /// Gets the collection of tags associated with this registration.<br/>
-    /// Will generate registrations for each tag specified.
+    /// Services with tags are only registered when the passed tags match.
     /// </summary>
     public string[] Tags { get; init; } = [];
 
@@ -145,9 +138,6 @@ public sealed class IocRegisterAttribute<T> : Attribute
 
     /// <inheritdoc cref="IocRegisterAttribute.Decorators"/>
     public Type[] Decorators { get; init; } = [];
-
-    /// <inheritdoc cref="IocRegisterAttribute.TagOnly"/>
-    public bool TagOnly { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];

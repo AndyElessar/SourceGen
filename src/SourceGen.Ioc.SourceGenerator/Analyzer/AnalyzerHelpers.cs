@@ -411,14 +411,15 @@ internal static class AnalyzerHelpers
 
     /// <summary>
     /// Gets the effective tags list for duplicate detection.
-    /// When TagOnly is false, an empty string is added as an additional tag for comparison.
+    /// Services without tags use an empty string tag for comparison.
+    /// Services with tags use their actual tags.
     /// </summary>
     /// <param name="tags">The original tags enumerable.</param>
-    /// <param name="tagOnly">Whether only tagged registrations should be considered.</param>
     /// <returns>The effective tags for comparison.</returns>
-    public static ImmutableArray<string> GetEffectiveTags(IEnumerable<string> tags, bool tagOnly)
+    public static ImmutableArray<string> GetEffectiveTags(IEnumerable<string> tags)
     {
-        return tagOnly ? [.. tags] : [.. tags, ""];
+        var tagArray = tags.ToImmutableArray();
+        return tagArray.IsEmpty ? [""] : tagArray;
     }
 
 /// <summary>

@@ -79,7 +79,6 @@ partial class IocSourceGenerator
             KeyType: 0,
             defaultSettings.Decorators,
             defaultSettings.Tags,
-            defaultSettings.TagOnly,
             InjectionMembers: [],
             defaultSettings.Factory,
             Instance: null);
@@ -171,7 +170,6 @@ partial class IocSourceGenerator
             validOpenGenericServiceTypes,
             defaultSettings.Decorators,
             defaultSettings.Tags,
-            defaultSettings.TagOnly,
             injectionMembers,
             factory,
             Instance: null);

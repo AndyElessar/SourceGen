@@ -10,7 +10,6 @@
 /// <param name="ServiceTypes">Additional service types to register by default.</param>
 /// <param name="Decorators">The decorator types to apply by default.</param>
 /// <param name="Tags">The collection of tags associated with this default setting.</param>
-/// <param name="TagOnly">Whether registrations should only appear in tagged extension methods.</param>
 /// <param name="Factory">The factory method data to use for creating instances, or null if not specified.</param>
 /// <param name="ImplementationTypes">Implementation types to directly register with these default settings.</param>
 internal sealed record class DefaultSettingsModel(
@@ -21,6 +20,5 @@ internal sealed record class DefaultSettingsModel(
     ImmutableEquatableArray<TypeData> ServiceTypes,
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
-    bool TagOnly,
     FactoryMethodData? Factory,
     ImmutableEquatableArray<TypeData> ImplementationTypes);

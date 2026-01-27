@@ -3,10 +3,8 @@
 var services = new ServiceCollection();
 
 services
-    .AddShared()
-    .AddShared_Mediator()
-    .AddIocSample()
-    .AddIocSample_Mediator();
+    .AddShared("Mediator")
+    .AddIocSample("Mediator");
 
 var sp = services.BuildServiceProvider();
 Console.WriteLine("Use MS.DI");

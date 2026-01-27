@@ -10,7 +10,7 @@ public sealed partial class RegisterAnalyzer
     /// <summary>
     /// SGIOC012: Analyzes IoCRegisterDefaultsAttribute on types (class, struct, interface).
     /// Reports warning when the same target type with at least one matching tag has multiple default settings.
-    /// When TagOnly=false, the setting is considered to have an empty tag for comparison.
+    /// Services without tags use an empty string tag for comparison.
     /// </summary>
     private static void AnalyzeTypeLevelDefaultsAttribute(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
@@ -45,11 +45,10 @@ public sealed partial class RegisterAnalyzer
 
             var targetTypeName = settings.TargetServiceType.Name;
             var tags = settings.Tags;
-            var tagOnly = settings.TagOnly;
             var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
 
             // Build effective tags list using helper method
-            var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags, tagOnly);
+            var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
 
             // SGIOC012: Check each effective tag for duplicates (shared with assembly-level)
             var hasDuplicate = false;
@@ -77,7 +76,7 @@ public sealed partial class RegisterAnalyzer
     /// <summary>
     /// SGIOC011: Analyzes for duplicated registrations (same implementation type, key, and at least one matching tag).
     /// Reports warning when registrations share the same (ImplementationType, Key) and have at least one overlapping tag.
-    /// When TagOnly=false, the registration is considered to have an empty tag for comparison.
+    /// Services without tags use an empty string tag for comparison.
     /// </summary>
     private static void AnalyzeDuplicatedRegistration(
         Action<Diagnostic> reportDiagnostic,
@@ -90,10 +89,9 @@ public sealed partial class RegisterAnalyzer
         // Get the registration key and tags from the attribute
         var (key, _) = attribute.GetKey();
         var tags = attribute.GetTags();
-        var tagOnly = attribute.GetTagOnly();
 
         // Build effective tags list using helper method
-        var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags, tagOnly);
+        var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
 
         // Check each effective tag for duplicates
         var hasDuplicate = false;

@@ -3,11 +3,6 @@
 partial class IocSourceGenerator
 {
     /// <summary>
-    /// Key for the default registration method (services not excluded from default).
-    /// </summary>
-    private const string DefaultMethodKey = "";
-
-    /// <summary>
     /// Processes a single registration that comes from IocRegisterDefaultsAttribute.ImplementationTypes.
     /// These registrations already have all settings explicitly set from the defaults attribute,
     /// so no default settings lookup is needed.
@@ -24,7 +19,6 @@ partial class IocSourceGenerator
             registerAllBaseClasses: registration.RegisterAllBaseClasses,
             decorators: registration.Decorators,
             tags: registration.Tags,
-            tagOnly: registration.TagOnly,
             factory: registration.Factory,
             additionalServiceTypesFromDefaults: null);
     }
@@ -65,10 +59,6 @@ partial class IocSourceGenerator
             ? registration.Tags
             : (matchingDefault?.Tags ?? registration.Tags);
 
-        var tagOnly = registration.Tags.Length > 0 || registration.TagOnly
-            ? registration.TagOnly
-            : (matchingDefault?.TagOnly ?? false);
-
         // Factory: explicit registration Factory takes precedence over default settings
         var factory = registration.Factory ?? matchingDefault?.Factory;
 
@@ -86,7 +76,6 @@ partial class IocSourceGenerator
             registerAllBaseClasses,
             decorators,
             tags,
-            tagOnly,
             factory,
             additionalServiceTypes);
     }
@@ -122,7 +111,6 @@ partial class IocSourceGenerator
         bool registerAllBaseClasses,
         ImmutableEquatableArray<TypeData> decorators,
         ImmutableEquatableArray<string> tags,
-        bool tagOnly,
         FactoryMethodData? factory,
         IEnumerable<TypeData>? additionalServiceTypesFromDefaults)
     {
@@ -180,7 +168,6 @@ partial class IocSourceGenerator
             lifetime,
             decorators,
             tags,
-            tagOnly,
             factory);
 
         // Collect closed generic dependencies from constructor parameters, injection members, factory params,
@@ -190,7 +177,6 @@ partial class IocSourceGenerator
         return new BasicRegistrationResult(
             serviceRegistrations,
             tags,
-            tagOnly,
             openGenericEntries,
             closedGenericDependencies);
     }
@@ -585,7 +571,6 @@ partial class IocSourceGenerator
         ServiceLifetime lifetime,
         ImmutableEquatableArray<TypeData> decorators,
         ImmutableEquatableArray<string> tags,
-        bool tagOnly,
         FactoryMethodData? factory)
     {
         var implementationType = registration.ImplementationType;
@@ -605,7 +590,6 @@ partial class IocSourceGenerator
             registration.KeyType,
             decorators,
             tags,
-            tagOnly,
             registration.InjectionMembers,
             factory,
             registration.Instance);

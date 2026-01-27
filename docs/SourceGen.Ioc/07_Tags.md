@@ -1,6 +1,6 @@
 # Tags
 
-Tags allow generating multiple registration methods for different scenarios.
+Tags allow filtering service registrations at runtime by passing tag parameters to the extension method.
 
 ## Basic Tags
 
@@ -12,26 +12,29 @@ public interface IHandler;
 internal class MyHandler : IHandler;
 ```
 
-This generates:
+This generates a single method with a `params IEnumerable<string> tags` parameter:
 
 ```csharp
 // Generated
-public static IServiceCollection AddMyProject(this IServiceCollection services)
+public static IServiceCollection AddMyProject(this IServiceCollection services, params IEnumerable<string> tags)
 {
-    // Default registrations (includes MyHandler)
-    services.AddTransient<global::MyNamespace.MyHandler, global::MyNamespace.MyHandler>();
-    services.AddTransient<global::MyNamespace.IHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.MyHandler>());
-    return services;
-}
+    // Services with tags: only register when matching tags are passed
+    if (tags.Contains("Mediator"))
+    {
+        services.AddTransient<global::MyNamespace.MyHandler, global::MyNamespace.MyHandler>();
+        services.AddTransient<global::MyNamespace.IHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.MyHandler>());
+    }
 
-public static IServiceCollection AddMyProject_Mediator(this IServiceCollection services)
-{
-    // Mediator-tagged registrations (also includes MyHandler)
-    services.AddTransient<global::MyNamespace.MyHandler, global::MyNamespace.MyHandler>();
-    services.AddTransient<global::MyNamespace.IHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.MyHandler>());
     return services;
 }
 ```
+
+## Behavior (Mutually Exclusive Model)
+
+- **Services without tags**: Only registered when **no tags are passed**
+- **Services with tags**: Only registered when matching tags are passed
+
+Tags act as mutually exclusive group selectors. This enables scenarios like environment-specific configurations where you switch between different service implementations rather than adding to them.
 
 ## Multiple Tags
 
@@ -40,15 +43,20 @@ public static IServiceCollection AddMyProject_Mediator(this IServiceCollection s
 internal class MyService : IService;
 ```
 
-Generates registration in both `AddMyProject_Feature1` and `AddMyProject_Feature2`, as well as the default `AddMyProject`.
-
-## Tag Only Registration
-
-Use `TagOnly = true` to exclude a registration from the default extension method. This is useful when you want certain services to only be registered via specific tag methods.
+The service is registered when any of the specified tags match:
 
 ```csharp
-[IocRegister<IService>(Tags = ["Feature1"], TagOnly = true)]
-internal class FeatureOnlyService : IService;
+if (tags.Contains("Feature1") || tags.Contains("Feature2"))
+{
+    // Register MyService
+}
+```
+
+## Mixed Services
+
+```csharp
+[IocRegister<IService>(Tags = ["Feature1"])]
+internal class FeatureService : IService;
 
 [IocRegister<IService>]
 internal class DefaultService : IService;
@@ -58,50 +66,55 @@ This generates:
 
 ```csharp
 // Generated
-public static IServiceCollection AddMyProject(this IServiceCollection services)
+public static IServiceCollection AddMyProject(this IServiceCollection services, params IEnumerable<string> tags)
 {
-    // Only DefaultService is registered here
-    services.AddSingleton<global::MyNamespace.DefaultService, global::MyNamespace.DefaultService>();
-    services.AddSingleton<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.DefaultService>());
-    return services;
-}
+    // Services without tags - only register when no tags passed
+    if (!tags.Any())
+    {
+        services.AddSingleton<global::MyNamespace.DefaultService, global::MyNamespace.DefaultService>();
+        services.AddSingleton<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.DefaultService>());
+    }
 
-public static IServiceCollection AddMyProject_Feature1(this IServiceCollection services)
-{
-    // FeatureOnlyService is only registered in the tag method
-    services.AddSingleton<global::MyNamespace.FeatureOnlyService, global::MyNamespace.FeatureOnlyService>();
-    services.AddSingleton<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.FeatureOnlyService>());
+    // Services with tags - only register when tags match
+    if (tags.Contains("Feature1"))
+    {
+        services.AddSingleton<global::MyNamespace.FeatureService, global::MyNamespace.FeatureService>();
+        services.AddSingleton<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.FeatureService>());
+    }
+
     return services;
 }
 ```
-
-> [!Note]  
-> `TagOnly` defaults to `false`, meaning registrations are included in both the default method and any tag methods.
 
 ## Using Tags
 
 ```csharp
-// Register only core services
+// Register only services without tags (default configuration)
 services.AddMyProject();
 
-// Register feature-specific services
-services.AddMyProject_Mediator();
-services.AddMyProject_Feature1();
+// Register only services matching "Mediator" tag (NOT services without tags)
+services.AddMyProject("Mediator");
+
+// Register only services matching "Feature1" or "Feature2" tags (NOT services without tags)
+services.AddMyProject("Feature1", "Feature2");
+
+// Using an array of tags
+string[] myTags = ["Mediator", "Feature1"];
+services.AddMyProject(myTags);
 ```
 
 ## Tags with Defaults
 
-Apply tags and exclusion settings to all implementations via `IocRegisterDefaults`:
+Apply tags to all implementations via `IocRegisterDefaults`:
 
 ```csharp
 [IocRegisterDefaults<IMediator>(
     ServiceLifetime.Singleton,
-    Tags = ["Mediator"],
-    TagOnly = true)]  // All IMediator implementations only in AddMyProject_Mediator()
+    Tags = ["Mediator"])]  // All IMediator implementations only register when "Mediator" tag is passed
 public interface IMediator;
 
 [IoCRegister]
-internal class Mediator : IMediator;  // Only in AddMyProject_Mediator()
+internal class Mediator : IMediator;  // Only registered with AddMyProject("Mediator")
 ```
 
 ---

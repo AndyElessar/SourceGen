@@ -6,8 +6,6 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// </summary>
 /// <param name="Registration">The service registration model.</param>
 /// <param name="Tags">The tags for generating tag-specific extension methods.</param>
-/// <param name="TagOnly">Whether this registration should only appear in tagged extension methods (not in default method).</param>
 internal readonly record struct ServiceRegistrationWithTags(
     ServiceRegistrationModel Registration,
-    ImmutableEquatableArray<string> Tags,
-    bool TagOnly);
+    ImmutableEquatableArray<string> Tags);

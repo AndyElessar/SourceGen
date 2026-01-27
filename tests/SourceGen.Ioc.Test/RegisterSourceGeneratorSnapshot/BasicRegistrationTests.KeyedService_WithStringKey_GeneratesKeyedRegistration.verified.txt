@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,16 +13,21 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddKeyedSingleton<global::TestNamespace.KeyedService, global::TestNamespace.KeyedService>("myKey");
-            services.AddKeyedSingleton<global::TestNamespace.IKeyedService>("myKey", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService>(key));
-            services.AddKeyedSingleton<global::TestNamespace.KeyedService2, global::TestNamespace.KeyedService2>(global::TestNamespace.MyEnum.Key1);
-            services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(global::TestNamespace.MyEnum.Key1, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService2>(key));
-            services.AddKeyedSingleton<global::TestNamespace.KeyedService3, global::TestNamespace.KeyedService3>(42);
-            services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(42, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService3>(key));
+            if (!tags.Any())
+            {
+                services.AddKeyedSingleton<global::TestNamespace.KeyedService, global::TestNamespace.KeyedService>("myKey");
+                services.AddKeyedSingleton<global::TestNamespace.IKeyedService>("myKey", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService>(key));
+                services.AddKeyedSingleton<global::TestNamespace.KeyedService2, global::TestNamespace.KeyedService2>(global::TestNamespace.MyEnum.Key1);
+                services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(global::TestNamespace.MyEnum.Key1, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService2>(key));
+                services.AddKeyedSingleton<global::TestNamespace.KeyedService3, global::TestNamespace.KeyedService3>(42);
+                services.AddKeyedSingleton<global::TestNamespace.IKeyedService>(42, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedService3>(key));
+            }
 
             return services;
         }

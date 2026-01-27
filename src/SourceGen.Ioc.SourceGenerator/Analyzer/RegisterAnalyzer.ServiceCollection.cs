@@ -286,10 +286,9 @@ public sealed partial class RegisterAnalyzer
             {
                 var targetTypeName = settings.TargetServiceType.Name;
                 var tags = settings.Tags;
-                var tagOnly = settings.TagOnly;
 
                 // Build effective tags list using helper method
-                var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags, tagOnly);
+                var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
 
                 // SGIOC012: Check each effective tag for duplicates
                 var hasDuplicate = false;
@@ -400,14 +399,14 @@ public sealed partial class RegisterAnalyzer
 
         /// <summary>
         /// Tracks seen IoCRegisterDefaults (target type name, single tag) pairs across assembly and type-level attributes (SGIOC012).
-        /// When TagOnly=false, an empty string tag is added for comparison.
+        /// Services without tags use an empty string tag for comparison.
         /// </summary>
         public ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> SeenDefaultTargetTypes { get; } = seenDefaultTargetTypes;
 
         /// <summary>
         /// Tracks registered (ImplementationType, Key, single Tag) tuples to detect duplicates (SGIOC011).
         /// Each tag is tracked separately; duplicates are detected when any single tag matches.
-        /// When TagOnly=false, an empty string tag is added for comparison.
+        /// Services without tags use an empty string tag for comparison.
         /// Value is the first registration location for diagnostic reporting.
         /// </summary>
         public ConcurrentDictionary<(string TypeName, string? Key, string Tag), Location?> RegistrationKeys { get; } = [];

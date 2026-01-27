@@ -2,6 +2,7 @@
 #nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TestAssembly
@@ -12,16 +13,21 @@ namespace TestAssembly
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers all default services.
+        /// Registers services. Services with tags are only registered when matching tags are passed.
         /// </summary>
-        public static IServiceCollection AddTestAssembly(this IServiceCollection services)
+        /// <param name="services">The service collection.</param>
+        /// <param name="tags">Optional tags to filter which services to register.</param>
+        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddTestAssembly(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            services.AddScoped(typeof(global::TestNamespace.Repository<>), typeof(global::TestNamespace.Repository<>));
-            services.AddScoped(typeof(global::TestNamespace.IRepository<>), typeof(global::TestNamespace.Repository<>));
-            services.AddScoped<global::TestNamespace.Repository<global::TestNamespace.Entity1>, global::TestNamespace.Repository<global::TestNamespace.Entity1>>();
-            services.AddScoped<global::TestNamespace.IRepository<global::TestNamespace.Entity1>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Entity1>>());
-            services.AddScoped<global::TestNamespace.Repository<global::TestNamespace.Entity2>, global::TestNamespace.Repository<global::TestNamespace.Entity2>>();
-            services.AddScoped<global::TestNamespace.IRepository<global::TestNamespace.Entity2>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Entity2>>());
+            if (!tags.Any())
+            {
+                services.AddScoped(typeof(global::TestNamespace.Repository<>), typeof(global::TestNamespace.Repository<>));
+                services.AddScoped(typeof(global::TestNamespace.IRepository<>), typeof(global::TestNamespace.Repository<>));
+                services.AddScoped<global::TestNamespace.Repository<global::TestNamespace.Entity1>, global::TestNamespace.Repository<global::TestNamespace.Entity1>>();
+                services.AddScoped<global::TestNamespace.IRepository<global::TestNamespace.Entity1>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Entity1>>());
+                services.AddScoped<global::TestNamespace.Repository<global::TestNamespace.Entity2>, global::TestNamespace.Repository<global::TestNamespace.Entity2>>();
+                services.AddScoped<global::TestNamespace.IRepository<global::TestNamespace.Entity2>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Repository<global::TestNamespace.Entity2>>());
+            }
 
             return services;
         }

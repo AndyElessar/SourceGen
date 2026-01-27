@@ -242,7 +242,6 @@ partial class IocSourceGenerator
             var (hasExplicitLifetime, lifetime) = attr.TryGetLifetime();
             var decorators = attr.GetDecorators();
             var tags = attr.GetTags();
-            var tagOnly = attr.GetTagOnly();
             var (key, keyType) = attr.GetKey(null);
 
             // Create the OpenGenericRegistrationInfo
@@ -256,7 +255,6 @@ partial class IocSourceGenerator
                 keyType,
                 decorators,
                 tags,
-                tagOnly,
                 InjectionMembers: [],
                 Factory: null,
                 Instance: null);

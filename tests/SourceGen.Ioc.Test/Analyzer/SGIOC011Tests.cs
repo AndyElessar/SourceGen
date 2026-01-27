@@ -2,7 +2,8 @@ namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC011: Duplicated Registration Detected - Same implementation type, key, and at least one matching tag are registered multiple times.
-/// When TagOnly=false, an empty tag is added for comparison.
+/// Services with tags are only registered when matching tags are passed, so services with different tags don't overlap.
+/// Services without tags are always registered.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC011)]
@@ -229,34 +230,9 @@ public class SGIOC011Tests
     }
 
     [Test]
-    public async Task SGIOC011_SameTypeWithDifferentTags_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC011_SameTypeWithDifferentTags_NoDiagnostic()
     {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegister(Tags = ["tag1"], TagOnly = true)]
-            public class MyService : IMyService { }
-
-            [IocRegisterFor(typeof(MyService), Tags = ["tag2"], TagOnly = true)]
-            public interface IServiceMarker { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011");
-
-        await Assert.That(sgioc011).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC011_SameTypeWithDifferentTags_TagOnlyFalse_ReportsDiagnostic()
-    {
-        // When TagOnly=false (default), both registrations have an implicit empty tag
-        // so they will be considered duplicates due to the empty tag overlap
+        // Services with different tags don't overlap (implicit tag-only behavior)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -273,40 +249,16 @@ public class SGIOC011Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
-
-        await Assert.That(sgioc011).Count().IsEqualTo(1);
-        await Assert.That(sgioc011[0].GetMessage()).Contains("MyService");
-    }
-
-    [Test]
-    public async Task SGIOC011_SameTypeWithTagsAndWithoutTags_TagOnlyTrue_NoDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegister]
-            public class MyService : IMyService { }
-
-            [IocRegisterFor(typeof(MyService), Tags = ["tag1"], TagOnly = true)]
-            public interface IServiceMarker { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011");
 
         await Assert.That(sgioc011).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC011_SameTypeWithTagsAndWithoutTags_TagOnlyFalse_ReportsDiagnostic()
+    public async Task SGIOC011_SameTypeWithTagsAndWithoutTags_NoDiagnostic()
     {
-        // When TagOnly=false (default), both have empty tag, causing overlap
+        // Tagged service and untagged service don't overlap
+        // (untagged is always registered, tagged only when matching tag is passed)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -323,10 +275,9 @@ public class SGIOC011Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011");
 
-        await Assert.That(sgioc011).Count().IsEqualTo(1);
-        await Assert.That(sgioc011[0].GetMessage()).Contains("MyService");
+        await Assert.That(sgioc011).Count().IsEqualTo(0);
     }
 
     [Test]
@@ -355,8 +306,9 @@ public class SGIOC011Tests
     }
 
     [Test]
-    public async Task SGIOC011_SameTypeSameKeyDifferentTags_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC011_SameTypeSameKeyDifferentTags_NoDiagnostic()
     {
+        // Services with same key but different tags don't overlap
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -365,10 +317,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IocRegister(Key = "key1", Tags = ["tag1"], TagOnly = true)]
+            [IocRegister(Key = "key1", Tags = ["tag1"])]
             public class MyService : IMyService { }
 
-            [IocRegisterFor(typeof(MyService), Key = "key1", Tags = ["tag2"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Key = "key1", Tags = ["tag2"])]
             public interface IServiceMarker { }
             """;
 
@@ -414,10 +366,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IocRegister(Tags = ["tag1", "tag2"], TagOnly = true)]
+            [IocRegister(Tags = ["tag1", "tag2"])]
             public class MyService : IMyService { }
 
-            [IocRegisterFor(typeof(MyService), Tags = ["tag2", "tag3"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag2", "tag3"])]
             public interface IServiceMarker { }
             """;
 
@@ -429,9 +381,9 @@ public class SGIOC011Tests
     }
 
     [Test]
-    public async Task SGIOC011_NoTagOverlap_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC011_NoTagOverlap_NoDiagnostic()
     {
-        // When tags don't overlap and TagOnly=true, no duplicate
+        // When tags don't overlap, no duplicate (services only registered when matching tags are passed)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -440,10 +392,10 @@ public class SGIOC011Tests
 
             public interface IMyService { }
 
-            [IocRegister(Tags = ["tag1", "tag2"], TagOnly = true)]
+            [IocRegister(Tags = ["tag1", "tag2"])]
             public class MyService : IMyService { }
 
-            [IocRegisterFor(typeof(MyService), Tags = ["tag3", "tag4"], TagOnly = true)]
+            [IocRegisterFor(typeof(MyService), Tags = ["tag3", "tag4"])]
             public interface IServiceMarker { }
             """;
 

@@ -58,39 +58,6 @@ public class TagsTests
     }
 
     [Test]
-    public async Task Tags_TagOnly_ExcludesFromDefaultMethod()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyTaggedService { }
-            public interface IMyTaggedService2 { }
-
-            [IocRegister(
-                Lifetime = ServiceLifetime.Singleton,
-                ServiceTypes = [typeof(IMyTaggedService)],
-                Tags = ["Tag1", "Tag2"])]
-            public class MyTaggedService : IMyTaggedService { }
-
-            [IocRegister(
-                Lifetime = ServiceLifetime.Singleton,
-                ServiceTypes = [typeof(IMyTaggedService2)],
-                Tags = ["Tag1"],
-                TagOnly = true)]
-            public class MyTaggedService2 : IMyTaggedService2 { }
-            """;
-
-        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
-        await result.VerifyCompilableAsync();
-        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-
-        await Verify(generatedSource);
-    }
-
-    [Test]
     public async Task Tags_MixedServicesWithTags_GeneratesCorrectMethods()
     {
         const string source = """

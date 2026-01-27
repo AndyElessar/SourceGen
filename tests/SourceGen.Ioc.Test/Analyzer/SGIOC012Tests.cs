@@ -2,7 +2,8 @@ namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
 /// Tests for SGIOC012: Duplicated IocRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.
-/// When TagOnly=false, an empty tag is added for comparison.
+/// Services with tags are only registered when matching tags are passed, so services with different tags don't overlap.
+/// Services without tags are always registered.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC012)]
@@ -281,33 +282,9 @@ public class SGIOC012Tests
     }
 
     [Test]
-    public async Task SGIOC012_SameTargetTypeWithDifferentTags_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC012_SameTargetTypeWithDifferentTags_NoDiagnostic()
     {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegister]
-            public class MyService : IMyService { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
-
-        await Assert.That(sgioc012).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC012_SameTargetTypeWithDifferentTags_TagOnlyFalse_ReportsDiagnostic()
-    {
-        // When TagOnly=false (default), both have an implicit empty tag, causing overlap
+        // Services with different tags don't overlap (implicit tag-only behavior)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -324,40 +301,15 @@ public class SGIOC012Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012").ToList();
-
-        await Assert.That(sgioc012).Count().IsEqualTo(1);
-        await Assert.That(sgioc012[0].GetMessage()).Contains("IMyService");
-    }
-
-    [Test]
-    public async Task SGIOC012_SameTargetTypeWithTagsAndWithoutTags_TagOnlyTrue_NoDiagnostic()
-    {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag1"], TagOnly = true)]
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegister]
-            public class MyService : IMyService { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
 
         await Assert.That(sgioc012).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC012_SameTargetTypeWithTagsAndWithoutTags_TagOnlyFalse_ReportsDiagnostic()
+    public async Task SGIOC012_SameTargetTypeWithTagsAndWithoutTags_NoDiagnostic()
     {
-        // When TagOnly=false (default), both have empty tag, causing overlap
+        // Tagged and untagged defaults don't overlap
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -374,10 +326,9 @@ public class SGIOC012Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012").ToList();
+        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
 
-        await Assert.That(sgioc012).Count().IsEqualTo(1);
-        await Assert.That(sgioc012[0].GetMessage()).Contains("IMyService");
+        await Assert.That(sgioc012).Count().IsEqualTo(0);
     }
 
     [Test]
@@ -430,32 +381,9 @@ public class SGIOC012Tests
     }
 
     [Test]
-    public async Task SGIOC012_TypeLevelAttribute_SameTargetTypeWithDifferentTags_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC012_TypeLevelAttribute_SameTargetTypeWithDifferentTags_NoDiagnostic()
     {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
-            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
-            [IocRegister]
-            public class MyService : IMyService { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
-
-        await Assert.That(sgioc012).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC012_TypeLevelAttribute_SameTargetTypeWithDifferentTags_TagOnlyFalse_ReportsDiagnostic()
-    {
-        // When TagOnly=false (default), both have an implicit empty tag, causing overlap
+        // Services with different tags don't overlap (implicit tag-only behavior)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -471,10 +399,9 @@ public class SGIOC012Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012").ToList();
+        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
 
-        await Assert.That(sgioc012).Count().IsEqualTo(1);
-        await Assert.That(sgioc012[0].GetMessage()).Contains("IMyService");
+        await Assert.That(sgioc012).Count().IsEqualTo(0);
     }
 
     [Test]
@@ -503,33 +430,9 @@ public class SGIOC012Tests
     }
 
     [Test]
-    public async Task SGIOC012_MixedAssemblyAndTypeLevelAttribute_DifferentTagsDifferentLevels_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC012_MixedAssemblyAndTypeLevelAttribute_DifferentTagsDifferentLevels_NoDiagnostic()
     {
-        const string source = """
-            using Microsoft.Extensions.DependencyInjection;
-            using SourceGen.Ioc;
-
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1"], TagOnly = true)]
-
-            namespace TestNamespace;
-
-            public interface IMyService { }
-
-            [IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped, Tags = ["tag2"], TagOnly = true)]
-            [IocRegister]
-            public class MyService : IMyService { }
-            """;
-
-        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
-
-        await Assert.That(sgioc012).Count().IsEqualTo(0);
-    }
-
-    [Test]
-    public async Task SGIOC012_MixedAssemblyAndTypeLevelAttribute_DifferentTagsDifferentLevels_TagOnlyFalse_ReportsDiagnostic()
-    {
-        // When TagOnly=false (default), both have an implicit empty tag, causing overlap
+        // Services with different tags don't overlap (implicit tag-only behavior)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -546,10 +449,9 @@ public class SGIOC012Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012").ToList();
+        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
 
-        await Assert.That(sgioc012).Count().IsEqualTo(1);
-        await Assert.That(sgioc012[0].GetMessage()).Contains("IMyService");
+        await Assert.That(sgioc012).Count().IsEqualTo(0);
     }
 
     [Test]
@@ -560,8 +462,8 @@ public class SGIOC012Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"], TagOnly = true)]
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2", "tag3"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag2", "tag3"])]
 
             namespace TestNamespace;
 
@@ -579,15 +481,15 @@ public class SGIOC012Tests
     }
 
     [Test]
-    public async Task SGIOC012_NoTagOverlap_TagOnlyTrue_NoDiagnostic()
+    public async Task SGIOC012_NoTagOverlap_NoDiagnostic()
     {
-        // When tags don't overlap and TagOnly=true, no duplicate
+        // When tags don't overlap, no duplicate (services only registered when matching tags are passed)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"], TagOnly = true)]
-            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag3", "tag4"], TagOnly = true)]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Tags = ["tag1", "tag2"])]
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped, Tags = ["tag3", "tag4"])]
 
             namespace TestNamespace;
 

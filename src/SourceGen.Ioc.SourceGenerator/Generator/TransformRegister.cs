@@ -79,7 +79,6 @@ partial class IocSourceGenerator
         var serviceTypes = attributeData.GetServiceTypes();
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
-        var tagOnly = attributeData.GetTagOnly();
         var (key, keyType) = attributeData.GetKey(semanticModel);
         var instance = attributeData.GetInstance(semanticModel);
 
@@ -112,7 +111,6 @@ partial class IocSourceGenerator
             validOpenGenericServiceTypes,
             decorators,
             tags,
-            tagOnly,
             injectionMembers,
             factory,
             instance);
@@ -139,7 +137,6 @@ partial class IocSourceGenerator
 
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
-        var tagOnly = attributeData.GetTagOnly();
         var (key, keyType) = attributeData.GetKey(semanticModel);
         var instance = attributeData.GetInstance(semanticModel);
 
@@ -172,7 +169,6 @@ partial class IocSourceGenerator
             validOpenGenericServiceTypes,
             decorators,
             tags,
-            tagOnly,
             injectionMembers,
             factory,
             instance);
