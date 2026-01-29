@@ -162,14 +162,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::TestNamespace.TestContainer, object>>> Services => _localServices;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _localServices;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new((typeof(global::TestNamespace.UserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_UserService()),
-        new((typeof(global::TestNamespace.IUserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_UserService()),
-        new((typeof(global::TestNamespace.Repository<global::TestNamespace.User>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
-        new((typeof(global::TestNamespace.IRepository<global::TestNamespace.User>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.UserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_UserService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IUserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_UserService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Repository<global::TestNamespace.User>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRepository<global::TestNamespace.User>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
     ];
 
     #endregion

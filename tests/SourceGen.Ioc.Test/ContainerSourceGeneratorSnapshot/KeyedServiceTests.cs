@@ -37,6 +37,34 @@ public class KeyedServiceTests
     }
 
     [Test]
+    public async Task Container_WithKeyedServices_UseSwitchStatement()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IKeyedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = "key1")]
+            public class KeyedService1 : IKeyedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = "key2")]
+            public class KeyedService2 : IKeyedService { }
+
+            [IocContainer(UseSwitchStatement = true)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithServiceKeyAttribute_InjectsRegistrationKey()
     {
         // When a constructor parameter has [ServiceKey] attribute,

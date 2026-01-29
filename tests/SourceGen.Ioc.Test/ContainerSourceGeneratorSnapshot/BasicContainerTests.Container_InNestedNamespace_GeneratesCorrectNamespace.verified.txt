@@ -18,7 +18,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::Company.Product.Module.DeepNamespaceContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::Company.Product.Module.DeepNamespaceContainer, object>> _serviceResolvers;
 
     #region Constructors
 
@@ -82,7 +82,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(DeepNamespaceContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -96,7 +96,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -126,7 +126,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(DeepNamespaceContainer)) return true;
 
-        if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -135,7 +135,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -154,12 +154,12 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::Company.Product.Module.DeepNamespaceContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::Company.Product.Module.DeepNamespaceContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::Company.Product.Module.DeepNamespaceContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::Company.Product.Module.DeepNamespaceContainer, object>>[] _localServices =
     [
-        new((typeof(global::Company.Product.Module.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
-        new((typeof(global::Company.Product.Module.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
+        new(new ServiceIdentifier(typeof(global::Company.Product.Module.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
+        new(new ServiceIdentifier(typeof(global::Company.Product.Module.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
     ];
 
     #endregion

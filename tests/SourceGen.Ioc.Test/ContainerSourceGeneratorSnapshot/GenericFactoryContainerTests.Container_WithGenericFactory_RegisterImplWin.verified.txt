@@ -18,7 +18,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::TestNamespace.TestContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers;
 
     #region Constructors
 
@@ -163,7 +163,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(TestContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -177,7 +177,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -207,7 +207,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(TestContainer)) return true;
 
-        if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -216,7 +216,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -235,22 +235,22 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::TestNamespace.TestContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::TestNamespace.TestContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new((typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
-        new((typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
-        new((typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
-        new((typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
-        new((typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
-        new((typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
-        new((typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
-        new((typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
-        new((typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
-        new((typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.Handler<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
-        new((typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.Handler<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
-        new((typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.Handler<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.Handler<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
     ];
 
     #endregion

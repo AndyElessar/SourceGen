@@ -16,7 +16,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::GlobalContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::GlobalContainer, object>> _serviceResolvers;
 
     #region Constructors
 
@@ -80,7 +80,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(GlobalContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -94,7 +94,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -124,7 +124,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(GlobalContainer)) return true;
 
-        if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -133,7 +133,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -152,12 +152,12 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::GlobalContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::GlobalContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::GlobalContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::GlobalContainer, object>>[] _localServices =
     [
-        new((typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
-        new((typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
+        new(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
+        new(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
     ];
 
     #endregion

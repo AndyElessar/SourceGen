@@ -19,10 +19,10 @@ public interface IIocContainer<TContainer> :
     where TContainer : IIocContainer<TContainer>
 {
     /// <summary>
-    /// Gets all registered services with their composite keys and factory functions.
-    /// The key is a tuple of (ServiceType, Key) where Key is <see cref="KeyedService.AnyKey"/>
-    /// for non-keyed services.
-    /// The factory function takes the container instance and returns the service.
+    /// Gets all resolvers with their composite keys and factory functions.<br/>
+    /// The key is a <see cref="ServiceIdentifier"/> where Key is <see cref="KeyedService.AnyKey"/>
+    /// for non-keyed services.<br/>
+    /// The factory function takes the container instance and returns the resolver.
     /// </summary>
-    IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<TContainer, object>>> Services { get; }
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<TContainer, object>>> Resolvers { get; }
 }

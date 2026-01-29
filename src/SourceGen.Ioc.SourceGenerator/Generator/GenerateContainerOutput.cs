@@ -178,7 +178,7 @@ partial class IocSourceGenerator
         // Service resolver dictionary
         if(!effectiveUseSwitchStatement)
         {
-            writer.WriteLine($"private readonly FrozenDictionary<(Type ServiceType, object Key), Func<{container.ContainerTypeName}, object>> _serviceResolvers;");
+            writer.WriteLine($"private readonly FrozenDictionary<ServiceIdentifier, Func<{container.ContainerTypeName}, object>> _serviceResolvers;");
             writer.WriteLine();
         }
 
@@ -363,7 +363,7 @@ partial class IocSourceGenerator
                 foreach(var module in container.ImportedModules)
                 {
                     var fieldName = GetModuleFieldName(module.Name);
-                    var source = $"{fieldName}.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
+                    var source = $"{fieldName}.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
 
                     if(isFirst)
                     {
@@ -1226,7 +1226,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine($"if(_serviceResolvers.TryGetValue((serviceType, {KeyedServiceAnyKey}), out var resolver))");
+            writer.WriteLine($"if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, {KeyedServiceAnyKey}), out var resolver))");
             writer.Indentation++;
             writer.WriteLine("return resolver(this);");
             writer.Indentation--;
@@ -1317,7 +1317,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine("if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))");
+            writer.WriteLine("if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))");
             writer.Indentation++;
             writer.WriteLine("return resolver(this);");
             writer.Indentation--;
@@ -1403,7 +1403,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine($"if(_serviceResolvers.ContainsKey((serviceType, {KeyedServiceAnyKey}))) return true;");
+            writer.WriteLine($"if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, {KeyedServiceAnyKey}))) return true;");
             writer.WriteLine();
         }
 
@@ -1430,7 +1430,7 @@ partial class IocSourceGenerator
         if(!effectiveUseSwitchStatement)
         {
             writer.WriteLine();
-            writer.WriteLine("if(_serviceResolvers.ContainsKey((serviceType, key))) return true;");
+            writer.WriteLine("if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;");
         }
 
         writer.WriteLine();
@@ -1485,16 +1485,16 @@ partial class IocSourceGenerator
 
         if(effectiveUseSwitchStatement)
         {
-            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<{container.ContainerTypeName}, object>>> Services => _localServices;");
+            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _localServices;");
         }
         else
         {
-            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<{container.ContainerTypeName}, object>>> Services => _serviceResolvers;");
+            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _serviceResolvers;");
         }
         writer.WriteLine();
 
         // Write _localServices as static field
-        writer.WriteLine($"private static readonly KeyValuePair<(Type, object), Func<{container.ContainerTypeName}, object>>[] _localServices =");
+        writer.WriteLine($"private static readonly KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>[] _localServices =");
         writer.WriteLine("[");
         writer.Indentation++;
 
@@ -1503,17 +1503,17 @@ partial class IocSourceGenerator
         {
             var cached = kvp.Value[^1]; // Last wins
             var keyExpr = kvp.Key.Key ?? KeyedServiceAnyKey;
-            writer.WriteLine($"new((typeof({kvp.Key.ServiceType}), {keyExpr}), static c => c.{cached.ResolverMethodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof({kvp.Key.ServiceType}), {keyExpr}), static c => c.{cached.ResolverMethodName}()),");
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[] entries for collection service types
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
             var methodName = GetArrayResolverMethodName(serviceType);
-            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new((typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new((typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
         }
 
         writer.Indentation--;

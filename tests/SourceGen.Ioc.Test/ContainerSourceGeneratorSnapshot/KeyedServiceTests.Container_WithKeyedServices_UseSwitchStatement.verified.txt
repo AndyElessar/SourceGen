@@ -18,8 +18,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers;
-
     #region Constructors
 
     /// <summary>
@@ -34,40 +32,61 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public TestContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-
-        _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _serviceResolvers = parent._serviceResolvers;
+        _testNamespace_KeyedService1__key1_ = parent._testNamespace_KeyedService1__key1_;
+        _testNamespace_KeyedService2__key2_ = parent._testNamespace_KeyedService2__key2_;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Repository<string>? _testNamespace_Repository_string_;
-    private readonly SemaphoreSlim _testNamespace_Repository_string_Semaphore = new(1, 1);
-    private global::TestNamespace.Repository<string> GetTestNamespace_Repository_string_()
+    private global::TestNamespace.KeyedService1? _testNamespace_KeyedService1__key1_;
+    private readonly SemaphoreSlim _testNamespace_KeyedService1__key1_Semaphore = new(1, 1);
+    private global::TestNamespace.KeyedService1 GetTestNamespace_KeyedService1__key1_()
     {
-        if (_testNamespace_Repository_string_ is not null) return _testNamespace_Repository_string_;
+        if (_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
 
-        _testNamespace_Repository_string_Semaphore.Wait();
+        _testNamespace_KeyedService1__key1_Semaphore.Wait();
         try
         {
-            if (_testNamespace_Repository_string_ is not null) return _testNamespace_Repository_string_;
+            if (_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
 
-            var instance = new global::TestNamespace.Repository<string>();
+            var instance = new global::TestNamespace.KeyedService1();
 
-            _testNamespace_Repository_string_ = instance;
+            _testNamespace_KeyedService1__key1_ = instance;
             return instance;
         }
         finally
         {
-            _testNamespace_Repository_string_Semaphore.Release();
+            _testNamespace_KeyedService1__key1_Semaphore.Release();
+        }
+    }
+
+    private global::TestNamespace.KeyedService2? _testNamespace_KeyedService2__key2_;
+    private readonly SemaphoreSlim _testNamespace_KeyedService2__key2_Semaphore = new(1, 1);
+    private global::TestNamespace.KeyedService2 GetTestNamespace_KeyedService2__key2_()
+    {
+        if (_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
+
+        _testNamespace_KeyedService2__key2_Semaphore.Wait();
+        try
+        {
+            if (_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
+
+            var instance = new global::TestNamespace.KeyedService2();
+
+            _testNamespace_KeyedService2__key2_ = instance;
+            return instance;
+        }
+        finally
+        {
+            _testNamespace_KeyedService2__key2_Semaphore.Release();
         }
     }
 
@@ -81,8 +100,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(TestContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
-            return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
     }
@@ -95,10 +112,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
-            return resolver(this);
-
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return (serviceType, key) switch
+        {
+            (Type t, object k) when t == typeof(global::TestNamespace.KeyedService1) && Equals(k, "key1") => GetTestNamespace_KeyedService1__key1_(),
+            (Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key1") => GetTestNamespace_KeyedService1__key1_(),
+            (Type t, object k) when t == typeof(global::TestNamespace.KeyedService2) && Equals(k, "key2") => GetTestNamespace_KeyedService2__key2_(),
+            (Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key2") => GetTestNamespace_KeyedService2__key2_(),
+            _ => _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null
+        };
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -125,7 +146,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(TestContainer)) return true;
 
-        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(serviceType == typeof(global::TestNamespace.KeyedService1)) return true;
+        if(serviceType == typeof(global::TestNamespace.IKeyedService)) return true;
+        if(serviceType == typeof(global::TestNamespace.KeyedService2)) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -133,8 +156,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public bool IsKeyedService(Type serviceType, object? serviceKey)
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
-
-        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -153,12 +174,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _localServices;
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Repository<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_string_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IRepository<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_string_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService1), "key1"), static c => c.GetTestNamespace_KeyedService1__key1_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key1"), static c => c.GetTestNamespace_KeyedService1__key1_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService2), "key2"), static c => c.GetTestNamespace_KeyedService2__key2_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key2"), static c => c.GetTestNamespace_KeyedService2__key2_()),
     ];
 
     #endregion
@@ -189,11 +212,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            DisposeService(_testNamespace_Repository_string_);
-            _testNamespace_Repository_string_Semaphore.Dispose();
             return;
         }
 
+        DisposeService(_testNamespace_KeyedService2__key2_);
+        _testNamespace_KeyedService2__key2_Semaphore.Dispose();
+        DisposeService(_testNamespace_KeyedService1__key1_);
+        _testNamespace_KeyedService1__key1_Semaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -202,11 +227,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_testNamespace_Repository_string_);
-            _testNamespace_Repository_string_Semaphore.Dispose();
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_KeyedService2__key2_);
+        _testNamespace_KeyedService2__key2_Semaphore.Dispose();
+        await DisposeServiceAsync(_testNamespace_KeyedService1__key1_);
+        _testNamespace_KeyedService1__key1_Semaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

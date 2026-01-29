@@ -249,7 +249,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::AppContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers;
 
     #region Constructors
 
@@ -335,7 +335,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(AppContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -349,7 +349,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         var key = serviceKey ?? KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -379,7 +379,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(AppContainer)) return true;
 
-        if(_serviceResolvers.ContainsKey((serviceType, KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -388,7 +388,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         var key = serviceKey ?? KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -407,14 +407,14 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::AppContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
     [
-        new((typeof(global::MyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
-        new((typeof(global::IMyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
-        new((typeof(global::MyService), KeyedService.AnyKey), static c => c.GetMyService()),
-        new((typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
+        new(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
+        new(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
+        new(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c.GetMyService()),
+        new(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
     ];
 
     #endregion
@@ -594,7 +594,7 @@ partial class AppContainer
 
 Full support for keyed services with various key types.
 
-> **Note**: The example below shows `UseSwitchStatement = true` style for clarity. By default, keyed services are also resolved via `FrozenDictionary` using the composite key `(Type, object)`.
+> **Note**: The example below shows `UseSwitchStatement = true` style for clarity. By default, keyed services are also resolved via `FrozenDictionary` using the `ServiceIdentifier` key.
 
 ```csharp
 #region Define:
@@ -815,7 +815,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 {
     private readonly global::SharedModule1 _sharedModule1;
     private readonly global::SharedModule2 _sharedModule2;
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::AppContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers;
 
     public AppContainer() : this((IServiceProvider?)null) { }
 
@@ -828,10 +828,10 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         // Build FrozenDictionary from local services and imported modules
         // Module resolvers are wrapped to pass the correct module instance
         // Local services take precedence (added last, will override imported)
-        _serviceResolvers = _sharedModule1.Services.Select(static kvp => 
-                new KeyValuePair<(Type, object), Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
-            .Concat(_sharedModule2.Services.Select(static kvp => 
-                new KeyValuePair<(Type, object), Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
+        _serviceResolvers = _sharedModule1.Resolvers.Select(static kvp => 
+                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
+            .Concat(_sharedModule2.Resolvers.Select(static kvp => 
+                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
             .Concat(_localServices)
             .ToFrozenDictionary();
     }
@@ -847,16 +847,16 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     }
 
     // Local services array with container-typed resolvers
-    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
     [
-        new((typeof(global::ILocalService1), KeyedService.AnyKey), static c => c.GetLocalService1()),
-        new((typeof(global::ILocalService2), KeyedService.AnyKey), static c => c.GetLocalService2()),
+        new(new ServiceIdentifier(typeof(global::ILocalService1), KeyedService.AnyKey), static c => c.GetLocalService1()),
+        new(new ServiceIdentifier(typeof(global::ILocalService2), KeyedService.AnyKey), static c => c.GetLocalService2()),
         // ... more local services
     ];
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::AppContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
 
     #endregion
 
@@ -868,7 +868,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(AppContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -882,7 +882,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         var key = serviceKey ?? KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -943,13 +943,13 @@ partial class AppContainer
 
     #region IIocContainer
 
-    // Services property returns _localServices when UseSwitchStatement = true
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::AppContainer, object>>> Services => _localServices;
+    // Resolvers property returns _localServices when UseSwitchStatement = true
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _localServices;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
     [
-        new((typeof(global::LocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
-        new((typeof(global::ILocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
+        new(new ServiceIdentifier(typeof(global::LocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
+        new(new ServiceIdentifier(typeof(global::ILocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
     ];
 
     #endregion
@@ -1221,15 +1221,15 @@ partial class AppContainer
     #endregion
 
     // Registered in _localServices
-    private static readonly KeyValuePair<(Type, object), Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
     [
-        new((typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
-        new((typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
-        new((typeof(global::Plugin2), KeyedService.AnyKey), static c => c.GetPlugin2()),
-        new((typeof(global::System.Collections.Generic.IEnumerable<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPlugin()),
-        new((typeof(global::System.Collections.Generic.IReadOnlyCollection<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
-        new((typeof(global::System.Collections.Generic.IReadOnlyList<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
-        new((typeof(global::IPlugin[]), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        new(new ServiceIdentifier(typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
+        new(new ServiceIdentifier(typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
+        new(new ServiceIdentifier(typeof(global::Plugin2), KeyedService.AnyKey), static c => c.GetPlugin2()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPlugin()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        new(new ServiceIdentifier(typeof(global::IPlugin[]), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
     ];
 }
 #endregion
@@ -1269,7 +1269,7 @@ partial class StandaloneContainer
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(StandaloneContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return null;
@@ -1529,7 +1529,7 @@ private static void DisposeService(object? service)
 
 ### Service Resolution Key Structure
 
-All service lookups use a composite key `(Type ServiceType, object Key)`:
+All service lookups use `ServiceIdentifier` as the key:
 
 - For non-keyed services: `Key = KeyedService.AnyKey`
 - For keyed services: `Key = actual key value`

@@ -18,7 +18,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::IocSample.Shared.SharedModule, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>> _serviceResolvers;
 
     #region Constructors
 
@@ -253,7 +253,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(SharedModule)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -267,7 +267,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -297,7 +297,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(SharedModule)) return true;
 
-        if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -306,7 +306,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -325,26 +325,26 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::IocSample.Shared.SharedModule, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::IocSample.Shared.SharedModule, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>[] _localServices =
     [
-        new((typeof(global::IocSample.Shared.TestHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
-        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
-        new((typeof(global::IocSample.Shared.TestRequest2Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
-        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
-        new((typeof(global::IocSample.Shared.TestRequest3Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
-        new((typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
-        new((typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()),
-        new((typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.TestHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestHandler()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.TestRequest2Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest2Handler()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.TestRequest3Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_TestRequest3Handler()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()),
     ];
 
     #endregion

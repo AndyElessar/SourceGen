@@ -18,7 +18,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<(Type ServiceType, object Key), Func<global::MainApp.MainContainer, object>> _serviceResolvers;
+    private readonly FrozenDictionary<ServiceIdentifier, Func<global::MainApp.MainContainer, object>> _serviceResolvers;
 
     private readonly global::SharedModule.SharedOpenGenericModule _sharedModule_SharedOpenGenericModule;
 
@@ -39,7 +39,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
         _sharedModule_SharedOpenGenericModule = new global::SharedModule.SharedOpenGenericModule(fallbackProvider);
 
         _serviceResolvers =
-        _sharedModule_SharedOpenGenericModule.Services.Select(static kvp => new KeyValuePair<(Type, object), Func<global::MainApp.MainContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule_SharedOpenGenericModule)))
+        _sharedModule_SharedOpenGenericModule.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule_SharedOpenGenericModule)))
             .Concat(_localServices)
             .ToFrozenDictionary();
     }
@@ -76,7 +76,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(MainContainer)) return this;
 
-        if(_serviceResolvers.TryGetValue((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
         return _fallbackProvider?.GetService(serviceType);
@@ -90,7 +90,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue((serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
         return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -120,7 +120,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
         if(serviceType == typeof(IServiceScopeFactory)) return true;
         if(serviceType == typeof(MainContainer)) return true;
 
-        if(_serviceResolvers.ContainsKey((serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
@@ -129,7 +129,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey((serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
         return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
@@ -148,13 +148,13 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<(Type ServiceType, object Key), Func<global::MainApp.MainContainer, object>>> Services => _serviceResolvers;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<(Type, object), Func<global::MainApp.MainContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>[] _localServices =
     [
-        new((typeof(global::MainApp.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMainApp_Consumer()),
-        new((typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
-        new((typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
+        new(new ServiceIdentifier(typeof(global::MainApp.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMainApp_Consumer()),
+        new(new ServiceIdentifier(typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
+        new(new ServiceIdentifier(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
     ];
 
     #endregion

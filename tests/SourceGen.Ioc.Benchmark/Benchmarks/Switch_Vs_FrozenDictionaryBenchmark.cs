@@ -4,12 +4,12 @@ using BenchmarkDotNet.Configs;
 namespace SourceGen.Ioc.Benchmark.Benchmarks;
 
 /// <summary>
-/// Benchmark comparing switch expression vs FrozenDictionary for (Type, object) based lookups.
+/// Benchmark comparing switch expression vs FrozenDictionary for ServiceIdentifier based lookups.
 /// <para>
 /// Tests the performance difference between:
 /// <list type="bullet">
 ///   <item>Switch expression with Type pattern matching</item>
-///   <item>FrozenDictionary&lt;Type, Func&lt;object&gt;&gt; lookup</item>
+///   <item>FrozenDictionary&lt;ServiceIdentifier, Func&lt;object&gt;&gt; lookup</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -19,11 +19,11 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 public class Switch_Vs_FrozenDictionaryBenchmark
 {
     // FrozenDictionary instances
-    private FrozenDictionary<(Type, object), Func<object>> _frozenDict10 = null!;
-    private FrozenDictionary<(Type, object), Func<object>> _frozenDict25 = null!;
-    private FrozenDictionary<(Type, object), Func<object>> _frozenDict50 = null!;
-    private FrozenDictionary<(Type, object), Func<object>> _frozenDict75 = null!;
-    private FrozenDictionary<(Type, object), Func<object>> _frozenDict100 = null!;
+    private FrozenDictionary<ServiceIdentifier, Func<object>> _frozenDict10 = null!;
+    private FrozenDictionary<ServiceIdentifier, Func<object>> _frozenDict25 = null!;
+    private FrozenDictionary<ServiceIdentifier, Func<object>> _frozenDict50 = null!;
+    private FrozenDictionary<ServiceIdentifier, Func<object>> _frozenDict75 = null!;
+    private FrozenDictionary<ServiceIdentifier, Func<object>> _frozenDict100 = null!;
 
     // Random lookup indices for realistic access patterns
     private int[] _randomIndices10 = null!;
@@ -53,9 +53,9 @@ public class Switch_Vs_FrozenDictionaryBenchmark
         _randomIndices100 = [.. Enumerable.Range(0, LookupIterations).Select(_ => random.Next(100))];
     }
 
-    private static FrozenDictionary<(Type, object), Func<object>> BuildFrozenDictionary((Type, object)[] vals)
+    private static FrozenDictionary<ServiceIdentifier, Func<object>> BuildFrozenDictionary(ServiceIdentifier[] vals)
     {
-        var dict = new Dictionary<(Type, object), Func<object>>();
+        var dict = new Dictionary<ServiceIdentifier, Func<object>>();
         Func<object> factory = static () => new object();
 
         foreach (var val in vals)
@@ -75,9 +75,9 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes10[_randomIndices10[i]];
+            var key = GeneratedTestData.TestTypes10[_randomIndices10[i]];
 
-            if (_frozenDict10.TryGetValue(type, out var func))
+            if (_frozenDict10.TryGetValue(key, out var func))
             {
                 result = func;
             }
@@ -93,8 +93,8 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes10[_randomIndices10[i]];
-            result = GeneratedSwitchLookup.Lookup10(type);
+            var key = GeneratedTestData.TestTypes10[_randomIndices10[i]];
+            result = GeneratedSwitchLookup.Lookup10(key);
         }
 
         return result;
@@ -111,9 +111,9 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes25[_randomIndices25[i]];
+            var key = GeneratedTestData.TestTypes25[_randomIndices25[i]];
 
-            if (_frozenDict25.TryGetValue(type, out var func))
+            if (_frozenDict25.TryGetValue(key, out var func))
             {
                 result = func;
             }
@@ -129,8 +129,8 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes25[_randomIndices25[i]];
-            result = GeneratedSwitchLookup.Lookup25(type);
+            var key = GeneratedTestData.TestTypes25[_randomIndices25[i]];
+            result = GeneratedSwitchLookup.Lookup25(key);
         }
 
         return result;
@@ -147,9 +147,9 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes50[_randomIndices50[i]];
+            var key = GeneratedTestData.TestTypes50[_randomIndices50[i]];
 
-            if (_frozenDict50.TryGetValue(type, out var func))
+            if (_frozenDict50.TryGetValue(key, out var func))
             {
                 result = func;
             }
@@ -165,8 +165,8 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes50[_randomIndices50[i]];
-            result = GeneratedSwitchLookup.Lookup50(type);
+            var key = GeneratedTestData.TestTypes50[_randomIndices50[i]];
+            result = GeneratedSwitchLookup.Lookup50(key);
         }
 
         return result;
@@ -183,9 +183,9 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes75[_randomIndices75[i]];
+            var key = GeneratedTestData.TestTypes75[_randomIndices75[i]];
 
-            if (_frozenDict75.TryGetValue(type, out var func))
+            if (_frozenDict75.TryGetValue(key, out var func))
             {
                 result = func;
             }
@@ -201,8 +201,8 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes75[_randomIndices75[i]];
-            result = GeneratedSwitchLookup.Lookup75(type);
+            var key = GeneratedTestData.TestTypes75[_randomIndices75[i]];
+            result = GeneratedSwitchLookup.Lookup75(key);
         }
 
         return result;
@@ -219,9 +219,9 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes100[_randomIndices100[i]];
+            var key = GeneratedTestData.TestTypes100[_randomIndices100[i]];
 
-            if (_frozenDict100.TryGetValue(type, out var func))
+            if (_frozenDict100.TryGetValue(key, out var func))
             {
                 result = func;
             }
@@ -237,8 +237,8 @@ public class Switch_Vs_FrozenDictionaryBenchmark
 
         for (int i = 0; i < LookupIterations; i++)
         {
-            var type = GeneratedTestData.TestTypes100[_randomIndices100[i]];
-            result = GeneratedSwitchLookup.Lookup100(type);
+            var key = GeneratedTestData.TestTypes100[_randomIndices100[i]];
+            result = GeneratedSwitchLookup.Lookup100(key);
         }
 
         return result;
