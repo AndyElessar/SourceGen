@@ -80,6 +80,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public object? GetService(Type serviceType)
     {
+        ThrowIfDisposed();
+
         if(serviceType == typeof(IServiceProvider)) return this;
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(TestContainer)) return this;
@@ -96,6 +98,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
+
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
@@ -106,6 +110,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
         return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
     }
 
@@ -115,6 +120,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public object GetRequiredService(Type serviceType)
     {
+        ThrowIfDisposed();
         return GetService(serviceType) ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
     }
 
@@ -146,7 +152,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IServiceScopeFactory
 
-    public IServiceScope CreateScope() => new TestContainer(this);
+    public IServiceScope CreateScope()
+    {
+        ThrowIfDisposed();
+        return new TestContainer(this);
+    }
 
     public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
@@ -210,6 +220,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             return;
         }
 
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

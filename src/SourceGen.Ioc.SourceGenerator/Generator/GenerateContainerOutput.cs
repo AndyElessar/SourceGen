@@ -1203,6 +1203,9 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine();
+
         // Built-in services
         writer.WriteLine("if(serviceType == typeof(IServiceProvider)) return this;");
         writer.WriteLine("if(serviceType == typeof(IServiceScopeFactory)) return this;");
@@ -1266,6 +1269,9 @@ partial class IocSourceGenerator
         writer.WriteLine("public object? GetKeyedService(Type serviceType, object? serviceKey)");
         writer.WriteLine("{");
         writer.Indentation++;
+
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine();
 
         writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
         writer.WriteLine();
@@ -1342,6 +1348,7 @@ partial class IocSourceGenerator
         writer.WriteLine("public object GetRequiredKeyedService(Type serviceType, object? serviceKey)");
         writer.WriteLine("{");
         writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
         writer.WriteLine("return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($\"No service for type '{serviceType}' with key '{serviceKey}' has been registered.\");");
         writer.Indentation--;
         writer.WriteLine("}");
@@ -1362,6 +1369,7 @@ partial class IocSourceGenerator
         writer.WriteLine("public object GetRequiredService(Type serviceType)");
         writer.WriteLine("{");
         writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
         writer.WriteLine("return GetService(serviceType) ?? throw new InvalidOperationException($\"No service for type '{serviceType}' has been registered.\");");
         writer.Indentation--;
         writer.WriteLine("}");
@@ -1460,7 +1468,13 @@ partial class IocSourceGenerator
         writer.WriteLine("#region IServiceScopeFactory");
         writer.WriteLine();
 
-        writer.WriteLine($"public IServiceScope CreateScope() => new {container.ClassName}(this);");
+        writer.WriteLine("public IServiceScope CreateScope()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"return new {container.ClassName}(this);");
+        writer.Indentation--;
+        writer.WriteLine("}");
         writer.WriteLine();
         writer.WriteLine("public AsyncServiceScope CreateAsyncScope() => new(CreateScope());");
         writer.WriteLine();
@@ -1658,6 +1672,15 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteDisposalHelperMethods(SourceWriter writer)
     {
+        // Helper method to throw ObjectDisposedException if disposed
+        writer.WriteLine("private void ThrowIfDisposed()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
         // Helper method for async disposal
         writer.WriteLine("private static async ValueTask DisposeServiceAsync(object? service)");
         writer.WriteLine("{");

@@ -357,6 +357,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
         return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
     }
 
@@ -366,6 +367,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public object GetRequiredService(Type serviceType)
     {
+        ThrowIfDisposed();
         return GetService(serviceType) ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
     }
 
@@ -397,7 +399,11 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     #region IServiceScopeFactory
 
-    public IServiceScope CreateScope() => new AppContainer(this);
+    public IServiceScope CreateScope()
+    {
+        ThrowIfDisposed();
+        return new AppContainer(this);
+    }
 
     public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
@@ -478,6 +484,11 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private static void DisposeService(object? service)
     {
         if(service is IDisposable disposable) disposable.Dispose();
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
     }
 
     #endregion

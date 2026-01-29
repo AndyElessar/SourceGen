@@ -147,4 +147,96 @@ public sealed class ThreadSafeStrategyTests
         var distinctInstanceIds = results.Select(s => s!.InstanceId).Distinct().ToList();
         await Assert.That(distinctInstanceIds.Count).IsGreaterThanOrEqualTo(1);
     }
+
+    [Test]
+    public async Task Container_AfterDispose_GetService_ThrowsObjectDisposedException()
+    {
+        // Arrange
+        var container = new ThreadSafeLockContainer();
+        container.Dispose();
+
+        // Act & Assert
+        await Assert.That(() => container.GetService<ISingletonService>())
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task Container_AfterDispose_GetRequiredService_ThrowsObjectDisposedException()
+    {
+        // Arrange
+        var container = new ThreadSafeSemaphoreSlimContainer();
+        container.Dispose();
+
+        // Act & Assert
+        await Assert.That(() => container.GetRequiredService<ISingletonService>())
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task Container_AfterDispose_CreateScope_ThrowsObjectDisposedException()
+    {
+        // Arrange
+        var container = new ThreadSafeSpinLockContainer();
+        container.Dispose();
+
+        // Act & Assert
+        await Assert.That(() => container.CreateScope())
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task Container_MultipleDispose_DoesNotThrow()
+    {
+        // Arrange
+        var container = new ThreadSafeLockContainer();
+
+        // Act - dispose multiple times (should not throw)
+        container.Dispose();
+        container.Dispose();
+        container.Dispose();
+
+        // Assert - container is disposed, subsequent GetService should throw
+        await Assert.That(() => container.GetService<ISingletonService>())
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task Container_ConcurrentDispose_DoesNotThrow()
+    {
+        // Arrange
+        var container = new ThreadSafeSemaphoreSlimContainer();
+        const int concurrentDisposes = 10;
+
+        // Act - simulate concurrent disposal
+        var tasks = Enumerable.Range(0, concurrentDisposes)
+            .Select(_ => Task.Run(() => container.Dispose()))
+            .ToArray();
+
+        // Assert - no exception thrown
+        await Assert.That(async () => await Task.WhenAll(tasks)).ThrowsNothing();
+    }
+
+    [Test]
+    public async Task Container_AfterDisposeAsync_GetService_ThrowsObjectDisposedException()
+    {
+        // Arrange
+        var container = new ThreadSafeLockContainer();
+        await container.DisposeAsync();
+
+        // Act & Assert
+        await Assert.That(() => container.GetService<ISingletonService>())
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task Container_ThreadSafeNone_AfterDispose_GetService_ThrowsObjectDisposedException()
+    {
+        // Arrange - even ThreadSafeStrategy.None should throw after dispose
+        var container = new ThreadSafeNoneContainer();
+        container.Dispose();
+
+        // Act & Assert
+        await Assert.That(() => container.GetService<ISingletonService>())
+            .Throws<ObjectDisposedException>();
+    }
 }
