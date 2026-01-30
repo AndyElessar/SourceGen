@@ -58,24 +58,19 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
     #region Service Resolution
 
     private global::MainApp.LocalService? _mainApp_LocalService;
-    private readonly SemaphoreSlim _mainApp_LocalServiceSemaphore = new(1, 1);
+    private readonly Lock _mainApp_LocalServiceLock = new();
     private global::MainApp.LocalService GetMainApp_LocalService()
     {
-        if (_mainApp_LocalService is not null) return _mainApp_LocalService;
+        if(_mainApp_LocalService is not null) return _mainApp_LocalService;
 
-        _mainApp_LocalServiceSemaphore.Wait();
-        try
+        lock(_mainApp_LocalServiceLock)
         {
-            if (_mainApp_LocalService is not null) return _mainApp_LocalService;
+            if(_mainApp_LocalService is not null) return _mainApp_LocalService;
 
             var instance = new global::MainApp.LocalService();
 
             _mainApp_LocalService = instance;
             return instance;
-        }
-        finally
-        {
-            _mainApp_LocalServiceSemaphore.Release();
         }
     }
 
@@ -212,7 +207,6 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
         }
 
         DisposeService(_mainApp_LocalService);
-        _mainApp_LocalServiceSemaphore.Dispose();
         _sharedLib_SharedModule.Dispose();
     }
 
@@ -227,13 +221,12 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
         }
 
         await DisposeServiceAsync(_mainApp_LocalService);
-        _mainApp_LocalServiceSemaphore.Dispose();
         await _sharedLib_SharedModule.DisposeAsync();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

@@ -47,46 +47,36 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.KeyedService1? _testNamespace_KeyedService1__key1_;
-    private readonly SemaphoreSlim _testNamespace_KeyedService1__key1_Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_KeyedService1__key1_Lock = new();
     private global::TestNamespace.KeyedService1 GetTestNamespace_KeyedService1__key1_()
     {
-        if (_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
+        if(_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
 
-        _testNamespace_KeyedService1__key1_Semaphore.Wait();
-        try
+        lock(_testNamespace_KeyedService1__key1_Lock)
         {
-            if (_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
+            if(_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
 
             var instance = new global::TestNamespace.KeyedService1();
 
             _testNamespace_KeyedService1__key1_ = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_KeyedService1__key1_Semaphore.Release();
-        }
     }
 
     private global::TestNamespace.KeyedService2? _testNamespace_KeyedService2__key2_;
-    private readonly SemaphoreSlim _testNamespace_KeyedService2__key2_Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_KeyedService2__key2_Lock = new();
     private global::TestNamespace.KeyedService2 GetTestNamespace_KeyedService2__key2_()
     {
-        if (_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
+        if(_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
 
-        _testNamespace_KeyedService2__key2_Semaphore.Wait();
-        try
+        lock(_testNamespace_KeyedService2__key2_Lock)
         {
-            if (_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
+            if(_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
 
             var instance = new global::TestNamespace.KeyedService2();
 
             _testNamespace_KeyedService2__key2_ = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_KeyedService2__key2_Semaphore.Release();
         }
     }
 
@@ -226,9 +216,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_KeyedService2__key2_);
-        _testNamespace_KeyedService2__key2_Semaphore.Dispose();
         DisposeService(_testNamespace_KeyedService1__key1_);
-        _testNamespace_KeyedService1__key1_Semaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -241,14 +229,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_KeyedService2__key2_);
-        _testNamespace_KeyedService2__key2_Semaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_KeyedService1__key1_);
-        _testNamespace_KeyedService1__key1_Semaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

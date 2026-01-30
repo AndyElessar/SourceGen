@@ -58,15 +58,14 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     #region Service Resolution
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>? _iocSample_Shared_TestHandler;
-    private readonly SemaphoreSlim _iocSample_Shared_TestHandlerSemaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_TestHandlerLock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> GetIocSample_Shared_TestHandler()
     {
-        if (_iocSample_Shared_TestHandler is not null) return _iocSample_Shared_TestHandler;
+        if(_iocSample_Shared_TestHandler is not null) return _iocSample_Shared_TestHandler;
 
-        _iocSample_Shared_TestHandlerSemaphore.Wait();
-        try
+        lock(_iocSample_Shared_TestHandlerLock)
         {
-            if (_iocSample_Shared_TestHandler is not null) return _iocSample_Shared_TestHandler;
+            if(_iocSample_Shared_TestHandler is not null) return _iocSample_Shared_TestHandler;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> instance = new global::IocSample.Shared.TestHandler();
 
@@ -76,22 +75,17 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
             _iocSample_Shared_TestHandler = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_TestHandlerSemaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>? _iocSample_Shared_TestRequest2Handler;
-    private readonly SemaphoreSlim _iocSample_Shared_TestRequest2HandlerSemaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_TestRequest2HandlerLock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> GetIocSample_Shared_TestRequest2Handler()
     {
-        if (_iocSample_Shared_TestRequest2Handler is not null) return _iocSample_Shared_TestRequest2Handler;
+        if(_iocSample_Shared_TestRequest2Handler is not null) return _iocSample_Shared_TestRequest2Handler;
 
-        _iocSample_Shared_TestRequest2HandlerSemaphore.Wait();
-        try
+        lock(_iocSample_Shared_TestRequest2HandlerLock)
         {
-            if (_iocSample_Shared_TestRequest2Handler is not null) return _iocSample_Shared_TestRequest2Handler;
+            if(_iocSample_Shared_TestRequest2Handler is not null) return _iocSample_Shared_TestRequest2Handler;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> instance = new global::IocSample.Shared.TestRequest2Handler(GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_());
 
@@ -102,22 +96,17 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
             _iocSample_Shared_TestRequest2Handler = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_TestRequest2HandlerSemaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>? _iocSample_Shared_TestRequest3Handler;
-    private readonly SemaphoreSlim _iocSample_Shared_TestRequest3HandlerSemaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_TestRequest3HandlerLock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> GetIocSample_Shared_TestRequest3Handler()
     {
-        if (_iocSample_Shared_TestRequest3Handler is not null) return _iocSample_Shared_TestRequest3Handler;
+        if(_iocSample_Shared_TestRequest3Handler is not null) return _iocSample_Shared_TestRequest3Handler;
 
-        _iocSample_Shared_TestRequest3HandlerSemaphore.Wait();
-        try
+        lock(_iocSample_Shared_TestRequest3HandlerLock)
         {
-            if (_iocSample_Shared_TestRequest3Handler is not null) return _iocSample_Shared_TestRequest3Handler;
+            if(_iocSample_Shared_TestRequest3Handler is not null) return _iocSample_Shared_TestRequest3Handler;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> instance = new global::IocSample.Shared.TestRequest3Handler(GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_());
 
@@ -127,119 +116,90 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
             _iocSample_Shared_TestRequest3Handler = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_TestRequest3HandlerSemaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>? _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___;
-    private readonly SemaphoreSlim _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Lock = new();
     private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()
     {
-        if (_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___;
+        if(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___;
 
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Semaphore.Wait();
-        try
+        lock(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Lock)
         {
-            if (_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___;
+            if(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___;
 
             var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>();
 
             _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>? _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
-    private readonly SemaphoreSlim _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Lock = new();
     private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()
     {
-        if (_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
+        if(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
 
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Semaphore.Wait();
-        try
+        lock(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Lock)
         {
-            if (_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
+            if(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
 
             var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>();
 
             _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>? _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
-    private readonly SemaphoreSlim _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Lock = new();
     private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()
     {
-        if (_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
+        if(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
 
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Semaphore.Wait();
-        try
+        lock(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Lock)
         {
-            if (_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
+            if(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
 
             var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>();
 
             _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>? _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
-    private readonly SemaphoreSlim _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Lock = new();
     private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()
     {
-        if (_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
+        if(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
 
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Semaphore.Wait();
-        try
+        lock(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Lock)
         {
-            if (_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
+            if(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ is not null) return _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
 
             var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>();
 
             _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>? _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
-    private readonly SemaphoreSlim _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Lock = new();
     private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()
     {
-        if (_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
+        if(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
 
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Semaphore.Wait();
-        try
+        lock(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Lock)
         {
-            if (_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
+            if(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ is not null) return _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
 
             var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>();
 
             _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = instance;
             return instance;
-        }
-        finally
-        {
-            _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Semaphore.Release();
         }
     }
 
@@ -249,6 +209,8 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     public object? GetService(Type serviceType)
     {
+        ThrowIfDisposed();
+
         if(serviceType == typeof(IServiceProvider)) return this;
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(SharedModule)) return this;
@@ -265,6 +227,8 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
+
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
@@ -275,6 +239,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
         return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
     }
 
@@ -284,6 +249,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     public object GetRequiredService(Type serviceType)
     {
+        ThrowIfDisposed();
         return GetService(serviceType) ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
     }
 
@@ -315,7 +281,11 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     #region IServiceScopeFactory
 
-    public IServiceScope CreateScope() => new SharedModule(this);
+    public IServiceScope CreateScope()
+    {
+        ThrowIfDisposed();
+        return new SharedModule(this);
+    }
 
     public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
@@ -361,21 +331,13 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         }
 
         DisposeService(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__);
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Semaphore.Dispose();
         DisposeService(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_);
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Semaphore.Dispose();
         DisposeService(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___);
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Semaphore.Dispose();
         DisposeService(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_);
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Semaphore.Dispose();
         DisposeService(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___);
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Semaphore.Dispose();
         DisposeService(_iocSample_Shared_TestRequest3Handler);
-        _iocSample_Shared_TestRequest3HandlerSemaphore.Dispose();
         DisposeService(_iocSample_Shared_TestRequest2Handler);
-        _iocSample_Shared_TestRequest2HandlerSemaphore.Dispose();
         DisposeService(_iocSample_Shared_TestHandler);
-        _iocSample_Shared_TestHandlerSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -388,21 +350,18 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         }
 
         await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__);
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_);
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___);
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_);
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___);
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_TestRequest3Handler);
-        _iocSample_Shared_TestRequest3HandlerSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_TestRequest2Handler);
-        _iocSample_Shared_TestRequest2HandlerSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Shared_TestHandler);
-        _iocSample_Shared_TestHandlerSemaphore.Dispose();
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

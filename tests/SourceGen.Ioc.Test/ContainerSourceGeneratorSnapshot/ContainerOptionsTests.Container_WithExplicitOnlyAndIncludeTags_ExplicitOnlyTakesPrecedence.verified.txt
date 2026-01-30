@@ -51,24 +51,19 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
     #region Service Resolution
 
     private global::TestNamespace.ExplicitService? _testNamespace_ExplicitService;
-    private readonly SemaphoreSlim _testNamespace_ExplicitServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_ExplicitServiceLock = new();
     private global::TestNamespace.ExplicitService GetTestNamespace_ExplicitService()
     {
-        if (_testNamespace_ExplicitService is not null) return _testNamespace_ExplicitService;
+        if(_testNamespace_ExplicitService is not null) return _testNamespace_ExplicitService;
 
-        _testNamespace_ExplicitServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_ExplicitServiceLock)
         {
-            if (_testNamespace_ExplicitService is not null) return _testNamespace_ExplicitService;
+            if(_testNamespace_ExplicitService is not null) return _testNamespace_ExplicitService;
 
             var instance = new global::TestNamespace.ExplicitService();
 
             _testNamespace_ExplicitService = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_ExplicitServiceSemaphore.Release();
         }
     }
 
@@ -204,7 +199,6 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
         }
 
         DisposeService(_testNamespace_ExplicitService);
-        _testNamespace_ExplicitServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -217,12 +211,11 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
         }
 
         await DisposeServiceAsync(_testNamespace_ExplicitService);
-        _testNamespace_ExplicitServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

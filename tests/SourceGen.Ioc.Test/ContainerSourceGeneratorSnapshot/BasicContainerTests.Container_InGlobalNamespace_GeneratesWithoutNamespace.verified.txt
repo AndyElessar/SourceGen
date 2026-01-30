@@ -49,24 +49,19 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     #region Service Resolution
 
     private global::MyService? _myService;
-    private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
+    private readonly Lock _myServiceLock = new();
     private global::MyService GetMyService()
     {
-        if (_myService is not null) return _myService;
+        if(_myService is not null) return _myService;
 
-        _myServiceSemaphore.Wait();
-        try
+        lock(_myServiceLock)
         {
-            if (_myService is not null) return _myService;
+            if(_myService is not null) return _myService;
 
             var instance = new global::MyService();
 
             _myService = instance;
             return instance;
-        }
-        finally
-        {
-            _myServiceSemaphore.Release();
         }
     }
 
@@ -202,7 +197,6 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         }
 
         DisposeService(_myService);
-        _myServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -215,12 +209,11 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         }
 
         await DisposeServiceAsync(_myService);
-        _myServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

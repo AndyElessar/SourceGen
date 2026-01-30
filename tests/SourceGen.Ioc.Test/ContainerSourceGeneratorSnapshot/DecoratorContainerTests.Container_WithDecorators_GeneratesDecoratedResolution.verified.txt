@@ -50,15 +50,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.IHandler? _testNamespace_Handler;
-    private readonly SemaphoreSlim _testNamespace_HandlerSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_HandlerLock = new();
     private global::TestNamespace.IHandler GetTestNamespace_Handler()
     {
-        if (_testNamespace_Handler is not null) return _testNamespace_Handler;
+        if(_testNamespace_Handler is not null) return _testNamespace_Handler;
 
-        _testNamespace_HandlerSemaphore.Wait();
-        try
+        lock(_testNamespace_HandlerLock)
         {
-            if (_testNamespace_Handler is not null) return _testNamespace_Handler;
+            if(_testNamespace_Handler is not null) return _testNamespace_Handler;
 
             global::TestNamespace.IHandler instance = new global::TestNamespace.Handler();
 
@@ -67,10 +66,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
             _testNamespace_Handler = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_HandlerSemaphore.Release();
         }
     }
 
@@ -203,7 +198,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_Handler);
-            _testNamespace_HandlerSemaphore.Dispose();
             return;
         }
 
@@ -216,7 +210,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_Handler);
-            _testNamespace_HandlerSemaphore.Dispose();
             return;
         }
 
@@ -224,7 +217,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

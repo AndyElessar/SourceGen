@@ -51,24 +51,19 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.KeyedService? _testNamespace_KeyedService__factoryKey_;
-    private readonly SemaphoreSlim _testNamespace_KeyedService__factoryKey_Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_KeyedService__factoryKey_Lock = new();
     private global::TestNamespace.KeyedService GetTestNamespace_KeyedService__factoryKey_()
     {
-        if (_testNamespace_KeyedService__factoryKey_ is not null) return _testNamespace_KeyedService__factoryKey_;
+        if(_testNamespace_KeyedService__factoryKey_ is not null) return _testNamespace_KeyedService__factoryKey_;
 
-        _testNamespace_KeyedService__factoryKey_Semaphore.Wait();
-        try
+        lock(_testNamespace_KeyedService__factoryKey_Lock)
         {
-            if (_testNamespace_KeyedService__factoryKey_ is not null) return _testNamespace_KeyedService__factoryKey_;
+            if(_testNamespace_KeyedService__factoryKey_ is not null) return _testNamespace_KeyedService__factoryKey_;
 
             var instance = (global::TestNamespace.KeyedService)global::TestNamespace.ServiceFactory.Create("factoryKey");
 
             _testNamespace_KeyedService__factoryKey_ = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_KeyedService__factoryKey_Semaphore.Release();
         }
     }
 
@@ -204,7 +199,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_KeyedService__factoryKey_);
-        _testNamespace_KeyedService__factoryKey_Semaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -217,12 +211,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_KeyedService__factoryKey_);
-        _testNamespace_KeyedService__factoryKey_Semaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

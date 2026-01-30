@@ -80,15 +80,14 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     private global::IocSample.InstanceService GetIocSample_InstanceService_IocSample_InstanceService_Instance() => global::IocSample.InstanceService.Instance;
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string>? _iocSample_TestQueryHandler;
-    private readonly SemaphoreSlim _iocSample_TestQueryHandlerSemaphore = new(1, 1);
+    private readonly Lock _iocSample_TestQueryHandlerLock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> GetIocSample_TestQueryHandler()
     {
-        if (_iocSample_TestQueryHandler is not null) return _iocSample_TestQueryHandler;
+        if(_iocSample_TestQueryHandler is not null) return _iocSample_TestQueryHandler;
 
-        _iocSample_TestQueryHandlerSemaphore.Wait();
-        try
+        lock(_iocSample_TestQueryHandlerLock)
         {
-            if (_iocSample_TestQueryHandler is not null) return _iocSample_TestQueryHandler;
+            if(_iocSample_TestQueryHandler is not null) return _iocSample_TestQueryHandler;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> instance = new global::IocSample.TestQueryHandler();
 
@@ -99,66 +98,51 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_TestQueryHandler = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_TestQueryHandlerSemaphore.Release();
-        }
     }
 
     private global::IocSample.ViewModel? _iocSample_ViewModel;
-    private readonly SemaphoreSlim _iocSample_ViewModelSemaphore = new(1, 1);
+    private readonly Lock _iocSample_ViewModelLock = new();
     private global::IocSample.ViewModel GetIocSample_ViewModel()
     {
-        if (_iocSample_ViewModel is not null) return _iocSample_ViewModel;
+        if(_iocSample_ViewModel is not null) return _iocSample_ViewModel;
 
-        _iocSample_ViewModelSemaphore.Wait();
-        try
+        lock(_iocSample_ViewModelLock)
         {
-            if (_iocSample_ViewModel is not null) return _iocSample_ViewModel;
+            if(_iocSample_ViewModel is not null) return _iocSample_ViewModel;
 
             var instance = new global::IocSample.ViewModel(GetIocSample_GenericRequestHandler_IocSample_Entity_());
 
             _iocSample_ViewModel = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_ViewModelSemaphore.Release();
-        }
     }
 
     private global::IocSample.CustomMessenger? _iocSample_CustomMessenger;
-    private readonly SemaphoreSlim _iocSample_CustomMessengerSemaphore = new(1, 1);
+    private readonly Lock _iocSample_CustomMessengerLock = new();
     private global::IocSample.CustomMessenger GetIocSample_CustomMessenger()
     {
-        if (_iocSample_CustomMessenger is not null) return _iocSample_CustomMessenger;
+        if(_iocSample_CustomMessenger is not null) return _iocSample_CustomMessenger;
 
-        _iocSample_CustomMessengerSemaphore.Wait();
-        try
+        lock(_iocSample_CustomMessengerLock)
         {
-            if (_iocSample_CustomMessenger is not null) return _iocSample_CustomMessenger;
+            if(_iocSample_CustomMessenger is not null) return _iocSample_CustomMessenger;
 
             var instance = new global::IocSample.CustomMessenger(this);
 
             _iocSample_CustomMessenger = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_CustomMessengerSemaphore.Release();
-        }
     }
 
     private global::IocSample.ViewModel2? _iocSample_ViewModel2;
-    private readonly SemaphoreSlim _iocSample_ViewModel2Semaphore = new(1, 1);
+    private readonly Lock _iocSample_ViewModel2Lock = new();
     private global::IocSample.ViewModel2 GetIocSample_ViewModel2()
     {
-        if (_iocSample_ViewModel2 is not null) return _iocSample_ViewModel2;
+        if(_iocSample_ViewModel2 is not null) return _iocSample_ViewModel2;
 
-        _iocSample_ViewModel2Semaphore.Wait();
-        try
+        lock(_iocSample_ViewModel2Lock)
         {
-            if (_iocSample_ViewModel2 is not null) return _iocSample_ViewModel2;
+            if(_iocSample_ViewModel2 is not null) return _iocSample_ViewModel2;
 
             var instance = new global::IocSample.ViewModel2(GetIocSample_CustomMessenger())
             {
@@ -170,22 +154,17 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_ViewModel2 = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_ViewModel2Semaphore.Release();
-        }
     }
 
     private global::IocSample.DependentClass? _iocSample_DependentClass;
-    private readonly SemaphoreSlim _iocSample_DependentClassSemaphore = new(1, 1);
+    private readonly Lock _iocSample_DependentClassLock = new();
     private global::IocSample.DependentClass GetIocSample_DependentClass()
     {
-        if (_iocSample_DependentClass is not null) return _iocSample_DependentClass;
+        if(_iocSample_DependentClass is not null) return _iocSample_DependentClass;
 
-        _iocSample_DependentClassSemaphore.Wait();
-        try
+        lock(_iocSample_DependentClassLock)
         {
-            if (_iocSample_DependentClass is not null) return _iocSample_DependentClass;
+            if(_iocSample_DependentClass is not null) return _iocSample_DependentClass;
 
             var instance = new global::IocSample.DependentClass(GetIocSample_Dependency__1_())
             {
@@ -196,132 +175,102 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_DependentClass = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_DependentClassSemaphore.Release();
-        }
     }
 
     private global::IocSample.DependentClass2? _iocSample_DependentClass2;
-    private readonly SemaphoreSlim _iocSample_DependentClass2Semaphore = new(1, 1);
+    private readonly Lock _iocSample_DependentClass2Lock = new();
     private global::IocSample.DependentClass2 GetIocSample_DependentClass2()
     {
-        if (_iocSample_DependentClass2 is not null) return _iocSample_DependentClass2;
+        if(_iocSample_DependentClass2 is not null) return _iocSample_DependentClass2;
 
-        _iocSample_DependentClass2Semaphore.Wait();
-        try
+        lock(_iocSample_DependentClass2Lock)
         {
-            if (_iocSample_DependentClass2 is not null) return _iocSample_DependentClass2;
+            if(_iocSample_DependentClass2 is not null) return _iocSample_DependentClass2;
 
             var instance = new global::IocSample.DependentClass2(GetIocSample_Dependency__1_());
 
             _iocSample_DependentClass2 = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_DependentClass2Semaphore.Release();
-        }
     }
 
     private global::IocSample.Dependency? _iocSample_Dependency__1_;
-    private readonly SemaphoreSlim _iocSample_Dependency__1_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Dependency__1_Lock = new();
     private global::IocSample.Dependency GetIocSample_Dependency__1_()
     {
-        if (_iocSample_Dependency__1_ is not null) return _iocSample_Dependency__1_;
+        if(_iocSample_Dependency__1_ is not null) return _iocSample_Dependency__1_;
 
-        _iocSample_Dependency__1_Semaphore.Wait();
-        try
+        lock(_iocSample_Dependency__1_Lock)
         {
-            if (_iocSample_Dependency__1_ is not null) return _iocSample_Dependency__1_;
+            if(_iocSample_Dependency__1_ is not null) return _iocSample_Dependency__1_;
 
             var instance = new global::IocSample.Dependency();
 
             _iocSample_Dependency__1_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Dependency__1_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Dependency2? _iocSample_Dependency2__2_;
-    private readonly SemaphoreSlim _iocSample_Dependency2__2_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Dependency2__2_Lock = new();
     private global::IocSample.Dependency2 GetIocSample_Dependency2__2_()
     {
-        if (_iocSample_Dependency2__2_ is not null) return _iocSample_Dependency2__2_;
+        if(_iocSample_Dependency2__2_ is not null) return _iocSample_Dependency2__2_;
 
-        _iocSample_Dependency2__2_Semaphore.Wait();
-        try
+        lock(_iocSample_Dependency2__2_Lock)
         {
-            if (_iocSample_Dependency2__2_ is not null) return _iocSample_Dependency2__2_;
+            if(_iocSample_Dependency2__2_ is not null) return _iocSample_Dependency2__2_;
 
             var instance = new global::IocSample.Dependency2();
 
             _iocSample_Dependency2__2_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Dependency2__2_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Dependency3? _iocSample_Dependency3__3_;
-    private readonly SemaphoreSlim _iocSample_Dependency3__3_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Dependency3__3_Lock = new();
     private global::IocSample.Dependency3 GetIocSample_Dependency3__3_()
     {
-        if (_iocSample_Dependency3__3_ is not null) return _iocSample_Dependency3__3_;
+        if(_iocSample_Dependency3__3_ is not null) return _iocSample_Dependency3__3_;
 
-        _iocSample_Dependency3__3_Semaphore.Wait();
-        try
+        lock(_iocSample_Dependency3__3_Lock)
         {
-            if (_iocSample_Dependency3__3_ is not null) return _iocSample_Dependency3__3_;
+            if(_iocSample_Dependency3__3_ is not null) return _iocSample_Dependency3__3_;
 
             var instance = new global::IocSample.Dependency3();
 
             _iocSample_Dependency3__3_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Dependency3__3_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Keyed? _iocSample_Keyed__Key_;
-    private readonly SemaphoreSlim _iocSample_Keyed__Key_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Keyed__Key_Lock = new();
     private global::IocSample.Keyed GetIocSample_Keyed__Key_()
     {
-        if (_iocSample_Keyed__Key_ is not null) return _iocSample_Keyed__Key_;
+        if(_iocSample_Keyed__Key_ is not null) return _iocSample_Keyed__Key_;
 
-        _iocSample_Keyed__Key_Semaphore.Wait();
-        try
+        lock(_iocSample_Keyed__Key_Lock)
         {
-            if (_iocSample_Keyed__Key_ is not null) return _iocSample_Keyed__Key_;
+            if(_iocSample_Keyed__Key_ is not null) return _iocSample_Keyed__Key_;
 
             var instance = new global::IocSample.Keyed();
 
             _iocSample_Keyed__Key_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Keyed__Key_Semaphore.Release();
-        }
     }
 
     private global::IocSample.KeyedEnum? _iocSample_KeyedEnum_IocSample_KeyEnum_Key0;
-    private readonly SemaphoreSlim _iocSample_KeyedEnum_IocSample_KeyEnum_Key0Semaphore = new(1, 1);
+    private readonly Lock _iocSample_KeyedEnum_IocSample_KeyEnum_Key0Lock = new();
     private global::IocSample.KeyedEnum GetIocSample_KeyedEnum_IocSample_KeyEnum_Key0()
     {
-        if (_iocSample_KeyedEnum_IocSample_KeyEnum_Key0 is not null) return _iocSample_KeyedEnum_IocSample_KeyEnum_Key0;
+        if(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0 is not null) return _iocSample_KeyedEnum_IocSample_KeyEnum_Key0;
 
-        _iocSample_KeyedEnum_IocSample_KeyEnum_Key0Semaphore.Wait();
-        try
+        lock(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0Lock)
         {
-            if (_iocSample_KeyedEnum_IocSample_KeyEnum_Key0 is not null) return _iocSample_KeyedEnum_IocSample_KeyEnum_Key0;
+            if(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0 is not null) return _iocSample_KeyedEnum_IocSample_KeyEnum_Key0;
 
             var instance = new global::IocSample.KeyedEnum();
             instance.Init(global::IocSample.KeyEnum.Key0);
@@ -329,88 +278,68 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_KeyedEnum_IocSample_KeyEnum_Key0 = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_KeyedEnum_IocSample_KeyEnum_Key0Semaphore.Release();
-        }
     }
 
     private global::IocSample.KeyedCsharp? _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key;
-    private readonly SemaphoreSlim _iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeySemaphore = new(1, 1);
+    private readonly Lock _iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeyLock = new();
     private global::IocSample.KeyedCsharp GetIocSample_KeyedCsharp_IocSample_KeyedExtensions_Key()
     {
-        if (_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key is not null) return _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key;
+        if(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key is not null) return _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key;
 
-        _iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeySemaphore.Wait();
-        try
+        lock(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeyLock)
         {
-            if (_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key is not null) return _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key;
+            if(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key is not null) return _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key;
 
             var instance = new global::IocSample.KeyedCsharp(GetIocSample_Keyed__Key_());
 
             _iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeySemaphore.Release();
-        }
     }
 
     private global::IocSample.External? _iocSample_External;
-    private readonly SemaphoreSlim _iocSample_ExternalSemaphore = new(1, 1);
+    private readonly Lock _iocSample_ExternalLock = new();
     private global::IocSample.External GetIocSample_External()
     {
-        if (_iocSample_External is not null) return _iocSample_External;
+        if(_iocSample_External is not null) return _iocSample_External;
 
-        _iocSample_ExternalSemaphore.Wait();
-        try
+        lock(_iocSample_ExternalLock)
         {
-            if (_iocSample_External is not null) return _iocSample_External;
+            if(_iocSample_External is not null) return _iocSample_External;
 
             var instance = new global::IocSample.External();
 
             _iocSample_External = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_ExternalSemaphore.Release();
-        }
     }
 
     private global::IocSample.Conflict? _iocSample_Conflict;
-    private readonly SemaphoreSlim _iocSample_ConflictSemaphore = new(1, 1);
+    private readonly Lock _iocSample_ConflictLock = new();
     private global::IocSample.Conflict GetIocSample_Conflict()
     {
-        if (_iocSample_Conflict is not null) return _iocSample_Conflict;
+        if(_iocSample_Conflict is not null) return _iocSample_Conflict;
 
-        _iocSample_ConflictSemaphore.Wait();
-        try
+        lock(_iocSample_ConflictLock)
         {
-            if (_iocSample_Conflict is not null) return _iocSample_Conflict;
+            if(_iocSample_Conflict is not null) return _iocSample_Conflict;
 
             var instance = new global::IocSample.Conflict();
 
             _iocSample_Conflict = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_ConflictSemaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>? _iocSample_GenericRequestHandler_IocSample_Entity_;
-    private readonly SemaphoreSlim _iocSample_GenericRequestHandler_IocSample_Entity_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_GenericRequestHandler_IocSample_Entity_Lock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> GetIocSample_GenericRequestHandler_IocSample_Entity_()
     {
-        if (_iocSample_GenericRequestHandler_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity_;
+        if(_iocSample_GenericRequestHandler_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity_;
 
-        _iocSample_GenericRequestHandler_IocSample_Entity_Semaphore.Wait();
-        try
+        lock(_iocSample_GenericRequestHandler_IocSample_Entity_Lock)
         {
-            if (_iocSample_GenericRequestHandler_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity_;
+            if(_iocSample_GenericRequestHandler_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity_;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> instance = new global::IocSample.GenericRequestHandler<global::IocSample.Entity>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity>>)));
 
@@ -420,22 +349,17 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_GenericRequestHandler_IocSample_Entity_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_GenericRequestHandler_IocSample_Entity_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>? _iocSample_GenericRequestHandler2_IocSample_Entity3_;
-    private readonly SemaphoreSlim _iocSample_GenericRequestHandler2_IocSample_Entity3_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_GenericRequestHandler2_IocSample_Entity3_Lock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> GetIocSample_GenericRequestHandler2_IocSample_Entity3_()
     {
-        if (_iocSample_GenericRequestHandler2_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity3_;
+        if(_iocSample_GenericRequestHandler2_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity3_;
 
-        _iocSample_GenericRequestHandler2_IocSample_Entity3_Semaphore.Wait();
-        try
+        lock(_iocSample_GenericRequestHandler2_IocSample_Entity3_Lock)
         {
-            if (_iocSample_GenericRequestHandler2_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity3_;
+            if(_iocSample_GenericRequestHandler2_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity3_;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> instance = new global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>)));
 
@@ -445,22 +369,17 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_GenericRequestHandler2_IocSample_Entity3_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_GenericRequestHandler2_IocSample_Entity3_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>? _iocSample_GenericRequestHandler_IocSample_Entity2_;
-    private readonly SemaphoreSlim _iocSample_GenericRequestHandler_IocSample_Entity2_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_GenericRequestHandler_IocSample_Entity2_Lock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> GetIocSample_GenericRequestHandler_IocSample_Entity2_()
     {
-        if (_iocSample_GenericRequestHandler_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity2_;
+        if(_iocSample_GenericRequestHandler_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity2_;
 
-        _iocSample_GenericRequestHandler_IocSample_Entity2_Semaphore.Wait();
-        try
+        lock(_iocSample_GenericRequestHandler_IocSample_Entity2_Lock)
         {
-            if (_iocSample_GenericRequestHandler_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity2_;
+            if(_iocSample_GenericRequestHandler_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity2_;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> instance = new global::IocSample.GenericRequestHandler<global::IocSample.Entity2>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>)));
 
@@ -470,22 +389,17 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_GenericRequestHandler_IocSample_Entity2_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_GenericRequestHandler_IocSample_Entity2_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>? _iocSample_GenericRequestHandler_IocSample_Entity3_;
-    private readonly SemaphoreSlim _iocSample_GenericRequestHandler_IocSample_Entity3_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_GenericRequestHandler_IocSample_Entity3_Lock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> GetIocSample_GenericRequestHandler_IocSample_Entity3_()
     {
-        if (_iocSample_GenericRequestHandler_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity3_;
+        if(_iocSample_GenericRequestHandler_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity3_;
 
-        _iocSample_GenericRequestHandler_IocSample_Entity3_Semaphore.Wait();
-        try
+        lock(_iocSample_GenericRequestHandler_IocSample_Entity3_Lock)
         {
-            if (_iocSample_GenericRequestHandler_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity3_;
+            if(_iocSample_GenericRequestHandler_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity3_;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> instance = new global::IocSample.GenericRequestHandler<global::IocSample.Entity3>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>)));
 
@@ -495,22 +409,17 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_GenericRequestHandler_IocSample_Entity3_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_GenericRequestHandler_IocSample_Entity3_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>? _iocSample_GenericRequestHandler2_IocSample_Entity_;
-    private readonly SemaphoreSlim _iocSample_GenericRequestHandler2_IocSample_Entity_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_GenericRequestHandler2_IocSample_Entity_Lock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> GetIocSample_GenericRequestHandler2_IocSample_Entity_()
     {
-        if (_iocSample_GenericRequestHandler2_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity_;
+        if(_iocSample_GenericRequestHandler2_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity_;
 
-        _iocSample_GenericRequestHandler2_IocSample_Entity_Semaphore.Wait();
-        try
+        lock(_iocSample_GenericRequestHandler2_IocSample_Entity_Lock)
         {
-            if (_iocSample_GenericRequestHandler2_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity_;
+            if(_iocSample_GenericRequestHandler2_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity_;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> instance = new global::IocSample.GenericRequestHandler2<global::IocSample.Entity>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>)));
 
@@ -520,44 +429,34 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_GenericRequestHandler2_IocSample_Entity_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_GenericRequestHandler2_IocSample_Entity_Semaphore.Release();
-        }
     }
 
     private global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>? _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
-    private readonly SemaphoreSlim _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateSemaphore = new(1, 1);
+    private readonly Lock _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateLock = new();
     private global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>> GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create()
     {
-        if (_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create is not null) return _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
+        if(_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create is not null) return _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
 
-        _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateSemaphore.Wait();
-        try
+        lock(_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateLock)
         {
-            if (_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create is not null) return _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
+            if(_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create is not null) return _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
 
             var instance = (global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>)global::IocSample.GenericFactory.Create<decimal>();
 
             _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateSemaphore.Release();
-        }
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>? _iocSample_GenericRequestHandler2_IocSample_Entity2_;
-    private readonly SemaphoreSlim _iocSample_GenericRequestHandler2_IocSample_Entity2_Semaphore = new(1, 1);
+    private readonly Lock _iocSample_GenericRequestHandler2_IocSample_Entity2_Lock = new();
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> GetIocSample_GenericRequestHandler2_IocSample_Entity2_()
     {
-        if (_iocSample_GenericRequestHandler2_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity2_;
+        if(_iocSample_GenericRequestHandler2_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity2_;
 
-        _iocSample_GenericRequestHandler2_IocSample_Entity2_Semaphore.Wait();
-        try
+        lock(_iocSample_GenericRequestHandler2_IocSample_Entity2_Lock)
         {
-            if (_iocSample_GenericRequestHandler2_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity2_;
+            if(_iocSample_GenericRequestHandler2_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity2_;
 
             global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> instance = new global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>)));
 
@@ -567,97 +466,73 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_GenericRequestHandler2_IocSample_Entity2_ = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_GenericRequestHandler2_IocSample_Entity2_Semaphore.Release();
-        }
     }
 
     private global::IocSample.Default2? _iocSample_Default2;
-    private readonly SemaphoreSlim _iocSample_Default2Semaphore = new(1, 1);
+    private readonly Lock _iocSample_Default2Lock = new();
     private global::IocSample.Default2 GetIocSample_Default2()
     {
-        if (_iocSample_Default2 is not null) return _iocSample_Default2;
+        if(_iocSample_Default2 is not null) return _iocSample_Default2;
 
-        _iocSample_Default2Semaphore.Wait();
-        try
+        lock(_iocSample_Default2Lock)
         {
-            if (_iocSample_Default2 is not null) return _iocSample_Default2;
+            if(_iocSample_Default2 is not null) return _iocSample_Default2;
 
             var instance = new global::IocSample.Default2();
 
             _iocSample_Default2 = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_Default2Semaphore.Release();
-        }
     }
 
     private global::IocSample.Basic? _iocSample_Basic;
-    private readonly SemaphoreSlim _iocSample_BasicSemaphore = new(1, 1);
+    private readonly Lock _iocSample_BasicLock = new();
     private global::IocSample.Basic GetIocSample_Basic()
     {
-        if (_iocSample_Basic is not null) return _iocSample_Basic;
+        if(_iocSample_Basic is not null) return _iocSample_Basic;
 
-        _iocSample_BasicSemaphore.Wait();
-        try
+        lock(_iocSample_BasicLock)
         {
-            if (_iocSample_Basic is not null) return _iocSample_Basic;
+            if(_iocSample_Basic is not null) return _iocSample_Basic;
 
             var instance = new global::IocSample.Basic();
 
             _iocSample_Basic = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_BasicSemaphore.Release();
-        }
     }
 
     private global::IocSample.FactoryService? _iocSample_FactoryService_IocSample_Factory_Create;
-    private readonly SemaphoreSlim _iocSample_FactoryService_IocSample_Factory_CreateSemaphore = new(1, 1);
+    private readonly Lock _iocSample_FactoryService_IocSample_Factory_CreateLock = new();
     private global::IocSample.FactoryService GetIocSample_FactoryService_IocSample_Factory_Create()
     {
-        if (_iocSample_FactoryService_IocSample_Factory_Create is not null) return _iocSample_FactoryService_IocSample_Factory_Create;
+        if(_iocSample_FactoryService_IocSample_Factory_Create is not null) return _iocSample_FactoryService_IocSample_Factory_Create;
 
-        _iocSample_FactoryService_IocSample_Factory_CreateSemaphore.Wait();
-        try
+        lock(_iocSample_FactoryService_IocSample_Factory_CreateLock)
         {
-            if (_iocSample_FactoryService_IocSample_Factory_Create is not null) return _iocSample_FactoryService_IocSample_Factory_Create;
+            if(_iocSample_FactoryService_IocSample_Factory_Create is not null) return _iocSample_FactoryService_IocSample_Factory_Create;
 
             var instance = (global::IocSample.FactoryService)global::IocSample.Factory.Create(this, (global::IocSample.IInstance)GetRequiredService(typeof(global::IocSample.IInstance)));
 
             _iocSample_FactoryService_IocSample_Factory_Create = instance;
             return instance;
         }
-        finally
-        {
-            _iocSample_FactoryService_IocSample_Factory_CreateSemaphore.Release();
-        }
     }
 
     private global::IocSample.FactoryService2? _iocSample_FactoryService2_IocSample_FactoryService2_Create;
-    private readonly SemaphoreSlim _iocSample_FactoryService2_IocSample_FactoryService2_CreateSemaphore = new(1, 1);
+    private readonly Lock _iocSample_FactoryService2_IocSample_FactoryService2_CreateLock = new();
     private global::IocSample.FactoryService2 GetIocSample_FactoryService2_IocSample_FactoryService2_Create()
     {
-        if (_iocSample_FactoryService2_IocSample_FactoryService2_Create is not null) return _iocSample_FactoryService2_IocSample_FactoryService2_Create;
+        if(_iocSample_FactoryService2_IocSample_FactoryService2_Create is not null) return _iocSample_FactoryService2_IocSample_FactoryService2_Create;
 
-        _iocSample_FactoryService2_IocSample_FactoryService2_CreateSemaphore.Wait();
-        try
+        lock(_iocSample_FactoryService2_IocSample_FactoryService2_CreateLock)
         {
-            if (_iocSample_FactoryService2_IocSample_FactoryService2_Create is not null) return _iocSample_FactoryService2_IocSample_FactoryService2_Create;
+            if(_iocSample_FactoryService2_IocSample_FactoryService2_Create is not null) return _iocSample_FactoryService2_IocSample_FactoryService2_Create;
 
             var instance = (global::IocSample.FactoryService2)global::IocSample.FactoryService2.Create();
 
             _iocSample_FactoryService2_IocSample_FactoryService2_Create = instance;
             return instance;
-        }
-        finally
-        {
-            _iocSample_FactoryService2_IocSample_FactoryService2_CreateSemaphore.Release();
         }
     }
 
@@ -721,6 +596,8 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     public object? GetService(Type serviceType)
     {
+        ThrowIfDisposed();
+
         if(serviceType == typeof(IServiceProvider)) return this;
         if(serviceType == typeof(IServiceScopeFactory)) return this;
         if(serviceType == typeof(Module)) return this;
@@ -737,6 +614,8 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
+
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
@@ -747,6 +626,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
     {
+        ThrowIfDisposed();
         return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
     }
 
@@ -756,6 +636,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     public object GetRequiredService(Type serviceType)
     {
+        ThrowIfDisposed();
         return GetService(serviceType) ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
     }
 
@@ -787,7 +668,11 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     #region IServiceScopeFactory
 
-    public IServiceScope CreateScope() => new Module(this);
+    public IServiceScope CreateScope()
+    {
+        ThrowIfDisposed();
+        return new Module(this);
+    }
 
     public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
@@ -900,59 +785,34 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         if(!_isRootScope)
         {
             DisposeService(_iocSample_FactoryService2_IocSample_FactoryService2_Create);
-            _iocSample_FactoryService2_IocSample_FactoryService2_CreateSemaphore.Dispose();
             DisposeService(_iocSample_FactoryService_IocSample_Factory_Create);
-            _iocSample_FactoryService_IocSample_Factory_CreateSemaphore.Dispose();
             DisposeService(_iocSample_Basic);
-            _iocSample_BasicSemaphore.Dispose();
             DisposeService(_iocSample_Default2);
-            _iocSample_Default2Semaphore.Dispose();
             _iocSample_Shared_SharedModule.Dispose();
             return;
         }
 
         DisposeService(_iocSample_GenericRequestHandler2_IocSample_Entity2_);
-        _iocSample_GenericRequestHandler2_IocSample_Entity2_Semaphore.Dispose();
         DisposeService(_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create);
-        _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateSemaphore.Dispose();
         DisposeService(_iocSample_GenericRequestHandler2_IocSample_Entity_);
-        _iocSample_GenericRequestHandler2_IocSample_Entity_Semaphore.Dispose();
         DisposeService(_iocSample_GenericRequestHandler_IocSample_Entity3_);
-        _iocSample_GenericRequestHandler_IocSample_Entity3_Semaphore.Dispose();
         DisposeService(_iocSample_GenericRequestHandler_IocSample_Entity2_);
-        _iocSample_GenericRequestHandler_IocSample_Entity2_Semaphore.Dispose();
         DisposeService(_iocSample_GenericRequestHandler2_IocSample_Entity3_);
-        _iocSample_GenericRequestHandler2_IocSample_Entity3_Semaphore.Dispose();
         DisposeService(_iocSample_GenericRequestHandler_IocSample_Entity_);
-        _iocSample_GenericRequestHandler_IocSample_Entity_Semaphore.Dispose();
         DisposeService(_iocSample_Conflict);
-        _iocSample_ConflictSemaphore.Dispose();
         DisposeService(_iocSample_External);
-        _iocSample_ExternalSemaphore.Dispose();
         DisposeService(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key);
-        _iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeySemaphore.Dispose();
         DisposeService(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0);
-        _iocSample_KeyedEnum_IocSample_KeyEnum_Key0Semaphore.Dispose();
         DisposeService(_iocSample_Keyed__Key_);
-        _iocSample_Keyed__Key_Semaphore.Dispose();
         DisposeService(_iocSample_Dependency3__3_);
-        _iocSample_Dependency3__3_Semaphore.Dispose();
         DisposeService(_iocSample_Dependency2__2_);
-        _iocSample_Dependency2__2_Semaphore.Dispose();
         DisposeService(_iocSample_Dependency__1_);
-        _iocSample_Dependency__1_Semaphore.Dispose();
         DisposeService(_iocSample_DependentClass2);
-        _iocSample_DependentClass2Semaphore.Dispose();
         DisposeService(_iocSample_DependentClass);
-        _iocSample_DependentClassSemaphore.Dispose();
         DisposeService(_iocSample_ViewModel2);
-        _iocSample_ViewModel2Semaphore.Dispose();
         DisposeService(_iocSample_CustomMessenger);
-        _iocSample_CustomMessengerSemaphore.Dispose();
         DisposeService(_iocSample_ViewModel);
-        _iocSample_ViewModelSemaphore.Dispose();
         DisposeService(_iocSample_TestQueryHandler);
-        _iocSample_TestQueryHandlerSemaphore.Dispose();
         _iocSample_Shared_SharedModule.Dispose();
     }
 
@@ -963,60 +823,40 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_iocSample_FactoryService2_IocSample_FactoryService2_Create);
-            _iocSample_FactoryService2_IocSample_FactoryService2_CreateSemaphore.Dispose();
             await DisposeServiceAsync(_iocSample_FactoryService_IocSample_Factory_Create);
-            _iocSample_FactoryService_IocSample_Factory_CreateSemaphore.Dispose();
             await DisposeServiceAsync(_iocSample_Basic);
-            _iocSample_BasicSemaphore.Dispose();
             await DisposeServiceAsync(_iocSample_Default2);
-            _iocSample_Default2Semaphore.Dispose();
             await _iocSample_Shared_SharedModule.DisposeAsync();
             return;
         }
 
         await DisposeServiceAsync(_iocSample_GenericRequestHandler2_IocSample_Entity2_);
-        _iocSample_GenericRequestHandler2_IocSample_Entity2_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create);
-        _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_CreateSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_GenericRequestHandler2_IocSample_Entity_);
-        _iocSample_GenericRequestHandler2_IocSample_Entity_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_GenericRequestHandler_IocSample_Entity3_);
-        _iocSample_GenericRequestHandler_IocSample_Entity3_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_GenericRequestHandler_IocSample_Entity2_);
-        _iocSample_GenericRequestHandler_IocSample_Entity2_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_GenericRequestHandler2_IocSample_Entity3_);
-        _iocSample_GenericRequestHandler2_IocSample_Entity3_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_GenericRequestHandler_IocSample_Entity_);
-        _iocSample_GenericRequestHandler_IocSample_Entity_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Conflict);
-        _iocSample_ConflictSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_External);
-        _iocSample_ExternalSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_KeyedCsharp_IocSample_KeyedExtensions_Key);
-        _iocSample_KeyedCsharp_IocSample_KeyedExtensions_KeySemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_KeyedEnum_IocSample_KeyEnum_Key0);
-        _iocSample_KeyedEnum_IocSample_KeyEnum_Key0Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Keyed__Key_);
-        _iocSample_Keyed__Key_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Dependency3__3_);
-        _iocSample_Dependency3__3_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Dependency2__2_);
-        _iocSample_Dependency2__2_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_Dependency__1_);
-        _iocSample_Dependency__1_Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_DependentClass2);
-        _iocSample_DependentClass2Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_DependentClass);
-        _iocSample_DependentClassSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_ViewModel2);
-        _iocSample_ViewModel2Semaphore.Dispose();
         await DisposeServiceAsync(_iocSample_CustomMessenger);
-        _iocSample_CustomMessengerSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_ViewModel);
-        _iocSample_ViewModelSemaphore.Dispose();
         await DisposeServiceAsync(_iocSample_TestQueryHandler);
-        _iocSample_TestQueryHandlerSemaphore.Dispose();
         await _iocSample_Shared_SharedModule.DisposeAsync();
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

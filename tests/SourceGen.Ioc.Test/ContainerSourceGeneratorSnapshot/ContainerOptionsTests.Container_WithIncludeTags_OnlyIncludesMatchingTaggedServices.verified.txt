@@ -52,46 +52,36 @@ partial class FeatureContainer : IIocContainer<global::TestNamespace.FeatureCont
     #region Service Resolution
 
     private global::TestNamespace.Feature1Service? _testNamespace_Feature1Service;
-    private readonly SemaphoreSlim _testNamespace_Feature1ServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_Feature1ServiceLock = new();
     private global::TestNamespace.Feature1Service GetTestNamespace_Feature1Service()
     {
-        if (_testNamespace_Feature1Service is not null) return _testNamespace_Feature1Service;
+        if(_testNamespace_Feature1Service is not null) return _testNamespace_Feature1Service;
 
-        _testNamespace_Feature1ServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_Feature1ServiceLock)
         {
-            if (_testNamespace_Feature1Service is not null) return _testNamespace_Feature1Service;
+            if(_testNamespace_Feature1Service is not null) return _testNamespace_Feature1Service;
 
             var instance = new global::TestNamespace.Feature1Service();
 
             _testNamespace_Feature1Service = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_Feature1ServiceSemaphore.Release();
-        }
     }
 
     private global::TestNamespace.Feature2Service? _testNamespace_Feature2Service;
-    private readonly SemaphoreSlim _testNamespace_Feature2ServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_Feature2ServiceLock = new();
     private global::TestNamespace.Feature2Service GetTestNamespace_Feature2Service()
     {
-        if (_testNamespace_Feature2Service is not null) return _testNamespace_Feature2Service;
+        if(_testNamespace_Feature2Service is not null) return _testNamespace_Feature2Service;
 
-        _testNamespace_Feature2ServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_Feature2ServiceLock)
         {
-            if (_testNamespace_Feature2Service is not null) return _testNamespace_Feature2Service;
+            if(_testNamespace_Feature2Service is not null) return _testNamespace_Feature2Service;
 
             var instance = new global::TestNamespace.Feature2Service();
 
             _testNamespace_Feature2Service = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_Feature2ServiceSemaphore.Release();
         }
     }
 
@@ -229,9 +219,7 @@ partial class FeatureContainer : IIocContainer<global::TestNamespace.FeatureCont
         }
 
         DisposeService(_testNamespace_Feature2Service);
-        _testNamespace_Feature2ServiceSemaphore.Dispose();
         DisposeService(_testNamespace_Feature1Service);
-        _testNamespace_Feature1ServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -244,14 +232,12 @@ partial class FeatureContainer : IIocContainer<global::TestNamespace.FeatureCont
         }
 
         await DisposeServiceAsync(_testNamespace_Feature2Service);
-        _testNamespace_Feature2ServiceSemaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Feature1Service);
-        _testNamespace_Feature1ServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

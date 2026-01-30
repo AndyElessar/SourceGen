@@ -55,11 +55,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     private readonly Lock _testNamespace_DependencyLock = new();
     private global::TestNamespace.Dependency GetTestNamespace_Dependency()
     {
-        if (_testNamespace_Dependency is not null) return _testNamespace_Dependency;
+        if(_testNamespace_Dependency is not null) return _testNamespace_Dependency;
 
-        lock (_testNamespace_DependencyLock)
+        lock(_testNamespace_DependencyLock)
         {
-            if (_testNamespace_Dependency is not null) return _testNamespace_Dependency;
+            if(_testNamespace_Dependency is not null) return _testNamespace_Dependency;
 
             var instance = new global::TestNamespace.Dependency();
 
@@ -72,11 +72,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     private readonly Lock _testNamespace_MyServiceLock = new();
     private global::TestNamespace.MyService GetTestNamespace_MyService()
     {
-        if (_testNamespace_MyService is not null) return _testNamespace_MyService;
+        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        lock (_testNamespace_MyServiceLock)
+        lock(_testNamespace_MyServiceLock)
         {
-            if (_testNamespace_MyService is not null) return _testNamespace_MyService;
+            if(_testNamespace_MyService is not null) return _testNamespace_MyService;
 
             var instance = new global::TestNamespace.MyService()
             {
@@ -240,7 +240,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

@@ -51,24 +51,19 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.ReadWriteService? _testNamespace_ReadWriteService;
-    private readonly SemaphoreSlim _testNamespace_ReadWriteServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_ReadWriteServiceLock = new();
     private global::TestNamespace.ReadWriteService GetTestNamespace_ReadWriteService()
     {
-        if (_testNamespace_ReadWriteService is not null) return _testNamespace_ReadWriteService;
+        if(_testNamespace_ReadWriteService is not null) return _testNamespace_ReadWriteService;
 
-        _testNamespace_ReadWriteServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_ReadWriteServiceLock)
         {
-            if (_testNamespace_ReadWriteService is not null) return _testNamespace_ReadWriteService;
+            if(_testNamespace_ReadWriteService is not null) return _testNamespace_ReadWriteService;
 
             var instance = new global::TestNamespace.ReadWriteService();
 
             _testNamespace_ReadWriteService = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_ReadWriteServiceSemaphore.Release();
         }
     }
 
@@ -205,7 +200,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_ReadWriteService);
-        _testNamespace_ReadWriteServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -218,12 +212,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_ReadWriteService);
-        _testNamespace_ReadWriteServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

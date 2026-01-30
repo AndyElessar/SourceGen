@@ -50,24 +50,19 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.AsyncDisposableService? _testNamespace_AsyncDisposableService;
-    private readonly SemaphoreSlim _testNamespace_AsyncDisposableServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_AsyncDisposableServiceLock = new();
     private global::TestNamespace.AsyncDisposableService GetTestNamespace_AsyncDisposableService()
     {
-        if (_testNamespace_AsyncDisposableService is not null) return _testNamespace_AsyncDisposableService;
+        if(_testNamespace_AsyncDisposableService is not null) return _testNamespace_AsyncDisposableService;
 
-        _testNamespace_AsyncDisposableServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_AsyncDisposableServiceLock)
         {
-            if (_testNamespace_AsyncDisposableService is not null) return _testNamespace_AsyncDisposableService;
+            if(_testNamespace_AsyncDisposableService is not null) return _testNamespace_AsyncDisposableService;
 
             var instance = new global::TestNamespace.AsyncDisposableService();
 
             _testNamespace_AsyncDisposableService = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_AsyncDisposableServiceSemaphore.Release();
         }
     }
 
@@ -200,7 +195,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_AsyncDisposableService);
-            _testNamespace_AsyncDisposableServiceSemaphore.Dispose();
             return;
         }
 
@@ -213,7 +207,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_AsyncDisposableService);
-            _testNamespace_AsyncDisposableServiceSemaphore.Dispose();
             return;
         }
 
@@ -221,7 +214,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

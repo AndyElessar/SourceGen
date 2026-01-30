@@ -34,7 +34,8 @@ public sealed class IocContainerAttribute : Attribute
     public bool UseSwitchStatement { get; init; }
 
     /// <summary>
-    /// Gets the thread safety strategy for the generated container.
+    /// Gets the thread safety strategy for the generated container.<br/>
+    /// Default is <see cref="ThreadSafeStrategy.Lock"/>.
     /// </summary>
     public ThreadSafeStrategy ThreadSafeStrategy { get; init; } = ThreadSafeStrategy.Lock;
 }

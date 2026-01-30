@@ -51,24 +51,19 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     #region Service Resolution
 
     private global::Company.Product.Module.MyService? _company_Product_Module_MyService;
-    private readonly SemaphoreSlim _company_Product_Module_MyServiceSemaphore = new(1, 1);
+    private readonly Lock _company_Product_Module_MyServiceLock = new();
     private global::Company.Product.Module.MyService GetCompany_Product_Module_MyService()
     {
-        if (_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
+        if(_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
 
-        _company_Product_Module_MyServiceSemaphore.Wait();
-        try
+        lock(_company_Product_Module_MyServiceLock)
         {
-            if (_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
+            if(_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
 
             var instance = new global::Company.Product.Module.MyService();
 
             _company_Product_Module_MyService = instance;
             return instance;
-        }
-        finally
-        {
-            _company_Product_Module_MyServiceSemaphore.Release();
         }
     }
 
@@ -204,7 +199,6 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         }
 
         DisposeService(_company_Product_Module_MyService);
-        _company_Product_Module_MyServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -217,12 +211,11 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         }
 
         await DisposeServiceAsync(_company_Product_Module_MyService);
-        _company_Product_Module_MyServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

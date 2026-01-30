@@ -53,68 +53,53 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Plugin1? _testNamespace_Plugin1;
-    private readonly SemaphoreSlim _testNamespace_Plugin1Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_Plugin1Lock = new();
     private global::TestNamespace.Plugin1 GetTestNamespace_Plugin1()
     {
-        if (_testNamespace_Plugin1 is not null) return _testNamespace_Plugin1;
+        if(_testNamespace_Plugin1 is not null) return _testNamespace_Plugin1;
 
-        _testNamespace_Plugin1Semaphore.Wait();
-        try
+        lock(_testNamespace_Plugin1Lock)
         {
-            if (_testNamespace_Plugin1 is not null) return _testNamespace_Plugin1;
+            if(_testNamespace_Plugin1 is not null) return _testNamespace_Plugin1;
 
             var instance = new global::TestNamespace.Plugin1();
 
             _testNamespace_Plugin1 = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_Plugin1Semaphore.Release();
-        }
     }
 
     private global::TestNamespace.Plugin2? _testNamespace_Plugin2;
-    private readonly SemaphoreSlim _testNamespace_Plugin2Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_Plugin2Lock = new();
     private global::TestNamespace.Plugin2 GetTestNamespace_Plugin2()
     {
-        if (_testNamespace_Plugin2 is not null) return _testNamespace_Plugin2;
+        if(_testNamespace_Plugin2 is not null) return _testNamespace_Plugin2;
 
-        _testNamespace_Plugin2Semaphore.Wait();
-        try
+        lock(_testNamespace_Plugin2Lock)
         {
-            if (_testNamespace_Plugin2 is not null) return _testNamespace_Plugin2;
+            if(_testNamespace_Plugin2 is not null) return _testNamespace_Plugin2;
 
             var instance = new global::TestNamespace.Plugin2();
 
             _testNamespace_Plugin2 = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_Plugin2Semaphore.Release();
-        }
     }
 
     private global::TestNamespace.Plugin3? _testNamespace_Plugin3;
-    private readonly SemaphoreSlim _testNamespace_Plugin3Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_Plugin3Lock = new();
     private global::TestNamespace.Plugin3 GetTestNamespace_Plugin3()
     {
-        if (_testNamespace_Plugin3 is not null) return _testNamespace_Plugin3;
+        if(_testNamespace_Plugin3 is not null) return _testNamespace_Plugin3;
 
-        _testNamespace_Plugin3Semaphore.Wait();
-        try
+        lock(_testNamespace_Plugin3Lock)
         {
-            if (_testNamespace_Plugin3 is not null) return _testNamespace_Plugin3;
+            if(_testNamespace_Plugin3 is not null) return _testNamespace_Plugin3;
 
             var instance = new global::TestNamespace.Plugin3();
 
             _testNamespace_Plugin3 = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_Plugin3Semaphore.Release();
         }
     }
 
@@ -263,11 +248,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_Plugin3);
-        _testNamespace_Plugin3Semaphore.Dispose();
         DisposeService(_testNamespace_Plugin2);
-        _testNamespace_Plugin2Semaphore.Dispose();
         DisposeService(_testNamespace_Plugin1);
-        _testNamespace_Plugin1Semaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -280,16 +262,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_Plugin3);
-        _testNamespace_Plugin3Semaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Plugin2);
-        _testNamespace_Plugin2Semaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Plugin1);
-        _testNamespace_Plugin1Semaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

@@ -50,24 +50,19 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Repository<string>? _testNamespace_Repository_string_;
-    private readonly SemaphoreSlim _testNamespace_Repository_string_Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_Repository_string_Lock = new();
     private global::TestNamespace.Repository<string> GetTestNamespace_Repository_string_()
     {
-        if (_testNamespace_Repository_string_ is not null) return _testNamespace_Repository_string_;
+        if(_testNamespace_Repository_string_ is not null) return _testNamespace_Repository_string_;
 
-        _testNamespace_Repository_string_Semaphore.Wait();
-        try
+        lock(_testNamespace_Repository_string_Lock)
         {
-            if (_testNamespace_Repository_string_ is not null) return _testNamespace_Repository_string_;
+            if(_testNamespace_Repository_string_ is not null) return _testNamespace_Repository_string_;
 
             var instance = new global::TestNamespace.Repository<string>();
 
             _testNamespace_Repository_string_ = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_Repository_string_Semaphore.Release();
         }
     }
 
@@ -200,7 +195,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_Repository_string_);
-            _testNamespace_Repository_string_Semaphore.Dispose();
             return;
         }
 
@@ -213,7 +207,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_Repository_string_);
-            _testNamespace_Repository_string_Semaphore.Dispose();
             return;
         }
 
@@ -221,7 +214,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

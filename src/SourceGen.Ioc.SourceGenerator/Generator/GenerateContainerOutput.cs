@@ -558,7 +558,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Early return check (common to all strategies)
-        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
         writer.WriteLine();
 
         switch(strategy)
@@ -620,11 +620,11 @@ partial class IocSourceGenerator
         bool hasDecorators,
         ContainerRegistrationGroups groups)
     {
-        writer.WriteLine($"lock ({fieldName}Lock)");
+        writer.WriteLine($"lock({fieldName}Lock)");
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
         writer.WriteLine();
 
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
@@ -660,7 +660,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
         writer.WriteLine();
 
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
@@ -703,7 +703,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         writer.WriteLine($"{fieldName}SpinLock.Enter(ref lockTaken);");
-        writer.WriteLine($"if ({fieldName} is not null) return {fieldName};");
+        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
         writer.WriteLine();
 
         var variableType = hasDecorators ? reg.ServiceType.Name : null;
@@ -724,7 +724,7 @@ partial class IocSourceGenerator
         writer.WriteLine("finally");
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine("if (lockTaken) {fieldName}SpinLock.Exit();".Replace("{fieldName}", fieldName));
+        writer.WriteLine("if(lockTaken) {fieldName}SpinLock.Exit();".Replace("{fieldName}", fieldName));
         writer.Indentation--;
         writer.WriteLine("}");
     }
@@ -1676,7 +1676,7 @@ partial class IocSourceGenerator
         writer.WriteLine("private void ThrowIfDisposed()");
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine("if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);");
+        writer.WriteLine("ObjectDisposedException.ThrowIf(_disposed != 0, GetType());");
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();

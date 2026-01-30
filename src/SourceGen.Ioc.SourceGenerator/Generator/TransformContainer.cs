@@ -31,7 +31,7 @@ partial class IocSourceGenerator
         var resolveIServiceCollection = true;
         var explicitOnly = false;
         var useSwitchStatement = false;
-        var threadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim;
+        var threadSafeStrategy = ThreadSafeStrategy.Lock;
         ImmutableEquatableArray<string>? includeTags = null;
 
         foreach(var namedArg in attributeData.NamedArguments)

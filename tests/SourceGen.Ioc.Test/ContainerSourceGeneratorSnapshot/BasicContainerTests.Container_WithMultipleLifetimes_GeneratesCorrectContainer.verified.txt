@@ -51,46 +51,36 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.SingletonService? _testNamespace_SingletonService;
-    private readonly SemaphoreSlim _testNamespace_SingletonServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_SingletonServiceLock = new();
     private global::TestNamespace.SingletonService GetTestNamespace_SingletonService()
     {
-        if (_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
+        if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
 
-        _testNamespace_SingletonServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_SingletonServiceLock)
         {
-            if (_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
+            if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
 
             var instance = new global::TestNamespace.SingletonService();
 
             _testNamespace_SingletonService = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_SingletonServiceSemaphore.Release();
-        }
     }
 
     private global::TestNamespace.ScopedService? _testNamespace_ScopedService;
-    private readonly SemaphoreSlim _testNamespace_ScopedServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_ScopedServiceLock = new();
     private global::TestNamespace.ScopedService GetTestNamespace_ScopedService()
     {
-        if (_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
+        if(_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
 
-        _testNamespace_ScopedServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_ScopedServiceLock)
         {
-            if (_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
+            if(_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
 
             var instance = new global::TestNamespace.ScopedService();
 
             _testNamespace_ScopedService = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_ScopedServiceSemaphore.Release();
         }
     }
 
@@ -232,12 +222,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_ScopedService);
-            _testNamespace_ScopedServiceSemaphore.Dispose();
             return;
         }
 
         DisposeService(_testNamespace_SingletonService);
-        _testNamespace_SingletonServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -247,17 +235,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_ScopedService);
-            _testNamespace_ScopedServiceSemaphore.Dispose();
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_SingletonService);
-        _testNamespace_SingletonServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

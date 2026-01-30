@@ -53,13 +53,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     private SpinLock _testNamespace_ScopedServiceSpinLock = new(false);
     private global::TestNamespace.ScopedService GetTestNamespace_ScopedService()
     {
-        if (_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
+        if(_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
 
         bool lockTaken = false;
         try
         {
             _testNamespace_ScopedServiceSpinLock.Enter(ref lockTaken);
-            if (_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
+            if(_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
 
             var instance = new global::TestNamespace.ScopedService();
 
@@ -68,7 +68,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
         finally
         {
-            if (lockTaken) _testNamespace_ScopedServiceSpinLock.Exit();
+            if(lockTaken) _testNamespace_ScopedServiceSpinLock.Exit();
         }
     }
 
@@ -220,7 +220,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

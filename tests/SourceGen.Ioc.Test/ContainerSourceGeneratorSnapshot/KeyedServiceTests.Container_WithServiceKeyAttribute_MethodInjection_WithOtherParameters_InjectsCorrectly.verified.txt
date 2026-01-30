@@ -51,47 +51,37 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Logger? _testNamespace_Logger;
-    private readonly SemaphoreSlim _testNamespace_LoggerSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_LoggerLock = new();
     private global::TestNamespace.Logger GetTestNamespace_Logger()
     {
-        if (_testNamespace_Logger is not null) return _testNamespace_Logger;
+        if(_testNamespace_Logger is not null) return _testNamespace_Logger;
 
-        _testNamespace_LoggerSemaphore.Wait();
-        try
+        lock(_testNamespace_LoggerLock)
         {
-            if (_testNamespace_Logger is not null) return _testNamespace_Logger;
+            if(_testNamespace_Logger is not null) return _testNamespace_Logger;
 
             var instance = new global::TestNamespace.Logger();
 
             _testNamespace_Logger = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_LoggerSemaphore.Release();
-        }
     }
 
     private global::TestNamespace.MyHandler? _testNamespace_MyHandler__myHandler_;
-    private readonly SemaphoreSlim _testNamespace_MyHandler__myHandler_Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_MyHandler__myHandler_Lock = new();
     private global::TestNamespace.MyHandler GetTestNamespace_MyHandler__myHandler_()
     {
-        if (_testNamespace_MyHandler__myHandler_ is not null) return _testNamespace_MyHandler__myHandler_;
+        if(_testNamespace_MyHandler__myHandler_ is not null) return _testNamespace_MyHandler__myHandler_;
 
-        _testNamespace_MyHandler__myHandler_Semaphore.Wait();
-        try
+        lock(_testNamespace_MyHandler__myHandler_Lock)
         {
-            if (_testNamespace_MyHandler__myHandler_ is not null) return _testNamespace_MyHandler__myHandler_;
+            if(_testNamespace_MyHandler__myHandler_ is not null) return _testNamespace_MyHandler__myHandler_;
 
             var instance = new global::TestNamespace.MyHandler();
             instance.Initialize(GetTestNamespace_Logger(), "myHandler");
 
             _testNamespace_MyHandler__myHandler_ = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_MyHandler__myHandler_Semaphore.Release();
         }
     }
 
@@ -226,12 +216,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_MyHandler__myHandler_);
-            _testNamespace_MyHandler__myHandler_Semaphore.Dispose();
             return;
         }
 
         DisposeService(_testNamespace_Logger);
-        _testNamespace_LoggerSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -241,17 +229,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_MyHandler__myHandler_);
-            _testNamespace_MyHandler__myHandler_Semaphore.Dispose();
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_Logger);
-        _testNamespace_LoggerSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

@@ -37,46 +37,36 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.UserService? _testNamespace_UserService;
-    private readonly SemaphoreSlim _testNamespace_UserServiceSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_UserServiceLock = new();
     private global::TestNamespace.UserService GetTestNamespace_UserService()
     {
-        if (_testNamespace_UserService is not null) return _testNamespace_UserService;
+        if(_testNamespace_UserService is not null) return _testNamespace_UserService;
 
-        _testNamespace_UserServiceSemaphore.Wait();
-        try
+        lock(_testNamespace_UserServiceLock)
         {
-            if (_testNamespace_UserService is not null) return _testNamespace_UserService;
+            if(_testNamespace_UserService is not null) return _testNamespace_UserService;
 
             var instance = new global::TestNamespace.UserService(GetTestNamespace_Repository_TestNamespace_User_());
 
             _testNamespace_UserService = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_UserServiceSemaphore.Release();
-        }
     }
 
     private global::TestNamespace.Repository<global::TestNamespace.User>? _testNamespace_Repository_TestNamespace_User_;
-    private readonly SemaphoreSlim _testNamespace_Repository_TestNamespace_User_Semaphore = new(1, 1);
+    private readonly Lock _testNamespace_Repository_TestNamespace_User_Lock = new();
     private global::TestNamespace.Repository<global::TestNamespace.User> GetTestNamespace_Repository_TestNamespace_User_()
     {
-        if (_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
+        if(_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
 
-        _testNamespace_Repository_TestNamespace_User_Semaphore.Wait();
-        try
+        lock(_testNamespace_Repository_TestNamespace_User_Lock)
         {
-            if (_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
+            if(_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
 
             var instance = new global::TestNamespace.Repository<global::TestNamespace.User>();
 
             _testNamespace_Repository_TestNamespace_User_ = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_Repository_TestNamespace_User_Semaphore.Release();
         }
     }
 
@@ -193,12 +183,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             DisposeService(_testNamespace_Repository_TestNamespace_User_);
-            _testNamespace_Repository_TestNamespace_User_Semaphore.Dispose();
             return;
         }
 
         DisposeService(_testNamespace_UserService);
-        _testNamespace_UserServiceSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -208,17 +196,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_testNamespace_Repository_TestNamespace_User_);
-            _testNamespace_Repository_TestNamespace_User_Semaphore.Dispose();
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_UserService);
-        _testNamespace_UserServiceSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

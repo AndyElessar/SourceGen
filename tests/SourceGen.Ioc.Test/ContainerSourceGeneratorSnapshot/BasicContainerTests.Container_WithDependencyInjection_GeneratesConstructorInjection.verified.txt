@@ -52,46 +52,36 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Logger? _testNamespace_Logger;
-    private readonly SemaphoreSlim _testNamespace_LoggerSemaphore = new(1, 1);
+    private readonly Lock _testNamespace_LoggerLock = new();
     private global::TestNamespace.Logger GetTestNamespace_Logger()
     {
-        if (_testNamespace_Logger is not null) return _testNamespace_Logger;
+        if(_testNamespace_Logger is not null) return _testNamespace_Logger;
 
-        _testNamespace_LoggerSemaphore.Wait();
-        try
+        lock(_testNamespace_LoggerLock)
         {
-            if (_testNamespace_Logger is not null) return _testNamespace_Logger;
+            if(_testNamespace_Logger is not null) return _testNamespace_Logger;
 
             var instance = new global::TestNamespace.Logger();
 
             _testNamespace_Logger = instance;
             return instance;
         }
-        finally
-        {
-            _testNamespace_LoggerSemaphore.Release();
-        }
     }
 
     private global::TestNamespace.Repository? _testNamespace_Repository;
-    private readonly SemaphoreSlim _testNamespace_RepositorySemaphore = new(1, 1);
+    private readonly Lock _testNamespace_RepositoryLock = new();
     private global::TestNamespace.Repository GetTestNamespace_Repository()
     {
-        if (_testNamespace_Repository is not null) return _testNamespace_Repository;
+        if(_testNamespace_Repository is not null) return _testNamespace_Repository;
 
-        _testNamespace_RepositorySemaphore.Wait();
-        try
+        lock(_testNamespace_RepositoryLock)
         {
-            if (_testNamespace_Repository is not null) return _testNamespace_Repository;
+            if(_testNamespace_Repository is not null) return _testNamespace_Repository;
 
             var instance = new global::TestNamespace.Repository(GetTestNamespace_Logger());
 
             _testNamespace_Repository = instance;
             return instance;
-        }
-        finally
-        {
-            _testNamespace_RepositorySemaphore.Release();
         }
     }
 
@@ -229,9 +219,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         DisposeService(_testNamespace_Repository);
-        _testNamespace_RepositorySemaphore.Dispose();
         DisposeService(_testNamespace_Logger);
-        _testNamespace_LoggerSemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -244,14 +232,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         }
 
         await DisposeServiceAsync(_testNamespace_Repository);
-        _testNamespace_RepositorySemaphore.Dispose();
         await DisposeServiceAsync(_testNamespace_Logger);
-        _testNamespace_LoggerSemaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)
