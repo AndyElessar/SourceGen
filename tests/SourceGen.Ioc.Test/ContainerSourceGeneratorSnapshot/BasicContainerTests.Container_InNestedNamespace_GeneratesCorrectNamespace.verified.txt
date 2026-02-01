@@ -35,6 +35,9 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _company_Product_Module_MyService = GetCompany_Product_Module_MyService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
 
     #region Service Resolution
 
-    private global::Company.Product.Module.MyService? _company_Product_Module_MyService;
-    private readonly Lock _company_Product_Module_MyServiceLock = new();
+    private global::Company.Product.Module.MyService _company_Product_Module_MyService = null!;
     private global::Company.Product.Module.MyService GetCompany_Product_Module_MyService()
     {
         if(_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
 
-        lock(_company_Product_Module_MyServiceLock)
-        {
-            if(_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
+        var instance = new global::Company.Product.Module.MyService();
 
-            var instance = new global::Company.Product.Module.MyService();
-
-            _company_Product_Module_MyService = instance;
-            return instance;
-        }
+        _company_Product_Module_MyService = instance;
+        return instance;
     }
 
     #endregion
@@ -163,8 +160,8 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::Company.Product.Module.DeepNamespaceContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::Company.Product.Module.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
-        new(new ServiceIdentifier(typeof(global::Company.Product.Module.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
+        new(new ServiceIdentifier(typeof(global::Company.Product.Module.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._company_Product_Module_MyService!),
+        new(new ServiceIdentifier(typeof(global::Company.Product.Module.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._company_Product_Module_MyService!),
     ];
 
     #endregion

@@ -14,7 +14,7 @@ partial class IocSourceGenerator
         var registrations = FilterRegistrationsForContainer(container, allRegistrations);
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations);
+        var groups = BuildContainerRegistrationGroups(registrations, container.EagerResolveOptions);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -91,7 +91,8 @@ partial class IocSourceGenerator
     /// Pre-computes field names, method names, and disposal lists to avoid redundant calculations.
     /// </summary>
     private static ContainerRegistrationGroups BuildContainerRegistrationGroups(
-        ImmutableEquatableArray<ServiceRegistrationModel> registrations)
+        ImmutableEquatableArray<ServiceRegistrationModel> registrations,
+        EagerResolveOptions eagerResolveOptions)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
         var byServiceTypeAndKey = new Dictionary<(string ServiceType, string? Key), List<CachedRegistration>>();
@@ -117,8 +118,8 @@ partial class IocSourceGenerator
                 continue;
             }
 
-            // Pre-compute field and method names once
-            var cached = CreateCachedRegistration(reg);
+            // Pre-compute field and method names once, including IsEager flag
+            var cached = CreateCachedRegistration(reg, eagerResolveOptions);
 
             var key = (reg.ServiceType.Name, reg.Key);
             if(reg.Key is not null)
@@ -241,10 +242,21 @@ partial class IocSourceGenerator
     /// Creates a CachedRegistration with pre-computed field and method names.
     /// Computes both names in a single pass to avoid redundant string operations.
     /// </summary>
-    private static CachedRegistration CreateCachedRegistration(ServiceRegistrationModel reg)
+    private static CachedRegistration CreateCachedRegistration(ServiceRegistrationModel reg, EagerResolveOptions eagerResolveOptions)
     {
         var (fieldName, methodName) = ComputeServiceNames(reg);
-        return new CachedRegistration(reg, fieldName, methodName);
+
+        // Determine if this registration should be eagerly resolved
+        // Instance registrations are inherently eager (no field caching needed)
+        // Transient services are not supported for eager resolution
+        var isEager = reg.Instance is null && reg.Lifetime switch
+        {
+            ServiceLifetime.Singleton => (eagerResolveOptions & EagerResolveOptions.Singleton) != 0,
+            ServiceLifetime.Scoped => (eagerResolveOptions & EagerResolveOptions.Scoped) != 0,
+            _ => false // Transient is never eager
+        };
+
+        return new CachedRegistration(reg, fieldName, methodName, isEager);
     }
 
     /// <summary>

@@ -40,6 +40,9 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
         _sharedLib1_SharedModule1 = new global::SharedLib1.SharedModule1(fallbackProvider);
         _sharedLib2_SharedModule2 = new global::SharedLib2.SharedModule2(fallbackProvider);
 
+        // Initialize eager singletons
+        _mainApp_LocalService = GetMainApp_LocalService();
+
         _serviceResolvers =
         _sharedLib1_SharedModule1.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib1_SharedModule1)))
             .Concat(_sharedLib2_SharedModule2.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib2_SharedModule2))))
@@ -61,21 +64,15 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
 
     #region Service Resolution
 
-    private global::MainApp.LocalService? _mainApp_LocalService;
-    private readonly Lock _mainApp_LocalServiceLock = new();
+    private global::MainApp.LocalService _mainApp_LocalService = null!;
     private global::MainApp.LocalService GetMainApp_LocalService()
     {
         if(_mainApp_LocalService is not null) return _mainApp_LocalService;
 
-        lock(_mainApp_LocalServiceLock)
-        {
-            if(_mainApp_LocalService is not null) return _mainApp_LocalService;
+        var instance = new global::MainApp.LocalService();
 
-            var instance = new global::MainApp.LocalService();
-
-            _mainApp_LocalService = instance;
-            return instance;
-        }
+        _mainApp_LocalService = instance;
+        return instance;
     }
 
     #endregion
@@ -174,8 +171,8 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::MainApp.AppContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::MainApp.LocalService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMainApp_LocalService()),
-        new(new ServiceIdentifier(typeof(global::MainApp.ILocalService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMainApp_LocalService()),
+        new(new ServiceIdentifier(typeof(global::MainApp.LocalService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._mainApp_LocalService!),
+        new(new ServiceIdentifier(typeof(global::MainApp.ILocalService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._mainApp_LocalService!),
     ];
 
     #endregion

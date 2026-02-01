@@ -35,6 +35,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_TestHandler = GetTestNamespace_TestHandler();
+        _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -51,40 +55,28 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>? _testNamespace_TestHandler;
-    private readonly Lock _testNamespace_TestHandlerLock = new();
+    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> _testNamespace_TestHandler = null!;
     private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> GetTestNamespace_TestHandler()
     {
         if(_testNamespace_TestHandler is not null) return _testNamespace_TestHandler;
 
-        lock(_testNamespace_TestHandlerLock)
-        {
-            if(_testNamespace_TestHandler is not null) return _testNamespace_TestHandler;
+        global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> instance = new global::TestNamespace.TestHandler();
 
-            global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> instance = new global::TestNamespace.TestHandler();
+        instance = new global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>(instance, GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___());
 
-            instance = new global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>(instance, GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___());
-
-            _testNamespace_TestHandler = instance;
-            return instance;
-        }
+        _testNamespace_TestHandler = instance;
+        return instance;
     }
 
-    private global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>? _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
-    private readonly Lock _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Lock = new();
+    private global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>> _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = null!;
     private global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>> GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___()
     {
         if(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ is not null) return _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
 
-        lock(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___Lock)
-        {
-            if(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ is not null) return _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
+        var instance = new global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>();
 
-            var instance = new global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>();
-
-            _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = instance;
-            return instance;
-        }
+        _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = instance;
+        return instance;
     }
 
     #endregion
@@ -183,10 +175,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.TestHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_TestHandler()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_TestHandler()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.ILogger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.TestHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_TestHandler!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_TestHandler!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ILogger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___!),
     ];
 
     #endregion

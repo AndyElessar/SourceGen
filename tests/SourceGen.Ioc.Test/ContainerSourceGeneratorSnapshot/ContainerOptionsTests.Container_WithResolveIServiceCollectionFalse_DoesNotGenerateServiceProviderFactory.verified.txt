@@ -27,6 +27,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public TestContainer()
     {
 
+        // Initialize eager singletons
+        _testNamespace_MyService = GetTestNamespace_MyService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -41,21 +44,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.MyService? _testNamespace_MyService;
-    private readonly Lock _testNamespace_MyServiceLock = new();
+    private global::TestNamespace.MyService _testNamespace_MyService = null!;
     private global::TestNamespace.MyService GetTestNamespace_MyService()
     {
         if(_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        lock(_testNamespace_MyServiceLock)
-        {
-            if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+        var instance = new global::TestNamespace.MyService();
 
-            var instance = new global::TestNamespace.MyService();
-
-            _testNamespace_MyService = instance;
-            return instance;
-        }
+        _testNamespace_MyService = instance;
+        return instance;
     }
 
     #endregion
@@ -154,8 +151,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
     ];
 
     #endregion

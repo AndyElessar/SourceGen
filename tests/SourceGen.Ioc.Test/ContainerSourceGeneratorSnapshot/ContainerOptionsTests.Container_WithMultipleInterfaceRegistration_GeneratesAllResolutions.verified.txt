@@ -35,6 +35,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_ReadWriteService = GetTestNamespace_ReadWriteService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.ReadWriteService? _testNamespace_ReadWriteService;
-    private readonly Lock _testNamespace_ReadWriteServiceLock = new();
+    private global::TestNamespace.ReadWriteService _testNamespace_ReadWriteService = null!;
     private global::TestNamespace.ReadWriteService GetTestNamespace_ReadWriteService()
     {
         if(_testNamespace_ReadWriteService is not null) return _testNamespace_ReadWriteService;
 
-        lock(_testNamespace_ReadWriteServiceLock)
-        {
-            if(_testNamespace_ReadWriteService is not null) return _testNamespace_ReadWriteService;
+        var instance = new global::TestNamespace.ReadWriteService();
 
-            var instance = new global::TestNamespace.ReadWriteService();
-
-            _testNamespace_ReadWriteService = instance;
-            return instance;
-        }
+        _testNamespace_ReadWriteService = instance;
+        return instance;
     }
 
     #endregion
@@ -163,9 +160,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.ReadWriteService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ReadWriteService()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IReader), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ReadWriteService()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IWriter), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ReadWriteService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ReadWriteService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ReadWriteService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IReader), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ReadWriteService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IWriter), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ReadWriteService!),
     ];
 
     #endregion

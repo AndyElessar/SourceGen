@@ -35,6 +35,9 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_ExplicitService = GetTestNamespace_ExplicitService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
 
     #region Service Resolution
 
-    private global::TestNamespace.ExplicitService? _testNamespace_ExplicitService;
-    private readonly Lock _testNamespace_ExplicitServiceLock = new();
+    private global::TestNamespace.ExplicitService _testNamespace_ExplicitService = null!;
     private global::TestNamespace.ExplicitService GetTestNamespace_ExplicitService()
     {
         if(_testNamespace_ExplicitService is not null) return _testNamespace_ExplicitService;
 
-        lock(_testNamespace_ExplicitServiceLock)
-        {
-            if(_testNamespace_ExplicitService is not null) return _testNamespace_ExplicitService;
+        var instance = new global::TestNamespace.ExplicitService();
 
-            var instance = new global::TestNamespace.ExplicitService();
-
-            _testNamespace_ExplicitService = instance;
-            return instance;
-        }
+        _testNamespace_ExplicitService = instance;
+        return instance;
     }
 
     #endregion
@@ -163,8 +160,8 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.ExplicitContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IExplicitService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ExplicitService()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.ExplicitService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ExplicitService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IExplicitService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ExplicitService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ExplicitService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ExplicitService!),
     ];
 
     #endregion

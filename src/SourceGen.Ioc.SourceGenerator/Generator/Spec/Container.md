@@ -49,7 +49,8 @@ The generated container implements the following interfaces:
     ExplicitOnly = false,              // Only register explicitly marked services
     IncludeTags = ["Tag1", "Tag2"],    // Only include services with specified tags
     UseSwitchStatement = false,        // Use FrozenDictionary by default; set true to use switch statement
-    ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim  // Thread safety strategy for singleton/scoped resolution
+    ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim,  // Thread safety strategy for singleton/scoped resolution
+    EagerResolveOptions = EagerResolveOptions.Singleton  // Eager resolution for singleton/scoped services
 )]
 public partial class MyContainer;
 ```
@@ -61,6 +62,7 @@ public partial class MyContainer;
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|
 |`ThreadSafeStrategy`|`SemaphoreSlim`|Thread safety strategy for singleton and scoped service resolution. See [ThreadSafeStrategy](#threadsafestrategy) for details.|
+|`EagerResolveOptions`|`Singleton`|Controls which service lifetimes should be eagerly resolved during container/scope construction. See [EagerResolveOptions](#eagerresolveoptions) for details.|
 
 > **Priority**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
 >
@@ -183,6 +185,8 @@ Each strategy generates different synchronization fields:
 |`SemaphoreSlim`|`private T? _field;`|`private readonly SemaphoreSlim _fieldSemaphore = new(1, 1);`|**Yes** (in `Dispose`/`DisposeAsync`)|
 |`SpinLock`|`private T? _field;`|`private SpinLock _fieldSpinLock = new(false);` (not readonly)|No (value type)|
 
+> **Note**: Eager services use non-nullable fields (`private T _field;`) without synchronization fields, as they are initialized in the constructor.
+
 #### Scope Constructor Behavior
 
 When creating a child scope, synchronization fields are NOT copied from parent. Each scope has its own synchronization primitives for scoped services:
@@ -193,21 +197,225 @@ private AppContainer(AppContainer parent)
     _fallbackProvider = parent._fallbackProvider;
     _isRootScope = false;
 
-    // Copy singleton instance references from parent
-    _singletonService = parent._singletonService;
+    // Copy singleton instance references from parent (both eager and lazy)
+    _eagerSingletonService = parent._eagerSingletonService;
+    _lazySingletonService = parent._lazySingletonService;
 
     // Singleton synchronization fields are NOT copied (parent already initialized)
     // Scoped fields are fresh for each scope (both instance and sync fields)
 
+    // Initialize eager scoped services
+    _eagerScopedService = GetEagerScopedService();
+
     _serviceResolvers = parent._serviceResolvers;
 }
+```
+
+### EagerResolveOptions
+
+The `EagerResolveOptions` enum controls which service lifetimes should be eagerly resolved during container/scope construction. Eager services are initialized immediately when the container or scope is created, rather than on first access.
+
+|Option|Value|Description|
+|:---|:---|:---|
+|`None`|`0`|Do not eagerly resolve any services. All services are lazily resolved on first access.|
+|`Singleton`|`1`|Eagerly resolve all singleton services when the root container is created. **(Default)**|
+|`Scoped`|`2`|Eagerly resolve all scoped services when a scope is created.|
+|`SingletonAndScoped`|`3`|Eagerly resolve both singleton and scoped services.|
+
+> **Note**: `Transient` services are not supported for eager resolution, as they create a new instance on every access by design.
+
+#### Eager vs Lazy Resolution
+
+|Aspect|Eager Resolution|Lazy Resolution|
+|:---|:---|:---|
+|**Initialization**|In constructor|On first access|
+|**Field Type**|Non-nullable (`private T _field;`)|Nullable (`private T? _field;`)|
+|**Synchronization Field**|None|Required (based on `ThreadSafeStrategy`)|
+|**Get Method**|Generated (used by constructor)|Generated (used by resolver and constructor)|
+|**Resolver in `_localServices`**|Direct field access (`c => c._field`)|Method call (`c => c.GetXxx()`)|
+|**Startup Time**|Longer (services initialized upfront)|Shorter (services initialized on demand)|
+|**First Access Time**|Instant (already initialized)|May have delay (initialization occurs)|
+
+#### Instance and Factory Registrations
+
+- **Instance Registration**: Instance registrations are inherently eager as they directly return a pre-existing static instance. They are not affected by `EagerResolveOptions`.
+- **Factory Registration**: Factory-based Singleton/Scoped registrations respect `EagerResolveOptions`. When eager, the factory is invoked during construction and the result is cached in the field.
+
+#### Dependency Order Handling
+
+Eager services may depend on other services (eager or lazy). The constructor initializes eager services by calling their `Get` methods, which automatically handles dependency resolution:
+
+```csharp
+// In constructor - Get methods handle dependencies recursively
+_eagerServiceA = GetEagerServiceA();  // May call GetDependencyB() internally
+_eagerServiceB = GetEagerServiceB();  // Already resolved if called by ServiceA
+```
+
+#### Generated Code Examples
+
+##### EagerResolveOptions.Singleton (Default)
+
+Singleton services are initialized in the root container constructor:
+
+```csharp
+#region Define:
+public interface IEagerService;
+public interface ILazyService;
+
+[IocRegister<IEagerService>(ServiceLifetime.Singleton)]
+internal class EagerService : IEagerService;
+
+[IocRegister<ILazyService>(ServiceLifetime.Transient)]
+internal class LazyService : ILazyService;
+
+[IocContainer(EagerResolveOptions = EagerResolveOptions.Singleton)]
+public partial class AppContainer;
+#endregion
+
+#region Generate:
+partial class AppContainer
+{
+    // Eager singleton - non-nullable field, no synchronization
+    private global::EagerService _eagerService;
+    private global::EagerService GetEagerService()
+    {
+        // First call from constructor creates instance, subsequent calls return cached
+        if (_eagerService is not null) return _eagerService;
+
+        var instance = new global::EagerService();
+        _eagerService = instance;
+        return instance;
+    }
+
+    // Transient - no field, always creates new instance
+    private global::LazyService GetLazyService()
+    {
+        return new global::LazyService();
+    }
+
+    public AppContainer(IServiceProvider? fallbackProvider)
+    {
+        _fallbackProvider = fallbackProvider;
+
+        // Initialize eager singletons by calling Get methods
+        _eagerService = GetEagerService();
+
+        _serviceResolvers = _localServices.ToFrozenDictionary();
+    }
+
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    [
+        // Eager service - direct field access (field is guaranteed initialized after constructor)
+        new(new ServiceIdentifier(typeof(global::EagerService), KeyedService.AnyKey), static c => c._eagerService),
+        new(new ServiceIdentifier(typeof(global::IEagerService), KeyedService.AnyKey), static c => c._eagerService),
+        // Transient service - method call
+        new(new ServiceIdentifier(typeof(global::LazyService), KeyedService.AnyKey), static c => c.GetLazyService()),
+        new(new ServiceIdentifier(typeof(global::ILazyService), KeyedService.AnyKey), static c => c.GetLazyService()),
+    ];
+}
+#endregion
+```
+
+##### EagerResolveOptions.Scoped
+
+Scoped services are initialized in the scope constructor:
+
+```csharp
+#region Define:
+public interface IScopedService;
+
+[IocRegister<IScopedService>(ServiceLifetime.Scoped)]
+internal class ScopedService : IScopedService;
+
+[IocContainer(EagerResolveOptions = EagerResolveOptions.Scoped)]
+public partial class AppContainer;
+#endregion
+
+#region Generate:
+partial class AppContainer
+{
+    // Eager scoped - non-nullable field, no synchronization
+    private global::ScopedService _scopedService;
+    private global::ScopedService GetScopedService()
+    {
+        // First call from constructor creates instance, subsequent calls return cached
+        if (_scopedService is not null) return _scopedService;
+
+        var instance = new global::ScopedService();
+        _scopedService = instance;
+        return instance;
+    }
+
+    private AppContainer(AppContainer parent)
+    {
+        _fallbackProvider = parent._fallbackProvider;
+        _isRootScope = false;
+
+        // Initialize eager scoped services by calling Get methods
+        _scopedService = GetScopedService();
+
+        _serviceResolvers = parent._serviceResolvers;
+    }
+
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    [
+        // Eager scoped service - direct field access (field is guaranteed initialized after constructor)
+        new(new ServiceIdentifier(typeof(global::ScopedService), KeyedService.AnyKey), static c => c._scopedService),
+        new(new ServiceIdentifier(typeof(global::IScopedService), KeyedService.AnyKey), static c => c._scopedService),
+    ];
+}
+#endregion
+```
+
+##### EagerResolveOptions.None
+
+All services use lazy resolution with synchronization:
+
+```csharp
+#region Define:
+[IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
+public partial class AppContainer;
+#endregion
+
+#region Generate:
+partial class AppContainer
+{
+    // Lazy singleton - nullable field with synchronization
+    private global::MySingleton? _mySingleton;
+    private readonly SemaphoreSlim _mySingletonSemaphore = new(1, 1);
+    private global::MySingleton GetMySingleton()
+    {
+        if (_mySingleton is not null) return _mySingleton;
+
+        _mySingletonSemaphore.Wait();
+        try
+        {
+            if (_mySingleton is not null) return _mySingleton;
+
+            var instance = new global::MySingleton();
+            _mySingleton = instance;
+            return instance;
+        }
+        finally
+        {
+            _mySingletonSemaphore.Release();
+        }
+    }
+
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    [
+        // Lazy service - method call (not direct field access)
+        new(new ServiceIdentifier(typeof(global::MySingleton), KeyedService.AnyKey), static c => c.GetMySingleton()),
+    ];
+}
+#endregion
 ```
 
 ## Features
 
 ### 1. Basic Container Generation
 
-Generate a container implementing all required interfaces with thread-safe singleton resolution:
+Generate a container implementing all required interfaces with eager singleton resolution (default behavior):
 
 ```csharp
 #region Define:
@@ -224,6 +432,7 @@ internal class MyService(IMyDependency myDependency) : IMyService
     private readonly IMyDependency _myDependency = myDependency;
 }
 
+// Default: EagerResolveOptions = EagerResolveOptions.Singleton
 [IocContainer]
 public partial class AppContainer;
 #endregion
@@ -266,6 +475,10 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons (calls Get methods to handle dependencies)
+        _myDependency = GetMyDependency();
+        _myService = GetMyService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -273,7 +486,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        // Copy singleton references from parent
+        // Copy eager singleton references from parent
         _myDependency = parent._myDependency;
         _myService = parent._myService;
         _serviceResolvers = parent._serviceResolvers;
@@ -283,46 +496,26 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     #region Service Resolution
 
-    private global::MyDependency? _myDependency;
-    private readonly SemaphoreSlim _myDependencySemaphore = new(1, 1);
+    // Eager singleton - non-nullable field, no synchronization
+    private global::MyDependency _myDependency;
     private global::MyDependency GetMyDependency()
     {
         if (_myDependency is not null) return _myDependency;
 
-        _myDependencySemaphore.Wait();
-        try
-        {
-            if (_myDependency is not null) return _myDependency;
-
-            var instance = new global::MyDependency();
-            _myDependency = instance;
-            return instance;
-        }
-        finally
-        {
-            _myDependencySemaphore.Release();
-        }
+        var instance = new global::MyDependency();
+        _myDependency = instance;
+        return instance;
     }
 
-    private global::MyService? _myService;
-    private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
+    // Eager singleton - non-nullable field, no synchronization
+    private global::MyService _myService;
     private global::MyService GetMyService()
     {
         if (_myService is not null) return _myService;
 
-        _myServiceSemaphore.Wait();
-        try
-        {
-            if (_myService is not null) return _myService;
-
-            var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
-            _myService = instance;
-            return instance;
-        }
-        finally
-        {
-            _myServiceSemaphore.Release();
-        }
+        var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
+        _myService = instance;
+        return instance;
     }
 
     #endregion
@@ -417,10 +610,11 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
-        new(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
-        new(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c.GetMyService()),
-        new(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
+        // Eager singletons - direct field access (not method calls)
+        new(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c._myDependency),
+        new(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c._myDependency),
+        new(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
+        new(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
     ];
 
     #endregion
@@ -454,10 +648,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
             return;
         }
 
+        // Eager singletons - no SemaphoreSlim to dispose
         DisposeService(_myService);
-        _myServiceSemaphore.Dispose();  // SemaphoreSlim disposed with service
         DisposeService(_myDependency);
-        _myDependencySemaphore.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -469,10 +662,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
             return;
         }
 
+        // Eager singletons - no SemaphoreSlim to dispose
         await DisposeServiceAsync(_myService);
-        _myServiceSemaphore.Dispose();  // SemaphoreSlim disposed with service
         await DisposeServiceAsync(_myDependency);
-        _myDependencySemaphore.Dispose();
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)

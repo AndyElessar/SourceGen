@@ -33,6 +33,9 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _myService = GetMyService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -48,21 +51,15 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
 
     #region Service Resolution
 
-    private global::MyService? _myService;
-    private readonly Lock _myServiceLock = new();
+    private global::MyService _myService = null!;
     private global::MyService GetMyService()
     {
         if(_myService is not null) return _myService;
 
-        lock(_myServiceLock)
-        {
-            if(_myService is not null) return _myService;
+        var instance = new global::MyService();
 
-            var instance = new global::MyService();
-
-            _myService = instance;
-            return instance;
-        }
+        _myService = instance;
+        return instance;
     }
 
     #endregion
@@ -161,8 +158,8 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::GlobalContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
-        new(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
+        new(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
+        new(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
     ];
 
     #endregion

@@ -35,6 +35,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>? _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
-    private readonly Lock _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_CreateLock = new();
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = null!;
     private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create()
     {
         if(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create is not null) return _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
 
-        lock(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_CreateLock)
-        {
-            if(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create is not null) return _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
+        var instance = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity, global::TestNamespace.Dto>();
 
-            var instance = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity, global::TestNamespace.Dto>();
-
-            _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = instance;
-            return instance;
-        }
+        _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = instance;
+        return instance;
     }
 
     #endregion
@@ -163,7 +160,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create!),
     ];
 
     #endregion

@@ -35,11 +35,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
-        // Initialize eager singletons
-        _testNamespace_Plugin1 = GetTestNamespace_Plugin1();
-        _testNamespace_Plugin2 = GetTestNamespace_Plugin2();
-        _testNamespace_Plugin3 = GetTestNamespace_Plugin3();
-
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -47,9 +42,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Plugin1 = parent._testNamespace_Plugin1;
-        _testNamespace_Plugin2 = parent._testNamespace_Plugin2;
-        _testNamespace_Plugin3 = parent._testNamespace_Plugin3;
+        _testNamespace_SingletonService = parent._testNamespace_SingletonService;
+
+        // Initialize eager scoped services
+        _testNamespace_ScopedService = GetTestNamespace_ScopedService();
         _serviceResolvers = parent._serviceResolvers;
     }
 
@@ -57,45 +53,33 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Plugin1 _testNamespace_Plugin1 = null!;
-    private global::TestNamespace.Plugin1 GetTestNamespace_Plugin1()
+    private global::TestNamespace.SingletonService? _testNamespace_SingletonService;
+    private readonly Lock _testNamespace_SingletonServiceLock = new();
+    private global::TestNamespace.SingletonService GetTestNamespace_SingletonService()
     {
-        if(_testNamespace_Plugin1 is not null) return _testNamespace_Plugin1;
+        if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
 
-        var instance = new global::TestNamespace.Plugin1();
+        lock(_testNamespace_SingletonServiceLock)
+        {
+            if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
 
-        _testNamespace_Plugin1 = instance;
-        return instance;
+            var instance = new global::TestNamespace.SingletonService();
+
+            _testNamespace_SingletonService = instance;
+            return instance;
+        }
     }
 
-    private global::TestNamespace.Plugin2 _testNamespace_Plugin2 = null!;
-    private global::TestNamespace.Plugin2 GetTestNamespace_Plugin2()
+    private global::TestNamespace.ScopedService _testNamespace_ScopedService = null!;
+    private global::TestNamespace.ScopedService GetTestNamespace_ScopedService()
     {
-        if(_testNamespace_Plugin2 is not null) return _testNamespace_Plugin2;
+        if(_testNamespace_ScopedService is not null) return _testNamespace_ScopedService;
 
-        var instance = new global::TestNamespace.Plugin2();
+        var instance = new global::TestNamespace.ScopedService();
 
-        _testNamespace_Plugin2 = instance;
+        _testNamespace_ScopedService = instance;
         return instance;
     }
-
-    private global::TestNamespace.Plugin3 _testNamespace_Plugin3 = null!;
-    private global::TestNamespace.Plugin3 GetTestNamespace_Plugin3()
-    {
-        if(_testNamespace_Plugin3 is not null) return _testNamespace_Plugin3;
-
-        var instance = new global::TestNamespace.Plugin3();
-
-        _testNamespace_Plugin3 = instance;
-        return instance;
-    }
-
-    private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>
-        [
-            GetTestNamespace_Plugin1(),
-            GetTestNamespace_Plugin2(),
-            GetTestNamespace_Plugin3(),
-        ];
 
     #endregion
 
@@ -193,14 +177,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Plugin1), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin1!),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IPlugin), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin3!),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Plugin2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin2!),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Plugin3), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin3!),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.SingletonService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SingletonService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ISingletonService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SingletonService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ScopedService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_ScopedService!),
     ];
 
     #endregion
@@ -231,12 +211,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            DisposeService(_testNamespace_ScopedService);
             return;
         }
 
-        DisposeService(_testNamespace_Plugin3);
-        DisposeService(_testNamespace_Plugin2);
-        DisposeService(_testNamespace_Plugin1);
+        DisposeService(_testNamespace_SingletonService);
     }
 
     public async ValueTask DisposeAsync()
@@ -245,12 +224,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_testNamespace_ScopedService);
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Plugin3);
-        await DisposeServiceAsync(_testNamespace_Plugin2);
-        await DisposeServiceAsync(_testNamespace_Plugin1);
+        await DisposeServiceAsync(_testNamespace_SingletonService);
     }
 
     private void ThrowIfDisposed()

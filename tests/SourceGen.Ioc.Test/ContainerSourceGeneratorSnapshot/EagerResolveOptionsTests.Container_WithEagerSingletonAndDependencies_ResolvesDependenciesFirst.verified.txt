@@ -36,9 +36,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _testNamespace_Plugin1 = GetTestNamespace_Plugin1();
-        _testNamespace_Plugin2 = GetTestNamespace_Plugin2();
-        _testNamespace_Plugin3 = GetTestNamespace_Plugin3();
+        _testNamespace_Dependency = GetTestNamespace_Dependency();
+        _testNamespace_MyService = GetTestNamespace_MyService();
 
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
@@ -47,9 +46,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Plugin1 = parent._testNamespace_Plugin1;
-        _testNamespace_Plugin2 = parent._testNamespace_Plugin2;
-        _testNamespace_Plugin3 = parent._testNamespace_Plugin3;
+        _testNamespace_Dependency = parent._testNamespace_Dependency;
+        _testNamespace_MyService = parent._testNamespace_MyService;
         _serviceResolvers = parent._serviceResolvers;
     }
 
@@ -57,45 +55,27 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Plugin1 _testNamespace_Plugin1 = null!;
-    private global::TestNamespace.Plugin1 GetTestNamespace_Plugin1()
+    private global::TestNamespace.Dependency _testNamespace_Dependency = null!;
+    private global::TestNamespace.Dependency GetTestNamespace_Dependency()
     {
-        if(_testNamespace_Plugin1 is not null) return _testNamespace_Plugin1;
+        if(_testNamespace_Dependency is not null) return _testNamespace_Dependency;
 
-        var instance = new global::TestNamespace.Plugin1();
+        var instance = new global::TestNamespace.Dependency();
 
-        _testNamespace_Plugin1 = instance;
+        _testNamespace_Dependency = instance;
         return instance;
     }
 
-    private global::TestNamespace.Plugin2 _testNamespace_Plugin2 = null!;
-    private global::TestNamespace.Plugin2 GetTestNamespace_Plugin2()
+    private global::TestNamespace.MyService _testNamespace_MyService = null!;
+    private global::TestNamespace.MyService GetTestNamespace_MyService()
     {
-        if(_testNamespace_Plugin2 is not null) return _testNamespace_Plugin2;
+        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
 
-        var instance = new global::TestNamespace.Plugin2();
+        var instance = new global::TestNamespace.MyService(GetTestNamespace_Dependency());
 
-        _testNamespace_Plugin2 = instance;
+        _testNamespace_MyService = instance;
         return instance;
     }
-
-    private global::TestNamespace.Plugin3 _testNamespace_Plugin3 = null!;
-    private global::TestNamespace.Plugin3 GetTestNamespace_Plugin3()
-    {
-        if(_testNamespace_Plugin3 is not null) return _testNamespace_Plugin3;
-
-        var instance = new global::TestNamespace.Plugin3();
-
-        _testNamespace_Plugin3 = instance;
-        return instance;
-    }
-
-    private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>
-        [
-            GetTestNamespace_Plugin1(),
-            GetTestNamespace_Plugin2(),
-            GetTestNamespace_Plugin3(),
-        ];
 
     #endregion
 
@@ -193,14 +173,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Plugin1), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin1!),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IPlugin), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin3!),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Plugin2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin2!),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Plugin3), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Plugin3!),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Dependency), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Dependency!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IDependency), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Dependency!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
     ];
 
     #endregion
@@ -234,9 +210,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             return;
         }
 
-        DisposeService(_testNamespace_Plugin3);
-        DisposeService(_testNamespace_Plugin2);
-        DisposeService(_testNamespace_Plugin1);
+        DisposeService(_testNamespace_MyService);
+        DisposeService(_testNamespace_Dependency);
     }
 
     public async ValueTask DisposeAsync()
@@ -248,9 +223,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Plugin3);
-        await DisposeServiceAsync(_testNamespace_Plugin2);
-        await DisposeServiceAsync(_testNamespace_Plugin1);
+        await DisposeServiceAsync(_testNamespace_MyService);
+        await DisposeServiceAsync(_testNamespace_Dependency);
     }
 
     private void ThrowIfDisposed()

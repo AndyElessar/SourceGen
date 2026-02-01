@@ -35,6 +35,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_Handler_TestNamespace_Entity_ = GetTestNamespace_Handler_TestNamespace_Entity_();
+        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create();
+        _testNamespace_Handler_TestNamespace_Entity2_ = GetTestNamespace_Handler_TestNamespace_Entity2_();
+        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -53,72 +59,48 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity>? _testNamespace_Handler_TestNamespace_Entity_;
-    private readonly Lock _testNamespace_Handler_TestNamespace_Entity_Lock = new();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> _testNamespace_Handler_TestNamespace_Entity_ = null!;
     private global::TestNamespace.Handler<global::TestNamespace.Entity> GetTestNamespace_Handler_TestNamespace_Entity_()
     {
         if(_testNamespace_Handler_TestNamespace_Entity_ is not null) return _testNamespace_Handler_TestNamespace_Entity_;
 
-        lock(_testNamespace_Handler_TestNamespace_Entity_Lock)
-        {
-            if(_testNamespace_Handler_TestNamespace_Entity_ is not null) return _testNamespace_Handler_TestNamespace_Entity_;
+        var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity>();
 
-            var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity>();
-
-            _testNamespace_Handler_TestNamespace_Entity_ = instance;
-            return instance;
-        }
+        _testNamespace_Handler_TestNamespace_Entity_ = instance;
+        return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity>? _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
-    private readonly Lock _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateLock = new();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = null!;
     private global::TestNamespace.Handler<global::TestNamespace.Entity> GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()
     {
         if(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
 
-        lock(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_CreateLock)
-        {
-            if(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
+        var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
 
-            var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
-
-            _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = instance;
-            return instance;
-        }
+        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = instance;
+        return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2>? _testNamespace_Handler_TestNamespace_Entity2_;
-    private readonly Lock _testNamespace_Handler_TestNamespace_Entity2_Lock = new();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _testNamespace_Handler_TestNamespace_Entity2_ = null!;
     private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetTestNamespace_Handler_TestNamespace_Entity2_()
     {
         if(_testNamespace_Handler_TestNamespace_Entity2_ is not null) return _testNamespace_Handler_TestNamespace_Entity2_;
 
-        lock(_testNamespace_Handler_TestNamespace_Entity2_Lock)
-        {
-            if(_testNamespace_Handler_TestNamespace_Entity2_ is not null) return _testNamespace_Handler_TestNamespace_Entity2_;
+        var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity2>();
 
-            var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity2>();
-
-            _testNamespace_Handler_TestNamespace_Entity2_ = instance;
-            return instance;
-        }
+        _testNamespace_Handler_TestNamespace_Entity2_ = instance;
+        return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2>? _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
-    private readonly Lock _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateLock = new();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = null!;
     private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()
     {
         if(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
 
-        lock(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_CreateLock)
-        {
-            if(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create is not null) return _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
+        var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity2>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
 
-            var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity2>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
-
-            _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = instance;
-            return instance;
-        }
+        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = instance;
+        return instance;
     }
 
     private global::TestNamespace.Handler<global::TestNamespace.Entity>[] GetAllTestNamespace_Handler_TestNamespace_Entity_Array() =>
@@ -229,10 +211,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create!),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.Handler<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),

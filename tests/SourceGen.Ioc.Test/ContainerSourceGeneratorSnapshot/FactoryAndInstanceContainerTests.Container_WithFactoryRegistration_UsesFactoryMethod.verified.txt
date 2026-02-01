@@ -35,6 +35,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Connection? _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
-    private readonly Lock _testNamespace_Connection_TestNamespace_ConnectionFactory_CreateLock = new();
+    private global::TestNamespace.Connection _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = null!;
     private global::TestNamespace.Connection GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()
     {
         if(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create is not null) return _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
 
-        lock(_testNamespace_Connection_TestNamespace_ConnectionFactory_CreateLock)
-        {
-            if(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create is not null) return _testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
+        var instance = (global::TestNamespace.Connection)global::TestNamespace.ConnectionFactory.Create(this);
 
-            var instance = (global::TestNamespace.Connection)global::TestNamespace.ConnectionFactory.Create(this);
-
-            _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = instance;
-            return instance;
-        }
+        _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = instance;
+        return instance;
     }
 
     #endregion
@@ -163,8 +160,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Connection), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IConnection), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Connection), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Connection_TestNamespace_ConnectionFactory_Create!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IConnection), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Connection_TestNamespace_ConnectionFactory_Create!),
     ];
 
     #endregion

@@ -38,4 +38,10 @@ public sealed class IocContainerAttribute : Attribute
     /// Default is <see cref="ThreadSafeStrategy.Lock"/>.
     /// </summary>
     public ThreadSafeStrategy ThreadSafeStrategy { get; init; } = ThreadSafeStrategy.Lock;
+
+    /// <summary>
+    /// Gets the eager resolution options for the generated container.<br/>
+    /// Default is <see cref="EagerResolveOptions.Singleton"/>.
+    /// </summary>
+    public EagerResolveOptions EagerResolveOptions { get; init; } = EagerResolveOptions.Singleton;
 }

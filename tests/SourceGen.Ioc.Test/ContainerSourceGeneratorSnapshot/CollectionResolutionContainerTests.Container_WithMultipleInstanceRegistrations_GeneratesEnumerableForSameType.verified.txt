@@ -49,17 +49,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private string Getstring_TestNamespace_ConnectionStrings_Primary() => global::TestNamespace.ConnectionStrings.Primary;
 
-    private string Getstring_TestNamespace_ConnectionStrings_Secondary() => global::TestNamespace.ConnectionStrings.Secondary;
 
-    private string Getstring_TestNamespace_ConnectionStrings_Backup() => global::TestNamespace.ConnectionStrings.Backup;
 
     private string[] GetAllstringArray() =>
         [
-            Getstring_TestNamespace_ConnectionStrings_Primary(),
-            Getstring_TestNamespace_ConnectionStrings_Secondary(),
-            Getstring_TestNamespace_ConnectionStrings_Backup(),
+            global::TestNamespace.ConnectionStrings.Primary,
+            global::TestNamespace.ConnectionStrings.Secondary,
+            global::TestNamespace.ConnectionStrings.Backup,
         ];
 
     #endregion
@@ -158,7 +155,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(string), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.Getstring_TestNamespace_ConnectionStrings_Backup()),
+        new(new ServiceIdentifier(typeof(string), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static _ => global::TestNamespace.ConnectionStrings.Backup),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),

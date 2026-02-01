@@ -35,6 +35,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_Handler1 = GetTestNamespace_Handler1();
+        _testNamespace_Handler2 = GetTestNamespace_Handler2();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -51,38 +55,26 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler1? _testNamespace_Handler1;
-    private readonly Lock _testNamespace_Handler1Lock = new();
+    private global::TestNamespace.Handler1 _testNamespace_Handler1 = null!;
     private global::TestNamespace.Handler1 GetTestNamespace_Handler1()
     {
         if(_testNamespace_Handler1 is not null) return _testNamespace_Handler1;
 
-        lock(_testNamespace_Handler1Lock)
-        {
-            if(_testNamespace_Handler1 is not null) return _testNamespace_Handler1;
+        var instance = new global::TestNamespace.Handler1();
 
-            var instance = new global::TestNamespace.Handler1();
-
-            _testNamespace_Handler1 = instance;
-            return instance;
-        }
+        _testNamespace_Handler1 = instance;
+        return instance;
     }
 
-    private global::TestNamespace.Handler2? _testNamespace_Handler2;
-    private readonly Lock _testNamespace_Handler2Lock = new();
+    private global::TestNamespace.Handler2 _testNamespace_Handler2 = null!;
     private global::TestNamespace.Handler2 GetTestNamespace_Handler2()
     {
         if(_testNamespace_Handler2 is not null) return _testNamespace_Handler2;
 
-        lock(_testNamespace_Handler2Lock)
-        {
-            if(_testNamespace_Handler2 is not null) return _testNamespace_Handler2;
+        var instance = new global::TestNamespace.Handler2();
 
-            var instance = new global::TestNamespace.Handler2();
-
-            _testNamespace_Handler2 = instance;
-            return instance;
-        }
+        _testNamespace_Handler2 = instance;
+        return instance;
     }
 
     private global::TestNamespace.IHandler[] GetAllTestNamespace_IHandlerArray() =>
@@ -187,9 +179,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler1), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler1()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler2()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Handler2()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler1), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler1!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler2!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler2!),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IHandlerArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IHandlerArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IHandlerArray()),

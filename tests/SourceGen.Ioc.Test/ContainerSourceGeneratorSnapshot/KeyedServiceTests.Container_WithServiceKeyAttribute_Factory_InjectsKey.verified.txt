@@ -35,6 +35,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_KeyedService__factoryKey_ = GetTestNamespace_KeyedService__factoryKey_();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.KeyedService? _testNamespace_KeyedService__factoryKey_;
-    private readonly Lock _testNamespace_KeyedService__factoryKey_Lock = new();
+    private global::TestNamespace.KeyedService _testNamespace_KeyedService__factoryKey_ = null!;
     private global::TestNamespace.KeyedService GetTestNamespace_KeyedService__factoryKey_()
     {
         if(_testNamespace_KeyedService__factoryKey_ is not null) return _testNamespace_KeyedService__factoryKey_;
 
-        lock(_testNamespace_KeyedService__factoryKey_Lock)
-        {
-            if(_testNamespace_KeyedService__factoryKey_ is not null) return _testNamespace_KeyedService__factoryKey_;
+        var instance = (global::TestNamespace.KeyedService)global::TestNamespace.ServiceFactory.Create("factoryKey");
 
-            var instance = (global::TestNamespace.KeyedService)global::TestNamespace.ServiceFactory.Create("factoryKey");
-
-            _testNamespace_KeyedService__factoryKey_ = instance;
-            return instance;
-        }
+        _testNamespace_KeyedService__factoryKey_ = instance;
+        return instance;
     }
 
     #endregion
@@ -163,8 +160,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService), "factoryKey"), static c => c.GetTestNamespace_KeyedService__factoryKey_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IService), "factoryKey"), static c => c.GetTestNamespace_KeyedService__factoryKey_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService), "factoryKey"), static c => c._testNamespace_KeyedService__factoryKey_!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IService), "factoryKey"), static c => c._testNamespace_KeyedService__factoryKey_!),
     ];
 
     #endregion

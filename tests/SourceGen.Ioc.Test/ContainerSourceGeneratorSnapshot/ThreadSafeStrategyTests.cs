@@ -10,6 +10,7 @@ public class ThreadSafeStrategyTests
     [Test]
     public async Task Container_WithThreadSafeStrategyNone_GeneratesNoSynchronization()
     {
+        // Use EagerResolveOptions.None to test lazy singleton without synchronization
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -21,7 +22,7 @@ public class ThreadSafeStrategyTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None)]
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 
@@ -35,6 +36,7 @@ public class ThreadSafeStrategyTests
     [Test]
     public async Task Container_WithThreadSafeStrategyLock_GeneratesLockSynchronization()
     {
+        // Use EagerResolveOptions.None to test lazy singleton with Lock synchronization
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -46,7 +48,7 @@ public class ThreadSafeStrategyTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock)]
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 
@@ -60,6 +62,7 @@ public class ThreadSafeStrategyTests
     [Test]
     public async Task Container_WithThreadSafeStrategySemaphoreSlim_GeneratesSemaphoreSynchronization()
     {
+        // Use EagerResolveOptions.None to test lazy singleton with SemaphoreSlim synchronization
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -71,7 +74,7 @@ public class ThreadSafeStrategyTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim)]
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 
@@ -85,6 +88,7 @@ public class ThreadSafeStrategyTests
     [Test]
     public async Task Container_WithThreadSafeStrategySpinLock_GeneratesSpinLockSynchronization()
     {
+        // Use EagerResolveOptions.None to test lazy singleton with SpinLock synchronization
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -96,7 +100,7 @@ public class ThreadSafeStrategyTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SpinLock)]
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SpinLock, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 
@@ -111,6 +115,7 @@ public class ThreadSafeStrategyTests
     public async Task Container_WithDefaultStrategy_GeneratesSemaphoreSlimSynchronization()
     {
         // Default ThreadSafeStrategy should be SemaphoreSlim
+        // Use EagerResolveOptions.None to test lazy singleton synchronization
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -122,7 +127,7 @@ public class ThreadSafeStrategyTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer]
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 
@@ -136,6 +141,7 @@ public class ThreadSafeStrategyTests
     [Test]
     public async Task Container_WithThreadSafeStrategyNone_AndDecorators_GeneratesNoSynchronization()
     {
+        // Use EagerResolveOptions.None to test lazy singleton with decorators
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -152,7 +158,7 @@ public class ThreadSafeStrategyTests
                 public void Execute() => inner.Execute();
             }
 
-            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None)]
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 
@@ -166,6 +172,7 @@ public class ThreadSafeStrategyTests
     [Test]
     public async Task Container_WithThreadSafeStrategyLock_AndPropertyInjection_GeneratesLockSynchronization()
     {
+        // Use EagerResolveOptions.None to test lazy singleton with property injection
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -186,7 +193,7 @@ public class ThreadSafeStrategyTests
                 public IDependency? Dep { get; set; }
             }
 
-            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock)]
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 

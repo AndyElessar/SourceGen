@@ -197,16 +197,29 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Writes a service instance field and synchronization field based on ThreadSafeStrategy.
+    /// For eager services, fields are non-nullable and no synchronization is needed.
     /// </summary>
     private static void WriteServiceInstanceField(
         SourceWriter writer,
         ThreadSafeStrategy strategy,
         ServiceRegistrationModel reg,
         string fieldName,
-        bool hasDecorators)
+        bool hasDecorators,
+        bool isEager)
     {
         // When there are decorators, field type is ServiceType (interface), otherwise ImplementationType
         var typeName = hasDecorators ? reg.ServiceType.Name : reg.ImplementationType.Name;
+
+        if(isEager)
+        {
+            // Eager services use non-nullable fields (initialized in constructor)
+            // Use null! to suppress CS8618 warning - field will be initialized in constructor
+            writer.WriteLine($"private {typeName} {fieldName} = null!;");
+            // No synchronization field needed for eager services
+            return;
+        }
+
+        // Lazy services use nullable fields
         writer.WriteLine($"private {typeName}? {fieldName};");
 
         // Generate synchronization field based on strategy
@@ -312,6 +325,18 @@ partial class IocSourceGenerator
             writer.WriteLine($"{fieldName} = ({module.Name})parent.{fieldName}.CreateScope().ServiceProvider;");
         }
 
+        // Initialize eager scoped services by calling their Get methods
+        var eagerScoped = groups.Scoped.Where(static c => c.IsEager).ToList();
+        if(eagerScoped.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Initialize eager scoped services");
+            foreach(var cached in eagerScoped)
+            {
+                writer.WriteLine($"{cached.FieldName} = {cached.ResolverMethodName}();");
+            }
+        }
+
         // Because resolvers are immutable per container, they can be reused from parent
         if(!effectiveUseSwitchStatement)
         {
@@ -347,6 +372,19 @@ partial class IocSourceGenerator
             else
             {
                 writer.WriteLine($"{fieldName} = new {module.Name}();");
+            }
+        }
+
+        // Initialize eager singletons by calling their Get methods
+        // This ensures dependencies are resolved in the correct order
+        var eagerSingletons = groups.Singletons.Where(static c => c.IsEager).ToList();
+        if(eagerSingletons.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Initialize eager singletons");
+            foreach(var cached in eagerSingletons)
+            {
+                writer.WriteLine($"{cached.FieldName} = {cached.ResolverMethodName}();");
             }
         }
 
@@ -449,20 +487,22 @@ partial class IocSourceGenerator
         if(!groups.CollectionRegistrations.TryGetValue(serviceType, out var registrations))
             return;
 
-        // Deduplicate resolver method names to avoid calling the same resolver multiple times
-        var uniqueResolvers = new HashSet<string>();
-        var resolverMethods = new List<string>();
+        // Deduplicate by resolver method name (or instance expression for instance registrations)
+        var uniqueKeys = new HashSet<string>();
+        var resolverEntries = new List<CachedRegistration>();
 
         foreach(var cached in registrations)
         {
-            if(uniqueResolvers.Add(cached.ResolverMethodName))
+            // Use instance expression as key for instance registrations, otherwise use method name
+            var key = cached.Registration.Instance ?? cached.ResolverMethodName;
+            if(uniqueKeys.Add(key))
             {
-                resolverMethods.Add(cached.ResolverMethodName);
+                resolverEntries.Add(cached);
             }
         }
 
-        // Only generate collection if there are multiple unique resolvers
-        if(resolverMethods.Count < 2)
+        // Only generate collection if there are multiple unique entries
+        if(resolverEntries.Count < 2)
             return;
 
         writer.WriteLine($"private {returnType} {methodName}() =>");
@@ -470,9 +510,18 @@ partial class IocSourceGenerator
         writer.WriteLine("[");
         writer.Indentation++;
 
-        foreach(var resolverMethod in resolverMethods)
+        foreach(var cached in resolverEntries)
         {
-            writer.WriteLine($"{resolverMethod}(),");
+            if(cached.Registration.Instance is not null)
+            {
+                // Instance registration: directly use the instance expression
+                writer.WriteLine($"{cached.Registration.Instance},");
+            }
+            else
+            {
+                // Regular registration: call the resolver method
+                writer.WriteLine($"{cached.ResolverMethodName}(),");
+            }
         }
 
         writer.Indentation--;
@@ -492,6 +541,7 @@ partial class IocSourceGenerator
         var reg = cached.Registration;
         var methodName = cached.ResolverMethodName;
         var fieldName = cached.FieldName;
+        var isEager = cached.IsEager;
 
         // Check if factory or instance registration
         bool hasFactory = reg.Factory is not null;
@@ -501,11 +551,9 @@ partial class IocSourceGenerator
         // Return type: if there are decorators, return the ServiceType (interface), otherwise ImplementationType
         var returnType = hasDecorators ? reg.ServiceType.Name : reg.ImplementationType.Name;
 
-        // Instance registration: directly return the instance without field caching
-        // The instance is already externally managed, no need for field storage
+        // Instance registration: no resolver method needed, will be inlined in _localServices
         if(hasInstance)
         {
-            WriteInstanceResolverMethod(writer, methodName, returnType, reg);
             return;
         }
 
@@ -514,10 +562,19 @@ partial class IocSourceGenerator
             case ServiceLifetime.Singleton:
             case ServiceLifetime.Scoped:
                 // Write field and synchronization field above the resolver method for better readability
-                WriteServiceInstanceField(writer, strategy, reg, fieldName, hasDecorators);
+                WriteServiceInstanceField(writer, strategy, reg, fieldName, hasDecorators, isEager);
 
-                // Write resolver method based on thread-safe strategy
-                WriteResolverMethodWithThreadSafety(writer, strategy, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
+                if(isEager)
+                {
+                    // Eager services: Get method still creates instance on first call (from constructor)
+                    // but no synchronization needed since constructor runs single-threaded
+                    WriteEagerResolverMethod(writer, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
+                }
+                else
+                {
+                    // Lazy services: Write resolver method based on thread-safe strategy
+                    WriteResolverMethodWithThreadSafety(writer, strategy, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
+                }
                 break;
 
             case ServiceLifetime.Transient:
@@ -527,16 +584,45 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes a simple resolver method for instance registrations.
-    /// Instance registrations directly return the pre-existing instance without field caching.
+    /// Writes resolver method for eager services.
+    /// Eager services are initialized in the constructor, so no synchronization is needed.
+    /// The Get method still handles first-call initialization for dependency resolution.
     /// </summary>
-    private static void WriteInstanceResolverMethod(
+    private static void WriteEagerResolverMethod(
         SourceWriter writer,
         string methodName,
         string returnType,
-        ServiceRegistrationModel reg)
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
     {
-        writer.WriteLine($"private {returnType} {methodName}() => {reg.Instance};");
+        writer.WriteLine($"private {returnType} {methodName}()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // For non-nullable reference types, we use object comparison instead of pattern matching
+        // since the field is initialized to null! and will be set during constructor
+        writer.WriteLine($"if({fieldName} is not null) return {fieldName};");
+        writer.WriteLine();
+
+        // No synchronization needed - constructor runs single-threaded
+        var variableType = hasDecorators ? reg.ServiceType.Name : null;
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
+
+        if(hasDecorators)
+        {
+            writer.WriteLine();
+            WriteDecoratorApplication(writer, "instance", reg, groups);
+        }
+
+        writer.WriteLine();
+        writer.WriteLine($"{fieldName} = instance;");
+        writer.WriteLine("return instance;");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
     }
 
     /// <summary>
@@ -1517,7 +1603,26 @@ partial class IocSourceGenerator
         {
             var cached = kvp.Value[^1]; // Last wins
             var keyExpr = kvp.Key.Key ?? KeyedServiceAnyKey;
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({kvp.Key.ServiceType}), {keyExpr}), static c => c.{cached.ResolverMethodName}()),");
+
+            // Determine resolver expression based on registration type
+            string resolverExpr;
+            if(cached.Registration.Instance is not null)
+            {
+                // Instance registration: directly return the instance
+                resolverExpr = $"static _ => {cached.Registration.Instance}";
+            }
+            else if(cached.IsEager)
+            {
+                // Eager services: directly access the field
+                resolverExpr = $"static c => c.{cached.FieldName}!";
+            }
+            else
+            {
+                // Lazy services: call the Get method
+                resolverExpr = $"static c => c.{cached.ResolverMethodName}()";
+            }
+
+            writer.WriteLine($"new(new ServiceIdentifier(typeof({kvp.Key.ServiceType}), {keyExpr}), {resolverExpr}),");
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[] entries for collection service types
@@ -1653,8 +1758,8 @@ partial class IocSourceGenerator
 
             writer.WriteLine($"{serviceMethod}({cached.FieldName});");
 
-            // Dispose SemaphoreSlim if using SemaphoreSlim strategy
-            if(strategy == ThreadSafeStrategy.SemaphoreSlim)
+            // Dispose SemaphoreSlim if using SemaphoreSlim strategy (only for non-eager services)
+            if(strategy == ThreadSafeStrategy.SemaphoreSlim && !cached.IsEager)
             {
                 writer.WriteLine($"{cached.FieldName}Semaphore.Dispose();");
             }

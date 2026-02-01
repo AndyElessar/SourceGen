@@ -49,7 +49,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.Configuration GetTestNamespace_Configuration_TestNamespace_Configuration_Default() => global::TestNamespace.Configuration.Default;
 
     #endregion
 
@@ -147,8 +146,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Configuration), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Configuration_TestNamespace_Configuration_Default()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IConfiguration), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Configuration_TestNamespace_Configuration_Default()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.Configuration), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static _ => global::TestNamespace.Configuration.Default),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IConfiguration), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static _ => global::TestNamespace.Configuration.Default),
     ];
 
     #endregion

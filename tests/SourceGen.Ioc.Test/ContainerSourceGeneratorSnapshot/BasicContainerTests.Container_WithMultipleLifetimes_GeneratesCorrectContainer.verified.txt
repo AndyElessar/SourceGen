@@ -35,6 +35,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_SingletonService = GetTestNamespace_SingletonService();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -50,21 +53,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.SingletonService? _testNamespace_SingletonService;
-    private readonly Lock _testNamespace_SingletonServiceLock = new();
+    private global::TestNamespace.SingletonService _testNamespace_SingletonService = null!;
     private global::TestNamespace.SingletonService GetTestNamespace_SingletonService()
     {
         if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
 
-        lock(_testNamespace_SingletonServiceLock)
-        {
-            if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
+        var instance = new global::TestNamespace.SingletonService();
 
-            var instance = new global::TestNamespace.SingletonService();
-
-            _testNamespace_SingletonService = instance;
-            return instance;
-        }
+        _testNamespace_SingletonService = instance;
+        return instance;
     }
 
     private global::TestNamespace.ScopedService? _testNamespace_ScopedService;
@@ -185,8 +182,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.SingletonService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SingletonService()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.ISingletonService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SingletonService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.SingletonService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_SingletonService!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ISingletonService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_SingletonService!),
         new(new ServiceIdentifier(typeof(global::TestNamespace.ScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ScopedService()),
         new(new ServiceIdentifier(typeof(global::TestNamespace.IScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_ScopedService()),
         new(new ServiceIdentifier(typeof(global::TestNamespace.TransientService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_TransientService()),

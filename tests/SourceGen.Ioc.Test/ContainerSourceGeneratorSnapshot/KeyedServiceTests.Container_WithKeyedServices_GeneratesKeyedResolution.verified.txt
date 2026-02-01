@@ -35,6 +35,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
+        // Initialize eager singletons
+        _testNamespace_KeyedService1__key1_ = GetTestNamespace_KeyedService1__key1_();
+        _testNamespace_KeyedService2__key2_ = GetTestNamespace_KeyedService2__key2_();
+
         _serviceResolvers = _localServices.ToFrozenDictionary();
     }
 
@@ -51,38 +55,26 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region Service Resolution
 
-    private global::TestNamespace.KeyedService1? _testNamespace_KeyedService1__key1_;
-    private readonly Lock _testNamespace_KeyedService1__key1_Lock = new();
+    private global::TestNamespace.KeyedService1 _testNamespace_KeyedService1__key1_ = null!;
     private global::TestNamespace.KeyedService1 GetTestNamespace_KeyedService1__key1_()
     {
         if(_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
 
-        lock(_testNamespace_KeyedService1__key1_Lock)
-        {
-            if(_testNamespace_KeyedService1__key1_ is not null) return _testNamespace_KeyedService1__key1_;
+        var instance = new global::TestNamespace.KeyedService1();
 
-            var instance = new global::TestNamespace.KeyedService1();
-
-            _testNamespace_KeyedService1__key1_ = instance;
-            return instance;
-        }
+        _testNamespace_KeyedService1__key1_ = instance;
+        return instance;
     }
 
-    private global::TestNamespace.KeyedService2? _testNamespace_KeyedService2__key2_;
-    private readonly Lock _testNamespace_KeyedService2__key2_Lock = new();
+    private global::TestNamespace.KeyedService2 _testNamespace_KeyedService2__key2_ = null!;
     private global::TestNamespace.KeyedService2 GetTestNamespace_KeyedService2__key2_()
     {
         if(_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
 
-        lock(_testNamespace_KeyedService2__key2_Lock)
-        {
-            if(_testNamespace_KeyedService2__key2_ is not null) return _testNamespace_KeyedService2__key2_;
+        var instance = new global::TestNamespace.KeyedService2();
 
-            var instance = new global::TestNamespace.KeyedService2();
-
-            _testNamespace_KeyedService2__key2_ = instance;
-            return instance;
-        }
+        _testNamespace_KeyedService2__key2_ = instance;
+        return instance;
     }
 
     #endregion
@@ -181,10 +173,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
     [
-        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService1), "key1"), static c => c.GetTestNamespace_KeyedService1__key1_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key1"), static c => c.GetTestNamespace_KeyedService1__key1_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService2), "key2"), static c => c.GetTestNamespace_KeyedService2__key2_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key2"), static c => c.GetTestNamespace_KeyedService2__key2_()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService1), "key1"), static c => c._testNamespace_KeyedService1__key1_!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key1"), static c => c._testNamespace_KeyedService1__key1_!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService2), "key2"), static c => c._testNamespace_KeyedService2__key2_!),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key2"), static c => c._testNamespace_KeyedService2__key2_!),
     ];
 
     #endregion

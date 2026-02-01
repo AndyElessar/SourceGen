@@ -43,7 +43,9 @@ internal sealed record ContainerRegistrationGroups(
 /// <param name="Registration">The original service registration model.</param>
 /// <param name="FieldName">The pre-computed field name for storing the service instance.</param>
 /// <param name="ResolverMethodName">The pre-computed resolver method name.</param>
+/// <param name="IsEager">Whether this registration should be eagerly resolved during container/scope construction.</param>
 internal readonly record struct CachedRegistration(
     ServiceRegistrationModel Registration,
     string FieldName,
-    string ResolverMethodName);
+    string ResolverMethodName,
+    bool IsEager);
