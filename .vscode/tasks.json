@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run T4 Template",
+      "type": "shell",
+      "command": "t4",
+      "args": ["${file}"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
