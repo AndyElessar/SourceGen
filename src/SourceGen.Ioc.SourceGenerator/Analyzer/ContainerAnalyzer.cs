@@ -47,11 +47,25 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "When a container has one or more [IocImportModule] attributes, UseSwitchStatement is ignored and FrozenDictionary is always used for service resolution.");
 
+    /// <summary>
+    /// SGIOC021: Unable to resolve partial accessor service - A partial method/property's return type cannot be resolved when ResolveIServiceCollection = false.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnableToResolvePartialAccessor = new(
+        id: "SGIOC021",
+        title: "Unable to resolve partial accessor service",
+        messageFormat: "Unable to resolve service '{0}' for partial accessor '{1}' in container '{2}'",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When ResolveIServiceCollection is false, the return type of a partial method or property accessor must be a registered service. No fallback to external IServiceProvider is available.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         UnableToResolveService,
         ContainerMustBePartialAndNotStatic,
-        UseSwitchStatementIgnoredWithImportedModules
+        UseSwitchStatementIgnoredWithImportedModules,
+        UnableToResolvePartialAccessor
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -283,6 +297,73 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                         AnalyzeFieldDependency(context, analyzerContext, containerSymbol, field, injectAttribute);
                         break;
                 }
+            }
+        }
+
+        // SGIOC021: Analyze partial accessor return types
+        AnalyzePartialAccessorDependencies(context, analyzerContext, containerSymbol);
+    }
+
+    /// <summary>
+    /// SGIOC021: Analyzes partial method/property accessors in a container class to ensure their return types are registered.
+    /// Only applies when ResolveIServiceCollection = false.
+    /// </summary>
+    private static void AnalyzePartialAccessorDependencies(
+        CompilationAnalysisContext context,
+        ContainerAnalyzerContext analyzerContext,
+        INamedTypeSymbol containerSymbol)
+    {
+        foreach (var member in containerSymbol.GetMembers())
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            if (member.IsStatic)
+                continue;
+
+            ITypeSymbol? returnType = null;
+            string? memberName = null;
+
+            switch (member)
+            {
+                case IMethodSymbol method
+                    when method.IsPartialDefinition
+                         && !method.ReturnsVoid
+                         && method.Parameters.Length == 0
+                         && !method.IsGenericMethod
+                         && method.MethodKind == MethodKind.Ordinary:
+                    returnType = method.ReturnType;
+                    memberName = method.Name;
+                    break;
+
+                case IPropertySymbol property
+                    when property.IsPartialDefinition
+                         && property.GetMethod is not null:
+                    returnType = property.Type;
+                    memberName = property.Name;
+                    break;
+            }
+
+            if (returnType is null || memberName is null)
+                continue;
+
+            // Strip nullable annotation for type lookup
+            var unwrappedType = returnType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+            var isNullable = returnType.NullableAnnotation == NullableAnnotation.Annotated;
+
+            // Nullable accessors are optional — skip the check
+            if (isNullable)
+                continue;
+
+            if (unwrappedType is INamedTypeSymbol namedReturnType
+                && !IsServiceRegistered(namedReturnType, analyzerContext))
+            {
+                var location = member.Locations.FirstOrDefault();
+                context.ReportDiagnostic(Diagnostic.Create(
+                    UnableToResolvePartialAccessor,
+                    location,
+                    returnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    memberName,
+                    containerSymbol.Name));
             }
         }
     }

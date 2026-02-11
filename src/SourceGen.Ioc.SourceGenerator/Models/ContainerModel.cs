@@ -66,6 +66,7 @@ internal enum ThreadSafeStrategy
 /// <param name="ThreadSafeStrategy">Thread safety strategy for singleton/scoped service resolution.</param>
 /// <param name="ImportedModules">Types of imported module containers.</param>
 /// <param name="ExplicitRegistrations">Registrations explicitly marked on the container class (for ExplicitOnly mode).</param>
+/// <param name="PartialAccessors">User-declared partial methods/properties that serve as fast-path service accessors.</param>
 internal sealed record class ContainerModel(
     string ContainerTypeName,
     string ContainerNamespace,
@@ -77,4 +78,5 @@ internal sealed record class ContainerModel(
     ThreadSafeStrategy ThreadSafeStrategy,
     EagerResolveOptions EagerResolveOptions,
     ImmutableEquatableArray<TypeData> ImportedModules,
-    ImmutableEquatableArray<RegistrationData> ExplicitRegistrations);
+    ImmutableEquatableArray<RegistrationData> ExplicitRegistrations,
+    ImmutableEquatableArray<PartialAccessorData> PartialAccessors);

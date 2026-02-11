@@ -21,3 +21,4 @@ SGIOC017 | Design | Error | Generic Factory Method's type parameters are duplica
 SGIOC018 | Design | Error | Unable to resolve service - A dependency cannot be resolved when ResolveIServiceCollection is false.
 SGIOC019 | Usage | Error | Container class must be partial - The class marked with IocContainerAttribute must be declared as partial.
 SGIOC020 | Usage | Warning | UseSwitchStatement ignored with imported modules - UseSwitchStatement = true is ignored when container has IocImportModule attributes.
+SGIOC021 | Design | Error | Unable to resolve partial accessor service - A partial method/property return type cannot be resolved when ResolveIServiceCollection is false.

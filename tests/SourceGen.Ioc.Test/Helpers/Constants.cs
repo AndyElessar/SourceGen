@@ -23,6 +23,7 @@ internal static class Constants
     public const string GenericService = "GenericService";
     public const string GenericFactory = "GenericFactory";
     public const string ContainerOptions = "ContainerOptions";
+    public const string PartialAccessor = "PartialAccessor";
 
     public const string SGIOC001 = "SGIOC001";
     public const string SGIOC002 = "SGIOC002";
@@ -43,4 +44,5 @@ internal static class Constants
     public const string SGIOC018 = "SGIOC018";
     public const string SGIOC019 = "SGIOC019";
     public const string SGIOC020 = "SGIOC020";
+    public const string SGIOC021 = "SGIOC021";
 }

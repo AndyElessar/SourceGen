@@ -13,8 +13,18 @@ partial class IocSourceGenerator
         // Filter registrations based on ExplicitOnly mode
         var registrations = FilterRegistrationsForContainer(container, allRegistrations);
 
+        // Collect partial accessor method names to avoid naming conflicts
+        var reservedNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach(var accessor in container.PartialAccessors)
+        {
+            if(accessor.Kind == PartialAccessorKind.Method)
+            {
+                reservedNames.Add(accessor.Name);
+            }
+        }
+
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, container.EagerResolveOptions);
+        var groups = BuildContainerRegistrationGroups(registrations, container.EagerResolveOptions, reservedNames);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -92,7 +102,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static ContainerRegistrationGroups BuildContainerRegistrationGroups(
         ImmutableEquatableArray<ServiceRegistrationModel> registrations,
-        EagerResolveOptions eagerResolveOptions)
+        EagerResolveOptions eagerResolveOptions,
+        HashSet<string> reservedNames)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
         var byServiceTypeAndKey = new Dictionary<(string ServiceType, string? Key), List<CachedRegistration>>();
@@ -119,7 +130,7 @@ partial class IocSourceGenerator
             }
 
             // Pre-compute field and method names once, including IsEager flag
-            var cached = CreateCachedRegistration(reg, eagerResolveOptions);
+            var cached = CreateCachedRegistration(reg, eagerResolveOptions, reservedNames);
 
             var key = (reg.ServiceType.Name, reg.Key);
             if(reg.Key is not null)
@@ -242,9 +253,18 @@ partial class IocSourceGenerator
     /// Creates a CachedRegistration with pre-computed field and method names.
     /// Computes both names in a single pass to avoid redundant string operations.
     /// </summary>
-    private static CachedRegistration CreateCachedRegistration(ServiceRegistrationModel reg, EagerResolveOptions eagerResolveOptions)
+    private static CachedRegistration CreateCachedRegistration(
+        ServiceRegistrationModel reg,
+        EagerResolveOptions eagerResolveOptions,
+        HashSet<string> reservedNames)
     {
         var (fieldName, methodName) = ComputeServiceNames(reg);
+
+        // Avoid naming conflicts with user-declared partial accessor methods
+        if(reservedNames.Contains(methodName))
+        {
+            methodName = $"{methodName}_Resolve";
+        }
 
         // Determine if this registration should be eagerly resolved
         // Instance registrations are inherently eager (no field caching needed)

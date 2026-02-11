@@ -169,7 +169,8 @@ public static class SourceGeneratorTestHelper
         string source,
         string assemblyName = "TestAssembly",
         IEnumerable<MetadataReference>? additionalReferences = null,
-        IReadOnlyDictionary<string, string>? analyzerConfigOptions = null)
+        IReadOnlyDictionary<string, string>? analyzerConfigOptions = null,
+        IReadOnlySet<string>? suppressedInitialDiagnosticIds = null)
         where TGenerator : IIncrementalGenerator, new()
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
@@ -183,7 +184,7 @@ public static class SourceGeneratorTestHelper
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        ThrowIfCompilationHasErrors(compilation);
+        ThrowIfCompilationHasErrors(compilation, suppressedInitialDiagnosticIds);
 
         var generator = new TGenerator();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generator).WithUpdatedParseOptions(ParseOptions);
@@ -275,10 +276,13 @@ public static class SourceGeneratorTestHelper
         return lastResult;
     }
 
-    private static void ThrowIfCompilationHasErrors(CSharpCompilation compilation)
+    private static void ThrowIfCompilationHasErrors(
+        CSharpCompilation compilation,
+        IReadOnlySet<string>? suppressedDiagnosticIds = null)
     {
         var errors = compilation.GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Where(d => suppressedDiagnosticIds is null || !suppressedDiagnosticIds.Contains(d.Id))
             .ToList();
 
         if(errors.Count > 0)

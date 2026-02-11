@@ -271,3 +271,22 @@ Report when a class marked with `[IocContainer]` specifies `UseSwitchStatement =
 When a container imports modules, service registrations come from multiple sources at runtime. The switch statement optimization requires all service types to be known at compile time, which is not possible with imported modules. Therefore, `UseSwitchStatement` is silently ignored and `FrozenDictionary` is used instead.
 
 **Message format:** `Container '{ContainerType}' specifies UseSwitchStatement = true but has imported modules; the setting will be ignored and FrozenDictionary will be used instead.`
+
+---
+
+### SGIOC021 - Error - Design - Unable to resolve partial accessor service
+
+Report when a partial method or property accessor in a container class references a service type that is not registered and `ResolveIServiceCollection = false`.
+
+**Analysis:**
+
+- Checks classes marked with `[IocContainer]` attribute that have `ResolveIServiceCollection = false`.
+- Scans the container class members for partial methods (non-void, parameterless, non-generic) and partial properties (with getter).
+- Checks if the return type of each non-nullable partial accessor is a registered service type.
+- Reports when a non-nullable partial accessor's return type is not found among registered services.
+
+**Rationale:**
+
+When `ResolveIServiceCollection = false`, there is no fallback to an external `IServiceProvider`. If a partial accessor references a service type that is not registered, it cannot be resolved at runtime. Nullable accessors are exempt because they can safely return `null`.
+
+**Message format:** `Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.`

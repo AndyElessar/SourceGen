@@ -84,6 +84,9 @@ partial class IocSourceGenerator
             ? ExtractExplicitRegistrations(typeSymbol, ctx.SemanticModel)
             : [];
 
+        // Extract user-declared partial methods/properties for direct service resolution
+        var partialAccessors = ExtractPartialAccessors(typeSymbol, ctx.SemanticModel);
+
         // Get container type information
         var containerTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var containerNamespace = typeSymbol.ContainingNamespace.IsGlobalNamespace
@@ -102,7 +105,94 @@ partial class IocSourceGenerator
             threadSafeStrategy,
             eagerResolveOptions,
             importedModules,
-            explicitRegistrations);
+            explicitRegistrations,
+            partialAccessors);
+    }
+
+    /// <summary>
+    /// Extracts user-declared partial methods and partial properties from the container class.
+    /// These serve as fast-path accessors for direct service resolution.
+    /// </summary>
+    /// <remarks>
+    /// Partial methods must: be partial definitions, return non-void, have no parameters, and not be generic.
+    /// Partial properties must: be partial definitions with a getter.
+    /// The [IocInject]/[Inject] attribute is optional and only used to specify a keyed service key.
+    /// </remarks>
+    private static ImmutableEquatableArray<PartialAccessorData> ExtractPartialAccessors(
+        INamedTypeSymbol containerSymbol,
+        SemanticModel semanticModel)
+    {
+        var accessors = new List<PartialAccessorData>();
+
+        foreach(var member in containerSymbol.GetMembers())
+        {
+            // Skip static members
+            if(member.IsStatic)
+                continue;
+
+            switch(member)
+            {
+                case IMethodSymbol method
+                    when method.IsPartialDefinition
+                         && !method.ReturnsVoid
+                         && method.Parameters.Length == 0
+                         && !method.IsGenericMethod
+                         && method.MethodKind == MethodKind.Ordinary:
+                {
+                    var returnType = method.ReturnType;
+                    var returnTypeName = returnType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+                        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var isNullable = returnType.NullableAnnotation == NullableAnnotation.Annotated;
+                    var key = ExtractKeyFromInjectAttribute(method, semanticModel);
+
+                    accessors.Add(new PartialAccessorData(
+                        PartialAccessorKind.Method,
+                        method.Name,
+                        returnTypeName,
+                        isNullable,
+                        key));
+                    break;
+                }
+
+                case IPropertySymbol property
+                    when property.IsPartialDefinition
+                         && property.GetMethod is not null:
+                {
+                    var returnType = property.Type;
+                    var returnTypeName = returnType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+                        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var isNullable = returnType.NullableAnnotation == NullableAnnotation.Annotated;
+                    var key = ExtractKeyFromInjectAttribute(property, semanticModel);
+
+                    accessors.Add(new PartialAccessorData(
+                        PartialAccessorKind.Property,
+                        property.Name,
+                        returnTypeName,
+                        isNullable,
+                        key));
+                    break;
+                }
+            }
+        }
+
+        return accessors.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Extracts the service key from [IocInject]/[Inject] attribute on a member, if present.
+    /// </summary>
+    private static string? ExtractKeyFromInjectAttribute(ISymbol member, SemanticModel semanticModel)
+    {
+        foreach(var attr in member.GetAttributes())
+        {
+            if(attr.AttributeClass?.IsInject == true)
+            {
+                var (key, _) = attr.GetKey(semanticModel);
+                return key;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -100,6 +100,9 @@ partial class IocSourceGenerator
         // Write service resolver methods
         WriteServiceResolverMethods(writer, container.ThreadSafeStrategy, groups);
 
+        // Write partial accessor implementations (user-declared partial methods/properties)
+        WritePartialAccessorImplementations(writer, container, groups);
+
         // Write IServiceProvider implementation
         WriteIServiceProviderImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
@@ -454,6 +457,90 @@ partial class IocSourceGenerator
 
         writer.WriteLine("#endregion");
         writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes implementations for user-declared partial methods and partial properties
+    /// that serve as fast-path service accessors.
+    /// </summary>
+    private static void WritePartialAccessorImplementations(
+        SourceWriter writer,
+        ContainerModel container,
+        ContainerRegistrationGroups groups)
+    {
+        if(container.PartialAccessors.Length == 0)
+            return;
+
+        writer.WriteLine("#region Partial Accessor Implementations");
+        writer.WriteLine();
+
+        foreach(var accessor in container.PartialAccessors)
+        {
+            var resolveExpression = ResolvePartialAccessorExpression(accessor, container, groups);
+
+            switch(accessor.Kind)
+            {
+                case PartialAccessorKind.Method:
+                    writer.WriteLine($"public partial {accessor.ReturnTypeName}{(accessor.IsNullable ? "?" : "")} {accessor.Name}() => {resolveExpression};");
+                    break;
+
+                case PartialAccessorKind.Property:
+                    writer.WriteLine($"public partial {accessor.ReturnTypeName}{(accessor.IsNullable ? "?" : "")} {accessor.Name} {{ get => {resolveExpression}; }}");
+                    break;
+            }
+
+            writer.WriteLine();
+        }
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Resolves the expression to use for a partial accessor implementation.
+    /// Looks up the registration by return type and optional key, with fallback to IServiceProvider.
+    /// </summary>
+    private static string ResolvePartialAccessorExpression(
+        PartialAccessorData accessor,
+        ContainerModel container,
+        ContainerRegistrationGroups groups)
+    {
+        var serviceType = accessor.ReturnTypeName;
+        var key = accessor.Key;
+
+        // Try to find direct resolver in this container
+        if(groups.ByServiceTypeAndKey.TryGetValue((serviceType, key), out var registrations))
+        {
+            var cached = registrations[^1]; // Last registration wins
+
+            if(cached.Registration.Instance is not null)
+            {
+                // Instance registration: use the instance expression directly
+                return cached.Registration.Instance;
+            }
+
+            return $"{cached.ResolverMethodName}()";
+        }
+
+        // Fallback to GetService/GetRequiredService (only when ResolveIServiceCollection is enabled)
+        if(container.ResolveIServiceCollection)
+        {
+            if(key is not null)
+            {
+                return accessor.IsNullable
+                    ? $"GetKeyedService(typeof({serviceType}), {key}) as {serviceType}"
+                    : $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})";
+            }
+
+            return accessor.IsNullable
+                ? $"GetService(typeof({serviceType})) as {serviceType}"
+                : $"({serviceType})GetRequiredService(typeof({serviceType}))";
+        }
+
+        // No resolver found and no fallback: throw (analyzer should have caught this)
+        return accessor.IsNullable
+            ? "default"
+            : $"""throw new global::System.InvalidOperationException("Service '{serviceType}' is not registered.")""";
     }
 
     /// <summary>

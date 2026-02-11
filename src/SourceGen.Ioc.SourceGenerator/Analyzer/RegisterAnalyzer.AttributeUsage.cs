@@ -87,6 +87,10 @@ public sealed partial class RegisterAnalyzer
         switch (member)
         {
             case IPropertySymbol property:
+                // Allow [IocInject] on partial properties in [IocContainer] classes (for keyed service accessor)
+                if (property.IsPartialDefinition && IsInContainerClass(member.ContainingType))
+                    return;
+
                 // Check if property has no setter or setter is private
                 if (property.SetMethod is null)
                 {
@@ -130,6 +134,10 @@ public sealed partial class RegisterAnalyzer
                 break;
 
             case IMethodSymbol method:
+                // Allow [IocInject] on partial methods in [IocContainer] classes (for keyed service accessor)
+                if (method.IsPartialDefinition && IsInContainerClass(member.ContainingType))
+                    return;
+
                 // Check if method is private
                 if (method.DeclaredAccessibility is Accessibility.Private)
                 {
@@ -430,5 +438,23 @@ public sealed partial class RegisterAnalyzer
                 reason);
             reportDiagnostic(diagnostic);
         }
+    }
+
+    /// <summary>
+    /// Checks whether the containing type is marked with [IocContainer]/[Container] attribute.
+    /// Used to allow [IocInject] on partial methods/properties for keyed service accessor specification.
+    /// </summary>
+    private static bool IsInContainerClass(INamedTypeSymbol? containingType)
+    {
+        if(containingType is null)
+            return false;
+
+        foreach(var attr in containingType.GetAttributes())
+        {
+            if(attr.AttributeClass?.Name is "IocContainerAttribute" or "ContainerAttribute")
+                return true;
+        }
+
+        return false;
     }
 }
