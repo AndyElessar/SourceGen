@@ -45,7 +45,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
         _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__();
 
-        _serviceResolvers = _localServices.ToFrozenDictionary();
+        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private SharedModule(SharedModule parent)
@@ -173,10 +173,6 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     {
         ThrowIfDisposed();
 
-        if(serviceType == typeof(IServiceProvider)) return this;
-        if(serviceType == typeof(IServiceScopeFactory)) return this;
-        if(serviceType == typeof(SharedModule)) return this;
-
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
@@ -217,14 +213,65 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     #endregion
 
+    #region ServiceProvider Extensions
+
+    public T? GetService<T>() where T : class
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? resolver(this) as T
+            : null;
+    }
+
+    public T GetRequiredService<T>() where T : notnull
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? (T)resolver(this)
+            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+    }
+
+    public System.Collections.Generic.IEnumerable<T> GetServices<T>()
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
+            : [];
+    }
+
+    public T? GetKeyedService<T>(object? serviceKey) where T : class
+    {
+        ThrowIfDisposed();
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
+            ? resolver(this) as T
+            : null;
+    }
+
+    public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
+    {
+        ThrowIfDisposed();
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
+            ? (T)resolver(this)
+            : throw new InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.");
+    }
+
+    public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
+    {
+        ThrowIfDisposed();
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), key), out var resolver)
+            ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
+            : [];
+    }
+
+    #endregion
+
     #region IServiceProviderIsService
 
     public bool IsService(Type serviceType)
     {
-        if(serviceType == typeof(IServiceProvider)) return true;
-        if(serviceType == typeof(IServiceScopeFactory)) return true;
-        if(serviceType == typeof(SharedModule)) return true;
-
         if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
@@ -259,8 +306,11 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>[] _localResolvers =
     [
+        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(global::IocSample.Shared.SharedModule), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::IocSample.Shared.TestHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_Shared_TestHandler!),
         new(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_Shared_TestHandler!),
         new(new ServiceIdentifier(typeof(global::IocSample.Shared.TestRequest2Handler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_Shared_TestRequest2Handler!),

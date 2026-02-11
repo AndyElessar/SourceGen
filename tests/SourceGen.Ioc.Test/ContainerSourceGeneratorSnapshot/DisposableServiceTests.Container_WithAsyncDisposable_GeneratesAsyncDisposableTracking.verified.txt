@@ -35,7 +35,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = fallbackProvider;
 
-        _serviceResolvers = _localServices.ToFrozenDictionary();
+        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private TestContainer(TestContainer parent)
@@ -73,10 +73,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public object? GetService(Type serviceType)
     {
         ThrowIfDisposed();
-
-        if(serviceType == typeof(IServiceProvider)) return this;
-        if(serviceType == typeof(IServiceScopeFactory)) return this;
-        if(serviceType == typeof(TestContainer)) return this;
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
@@ -118,14 +114,65 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #endregion
 
+    #region ServiceProvider Extensions
+
+    public T? GetService<T>() where T : class
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? resolver(this) as T
+            : null;
+    }
+
+    public T GetRequiredService<T>() where T : notnull
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? (T)resolver(this)
+            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+    }
+
+    public System.Collections.Generic.IEnumerable<T> GetServices<T>()
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
+            : [];
+    }
+
+    public T? GetKeyedService<T>(object? serviceKey) where T : class
+    {
+        ThrowIfDisposed();
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
+            ? resolver(this) as T
+            : null;
+    }
+
+    public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
+    {
+        ThrowIfDisposed();
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
+            ? (T)resolver(this)
+            : throw new InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.");
+    }
+
+    public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
+    {
+        ThrowIfDisposed();
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), key), out var resolver)
+            ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
+            : [];
+    }
+
+    #endregion
+
     #region IServiceProviderIsService
 
     public bool IsService(Type serviceType)
     {
-        if(serviceType == typeof(IServiceProvider)) return true;
-        if(serviceType == typeof(IServiceScopeFactory)) return true;
-        if(serviceType == typeof(TestContainer)) return true;
-
         if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
@@ -160,8 +207,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
+        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::TestNamespace.AsyncDisposableService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_AsyncDisposableService()),
         new(new ServiceIdentifier(typeof(global::TestNamespace.IAsyncDisposableService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_AsyncDisposableService()),
     ];

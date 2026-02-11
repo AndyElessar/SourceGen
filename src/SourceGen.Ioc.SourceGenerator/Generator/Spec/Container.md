@@ -41,6 +41,24 @@ The generated container implements the following interfaces:
 |`IDisposable`|Synchronous disposal|
 |`IAsyncDisposable`|Asynchronous disposal|
 
+## Generated Extension Methods
+
+The container generates generic instance methods matching the signatures from `ServiceProviderServiceExtensions` and `ServiceProviderKeyedServiceExtensions`. These are generated as instance methods on the container class, avoiding the overhead of the non-generic `GetService(Type)` path.
+
+|Method|Return Type|Constraint|
+|:---|:---|:---|
+|`GetService<T>()`|`T?`|`where T : class`|
+|`GetRequiredService<T>()`|`T`|`where T : notnull`|
+|`GetServices<T>()`|`IEnumerable<T>`|None|
+|`GetKeyedService<T>(object? serviceKey)`|`T?`|`where T : class`|
+|`GetRequiredKeyedService<T>(object? serviceKey)`|`T`|`where T : notnull`|
+|`GetKeyedServices<T>(object? serviceKey)`|`IEnumerable<T>`|None|
+
+**Resolution strategy by mode**:
+
+- **FrozenDictionary mode** (default): Methods directly query `_serviceResolvers` FrozenDictionary for O(1) lookup, bypassing the non-generic `GetService(Type)` overhead.
+- **Switch mode** (`UseSwitchStatement = true`): Methods delegate to their non-generic counterparts (e.g., `GetService<T>()` calls `GetService(typeof(T)) as T`).
+
 ## Container Attribute Options
 
 ```csharp
@@ -75,8 +93,8 @@ The `ThreadSafeStrategy` enum controls how the container ensures thread-safe ini
 |Strategy|Description|Use Case|
 |:---|:---|:---|
 |`None`|No thread safety. Direct field assignment without synchronization.|Single-threaded applications or when external synchronization is guaranteed. **Warning**: May create multiple instances in multi-threaded scenarios.|
-|`Lock`|Uses `lock` statement with double-checked locking pattern.|General-purpose thread safety with balanced performance.|
-|`SemaphoreSlim`|Uses `SemaphoreSlim` with double-checked locking pattern. **(Default)**|Recommended for most scenarios. Slightly lower contention than `Lock`.|
+|`Lock`|Uses `lock` statement with double-checked locking pattern. **(Default)**|General-purpose thread safety with balanced performance.|
+|`SemaphoreSlim`|Uses `SemaphoreSlim` with double-checked locking pattern.|Only option for scenarios with async initialization.|
 |`SpinLock`|Uses `SpinLock` with double-checked locking pattern.|High-performance scenarios with very short initialization times. Not recommended for I/O-bound initialization.|
 
 #### Generated Code Examples
@@ -232,7 +250,7 @@ The `EagerResolveOptions` enum controls which service lifetimes should be eagerl
 |**Field Type**|Non-nullable (`private T _field;`)|Nullable (`private T? _field;`)|
 |**Synchronization Field**|None|Required (based on `ThreadSafeStrategy`)|
 |**Get Method**|Generated (used by constructor)|Generated (used by resolver and constructor)|
-|**Resolver in `_localServices`**|Direct field access (`c => c._field`)|Method call (`c => c.GetXxx()`)|
+|**Resolver in `_localResolvers`**|Direct field access (`c => c._field`)|Method call (`c => c.GetXxx()`)|
 |**Startup Time**|Longer (services initialized upfront)|Shorter (services initialized on demand)|
 |**First Access Time**|Instant (already initialized)|May have delay (initialization occurs)|
 
@@ -300,10 +318,10 @@ partial class AppContainer
         // Initialize eager singletons by calling Get methods
         _eagerService = GetEagerService();
 
-        _serviceResolvers = _localServices.ToFrozenDictionary();
+        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         // Eager service - direct field access (field is guaranteed initialized after constructor)
         new(new ServiceIdentifier(typeof(global::EagerService), KeyedService.AnyKey), static c => c._eagerService),
@@ -357,7 +375,7 @@ partial class AppContainer
         _serviceResolvers = parent._serviceResolvers;
     }
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         // Eager scoped service - direct field access (field is guaranteed initialized after constructor)
         new(new ServiceIdentifier(typeof(global::ScopedService), KeyedService.AnyKey), static c => c._scopedService),
@@ -402,7 +420,7 @@ partial class AppContainer
         }
     }
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         // Lazy service - method call (not direct field access)
         new(new ServiceIdentifier(typeof(global::MySingleton), KeyedService.AnyKey), static c => c.GetMySingleton()),
@@ -479,7 +497,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         _myDependency = GetMyDependency();
         _myService = GetMyService();
 
-        _serviceResolvers = _localServices.ToFrozenDictionary();
+        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private AppContainer(AppContainer parent)
@@ -524,9 +542,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public object? GetService(Type serviceType)
     {
-        if(serviceType == typeof(IServiceProvider)) return this;
-        if(serviceType == typeof(IServiceScopeFactory)) return this;
-        if(serviceType == typeof(AppContainer)) return this;
+        ThrowIfDisposed();
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
@@ -566,14 +582,35 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     #endregion
 
+    #region ServiceProvider Extensions
+
+    public T? GetService<T>() where T : class
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
+            ? resolver(this) as T
+            : null;
+    }
+
+    public T GetRequiredService<T>() where T : notnull
+    {
+        ThrowIfDisposed();
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
+            ? (T)resolver(this)
+            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+    }
+
+    public IEnumerable<T> GetServices<T>() { /* ... */ }
+    public T? GetKeyedService<T>(object? serviceKey) where T : class { /* ... */ }
+    public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull { /* ... */ }
+    public IEnumerable<T> GetKeyedServices<T>(object? serviceKey) { /* ... */ }
+
+    #endregion
+
     #region IServiceProviderIsService
 
     public bool IsService(Type serviceType)
     {
-        if(serviceType == typeof(IServiceProvider)) return true;
-        if(serviceType == typeof(IServiceScopeFactory)) return true;
-        if(serviceType == typeof(AppContainer)) return true;
-
         if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, KeyedService.AnyKey))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
@@ -608,8 +645,12 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
+        // Built-in services
+        new(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
         // Eager singletons - direct field access (not method calls)
         new(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c._myDependency),
         new(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c._myDependency),
@@ -1035,7 +1076,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
                 new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
             .Concat(_sharedModule2.Resolvers.Select(static kvp => 
                 new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
-            .Concat(_localServices)
+            .Concat(_localResolvers)
             .ToFrozenDictionary();
     }
 
@@ -1050,8 +1091,11 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     }
 
     // Local services array with container-typed resolvers
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
+        new(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::ILocalService1), KeyedService.AnyKey), static c => c.GetLocalService1()),
         new(new ServiceIdentifier(typeof(global::ILocalService2), KeyedService.AnyKey), static c => c.GetLocalService2()),
         // ... more local services
@@ -1067,9 +1111,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public object? GetService(Type serviceType)
     {
-        if(serviceType == typeof(IServiceProvider)) return this;
-        if(serviceType == typeof(IServiceScopeFactory)) return this;
-        if(serviceType == typeof(AppContainer)) return this;
+        ThrowIfDisposed();
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
@@ -1146,10 +1188,10 @@ partial class AppContainer
 
     #region IIocContainer
 
-    // Resolvers property returns _localServices when UseSwitchStatement = true
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _localServices;
+    // Resolvers property returns _localResolvers when UseSwitchStatement = true
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _localResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         new(new ServiceIdentifier(typeof(global::LocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
         new(new ServiceIdentifier(typeof(global::ILocalService), KeyedService.AnyKey), static c => c.GetLocalService()),
@@ -1333,7 +1375,7 @@ partial class AppContainer
 
 ### 9. Collection Resolution
 
-Support for collection resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localServices`.
+Support for collection resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localResolvers`.
 
 **Supported Collection Types**:
 
@@ -1423,8 +1465,8 @@ partial class AppContainer
 
     #endregion
 
-    // Registered in _localServices
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localServices =
+    // Registered in _localResolvers
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         new(new ServiceIdentifier(typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
         new(new ServiceIdentifier(typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
@@ -1444,8 +1486,6 @@ partial class AppContainer
 
 When disabled, the container operates in standalone mode without fallback to external `IServiceProvider`.
 
-> **Note**: The `GetService` snippet below shows `UseSwitchStatement = true` style for clarity.
-
 ```csharp
 #region Define:
 [IocContainer(ResolveIServiceCollection = false)]
@@ -1461,16 +1501,14 @@ partial class StandaloneContainer
 
     public StandaloneContainer()
     {
-        _serviceResolvers = _localServices.ToFrozenDictionary();
+        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     #endregion
 
     public object? GetService(Type serviceType)
     {
-        if(serviceType == typeof(IServiceProvider)) return this;
-        if(serviceType == typeof(IServiceScopeFactory)) return this;
-        if(serviceType == typeof(StandaloneContainer)) return this;
+        ThrowIfDisposed();
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
@@ -1589,61 +1627,26 @@ var host = Host.CreateDefaultBuilder(args)
 
 ## Thread Safety
 
-Service resolution is thread-safe by default using `SemaphoreSlim` with double-checked locking pattern. The strategy can be configured via `ThreadSafeStrategy` property on `[IocContainer]` attribute.
+Service resolution is thread-safe by default using `Lock` with double-checked locking pattern. The strategy can be configured via `ThreadSafeStrategy` property on `[IocContainer]` attribute.
 
 See [ThreadSafeStrategy](#threadsafestrategy) for all available strategies and their generated code examples.
 
-**Default (SemaphoreSlim)**:
+**Default (Lock)**:
 
 ```csharp
 private global::MyService? _myService;
-private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
+private readonly Lock _myServiceLock = new();
 private global::MyService GetMyService()
 {
-    if (_myService is not null) return _myService;
+    if(_myService is not null) return _myService;
 
-    _myServiceSemaphore.Wait();
-    try
+    lock(_myServiceLock)
     {
         if (_myService is not null) return _myService;
 
         var instance = new global::MyService(/* ... */);
         _myService = instance;
         return instance;
-    }
-    finally
-    {
-        _myServiceSemaphore.Release();
-    }
-}
-```
-
-For complex initialization (property/method injection or decorators), the same strategy is used with additional initialization steps inside the synchronized block:
-
-```csharp
-private global::MyService? _myService;
-private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
-private global::MyService GetMyService()
-{
-    if (_myService is not null) return _myService;
-
-    _myServiceSemaphore.Wait();
-    try
-    {
-        if (_myService is not null) return _myService;
-
-        var instance = new global::MyService(/* ... */)
-        {
-            Property = (global::IDependency)GetRequiredService(typeof(global::IDependency)),
-        };
-        instance.Initialize(/* ... */);
-
-        _myService = instance;
-        return instance;
-    }
-    finally
-    {
-        _myServiceSemaphore.Release();
     }
 }
 ```
@@ -1652,8 +1655,8 @@ private global::MyService GetMyService()
 
 When resolving services, the container follows this order:
 
-1. **Built-in services**: `IServiceProvider`, `IServiceScopeFactory`, container type itself
-2. **Local services**: Services registered in this container
+1. **Built-in services**: `IServiceProvider`, `IServiceScopeFactory`, and the container type itself are registered as entries in `_localResolvers`. In **dictionary mode** (default), they are resolved via `_serviceResolvers` FrozenDictionary like any other service — no separate hardcoded `if`-checks are needed. In **switch mode** (`UseSwitchStatement = true`), they are resolved via hardcoded `if`-checks at the top of `GetService(Type)` and `IsService(Type)`.
+2. **Local services**: Services registered in this container (also in `_localResolvers`)
 3. **Imported modules**: Services from `IocImportModuleAttribute`
 4. **Fallback provider**: External `IServiceProvider` (if `ResolveIServiceCollection = true`)
 

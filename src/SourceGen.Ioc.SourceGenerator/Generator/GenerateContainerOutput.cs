@@ -109,6 +109,9 @@ partial class IocSourceGenerator
         // Write ISupportRequiredService implementation
         WriteISupportRequiredServiceImplementation(writer, container);
 
+        // Write ServiceProvider extension methods (generic overloads)
+        WriteServiceProviderExtensions(writer, container, effectiveUseSwitchStatement);
+
         // Write IServiceProviderIsService implementation
         WriteIServiceProviderIsServiceImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
@@ -414,12 +417,12 @@ partial class IocSourceGenerator
                     }
                 }
 
-                writer.WriteLine("    .Concat(_localServices)");
+                writer.WriteLine("    .Concat(_localResolvers)");
                 writer.WriteLine("    .ToFrozenDictionary();");
             }
             else
             {
-                writer.WriteLine("_serviceResolvers = _localServices.ToFrozenDictionary();");
+                writer.WriteLine("_serviceResolvers = _localResolvers.ToFrozenDictionary();");
             }
         }
     }
@@ -551,7 +554,7 @@ partial class IocSourceGenerator
         // Return type: if there are decorators, return the ServiceType (interface), otherwise ImplementationType
         var returnType = hasDecorators ? reg.ServiceType.Name : reg.ImplementationType.Name;
 
-        // Instance registration: no resolver method needed, will be inlined in _localServices
+        // Instance registration: no resolver method needed, will be inlined in _localResolvers
         if(hasInstance)
         {
             return;
@@ -1292,14 +1295,14 @@ partial class IocSourceGenerator
         writer.WriteLine("ThrowIfDisposed();");
         writer.WriteLine();
 
-        // Built-in services
-        writer.WriteLine("if(serviceType == typeof(IServiceProvider)) return this;");
-        writer.WriteLine("if(serviceType == typeof(IServiceScopeFactory)) return this;");
-        writer.WriteLine($"if(serviceType == typeof({container.ClassName})) return this;");
-        writer.WriteLine();
-
         if(effectiveUseSwitchStatement)
         {
+            // Built-in services (switch mode only - in dictionary mode these are in _localResolvers)
+            writer.WriteLine("if(serviceType == typeof(IServiceProvider)) return this;");
+            writer.WriteLine("if(serviceType == typeof(IServiceScopeFactory)) return this;");
+            writer.WriteLine($"if(serviceType == typeof({container.ClassName})) return this;");
+            writer.WriteLine();
+
             // Cascading if statements - registrations already filtered (no open generics)
             foreach(var kvp in groups.ByServiceTypeAndKey)
             {
@@ -1466,6 +1469,176 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Writes generic service resolution extension methods matching
+    /// ServiceProviderServiceExtensions and ServiceProviderKeyedServiceExtensions signatures.
+    /// In dictionary mode, methods directly query _serviceResolvers for optimal performance.
+    /// In switch mode, methods delegate to non-generic counterparts.
+    /// </summary>
+    private static void WriteServiceProviderExtensions(
+        SourceWriter writer,
+        ContainerModel container,
+        bool effectiveUseSwitchStatement)
+    {
+        writer.WriteLine("#region ServiceProvider Extensions");
+        writer.WriteLine();
+
+        if(effectiveUseSwitchStatement)
+        {
+            WriteServiceProviderExtensionsSwitchMode(writer);
+        }
+        else
+        {
+            WriteServiceProviderExtensionsDictionaryMode(writer);
+        }
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes generic extension methods for switch/if-cascade mode.
+    /// These delegate to the non-generic methods.
+    /// </summary>
+    private static void WriteServiceProviderExtensionsSwitchMode(SourceWriter writer)
+    {
+        // GetService<T>
+        writer.WriteLine("public T? GetService<T>() where T : class");
+        writer.Indentation++;
+        writer.WriteLine("=> GetService(typeof(T)) as T;");
+        writer.Indentation--;
+        writer.WriteLine();
+
+        // GetRequiredService<T>
+        writer.WriteLine("public T GetRequiredService<T>() where T : notnull");
+        writer.Indentation++;
+        writer.WriteLine("=> (T)GetRequiredService(typeof(T));");
+        writer.Indentation--;
+        writer.WriteLine();
+
+        // GetServices<T>
+        writer.WriteLine("public System.Collections.Generic.IEnumerable<T> GetServices<T>()");
+        writer.Indentation++;
+        writer.WriteLine("=> (System.Collections.Generic.IEnumerable<T>?)GetService(typeof(System.Collections.Generic.IEnumerable<T>)) ?? [];");
+        writer.Indentation--;
+        writer.WriteLine();
+
+        // GetKeyedService<T>
+        writer.WriteLine("public T? GetKeyedService<T>(object? serviceKey) where T : class");
+        writer.Indentation++;
+        writer.WriteLine("=> GetKeyedService(typeof(T), serviceKey) as T;");
+        writer.Indentation--;
+        writer.WriteLine();
+
+        // GetRequiredKeyedService<T>
+        writer.WriteLine("public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull");
+        writer.Indentation++;
+        writer.WriteLine("=> (T)GetRequiredKeyedService(typeof(T), serviceKey);");
+        writer.Indentation--;
+        writer.WriteLine();
+
+        // GetKeyedServices<T>
+        writer.WriteLine("public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)");
+        writer.Indentation++;
+        writer.WriteLine("=> (System.Collections.Generic.IEnumerable<T>?)GetKeyedService(typeof(System.Collections.Generic.IEnumerable<T>), serviceKey) ?? [];");
+        writer.Indentation--;
+        writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes generic extension methods for dictionary mode.
+    /// These directly query _serviceResolvers FrozenDictionary for optimal performance.
+    /// </summary>
+    private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer)
+    {
+        // GetService<T>
+        writer.WriteLine("public T? GetService<T>() where T : class");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), {KeyedServiceAnyKey}), out var resolver)");
+        writer.Indentation++;
+        writer.WriteLine("? resolver(this) as T");
+        writer.WriteLine(": null;");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // GetRequiredService<T>
+        writer.WriteLine("public T GetRequiredService<T>() where T : notnull");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), {KeyedServiceAnyKey}), out var resolver)");
+        writer.Indentation++;
+        writer.WriteLine("? (T)resolver(this)");
+        writer.WriteLine(": throw new InvalidOperationException($\"No service for type '{typeof(T)}' has been registered.\");");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // GetServices<T>
+        writer.WriteLine("public System.Collections.Generic.IEnumerable<T> GetServices<T>()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), {KeyedServiceAnyKey}), out var resolver)");
+        writer.Indentation++;
+        writer.WriteLine("? (System.Collections.Generic.IEnumerable<T>)resolver(this)");
+        writer.WriteLine(": [];");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // GetKeyedService<T>
+        writer.WriteLine("public T? GetKeyedService<T>(object? serviceKey) where T : class");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+        writer.WriteLine("return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)");
+        writer.Indentation++;
+        writer.WriteLine("? resolver(this) as T");
+        writer.WriteLine(": null;");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // GetRequiredKeyedService<T>
+        writer.WriteLine("public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+        writer.WriteLine("return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)");
+        writer.Indentation++;
+        writer.WriteLine("? (T)resolver(this)");
+        writer.WriteLine(": throw new InvalidOperationException($\"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.\");");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // GetKeyedServices<T>
+        writer.WriteLine("public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+        writer.WriteLine("return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), key), out var resolver)");
+        writer.Indentation++;
+        writer.WriteLine("? (System.Collections.Generic.IEnumerable<T>)resolver(this)");
+        writer.WriteLine(": [];");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+    }
+
+    /// <summary>
     /// Writes IServiceProviderIsService implementation.
     /// </summary>
     private static void WriteIServiceProviderIsServiceImplementation(
@@ -1482,13 +1655,14 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine("if(serviceType == typeof(IServiceProvider)) return true;");
-        writer.WriteLine("if(serviceType == typeof(IServiceScopeFactory)) return true;");
-        writer.WriteLine($"if(serviceType == typeof({container.ClassName})) return true;");
-        writer.WriteLine();
-
         if(effectiveUseSwitchStatement)
         {
+            // Built-in services (switch mode only - in dictionary mode these are in _localResolvers)
+            writer.WriteLine("if(serviceType == typeof(IServiceProvider)) return true;");
+            writer.WriteLine("if(serviceType == typeof(IServiceScopeFactory)) return true;");
+            writer.WriteLine($"if(serviceType == typeof({container.ClassName})) return true;");
+            writer.WriteLine();
+
             foreach(var serviceType in groups.AllServiceTypes)
             {
                 writer.WriteLine($"if(serviceType == typeof({serviceType})) return true;");
@@ -1585,7 +1759,7 @@ partial class IocSourceGenerator
 
         if(effectiveUseSwitchStatement)
         {
-            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _localServices;");
+            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _localResolvers;");
         }
         else
         {
@@ -1593,10 +1767,15 @@ partial class IocSourceGenerator
         }
         writer.WriteLine();
 
-        // Write _localServices as static field
-        writer.WriteLine($"private static readonly KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>[] _localServices =");
+        // Write _localResolvers as static field
+        writer.WriteLine($"private static readonly KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>[] _localResolvers =");
         writer.WriteLine("[");
         writer.Indentation++;
+
+        // Built-in services: IServiceProvider, IServiceScopeFactory, and the container itself
+        writer.WriteLine($"new(new ServiceIdentifier(typeof(IServiceProvider), {KeyedServiceAnyKey}), static c => c),");
+        writer.WriteLine($"new(new ServiceIdentifier(typeof(IServiceScopeFactory), {KeyedServiceAnyKey}), static c => c),");
+        writer.WriteLine($"new(new ServiceIdentifier(typeof({container.ContainerTypeName}), {KeyedServiceAnyKey}), static c => c),");
 
         // Use ByServiceTypeAndKey to include all service types (already filtered for non-open-generics)
         foreach(var kvp in groups.ByServiceTypeAndKey)

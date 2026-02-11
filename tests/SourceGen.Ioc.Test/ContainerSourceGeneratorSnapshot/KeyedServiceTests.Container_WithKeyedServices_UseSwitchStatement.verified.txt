@@ -126,6 +126,28 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #endregion
 
+    #region ServiceProvider Extensions
+
+    public T? GetService<T>() where T : class
+        => GetService(typeof(T)) as T;
+
+    public T GetRequiredService<T>() where T : notnull
+        => (T)GetRequiredService(typeof(T));
+
+    public System.Collections.Generic.IEnumerable<T> GetServices<T>()
+        => (System.Collections.Generic.IEnumerable<T>?)GetService(typeof(System.Collections.Generic.IEnumerable<T>)) ?? [];
+
+    public T? GetKeyedService<T>(object? serviceKey) where T : class
+        => GetKeyedService(typeof(T), serviceKey) as T;
+
+    public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
+        => (T)GetRequiredKeyedService(typeof(T), serviceKey);
+
+    public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
+        => (System.Collections.Generic.IEnumerable<T>?)GetKeyedService(typeof(System.Collections.Generic.IEnumerable<T>), serviceKey) ?? [];
+
+    #endregion
+
     #region IServiceProviderIsService
 
     public bool IsService(Type serviceType)
@@ -166,10 +188,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _localServices;
+    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _localResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localServices =
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
+        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService1), "key1"), static c => c._testNamespace_KeyedService1__key1_!),
         new(new ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key1"), static c => c._testNamespace_KeyedService1__key1_!),
         new(new ServiceIdentifier(typeof(global::TestNamespace.KeyedService2), "key2"), static c => c._testNamespace_KeyedService2__key2_!),
