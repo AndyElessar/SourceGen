@@ -3,15 +3,17 @@ using BenchmarkDotNet.Configs;
 namespace SourceGen.Ioc.Benchmark.Benchmarks;
 
 /// <summary>
-/// Benchmark comparing different ThreadSafeStrategy options for singleton resolution.
+/// Benchmark comparing different <see cref="ThreadSafeStrategy"/> options using a realistic dependency graph.
 /// <para>
 /// Tests the performance difference between:
 /// <list type="bullet">
 ///   <item><c>ThreadSafeStrategy.None</c> - No synchronization (fastest but not thread-safe)</item>
-///   <item><c>ThreadSafeStrategy.Lock</c> - Uses lock statement</item>
-///   <item><c>ThreadSafeStrategy.SemaphoreSlim</c> - Uses SemaphoreSlim (default, async-friendly)</item>
+///   <item><c>ThreadSafeStrategy.Lock</c> - Uses lock statement (default)</item>
+///   <item><c>ThreadSafeStrategy.SemaphoreSlim</c> - Uses SemaphoreSlim (async-friendly)</item>
 ///   <item><c>ThreadSafeStrategy.SpinLock</c> - Uses SpinLock (best for short operations)</item>
 /// </list>
+/// Each scenario resolves <see cref="IRequestHandler{TRequest, TResponse}"/> for <see cref="GetUserRequest"/>,
+/// exercising the full multi-layer dependency graph (Singleton → Scoped → Transient).
 /// </para>
 /// </summary>
 [MemoryDiagnoser]
@@ -19,135 +21,183 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 [CategoriesColumn]
 public class ThreadSafeStrategyBenchmark
 {
-    private ServiceProvider _serviceProvider = null!;
-    private BenchmarkContainerNone _containerNone = null!;
-    private BenchmarkContainerLock _containerLock = null!;
-    private BenchmarkContainerSemaphoreSlim _containerSemaphoreSlim = null!;
-    private BenchmarkContainerSpinLock _containerSpinLock = null!;
+    private ServiceProvider _msdiProvider = null!;
+    private RealisticContainerNone _containerNone = null!;
+    private RealisticContainerLock _containerLock = null!;
+    private RealisticContainerSemaphoreSlim _containerSemaphoreSlim = null!;
+    private RealisticContainerSpinLock _containerSpinLock = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _serviceProvider = new ServiceCollection()
-            .AddSingleton<ISingletonBenchmarkService, SingletonBenchmarkService>()
-            .BuildServiceProvider();
+        _msdiProvider = MsdiHelper.CreateServiceProvider();
 
-        _containerNone = new BenchmarkContainerNone();
-        _containerLock = new BenchmarkContainerLock();
-        _containerSemaphoreSlim = new BenchmarkContainerSemaphoreSlim();
-        _containerSpinLock = new BenchmarkContainerSpinLock();
+        _containerNone = new RealisticContainerNone();
+        _containerLock = new RealisticContainerLock();
+        _containerSemaphoreSlim = new RealisticContainerSemaphoreSlim();
+        _containerSpinLock = new RealisticContainerSpinLock();
 
-        // Warm up - pre-resolve singleton instances
-        _ = _serviceProvider.GetRequiredService<ISingletonBenchmarkService>();
-        _ = _containerNone.GetRequiredService<ISingletonBenchmarkService>();
-        _ = _containerLock.GetRequiredService<ISingletonBenchmarkService>();
-        _ = _containerSemaphoreSlim.GetRequiredService<ISingletonBenchmarkService>();
-        _ = _containerSpinLock.GetRequiredService<ISingletonBenchmarkService>();
+        // Warm up all singletons
+        MsdiHelper.WarmUpSingletons(_msdiProvider);
+        MsdiHelper.WarmUpSingletons(_containerNone);
+        MsdiHelper.WarmUpSingletons(_containerLock);
+        MsdiHelper.WarmUpSingletons(_containerSemaphoreSlim);
+        MsdiHelper.WarmUpSingletons(_containerSpinLock);
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        _serviceProvider.Dispose();
+        _msdiProvider.Dispose();
         _containerNone.Dispose();
         _containerLock.Dispose();
         _containerSemaphoreSlim.Dispose();
         _containerSpinLock.Dispose();
     }
 
-    #region Single-threaded Resolution (after initialization)
+    #region Synchronous Resolution (scope → resolve handler)
 
-    [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark(Baseline = true)]
-    public ISingletonBenchmarkService Resolve_MSDI()
+    [BenchmarkCategory("Sync"), Benchmark(Baseline = true)]
+    public IRequestHandler<GetUserRequest, GetUserResponse> Sync_MSDI()
     {
-        return _serviceProvider.GetRequiredService<ISingletonBenchmarkService>();
+        using var scope = _msdiProvider.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark]
-    public ISingletonBenchmarkService Resolve_None()
+    [BenchmarkCategory("Sync"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> Sync_None()
     {
-        return _containerNone.GetRequiredService<ISingletonBenchmarkService>();
+        using var scope = _containerNone.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark]
-    public ISingletonBenchmarkService Resolve_Lock()
+    [BenchmarkCategory("Sync"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> Sync_Lock()
     {
-        return _containerLock.GetRequiredService<ISingletonBenchmarkService>();
+        using var scope = _containerLock.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark]
-    public ISingletonBenchmarkService Resolve_SemaphoreSlim()
+    [BenchmarkCategory("Sync"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> Sync_SemaphoreSlim()
     {
-        return _containerSemaphoreSlim.GetRequiredService<ISingletonBenchmarkService>();
+        using var scope = _containerSemaphoreSlim.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("Resolve_SingleThreaded"), Benchmark]
-    public ISingletonBenchmarkService Resolve_SpinLock()
+    [BenchmarkCategory("Sync"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> Sync_SpinLock()
     {
-        return _containerSpinLock.GetRequiredService<ISingletonBenchmarkService>();
+        using var scope = _containerSpinLock.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
     #endregion
 
-    #region Concurrent Resolution (simulating multi-threaded access)
+    #region Asynchronous Concurrent Resolution (16 parallel full-request tasks)
 
     private const int ConcurrentTasks = 16;
 
-    [BenchmarkCategory("Resolve_Concurrent"), Benchmark(Baseline = true)]
-    public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_MSDI()
+    [BenchmarkCategory("Async"), Benchmark(Baseline = true)]
+    public async Task<GetUserResponse[]> Async_MSDI()
     {
-        var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
+        var tasks = new Task<GetUserResponse>[ConcurrentTasks];
+
         for(var i = 0; i < ConcurrentTasks; i++)
         {
-            tasks[i] = Task.Run(() => _serviceProvider.GetRequiredService<ISingletonBenchmarkService>());
+            var userId = i + 1;
+            tasks[i] = Task.Run(async () =>
+            {
+                using var scope = _msdiProvider.CreateScope();
+                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+
+                return await handler.HandleAsync(new GetUserRequest(userId));
+            });
         }
 
         return await Task.WhenAll(tasks);
     }
 
-    [BenchmarkCategory("Resolve_Concurrent"), Benchmark]
-    public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_None()
+    [BenchmarkCategory("Async"), Benchmark]
+    public async Task<GetUserResponse[]> Async_None()
     {
-        var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
+        var tasks = new Task<GetUserResponse>[ConcurrentTasks];
+
         for(var i = 0; i < ConcurrentTasks; i++)
         {
-            tasks[i] = Task.Run(() => _containerNone.GetRequiredService<ISingletonBenchmarkService>());
+            var userId = i + 1;
+            tasks[i] = Task.Run(async () =>
+            {
+                using var scope = _containerNone.CreateScope();
+                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+
+                return await handler.HandleAsync(new GetUserRequest(userId));
+            });
         }
 
         return await Task.WhenAll(tasks);
     }
 
-    [BenchmarkCategory("Resolve_Concurrent"), Benchmark]
-    public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_Lock()
+    [BenchmarkCategory("Async"), Benchmark]
+    public async Task<GetUserResponse[]> Async_Lock()
     {
-        var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
+        var tasks = new Task<GetUserResponse>[ConcurrentTasks];
+
         for(var i = 0; i < ConcurrentTasks; i++)
         {
-            tasks[i] = Task.Run(() => _containerLock.GetRequiredService<ISingletonBenchmarkService>());
+            var userId = i + 1;
+            tasks[i] = Task.Run(async () =>
+            {
+                using var scope = _containerLock.CreateScope();
+                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+
+                return await handler.HandleAsync(new GetUserRequest(userId));
+            });
         }
 
         return await Task.WhenAll(tasks);
     }
 
-    [BenchmarkCategory("Resolve_Concurrent"), Benchmark]
-    public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_SemaphoreSlim()
+    [BenchmarkCategory("Async"), Benchmark]
+    public async Task<GetUserResponse[]> Async_SemaphoreSlim()
     {
-        var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
+        var tasks = new Task<GetUserResponse>[ConcurrentTasks];
+
         for(var i = 0; i < ConcurrentTasks; i++)
         {
-            tasks[i] = Task.Run(() => _containerSemaphoreSlim.GetRequiredService<ISingletonBenchmarkService>());
+            var userId = i + 1;
+            tasks[i] = Task.Run(async () =>
+            {
+                using var scope = _containerSemaphoreSlim.CreateScope();
+                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+
+                return await handler.HandleAsync(new GetUserRequest(userId));
+            });
         }
 
         return await Task.WhenAll(tasks);
     }
 
-    [BenchmarkCategory("Resolve_Concurrent"), Benchmark]
-    public async Task<ISingletonBenchmarkService[]> ConcurrentResolve_SpinLock()
+    [BenchmarkCategory("Async"), Benchmark]
+    public async Task<GetUserResponse[]> Async_SpinLock()
     {
-        var tasks = new Task<ISingletonBenchmarkService>[ConcurrentTasks];
+        var tasks = new Task<GetUserResponse>[ConcurrentTasks];
+
         for(var i = 0; i < ConcurrentTasks; i++)
         {
-            tasks[i] = Task.Run(() => _containerSpinLock.GetRequiredService<ISingletonBenchmarkService>());
+            var userId = i + 1;
+            tasks[i] = Task.Run(async () =>
+            {
+                using var scope = _containerSpinLock.CreateScope();
+                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+
+                return await handler.HandleAsync(new GetUserRequest(userId));
+            });
         }
 
         return await Task.WhenAll(tasks);
@@ -155,48 +205,51 @@ public class ThreadSafeStrategyBenchmark
 
     #endregion
 
-    #region First-time Initialization (cold start)
+    #region Cold Start (new container → scope → resolve handler)
 
-    [BenchmarkCategory("FirstInit"), Benchmark(Baseline = true)]
-    public ISingletonBenchmarkService FirstInit_MSDI()
+    [BenchmarkCategory("ColdStart"), Benchmark(Baseline = true)]
+    public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_MSDI()
     {
-        using var serviceProvider = new ServiceCollection()
-            .AddSingleton<ISingletonBenchmarkService, SingletonBenchmarkService>()
-            .BuildServiceProvider();
+        using var provider = MsdiHelper.CreateServiceProvider();
+        using var scope = provider.CreateScope();
 
-        return serviceProvider.GetRequiredService<ISingletonBenchmarkService>();
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("FirstInit"), Benchmark]
-    public ISingletonBenchmarkService FirstInit_None()
+    [BenchmarkCategory("ColdStart"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_None()
     {
-        using var container = new BenchmarkContainerNone();
+        using var container = new RealisticContainerNone();
+        using var scope = container.CreateScope();
 
-        return container.GetRequiredService<ISingletonBenchmarkService>();
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("FirstInit"), Benchmark]
-    public ISingletonBenchmarkService FirstInit_Lock()
+    [BenchmarkCategory("ColdStart"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_Lock()
     {
-        using var container = new BenchmarkContainerLock();
+        using var container = new RealisticContainerLock();
+        using var scope = container.CreateScope();
 
-        return container.GetRequiredService<ISingletonBenchmarkService>();
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("FirstInit"), Benchmark]
-    public ISingletonBenchmarkService FirstInit_SemaphoreSlim()
+    [BenchmarkCategory("ColdStart"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_SemaphoreSlim()
     {
-        using var container = new BenchmarkContainerSemaphoreSlim();
+        using var container = new RealisticContainerSemaphoreSlim();
+        using var scope = container.CreateScope();
 
-        return container.GetRequiredService<ISingletonBenchmarkService>();
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
-    [BenchmarkCategory("FirstInit"), Benchmark]
-    public ISingletonBenchmarkService FirstInit_SpinLock()
+    [BenchmarkCategory("ColdStart"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_SpinLock()
     {
-        using var container = new BenchmarkContainerSpinLock();
+        using var container = new RealisticContainerSpinLock();
+        using var scope = container.CreateScope();
 
-        return container.GetRequiredService<ISingletonBenchmarkService>();
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
 
     #endregion

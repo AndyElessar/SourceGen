@@ -429,6 +429,9 @@ public sealed class GetProductHandler(
 
 #region Realistic Benchmark Containers
 
+[IocContainer]
+public sealed partial class RealisticContainerDefault;
+
 /// <summary>
 /// Realistic container with ThreadSafeStrategy.None for benchmarking.
 /// </summary>
@@ -442,7 +445,7 @@ public sealed partial class RealisticContainerNone;
 public sealed partial class RealisticContainerLock;
 
 /// <summary>
-/// Realistic container with ThreadSafeStrategy.SemaphoreSlim (default) for benchmarking.
+/// Realistic container with ThreadSafeStrategy.SemaphoreSlim for benchmarking.
 /// </summary>
 [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim)]
 public sealed partial class RealisticContainerSemaphoreSlim;

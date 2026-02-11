@@ -8,7 +8,9 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 /// <summary>
 /// Realistic benchmark simulating a typical .NET Core web application DI patterns.
 /// <para>
-/// This benchmark tests real-world scenarios with:
+/// Compares <c>Microsoft.Extensions.DependencyInjection</c> (MSDI) against
+/// <see cref="RealisticContainerDefault"/> (SourceGen.Ioc with default <see cref="ThreadSafeStrategy"/>)
+/// across multiple scenarios:
 /// <list type="bullet">
 ///   <item>Multi-layer architecture (Infrastructure → Data → Business → API)</item>
 ///   <item>Mixed lifetimes (Singleton, Scoped, Transient)</item>
@@ -23,72 +25,24 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 public class RealisticAppBenchmark
 {
     private ServiceProvider _msdiProvider = null!;
-    private RealisticContainerNone _containerNone = null!;
-    private RealisticContainerLock _containerLock = null!;
-    private RealisticContainerSemaphoreSlim _containerSemaphoreSlim = null!;
-    private RealisticContainerSpinLock _containerSpinLock = null!;
+    private RealisticContainerDefault _container = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        // Setup Microsoft.Extensions.DependencyInjection
-        _msdiProvider = new ServiceCollection()
-            // Infrastructure Layer - Singleton
-            .AddSingleton<IAppConfiguration, AppConfiguration>()
-            .AddSingleton(typeof(IAppLogger<>), typeof(AppLogger<>))
-            .AddSingleton<ICacheService, CacheService>()
-            // Data Access Layer - Scoped
-            .AddScoped<IDbContext, AppDbContext>()
-            .AddScoped<IRepository<User>, UserRepository>()
-            .AddScoped<IRepository<Order>, OrderRepository>()
-            .AddScoped<IRepository<Product>, ProductRepository>()
-            // Business Logic Layer - Scoped
-            .AddScoped<IUserService, UserService>()
-            .AddScoped<IOrderService, OrderService>()
-            .AddScoped<ICatalogService, CatalogService>()
-            // API Layer - Transient
-            .AddTransient<IRequestContext, RequestContext>()
-            .AddTransient<IRequestHandler<GetUserRequest, GetUserResponse>, GetUserHandler>()
-            .AddTransient<IRequestHandler<CreateOrderRequest, CreateOrderResponse>, CreateOrderHandler>()
-            .AddTransient<IRequestHandler<GetProductRequest, GetProductResponse>, GetProductHandler>()
-            .BuildServiceProvider();
-
-        // Setup SourceGen.Ioc containers
-        _containerNone = new RealisticContainerNone();
-        _containerLock = new RealisticContainerLock();
-        _containerSemaphoreSlim = new RealisticContainerSemaphoreSlim();
-        _containerSpinLock = new RealisticContainerSpinLock();
+        _msdiProvider = MsdiHelper.CreateServiceProvider();
+        _container = new RealisticContainerDefault();
 
         // Warm up all singletons
-        WarmUpSingletons(_msdiProvider);
-        WarmUpSingletons(_containerNone);
-        WarmUpSingletons(_containerLock);
-        WarmUpSingletons(_containerSemaphoreSlim);
-        WarmUpSingletons(_containerSpinLock);
-    }
-
-    private static void WarmUpSingletons(IServiceProvider provider)
-    {
-        _ = provider.GetRequiredService<IAppConfiguration>();
-        _ = provider.GetRequiredService<IAppLogger<UserRepository>>();
-        _ = provider.GetRequiredService<IAppLogger<OrderRepository>>();
-        _ = provider.GetRequiredService<IAppLogger<UserService>>();
-        _ = provider.GetRequiredService<IAppLogger<OrderService>>();
-        _ = provider.GetRequiredService<IAppLogger<CatalogService>>();
-        _ = provider.GetRequiredService<IAppLogger<GetUserHandler>>();
-        _ = provider.GetRequiredService<IAppLogger<CreateOrderHandler>>();
-        _ = provider.GetRequiredService<IAppLogger<GetProductHandler>>();
-        _ = provider.GetRequiredService<ICacheService>();
+        MsdiHelper.WarmUpSingletons(_msdiProvider);
+        MsdiHelper.WarmUpSingletons(_container);
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
         _msdiProvider.Dispose();
-        _containerNone.Dispose();
-        _containerLock.Dispose();
-        _containerSemaphoreSlim.Dispose();
-        _containerSpinLock.Dispose();
+        _container.Dispose();
     }
 
     #region Singleton Resolution - Infrastructure Layer
@@ -100,27 +54,9 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("Singleton"), Benchmark]
-    public IAppConfiguration Singleton_None()
+    public IAppConfiguration Singleton_SourceGenIoc()
     {
-        return _containerNone.GetRequiredService<IAppConfiguration>();
-    }
-
-    [BenchmarkCategory("Singleton"), Benchmark]
-    public IAppConfiguration Singleton_Lock()
-    {
-        return _containerLock.GetRequiredService<IAppConfiguration>();
-    }
-
-    [BenchmarkCategory("Singleton"), Benchmark]
-    public IAppConfiguration Singleton_SemaphoreSlim()
-    {
-        return _containerSemaphoreSlim.GetRequiredService<IAppConfiguration>();
-    }
-
-    [BenchmarkCategory("Singleton"), Benchmark]
-    public IAppConfiguration Singleton_SpinLock()
-    {
-        return _containerSpinLock.GetRequiredService<IAppConfiguration>();
+        return _container.GetRequiredService<IAppConfiguration>();
     }
 
     #endregion
@@ -136,33 +72,9 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("Scoped"), Benchmark]
-    public IUserService Scoped_None()
+    public IUserService Scoped_SourceGenIoc()
     {
-        using var scope = _containerNone.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IUserService>();
-    }
-
-    [BenchmarkCategory("Scoped"), Benchmark]
-    public IUserService Scoped_Lock()
-    {
-        using var scope = _containerLock.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IUserService>();
-    }
-
-    [BenchmarkCategory("Scoped"), Benchmark]
-    public IUserService Scoped_SemaphoreSlim()
-    {
-        using var scope = _containerSemaphoreSlim.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IUserService>();
-    }
-
-    [BenchmarkCategory("Scoped"), Benchmark]
-    public IUserService Scoped_SpinLock()
-    {
-        using var scope = _containerSpinLock.CreateScope();
+        using var scope = _container.CreateScope();
 
         return scope.ServiceProvider.GetRequiredService<IUserService>();
     }
@@ -180,33 +92,9 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("Transient"), Benchmark]
-    public IRequestHandler<GetUserRequest, GetUserResponse> Transient_None()
+    public IRequestHandler<GetUserRequest, GetUserResponse> Transient_SourceGenIoc()
     {
-        using var scope = _containerNone.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-    }
-
-    [BenchmarkCategory("Transient"), Benchmark]
-    public IRequestHandler<GetUserRequest, GetUserResponse> Transient_Lock()
-    {
-        using var scope = _containerLock.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-    }
-
-    [BenchmarkCategory("Transient"), Benchmark]
-    public IRequestHandler<GetUserRequest, GetUserResponse> Transient_SemaphoreSlim()
-    {
-        using var scope = _containerSemaphoreSlim.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-    }
-
-    [BenchmarkCategory("Transient"), Benchmark]
-    public IRequestHandler<GetUserRequest, GetUserResponse> Transient_SpinLock()
-    {
-        using var scope = _containerSpinLock.CreateScope();
+        using var scope = _container.CreateScope();
 
         return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
@@ -225,36 +113,9 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("FullRequest"), Benchmark]
-    public async Task<GetUserResponse> FullRequest_None()
+    public async Task<GetUserResponse> FullRequest_SourceGenIoc()
     {
-        using var scope = _containerNone.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-
-        return await handler.HandleAsync(new GetUserRequest(1));
-    }
-
-    [BenchmarkCategory("FullRequest"), Benchmark]
-    public async Task<GetUserResponse> FullRequest_Lock()
-    {
-        using var scope = _containerLock.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-
-        return await handler.HandleAsync(new GetUserRequest(1));
-    }
-
-    [BenchmarkCategory("FullRequest"), Benchmark]
-    public async Task<GetUserResponse> FullRequest_SemaphoreSlim()
-    {
-        using var scope = _containerSemaphoreSlim.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-
-        return await handler.HandleAsync(new GetUserRequest(1));
-    }
-
-    [BenchmarkCategory("FullRequest"), Benchmark]
-    public async Task<GetUserResponse> FullRequest_SpinLock()
-    {
-        using var scope = _containerSpinLock.CreateScope();
+        using var scope = _container.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
 
         return await handler.HandleAsync(new GetUserRequest(1));
@@ -274,36 +135,9 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("ComplexRequest"), Benchmark]
-    public async Task<CreateOrderResponse> ComplexRequest_None()
+    public async Task<CreateOrderResponse> ComplexRequest_SourceGenIoc()
     {
-        using var scope = _containerNone.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<CreateOrderRequest, CreateOrderResponse>>();
-
-        return await handler.HandleAsync(new CreateOrderRequest(1, [1, 2, 3]));
-    }
-
-    [BenchmarkCategory("ComplexRequest"), Benchmark]
-    public async Task<CreateOrderResponse> ComplexRequest_Lock()
-    {
-        using var scope = _containerLock.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<CreateOrderRequest, CreateOrderResponse>>();
-
-        return await handler.HandleAsync(new CreateOrderRequest(1, [1, 2, 3]));
-    }
-
-    [BenchmarkCategory("ComplexRequest"), Benchmark]
-    public async Task<CreateOrderResponse> ComplexRequest_SemaphoreSlim()
-    {
-        using var scope = _containerSemaphoreSlim.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<CreateOrderRequest, CreateOrderResponse>>();
-
-        return await handler.HandleAsync(new CreateOrderRequest(1, [1, 2, 3]));
-    }
-
-    [BenchmarkCategory("ComplexRequest"), Benchmark]
-    public async Task<CreateOrderResponse> ComplexRequest_SpinLock()
-    {
-        using var scope = _containerSpinLock.CreateScope();
+        using var scope = _container.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<CreateOrderRequest, CreateOrderResponse>>();
 
         return await handler.HandleAsync(new CreateOrderRequest(1, [1, 2, 3]));
@@ -326,45 +160,9 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("MultiService"), Benchmark]
-    public (IUserService, IOrderService, ICatalogService) MultiService_None()
+    public (IUserService, IOrderService, ICatalogService) MultiService_SourceGenIoc()
     {
-        using var scope = _containerNone.CreateScope();
-
-        return (
-            scope.ServiceProvider.GetRequiredService<IUserService>(),
-            scope.ServiceProvider.GetRequiredService<IOrderService>(),
-            scope.ServiceProvider.GetRequiredService<ICatalogService>()
-        );
-    }
-
-    [BenchmarkCategory("MultiService"), Benchmark]
-    public (IUserService, IOrderService, ICatalogService) MultiService_Lock()
-    {
-        using var scope = _containerLock.CreateScope();
-
-        return (
-            scope.ServiceProvider.GetRequiredService<IUserService>(),
-            scope.ServiceProvider.GetRequiredService<IOrderService>(),
-            scope.ServiceProvider.GetRequiredService<ICatalogService>()
-        );
-    }
-
-    [BenchmarkCategory("MultiService"), Benchmark]
-    public (IUserService, IOrderService, ICatalogService) MultiService_SemaphoreSlim()
-    {
-        using var scope = _containerSemaphoreSlim.CreateScope();
-
-        return (
-            scope.ServiceProvider.GetRequiredService<IUserService>(),
-            scope.ServiceProvider.GetRequiredService<IOrderService>(),
-            scope.ServiceProvider.GetRequiredService<ICatalogService>()
-        );
-    }
-
-    [BenchmarkCategory("MultiService"), Benchmark]
-    public (IUserService, IOrderService, ICatalogService) MultiService_SpinLock()
-    {
-        using var scope = _containerSpinLock.CreateScope();
+        using var scope = _container.CreateScope();
 
         return (
             scope.ServiceProvider.GetRequiredService<IUserService>(),
@@ -400,7 +198,7 @@ public class RealisticAppBenchmark
     }
 
     [BenchmarkCategory("ConcurrentRequests"), Benchmark]
-    public async Task<GetUserResponse[]> ConcurrentRequests_None()
+    public async Task<GetUserResponse[]> ConcurrentRequests_SourceGenIoc()
     {
         var tasks = new Task<GetUserResponse>[ConcurrentRequests];
 
@@ -409,67 +207,7 @@ public class RealisticAppBenchmark
             var userId = i + 1;
             tasks[i] = Task.Run(async () =>
             {
-                using var scope = _containerNone.CreateScope();
-                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-
-                return await handler.HandleAsync(new GetUserRequest(userId));
-            });
-        }
-
-        return await Task.WhenAll(tasks);
-    }
-
-    [BenchmarkCategory("ConcurrentRequests"), Benchmark]
-    public async Task<GetUserResponse[]> ConcurrentRequests_Lock()
-    {
-        var tasks = new Task<GetUserResponse>[ConcurrentRequests];
-
-        for(var i = 0; i < ConcurrentRequests; i++)
-        {
-            var userId = i + 1;
-            tasks[i] = Task.Run(async () =>
-            {
-                using var scope = _containerLock.CreateScope();
-                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-
-                return await handler.HandleAsync(new GetUserRequest(userId));
-            });
-        }
-
-        return await Task.WhenAll(tasks);
-    }
-
-    [BenchmarkCategory("ConcurrentRequests"), Benchmark]
-    public async Task<GetUserResponse[]> ConcurrentRequests_SemaphoreSlim()
-    {
-        var tasks = new Task<GetUserResponse>[ConcurrentRequests];
-
-        for(var i = 0; i < ConcurrentRequests; i++)
-        {
-            var userId = i + 1;
-            tasks[i] = Task.Run(async () =>
-            {
-                using var scope = _containerSemaphoreSlim.CreateScope();
-                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
-
-                return await handler.HandleAsync(new GetUserRequest(userId));
-            });
-        }
-
-        return await Task.WhenAll(tasks);
-    }
-
-    [BenchmarkCategory("ConcurrentRequests"), Benchmark]
-    public async Task<GetUserResponse[]> ConcurrentRequests_SpinLock()
-    {
-        var tasks = new Task<GetUserResponse>[ConcurrentRequests];
-
-        for(var i = 0; i < ConcurrentRequests; i++)
-        {
-            var userId = i + 1;
-            tasks[i] = Task.Run(async () =>
-            {
-                using var scope = _containerSpinLock.CreateScope();
+                using var scope = _container.CreateScope();
                 var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
 
                 return await handler.HandleAsync(new GetUserRequest(userId));
@@ -486,59 +224,16 @@ public class RealisticAppBenchmark
     [BenchmarkCategory("ColdStart"), Benchmark(Baseline = true)]
     public IUserService ColdStart_MSDI()
     {
-        using var provider = new ServiceCollection()
-            .AddSingleton<IAppConfiguration, AppConfiguration>()
-            .AddSingleton(typeof(IAppLogger<>), typeof(AppLogger<>))
-            .AddSingleton<ICacheService, CacheService>()
-            .AddScoped<IDbContext, AppDbContext>()
-            .AddScoped<IRepository<User>, UserRepository>()
-            .AddScoped<IRepository<Order>, OrderRepository>()
-            .AddScoped<IRepository<Product>, ProductRepository>()
-            .AddScoped<IUserService, UserService>()
-            .AddScoped<IOrderService, OrderService>()
-            .AddScoped<ICatalogService, CatalogService>()
-            .AddTransient<IRequestContext, RequestContext>()
-            .AddTransient<IRequestHandler<GetUserRequest, GetUserResponse>, GetUserHandler>()
-            .AddTransient<IRequestHandler<CreateOrderRequest, CreateOrderResponse>, CreateOrderHandler>()
-            .AddTransient<IRequestHandler<GetProductRequest, GetProductResponse>, GetProductHandler>()
-            .BuildServiceProvider();
-
+        using var provider = MsdiHelper.CreateServiceProvider();
         using var scope = provider.CreateScope();
 
         return scope.ServiceProvider.GetRequiredService<IUserService>();
     }
 
     [BenchmarkCategory("ColdStart"), Benchmark]
-    public IUserService ColdStart_None()
+    public IUserService ColdStart_SourceGenIoc()
     {
-        using var container = new RealisticContainerNone();
-        using var scope = container.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IUserService>();
-    }
-
-    [BenchmarkCategory("ColdStart"), Benchmark]
-    public IUserService ColdStart_Lock()
-    {
-        using var container = new RealisticContainerLock();
-        using var scope = container.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IUserService>();
-    }
-
-    [BenchmarkCategory("ColdStart"), Benchmark]
-    public IUserService ColdStart_SemaphoreSlim()
-    {
-        using var container = new RealisticContainerSemaphoreSlim();
-        using var scope = container.CreateScope();
-
-        return scope.ServiceProvider.GetRequiredService<IUserService>();
-    }
-
-    [BenchmarkCategory("ColdStart"), Benchmark]
-    public IUserService ColdStart_SpinLock()
-    {
-        using var container = new RealisticContainerSpinLock();
+        using var container = new RealisticContainerDefault();
         using var scope = container.CreateScope();
 
         return scope.ServiceProvider.GetRequiredService<IUserService>();
