@@ -8,7 +8,6 @@ spelling_exclusion_path = exclusion.dic
 indent_size = 4
 indent_style = space
 end_of_line = crlf
-tab_width = 4
 
 [*.json]
 indent_size = 2
@@ -17,7 +16,6 @@ indent_style = space
 [*.cs]
 indent_size = 4
 indent_style = space
-tab_width = 4
 end_of_line = crlf
 insert_final_newline = true
 
@@ -58,3 +56,12 @@ dotnet_diagnostic.SA1402.severity = silent
 
 # SA1625: Element documentation should not be copied and pasted
 dotnet_diagnostic.SA1625.severity = silent
+
+# SA1000: Keywords should be spaced correctly
+dotnet_diagnostic.SA1000.severity = none
+
+# SA1309: Field names should not begin with underscore
+dotnet_diagnostic.SA1309.severity = none
+
+# SA1101: Prefix local calls with this
+dotnet_diagnostic.SA1101.severity = none

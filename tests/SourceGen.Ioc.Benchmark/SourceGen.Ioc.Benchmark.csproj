@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <!-- BenchmarkDotNet requires Release configuration for accurate results -->
     <Optimize>true</Optimize>
   </PropertyGroup>
