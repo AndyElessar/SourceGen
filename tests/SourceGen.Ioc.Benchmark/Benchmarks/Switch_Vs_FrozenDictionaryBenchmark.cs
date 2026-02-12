@@ -3,6 +3,8 @@ using BenchmarkDotNet.Configs;
 
 namespace SourceGen.Ioc.Benchmark.Benchmarks;
 
+#pragma warning disable SGIOCEXP001
+
 /// <summary>
 /// Benchmark comparing switch expression vs FrozenDictionary for ServiceIdentifier based lookups.
 /// <para>

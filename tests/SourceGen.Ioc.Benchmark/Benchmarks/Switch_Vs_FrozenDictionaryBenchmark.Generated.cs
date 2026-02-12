@@ -5,6 +5,8 @@ using SourceGen.Ioc;
 
 namespace SourceGen.Ioc.Benchmark.Benchmarks;
 
+#pragma warning disable SGIOCEXP001
+
 #region Generated Test Types
 
 public sealed class TestType0;
