@@ -247,6 +247,10 @@ partial class IocSourceGenerator
                 // SpinLock must NOT be readonly because Enter/Exit mutate it
                 writer.WriteLine($"private SpinLock {fieldName}SpinLock = new(false);");
                 break;
+
+            case ThreadSafeStrategy.CompareExchange:
+                // No synchronization field needed - uses Interlocked.CompareExchange
+                break;
         }
     }
 
@@ -754,6 +758,10 @@ partial class IocSourceGenerator
             case ThreadSafeStrategy.SpinLock:
                 WriteResolverBodySpinLock(writer, fieldName, reg, hasFactory, hasDecorators, groups);
                 break;
+
+            case ThreadSafeStrategy.CompareExchange:
+                WriteResolverBodyCompareExchange(writer, fieldName, reg, hasFactory, hasDecorators, groups);
+                break;
         }
 
         writer.Indentation--;
@@ -903,6 +911,40 @@ partial class IocSourceGenerator
         writer.WriteLine("if(lockTaken) {fieldName}SpinLock.Exit();".Replace("{fieldName}", fieldName));
         writer.Indentation--;
         writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes resolver body for ThreadSafeStrategy.CompareExchange (lock-free CAS pattern).
+    /// Uses Interlocked.CompareExchange to atomically set the field. If another thread wins the race,
+    /// the losing instance is disposed via DisposeService and the winning instance is returned.
+    /// </summary>
+    private static void WriteResolverBodyCompareExchange(
+        SourceWriter writer,
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        var variableType = hasDecorators ? reg.ServiceType.Name : null;
+        WriteInstanceCreationWithInjection(writer, "instance", reg, hasFactory, variableType, groups);
+
+        if(hasDecorators)
+        {
+            writer.WriteLine();
+            WriteDecoratorApplication(writer, "instance", reg, groups);
+        }
+
+        writer.WriteLine();
+        writer.WriteLine($"var existing = Interlocked.CompareExchange(ref {fieldName}, instance, null);");
+        writer.WriteLine("if(existing is not null)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("DisposeService(instance);");
+        writer.WriteLine("return existing;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("return instance;");
     }
 
     /// <summary>

@@ -51,6 +51,11 @@ internal enum ThreadSafeStrategy
     /// Use SpinLock with double-checked locking pattern.
     /// </summary>
     SpinLock = 4,
+
+    /// <summary>
+    /// Use Interlocked.CompareExchange for lock-free thread safety.
+    /// </summary>
+    CompareExchange = 8,
 }
 
 /// <summary>

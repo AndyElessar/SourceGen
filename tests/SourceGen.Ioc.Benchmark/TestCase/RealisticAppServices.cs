@@ -456,4 +456,10 @@ public sealed partial class RealisticContainerSemaphoreSlim;
 [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SpinLock)]
 public sealed partial class RealisticContainerSpinLock;
 
+/// <summary>
+/// Realistic container with ThreadSafeStrategy.CompareExchange for benchmarking.
+/// </summary>
+[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange)]
+public sealed partial class RealisticContainerCompareExchange;
+
 #endregion

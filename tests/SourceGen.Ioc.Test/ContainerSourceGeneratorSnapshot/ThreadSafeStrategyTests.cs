@@ -230,6 +230,63 @@ public class ThreadSafeStrategyTests
     }
 
     [Test]
+    public async Task Container_WithThreadSafeStrategyCompareExchange_GeneratesCompareExchangeSynchronization()
+    {
+        // Use EagerResolveOptions.None to test lazy singleton with CompareExchange synchronization
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithThreadSafeStrategyCompareExchange_AndDecorators_GeneratesCompareExchangeSynchronization()
+    {
+        // Use EagerResolveOptions.None to test lazy singleton with CompareExchange and decorators
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { void Execute(); }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService : IMyService { public void Execute() { } }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                public void Execute() => inner.Execute();
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithTransientServices_DoesNotGenerateSynchronization()
     {
         // Transient services should not have any synchronization regardless of strategy

@@ -26,6 +26,7 @@ public class ThreadSafeStrategyBenchmark
     private RealisticContainerLock _containerLock = null!;
     private RealisticContainerSemaphoreSlim _containerSemaphoreSlim = null!;
     private RealisticContainerSpinLock _containerSpinLock = null!;
+    private RealisticContainerCompareExchange _containerCompareExchange = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -36,6 +37,7 @@ public class ThreadSafeStrategyBenchmark
         _containerLock = new RealisticContainerLock();
         _containerSemaphoreSlim = new RealisticContainerSemaphoreSlim();
         _containerSpinLock = new RealisticContainerSpinLock();
+        _containerCompareExchange = new RealisticContainerCompareExchange();
 
         // Warm up all singletons
         MsdiHelper.WarmUpSingletons(_msdiProvider);
@@ -43,6 +45,7 @@ public class ThreadSafeStrategyBenchmark
         MsdiHelper.WarmUpSingletons(_containerLock);
         MsdiHelper.WarmUpSingletons(_containerSemaphoreSlim);
         MsdiHelper.WarmUpSingletons(_containerSpinLock);
+        MsdiHelper.WarmUpSingletons(_containerCompareExchange);
     }
 
     [GlobalCleanup]
@@ -53,6 +56,7 @@ public class ThreadSafeStrategyBenchmark
         _containerLock.Dispose();
         _containerSemaphoreSlim.Dispose();
         _containerSpinLock.Dispose();
+        _containerCompareExchange.Dispose();
     }
 
     #region Synchronous Resolution (scope → resolve handler)
@@ -93,6 +97,14 @@ public class ThreadSafeStrategyBenchmark
     public IRequestHandler<GetUserRequest, GetUserResponse> Sync_SpinLock()
     {
         using var scope = _containerSpinLock.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+    }
+
+    [BenchmarkCategory("Sync"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> Sync_CompareExchange()
+    {
+        using var scope = _containerCompareExchange.CreateScope();
 
         return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
     }
@@ -203,6 +215,26 @@ public class ThreadSafeStrategyBenchmark
         return await Task.WhenAll(tasks);
     }
 
+    [BenchmarkCategory("Async"), Benchmark]
+    public async Task<GetUserResponse[]> Async_CompareExchange()
+    {
+        var tasks = new Task<GetUserResponse>[ConcurrentTasks];
+
+        for(var i = 0; i < ConcurrentTasks; i++)
+        {
+            var userId = i + 1;
+            tasks[i] = Task.Run(async () =>
+            {
+                using var scope = _containerCompareExchange.CreateScope();
+                var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+
+                return await handler.HandleAsync(new GetUserRequest(userId));
+            });
+        }
+
+        return await Task.WhenAll(tasks);
+    }
+
     #endregion
 
     #region Cold Start (new container → scope → resolve handler)
@@ -247,6 +279,15 @@ public class ThreadSafeStrategyBenchmark
     public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_SpinLock()
     {
         using var container = new RealisticContainerSpinLock();
+        using var scope = container.CreateScope();
+
+        return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();
+    }
+
+    [BenchmarkCategory("ColdStart"), Benchmark]
+    public IRequestHandler<GetUserRequest, GetUserResponse> ColdStart_CompareExchange()
+    {
+        using var container = new RealisticContainerCompareExchange();
         using var scope = container.CreateScope();
 
         return scope.ServiceProvider.GetRequiredService<IRequestHandler<GetUserRequest, GetUserResponse>>();

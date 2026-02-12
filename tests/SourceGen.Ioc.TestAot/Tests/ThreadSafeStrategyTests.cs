@@ -75,6 +75,22 @@ public sealed class ThreadSafeStrategyTests
     }
 
     [Test]
+    public async Task ThreadSafeStrategy_CompareExchange_ResolvesSingleton()
+    {
+        // Arrange
+        using var container = new ThreadSafeCompareExchangeContainer();
+
+        // Act
+        var service1 = container.GetService<ISingletonService>();
+        var service2 = container.GetService<ISingletonService>();
+
+        // Assert
+        await Assert.That(service1).IsNotNull();
+        await Assert.That(service2).IsNotNull();
+        await Assert.That(service1!.InstanceId).IsEqualTo(service2!.InstanceId);
+    }
+
+    [Test]
     public async Task ThreadSafeStrategy_Lock_ConcurrentAccess_ReturnsOnlyOneInstance()
     {
         // Arrange
@@ -115,6 +131,24 @@ public sealed class ThreadSafeStrategyTests
     {
         // Arrange
         using var container = new ThreadSafeSpinLockContainer();
+        const int concurrentRequests = 100;
+
+        // Act - simulate concurrent access
+        var tasks = Enumerable.Range(0, concurrentRequests)
+            .Select(_ => Task.Run(() => container.GetService<ISingletonService>()))
+            .ToArray();
+        var results = await Task.WhenAll(tasks);
+
+        // Assert - all should return the same singleton instance
+        var distinctInstanceIds = results.Select(s => s!.InstanceId).Distinct().ToList();
+        await Assert.That(distinctInstanceIds).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task ThreadSafeStrategy_CompareExchange_ConcurrentAccess_ReturnsOnlyOneInstance()
+    {
+        // Arrange
+        using var container = new ThreadSafeCompareExchangeContainer();
         const int concurrentRequests = 100;
 
         // Act - simulate concurrent access
@@ -181,6 +215,18 @@ public sealed class ThreadSafeStrategyTests
 
         // Act & Assert
         await Assert.That(() => container.CreateScope())
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task Container_CompareExchange_AfterDispose_ThrowsObjectDisposedException()
+    {
+        // Arrange
+        var container = new ThreadSafeCompareExchangeContainer();
+        container.Dispose();
+
+        // Act & Assert
+        await Assert.That(() => container.GetService<ISingletonService>())
             .Throws<ObjectDisposedException>();
     }
 

@@ -488,6 +488,14 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     #endregion
 
+    #region Partial Accessor Implementations
+
+    public partial global::IocSample.IBasic GetBasic() => GetIocSample_Basic();
+
+    public partial global::IocSample.IKeyed GetKeyEnum() => GetIocSample_KeyedEnum_IocSample_KeyEnum_Key0();
+
+    #endregion
+
     #region IServiceProvider
 
     public object? GetService(Type serviceType)
