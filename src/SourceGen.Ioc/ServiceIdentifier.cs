@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SourceGen.Ioc;
@@ -7,6 +8,7 @@ namespace SourceGen.Ioc;
 /// </summary>
 /// <param name="ServiceType">Service type.</param>
 /// <param name="Key">Service key. Use <see cref="KeyedService.AnyKey"/> for non-keyed services.</param>
+[Experimental("SGIOCEXP001", Message = "This type is used by SourceGen.Ioc and may change or be removed in future versions.")]
 public readonly record struct ServiceIdentifier(Type ServiceType, object Key)
 {
     /// <inheritdoc/>

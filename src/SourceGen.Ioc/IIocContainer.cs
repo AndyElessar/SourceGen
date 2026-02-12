@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SourceGen.Ioc;
 
@@ -24,5 +25,28 @@ public interface IIocContainer<TContainer> :
     /// for non-keyed services.<br/>
     /// The factory function takes the container instance and returns the resolver.
     /// </summary>
+    [Experimental("SGIOCEXP001", Message = "This API is used by SourceGen.Ioc and may change or be removed in future versions.")]
     public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<TContainer, object>>> Resolvers { get; }
+
+    /// <inheritdoc cref="ServiceProviderServiceExtensions.GetService{T}"/>
+    public T? GetService<T>()
+        where T : class;
+
+    /// <inheritdoc cref="ServiceProviderServiceExtensions.GetRequiredService{T}"/>
+    public T? GetRequiredService<T>()
+        where T : notnull;
+
+    /// <inheritdoc cref="ServiceProviderServiceExtensions.GetServices{T}"/>
+    public IEnumerable<T> GetServices<T>();
+
+    /// <inheritdoc cref="ServiceProviderKeyedServiceExtensions.GetKeyedService{T}"/>
+    public T? GetKeyedService<T>(object? serviceKey)
+        where T : class;
+
+    /// <inheritdoc cref="ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService{T}"/>
+    public T GetRequiredKeyedService<T>(object? serviceKey)
+        where T : notnull;
+
+    /// <inheritdoc cref="ServiceProviderKeyedServiceExtensions.GetKeyedServices{T}"/>
+    public IEnumerable<T> GetKeyedServices<T>(object? serviceKey);
 }
