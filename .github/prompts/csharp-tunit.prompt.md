@@ -1,6 +1,6 @@
 ---
 agent: 'agent'
-tools: ['execute/testFailure', 'execute/getTerminalOutput', 'execute/runInTerminal', 'execute/runTests', 'read/problems', 'read/readFile', 'edit/createDirectory', 'edit/createFile', 'edit/editFiles', 'search', 'web', 'microsoftdocs/mcp/*', 'agent', 'todo']
+tools: [vscode/memory, vscode/askQuestions, execute/testFailure, execute/getTerminalOutput, execute/runInTerminal, execute/runTests, read, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram, todo]
 description: 'Get best practices for TUnit unit testing, including data-driven tests'
 ---
 

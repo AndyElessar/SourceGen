@@ -46,6 +46,13 @@ tests/
 └── SourceGen.Ioc.TestCase/           # Shared test case code
 ```
 
+## Specifications
+
+Always read the relevant spec before implementing or modifying features:
+
+- [Generator Spec](../src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md) — Source Generator data flow, parse logic, and architecture
+- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
+
 ## Code Style
 
 - Use file-scoped namespaces
@@ -92,6 +99,8 @@ The `SourceGen.Ioc.TestAot` project validates that the Source Generator produces
 
 ## Reference
 
+- [Generator Spec](../src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md) — Data flow, parse logic, architecture
+- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
 - [C# Best Practices](./instructions/csharp.instructions.md)
 - [C# Source Generator Best Practices](./instructions/csharp-source-generator.instructions.md)
 - [TUnit Best Practices](./prompts/csharp-tunit.prompt.md)

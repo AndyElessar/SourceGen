@@ -1,13 +1,11 @@
 ---
-name: modify feature
+name: modify-feature
 description: Guide for modifying existing features according to updated specifications. Use this when you need to change an existing feature.
 ---
 
 # Modify Feature
 
-To modify existing features according to updated specifications, follow these steps:
-
-Task Progress:
+## Workflow
 
 - [ ] Step 1: Review the Updated Specification
 - [ ] Step 2: Assess the Current Implementation
@@ -17,22 +15,40 @@ Task Progress:
 - [ ] Step 6: Implement the Changes
 - [ ] Step 7: Verify Tests
 - [ ] Step 8: Review and Refactor
-- [ ] Step 9: Document the Changes
 
-1. **Review the Updated Specification**: Carefully read the updated specification to understand the changes required. Identify what aspects of the existing feature need to be modified. If anything in the specification is unclear, ask questions to clarify before proceeding.
+## Steps
 
-2. **Assess the Current Implementation**: Analyze the current implementation of the feature. Determine how the existing code aligns with the updated specification and identify the areas that need modification.
+1. **Review the Updated Specification**
+   - Read the updated spec to understand what changed and why.
+   - **ASK FIRST**: If the spec is unclear or conflicts with existing behavior, ask the user.
 
-3. **Update the Specification**: If the modifications require changes to the specification, update it accordingly. Ensure that the specification accurately reflects the updated feature's requirements.
+2. **Assess the Current Implementation**
+   - Explore the existing code to understand current behavior and dependencies.
+   - Identify all areas affected by the change (code, tests, docs).
+   - **MUST**: Check for downstream consumers that may break.
 
-4. **Plan the Modifications**: Create a plan that outlines the specific changes needed to align the feature with the updated specification. Break down the modifications into smaller tasks if necessary.
+3. **Update the Specification**
+   - **MUST**: Keep the spec in sync with the intended changes before implementing.
+   - **MUST NOT**: Implement changes that contradict the spec.
 
-5. **Update Tests**: Review and update existing tests to ensure they cover the modified feature according to the updated specification. Add new tests if necessary to verify that the changes work as intended.
+4. **Plan the Modifications**
+   - Outline specific changes using `manage_todo_list`.
+   - **ASK FIRST**: If the change has significant scope or risk, confirm approach with user.
 
-6. **Implement the Changes**: Follow your plan to modify the code for the existing feature. Ensure that you adhere to the updated specification and maintain code quality.
+5. **Update Tests**
+   - Update existing tests to reflect new behavior.
+   - Add new tests for added or changed functionality.
+   - **MUST NOT**: Delete tests without understanding why they existed.
 
-7. **Verify Tests**: Run the updated and new tests to ensure that the modified feature works as expected. Fix any issues that arise during testing.
+6. **Implement the Changes**
+   - Follow the plan; make incremental, verifiable changes.
+   - **MUST NOT**: Change unrelated code without explicit approval.
 
-8. **Review and Refactor**: Review your modified code for any potential improvements. Refactor if necessary to enhance readability, performance, or maintainability.
+7. **Verify Tests**
+   - **MUST**: Run all related tests and ensure they pass.
+   - **MUST NOT**: Leave failing tests unresolved.
 
-9. **Document the Changes**: Update any relevant documentation to reflect the modifications made to the feature. This may include code comments, design documents, or user manuals.
+8. **Review and Refactor**
+   - Review for correctness, readability, and convention adherence.
+   - Update relevant documentation.
+   - **MUST NOT**: Introduce behavioral changes during refactoring.
