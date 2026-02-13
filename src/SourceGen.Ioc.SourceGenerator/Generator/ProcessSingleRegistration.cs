@@ -225,9 +225,10 @@ partial class IocSourceGenerator
         }
 
         // Check generic matches (only if type has generic parameters)
-        if(candidate.IsOpenGeneric || candidate.Name != candidate.NameWithoutGeneric)
+        if(candidate is GenericTypeData candidateGeneric
+            && (candidateGeneric.IsOpenGeneric || candidate.Name != candidateGeneric.NameWithoutGeneric))
         {
-            if(defaultSettings.TryGetGenericMatches(candidate.NameWithoutGeneric, candidate.GenericArity, out var gIndex)
+            if(defaultSettings.TryGetGenericMatches(candidateGeneric.NameWithoutGeneric, candidateGeneric.GenericArity, out var gIndex)
                 && matchedDefaultIndices.Add(gIndex))
             {
                 matchedServiceTypes.Add(candidate);
@@ -269,10 +270,10 @@ partial class IocSourceGenerator
         FactoryMethodData? factory)
     {
         var implementationType = registration.ImplementationType;
-        var isOpenGenericImplementation = implementationType.IsOpenGeneric;
+        var isOpenGenericImplementation = implementationType is GenericTypeData { IsOpenGeneric: true };
 
         // Skip if implementation has nested open generic (cannot be registered)
-        if(implementationType.IsNestedOpenGeneric)
+        if(implementationType is GenericTypeData { IsNestedOpenGeneric: true })
         {
             return [];
         }
@@ -329,22 +330,28 @@ partial class IocSourceGenerator
         ImmutableEquatableSet<string> validOpenGenericServiceTypes)
     {
         // Open generic implementation requires open generic service type (and vice versa)
-        if(isOpenGenericImplementation != serviceType.IsOpenGeneric)
+        var isOpenGenericServiceType = serviceType is GenericTypeData { IsOpenGeneric: true };
+        if(isOpenGenericImplementation != isOpenGenericServiceType)
         {
             return false;
         }
 
         // Skip nested open generic types (cannot be properly registered with DI container)
-        if(serviceType.IsNestedOpenGeneric)
+        if(serviceType is GenericTypeData { IsNestedOpenGeneric: true })
         {
             return false;
         }
 
         // For open generic service types (excluding the implementation type itself),
         // verify the implementation actually implements it correctly
-        if(serviceType.IsOpenGeneric && serviceType.Name != implementationType.Name)
+        if(isOpenGenericServiceType && serviceType.Name != implementationType.Name)
         {
-            var serviceTypeKey = $"{serviceType.NameWithoutGeneric}`{serviceType.GenericArity}";
+            if(serviceType is not GenericTypeData genericServiceType)
+            {
+                return false;
+            }
+
+            var serviceTypeKey = $"{genericServiceType.NameWithoutGeneric}`{genericServiceType.GenericArity}";
             if(!validOpenGenericServiceTypes.Contains(serviceTypeKey))
             {
                 return false;
@@ -369,7 +376,9 @@ partial class IocSourceGenerator
         }
 
         // If service type has no generic arguments, all decorators pass through
-        var serviceTypeParams = serviceType.TypeParameters;
+        var serviceTypeParams = serviceType is GenericTypeData genericServiceType
+            ? genericServiceType.TypeParameters
+            : null;
         if(serviceTypeParams is null || serviceTypeParams.Length == 0)
         {
             return decorators;
@@ -439,9 +448,9 @@ partial class IocSourceGenerator
             foreach(var iface in interfaces)
             {
                 result.Add(iface.Name);
-                if(iface.Name != iface.NameWithoutGeneric)
+                if(iface is GenericTypeData genericInterface && iface.Name != genericInterface.NameWithoutGeneric)
                 {
-                    result.Add(iface.NameWithoutGeneric);
+                    result.Add(genericInterface.NameWithoutGeneric);
                 }
             }
         }
@@ -480,7 +489,9 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<TypeParameter> serviceTypeParams,
         HashSet<string>? interfaceNameSet)
     {
-        var decoratorTypeParams = decorator.TypeParameters;
+        var decoratorTypeParams = decorator is GenericTypeData genericDecorator
+            ? genericDecorator.TypeParameters
+            : null;
         if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
         {
             return true;
@@ -547,13 +558,13 @@ partial class IocSourceGenerator
         {
             // No interface information available, assume constraint is not satisfied
             // for open generic constraints
-            return !constraintType.IsOpenGeneric;
+            return constraintType is not GenericTypeData { IsOpenGeneric: true };
         }
 
-        if(constraintType.IsOpenGeneric)
+        if(constraintType is GenericTypeData { IsOpenGeneric: true } genericConstraintType)
         {
             // For open generic constraints, check NameWithoutGeneric
-            return interfaceNameSet.Contains(constraintType.NameWithoutGeneric);
+            return interfaceNameSet.Contains(genericConstraintType.NameWithoutGeneric);
         }
         else
         {
@@ -576,7 +587,7 @@ partial class IocSourceGenerator
         var implementationType = registration.ImplementationType;
 
         // Only for open generic implementations (not nested)
-        if(!implementationType.IsOpenGeneric || implementationType.IsNestedOpenGeneric)
+        if(implementationType is not GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false })
         {
             return [];
         }
@@ -600,12 +611,12 @@ partial class IocSourceGenerator
         // Index by each open generic service type
         foreach(var serviceType in serviceTypesToRegister)
         {
-            if(!serviceType.IsOpenGeneric)
+            if(serviceType is not GenericTypeData { IsOpenGeneric: true } genericServiceType)
             {
                 continue;
             }
 
-            var key = serviceType.NameWithoutGeneric;
+            var key = genericServiceType.NameWithoutGeneric;
             if(addedKeys.Add(key))
             {
                 entries.Add(new OpenGenericEntry(key, info));
@@ -615,12 +626,12 @@ partial class IocSourceGenerator
         // Also index by all interfaces that are open generics
         foreach(var iface in registration.AllInterfaces)
         {
-            if(!iface.IsOpenGeneric)
+            if(iface is not GenericTypeData { IsOpenGeneric: true } genericInterface)
             {
                 continue;
             }
 
-            var key = iface.NameWithoutGeneric;
+            var key = genericInterface.NameWithoutGeneric;
             if(addedKeys.Add(key))
             {
                 entries.Add(new OpenGenericEntry(key, info));
@@ -766,13 +777,13 @@ partial class IocSourceGenerator
         List<ClosedGenericDependency> dependencies,
         HashSet<string> addedKeys)
     {
-        // First, check if this is any IEnumerable<T> compatible type (IEnumerable<T>, IList<T>, ICollection<T>, T[], etc.)
-        // Use TryGetElementType with checkInterfaces: true to support all collection types for closed generic dependency extraction
-        var elementType = paramType.TryGetElementType(checkInterfaces: true);
-        if(elementType is not null
-            && elementType.GenericArity > 0
-            && !elementType.IsOpenGeneric
-            && !elementType.IsNestedOpenGeneric)
+        // Check if this is any enumerable-compatible type and extract element type for closed generic dependency.
+        // CollectionTypeData (IEnumerable<T>, IList<T>, T[], etc.) uses ElementType directly;
+        // other types check direct generic type name and AllInterfaces for IEnumerable<T> implementation.
+        var elementType = paramType is CollectionTypeData collectionType
+            ? collectionType.ElementType
+            : paramType.TryGetEnumerableElementType();
+        if(elementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)
         {
             // Add the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>> or IHandler<T>[])
             if(addedKeys.Add(elementType.Name))
@@ -780,12 +791,12 @@ partial class IocSourceGenerator
                 dependencies.Add(new ClosedGenericDependency(
                     elementType.Name,
                     elementType,
-                    elementType.NameWithoutGeneric));
+                    genericElementType.NameWithoutGeneric));
             }
         }
 
         // Check if this is a closed generic type (has generic arguments but is not open generic)
-        if(paramType.GenericArity > 0 && !paramType.IsOpenGeneric && !paramType.IsNestedOpenGeneric)
+        if(paramType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericParamType)
         {
             // Add the original type as a dependency (skip arrays as they don't need registration)
             if(!paramType.IsArrayType && addedKeys.Add(paramType.Name))
@@ -793,7 +804,7 @@ partial class IocSourceGenerator
                 dependencies.Add(new ClosedGenericDependency(
                     paramType.Name,
                     paramType,
-                    paramType.NameWithoutGeneric));
+                    genericParamType.NameWithoutGeneric));
             }
         }
     }

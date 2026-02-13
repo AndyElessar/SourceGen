@@ -1346,7 +1346,7 @@ partial class IocSourceGenerator
         ContainerRegistrationGroups groups)
     {
         // Collection types - use collection resolver method if available
-        if(type.CollectionKind != CollectionKind.None)
+        if(type is CollectionTypeData { CollectionKind: not CollectionKind.None })
         {
             var elementType = ExtractElementTypeForContainer(type);
 
@@ -1399,9 +1399,9 @@ partial class IocSourceGenerator
     private static string ExtractElementTypeForContainer(TypeData type)
     {
         // Use TypeParameters for efficient element type extraction
-        if(type.TypeParameters is { Length: > 0 })
+        if(type is GenericTypeData { TypeParameters: { Length: > 0 } typeParameters })
         {
-            return type.TypeParameters[0].Type.Name;
+            return typeParameters[0].Type.Name;
         }
         return "object";
     }

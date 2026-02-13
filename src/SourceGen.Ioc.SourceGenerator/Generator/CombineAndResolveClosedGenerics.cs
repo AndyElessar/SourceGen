@@ -264,8 +264,13 @@ partial class IocSourceGenerator
         HashSet<string> processedDependencies,
         HashSet<string> generatedClosedGenerics)
     {
+        if(paramType is not GenericTypeData genericParamType)
+        {
+            return;
+        }
+
         // Skip if not a closed generic type
-        if(paramType.GenericArity == 0 || paramType.IsOpenGeneric || paramType.IsNestedOpenGeneric)
+        if(genericParamType.GenericArity == 0 || genericParamType.IsOpenGeneric || genericParamType.IsNestedOpenGeneric)
         {
             return;
         }
@@ -280,7 +285,7 @@ partial class IocSourceGenerator
         var dependency = new ClosedGenericDependency(
             paramType.Name,
             paramType,
-            paramType.NameWithoutGeneric);
+            genericParamType.NameWithoutGeneric);
         pendingDependencies.Enqueue(dependency);
     }
 
@@ -295,26 +300,39 @@ partial class IocSourceGenerator
         List<ServiceRegistrationWithTags> registrations,
         HashSet<string> generatedClosedGenerics)
     {
-        var openImplType = openGenericInfo.ImplementationType;
+        if(closedServiceType is not GenericTypeData closedServiceGenericType)
+        {
+            return false;
+        }
+
+        if(openGenericInfo.ImplementationType is not GenericTypeData openImplType)
+        {
+            return false;
+        }
 
         // Check if this is a factory-only registration (no explicit implementation type)
         // In this case, ImplementationType equals ServiceType (set in CreateOpenGenericEntriesFromDefaultSettings)
+        if(openGenericInfo.ServiceTypes.Length == 0 || openGenericInfo.ServiceTypes[0] is not GenericTypeData firstServiceType)
+        {
+            return false;
+        }
+
         var isFactoryOnlyRegistration = openGenericInfo.Factory is not null &&
-            openImplType.NameWithoutGeneric == openGenericInfo.ServiceTypes[0].NameWithoutGeneric &&
+            openImplType.NameWithoutGeneric == firstServiceType.NameWithoutGeneric &&
             openGenericInfo.AllInterfaces.Length == 0;
 
         // Find the matching open service type to build the type argument map
         // Prefer AllInterfaces over ServiceTypes because AllInterfaces contains
         // the actual interface as implemented (e.g., IRequestHandler<Task<T1>, List<T2>>)
         // while ServiceTypes may contain the open generic definition (e.g., IRequestHandler<TRequest, TResponse>)
-        TypeData? matchingOpenServiceType = null;
+        GenericTypeData? matchingOpenServiceType = null;
 
         // First, check in AllInterfaces (for nested open generics - this is the preferred match)
         foreach(var iface in openGenericInfo.AllInterfaces)
         {
-            if(iface.NameWithoutGeneric == closedServiceType.NameWithoutGeneric)
+            if(iface is GenericTypeData genericInterface && genericInterface.NameWithoutGeneric == closedServiceGenericType.NameWithoutGeneric)
             {
-                matchingOpenServiceType = iface;
+                matchingOpenServiceType = genericInterface;
                 break;
             }
         }
@@ -324,9 +342,9 @@ partial class IocSourceGenerator
         {
             foreach(var serviceType in openGenericInfo.ServiceTypes)
             {
-                if(serviceType.NameWithoutGeneric == closedServiceType.NameWithoutGeneric)
+                if(serviceType is GenericTypeData genericServiceType && genericServiceType.NameWithoutGeneric == closedServiceGenericType.NameWithoutGeneric)
                 {
-                    matchingOpenServiceType = serviceType;
+                    matchingOpenServiceType = genericServiceType;
                     break;
                 }
             }
@@ -341,7 +359,7 @@ partial class IocSourceGenerator
         // Map: open service type param name -> closed service type arg name
         var serviceTypeArgMap = BuildTypeArgumentMapFromServiceType(
             matchingOpenServiceType,
-            closedServiceType);
+            closedServiceGenericType);
         if(serviceTypeArgMap.IsDefaultOrEmpty)
         {
             return false; // Cannot build substitution map - type structure incompatible
@@ -421,7 +439,7 @@ partial class IocSourceGenerator
             }
 
             // Skip nested open generic service types
-            if(closedSvcType.IsNestedOpenGeneric || closedSvcType.IsOpenGeneric)
+            if(closedSvcType is GenericTypeData { IsNestedOpenGeneric: true } or GenericTypeData { IsOpenGeneric: true })
             {
                 continue;
             }
@@ -462,16 +480,15 @@ partial class IocSourceGenerator
         List<ServiceRegistrationWithTags> registrations,
         HashSet<string> generatedClosedGenerics)
     {
+        if(closedServiceType is not GenericTypeData { IsNestedOpenGeneric: false, IsOpenGeneric: false })
+        {
+            return false;
+        }
+
         // Skip if already registered
         if(generatedClosedGenerics.Contains(closedServiceType.Name))
         {
             return true; // Already registered, consider it success
-        }
-
-        // Skip nested open generic or open generic service types
-        if(closedServiceType.IsNestedOpenGeneric || closedServiceType.IsOpenGeneric)
-        {
-            return false;
         }
 
         // Process decorators for this specific service type
@@ -506,9 +523,14 @@ partial class IocSourceGenerator
     /// the nested type arguments.
     /// </summary>
     private static TypeArgMap BuildTypeArgumentMapFromServiceType(
-        TypeData openServiceType,
-        TypeData closedServiceType)
+        GenericTypeData? openServiceType,
+        GenericTypeData? closedServiceType)
     {
+        if(openServiceType is null || closedServiceType is null)
+        {
+            return default;
+        }
+
         var openTypeParams = openServiceType.TypeParameters;
         var closedTypeParams = closedServiceType.TypeParameters;
 
@@ -596,15 +618,20 @@ partial class IocSourceGenerator
         TypeData closedType,
         ref TypeArgMap typeArgMap)
     {
+        if(openType is not GenericTypeData openGenericType || closedType is not GenericTypeData closedGenericType)
+        {
+            return openType.Name == closedType.Name;
+        }
+
         // Verify base type names match (excluding generic arguments)
         // e.g., GenericRequest<T> vs TestRequest should fail because GenericRequest != TestRequest
-        if(openType.NameWithoutGeneric != closedType.NameWithoutGeneric)
+        if(openGenericType.NameWithoutGeneric != closedGenericType.NameWithoutGeneric)
         {
             return false; // Incompatible type structure
         }
 
-        var openTypeParams = openType.TypeParameters;
-        var closedTypeParams = closedType.TypeParameters;
+        var openTypeParams = openGenericType.TypeParameters;
+        var closedTypeParams = closedGenericType.TypeParameters;
 
         // If no type parameters, nothing to extract but structure is compatible
         if(openTypeParams is null || closedTypeParams is null)
@@ -626,12 +653,12 @@ partial class IocSourceGenerator
             var closedNestedType = closedTypeParam.Type;
 
             // Check if openNestedType is a type parameter (determined at creation time from TypeKind)
-            if(openNestedType.IsTypeParameter)
+            if(openNestedType is TypeParameterTypeData)
             {
                 // Direct mapping: T -> Entity (use the full closed type name)
                 typeArgMap[openNestedType.Name] = closedNestedType.Name;
             }
-            else if(openNestedType.TypeParameters is not null && openNestedType.TypeParameters.Length > 0)
+            else if(openNestedType is GenericTypeData { TypeParameters: { Length: > 0 } })
             {
                 // Nested generic type, recurse using TypeParameters
                 if(!ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, ref typeArgMap))
@@ -658,8 +685,8 @@ partial class IocSourceGenerator
     /// the extracted type parameter mappings (e.g., T -> Entity).
     /// </summary>
     private static TypeArgMap BuildImplTypeArgMapFromServiceTypeMap(
-        TypeData openImplType,
-        TypeData openServiceType,
+        GenericTypeData openImplType,
+        GenericTypeData? openServiceType,
         TypeArgMap serviceTypeArgMap)
     {
         var implTypeParams = openImplType.TypeParameters;
@@ -688,9 +715,9 @@ partial class IocSourceGenerator
     /// <summary>
     /// Builds closed implementation TypeData with substituted constructor parameters.
     /// </summary>
-    private static TypeData BuildClosedImplTypeData(
+    private static GenericTypeData BuildClosedImplTypeData(
         string closedImplTypeName,
-        TypeData openImplType,
+        GenericTypeData openImplType,
         TypeArgMap typeArgMap)
     {
         // Build closed type parameters
@@ -703,11 +730,7 @@ partial class IocSourceGenerator
             {
                 if(typeArgMap.TryGetValue(param.ParameterName, out var closedTypeName))
                 {
-                    var closedType = new TypeData(
-                        closedTypeName,
-                        closedTypeName, // For concrete types, Name == NameWithoutGeneric
-                        IsOpenGeneric: false,
-                        GenericArity: 0);
+                    var closedType = TypeData.CreateSimple(closedTypeName);
                     newParams.Add(new TypeParameter(param.ParameterName, closedType));
                 }
             }
@@ -723,28 +746,22 @@ partial class IocSourceGenerator
             foreach(var param in openConstructorParams)
             {
                 var newParamTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
-                var newParamType = param.Type with
-                {
-                    Name = newParamTypeName,
-                    IsOpenGeneric = false
-                };
+                var newParamType = RehydrateTypeData(param.Type, Name: newParamTypeName, IsOpenGeneric: false);
                 newParams.Add(param with { Type = newParamType });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
 
-        return new TypeData(
+        return TypeData.CreateGeneric(
             closedImplTypeName,
             openImplType.NameWithoutGeneric,
             IsOpenGeneric: false,
             openImplType.GenericArity,
             IsNestedOpenGeneric: false,
-            IsTypeParameter: false, // Closed implementation types are not type parameters
-            CollectionKind: CollectionKind.None,
-            IsBuiltInTypeOrBuiltInCollection: false, // Implementation types are not built-in types
-            closedTypeParams,
-            closedConstructorParams,
-            openImplType.HasInjectConstructor);
+            IsBuiltInType: false, // Implementation types are not built-in types
+            TypeParameters: closedTypeParams,
+            ConstructorParameters: closedConstructorParams,
+            HasInjectConstructor: openImplType.HasInjectConstructor);
     }
 
     /// <summary>
@@ -759,8 +776,14 @@ partial class IocSourceGenerator
 
         foreach(var openServiceType in openServiceTypes)
         {
+            if(openServiceType is not GenericTypeData openGenericServiceType)
+            {
+                result.Add(openServiceType);
+                continue;
+            }
+
             // Skip non-generic service types
-            if(openServiceType.GenericArity == 0)
+            if(openGenericServiceType.GenericArity == 0)
             {
                 result.Add(openServiceType);
                 continue;
@@ -773,7 +796,7 @@ partial class IocSourceGenerator
             var closedServiceTypeName = SubstituteTypeArguments(openServiceType.Name, typeArgMapToUse);
 
             // Also try with impl type arg map if service type arg map doesn't fully substitute
-            if(closedServiceTypeName.Contains('>') || openServiceType.IsOpenGeneric)
+            if(closedServiceTypeName.Contains('>') || openGenericServiceType.IsOpenGeneric)
             {
                 closedServiceTypeName = SubstituteTypeArguments(closedServiceTypeName, implTypeArgMap);
             }
@@ -786,16 +809,14 @@ partial class IocSourceGenerator
                 continue;
             }
 
-            var closedServiceType = new TypeData(
+            var closedServiceType = TypeData.CreateGeneric(
                 closedServiceTypeName,
-                openServiceType.NameWithoutGeneric,
+                openGenericServiceType.NameWithoutGeneric,
                 IsOpenGeneric: false,
-                openServiceType.GenericArity,
+                openGenericServiceType.GenericArity,
                 IsNestedOpenGeneric: false,
-                IsTypeParameter: false, // Closed service types are not type parameters
-                CollectionKind: CollectionKind.None,
-                IsBuiltInTypeOrBuiltInCollection: false, // Service types are not built-in types
-                SubstituteTypeParameters(openServiceType.TypeParameters, serviceTypeArgMap));
+                IsBuiltInType: false, // Service types are not built-in types
+                TypeParameters: SubstituteTypeParameters(openGenericServiceType.TypeParameters, serviceTypeArgMap));
 
             result.Add(closedServiceType);
         }
@@ -810,7 +831,9 @@ partial class IocSourceGenerator
     private static bool StillContainsUnresolvedTypeParameters(string closedTypeName, TypeData openServiceType)
     {
         // If the type parameters are null or empty, it's not a generic type to begin with
-        var typeParams = openServiceType.TypeParameters;
+        var typeParams = openServiceType is GenericTypeData genericServiceType
+            ? genericServiceType.TypeParameters
+            : null;
         if(typeParams is null || typeParams.Length == 0)
         {
             return false;
@@ -823,7 +846,8 @@ partial class IocSourceGenerator
             var paramTypeName = typeParam.Type.Name;
             // Check if this type parameter is a simple type parameter (not a generic type)
             // and still appears in the closed type name
-            if(typeParam.Type.IsTypeParameter || (typeParam.Type.IsOpenGeneric && typeParam.Type.GenericArity == 0))
+            if(typeParam.Type is TypeParameterTypeData
+                or GenericTypeData { IsOpenGeneric: true, GenericArity: 0 })
             {
                 // Check if the parameter name still appears between < and > or < and ,
                 if(closedTypeName.Contains($"<{paramTypeName}>") ||
@@ -869,14 +893,74 @@ partial class IocSourceGenerator
     private static TypeData SubstituteTypeData(TypeData typeData, TypeArgMap typeArgMap)
     {
         var newTypeName = SubstituteTypeArguments(typeData.Name, typeArgMap);
-        var newTypeParams = SubstituteTypeParameters(typeData.TypeParameters, typeArgMap);
+        var newTypeParams = SubstituteTypeParameters(
+            typeData is GenericTypeData genericTypeData ? genericTypeData.TypeParameters : null,
+            typeArgMap);
 
-        return typeData with
+        return RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
+    }
+
+    /// <summary>
+    /// Rehydrates a <see cref="TypeData"/> instance while preserving subtype semantics.
+    /// </summary>
+    private static TypeData RehydrateTypeData(
+        TypeData source,
+        string? Name = null,
+        bool? IsOpenGeneric = null,
+        bool? IsNestedOpenGeneric = null,
+        ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+        bool OverrideTypeParameters = false)
+    {
+        var newName = Name ?? source.Name;
+        var sourceGenericType = source as GenericTypeData;
+        var sourceCollectionType = source as CollectionTypeData;
+        var newIsOpenGeneric = IsOpenGeneric ?? sourceGenericType?.IsOpenGeneric ?? false;
+        var newIsNestedOpenGeneric = IsNestedOpenGeneric ?? sourceGenericType?.IsNestedOpenGeneric ?? false;
+        var newTypeParameters = OverrideTypeParameters ? TypeParameters : sourceGenericType?.TypeParameters;
+
+        if(sourceCollectionType is not null)
         {
-            Name = newTypeName,
-            IsOpenGeneric = false,
-            TypeParameters = newTypeParams
-        };
+            return TypeData.CreateCollection(
+                newName,
+                sourceCollectionType.NameWithoutGeneric,
+                newIsOpenGeneric,
+                sourceCollectionType.GenericArity,
+                newIsNestedOpenGeneric,
+                source.IsBuiltInType,
+                sourceCollectionType.CollectionKind,
+                newTypeParameters,
+                source.ConstructorParameters,
+                source.HasInjectConstructor,
+                source.InjectionMembers,
+                source.AllInterfaces,
+                source.AllBaseClasses);
+        }
+
+        if(sourceGenericType is not null && (newIsOpenGeneric || sourceGenericType.GenericArity > 0 || newTypeParameters is { Length: > 0 } || source is TypeParameterTypeData))
+        {
+            return TypeData.CreateGeneric(
+                newName,
+                sourceGenericType.NameWithoutGeneric,
+                newIsOpenGeneric,
+                sourceGenericType.GenericArity,
+                newIsNestedOpenGeneric,
+                source.IsBuiltInType,
+                newTypeParameters,
+                source.ConstructorParameters,
+                source.HasInjectConstructor,
+                source.InjectionMembers,
+                source.AllInterfaces,
+                source.AllBaseClasses);
+        }
+
+        return TypeData.CreateSimple(
+            newName,
+            source.IsBuiltInType,
+            source.ConstructorParameters,
+            source.HasInjectConstructor,
+            source.InjectionMembers,
+            source.AllInterfaces,
+            source.AllBaseClasses);
     }
 
     /// <summary>
@@ -893,7 +977,9 @@ partial class IocSourceGenerator
             return decorators;
         }
 
-        var serviceTypeParams = serviceType.TypeParameters;
+        var serviceTypeParams = serviceType is GenericTypeData genericServiceType
+            ? genericServiceType.TypeParameters
+            : null;
         if(serviceTypeParams is null || serviceTypeParams.Length == 0)
         {
             // No type parameters, return decorators as-is
@@ -926,14 +1012,14 @@ partial class IocSourceGenerator
         TypeData decorator,
         ImmutableEquatableArray<TypeParameter> closedTypeParams)
     {
-        if(!decorator.IsOpenGeneric)
+        if(decorator is not GenericTypeData { IsOpenGeneric: true } genericDecorator)
         {
             // No longer need to process decorator parameters for IsServiceParameter
             return decorator;
         }
 
         // Build type argument map from decorator type params to closed type args
-        var decoratorTypeParams = decorator.TypeParameters;
+        var decoratorTypeParams = genericDecorator.TypeParameters;
         if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
         {
             return decorator;
@@ -949,7 +1035,7 @@ partial class IocSourceGenerator
 
         // Substitute in decorator type name
         var closedDecoratorName = SubstituteTypeArguments(decorator.Name, typeArgMap);
-        var closedDecoratorNameWithoutGeneric = decorator.NameWithoutGeneric;
+        var closedDecoratorNameWithoutGeneric = genericDecorator.NameWithoutGeneric;
 
         // Substitute in constructor parameters
         var constructorParams = decorator.ConstructorParameters;
@@ -962,10 +1048,8 @@ partial class IocSourceGenerator
                 // Use SubstituteTypeData to recursively substitute type parameters
                 // This ensures nested generics like ILogger<HandlerDecorator1<TRequest, TResponse>>
                 // get their TypeParameters correctly substituted
-                var newParamType = SubstituteTypeData(param.Type, typeArgMap) with
-                {
-                    IsNestedOpenGeneric = false
-                };
+                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
+                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
                 newParams.Add(param with { Type = newParamType });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
@@ -988,19 +1072,17 @@ partial class IocSourceGenerator
         // Substitute in type parameters
         var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap);
 
-        return new TypeData(
+        return TypeData.CreateGeneric(
             closedDecoratorName,
             closedDecoratorNameWithoutGeneric,
             IsOpenGeneric: false,
-            decorator.GenericArity,
+            genericDecorator.GenericArity,
             IsNestedOpenGeneric: false,
-            IsTypeParameter: false, // Closed decorator types are not type parameters
-            CollectionKind: CollectionKind.None,
-            IsBuiltInTypeOrBuiltInCollection: false, // Decorator types are not built-in types
-            newTypeParams,
-            closedConstructorParams,
+            IsBuiltInType: false, // Decorator types are not built-in types
+            TypeParameters: newTypeParams,
+            ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: false,
-            closedInjectionMembers);
+            InjectionMembers: closedInjectionMembers);
     }
 
     /// <summary>
@@ -1014,10 +1096,8 @@ partial class IocSourceGenerator
         TypeData? newType = null;
         if(member.Type is not null)
         {
-            newType = SubstituteTypeData(member.Type, typeArgMap) with
-            {
-                IsNestedOpenGeneric = false
-            };
+            var substitutedType = SubstituteTypeData(member.Type, typeArgMap);
+            newType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
         }
 
         // For methods, substitute each parameter type
@@ -1027,10 +1107,8 @@ partial class IocSourceGenerator
             var paramList = new List<ParameterData>(member.Parameters.Length);
             foreach(var param in member.Parameters)
             {
-                var newParamType = SubstituteTypeData(param.Type, typeArgMap) with
-                {
-                    IsNestedOpenGeneric = false
-                };
+                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
+                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
                 paramList.Add(param with { Type = newParamType });
             }
             newParams = paramList.ToImmutableEquatableArray();

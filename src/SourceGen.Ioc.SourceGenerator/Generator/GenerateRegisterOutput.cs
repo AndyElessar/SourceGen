@@ -273,7 +273,7 @@ partial class IocSourceGenerator
         bool hasSpecialConstructorParams = constructorParams?.Any(static p =>
             p.HasInjectAttribute ||
             p.Type.IsNonEnumerableCollection ||
-            (p.HasDefaultValue && !p.Type.IsBuiltInTypeOrBuiltInCollection)) == true;
+            (p.HasDefaultValue && !p.Type.IsBuiltInTypeResolvable)) == true;
 
         // Determine if factory construction is needed:
         // - Injection members (properties, fields, methods) always require factory
@@ -805,7 +805,7 @@ partial class IocSourceGenerator
         bool hasNonNullDefault,
         string? defaultValue)
     {
-        if(memberType?.CollectionKind is not null and not CollectionKind.None)
+        if(memberType is CollectionTypeData { CollectionKind: not CollectionKind.None })
         {
             WriteCollectionResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable);
             return;
@@ -843,13 +843,13 @@ partial class IocSourceGenerator
             return resolvedVar!;
         }
 
-        if(param.HasDefaultValue && param.Type.IsBuiltInTypeOrBuiltInCollection)
+        if(param.HasDefaultValue && param.Type.IsBuiltInTypeResolvable)
         {
             return null;
         }
 
         var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
-        if(param.HasDefaultValue && !param.Type.IsBuiltInTypeOrBuiltInCollection)
+        if(param.HasDefaultValue && !param.Type.IsBuiltInTypeResolvable)
         {
             var defExpr = param.DefaultValue ?? "default";
             var svcCall = BuildServiceCall(GetKeyedService, resolvedTypeName, methodKey);
@@ -889,13 +889,13 @@ partial class IocSourceGenerator
     /// </summary>
     private static string ConvertToTypeOf(TypeData typeData)
     {
-        if(typeData.GenericArity == 0)
+        if(typeData is not GenericTypeData genericTypeData || genericTypeData.GenericArity == 0)
         {
             return $"typeof({typeData.Name})";
         }
 
         // Build the open generic typeof
-        return $"typeof({typeData.NameWithoutGeneric}{GetGenericString(typeData.GenericArity)})";
+        return $"typeof({genericTypeData.NameWithoutGeneric}{GetGenericString(genericTypeData.GenericArity)})";
     }
 
     /// <summary>
@@ -943,7 +943,9 @@ partial class IocSourceGenerator
         var decoratorCount = decorators.Length;
 
         // Get generic arguments from the service type (for closed generic service types)
-        var serviceTypeParams = registration.ServiceType.TypeParameters;
+        var serviceTypeParams = registration.ServiceType is GenericTypeData genericServiceType
+            ? genericServiceType.TypeParameters
+            : null;
         var serviceTypeName = registration.ServiceType.Name;
 
         // Build service type names set for IsServiceParameter check
@@ -990,8 +992,8 @@ partial class IocSourceGenerator
                 isKeyedRegistration: isKeyedRegistration,
                 registrationKey: registration.Key,
                 serviceTypeNames: serviceTypeNames,
-                ctorTypeNameResolver: t => decorator.IsOpenGeneric && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
-                memberTypeNameResolver: t => decorator.IsOpenGeneric && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
+                ctorTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
+                memberTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
                 decoratedPrevVar: prevVar);
         }
 
@@ -1011,7 +1013,7 @@ partial class IocSourceGenerator
     private static string GetClosedDecoratorTypeName(TypeData decorator, ImmutableEquatableArray<TypeParameter>? serviceTypeParams)
     {
         // If decorator is not open generic, return as-is
-        if(!decorator.IsOpenGeneric)
+        if(decorator is not GenericTypeData { IsOpenGeneric: true } genericDecorator)
         {
             return decorator.Name;
         }
@@ -1024,7 +1026,7 @@ partial class IocSourceGenerator
 
         // Replace the open generic parameters with the service type's generic arguments
         // e.g., "global::Namespace.Decorator<TRequest, TResponse>" -> "global::Namespace.Decorator<global::Ns.TestRequest, global::Ns.TestResponse>"
-        return $"{decorator.NameWithoutGeneric}<{string.Join(", ", serviceTypeParams.Select(a => a.Type.Name))}>";
+        return $"{genericDecorator.NameWithoutGeneric}<{string.Join(", ", serviceTypeParams.Select(a => a.Type.Name))}>";
     }
 
     /// <summary>
@@ -1037,7 +1039,9 @@ partial class IocSourceGenerator
     private static string SubstituteGenericArguments(TypeData paramType, TypeData decorator, ImmutableEquatableArray<TypeParameter> serviceTypeParams)
     {
         // Use pre-extracted type arguments from TypeData
-        var decoratorTypeParams = decorator.TypeParameters;
+        var decoratorTypeParams = decorator is GenericTypeData genericDecorator
+            ? genericDecorator.TypeParameters
+            : null;
         if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
         {
             return paramType.Name;
@@ -1103,9 +1107,9 @@ partial class IocSourceGenerator
     private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
     {
         set.Add(type.Name);
-        if(type.Name != type.NameWithoutGeneric)
+        if(type is GenericTypeData genericType && type.Name != genericType.NameWithoutGeneric)
         {
-            set.Add(type.NameWithoutGeneric);
+            set.Add(genericType.NameWithoutGeneric);
         }
     }
 
@@ -1121,8 +1125,13 @@ partial class IocSourceGenerator
         }
 
         // Direct match on full name or non-generic name
-        return serviceTypeNames.Contains(paramType.Name)
-            || serviceTypeNames.Contains(paramType.NameWithoutGeneric);
+        if(serviceTypeNames.Contains(paramType.Name))
+        {
+            return true;
+        }
+
+        return paramType is GenericTypeData genericParamType
+            && serviceTypeNames.Contains(genericParamType.NameWithoutGeneric);
     }
 
     /// <summary>
@@ -1178,7 +1187,7 @@ partial class IocSourceGenerator
         }
 
         // Case: Built-in type (no [ServiceKey]) - use default expression, do not call sp
-        if(param.Type.IsBuiltInTypeOrBuiltInCollection && !param.HasServiceKeyAttribute)
+        if(param.Type.IsBuiltInTypeResolvable && !param.HasServiceKeyAttribute)
         {
             var defaultExpr = param.HasDefaultValue ? (param.DefaultValue ?? $"default({param.Type.Name})") : $"default({param.Type.Name})";
             writer.WriteLine($"var {paramVar} = {defaultExpr};");
@@ -1219,12 +1228,11 @@ partial class IocSourceGenerator
         string? serviceKey,
         bool isOptional = false)
     {
-        var elementType = type.TryGetElementType();
         var isKeyed = serviceKey is not null;
 
-        if(elementType is null)
+        if(type is not CollectionTypeData collectionType)
         {
-            // Fallback: couldn't determine element type, use direct service resolution
+            // Fallback: not a collection type, use direct service resolution
             if(isKeyed)
             {
                 var method = isOptional ? GetKeyedService : GetRequiredKeyedService;
@@ -1240,10 +1248,10 @@ partial class IocSourceGenerator
             return;
         }
 
-        var elementTypeName = elementType.Name;
+        var elementTypeName = collectionType.ElementType.Name;
 
         // Use CollectionKind to determine the resolution method
-        switch(type.CollectionKind)
+        switch(collectionType.CollectionKind)
         {
             case CollectionKind.Enumerable:
                 // IEnumerable<T> - use GetServices directly
@@ -1327,7 +1335,7 @@ partial class IocSourceGenerator
             return true;
         }
 
-        if(param.Type.CollectionKind is not CollectionKind.None)
+        if(param.Type is CollectionTypeData { CollectionKind: not CollectionKind.None })
         {
             WriteCollectionResolution(writer, param.Type, paramVar, serviceKey, isOptional);
             resolvedVar = paramVar;
@@ -1412,14 +1420,19 @@ partial class IocSourceGenerator
         TypeData closed,
         Dictionary<string, string> placeholderToActualType)
     {
-        // If base type names don't match, can't extract mappings
-        if(template.NameWithoutGeneric != closed.NameWithoutGeneric)
+        if(template is not GenericTypeData genericTemplate || closed is not GenericTypeData genericClosed)
         {
             return;
         }
 
-        var templateParams = template.TypeParameters;
-        var closedParams = closed.TypeParameters;
+        // If base type names don't match, can't extract mappings
+        if(genericTemplate.NameWithoutGeneric != genericClosed.NameWithoutGeneric)
+        {
+            return;
+        }
+
+        var templateParams = genericTemplate.TypeParameters;
+        var closedParams = genericClosed.TypeParameters;
 
         if(templateParams is null || closedParams is null)
         {
@@ -1438,7 +1451,7 @@ partial class IocSourceGenerator
 
             // If the template param is a simple type (no nested type parameters),
             // it's a placeholder that maps to the closed param type
-            if(templateParamType.TypeParameters is null || templateParamType.TypeParameters.Length == 0)
+            if(templateParamType is not GenericTypeData { TypeParameters.Length: > 0 })
             {
                 // Map the template type name to the closed type name
                 // e.g., "global::System.Int32" -> "global::TestNamespace.Entity"

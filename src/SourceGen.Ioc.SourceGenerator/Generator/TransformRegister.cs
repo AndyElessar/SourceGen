@@ -369,18 +369,18 @@ partial class IocSourceGenerator
 
         foreach(var iface in allInterfaces)
         {
-            if(iface.IsOpenGeneric && !iface.IsNestedOpenGeneric)
+            if(iface is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } genericInterface)
             {
                 // Use NameWithoutGeneric + Arity as key to handle different arities
-                result.Add($"{iface.NameWithoutGeneric}`{iface.GenericArity}");
+                result.Add($"{genericInterface.NameWithoutGeneric}`{genericInterface.GenericArity}");
             }
         }
 
         foreach(var baseClass in allBaseClasses)
         {
-            if(baseClass.IsOpenGeneric && !baseClass.IsNestedOpenGeneric)
+            if(baseClass is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } genericBaseClass)
             {
-                result.Add($"{baseClass.NameWithoutGeneric}`{baseClass.GenericArity}");
+                result.Add($"{genericBaseClass.NameWithoutGeneric}`{genericBaseClass.GenericArity}");
             }
         }
 

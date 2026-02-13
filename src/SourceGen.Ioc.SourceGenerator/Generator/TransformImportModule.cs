@@ -200,11 +200,14 @@ partial class IocSourceGenerator
             var implementationType = typeToProcess.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
 
             // Skip nested open generics
-            if(implementationType.IsNestedOpenGeneric)
+            if(implementationType is not GenericTypeData implementationGenericType)
+                continue;
+
+            if(implementationGenericType.IsNestedOpenGeneric)
                 continue;
 
             // Only process if this is truly an open generic
-            if(!implementationType.IsOpenGeneric)
+            if(!implementationGenericType.IsOpenGeneric)
                 continue;
 
             // Extract service types from the attribute
@@ -217,7 +220,7 @@ partial class IocSourceGenerator
             HashSet<TypeData> openGenericServiceTypes = [];
             foreach(var serviceType in serviceTypesToUse)
             {
-                if(serviceType.IsOpenGeneric && !serviceType.IsNestedOpenGeneric)
+                if(serviceType is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false })
                 {
                     openGenericServiceTypes.Add(serviceType);
                 }
@@ -228,7 +231,7 @@ partial class IocSourceGenerator
             {
                 foreach(var iface in implementationType.AllInterfaces)
                 {
-                    if(iface.IsOpenGeneric && !iface.IsNestedOpenGeneric)
+                    if(iface is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false })
                     {
                         openGenericServiceTypes.Add(iface);
                     }
@@ -263,7 +266,12 @@ partial class IocSourceGenerator
             var addedKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach(var serviceType in openGenericServiceTypes)
             {
-                var serviceKey = serviceType.NameWithoutGeneric;
+                if(serviceType is not GenericTypeData genericServiceType)
+                {
+                    continue;
+                }
+
+                var serviceKey = genericServiceType.NameWithoutGeneric;
                 if(addedKeys.Add(serviceKey))
                 {
                     yield return new OpenGenericEntry(serviceKey, info);

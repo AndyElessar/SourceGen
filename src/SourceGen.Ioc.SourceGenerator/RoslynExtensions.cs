@@ -112,9 +112,9 @@ internal static class RoslynExtensions
         }
 
         /// <summary>
-        /// Determines whether the type is a built-in type or an array/collection of built-in types.
+        /// Determines whether the type is a built-in type, or an array/collection whose element type is built-in.
         /// </summary>
-        public bool IsBuiltInTypeOrBuiltInCollection
+        public bool IsBuiltInTypeOrBuiltInElement
         {
             get
             {

@@ -345,7 +345,9 @@ public sealed partial class RegisterAnalyzer
                 return defaultSettings[exactIndex].Lifetime;
 
             // Try generic match (e.g., IGenericTest<> matches IGenericTest<T>)
-            if (iface.IsGenericType && defaultSettings.TryGetGenericMatches(ifaceTypeData.NameWithoutGeneric, ifaceTypeData.GenericArity, out var genericIndex))
+            if (iface.IsGenericType
+                && ifaceTypeData is GenericTypeData genericInterfaceTypeData
+                && defaultSettings.TryGetGenericMatches(genericInterfaceTypeData.NameWithoutGeneric, genericInterfaceTypeData.GenericArity, out var genericIndex))
                 return defaultSettings[genericIndex].Lifetime;
         }
 
@@ -360,7 +362,9 @@ public sealed partial class RegisterAnalyzer
                 return defaultSettings[exactIndex].Lifetime;
 
             // Try generic match for base classes
-            if (baseType.IsGenericType && defaultSettings.TryGetGenericMatches(baseTypeData.NameWithoutGeneric, baseTypeData.GenericArity, out var genericIndex))
+            if (baseType.IsGenericType
+                && baseTypeData is GenericTypeData genericBaseTypeData
+                && defaultSettings.TryGetGenericMatches(genericBaseTypeData.NameWithoutGeneric, genericBaseTypeData.GenericArity, out var genericIndex))
                 return defaultSettings[genericIndex].Lifetime;
 
             baseType = baseType.BaseType;

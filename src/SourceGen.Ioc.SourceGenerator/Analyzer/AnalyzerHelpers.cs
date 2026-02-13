@@ -223,7 +223,7 @@ internal static class AnalyzerHelpers
         var fieldType = field.Type;
 
         // Skip built-in types
-        if (fieldType.IsBuiltInTypeOrBuiltInCollection)
+        if (fieldType.IsBuiltInTypeOrBuiltInElement)
             return true;
 
         // Skip well-known service types
@@ -300,7 +300,7 @@ internal static class AnalyzerHelpers
         var paramType = param.Type;
 
         // Skip built-in types (resolved as default values)
-        if (paramType.IsBuiltInTypeOrBuiltInCollection)
+        if (paramType.IsBuiltInTypeOrBuiltInElement)
             return true;
 
         // Skip if parameter has default value
@@ -354,7 +354,7 @@ internal static class AnalyzerHelpers
         var propertyType = property.Type;
 
         // Skip built-in types
-        if (propertyType.IsBuiltInTypeOrBuiltInCollection)
+        if (propertyType.IsBuiltInTypeOrBuiltInElement)
             return true;
 
         // Skip well-known service types

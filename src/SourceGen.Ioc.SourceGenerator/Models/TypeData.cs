@@ -1,50 +1,123 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc.SourceGenerator.Models;
 
 /// <summary>
-/// Represents type information including its name and whether it is an open generic type.
+/// Represents type information including its name and hierarchical injection metadata.
+/// Generic and wrapper-specific data are provided by derived union types.
 /// </summary>
 /// <param name="Name">The fully qualified name of the type.</param>
-/// <param name="NameWithoutGeneric">The fully qualified name of the type without generic parameters.</param>
-/// <param name="IsOpenGeneric">Whether the type is an open generic type.</param>
-/// <param name="GenericArity">The number of generic type parameters.</param>
-/// <param name="IsNestedOpenGeneric">Whether the type contains nested open generic type arguments (e.g., IGeneric&lt;IGeneric2&lt;T&gt;&gt;).</param>
-/// <param name="IsTypeParameter">Whether this type represents a type parameter (e.g., T, TRequest). Determined from TypeKind.TypeParameter at creation time.</param>
-/// <param name="CollectionKind">The kind of collection this type represents for DI injection purposes.</param>
-/// <param name="IsBuiltInTypeOrBuiltInCollection">Whether this type is a built-in type or a collection of built-in types that cannot be resolved from DI.</param>
-/// <param name="TypeParameters">The generic type parameters with their names, resolved types, implemented interfaces, and constraints.</param>
+/// <param name="IsBuiltInType">Whether this type itself is a built-in/primitive type that cannot be resolved from DI.</param>
 /// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
 /// <param name="HasInjectConstructor">Whether the type's constructor was selected by [Inject] attribute (requires factory method for proper instantiation).</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection. Only populated for decorators when extractInjectionMembers is true.</param>
 /// <param name="AllInterfaces">All interfaces implemented by the type. Only populated when extractHierarchy is true.</param>
 /// <param name="AllBaseClasses">All base classes of the type (excluding System.Object). Only populated when extractHierarchy is true.</param>
-internal sealed record class TypeData(
+internal record class TypeData(
+    string Name,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null);
+
+/// <summary>
+/// Represents generic type information.
+/// </summary>
+internal record class GenericTypeData(
     string Name,
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
     bool IsNestedOpenGeneric = false,
-    bool IsTypeParameter = false,
-    CollectionKind CollectionKind = CollectionKind.None,
-    bool IsBuiltInTypeOrBuiltInCollection = false,
+    bool IsBuiltInType = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
-{
-    /// <summary>
-    /// Whether this type is a non-IEnumerable collection type (IList&lt;T&gt;, T[], IReadOnlyList&lt;T&gt;, etc.)
-    /// that requires factory method for DI injection.
-    /// </summary>
-    public bool IsNonEnumerableCollection =>
-        CollectionKind is not CollectionKind.None and not CollectionKind.Enumerable;
+    : TypeData(
+        Name,
+        IsBuiltInType,
+        ConstructorParameters,
+        HasInjectConstructor,
+        InjectionMembers,
+        AllInterfaces,
+        AllBaseClasses);
 
-    /// <summary>
-    /// Gets whether is a closed generic (has type arguments but is not an open generic).
-    /// </summary>
-    public bool IsClosedGeneric => !IsOpenGeneric && Name != NameWithoutGeneric;
-}
+/// <summary>
+/// Represents a generic type parameter placeholder (e.g., T, TRequest).
+/// Inherits from <see cref="GenericTypeData"/> with fixed IsOpenGeneric = true and GenericArity = 0.
+/// </summary>
+internal sealed record class TypeParameterTypeData(
+    string Name,
+    string NameWithoutGeneric)
+    : GenericTypeData(
+        Name,
+        NameWithoutGeneric,
+        IsOpenGeneric: true,
+        GenericArity: 0);
+
+/// <summary>
+/// Represents wrapper type information.
+/// </summary>
+internal record class WrapperTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : GenericTypeData(
+        Name,
+        NameWithoutGeneric,
+        IsOpenGeneric,
+        GenericArity,
+        IsNestedOpenGeneric,
+        IsBuiltInType,
+        TypeParameters,
+        ConstructorParameters,
+        HasInjectConstructor,
+        InjectionMembers,
+        AllInterfaces,
+        AllBaseClasses);
+
+/// <summary>
+/// Represents collection wrapper type information.
+/// </summary>
+internal sealed record class CollectionTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    CollectionKind CollectionKind = CollectionKind.None,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name,
+        NameWithoutGeneric,
+        IsOpenGeneric,
+        GenericArity,
+        IsNestedOpenGeneric,
+        IsBuiltInType,
+        TypeParameters,
+        ConstructorParameters,
+        HasInjectConstructor,
+        InjectionMembers,
+        AllInterfaces,
+        AllBaseClasses);
 
 /// <summary>
 /// Represents the kind of collection for DI injection purposes.
@@ -66,4 +139,168 @@ internal enum CollectionKind
     /// Should be resolved using GetServices&lt;T&gt;().ToArray().
     /// </summary>
     ReadOnlyCollection
+}
+
+internal static class TypeDataExtensions
+{
+    /// <summary>
+    /// Factory methods and common type checks for TypeData and its derived types.
+    /// </summary>
+    /// <param name="typeData">The type data to check.</param>
+    extension(TypeData typeData)
+    {
+        /// <summary>
+        /// Creates a non-generic non-collection type data.
+        /// </summary>
+        public static TypeData CreateSimple(
+            string Name,
+            bool IsBuiltInType = false,
+            ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+            bool HasInjectConstructor = false,
+            ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+            ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
+            new(
+                Name,
+                IsBuiltInType,
+                ConstructorParameters,
+                HasInjectConstructor,
+                InjectionMembers,
+                AllInterfaces,
+                AllBaseClasses);
+
+        /// <summary>
+        /// Creates a generic type data.
+        /// </summary>
+        public static GenericTypeData CreateGeneric(
+            string Name,
+            string NameWithoutGeneric,
+            bool IsOpenGeneric,
+            int GenericArity,
+            bool IsNestedOpenGeneric = false,
+            bool IsBuiltInType = false,
+            ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+            ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+            bool HasInjectConstructor = false,
+            ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+            ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
+            new(
+                Name,
+                NameWithoutGeneric,
+                IsOpenGeneric,
+                GenericArity,
+                IsNestedOpenGeneric,
+                IsBuiltInType,
+                TypeParameters,
+                ConstructorParameters,
+                HasInjectConstructor,
+                InjectionMembers,
+                AllInterfaces,
+                AllBaseClasses);
+
+        /// <summary>
+        /// Creates a type parameter placeholder (e.g., T, TRequest).
+        /// </summary>
+        public static TypeParameterTypeData CreateTypeParameter(string Name) =>
+            new(Name, Name);
+
+        /// <summary>
+        /// Creates a collection wrapper type data.
+        /// </summary>
+        public static CollectionTypeData CreateCollection(
+            string Name,
+            string NameWithoutGeneric,
+            bool IsOpenGeneric,
+            int GenericArity,
+            bool IsNestedOpenGeneric = false,
+            bool IsBuiltInType = false,
+            CollectionKind CollectionKind = CollectionKind.None,
+            ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+            ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+            bool HasInjectConstructor = false,
+            ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+            ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
+            new(
+                Name,
+                NameWithoutGeneric,
+                IsOpenGeneric,
+                GenericArity,
+                IsNestedOpenGeneric,
+                IsBuiltInType,
+                CollectionKind,
+                TypeParameters,
+                ConstructorParameters,
+                HasInjectConstructor,
+                InjectionMembers,
+                AllInterfaces,
+                AllBaseClasses);
+
+        /// <summary>
+        /// Checks if the type is an array type (e.g., T[]).
+        /// </summary>
+        public bool IsArrayType =>
+            typeData.Name.EndsWith("[]", StringComparison.Ordinal);
+
+        /// <summary>
+        /// Tries to extract the element type from an enumerable-compatible type that is NOT a <see cref="CollectionTypeData"/>.
+        /// Checks direct IEnumerable&lt;T&gt;-compatible generic types, then AllInterfaces for IEnumerable&lt;T&gt; implementation.
+        /// For <see cref="CollectionTypeData"/>, use <see cref="TypeDataExtensions.ElementType"/> directly instead.
+        /// </summary>
+        /// <returns>The element type if this is an enumerable-compatible type; otherwise, null.</returns>
+        public TypeData? TryGetEnumerableElementType()
+        {
+            // For closed generic dependency extraction, allow direct IEnumerable<T>-compatible generic types.
+            if(typeData is GenericTypeData
+                {
+                    GenericArity: 1,
+                    TypeParameters: { Length: 1 } directTypeParameters
+                } directGenericTypeData
+                && IsEnumerableType(directGenericTypeData.NameWithoutGeneric))
+            {
+                return directTypeParameters[0].Type;
+            }
+
+            // Check AllInterfaces for IEnumerable<T> implementation
+            if(typeData.AllInterfaces is { Length: > 0 })
+            {
+                foreach(var iface in typeData.AllInterfaces)
+                {
+                    // Look for IEnumerable<T> (with exactly one type argument)
+                    if(iface is GenericTypeData { GenericArity: 1 } genericInterface
+                        && IsEnumerableType(genericInterface.NameWithoutGeneric))
+                    {
+                        if(genericInterface.TypeParameters is { Length: 1 } ifaceTypeParams)
+                        {
+                            return ifaceTypeParams[0].Type;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Determines whether this type is a built-in type that can't be resolved from DI.
+        /// For collections, checks whether the element type is built-in.
+        /// For other types, checks the type itself.
+        /// </summary>
+        public bool IsBuiltInTypeResolvable => 
+            typeData is CollectionTypeData c
+            ? c.ElementType.IsBuiltInType
+            : typeData.IsBuiltInType;
+
+        /// <summary>
+        /// Checks if the type is a non-enumerable collection type.
+        /// </summary>
+        public bool IsNonEnumerableCollection =>
+            typeData is CollectionTypeData { CollectionKind: not CollectionKind.None and not CollectionKind.Enumerable };
+    }
+
+    extension(CollectionTypeData typeData)
+    {
+        public TypeData ElementType => typeData.TypeParameters![0].Type;
+    }
 }

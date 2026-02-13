@@ -25,9 +25,9 @@ internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, 
                 _exactMatches[targetType] = i;
             }
 
-            if(targetType != targetTypeData.NameWithoutGeneric)
+            if(targetTypeData is GenericTypeData genericTargetTypeData && targetType != genericTargetTypeData.NameWithoutGeneric)
             {
-                var genericKey = (targetTypeData.NameWithoutGeneric, targetTypeData.GenericArity);
+                var genericKey = (genericTargetTypeData.NameWithoutGeneric, genericTargetTypeData.GenericArity);
                 if(!_genericMatches.ContainsKey(genericKey))
                 {
                     _genericMatches[genericKey] = i;

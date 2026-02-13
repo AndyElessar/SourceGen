@@ -71,10 +71,15 @@ partial class IocSourceGenerator
                 && !namedElementType.ContainsGenericParameters)
             {
                 var elementTypeData = namedElementType.CreateBasicTypeData();
+                if(elementTypeData is not GenericTypeData genericElementTypeData)
+                {
+                    yield break;
+                }
+
                 yield return new ClosedGenericDependency(
                     elementTypeData.Name,
                     elementTypeData,
-                    elementTypeData.NameWithoutGeneric);
+                    genericElementTypeData.NameWithoutGeneric);
             }
             yield break;
         }
@@ -100,24 +105,26 @@ partial class IocSourceGenerator
         // Create TypeData with type parameters for closed generic resolution
         var typeData = namedTypeSymbol.CreateBasicTypeData();
 
-        // Check if this is a collection type (IEnumerable<T>, IList<T>, etc.)
-        var elementType = typeData.TryGetElementType();
-        if(elementType is not null
-            && elementType.GenericArity > 0
-            && !elementType.IsOpenGeneric
-            && !elementType.IsNestedOpenGeneric)
+        // Check if this is a collection type — extract element type for closed generic dependency
+        if(typeData is CollectionTypeData collectionType
+            && collectionType.ElementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)
         {
             // Yield the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>>)
             yield return new ClosedGenericDependency(
-                elementType.Name,
-                elementType,
-                elementType.NameWithoutGeneric);
+                collectionType.ElementType.Name,
+                collectionType.ElementType,
+                genericElementType.NameWithoutGeneric);
         }
 
         // Yield the original type as a dependency
+        if(typeData is not GenericTypeData genericTypeData)
+        {
+            yield break;
+        }
+
         yield return new ClosedGenericDependency(
             typeData.Name,
             typeData,
-            typeData.NameWithoutGeneric);
+            genericTypeData.NameWithoutGeneric);
     }
 }

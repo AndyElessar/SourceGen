@@ -62,7 +62,7 @@ partial class IocSourceGenerator
         }
 
         var targetServiceType = defaultSettings.TargetServiceType;
-        if(!targetServiceType.IsOpenGeneric || targetServiceType.IsNestedOpenGeneric)
+        if(targetServiceType is not GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } targetServiceGenericType)
         {
             return [];
         }
@@ -83,7 +83,7 @@ partial class IocSourceGenerator
             defaultSettings.Factory,
             Instance: null);
 
-        var entry = new OpenGenericEntry(targetServiceType.NameWithoutGeneric, info);
+        var entry = new OpenGenericEntry(targetServiceGenericType.NameWithoutGeneric, info);
         return [entry];
     }
 
@@ -132,7 +132,7 @@ partial class IocSourceGenerator
         // Determine service types based on whether implementation is open or closed generic
         ImmutableEquatableArray<TypeData> serviceTypes;
 
-        if(implementationType.IsOpenGeneric)
+        if(implementationType is GenericTypeData { IsOpenGeneric: true })
         {
             // For open generic implementations, use the original open generic service types
             serviceTypes = defaultSettings.ServiceTypes.Length > 0
@@ -152,7 +152,7 @@ partial class IocSourceGenerator
         // For closed generic implementations (e.g., Handler<Entity>), do NOT inherit Factory from defaults
         // Factory should only be used for IocDiscover-based registrations, not explicit ImplementationTypes
         // Priority: [IocRegister] > ImplementationTypes > Factory
-        var factory = implementationType.IsOpenGeneric ? defaultSettings.Factory : null;
+        var factory = implementationType is GenericTypeData { IsOpenGeneric: true } ? defaultSettings.Factory : null;
 
         // Use settings from DefaultSettingsModel
         // These registrations have "explicit" settings from the DefaultSettingsAttribute
@@ -186,14 +186,17 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<TypeData> additionalServiceTypes)
     {
         var result = new List<TypeData>();
-        var targetNameWithoutGeneric = targetServiceType.NameWithoutGeneric;
+        var targetMatchName = targetServiceType is GenericTypeData targetGenericType
+            ? targetGenericType.NameWithoutGeneric
+            : targetServiceType.Name;
 
         // Search in all interfaces for matching closed service types
         if(implementationType.AllInterfaces is not null)
         {
             foreach(var iface in implementationType.AllInterfaces)
             {
-                if(iface.NameWithoutGeneric == targetNameWithoutGeneric && !iface.IsOpenGeneric)
+                if((iface is GenericTypeData { IsOpenGeneric: false } genericInterface && genericInterface.NameWithoutGeneric == targetMatchName)
+                    || iface.Name == targetMatchName)
                 {
                     result.Add(iface);
                 }
@@ -205,7 +208,8 @@ partial class IocSourceGenerator
         {
             foreach(var baseClass in implementationType.AllBaseClasses)
             {
-                if(baseClass.NameWithoutGeneric == targetNameWithoutGeneric && !baseClass.IsOpenGeneric)
+                if((baseClass is GenericTypeData { IsOpenGeneric: false } genericBaseClass && genericBaseClass.NameWithoutGeneric == targetMatchName)
+                    || baseClass.Name == targetMatchName)
                 {
                     result.Add(baseClass);
                 }
@@ -215,13 +219,16 @@ partial class IocSourceGenerator
         // Also search for additional service types
         foreach(var additionalType in additionalServiceTypes)
         {
-            var additionalNameWithoutGeneric = additionalType.NameWithoutGeneric;
+            var additionalMatchName = additionalType is GenericTypeData additionalGenericType
+                ? additionalGenericType.NameWithoutGeneric
+                : additionalType.Name;
 
             if(implementationType.AllInterfaces is not null)
             {
                 foreach(var iface in implementationType.AllInterfaces)
                 {
-                    if(iface.NameWithoutGeneric == additionalNameWithoutGeneric && !iface.IsOpenGeneric)
+                    if((iface is GenericTypeData { IsOpenGeneric: false } genericInterface && genericInterface.NameWithoutGeneric == additionalMatchName)
+                        || iface.Name == additionalMatchName)
                     {
                         result.Add(iface);
                     }
@@ -232,7 +239,8 @@ partial class IocSourceGenerator
             {
                 foreach(var baseClass in implementationType.AllBaseClasses)
                 {
-                    if(baseClass.NameWithoutGeneric == additionalNameWithoutGeneric && !baseClass.IsOpenGeneric)
+                    if((baseClass is GenericTypeData { IsOpenGeneric: false } genericBaseClass && genericBaseClass.NameWithoutGeneric == additionalMatchName)
+                        || baseClass.Name == additionalMatchName)
                     {
                         result.Add(baseClass);
                     }

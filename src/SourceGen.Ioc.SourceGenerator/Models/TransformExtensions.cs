@@ -23,15 +23,9 @@ internal static class TransformExtensions
                 return arrayTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
 
             var name = typeSymbol.FullyQualifiedName;
-            return new TypeData(
+            return TypeData.CreateSimple(
                 name,
-                GetNameWithoutGeneric(name),
-                typeSymbol.ContainsGenericParameters,
-                0,
-                IsNestedOpenGeneric: false,
-                IsTypeParameter: false,
-                CollectionKind: CollectionKind.None,
-                IsBuiltInTypeOrBuiltInCollection: typeSymbol.IsBuiltInTypeOrBuiltInCollection);
+                IsBuiltInType: typeSymbol.IsBuiltInType);
         }
     }
 
@@ -100,19 +94,47 @@ internal static class TransformExtensions
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
             var collectionKind = typeSymbol.CollectionKind;
 
-            // Check if this is a built-in type or collection of built-in types
-            var isBuiltInTypeOrBuiltInCollection = typeSymbol.IsBuiltInTypeOrBuiltInCollection;
+            // Check if this is a built-in type
+            var isBuiltInType = typeSymbol.IsBuiltInType;
 
-            return new TypeData(
+            if(collectionKind is not CollectionKind.None)
+            {
+                return TypeData.CreateCollection(
+                    typeName,
+                    nameWithoutGeneric,
+                    typeSymbol.ContainsGenericParameters,
+                    typeSymbol.Arity,
+                    typeSymbol.IsNestedOpenGeneric,
+                    isBuiltInType,
+                    collectionKind,
+                    typeParameters,
+                    constructorParams,
+                    hasInjectConstructor,
+                    injectionMembers,
+                    allInterfaces,
+                    allBaseClasses);
+            }
+
+            if(typeSymbol.ContainsGenericParameters || typeSymbol.Arity > 0 || typeParameters is { Length: > 0 })
+            {
+                return TypeData.CreateGeneric(
+                    typeName,
+                    nameWithoutGeneric,
+                    typeSymbol.ContainsGenericParameters,
+                    typeSymbol.Arity,
+                    typeSymbol.IsNestedOpenGeneric,
+                    isBuiltInType,
+                    typeParameters,
+                    constructorParams,
+                    hasInjectConstructor,
+                    injectionMembers,
+                    allInterfaces,
+                    allBaseClasses);
+            }
+
+            return TypeData.CreateSimple(
                 typeName,
-                nameWithoutGeneric,
-                typeSymbol.ContainsGenericParameters,
-                typeSymbol.Arity,
-                typeSymbol.IsNestedOpenGeneric,
-                IsTypeParameter: false, // Named types are not type parameters
-                collectionKind,
-                isBuiltInTypeOrBuiltInCollection,
-                typeParameters,
+                isBuiltInType,
                 constructorParams,
                 hasInjectConstructor,
                 injectionMembers,
@@ -179,7 +201,14 @@ internal static class TransformExtensions
                     constraintTypes = typeParam.ConstraintTypes
                         .Select(ct => ct is INamedTypeSymbol namedCt
                             ? namedCt.CreateBasicTypeData(depth + 1)
-                            : new TypeData(ct.FullyQualifiedName, GetNameWithoutGeneric(ct.FullyQualifiedName), ct.ContainsGenericParameters, 0, false))
+                            : ct.TypeKind == TypeKind.TypeParameter
+                                ? TypeData.CreateTypeParameter(ct.FullyQualifiedName)
+                                : TypeData.CreateGeneric(
+                                    ct.FullyQualifiedName,
+                                    GetNameWithoutGeneric(ct.FullyQualifiedName),
+                                    ct.ContainsGenericParameters,
+                                    0,
+                                    false))
                         .ToImmutableEquatableArray();
                 }
 
@@ -239,19 +268,35 @@ internal static class TransformExtensions
             // Check if this is a collection type
             var collectionKind = typeSymbol.CollectionKind;
 
-            // Check if this is a built-in type or collection of built-in types
-            var isBuiltInTypeOrBuiltInCollection = ((ITypeSymbol)typeSymbol).IsBuiltInTypeOrBuiltInCollection;
+            // Check if this is a built-in type
+            var isBuiltInType = typeSymbol.IsBuiltInType;
 
-            return new TypeData(
-                typeName,
-                nameWithoutGeneric,
-                typeSymbol.ContainsGenericParameters,
-                typeSymbol.Arity,
-                typeSymbol.IsNestedOpenGeneric,
-                IsTypeParameter: false, // Named types are not type parameters
-                collectionKind,
-                isBuiltInTypeOrBuiltInCollection,
-                typeParameters);
+            if(collectionKind is not CollectionKind.None)
+            {
+                return TypeData.CreateCollection(
+                    typeName,
+                    nameWithoutGeneric,
+                    typeSymbol.ContainsGenericParameters,
+                    typeSymbol.Arity,
+                    typeSymbol.IsNestedOpenGeneric,
+                    isBuiltInType,
+                    collectionKind,
+                    typeParameters);
+            }
+
+            if(typeSymbol.ContainsGenericParameters || typeSymbol.Arity > 0 || typeParameters is { Length: > 0 })
+            {
+                return TypeData.CreateGeneric(
+                    typeName,
+                    nameWithoutGeneric,
+                    typeSymbol.ContainsGenericParameters,
+                    typeSymbol.Arity,
+                    typeSymbol.IsNestedOpenGeneric,
+                    isBuiltInType,
+                    typeParameters);
+            }
+
+            return TypeData.CreateSimple(typeName, isBuiltInType);
         }
 
         public IMethodSymbol? SpecifiedOrPrimaryOrMostParametersConstructor
@@ -536,28 +581,29 @@ internal static class TransformExtensions
             if(typeArg is not null)
             {
                 var argName = typeArg.FullyQualifiedName;
-                var isTypeParam = typeArg.TypeKind == TypeKind.TypeParameter;
-                var typeData = new TypeData(
-                    argName,
-                    GetNameWithoutGeneric(argName),
-                    typeArg.ContainsGenericParameters,
-                    0,
-                    IsNestedOpenGeneric: false,
-                    IsTypeParameter: isTypeParam);
+                TypeData typeData = typeArg.TypeKind == TypeKind.TypeParameter
+                    ? TypeData.CreateTypeParameter(argName)
+                    : TypeData.CreateGeneric(
+                        argName,
+                        GetNameWithoutGeneric(argName),
+                        typeArg.ContainsGenericParameters,
+                        0);
                 return (typeData, null);
             }
 
             // No type argument available, this is a type parameter placeholder
-            return (new TypeData(typeParam.Name, typeParam.Name, true, 0, IsNestedOpenGeneric: false, IsTypeParameter: true), null);
+            return (TypeData.CreateTypeParameter(typeParam.Name), null);
 
             // Creates a simple TypeData for an interface type.
             static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface) =>
-                new(
-                    iface.FullyQualifiedName,
-                    GetNameWithoutGeneric(iface.FullyQualifiedName),
-                    iface.ContainsGenericParameters,
-                    iface.Arity,
-                    false);
+                iface.IsGenericType || iface.Arity > 0
+                    ? TypeData.CreateGeneric(
+                        iface.FullyQualifiedName,
+                        GetNameWithoutGeneric(iface.FullyQualifiedName),
+                        iface.ContainsGenericParameters,
+                        iface.Arity,
+                        false)
+                    : TypeData.CreateSimple(iface.FullyQualifiedName);
         }
     }
 
@@ -571,9 +617,6 @@ internal static class TransformExtensions
             var elementType = arrayTypeSymbol.ElementType;
             var typeName = arrayTypeSymbol.FullyQualifiedName;
 
-            // Check if this is a built-in type array
-            var isBuiltInTypeOrBuiltInCollection = elementType.IsBuiltInType;
-
             // For arrays, create TypeData with element type as a pseudo-TypeParameter
             // This allows TryGetArrayElementType to extract the element type
             ImmutableEquatableArray<TypeParameter> typeParameters;
@@ -585,25 +628,24 @@ internal static class TransformExtensions
             else
             {
                 var elementTypeName = elementType.FullyQualifiedName;
-                var elementTypeData = new TypeData(
-                    elementTypeName,
-                    GetNameWithoutGeneric(elementTypeName),
-                    elementType.ContainsGenericParameters,
-                    0,
-                    IsNestedOpenGeneric: false,
-                    IsTypeParameter: elementType.TypeKind == TypeKind.TypeParameter);
+                TypeData elementTypeData = elementType.TypeKind == TypeKind.TypeParameter
+                    ? TypeData.CreateTypeParameter(elementTypeName)
+                    : TypeData.CreateGeneric(
+                        elementTypeName,
+                        GetNameWithoutGeneric(elementTypeName),
+                        elementType.ContainsGenericParameters,
+                        0);
                 typeParameters = [new TypeParameter("T", elementTypeData)];
             }
 
-            return new TypeData(
+            return TypeData.CreateCollection(
                 typeName,
                 typeName, // For arrays, use full name as NameWithoutGeneric
                 elementType.ContainsGenericParameters,
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 IsNestedOpenGeneric: false,
-                IsTypeParameter: false,
                 CollectionKind: CollectionKind.ReadOnlyCollection, // Arrays are read-only collections
-                IsBuiltInTypeOrBuiltInCollection: isBuiltInTypeOrBuiltInCollection,
+                IsBuiltInType: false, // Arrays are not built-in types; element type carries built-in info
                 TypeParameters: typeParameters);
         }
     }
@@ -1357,73 +1399,6 @@ internal static class TransformExtensions
             return new GenericFactoryTypeMapping(
                 serviceTypeTemplateData,
                 placeholderMap.ToImmutableEquatableDictionary());
-        }
-    }
-
-    /// <param name="typeData">The type data to check.</param>
-    extension(TypeData typeData)
-    {
-        /// <summary>
-        /// Checks if the type is an array type (e.g., T[]).
-        /// </summary>
-        public bool IsArrayType =>
-            typeData.Name.EndsWith("[]", StringComparison.Ordinal);
-
-        /// <summary>
-        /// Tries to extract the element type from an enumerable-compatible type.
-        /// Handles IEnumerable&lt;T&gt;, IList&lt;T&gt;, ICollection&lt;T&gt;, List&lt;T&gt;, HashSet&lt;T&gt;, T[], etc.
-        /// </summary>
-        /// <param name="checkInterfaces">
-        /// When true, also checks AllInterfaces for IEnumerable&lt;T&gt; implementation.
-        /// Use true for closed generic dependency extraction, false for DI injection handling.
-        /// </param>
-        /// <returns>The element type if this is an enumerable-compatible type; otherwise, null.</returns>
-        public TypeData? TryGetElementType(bool checkInterfaces = false)
-        {
-            // Handle arrays first
-            if(typeData.IsArrayType)
-            {
-                var typeParams = typeData.TypeParameters;
-                return typeParams is { Length: 1 } ? typeParams[0].Type : null;
-            }
-
-            // Check if this type itself is an enumerable-compatible collection type
-            if(typeData.GenericArity == 1)
-            {
-                // For DI injection: only handle types with CollectionKind (IEnumerable<T>, IList<T>, etc.)
-                // For dependency extraction: handle any type with IsEnumerableType name pattern
-                var isEnumerable = checkInterfaces
-                    ? IsEnumerableType(typeData.NameWithoutGeneric)
-                    : typeData.CollectionKind is not CollectionKind.None;
-
-                if(isEnumerable)
-                {
-                    var typeParams = typeData.TypeParameters;
-                    if(typeParams is { Length: 1 })
-                    {
-                        return typeParams[0].Type;
-                    }
-                }
-            }
-
-            // Check AllInterfaces for IEnumerable<T> implementation (only when checkInterfaces is true)
-            if(checkInterfaces && typeData.AllInterfaces is { Length: > 0 })
-            {
-                foreach(var iface in typeData.AllInterfaces)
-                {
-                    // Look for IEnumerable<T> (with exactly one type argument)
-                    if(IsEnumerableType(iface.NameWithoutGeneric) && iface.GenericArity == 1)
-                    {
-                        var ifaceTypeParams = iface.TypeParameters;
-                        if(ifaceTypeParams is { Length: 1 })
-                        {
-                            return ifaceTypeParams[0].Type;
-                        }
-                    }
-                }
-            }
-
-            return null;
         }
     }
 

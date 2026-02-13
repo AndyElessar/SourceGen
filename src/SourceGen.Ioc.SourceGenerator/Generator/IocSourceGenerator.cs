@@ -175,7 +175,7 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 // Detect if Microsoft.Extensions.DependencyInjection package is referenced
                 // by checking for ServiceCollectionContainerBuilderExtensions type
                 var hasDIPackage = compilation.GetTypeByMetadataName(
-                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is not null;
+                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is INamedTypeSymbol;
                 return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
             });
 
@@ -186,17 +186,19 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 // Try to get RootNamespace from MSBuild property
                 string? rootNamespace = null;
                 if(configOptions.GlobalOptions.TryGetValue(Constants.RootNamespaceProperty, out var ns)
-                    && !string.IsNullOrWhiteSpace(ns))
+                    && ns is { Length: > 0 } rawRootNamespace
+                    && !string.IsNullOrWhiteSpace(rawRootNamespace))
                 {
-                    rootNamespace = ns;
+                    rootNamespace = rawRootNamespace;
                 }
 
                 // Try to get custom IoC name from MSBuild property
                 string? customIocName = null;
                 if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocNameProperty, out var iocName)
-                    && !string.IsNullOrWhiteSpace(iocName))
+                    && iocName is { Length: > 0 } rawCustomIocName
+                    && !string.IsNullOrWhiteSpace(rawCustomIocName))
                 {
-                    customIocName = iocName;
+                    customIocName = rawCustomIocName;
                 }
 
                 return (RootNamespace: rootNamespace, CustomIocName: customIocName);

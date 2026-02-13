@@ -89,7 +89,7 @@ partial class IocSourceGenerator
             data.Lifetime,
             data.Key,
             data.KeyType,
-            data.ImplementationType.IsOpenGeneric,
+            data.ImplementationType is GenericTypeData { IsOpenGeneric: true },
             data.Decorators,
             data.InjectionMembers,
             data.Factory,
@@ -287,7 +287,12 @@ partial class IocSourceGenerator
     private static (string FieldName, string ResolverMethodName) ComputeServiceNames(ServiceRegistrationModel reg)
     {
         var implType = reg.ImplementationType;
-        var typeName = implType.IsClosedGeneric ? implType.Name : implType.NameWithoutGeneric;
+        var typeName = implType switch
+        {
+            GenericTypeData { IsOpenGeneric: false } genericTypeData when genericTypeData.Name != genericTypeData.NameWithoutGeneric => genericTypeData.Name,
+            GenericTypeData genericTypeData => genericTypeData.NameWithoutGeneric,
+            _ => implType.Name,
+        };
         var baseName = GetSafeIdentifier(typeName);
         var lowerFirstChar = char.ToLowerInvariant(baseName[0]);
         var restOfName = baseName[1..];

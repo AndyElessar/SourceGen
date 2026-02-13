@@ -95,9 +95,14 @@ partial class IocSourceGenerator
         var typeData = typeSymbol.CreateBasicTypeData();
 
         // Return the type as a dependency
+        if(typeData is not GenericTypeData genericTypeData)
+        {
+            return null;
+        }
+
         return new ClosedGenericDependency(
             typeData.Name,
             typeData,
-            typeData.NameWithoutGeneric);
+            genericTypeData.NameWithoutGeneric);
     }
 }
