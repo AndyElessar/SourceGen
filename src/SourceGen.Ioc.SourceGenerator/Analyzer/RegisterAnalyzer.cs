@@ -180,6 +180,18 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.");
 
     /// <summary>
+    /// SGIOC015: KeyValuePair's Key type is unmatched - Injected KeyValuePair/Dictionary key type does not match any registered keyed service's key type.
+    /// </summary>
+    public static readonly DiagnosticDescriptor KeyValuePairKeyTypeMismatch = new(
+        id: "SGIOC015",
+        title: "KeyValuePair's Key type is unmatched",
+        messageFormat: "KeyValuePair parameter '{0}' has key type '{1}' but no keyed service for '{2}' has a matching key type",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "When injecting KeyValuePair<K, V>, IDictionary<K, V>, or collection of KeyValuePair<K, V>, the key type K must match the registered key type of at least one keyed service for V.");
+
+    /// <summary>
     /// SGIOC016: Factory Method is unmatched - Generic factory method does not have [IocGenericFactory] attribute.
     /// </summary>
     public static readonly DiagnosticDescriptor GenericFactoryMissingAttribute = new(
@@ -219,6 +231,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedDefaultSettings,
         ServiceKeyTypeMismatch,
         ServiceKeyNotRegistered,
+        KeyValuePairKeyTypeMismatch,
         GenericFactoryMissingAttribute,
         DuplicatedGenericFactoryPlaceholders
     ];
@@ -292,7 +305,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// Analyzes all dependencies after all services have been collected.
     /// This ensures we have a complete picture of all registered services before checking dependencies.
-    /// Also reports SGIOC012 for duplicated IoCRegisterDefaults and SGIOC013 for ServiceKey type mismatches.
+    /// Also reports SGIOC012 for duplicated IoCRegisterDefaults, SGIOC013-014 for ServiceKey type mismatches,
+    /// and SGIOC015 for KeyValuePair key type mismatches.
     /// </summary>
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
     {
@@ -317,6 +331,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
             // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
             AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
+
+            // SGIOC015: Analyze KeyValuePair/Dictionary key type mismatches
+            AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, context.CancellationToken);
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,

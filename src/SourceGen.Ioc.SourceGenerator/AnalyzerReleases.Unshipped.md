@@ -16,6 +16,7 @@ SGIOC011 | Design | Warning | Duplicated Registration Detected - Same implementa
 SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.
 SGIOC013 | Usage | Error | Key type is unmatched - ServiceKeyAttribute parameter type does not match the registered key type.
 SGIOC014 | Usage | Warning | Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.
+SGIOC015 | Usage | Warning | KeyValuePair's Key type is unmatched - Injected KeyValuePair/Dictionary key type does not match any registered keyed service's key type.
 SGIOC016 | Design | Error | Factory Method is unmatched - Generic factory method does not have IocGenericFactoryAttribute.
 SGIOC017 | Design | Error | Generic Factory Method's type parameters are duplicated - Placeholder types in IocGenericFactoryAttribute must be unique.
 SGIOC018 | Design | Error | Unable to resolve service - A dependency cannot be resolved when ResolveIServiceCollection is false.

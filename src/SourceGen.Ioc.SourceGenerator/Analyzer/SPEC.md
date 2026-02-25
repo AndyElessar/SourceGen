@@ -187,7 +187,28 @@ Report when `ServiceKeyAttribute` is mark on parameter, but there is no specifie
 
 ---
 
-### SGIOC015
+### SGIOC015 - Warning - Usage - KeyValuePair's Key type is unmatched
+
+Report when a `KeyValuePair<K, V>` is injected but the registered key type of `V` does not match `K`.
+
+**Analysis:**
+
+- Runs during CompilationEnd phase after all services are collected.
+- For each registered service, scans constructor parameters and `[IocInject]`/`[Inject]` members (method parameters, properties, fields).
+- Detects parameters/members whose type contains key-value semantics:
+  - `KeyValuePair<K, V>` directly
+  - `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`
+  - Collection types wrapping `KeyValuePair<K, V>`: `IEnumerable<KeyValuePair<K, V>>`, `IReadOnlyCollection<KeyValuePair<K, V>>`, `ICollection<KeyValuePair<K, V>>`, `IReadOnlyList<KeyValuePair<K, V>>`, `IList<KeyValuePair<K, V>>`, `KeyValuePair<K, V>[]`
+- For each detected key-value parameter with key type `K` and value type `V`:
+  - Iterates all registered services to find those with `HasKey = true` and whose `Type` implements interface `V`, has `V` as a base class, or equals `V`.
+  - If at least one keyed registration for `V` exists but **none** have a key type compatible with `K`, reports the diagnostic.
+- Key type compatibility rules:
+  - `K = object` is always compatible with any key type (no diagnostic).
+  - If a registration's `KeyTypeSymbol` is `null` (KeyType is `Csharp`), it is considered compatible (no diagnostic).
+  - Otherwise, reports if the registration's `KeyTypeSymbol` is not assignable to `K`.
+- Skips parameters that have `[FromKeyedServices]` attribute (those resolve specific keyed services, not KVP aggregation).
+
+**Message format:** `KeyValuePair parameter '{0}' has key type '{1}' but no keyed service for '{2}' has a matching key type`
 
 ---
 
