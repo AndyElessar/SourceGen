@@ -21,7 +21,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |:-------|:-----|
 |Service Type|`TargetServiceType`, `ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`|
 |Implementation Type|`IocRegisterForAttribute.ImplementationType`, marked class, defaults `ImplementationTypes`|
-|Lifetime|Attribute → defaults → `Scoped`|
+|Lifetime|Attribute → defaults → MSBuild `SourceGenIocDefaultLifetime` → `Transient`|
 |Key / KeyType|Attribute → defaults|
 |KeyValueType|Resolved `TypeData` of the key value (e.g., `string`, enum, `Guid`). `null` when `KeyType=Csharp` without `nameof()`|
 |Decorators|`Decorators` property (with constructor params and type constraints)|
@@ -59,6 +59,7 @@ Collect service types from invocations: `GetService<T>`, `GetRequiredService<T>`
 |Root Namespace|MSBuild `RootNamespace` (fallback: assembly name)|
 |Assembly Name|Compilation options|
 |Custom Method Name|`SourceGenIocName` MSBuild property|
+|Default Lifetime|`SourceGenIocDefaultLifetime` MSBuild property (fallback: Transient)|
 
 ## Parse Logic
 
@@ -79,7 +80,7 @@ When multiple defaults match an implementation type:
 
 ### 3. Settings Merge Order
 
-`Explicit attribute` → `Matching defaults` → `Registration default`
+`Explicit attribute` → `Matching defaults` → `MSBuild SourceGenIocDefaultLifetime` → `Transient`
 
 ### 4. Inject Attribute Matching
 

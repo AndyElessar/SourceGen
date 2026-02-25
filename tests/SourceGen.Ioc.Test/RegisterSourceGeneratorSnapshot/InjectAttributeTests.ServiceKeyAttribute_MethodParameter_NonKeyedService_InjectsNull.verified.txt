@@ -21,7 +21,7 @@ namespace TestAssembly
         {
             if (!tags.Any())
             {
-                services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
+                services.AddTransient<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
                 {
                     var s0_m0 = default(string);
                     var s0 = new global::TestNamespace.MyService();

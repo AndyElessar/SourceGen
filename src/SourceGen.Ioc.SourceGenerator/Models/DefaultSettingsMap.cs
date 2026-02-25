@@ -5,13 +5,15 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, IEquatable<DefaultSettingsMap>
 {
     public ImmutableArray<DefaultSettingsModel> Settings { get; }
+    public ServiceLifetime FallbackLifetime { get; }
 
     private readonly Dictionary<string, int> _exactMatches;
     private readonly Dictionary<(string NameWithoutGeneric, int GenericArity), int> _genericMatches;
 
-    public DefaultSettingsMap(ImmutableArray<DefaultSettingsModel> settings)
+    public DefaultSettingsMap(ImmutableArray<DefaultSettingsModel> settings, ServiceLifetime fallbackLifetime = ServiceLifetime.Transient)
     {
         Settings = settings;
+        FallbackLifetime = fallbackLifetime;
         _exactMatches = [];
         _genericMatches = [];
 
@@ -48,15 +50,19 @@ internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, 
         if(ReferenceEquals(this, other))
             return true;
         // Only need to compare the source array, as dictionaries are derived from it deterministically
-        return Settings.SequenceEqual(other.Settings);
+        return FallbackLifetime == other.FallbackLifetime
+            && Settings.SequenceEqual(other.Settings);
     }
 
     public override bool Equals(object obj) => obj is DefaultSettingsMap map && Equals(map);
 
     public override int GetHashCode()
     {
-        // Simple hash code based on length to avoid iterating array
-        return Settings.Length;
+        // Simple hash code based on length and fallback lifetime to avoid iterating array
+        unchecked
+        {
+            return (Settings.Length * 397) ^ (int)FallbackLifetime;
+        }
     }
 
     public int Count => Settings.Length;

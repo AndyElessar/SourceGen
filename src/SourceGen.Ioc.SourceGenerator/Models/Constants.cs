@@ -37,6 +37,20 @@ internal static class Constants
     /// </remarks>
     public const string SourceGenIocNameProperty = "build_property.SourceGenIocName";
 
+    /// <summary>
+    /// The MSBuild property name for configuring the default service lifetime.
+    /// </summary>
+    /// <remarks>
+    /// Usage in .csproj:
+    /// <code>
+    /// &lt;PropertyGroup&gt;
+    ///     &lt;SourceGenIocDefaultLifetime&gt;Scoped&lt;/SourceGenIocDefaultLifetime&gt;
+    /// &lt;/PropertyGroup&gt;
+    /// </code>
+    /// Valid values: Singleton, Scoped, Transient (case-insensitive). Defaults to Transient.
+    /// </remarks>
+    public const string SourceGenIocDefaultLifetimeProperty = "build_property.SourceGenIocDefaultLifetime";
+
     public const string Category_Usage = "Usage";
     public const string Category_Design = "Design";
 

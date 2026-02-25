@@ -377,7 +377,7 @@ public sealed partial class RegisterAnalyzer
             baseType = baseType.BaseType;
         }
 
-        // Default lifetime is Singleton (as defined in TryGetLifetime)
+        // Default lifetime is Transient (as defined in TryGetLifetime)
         return explicitLifetime;
     }
 

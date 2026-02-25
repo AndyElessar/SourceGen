@@ -123,17 +123,58 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 .SelectMany(static r => r.OpenGenericEntries))
             .Collect();
 
+        // Get MSBuild properties from analyzer config options
+        var msbuildPropertiesProvider = context.AnalyzerConfigOptionsProvider
+            .Select(static (configOptions, _) =>
+            {
+                // Try to get RootNamespace from MSBuild property
+                string? rootNamespace = null;
+                if(configOptions.GlobalOptions.TryGetValue(Constants.RootNamespaceProperty, out var ns)
+                    && ns is { Length: > 0 } rawRootNamespace
+                    && !string.IsNullOrWhiteSpace(rawRootNamespace))
+                {
+                    rootNamespace = rawRootNamespace;
+                }
+
+                // Try to get custom IoC name from MSBuild property
+                string? customIocName = null;
+                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocNameProperty, out var iocName)
+                    && iocName is { Length: > 0 } rawCustomIocName
+                    && !string.IsNullOrWhiteSpace(rawCustomIocName))
+                {
+                    customIocName = rawCustomIocName;
+                }
+
+                // Try to get default lifetime from MSBuild property
+                ServiceLifetime? defaultLifetime = null;
+                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocDefaultLifetimeProperty, out var lifetimeStr)
+                    && lifetimeStr is { Length: > 0 } rawLifetime
+                    && !string.IsNullOrWhiteSpace(rawLifetime))
+                {
+                    defaultLifetime = rawLifetime.Trim().ToLowerInvariant() switch
+                    {
+                        "singleton" => ServiceLifetime.Singleton,
+                        "scoped" => ServiceLifetime.Scoped,
+                        "transient" => ServiceLifetime.Transient,
+                        _ => null
+                    };
+                }
+
+                return (RootNamespace: rootNamespace, CustomIocName: customIocName, DefaultLifetime: defaultLifetime);
+            });
+
         // Combine default settings from current assembly and imported modules
         // Current assembly settings take precedence over imported settings
         var combinedDefaultSettings = allDefaultSettings
             .Combine(allImportedDefaultSettings)
+            .Combine(msbuildPropertiesProvider)
             .Select(static (combined, _) =>
             {
-                var (currentAssembly, imported) = combined;
+                var ((currentAssembly, imported), msbuildProps) = combined;
                 // Current assembly settings come first (higher priority), then imported settings (lower priority)
                 // DefaultSettingsMap uses first-match semantics, so current assembly settings should be added first
                 var allSettings = currentAssembly.AddRange(imported);
-                return new DefaultSettingsMap(allSettings);
+                return new DefaultSettingsMap(allSettings, msbuildProps.DefaultLifetime ?? ServiceLifetime.Transient);
             });
 
         // Collect GetService, GetRequiredService, GetKeyedService, GetRequiredKeyedService, GetServices invocations
@@ -177,31 +218,6 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 var hasDIPackage = compilation.GetTypeByMetadataName(
                     "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is INamedTypeSymbol;
                 return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
-            });
-
-        // Get MSBuild properties from analyzer config options
-        var msbuildPropertiesProvider = context.AnalyzerConfigOptionsProvider
-            .Select(static (configOptions, _) =>
-            {
-                // Try to get RootNamespace from MSBuild property
-                string? rootNamespace = null;
-                if(configOptions.GlobalOptions.TryGetValue(Constants.RootNamespaceProperty, out var ns)
-                    && ns is { Length: > 0 } rawRootNamespace
-                    && !string.IsNullOrWhiteSpace(rawRootNamespace))
-                {
-                    rootNamespace = rawRootNamespace;
-                }
-
-                // Try to get custom IoC name from MSBuild property
-                string? customIocName = null;
-                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocNameProperty, out var iocName)
-                    && iocName is { Length: > 0 } rawCustomIocName
-                    && !string.IsNullOrWhiteSpace(rawCustomIocName))
-                {
-                    customIocName = rawCustomIocName;
-                }
-
-                return (RootNamespace: rootNamespace, CustomIocName: customIocName);
             });
 
         // ========== Pipeline 1: Process individual registrations (cacheable per registration) ==========

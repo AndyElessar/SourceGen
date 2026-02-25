@@ -11,7 +11,7 @@ partial class IocSourceGenerator
         in SourceProductionContext ctx,
         ContainerWithGroups containerWithGroups,
         string assemblyName,
-        (string? RootNamespace, string? CustomIocName) msbuildProps,
+        (string? RootNamespace, string? CustomIocName, ServiceLifetime? DefaultLifetime) msbuildProps,
         bool hasDIPackage)
     {
         var source = GenerateContainerSource(containerWithGroups, assemblyName, msbuildProps, hasDIPackage);
@@ -25,7 +25,7 @@ partial class IocSourceGenerator
     private static string GenerateContainerSource(
         ContainerWithGroups containerWithGroups,
         string assemblyName,
-        (string? RootNamespace, string? CustomIocName) msbuildProps,
+        (string? RootNamespace, string? CustomIocName, ServiceLifetime? DefaultLifetime) msbuildProps,
         bool hasDIPackage)
     {
         var writer = new SourceWriter();

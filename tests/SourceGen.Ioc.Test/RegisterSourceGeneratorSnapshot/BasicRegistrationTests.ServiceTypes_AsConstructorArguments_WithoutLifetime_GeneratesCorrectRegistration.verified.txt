@@ -21,9 +21,9 @@ namespace TestAssembly
         {
             if (!tags.Any())
             {
-                services.AddSingleton<global::TestNamespace.MultiService, global::TestNamespace.MultiService>();
-                services.AddSingleton<global::TestNamespace.IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MultiService>());
-                services.AddSingleton<global::TestNamespace.IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MultiService>());
+                services.AddTransient<global::TestNamespace.MultiService, global::TestNamespace.MultiService>();
+                services.AddTransient<global::TestNamespace.IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MultiService>());
+                services.AddTransient<global::TestNamespace.IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MultiService>());
             }
 
             return services;

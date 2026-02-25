@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace SourceGen.Ioc;
 
 /// <summary>
-/// Specifies that a class should be registered with a dependency injection container, Default lifetime is Singleton.
+/// Specifies that a class should be registered with a dependency injection container, Default lifetime is Transient.
 /// </summary>
 /// <remarks>
 /// Apply this attribute to a class to indicate that it should be registered for dependency injection.<br/>
@@ -16,7 +16,7 @@ public sealed class IocRegisterAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="IocRegisterAttribute"/> class. <br/>
-    /// Default lifetime is Singleton.
+    /// Default lifetime is Transient.
     /// </summary>
     /// <param name="serviceTypes">The service types to register the class as.</param>
     public IocRegisterAttribute(params Type[] serviceTypes)
@@ -106,7 +106,7 @@ public sealed class IocRegisterAttribute<T> : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="IocRegisterAttribute{T}"/> class. <br/>
-    /// Default lifetime is Singleton.
+    /// Default lifetime is Transient.
     /// </summary>
     public IocRegisterAttribute()
     {

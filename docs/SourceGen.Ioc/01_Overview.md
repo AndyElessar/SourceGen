@@ -67,7 +67,7 @@ public static IServiceCollection AddMyProject(this IServiceCollection services)
 ## Service Lifetimes
 
 ```csharp
-[IocRegister<IService>(ServiceLifetime.Singleton)]  // Default
+[IocRegister<IService>(ServiceLifetime.Transient)]  // Default
 [IocRegister<IService>(ServiceLifetime.Scoped)]
 [IocRegister<IService>(ServiceLifetime.Transient)]
 ```

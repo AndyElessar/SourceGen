@@ -18,8 +18,8 @@ internal class MyService : IMyService;
 <summary>Generated Code</summary>
 
 ```csharp
-services.AddSingleton<MyService, MyService>();
-services.AddSingleton<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddTransient<MyService, MyService>();
+services.AddTransient<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
 ```
 
 </details>
@@ -27,31 +27,31 @@ services.AddSingleton<IMyService>((global::System.IServiceProvider sp) => sp.Get
 ## Specifying Lifetime
 
 ```csharp
-// Singleton (default)
+// Transient (default)
 [IocRegister<IService>]
+internal class TransientService : IService;
+
+// Singleton
+[IocRegister<IService>(ServiceLifetime.Singleton)]
 internal class SingletonService : IService;
 
 // Scoped
 [IocRegister<IService>(ServiceLifetime.Scoped)]
 internal class ScopedService : IService;
-
-// Transient
-[IocRegister<IService>(ServiceLifetime.Transient)]
-internal class TransientService : IService;
 ```
 
 <details>
 <summary>Generated Code</summary>
 
 ```csharp
+services.AddTransient<TransientService, TransientService>();
+services.AddTransient<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<TransientService>());
+
 services.AddSingleton<SingletonService, SingletonService>();
 services.AddSingleton<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<SingletonService>());
 
 services.AddScoped<ScopedService, ScopedService>();
 services.AddScoped<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ScopedService>());
-
-services.AddTransient<TransientService, TransientService>();
-services.AddTransient<IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<TransientService>());
 ```
 
 </details>

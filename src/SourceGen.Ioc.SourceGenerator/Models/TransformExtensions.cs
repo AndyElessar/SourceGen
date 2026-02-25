@@ -763,7 +763,7 @@ internal static class TransformExtensions
             }
 
             // Fall back to named argument
-            var (hasArg, val) = attribute.TryGetNamedArgument<int>("Lifetime", 0); // Default is ServiceLifetime.Singleton
+            var (hasArg, val) = attribute.TryGetNamedArgument<int>("Lifetime", 2); // Default is ServiceLifetime.Transient
             return (hasArg, (ServiceLifetime)val);
         }
 

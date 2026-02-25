@@ -21,7 +21,7 @@ namespace MainApp
         {
             if (!tags.Any())
             {
-                services.AddSingleton<global::MainApp.ViewModel2, global::MainApp.ViewModel2>();
+                services.AddTransient<global::MainApp.ViewModel2, global::MainApp.ViewModel2>();
             }
 
             if (tags.Contains("Mediator"))

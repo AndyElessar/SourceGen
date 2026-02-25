@@ -23,7 +23,7 @@ namespace TestAssembly
             {
                 services.AddScoped(typeof(global::TestNamespace.SingleArityService<>), typeof(global::TestNamespace.SingleArityService<>));
                 services.AddScoped(typeof(global::TestNamespace.IGenericService<>), typeof(global::TestNamespace.SingleArityService<>));
-                services.AddSingleton(typeof(global::TestNamespace.DoubleArityService<,>), typeof(global::TestNamespace.DoubleArityService<,>));
+                services.AddTransient(typeof(global::TestNamespace.DoubleArityService<,>), typeof(global::TestNamespace.DoubleArityService<,>));
             }
 
             return services;

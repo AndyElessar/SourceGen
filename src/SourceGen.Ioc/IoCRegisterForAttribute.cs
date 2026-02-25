@@ -70,7 +70,7 @@ public sealed class IocRegisterForAttribute<T> : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="IocRegisterForAttribute{T}"/> class. <br/>
-    /// Default lifetime is Singleton.
+    /// Default lifetime is Transient.
     /// </summary>
     public IocRegisterForAttribute()
     {

@@ -1,7 +1,8 @@
 ---
 description: "Use when: implementing approved plan from /memories/session/plan.md. Executes code changes, runs tests, and follows project conventions."
-model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, execute, read, agent/askQuestions, edit, search, web, browser, github/get_commit, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, github/get_commit, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, todo]
+model: GPT-5.3-Codex (copilot)
+tools: [vscode/memory, execute, read, edit, search, 'microsoftdocs/mcp/*', todo]
+agents: []
 user-invocable: false
 argument-hint: "Implement the approved plan stored in /memories/session/plan.md"
 ---

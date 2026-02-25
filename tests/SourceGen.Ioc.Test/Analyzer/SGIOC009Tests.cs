@@ -110,11 +110,11 @@ public class SGIOC009Tests
             }
             """;
 
-        // Default lifetime is Singleton, so no diagnostic
+        // Default lifetime is Transient, Instance requires Singleton, so diagnostic should fire
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC009");
 
-        await Assert.That(sgioc009).Count().IsEqualTo(0);
+        await Assert.That(sgioc009).Count().IsEqualTo(1);
     }
 
     [Test]

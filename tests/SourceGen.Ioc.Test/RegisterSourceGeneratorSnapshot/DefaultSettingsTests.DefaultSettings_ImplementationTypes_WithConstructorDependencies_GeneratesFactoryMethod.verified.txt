@@ -21,7 +21,7 @@ namespace TestAssembly
         {
             if (!tags.Any())
             {
-                services.AddSingleton<global::TestNamespace.Dependency, global::TestNamespace.Dependency>();
+                services.AddTransient<global::TestNamespace.Dependency, global::TestNamespace.Dependency>();
                 services.AddScoped<global::TestNamespace.MyService, global::TestNamespace.MyService>();
                 services.AddScoped<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
             }

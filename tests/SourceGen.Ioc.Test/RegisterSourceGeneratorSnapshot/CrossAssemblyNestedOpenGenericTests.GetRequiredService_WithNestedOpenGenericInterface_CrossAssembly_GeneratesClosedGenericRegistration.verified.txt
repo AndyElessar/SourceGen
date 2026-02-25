@@ -21,7 +21,7 @@ namespace MainApp
         {
             if (!tags.Any())
             {
-                services.AddSingleton<global::MainApp.CustomMessenger, global::MainApp.CustomMessenger>();
+                services.AddTransient<global::MainApp.CustomMessenger, global::MainApp.CustomMessenger>();
             }
 
             if (tags.Contains("Mediator"))

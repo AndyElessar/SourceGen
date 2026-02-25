@@ -402,11 +402,7 @@ public sealed partial class RegisterAnalyzer
             return;
 
         // Get the lifetime
-        var (hasLifetime, lifetime) = attribute.TryGetLifetime();
-
-        // If lifetime is not explicitly set, it defaults to Singleton (0), which is valid
-        if (!hasLifetime)
-            return;
+        var (_, lifetime) = attribute.TryGetLifetime();
 
         // If lifetime is Singleton, it's valid
         if (lifetime is ServiceLifetime.Singleton)

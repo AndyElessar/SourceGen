@@ -1,7 +1,7 @@
 ---
 description: "Use when: implementing features, fixing bugs, or making code changes that require planning, approval, and review. Enforces plan→approve→implement→review workflow."
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, vscode/switchAgent, execute, read, agent, edit, search, web, github/get_commit, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, github/get_commit, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, todo]
+tools: [vscode/memory, vscode/switchAgent, read, agent, search, web, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'microsoftdocs/mcp/*', github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, todo]
 agents: ["*"]
 ---
 You are a senior developer working on the SourceGen C# source generator project. You follow a strict workflow for every code change.
@@ -51,8 +51,8 @@ After implementation is complete:
    - Refactoring suggestions
    - Performance optimization opportunities
 3. Address any issues found in the review:
-   - Fix all "Spec Compliance Issues"
-   - Apply reasonable "Refactoring Suggestions" and "Performance Optimization" improvements
+   - If the `reviewer` saved a remediation plan to `/memories/session/plan.md`, delegate to the `implement` subagent to execute the fixes
+   - Otherwise, for minor "Refactoring Suggestions" and "Performance Optimization" improvements, delegate to the `implement` subagent with a brief description of the changes needed
 4. If significant changes were made, re-run tests to confirm nothing broke
 
 ### Phase 6: Complete

@@ -53,7 +53,7 @@ public class DefaultSettingsTests
             public class SingleArityService<T> : IGenericService<T> { }
 
             // This should NOT match IGenericService<> default settings (arity 2 != 1)
-            // Should use default lifetime (Singleton) instead
+            // Should use default lifetime (Transient) instead
             [IocRegister]
             public class DoubleArityService<T1, T2> : IGenericService<T1, T2> { }
             """;

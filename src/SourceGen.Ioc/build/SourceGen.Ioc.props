@@ -23,5 +23,6 @@
   -->
   <ItemGroup>
     <CompilerVisibleProperty Include="SourceGenIocName" />
+    <CompilerVisibleProperty Include="SourceGenIocDefaultLifetime" />
   </ItemGroup>
 </Project>

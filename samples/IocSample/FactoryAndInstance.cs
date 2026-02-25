@@ -23,7 +23,7 @@ internal class FactoryService2 : IFactoryService
 }
 
 public interface IInstance;
-[IocRegister(Instance = nameof(Instance))]
+[IocRegister(ServiceLifetime.Singleton, Instance = nameof(Instance))]
 internal sealed class InstanceService : IInstance
 {
     public static readonly InstanceService Instance = new();

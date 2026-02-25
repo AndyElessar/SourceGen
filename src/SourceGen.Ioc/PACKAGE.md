@@ -41,17 +41,17 @@ services.AddMyProject(); // Generated extension method
 ### Basic Registration
 
 ```csharp
-// Singleton (default)
+// Transient (default)
 [IocRegister<IService>]
+internal class TransientService : IService;
+
+// Singleton
+[IocRegister<IService>(ServiceLifetime.Singleton)]
 internal class SingletonService : IService;
 
 // Scoped
 [IocRegister<IService>(ServiceLifetime.Scoped)]
 internal class ScopedService : IService;
-
-// Transient
-[IocRegister<IService>(ServiceLifetime.Transient)]
-internal class TransientService : IService;
 ```
 
 ### Multiple Service Types

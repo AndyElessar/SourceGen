@@ -48,8 +48,8 @@ partial class IocSourceGenerator
 
         DefaultSettingsModel? matchingDefault = bestDefaultIndex >= 0 ? defaultSettings[bestDefaultIndex] : null;
 
-        // Merge settings (explicit > default > registration default)
-        var (lifetime, registerAllInterfaces, registerAllBaseClasses) = MergeSettings(registration, matchingDefault);
+        // Merge settings (explicit > default > fallback lifetime)
+        var (lifetime, registerAllInterfaces, registerAllBaseClasses) = MergeSettings(registration, matchingDefault, defaultSettings.FallbackLifetime);
 
         var decorators = registration.Decorators.Length > 0
             ? registration.Decorators
@@ -242,11 +242,12 @@ partial class IocSourceGenerator
     /// </summary>
     private static (ServiceLifetime Lifetime, bool RegisterAllInterfaces, bool RegisterAllBaseClasses) MergeSettings(
         RegistrationData registration,
-        DefaultSettingsModel? matchingDefault)
+        DefaultSettingsModel? matchingDefault,
+        ServiceLifetime fallbackLifetime)
     {
         var lifetime = registration.HasExplicitLifetime
             ? registration.Lifetime
-            : (matchingDefault?.Lifetime ?? registration.Lifetime);
+            : (matchingDefault?.Lifetime ?? fallbackLifetime);
 
         var registerAllInterfaces = registration.HasExplicitRegisterAllInterfaces
             ? registration.RegisterAllInterfaces

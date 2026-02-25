@@ -21,7 +21,7 @@ namespace TestAssembly
         {
             if (!tags.Any())
             {
-                services.AddKeyedSingleton<global::TestNamespace.MyService>("MyKey", (global::System.IServiceProvider sp, object? key) =>
+                services.AddKeyedTransient<global::TestNamespace.MyService>("MyKey", (global::System.IServiceProvider sp, object? key) =>
                 {
                     var s0_m0 = "MyKey";
                     var s0 = new global::TestNamespace.MyService();
