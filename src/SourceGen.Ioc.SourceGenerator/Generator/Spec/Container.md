@@ -67,7 +67,7 @@ The container generates generic instance methods matching the signatures from `S
     ExplicitOnly = false,              // Only register explicitly marked services
     IncludeTags = ["Tag1", "Tag2"],    // Only include services with specified tags
     UseSwitchStatement = false,        // Use FrozenDictionary by default; set true to use switch statement
-    ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim,  // Thread safety strategy for singleton/scoped resolution
+    ThreadSafeStrategy = ThreadSafeStrategy.Lock,  // Thread safety strategy for singleton/scoped resolution
     EagerResolveOptions = EagerResolveOptions.Singleton  // Eager resolution for singleton/scoped services
 )]
 public partial class MyContainer;
@@ -79,7 +79,7 @@ public partial class MyContainer;
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|
-|`ThreadSafeStrategy`|`SemaphoreSlim`|Thread safety strategy for singleton and scoped service resolution. See [ThreadSafeStrategy](#threadsafestrategy) for details.|
+|`ThreadSafeStrategy`|`Lock`|Thread safety strategy for singleton and scoped service resolution. See [ThreadSafeStrategy](#threadsafestrategy) for details.|
 |`EagerResolveOptions`|`Singleton`|Controls which service lifetimes should be eagerly resolved during container/scope construction. See [EagerResolveOptions](#eagerresolveoptions) for details.|
 
 > **Priority**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
@@ -116,7 +116,7 @@ private global::MyService GetMyService()
 }
 ```
 
-##### ThreadSafeStrategy.Lock
+##### ThreadSafeStrategy.Lock (Default)
 
 Uses `Lock` class with double-checked locking:
 
@@ -138,7 +138,7 @@ private global::MyService GetMyService()
 }
 ```
 
-##### ThreadSafeStrategy.SemaphoreSlim (Default)
+##### ThreadSafeStrategy.SemaphoreSlim
 
 Uses `SemaphoreSlim` with double-checked locking:
 

@@ -37,9 +37,10 @@ This source generator automatically generates extension methods for registering 
 
 ## Features
 
-1. Basic:
-    - Always register Implementation type itself.
-    - When Service type is open generic type and Implementation type is closed type, make sure to register with closed generic type.
+### 1. Basic Registration
+
+- Always register Implementation type itself.
+- When Service type is open generic type and Implementation type is closed type, make sure to register with closed generic type.
 
     ```csharp
       #region Define:
@@ -93,140 +94,146 @@ This source generator automatically generates extension methods for registering 
       #endregion
       ```
 
-2. When `Decorators` is not empty, generate register code to handle decorator pattern:\
-    Only generate decorator when all type arguments constraints are satisfied.
+### 2. Decorator Pattern
 
-    ```csharp
-    #region Define:
-    public interface IMyService;
+When `Decorators` is not empty, generate register code to handle decorator pattern:\
+Only generate decorator when all type arguments constraints are satisfied.
 
-    [IocRegister(
-        Lifetime = ServiceLifetime.Singleton,
-        ServiceTypes = [typeof(IMyService)],
-        Decorators = [typeof(MyServiceDecorator), typeof(MyServiceDecorator2)])]
-    public class MyService(ILogger<MyService> logger) : IMyService;
+```csharp
+#region Define:
+public interface IMyService;
 
-    // IocRegister attribute on decorator is optional
-    [IocRegister]
-    public class MyServiceDecorator(ILogger<MyServiceDecorator> logger, IMyService myservice) : IMyService
+[IocRegister(
+    Lifetime = ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IMyService)],
+    Decorators = [typeof(MyServiceDecorator), typeof(MyServiceDecorator2)])]
+public class MyService(ILogger<MyService> logger) : IMyService;
+
+// IocRegister attribute on decorator is optional
+[IocRegister]
+public class MyServiceDecorator(ILogger<MyServiceDecorator> logger, IMyService myservice) : IMyService
+{
+    private readonly IMyService myservice = myservice;
+    private readonly ILogger<MyServiceDecorator> logger = logger;
+}
+
+public class MyServiceDecorator2(ILogger<MyServiceDecorator2> logger, IMyService myservice) : IMyService
+{
+    private readonly IMyService myservice = myservice;
+    private readonly ILogger<MyServiceDecorator2> logger = logger;
+}
+#endregion
+
+#region Generate:
+service.AddSingleton<MyService>();
+service.AddSingleton<IMyService>((IServiceProvider sp) =>
+{
+    var s0 = sp.GetRequiredService<MyService>();
+    var s1_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator2>>();
+    var s1 = new MyServiceDecorator2(s1_p1, s0);
+    var s2_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator>>();
+    var s2 = new MyServiceDecorator(s2_p1, s1);
+    return s2;
+});
+#endregion
+
+#region Define:
+public interface ILogger<T>
+{
+    public void Log(string msg);
+}
+[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+public sealed class Logger<T> : ILogger<T>
+{
+    public void Log(string msg)
     {
-        private readonly IMyService myservice = myservice;
-        private readonly ILogger<MyServiceDecorator> logger = logger;
+        Console.WriteLine(msg);
     }
+}
 
-    public class MyServiceDecorator2(ILogger<MyServiceDecorator2> logger, IMyService myservice) : IMyService
+public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+[IocRegisterDefaultSettings(
+    typeof(IRequestHandler<,>),
+    ServiceLifetime.Singleton,
+    Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
+)]
+public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+{
+    TResponse Handle(TRequest request);
+}
+
+public sealed record TestRequest(int Key) : IRequest<TestRequest, List<string>>;
+
+[IocRegister]
+internal sealed class TestHandler : IRequestHandler<TestRequest, List<string>>
+{
+    public List<string> Handle(TestRequest request)
     {
-        private readonly IMyService myservice = myservice;
-        private readonly ILogger<MyServiceDecorator2> logger = logger;
+        return [.. Enumerable.Range(1, request.Key).Select(i => $"Value {i}")];
     }
-    #endregion
+}
 
-    #region Generate:
-    service.AddSingleton<MyService>();
-    service.AddSingleton<IMyService>((IServiceProvider sp) =>
-    {
-        var s0 = sp.GetRequiredService<MyService>();
-        var s1_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator2>>();
-        var s1 = new MyServiceDecorator2(s1_p1, s0);
-        var s2_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator>>();
-        var s2 = new MyServiceDecorator(s2_p1, s1);
-        return s2;
-    });
-    #endregion
+internal sealed class HandlerDecorator1<TRequest, TResponse>(
+    IRequestHandler<TRequest, TResponse> inner,
+    ILogger<HandlerDecorator1<TRequest, TResponse>> logger
+) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+{
+    private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
 
-    #region Define:
-    public interface ILogger<T>
+    public TResponse Handle(TRequest request)
     {
-        public void Log(string msg);
+        logger.Log(request.ToString() ?? string.Empty);
+        Console.WriteLine("HandlerDecorator1: Before handling request");
+        var response = inner.Handle(request);
+        Console.WriteLine("HandlerDecorator1: After handling request");
+        return response;
     }
-    [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
-    public sealed class Logger<T> : ILogger<T>
+}
+
+internal sealed class HandlerDecorator2<TRequest, TResponse>(
+    IRequestHandler<TRequest, TResponse> inner
+) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+{
+    public TResponse Handle(TRequest request)
     {
-        public void Log(string msg)
-        {
-            Console.WriteLine(msg);
-        }
+        Console.WriteLine("HandlerDecorator2: Before handling request");
+        var response = inner.Handle(request);
+        Console.WriteLine("HandlerDecorator2: After handling request");
+        return response;
     }
+}
+#endregion
 
-    public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+#region Generate:
+services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) =>
+{
+    var s0 = sp.GetRequiredService<TestHandler>();
 
-    [IocRegisterDefaultSettings(
-        typeof(IRequestHandler<,>),
-        ServiceLifetime.Singleton,
-        Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
-    )]
-    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
-    {
-        TResponse Handle(TRequest request);
-    }
+    var s1 = new HandlerDecorator2<TestRequest, List<string>>(s0);
 
-    public sealed record TestRequest(int Key) : IRequest<TestRequest, List<string>>;
+    var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest, List<string>>>>();
+    var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p0);
+    return s2;
+});
+#endregion
+```
 
-    [IocRegister]
-    internal sealed class TestHandler : IRequestHandler<TestRequest, List<string>>
-    {
-        public List<string> Handle(TestRequest request)
-        {
-            return [.. Enumerable.Range(1, request.Key).Select(i => $"Value {i}")];
-        }
-    }
+### 3. Tag-Based Registration
 
-    internal sealed class HandlerDecorator1<TRequest, TResponse>(
-        IRequestHandler<TRequest, TResponse> inner,
-        ILogger<HandlerDecorator1<TRequest, TResponse>> logger
-    ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
-    {
-        private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
+When Tags is not empty, generate a single extension method with `params IEnumerable<string> tags` parameter to handle tag-based registration:
 
-        public TResponse Handle(TRequest request)
-        {
-            logger.Log(request.ToString() ?? string.Empty);
-            Console.WriteLine("HandlerDecorator1: Before handling request");
-            var response = inner.Handle(request);
-            Console.WriteLine("HandlerDecorator1: After handling request");
-            return response;
-        }
-    }
+#### **Registration Logic** (Mutually Exclusive Model)
 
-    internal sealed class HandlerDecorator2<TRequest, TResponse>(
-        IRequestHandler<TRequest, TResponse> inner
-    ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
-    {
-        public TResponse Handle(TRequest request)
-        {
-            Console.WriteLine("HandlerDecorator2: Before handling request");
-            var response = inner.Handle(request);
-            Console.WriteLine("HandlerDecorator2: After handling request");
-            return response;
-        }
-    }
-    #endregion
+- Services **without** Tags: Only registered when no tags are passed (`!tags.Any()`)
+- Services **with** Tags: Only registered when passed tags match (at least one tag matches)
+- Tags act as mutually exclusive group selectors - passing tags switches from default to tagged services
 
-    #region Generate:
-    services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) =>
-    {
-        var s0 = sp.GetRequiredService<TestHandler>();
+#### **Generated Code Pattern**
 
-        var s1 = new HandlerDecorator2<TestRequest, List<string>>(s0);
-
-        var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest, List<string>>>>();
-        var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p0);
-        return s2;
-    });
-    #endregion
-    ```
-
-3. When Tags is not empty, generate a single extension method with `params IEnumerable<string> tags` parameter to handle tag-based registration:
-
-    **Registration Logic** (Mutually Exclusive Model):
-    - Services **without** Tags: Only registered when no tags are passed (`!tags.Any()`)
-    - Services **with** Tags: Only registered when passed tags match (at least one tag matches)
-    - Tags act as mutually exclusive group selectors - passing tags switches from default to tagged services
-
-    **Generated Code Pattern**:
-    - Use `!tags.Any()` for services without tags (only when no tags passed)
-    - Use `tags.Contains("TagName")` for tag matching (extension method syntax)
-    - Group registrations by tag conditions to minimize runtime checks
+- Use `!tags.Any()` for services without tags (only when no tags passed)
+- Use `tags.Contains("TagName")` for tag matching (extension method syntax)
+- Group registrations by tag conditions to minimize runtime checks
 
     ```csharp
     #region Define:
@@ -284,74 +291,81 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-4. When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `IocInjectAttribute` or `InjectAttribute`, generate the necessary code to handle the injection.
+### 4. Injection (Field / Property / Method / Constructor)
 
-    Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
+When a class marked with `IocRegisterAttribute`, `IocRegisterForAttribute` and its members or parameters marked with `IocInjectAttribute` or `InjectAttribute`, generate the necessary code to handle the injection.
 
-    **Important**: Factory method registration is only generated when necessary. The following cases require factory method:
-    - Constructor parameter has `[IocInject]` attribute (SourceGen.Ioc-specific, MS.E.DI cannot handle)
-    - Field/Property/Method has `[IocInject]` attribute
-    - Decorator pattern is used
-    - Factory or Instance is specified
+Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use other library's attribute, like `Microsoft.AspNetCore.Components.InjectAttribute`, make sure the Key interpret logic is compatible with `Microsoft.AspNetCore.Components.InjectAttribute`.
 
-    The following cases are handled natively by MS.E.DI and do **NOT** require factory method:
-    - `[FromKeyedServices]` attribute on constructor parameters
-    - `[ServiceKey]` attribute on constructor parameters
-    - `IServiceProvider` parameter in constructor
+**Important**: Factory method registration is only generated when necessary. The following cases require factory method:
 
-    **Method Parameter Analysis (same as constructor parameters)**:
-    Method parameters marked with `[IocInject]` must be analyzed using the same logic as constructor parameters:
-    - `[ServiceKey]` attribute: Inject the registration key (or default if non-keyed)
-    - `[FromKeyedServices]` attribute: Use keyed service resolution
-    - `[IocInject]` attribute with Key: Use keyed service resolution
-    - `IServiceProvider` type: Pass the service provider directly
-    - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
-    - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
-    - Built-in types without attributes and without default value: Skip (unresolvable)
-    - Parameters with default values: See rule for optional parameters below
+- Constructor parameter has `[IocInject]` attribute (SourceGen.Ioc-specific, MS.E.DI cannot handle)
+- Field/Property/Method has `[IocInject]` attribute
+- Decorator pattern is used
+- Factory or Instance is specified
 
-    **Property/Field Analysis**:
-    Properties and fields marked with `[IocInject]` or `[Inject]` are analyzed for injection:
-    - Only non-static properties with a setter (`set` or `init`) are eligible
-    - Only non-static, non-readonly fields are eligible
-    - `[IocInject]` attribute with Key: Use keyed service resolution (`GetRequiredKeyedService<T>(key)` or `GetKeyedService<T>(key)`)
-    - `IServiceProvider` type: Pass the service provider directly
-    - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
-    - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
-    - Built-in types without Key and without initializer: Skip (unresolvable)
-    - Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
-    - Property/Field with initializer: Treated as having a default value, use optional resolution
+The following cases are handled natively by MS.E.DI and do **NOT** require factory method:
 
-    **Optional Parameter Handling (constructor and method parameters)**:
-    When a parameter has a default value:
-    - If the type is a built-in type (int, string, etc.) or collection of built-in types: Skip (use default value)
-    - If the type is resolvable from DI: Use `GetService<T>()` (non-required) and conditionally assign:
-      - If the resolved value is not null: Use the resolved value
-      - If the resolved value is null: Do not specify the argument (use default value)
+- `[FromKeyedServices]` attribute on constructor parameters
+- `[ServiceKey]` attribute on constructor parameters
+- `IServiceProvider` parameter in constructor
 
-    **Wrapper Type Resolution**:
-    When a parameter or member type is a recognized wrapper type, the generator resolves it differently depending on whether it is a **direct wrapper** (inner type is a plain service) or a **nested wrapper** (inner type is itself a wrapper).
+**Method Parameter Analysis (same as constructor parameters)**:
+Method parameters marked with `[IocInject]` must be analyzed using the same logic as constructor parameters:
 
-    **Direct `Lazy<T>` / `Func<T>`**: A standalone registration is emitted so that `Lazy<T>` / `Func<T>` can be resolved directly from DI. The lifetime and tags of the registration match the inner service `T`. Consumers then resolve via `sp.GetRequiredService<Lazy<T>>()`.
+- `[ServiceKey]` attribute: Inject the registration key (or default if non-keyed)
+- `[FromKeyedServices]` attribute: Use keyed service resolution
+- `[IocInject]` attribute with Key: Use keyed service resolution
+- `IServiceProvider` type: Pass the service provider directly
+- Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
+- Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
+- Built-in types without attributes and without default value: Skip (unresolvable)
+- Parameters with default values: See rule for optional parameters below
 
-    | Wrapper Type | Standalone Registration | Consumer Resolution |
-    | --- | --- | --- |
-    | `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Lazy<T>>()` |
-    | `Func<T>` | `services.AddXXX<Func<T>>(sp => new Func<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Func<T>>()` |
-    | `KeyValuePair<K, V>` | `services.Add(new ServiceDescriptor(typeof(KVP<K,V>), sp => ..., lifetime))` | (used by Dictionary resolution) |
-    | `IDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
-    | `IReadOnlyDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
-    | `Dictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+**Property/Field Analysis**:
+Properties and fields marked with `[IocInject]` or `[Inject]` are analyzed for injection:
 
-    - **Nullable wrapper types**: Use `GetService<T>()` (optional) instead of `GetRequiredService<T>()`
-    - **Nested wrappers**: Supported up to 2 levels. Inner wrapper types are recursively constructed **inline** (no standalone registration).
-      - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => sp.GetRequiredService<T>()))`
-      - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => sp.GetRequiredService<T>()))`
-      - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => sp.GetServices<T>())`
-      - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Consumers resolve via `sp.GetServices<Lazy<T>>()` (uses standalone registrations)
-    - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
-    - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
-    - **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
+- Only non-static properties with a setter (`set` or `init`) are eligible
+- Only non-static, non-readonly fields are eligible
+- `[IocInject]` attribute with Key: Use keyed service resolution (`GetRequiredKeyedService<T>(key)` or `GetKeyedService<T>(key)`)
+- `IServiceProvider` type: Pass the service provider directly
+- Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
+- Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
+- Built-in types without Key and without initializer: Skip (unresolvable)
+- Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
+- Property/Field with initializer: Treated as having a default value, use optional resolution
+
+**Optional Parameter Handling (constructor and method parameters)**:
+When a parameter has a default value:
+
+- If the type is a built-in type (int, string, etc.) or collection of built-in types: Skip (use default value)
+- If the type is resolvable from DI: Use `GetService<T>()` (non-required) and conditionally assign:
+  - If the resolved value is not null: Use the resolved value
+  - If the resolved value is null: Do not specify the argument (use default value)
+
+**Wrapper Type Resolution**:
+When a parameter or member type is a recognized wrapper type, the generator resolves it differently depending on whether it is a **direct wrapper** (inner type is a plain service) or a **nested wrapper** (inner type is itself a wrapper).
+
+**Direct `Lazy<T>` / `Func<T>`**: A standalone registration is emitted so that `Lazy<T>` / `Func<T>` can be resolved directly from DI. The lifetime and tags of the registration match the inner service `T`. Consumers then resolve via `sp.GetRequiredService<Lazy<T>>()`.
+
+| Wrapper Type | Standalone Registration | Consumer Resolution |
+| --- | --- | --- |
+| `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Lazy<T>>()` |
+| `Func<T>` | `services.AddXXX<Func<T>>(sp => new Func<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Func<T>>()` |
+| `KeyValuePair<K, V>` | `services.Add(new ServiceDescriptor(typeof(KVP<K,V>), sp => ..., lifetime))` | (used by Dictionary resolution) |
+| `IDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+| `IReadOnlyDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+| `Dictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+
+- **Nullable wrapper types**: Use `GetService<T>()` (optional) instead of `GetRequiredService<T>()`
+- **Nested wrappers**: Supported up to 2 levels. Inner wrapper types are recursively constructed **inline** (no standalone registration).
+  - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => sp.GetRequiredService<T>()))`
+  - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => sp.GetRequiredService<T>()))`
+  - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => sp.GetServices<T>())`
+  - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Consumers resolve via `sp.GetServices<Lazy<T>>()` (uses standalone registrations)
+- **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
+- **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
+- **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
 
     ```csharp
     #region Define:
@@ -567,179 +581,190 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-5. When a class marked with `IocImportModuleAttribute` (or `IocImportModuleAttribute<T>`), generator will get `IocImportModuleAttribute.ModuleType`'s (or `T` type's) assembly's `IocRegisterDefaultsAttribute` as default settings for current assembly.
+### 5. Import Module
 
-6. When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate closed generic registration.
+When a class marked with `IocImportModuleAttribute` (or `IocImportModuleAttribute<T>`), generator will get `IocImportModuleAttribute.ModuleType`'s (or `T` type's) assembly's `IocRegisterDefaultsAttribute` as default settings for current assembly.
 
-    ```csharp
-    #region Define:
-    public interface ILogger<T>
+### 6. Closed Generic Registration from Open Generic
+
+When a open generic registration exists, and a class has register and its constructor has closed generic for open generic registration, generate closed generic registration.
+
+```csharp
+#region Define:
+public interface ILogger<T>
+{
+    public void Log(string msg);
+}
+[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+public sealed class Logger<T> : ILogger<T>
+{
+    public void Log(string msg)
     {
-        public void Log(string msg);
+        Console.WriteLine(msg);
     }
-    [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
-    public sealed class Logger<T> : ILogger<T>
+}
+
+public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+
+[IocRegisterDefaultSettings(
+    typeof(IRequestHandler<,>),
+    ServiceLifetime.Singleton,
+    Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
+)]
+public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+{
+    TResponse Handle(TRequest request);
+}
+
+public sealed record TestRequest<T>(Guid PK) : IRequest<TestRequest<T>, List<T>>;
+
+[IocRegister]
+internal sealed class TestHandler<T>(
+    ILogger<TestHandler<T>> logger,
+    IUnitOfWorkFactory factory 
+) : IRequestHandler<TestRequest<T>, List<T>>
+{
+    private readonly ILogger<TestHandler<T>> logger = logger;
+    private readonly IUnitOfWorkFactory factory = factory;
+
+    public List<T> Handle(TestRequest<T> request)
     {
-        public void Log(string msg)
-        {
-            Console.WriteLine(msg);
-        }
+        return factory.Query<T>(request.PK);
     }
+}
 
-    public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+internal sealed class HandlerDecorator1<TRequest, TResponse>(
+    IRequestHandler<TRequest, TResponse> inner,
+    ILogger<HandlerDecorator1<TRequest, TResponse>> logger
+) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+{
+    private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
 
-    [IocRegisterDefaultSettings(
-        typeof(IRequestHandler<,>),
-        ServiceLifetime.Singleton,
-        Decorators = [typeof(HandlerDecorator1<,>), typeof(HandlerDecorator2<,>)]
-    )]
-    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+    public TResponse Handle(TRequest request)
     {
-        TResponse Handle(TRequest request);
+        logger.Log(request.ToString() ?? string.Empty);
+        Console.WriteLine("HandlerDecorator1: Before handling request");
+        var response = inner.Handle(request);
+        Console.WriteLine("HandlerDecorator1: After handling request");
+        return response;
     }
+}
 
-    public sealed record TestRequest<T>(Guid PK) : IRequest<TestRequest<T>, List<T>>;
-
-    [IocRegister]
-    internal sealed class TestHandler<T>(
-        ILogger<TestHandler<T>> logger,
-        IUnitOfWorkFactory factory 
-    ) : IRequestHandler<TestRequest<T>, List<T>>
+internal sealed class HandlerDecorator2<TRequest, TResponse>(
+    IRequestHandler<TRequest, TResponse> inner
+) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+{
+    public TResponse Handle(TRequest request)
     {
-        private readonly ILogger<TestHandler<T>> logger = logger;
-        private readonly IUnitOfWorkFactory factory = factory;
-
-        public List<T> Handle(TestRequest<T> request)
-        {
-            return factory.Query<T>(request.PK);
-        }
+        Console.WriteLine("HandlerDecorator2: Before handling request");
+        var response = inner.Handle(request);
+        Console.WriteLine("HandlerDecorator2: After handling request");
+        return response;
     }
+}
 
-    internal sealed class HandlerDecorator1<TRequest, TResponse>(
-        IRequestHandler<TRequest, TResponse> inner,
-        ILogger<HandlerDecorator1<TRequest, TResponse>> logger
-    ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
+public class TestEntity;
+
+[IocRegister]
+internal sealed class ViewModel(IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler)
+{
+    private readonly IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler = handler;
+
+    public List<TestEntity> Query(Guid pk)
     {
-        private readonly ILogger<HandlerDecorator1<TRequest, TResponse>> logger = logger;
-
-        public TResponse Handle(TRequest request)
-        {
-            logger.Log(request.ToString() ?? string.Empty);
-            Console.WriteLine("HandlerDecorator1: Before handling request");
-            var response = inner.Handle(request);
-            Console.WriteLine("HandlerDecorator1: After handling request");
-            return response;
-        }
+        return handler.Handle(new TestRequest<TestEntity>(pk));
     }
+} 
+#endregion
 
-    internal sealed class HandlerDecorator2<TRequest, TResponse>(
-        IRequestHandler<TRequest, TResponse> inner
-    ) : IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>
-    {
-        public TResponse Handle(TRequest request)
-        {
-            Console.WriteLine("HandlerDecorator2: Before handling request");
-            var response = inner.Handle(request);
-            Console.WriteLine("HandlerDecorator2: After handling request");
-            return response;
-        }
-    }
+#region Generate:
+services.AddSingleton<TestHandler<TestEntity>>();
+services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
+{
+    var s0 = sp.GetRequiredService<TestHandler<TestEntity>>();
 
-    public class TestEntity;
+    var s1 = new HandlerDecorator2<TestRequest<TestEntity>, List<TestEntity>>(s0);
 
-    [IocRegister]
-    internal sealed class ViewModel(IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler)
-    {
-        private readonly IRequestHandler<TestRequest<TestEntity>, List<TestEntity>> handler = handler;
+    var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
+    var s2 = new HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
+    return s2;
+});
+#endregion
+```
 
-        public List<TestEntity> Query(Guid pk)
-        {
-            return handler.Handle(new TestRequest<TestEntity>(pk));
-        }
-    } 
-    #endregion
+### 7. IServiceProvider Invocation Discovery
 
-    #region Generate:
-    services.AddSingleton<TestHandler<TestEntity>>();
-    services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
-    {
-        var s0 = sp.GetRequiredService<TestHandler<TestEntity>>();
+Search code: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`;\
+If Type is closed generic from open generic registration, generate factory to register class.
 
-        var s1 = new HandlerDecorator2<TestRequest<TestEntity>, List<TestEntity>>(s0);
+```csharp
+#region Method Call:
+var handler = IServiceProvider.GetRequiredService<IRequestHandler<QueryRequest<TestEntity>>>();
+#endregion
 
-        var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
-        var s2 = new HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
-        return s2;
-    });
-    #endregion
+#region Generate:
+services.AddSingleton<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
+{
+    var s0 = sp.GetRequiredService<QueryRequestHandler<TestEntity>>();
+
+    var s1 = new HandlerDecorator2<QueryRequest<TestEntity>, List<TestEntity>>(s0);
+
+    var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<QueryRequest<TestEntity>, List<TestEntity>>>>();
+    var s2 = new HandlerDecorator1<QueryRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
+    return s2;
+});
+#endregion
+```
+
+### 8. MSBuild Properties
+
+MSBuild properties for customizing generated code:\
+**RootNamespace**: Controls the namespace of generated extension class. If not set, falls back to assembly name.\
+**SourceGenIocName**: Controls the method name suffix. If not set, uses assembly name.
+
+- .csproj:
+
+    ```xml
+    <PropertyGroup>
+        <RootNamespace>MyCompany.MyProject</RootNamespace>
+        <SourceGenIocName>CustomName</SourceGenIocName>
+    </PropertyGroup>
+    <ItemGroup>
+        <CompilerVisibleProperty Include="RootNamespace" />
+        <CompilerVisibleProperty Include="SourceGenIocName" />
+    </ItemGroup>
     ```
 
-7. Search code: `GetService(Type)`, `GetService<T>()`, `GetRequiredService(Type)`, `GetRequiredService<T>()`, `GetKeyedService(Type, Key)`, `GetKeyedService<T>(Key)`, `GetRequiredKeyedService(Type, Key)`, `GetRequiredKeyedService<T>(Key)`, `GetServices(Type)`, `GetServices<T>()`, `GetKeyedServices(Type)`, `GetKeyedServices<T>()`;  
-  If Type is closed generic from open generic registration, generate factory to register class.
+- generate:
 
     ```csharp
-    #region Method Call:
-    var handler = IServiceProvider.GetRequiredService<IRequestHandler<QueryRequest<TestEntity>>>();
-    #endregion
+    namespace MyCompany.MyProject;
 
-    #region Generate:
-    services.AddSingleton<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
+    public static class ServiceCollectionExtensions
     {
-      var s0 = sp.GetRequiredService<QueryRequestHandler<TestEntity>>();
+        public static IServiceCollection AddCustomName(this IServiceCollection services)
+        {
+            // ...registration
+            return services;
+        }
 
-      var s1 = new HandlerDecorator2<QueryRequest<TestEntity>, List<TestEntity>>(s0);
-
-      var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<QueryRequest<TestEntity>, List<TestEntity>>>>();
-      var s2 = new HandlerDecorator1<QueryRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
-      return s2;
-    });
-    #endregion
+        public static IServiceCollection AddCustomName_Tag1(this IServiceCollection services)
+        {
+            // ...tag registration
+            return services;
+        }
+    }
     ```
 
-8. MSBuild properties for customizing generated code:\
-    **RootNamespace**: Controls the namespace of generated extension class. If not set, falls back to assembly name.\
-    **SourceGenIocName**: Controls the method name suffix. If not set, uses assembly name.
+### 9. Factory Method Registration
 
-    - .csproj:
+When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
 
-      ```xml
-      <PropertyGroup>
-          <RootNamespace>MyCompany.MyProject</RootNamespace>
-          <SourceGenIocName>CustomName</SourceGenIocName>
-      </PropertyGroup>
-      <ItemGroup>
-          <CompilerVisibleProperty Include="RootNamespace" />
-          <CompilerVisibleProperty Include="SourceGenIocName" />
-      </ItemGroup>
-      ```
+**Factory Method Parameter Analysis**:
 
-    - generate:
-
-      ```csharp
-      namespace MyCompany.MyProject;
-
-      public static class ServiceCollectionExtensions
-      {
-          public static IServiceCollection AddCustomName(this IServiceCollection services)
-          {
-              // ...registration
-              return services;
-          }
-
-          public static IServiceCollection AddCustomName_Tag1(this IServiceCollection services)
-          {
-              // ...tag registration
-              return services;
-          }
-      }
-      ```
-
-9. When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
-
-    **Factory Method Parameter Analysis**:
-    - If parameter type is `IServiceProvider`: Pass the service provider directly
-    - If parameter has `[ServiceKey]` attribute and registration has a Key: Pass the Key value
-    - Other parameters are not supported and should be ignored or report diagnostic
+- If parameter type is `IServiceProvider`: Pass the service provider directly
+- If parameter has `[ServiceKey]` attribute and registration has a Key: Pass the Key value
+- Other parameters are not supported and should be ignored or report diagnostic
 
     ```csharp
     #region Define:
@@ -788,432 +813,444 @@ This source generator automatically generates extension methods for registering 
     #endregion
     ```
 
-    **Factory without IServiceProvider parameter**:
+**Factory without IServiceProvider parameter**:
 
-    ```csharp
-    #region Define:
-    public interface IMyService;
+```csharp
+#region Define:
+public interface IMyService;
 
-    [IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Create))]
-    internal sealed class MyService : IMyService;
+[IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Create))]
+internal sealed class MyService : IMyService;
 
-    public sealed class MyServiceFactory
+public sealed class MyServiceFactory
+{
+    public static IMyService Create()
     {
-      public static IMyService Create()
-      {
-        return new MyService();
-      }
+    return new MyService();
     }
-    #endregion
+}
+#endregion
 
-    #region Generate:
-    services.AddSingleton<IMyService>(sp => MyServiceFactory.Create());
-    #endregion
-    ```
+#region Generate:
+services.AddSingleton<IMyService>(sp => MyServiceFactory.Create());
+#endregion
+```
 
-    **Factory in DefaultSettings**:
+**Factory in DefaultSettings**:
 
-    When `Factory` is specified in `IocRegisterDefaultsAttribute`, it applies as the default factory for all services implementing the target type. Explicit `Factory` specified in `IocRegisterAttribute` takes precedence over the default.
+When `Factory` is specified in `IocRegisterDefaultsAttribute`, it applies as the default factory for all services implementing the target type. Explicit `Factory` specified in `IocRegisterAttribute` takes precedence over the default.
 
-    **Important**: When using Factory in DefaultSettings:
-    - The factory method must be compatible with all implementations that match the target service type
-    - The factory method should typically return the target service type (interface/base class)
-    - Factory is only applied when the registration doesn't have its own explicit Factory
+**Important**: When using Factory in DefaultSettings:
 
-    ```csharp
-    #region Define:
-    public interface IMyHandler { void Handle(); }
+- The factory method must be compatible with all implementations that match the target service type
+- The factory method should typically return the target service type (interface/base class)
+- Factory is only applied when the registration doesn't have its own explicit Factory
 
-    // DefaultSettings with Factory - applies to all IMyHandler implementations
-    [assembly: IocRegisterDefaults(
-        typeof(IMyHandler),
-        ServiceLifetime.Scoped,
-        Factory = nameof(HandlerFactory.Create))]
+```csharp
+#region Define:
+public interface IMyHandler { void Handle(); }
 
-    public static class HandlerFactory
+// DefaultSettings with Factory - applies to all IMyHandler implementations
+[assembly: IocRegisterDefaults(
+    typeof(IMyHandler),
+    ServiceLifetime.Scoped,
+    Factory = nameof(HandlerFactory.Create))]
+
+public static class HandlerFactory
+{
+    public static IMyHandler Create(IServiceProvider sp)
     {
-        public static IMyHandler Create(IServiceProvider sp)
-        {
-            // Custom creation logic for all handlers
-            var handler = sp.GetRequiredService<MyHandlerImpl>();
-            // Additional setup...
-            return handler;
-        }
+        // Custom creation logic for all handlers
+        var handler = sp.GetRequiredService<MyHandlerImpl>();
+        // Additional setup...
+        return handler;
     }
+}
 
-    [IocRegister]
-    public class MyHandlerImpl : IMyHandler
+[IocRegister]
+public class MyHandlerImpl : IMyHandler
+{
+    public void Handle() { }
+}
+
+// This handler uses explicit Factory, overrides default
+[IocRegister(Factory = nameof(SpecialHandlerFactory.Create))]
+public class SpecialHandler : IMyHandler
+{
+    public void Handle() { }
+}
+
+public static class SpecialHandlerFactory
+{
+    public static IMyHandler Create(IServiceProvider sp) => new SpecialHandler();
+}
+#endregion
+
+#region Generate:
+// MyHandlerImpl uses Factory from DefaultSettings
+services.AddScoped<IMyHandler>(sp => HandlerFactory.Create(sp));
+
+// SpecialHandler uses its own explicit Factory
+services.AddScoped<IMyHandler>(sp => SpecialHandlerFactory.Create(sp));
+#endregion
+```
+
+**Generic DefaultSettings with Factory**:
+
+```csharp
+#region Define:
+public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
+
+[assembly: IocRegisterDefaults<IRequestHandler<,>>(
+    ServiceLifetime.Singleton,
+    Factory = nameof(HandlerFactory.CreateHandler))]
+
+public static class HandlerFactory
+{
+    public static object CreateHandler(IServiceProvider sp, [ServiceKey] object? key)
     {
-        public void Handle() { }
+        // Factory for all IRequestHandler implementations
+        // Note: For generic handlers, factory typically creates the concrete handler
+        // and returns it as the interface type
     }
+}
 
-    // This handler uses explicit Factory, overrides default
-    [IocRegister(Factory = nameof(SpecialHandlerFactory.Create))]
-    public class SpecialHandler : IMyHandler
+[IocRegister]
+public class QueryHandler : IRequestHandler<QueryRequest, QueryResponse>
+{
+    public QueryResponse Handle(QueryRequest request) => new();
+}
+#endregion
+
+#region Generate:
+services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>(sp => HandlerFactory.CreateHandler(sp, null));
+#endregion
+```
+
+### 10. Instance Registration
+
+When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
+
+```csharp
+#region Define:
+public interface IMyService;
+
+[IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(Default))]
+internal sealed class MyService : IMyService
+{
+    // Must be static
+    public static MyService Default = new MyService();
+}
+#endregion
+
+#region Generate:
+// When specify Instance, only allow AddSingleton or AddKeyedSingleton
+services.AddSingleton<IMyService>(MyService.Default);
+#endregion
+```
+
+### 11. Explicit Closed Generic Discovery
+
+When `IocDiscoverAttribute` (or `IocDiscoverAttribute<T>`) is exists, collect `IocDiscoverAttribute.ClosedGenericType` (or `T`) for generate factory code for open generic registrations.
+
+```csharp
+#region Define:
+public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
+
+public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
+
+[IocRegister]
+public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
+
+public class ViewModel
+{
+    // Non-generic version with type parameter
+    [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
+    // Or generic version
+    // [IocDiscover<IRequestHandler<TestRequest<string>, List<string>>>]
+    public void DoAction()
     {
-        public void Handle() { }
+    var response = Mediator.Send(new TestRequest<string>());
     }
-
-    public static class SpecialHandlerFactory
-    {
-        public static IMyHandler Create(IServiceProvider sp) => new SpecialHandler();
-    }
-    #endregion
-
-    #region Generate:
-    // MyHandlerImpl uses Factory from DefaultSettings
-    services.AddScoped<IMyHandler>(sp => HandlerFactory.Create(sp));
-
-    // SpecialHandler uses its own explicit Factory
-    services.AddScoped<IMyHandler>(sp => SpecialHandlerFactory.Create(sp));
-    #endregion
-    ```
-
-    **Generic DefaultSettings with Factory**:
-
-    ```csharp
-    #region Define:
-    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
-
-    [assembly: IocRegisterDefaults<IRequestHandler<,>>(
-        ServiceLifetime.Singleton,
-        Factory = nameof(HandlerFactory.CreateHandler))]
-
-    public static class HandlerFactory
-    {
-        public static object CreateHandler(IServiceProvider sp, [ServiceKey] object? key)
-        {
-            // Factory for all IRequestHandler implementations
-            // Note: For generic handlers, factory typically creates the concrete handler
-            // and returns it as the interface type
-        }
-    }
-
-    [IocRegister]
-    public class QueryHandler : IRequestHandler<QueryRequest, QueryResponse>
-    {
-        public QueryResponse Handle(QueryRequest request) => new();
-    }
-    #endregion
-
-    #region Generate:
-    services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>(sp => HandlerFactory.CreateHandler(sp, null));
-    #endregion
-    ```
-
-10. When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
-
-    ```csharp
-    #region Define:
-    public interface IMyService;
-
-    [IocRegister(ServiceTypes = [typeof(IMyService), Instance = nameof(Default)])]
-    internal sealed class MyService : IMyService
-    {
-      // Must be static
-      public static MyService Default = new MyService();
-    }
-    #endregion
-
-    #region Generate:
-    // When specify Instance, only allow AddSingleton or AddKeyedSingleton
-    services.AddSingleton<IMyService>(MyService.Default);
-    #endregion
-    ```
-
-11. When `IocDiscoverAttribute` (or `IocDiscoverAttribute<T>`) is exists, collect `IocDiscoverAttribute.ClosedGenericType` (or `T`) for generate factory code for open generic registrations.
-
-    ```csharp
-    #region Define:
-    public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
-    public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
-
-    public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
-
-    [IocRegister]
-    public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
-
-    public class ViewModel
-    {
-      // Non-generic version with type parameter
-      [IocDiscover(typeof(IRequestHandler<TestRequest<string>, List<string>>))]
-      // Or generic version
-      // [IocDiscover<IRequestHandler<TestRequest<string>, List<string>>>]
-      public void DoAction()
-      {
-        var response = Mediator.Send(new TestRequest<string>());
-      }
-    }
-    #endregion
-
-    #region Generate:
-    services.AddSingleton<IRequestHandler<TestRequest<string>, List<string>>>((IServiceProvider sp) =>
-    {
-      var s0 = sp.GetRequiredService<TestRequestHandler<string>>();
-      return s0;
-    });
-    #endregion
-    ```
-
-12. When registrations is specified `IocRegisterAttribute.Factory` or `IocRegisterDefaultsAttribute.Factory` and factory method is generic, the method must be marked with `[IocGenericFactory]` attribute to provide type parameter mapping information.
-
-    **Purpose**: When a generic factory method is used with open generic service registration, the generator needs to know how to map the actual type arguments from the discovered closed generic type to the factory method's type parameters.
-
-    **Attribute Signature**:
-
-    ```csharp
-    [IocGenericFactory(params Type[] genericTypeMap)]
-    ```
-
-    **Parameters**:
-    - First type: Service type template with placeholder types (e.g., `IRequestHandler<Task<int>>`)
-    - Following types: Placeholder types that correspond to factory method's type parameters in order
-
-    **Rules**:
-    - The factory method must have the same number of type parameters as placeholder types provided
-    - Each placeholder type should be unique - duplicate placeholders cannot be distinguished and will not generate registration
-    - The service type template must match the structure of the open generic service type in the `IocRegisterDefaults`
-    - If `[IocGenericFactory]` is missing on a generic factory method, SGIOC016 diagnostic is reported
-
-    **Single Type Parameter Example**:
-
-    ```csharp
-    #region Define:
-    public interface IRequestHandler<TResponse> { }
-
-    // Service type is IRequestHandler<>, has 1 type parameter
-    [IocRegisterDefaults(typeof(IRequestHandler<>),
-        ServiceLifetime.Singleton,
-        Factory = nameof(FactoryContainer.Create))]
-    public static class FactoryContainer
-    {
-        // Template: IRequestHandler<Task<int>> where int is placeholder for T
-        //                                              ┌──────────────┐
-        //                                              │              │int = T (index 0)
-        //                                              ↓              ↓
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
-        public static IRequestHandler<Task<T>> Create<T>() => new Handler<T>();
-    }
-
-    [IocRegister]
-    public class Handler<T> : IRequestHandler<Task<T>> { }
-
-    public class Entity { }
-
-    // Discover IRequestHandler<Task<Entity>>
-    [IocDiscover<IRequestHandler<Task<Entity>>>]
-    public sealed class App { }
-    #endregion
-
-    #region Generate:
-    // Type mapping: Task<Entity> matches Task<int> template
-    // → int placeholder maps to Entity
-    // → T = Entity
-    services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
-        (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>());
-    #endregion
-    ```
-
-    **Two Type Parameters Example**:
-
-    ```csharp
-    #region Define:
-    public interface IRequestHandler<TRequest, TResponse> { }
-
-    // Service type is IRequestHandler<,>, has 2 type parameters
-    [IocRegisterDefaults(typeof(IRequestHandler<,>),
-        ServiceLifetime.Singleton,
-        Factory = nameof(FactoryContainer.Create))]
-    public static class FactoryContainer
-    {
-        // Template: IRequestHandler<Task<int>, List<decimal>>
-        // int = T1 (index 0), decimal = T2 (index 1)
-        //                                              ┌─────────────────────────────┐
-        //                                              │            ┌────────────────┼──────────────┐
-        //                                              ↓            ↓                ↓              ↓
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(int), typeof(decimal))]
-        public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>()
-            => new Handler<T1, T2>();
-    }
-
-    [IocRegister(ServiceTypes = [typeof(IRequestHandler<,>)])]
-    public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
-
-    public class Entity { }
-    public class Dto { }
-
-    // Discover IRequestHandler<Task<Entity>, List<Dto>>
-    [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
-    public sealed class App { }
-    #endregion
-
-    #region Generate:
-    // Type mapping:
-    // - Task<Entity> matches Task<int> → int = Entity → T1 = Entity
-    // - List<Dto> matches List<decimal> → decimal = Dto → T2 = Dto
-    services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
-        (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>());
-    #endregion
-    ```
-
-    **Reversed Mapping Example** (type parameter order differs from service type order):
-
-    ```csharp
-    #region Define:
-    public interface IRequestHandler<TRequest, TResponse> { }
-
-    [IocRegisterDefaults(typeof(IRequestHandler<,>),
-        ServiceLifetime.Singleton,
-        Factory = nameof(FactoryContainer.Create))]
-    public static class FactoryContainer
-    {
-        // REVERSED: First placeholder (int) maps to T2, second placeholder (decimal) maps to T1
-        // decimal = T1, int = T2                       ┌────────────────────────────────────────────┐
-        //                                              │            ┌─────────────────┐             │
-        //                                              ↓            ↓                 ↓             ↓
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(decimal), typeof(int))]
-        public static IRequestHandler<Task<T2>, List<T1>> Create<T1, T2>()
-            => new Handler<T1, T2>();
-    }
-
-    public class Entity { }
-    public class Dto { }
-
-    // Discover IRequestHandler<Task<Entity>, List<Dto>>
-    [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
-    public sealed class App { }
-    #endregion
-
-    #region Generate:
-    // Type mapping:
-    // - Task<Entity> matches Task<int> → int = Entity → T2 = Entity
-    // - List<Dto> matches List<decimal> → decimal = Dto → T1 = Dto
-    // Note: Create<T1, T2> so call is Create<Dto, Entity>
-    services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
-        (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>());
-    #endregion
-    ```
-
-    **With IServiceProvider Parameter**:
-
-    ```csharp
-    #region Define:
-    public interface IRequestHandler<TResponse> { }
-
-    [IocRegisterDefaults(typeof(IRequestHandler<>),
-        ServiceLifetime.Singleton,
-        Factory = nameof(FactoryContainer.Create))]
-    public static class FactoryContainer
-    {
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
-        public static IRequestHandler<Task<T>> Create<T>(IServiceProvider sp)
-            => new Handler<T>(sp);
-    }
-
-    public class Entity { }
-
-    [IocDiscover<IRequestHandler<Task<Entity>>>]
-    public sealed class App { }
-    #endregion
-
-    #region Generate:
-    // Factory method receives IServiceProvider
-    services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
-        (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp));
-    #endregion
-    ```
-
-    **Invalid: Duplicate Placeholder Types** (registration is NOT generated):
-
-    ```csharp
-    #region Define:
-    public interface IRequestHandler<TRequest, TResponse> { }
-
-    [IocRegisterDefaults(typeof(IRequestHandler<,>),
-        ServiceLifetime.Singleton,
-        Factory = nameof(FactoryContainer.Create))]
-    public static class FactoryContainer
-    {
-        // INVALID: Both placeholders use int - cannot distinguish which maps to T1 vs T2
-        [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<int>>), typeof(int), typeof(int))]
-        public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>()
-            => throw new NotImplementedException();
-    }
-
-    public class Entity { }
-    public class Dto { }
-
-    [IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
-    public sealed class App { }
-    #endregion
-
-    #region Generate:
-    // NO factory registration is generated because placeholders are not unique
-    // Only the implementation type itself is registered
-    services.AddSingleton<Handler<Entity, Dto>, Handler<Entity, Dto>>();
-    #endregion
-    ```
-
-    **Missing Attribute Diagnostic** (SGIOC016):
-
-    When a generic factory method is referenced by `IocRegisterDefaults.Factory` or `IocRegister.Factory` but does not have `[IocGenericFactory]` attribute, the analyzer reports SGIOC016 diagnostic:
-
-    ```csharp
-    #region Define:
-    [IocRegisterDefaults(typeof(IRequestHandler<>),
-        ServiceLifetime.Singleton,
-        Factory = nameof(FactoryContainer.Create))] // ← SGIOC016 reported here
-    public static class FactoryContainer
-    {
-        // Missing [IocGenericFactory] attribute on generic factory method
-        public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
-    }
-    #endregion
-    ```
-
-13. When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`, or `IEnumerable<KeyValuePair<K, V>>`, the generator also produces explicit `KeyValuePair<K, V>` service registrations for each matching keyed service.
-
-    **Purpose**: `IDictionary<K, V>` and similar types resolve via `sp.GetServices<KeyValuePair<K, V>>().ToDictionary()`. For this to work, `KeyValuePair<K, V>` must be registered as a service. Without explicit registrations, `GetServices<KeyValuePair<K, V>>()` returns an empty collection.
-
-    **Behavior**:
-    - Triggered by consumer dependencies — only keyed services that match a needed `(K, V)` pair produce KVP registrations
-    - **Key type filtering**: a keyed service is only matched when its `KeyValueType` is compatible with the consumer's key type `K`:
-      - `K` is `object` → matches **all** keyed services (regardless of their key type)
-      - `KeyValueType` is `null` (e.g., `KeyType=Csharp` without `nameof()`) → matches only `object` consumers
-      - Otherwise → `KeyValueType.Name` must match `K` exactly (case-sensitive)
-    - Lifetime matches the keyed value service's lifetime
-    - Uses `ServiceDescriptor` directly because `KeyValuePair<K, V>` is a struct (generic `AddXxx<T>` has a `class` constraint)
-    - Registrations are emitted after all normal service registrations, before `return services;`
-
-    ```csharp
-    #region Define:
-    [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "h1")]
-    public class Handler1 : IHandler { }
-
-    [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler)], Key = "h2")]
-    public class Handler2 : IHandler { }
-
-    [IocRegister(Lifetime = ServiceLifetime.Singleton)]
-    public class Registry(IDictionary<string, IHandler> handlers) { }
-    #endregion
-
-    #region Generate:
-    services.AddKeyedSingleton<Handler1, Handler1>("h1");
-    services.AddKeyedSingleton<IHandler>("h1", (sp, key) => sp.GetRequiredKeyedService<Handler1>(key));
-    services.AddKeyedScoped<Handler2, Handler2>("h2");
-    services.AddKeyedScoped<IHandler>("h2", (sp, key) => sp.GetRequiredKeyedService<Handler2>(key));
-    services.AddSingleton<Registry>((sp) =>
-    {
-        var p0 = sp.GetServices<KeyValuePair<string, IHandler>>().ToDictionary();
-        return new Registry(p0);
-    });
-
-    // KeyValuePair registrations for keyed services
-    services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
-        (sp) => (object)new KeyValuePair<string, IHandler>("h1", sp.GetRequiredKeyedService<IHandler>("h1")),
-        ServiceLifetime.Singleton));
-    services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
-        (sp) => (object)new KeyValuePair<string, IHandler>("h2", sp.GetRequiredKeyedService<IHandler>("h2")),
-        ServiceLifetime.Scoped));
-    #endregion
-    ```
+}
+#endregion
+
+#region Generate:
+services.AddSingleton<IRequestHandler<TestRequest<string>, List<string>>>((IServiceProvider sp) =>
+{
+    var s0 = sp.GetRequiredService<TestRequestHandler<string>>();
+    return s0;
+});
+#endregion
+```
+
+### 12. Generic Factory Type Mapping
+
+When registrations is specified `IocRegisterAttribute.Factory` or `IocRegisterDefaultsAttribute.Factory` and factory method is generic, the method must be marked with `[IocGenericFactory]` attribute to provide type parameter mapping information.
+
+**Purpose**: When a generic factory method is used with open generic service registration, the generator needs to know how to map the actual type arguments from the discovered closed generic type to the factory method's type parameters.
+
+**Attribute Signature**:
+
+```csharp
+[IocGenericFactory(params Type[] genericTypeMap)]
+```
+
+**Parameters**:
+
+- First type: Service type template with placeholder types (e.g., `IRequestHandler<Task<int>>`)
+- Following types: Placeholder types that correspond to factory method's type parameters in order
+
+**Rules**:
+
+- The factory method must have the same number of type parameters as placeholder types provided
+- Each placeholder type should be unique - duplicate placeholders cannot be distinguished and will not generate registration
+- The service type template must match the structure of the open generic service type in the `IocRegisterDefaults`
+- If `[IocGenericFactory]` is missing on a generic factory method, SGIOC016 diagnostic is reported
+
+**Single Type Parameter Example**:
+
+```csharp
+#region Define:
+public interface IRequestHandler<TResponse> { }
+
+// Service type is IRequestHandler<>, has 1 type parameter
+[IocRegisterDefaults(typeof(IRequestHandler<>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(FactoryContainer.Create))]
+public static class FactoryContainer
+{
+    // Template: IRequestHandler<Task<int>> where int is placeholder for T
+    //                                              ┌──────────────┐
+    //                                              │              │int = T (index 0)
+    //                                              ↓              ↓
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+    public static IRequestHandler<Task<T>> Create<T>() => new Handler<T>();
+}
+
+[IocRegister]
+public class Handler<T> : IRequestHandler<Task<T>> { }
+
+public class Entity { }
+
+// Discover IRequestHandler<Task<Entity>>
+[IocDiscover<IRequestHandler<Task<Entity>>>]
+public sealed class App { }
+#endregion
+
+#region Generate:
+// Type mapping: Task<Entity> matches Task<int> template
+// → int placeholder maps to Entity
+// → T = Entity
+services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
+    (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>());
+#endregion
+```
+
+**Two Type Parameters Example**:
+
+```csharp
+#region Define:
+public interface IRequestHandler<TRequest, TResponse> { }
+
+// Service type is IRequestHandler<,>, has 2 type parameters
+[IocRegisterDefaults(typeof(IRequestHandler<,>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(FactoryContainer.Create))]
+public static class FactoryContainer
+{
+    // Template: IRequestHandler<Task<int>, List<decimal>>
+    // int = T1 (index 0), decimal = T2 (index 1)
+    //                                              ┌─────────────────────────────┐
+    //                                              │            ┌────────────────┼──────────────┐
+    //                                              ↓            ↓                ↓              ↓
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(int), typeof(decimal))]
+    public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>()
+        => new Handler<T1, T2>();
+}
+
+[IocRegister(ServiceTypes = [typeof(IRequestHandler<,>)])]
+public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
+
+public class Entity { }
+public class Dto { }
+
+// Discover IRequestHandler<Task<Entity>, List<Dto>>
+[IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+public sealed class App { }
+#endregion
+
+#region Generate:
+// Type mapping:
+// - Task<Entity> matches Task<int> → int = Entity → T1 = Entity
+// - List<Dto> matches List<decimal> → decimal = Dto → T2 = Dto
+services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
+    (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>());
+#endregion
+```
+
+**Reversed Mapping Example** (type parameter order differs from service type order):
+
+```csharp
+#region Define:
+public interface IRequestHandler<TRequest, TResponse> { }
+
+[IocRegisterDefaults(typeof(IRequestHandler<,>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(FactoryContainer.Create))]
+public static class FactoryContainer
+{
+    // REVERSED: First placeholder (int) maps to T2, second placeholder (decimal) maps to T1
+    // decimal = T1, int = T2                       ┌────────────────────────────────────────────┐
+    //                                              │            ┌─────────────────┐             │
+    //                                              ↓            ↓                 ↓             ↓
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<decimal>>), typeof(decimal), typeof(int))]
+    public static IRequestHandler<Task<T2>, List<T1>> Create<T1, T2>()
+        => new Handler<T1, T2>();
+}
+
+public class Entity { }
+public class Dto { }
+
+// Discover IRequestHandler<Task<Entity>, List<Dto>>
+[IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+public sealed class App { }
+#endregion
+
+#region Generate:
+// Type mapping:
+// - Task<Entity> matches Task<int> → int = Entity → T2 = Entity
+// - List<Dto> matches List<decimal> → decimal = Dto → T1 = Dto
+// Note: Create<T1, T2> so call is Create<Dto, Entity>
+services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
+    (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>());
+#endregion
+```
+
+**With IServiceProvider Parameter**:
+
+```csharp
+#region Define:
+public interface IRequestHandler<TResponse> { }
+
+[IocRegisterDefaults(typeof(IRequestHandler<>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(FactoryContainer.Create))]
+public static class FactoryContainer
+{
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+    public static IRequestHandler<Task<T>> Create<T>(IServiceProvider sp)
+        => new Handler<T>(sp);
+}
+
+public class Entity { }
+
+[IocDiscover<IRequestHandler<Task<Entity>>>]
+public sealed class App { }
+#endregion
+
+#region Generate:
+// Factory method receives IServiceProvider
+services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
+    (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp));
+#endregion
+```
+
+**Invalid: Duplicate Placeholder Types** (registration is NOT generated):
+
+```csharp
+#region Define:
+public interface IRequestHandler<TRequest, TResponse> { }
+
+[IocRegisterDefaults(typeof(IRequestHandler<,>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(FactoryContainer.Create))]
+public static class FactoryContainer
+{
+    // INVALID: Both placeholders use int - cannot distinguish which maps to T1 vs T2
+    [IocGenericFactory(typeof(IRequestHandler<Task<int>, List<int>>), typeof(int), typeof(int))]
+    public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>()
+        => throw new NotImplementedException();
+}
+
+public class Entity { }
+public class Dto { }
+
+[IocDiscover(typeof(IRequestHandler<Task<Entity>, List<Dto>>))]
+public sealed class App { }
+#endregion
+
+#region Generate:
+// NO factory registration is generated because placeholders are not unique
+// Only the implementation type itself is registered
+services.AddSingleton<Handler<Entity, Dto>, Handler<Entity, Dto>>();
+#endregion
+```
+
+**Missing Attribute Diagnostic** (SGIOC016):
+
+When a generic factory method is referenced by `IocRegisterDefaults.Factory` or `IocRegister.Factory` but does not have `[IocGenericFactory]` attribute, the analyzer reports SGIOC016 diagnostic:
+
+```csharp
+#region Define:
+[IocRegisterDefaults(typeof(IRequestHandler<>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(FactoryContainer.Create))] // ← SGIOC016 reported here
+public static class FactoryContainer
+{
+    // Missing [IocGenericFactory] attribute on generic factory method
+    public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+}
+#endregion
+```
+
+### 13. KeyValuePair and Dictionary Registration
+
+When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`, or `IEnumerable<KeyValuePair<K, V>>`, the generator also produces explicit `KeyValuePair<K, V>` service registrations for each matching keyed service.
+
+**Purpose**: `IDictionary<K, V>` and similar types resolve via `sp.GetServices<KeyValuePair<K, V>>().ToDictionary()`. For this to work, `KeyValuePair<K, V>` must be registered as a service. Without explicit registrations, `GetServices<KeyValuePair<K, V>>()` returns an empty collection.
+
+**Behavior**:
+
+- Triggered by consumer dependencies — only keyed services that match a needed `(K, V)` pair produce KVP registrations
+- **Key type filtering**: a keyed service is only matched when its `KeyValueType` is compatible with the consumer's key type `K`:
+  - `K` is `object` → matches **all** keyed services (regardless of their key type)
+  - `KeyValueType` is `null` (e.g., `KeyType=Csharp` without `nameof()`) → matches only `object` consumers
+  - Otherwise → `KeyValueType.Name` must match `K` exactly (case-sensitive)
+- Lifetime matches the keyed value service's lifetime
+- Uses `ServiceDescriptor` directly because `KeyValuePair<K, V>` is a struct (generic `AddXxx<T>` has a `class` constraint)
+- Registrations are emitted after all normal service registrations, before `return services;`
+
+```csharp
+#region Define:
+[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "h1")]
+public class Handler1 : IHandler { }
+
+[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler)], Key = "h2")]
+public class Handler2 : IHandler { }
+
+[IocRegister(Lifetime = ServiceLifetime.Singleton)]
+public class Registry(IDictionary<string, IHandler> handlers) { }
+#endregion
+
+#region Generate:
+services.AddKeyedSingleton<Handler1, Handler1>("h1");
+services.AddKeyedSingleton<IHandler>("h1", (sp, key) => sp.GetRequiredKeyedService<Handler1>(key));
+services.AddKeyedScoped<Handler2, Handler2>("h2");
+services.AddKeyedScoped<IHandler>("h2", (sp, key) => sp.GetRequiredKeyedService<Handler2>(key));
+services.AddSingleton<Registry>((sp) =>
+{
+    var p0 = sp.GetServices<KeyValuePair<string, IHandler>>().ToDictionary();
+    return new Registry(p0);
+});
+
+// KeyValuePair registrations for keyed services
+services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
+    (sp) => (object)new KeyValuePair<string, IHandler>("h1", sp.GetRequiredKeyedService<IHandler>("h1")),
+    ServiceLifetime.Singleton));
+services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
+    (sp) => (object)new KeyValuePair<string, IHandler>("h2", sp.GetRequiredKeyedService<IHandler>("h2")),
+    ServiceLifetime.Scoped));
+#endregion
+```

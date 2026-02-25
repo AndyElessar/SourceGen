@@ -25,7 +25,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |Key / KeyType|Attribute → defaults|
 |KeyValueType|Resolved `TypeData` of the key value (e.g., `string`, enum, `Guid`). `null` when `KeyType=Csharp` without `nameof()`|
 |Decorators|`Decorators` property (with constructor params and type constraints)|
-|Tags / TagOnly|Attribute → defaults|
+|Tags|Attribute → defaults|
 |Factory|`Factory` property (method path, supports generic mapping)|
 |Instance|`Instance` property (static instance path, e.g., `"MyService.Default"`)|
 |ValidOpenGenericServiceTypes|Set of valid open generic service type names for constraint checking|
@@ -38,7 +38,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |`AllBaseClasses`|All base classes (excluding `System.Object`)|
 |`TypeParameters`|Generic type parameters with constraints|
 |`ConstructorParameters`|Constructor parameters (for decorators)|
-|`WrapperKind`|`None`, `Enumerable`, `ReadOnlyCollection`, `Collection`, `Lazy`, `Func`, `Dictionary`, or `KeyValuePair`|
+|`WrapperKind`|`None`, `Enumerable`, `ReadOnlyCollection`, `Collection`, `ReadOnlyList`, `List`, `Array`, `Lazy`, `Func`, `Dictionary`, or `KeyValuePair`|
 
 ### 4. Injection Members
 
@@ -122,8 +122,11 @@ Only members with `[IocInject]` or `[Inject]`:
 |`WrapperKind`|TypeData Type|Types|Resolution|
 |:------------|:------------|:----|:---------|
 |`Enumerable`|`EnumerableTypeData`|`IEnumerable<T>`|MS.E.DI native collection support|
-|`ReadOnlyCollection`|`ReadOnlyCollectionTypeData`|`IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `T[]`|`GetServices<T>().ToArray()`|
-|`Collection`|`CollectionTypeData`|`ICollection<T>`, `IList<T>`|`GetServices<T>().ToArray()`|
+|`ReadOnlyCollection`|`ReadOnlyCollectionTypeData`|`IReadOnlyCollection<T>`|`GetServices<T>().ToArray()`|
+|`Collection`|`CollectionTypeData`|`ICollection<T>`|`GetServices<T>().ToArray()`|
+|`ReadOnlyList`|`ReadOnlyListTypeData`|`IReadOnlyList<T>`|`GetServices<T>().ToArray()`|
+|`List`|`ListTypeData`|`IList<T>`|`GetServices<T>().ToArray()`|
+|`Array`|`ArrayTypeData`|`T[]`|`GetServices<T>().ToArray()`|
 |`Lazy`|`LazyTypeData`|`Lazy<T>`|Lazy-initialized service wrapper|
 |`Func`|`FuncTypeData`|`Func<T>`|Factory delegate wrapper|
 |`Dictionary`|`DictionaryTypeData`|`IDictionary<TKey, TValue>`|Dictionary of keyed services|
@@ -136,13 +139,17 @@ TypeData
 └── GenericTypeData
     ├── TypeParameterTypeData
     └── WrapperTypeData (WrapperKind)
-        ├── EnumerableTypeData         (WrapperKind.Enumerable)
-        ├── ReadOnlyCollectionTypeData (WrapperKind.ReadOnlyCollection)
-        ├── CollectionTypeData          (WrapperKind.Collection)
-        ├── LazyTypeData               (WrapperKind.Lazy)
-        ├── FuncTypeData               (WrapperKind.Func)
-        ├── DictionaryTypeData         (WrapperKind.Dictionary)
-        └── KeyValuePairTypeData       (WrapperKind.KeyValuePair)
+        ├── CollectionWrapperTypeData
+        │   ├── EnumerableTypeData          (Enumerable)
+        │   ├── ReadOnlyCollectionTypeData  (ReadOnlyCollection)
+        │   ├── CollectionTypeData          (Collection)
+        │   ├── ReadOnlyListTypeData        (ReadOnlyList)
+        │   ├── ListTypeData                (List)
+        │   └── ArrayTypeData               (Array)
+        ├── LazyTypeData                    (Lazy)
+        ├── FuncTypeData                    (Func)
+        ├── DictionaryTypeData              (Dictionary)
+        └── KeyValuePairTypeData            (KeyValuePair)
 ```
 
 Wrapper types support nesting. For example, `IEnumerable<Lazy<IMyService>>` is parsed as:
@@ -188,54 +195,23 @@ public class FactoryContainer
 ### Source Generator Architecture
 
 Implemented at `IocSourceGenerator`, using the Incremental Generator pattern.
-
-```filetree
-IocSourceGenerator.cs
-├── Initialize() - Main pipeline configuration
-│   ├── Existing Registration pipelines
-│   │   ├── RegisterAttribute providers
-│   │   ├── RegisterForAttribute providers
-│   │   ├── DefaultSettings providers
-│   │   └── ImportModule providers
-│   └── Container pipeline
-│       ├── ContainerAttribute provider
-│       ├── Combine with serviceRegistrations
-│       ├── GroupRegistrationsForContainer
-│       └── RegisterSourceOutput for Container
-├── TransformRegister.cs
-├── TransformContainer.cs
-├── GroupRegistrationsForContainer.cs
-├── GenerateRegisterOutput.cs
-└── GenerateContainerOutput.cs
-```
-
-### Target Framework Requirements
-
 The generated code requires .NET 10.0 or later.
-
-### File Organization
 
 ```filetree
 src/SourceGen.Ioc.SourceGenerator/
 ├── Generator/
-│   ├── IocSourceGenerator.cs              # Main generator with both pipelines
-│   ├── TransformRegister.cs               # Transform [IocRegister*] attributes
-│   ├── TransformContainer.cs              # Transform [IocContainer]
+│   ├── IocSourceGenerator.cs              # Main generator (partial) with Initialize()
+│   ├── Transform*.cs                      # Attribute → model transforms (Register, DefaultSettings, ImportModule, Discover, Container)
+│   ├── ProcessSingleRegistration.cs       # Apply defaults to individual registrations
+│   ├── CombineAndResolveClosedGenerics.cs # Combine results & resolve closed generics from open generics
+│   ├── IServiceProviderInvocations.cs     # Collect IServiceProvider invocations
 │   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation
-│   ├── GenerateRegisterOutput.cs          # Generate registration code
-│   ├── GenerateContainerOutput.cs         # Generate container code
-│   └── Spec/
-│       ├── Registration.md                # Registration specification
-│       └── Container.md                   # Container specification
-│       └── SPEC.md                        # Generators specification (this file)
-├── Models/
-│   ├── ContainerModel.cs                  # Container data model
-│   ├── ContainerWithGroups.cs             # Container with pre-computed groups
-│   ├── ServiceRegistrationModel.cs        # Service registration model
-│   ├── TypeData.cs                        # Type information model
-│   └── ...
-└── Analyzer/
-    └── SPEC.md                            # Analyzer specifications
+│   ├── Generate*Output.cs                 # Code emitters (Register, Container)
+│   ├── LazyFuncRegistrationHelper.cs      # Lazy/Func wrapper registration helper
+│   ├── KvpRegistrationHelper.cs           # KeyValuePair registration helper
+│   └── Spec/                              # SPEC.md, Registration.md, Container.md
+├── Models/                                # Immutable data models (RegistrationData, TypeData, etc.)
+└── Analyzer/                              # Diagnostic analyzers & SPEC.md
 ```
 
 ### Data Flow
@@ -247,13 +223,22 @@ flowchart TB
             IocRegister["[IocRegister]"]
             IocRegisterFor["[IocRegisterFor]"]
             IocRegisterDefaults["[IocRegisterDefaults]"]
+            IocImportModule["[IocImportModule]"]
             IocDiscover["[IocDiscover]"]
+            Invocations["IServiceProvider Invocations"]
             IocContainer["[IocContainer]"]
+        end
+
+        subgraph Default Settings
+            allDefaultSettings["allDefaultSettings"]
+            allImportedDefaultSettings["allImportedDefaultSettings"]
+            combinedDefaultSettings["combinedDefaultSettings<br/>(DefaultSettingsMap)"]
         end
 
         subgraph Registration Pipeline
             allBasicResults["allBasicResults<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
             combinedClosedGenericDependencies["combinedClosedGenericDependencies<br/>(Invocations + Discover)"]
+            allOpenGenericEntries["allOpenGenericEntries<br/>(Factory-based + Imported)"]
             CombineResolve["CombineAndResolveClosedGenerics"]
             serviceRegistrations["serviceRegistrations<br/>ImmutableEquatableArray#lt;ServiceRegistrationWithTags#gt;"]
         end
@@ -269,14 +254,24 @@ flowchart TB
             GenerateContainerOutput["GenerateContainerOutput<br/>(.Container.g.cs)"]
         end
 
+        IocRegisterDefaults --> allDefaultSettings
+        IocRegisterDefaults -->|OpenGenericEntries| allOpenGenericEntries
+        IocImportModule --> allImportedDefaultSettings
+        IocImportModule -->|OpenGenericEntries| allOpenGenericEntries
+        allDefaultSettings --> combinedDefaultSettings
+        allImportedDefaultSettings --> combinedDefaultSettings
+
         IocRegister --> allBasicResults
         IocRegisterFor --> allBasicResults
-        IocRegisterDefaults --> allBasicResults
+        IocRegisterDefaults -->|ImplementationTypes| allBasicResults
+        combinedDefaultSettings -.->|applied to| allBasicResults
 
         IocDiscover --> combinedClosedGenericDependencies
+        Invocations --> combinedClosedGenericDependencies
 
         allBasicResults --> CombineResolve
         combinedClosedGenericDependencies --> CombineResolve
+        allOpenGenericEntries --> CombineResolve
         CombineResolve --> serviceRegistrations
 
         IocContainer --> ContainerModel
