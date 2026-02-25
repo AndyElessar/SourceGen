@@ -105,14 +105,37 @@ partial class IocSourceGenerator
         // Create TypeData with type parameters for closed generic resolution
         var typeData = namedTypeSymbol.CreateBasicTypeData();
 
+        // Extract inner types from wrapper types for closed generic dependency discovery
+        var wrapperInnerType = typeData switch
+        {
+            LazyTypeData l => l.InstanceType,
+            FuncTypeData f => f.ReturnType,
+            DictionaryTypeData d => d.ValueType,
+            KeyValuePairTypeData k => k.ValueType,
+            _ => (TypeData?)null
+        };
+        if(wrapperInnerType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericInnerType)
+        {
+            yield return new ClosedGenericDependency(
+                wrapperInnerType.Name,
+                wrapperInnerType,
+                genericInnerType.NameWithoutGeneric);
+        }
+
         // Check if this is a collection type — extract element type for closed generic dependency
-        if(typeData is CollectionTypeData collectionType
-            && collectionType.ElementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)
+        var collectionElementType = typeData switch
+        {
+            EnumerableTypeData e => e.ElementType,
+            ReadOnlyCollectionTypeData r => r.ElementType,
+            CollectionTypeData c => c.ElementType,
+            _ => null
+        };
+        if(collectionElementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)
         {
             // Yield the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>>)
             yield return new ClosedGenericDependency(
-                collectionType.ElementType.Name,
-                collectionType.ElementType,
+                collectionElementType.Name,
+                collectionElementType,
                 genericElementType.NameWithoutGeneric);
         }
 

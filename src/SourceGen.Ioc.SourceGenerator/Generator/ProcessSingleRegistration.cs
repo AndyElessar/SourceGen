@@ -308,6 +308,7 @@ partial class IocSourceGenerator
                 lifetime,
                 registration.Key,
                 registration.KeyType,
+                registration.KeyValueType,
                 isOpenGenericImplementation,
                 filteredDecorators,
                 registration.InjectionMembers,
@@ -599,6 +600,7 @@ partial class IocSourceGenerator
             lifetime,
             registration.Key,
             registration.KeyType,
+            registration.KeyValueType,
             decorators,
             tags,
             registration.InjectionMembers,
@@ -777,22 +779,36 @@ partial class IocSourceGenerator
         List<ClosedGenericDependency> dependencies,
         HashSet<string> addedKeys)
     {
-        // Check if this is any enumerable-compatible type and extract element type for closed generic dependency.
-        // CollectionTypeData (IEnumerable<T>, IList<T>, T[], etc.) uses ElementType directly;
-        // other types check direct generic type name and AllInterfaces for IEnumerable<T> implementation.
-        var elementType = paramType is CollectionTypeData collectionType
-            ? collectionType.ElementType
-            : paramType.TryGetEnumerableElementType();
-        if(elementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)
+        // Extract inner types from wrapper types for closed generic dependency discovery.
+        // For example, Lazy<IHandler<int>> → extract IHandler<int> as a dependency.
+        var innerType = paramType switch
         {
-            // Add the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>> or IHandler<T>[])
-            if(addedKeys.Add(elementType.Name))
-            {
-                dependencies.Add(new ClosedGenericDependency(
-                    elementType.Name,
-                    elementType,
-                    genericElementType.NameWithoutGeneric));
-            }
+            LazyTypeData l => l.InstanceType,
+            FuncTypeData f => f.ReturnType,
+            DictionaryTypeData d => d.ValueType,
+            KeyValuePairTypeData k => k.ValueType,
+            _ => (TypeData?)null
+        };
+        if(innerType is not null)
+        {
+            // Recursively collect from the inner type (handles nested wrappers like Lazy<KVP<K,V>>)
+            CollectClosedGenericDependencyFromType(innerType, dependencies, addedKeys);
+        }
+
+        // Check if this is any enumerable-compatible type and extract element type for closed generic dependency.
+        // Collection wrappers (EnumerableTypeData, ReadOnlyCollectionTypeData, CollectionTypeData) use ElementType directly;
+        // other types check direct generic type name and AllInterfaces for IEnumerable<T> implementation.
+        var elementType = paramType switch
+        {
+            EnumerableTypeData e => e.ElementType,
+            ReadOnlyCollectionTypeData r => r.ElementType,
+            CollectionTypeData c => c.ElementType,
+            _ => paramType.TryGetEnumerableElementType()
+        };
+        if(elementType is not null)
+        {
+            // Recursively collect from the element type (handles nested wrappers like IEnumerable<Lazy<IHandler<T>>>)
+            CollectClosedGenericDependencyFromType(elementType, dependencies, addedKeys);
         }
 
         // Check if this is a closed generic type (has generic arguments but is not open generic)

@@ -32,6 +32,7 @@ internal readonly record struct OpenGenericEntry(
 /// <param name="Lifetime">The service lifetime.</param>
 /// <param name="Key">The registration key.</param>
 /// <param name="KeyType">The key type.</param>
+/// <param name="KeyValueType">The type data of the key value, or null if unknown.</param>
 /// <param name="Decorators">The decorators to apply.</param>
 /// <param name="Tags">The tags for method grouping.</param>
 /// <param name="InjectionMembers">The injection members.</param>
@@ -44,6 +45,7 @@ internal sealed record class OpenGenericRegistrationInfo(
     ServiceLifetime Lifetime,
     string? Key,
     int KeyType,
+    TypeData? KeyValueType,
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<string> Tags,
     ImmutableEquatableArray<InjectionMemberData> InjectionMembers,

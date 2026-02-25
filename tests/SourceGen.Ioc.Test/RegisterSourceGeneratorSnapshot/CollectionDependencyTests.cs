@@ -51,10 +51,9 @@ public class CollectionDependencyTests
     }
 
     [Test]
-    public async Task IListDependency_NotRecognizedAsCollection()
+    public async Task IListDependency_RecognizedAsCollection()
     {
-        // IList<T> is NOT recognized as a collection type for special injection handling
-        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
+        // IList<T> is recognized as a collection type and resolved via GetServices<T>().ToArray()
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;

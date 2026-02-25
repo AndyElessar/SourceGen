@@ -238,7 +238,7 @@ internal static class AnalyzerHelpers
         // as it depends on whether T is registered
 
         // Check if [IocInject] has a Key specified - this makes it resolvable
-        var (key, _) = injectAttribute.GetKey();
+        var (key, _, _) = injectAttribute.GetKeyInfo();
         if (key is not null)
             return true;
 
@@ -326,7 +326,7 @@ internal static class AnalyzerHelpers
             // [IocInject] or [Inject] with Key - check if it has a key
             if (attrClass.IsInject)
             {
-                var (key, _) = attribute.GetKey();
+                var (key, _, _) = attribute.GetKeyInfo();
                 if (key is not null)
                     return true;
             }
@@ -370,7 +370,7 @@ internal static class AnalyzerHelpers
         }
 
         // Check if [IocInject] has a Key specified - this makes it resolvable
-        var (key, _) = injectAttribute.GetKey();
+        var (key, _, _) = injectAttribute.GetKeyInfo();
         if (key is not null)
             return true;
 

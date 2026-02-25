@@ -23,6 +23,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |Implementation Type|`IocRegisterForAttribute.ImplementationType`, marked class, defaults `ImplementationTypes`|
 |Lifetime|Attribute → defaults → `Scoped`|
 |Key / KeyType|Attribute → defaults|
+|KeyValueType|Resolved `TypeData` of the key value (e.g., `string`, enum, `Guid`). `null` when `KeyType=Csharp` without `nameof()`|
 |Decorators|`Decorators` property (with constructor params and type constraints)|
 |Tags / TagOnly|Attribute → defaults|
 |Factory|`Factory` property (method path, supports generic mapping)|
@@ -37,7 +38,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |`AllBaseClasses`|All base classes (excluding `System.Object`)|
 |`TypeParameters`|Generic type parameters with constraints|
 |`ConstructorParameters`|Constructor parameters (for decorators)|
-|`CollectionKind`|`None`, `Enumerable`, or `ReadOnlyCollection`|
+|`WrapperKind`|`None`, `Enumerable`, `ReadOnlyCollection`, `Collection`, `Lazy`, `Func`, `Dictionary`, or `KeyValuePair`|
 
 ### 4. Injection Members
 
@@ -114,12 +115,41 @@ Only members with `[IocInject]` or `[Inject]`:
 |Nullable type|Assign resolved nullable value|
 |Has default value|Use resolved if non-null|
 
-### 8. Collection Kind Resolution
+### 8. Wrapper Kind Resolution
 
-|`CollectionKind`|Types|Resolution|
-|:---------------|:----|:---------|
-|`Enumerable`|`IEnumerable<T>`|MS.E.DI native support|
-|`ReadOnlyCollection`|`IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `T[]`|`GetServices<T>().ToArray()`|
+`WrapperKind` is a unified enum. Each value has a dedicated `TypeData` derived type.
+
+|`WrapperKind`|TypeData Type|Types|Resolution|
+|:------------|:------------|:----|:---------|
+|`Enumerable`|`EnumerableTypeData`|`IEnumerable<T>`|MS.E.DI native collection support|
+|`ReadOnlyCollection`|`ReadOnlyCollectionTypeData`|`IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `T[]`|`GetServices<T>().ToArray()`|
+|`Collection`|`CollectionTypeData`|`ICollection<T>`, `IList<T>`|`GetServices<T>().ToArray()`|
+|`Lazy`|`LazyTypeData`|`Lazy<T>`|Lazy-initialized service wrapper|
+|`Func`|`FuncTypeData`|`Func<T>`|Factory delegate wrapper|
+|`Dictionary`|`DictionaryTypeData`|`IDictionary<TKey, TValue>`|Dictionary of keyed services|
+|`KeyValuePair`|`KeyValuePairTypeData`|`KeyValuePair<TKey, TValue>`|Single keyed service entry|
+
+#### Type Hierarchy
+
+```tree
+TypeData
+└── GenericTypeData
+    ├── TypeParameterTypeData
+    └── WrapperTypeData (WrapperKind)
+        ├── EnumerableTypeData         (WrapperKind.Enumerable)
+        ├── ReadOnlyCollectionTypeData (WrapperKind.ReadOnlyCollection)
+        ├── CollectionTypeData          (WrapperKind.Collection)
+        ├── LazyTypeData               (WrapperKind.Lazy)
+        ├── FuncTypeData               (WrapperKind.Func)
+        ├── DictionaryTypeData         (WrapperKind.Dictionary)
+        └── KeyValuePairTypeData       (WrapperKind.KeyValuePair)
+```
+
+Wrapper types support nesting. For example, `IEnumerable<Lazy<IMyService>>` is parsed as:
+
+- `EnumerableTypeData` (`WrapperKind.Enumerable`)
+  - `TypeParameters[0].Type` = `LazyTypeData` (`WrapperKind.Lazy`)
+    - `TypeParameters[0].Type` = `TypeData` (`IMyService`)
 
 ### 9. Generic Factory Type Mapping
 

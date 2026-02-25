@@ -1504,7 +1504,92 @@ partial class AppContainer
 #endregion
 ```
 
-## Configuration Options Behavior
+### 10. Wrapper Type Resolution
+
+When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, `Func<T>`, `KeyValuePair<K, V>`), the container generates wrapper resolution that delegates to the container's own resolver methods.
+
+**Direct `Lazy<T>` / `Func<T>`**: Dedicated wrapper resolver methods are generated (e.g., `GetLazy_IMyService_MyService()`) and registered in `_localResolvers`. Consumers call these resolver methods directly instead of constructing wrappers inline.
+
+**Supported Wrapper Types**:
+
+| Wrapper Type | Generated Code | Notes |
+| :--- | :--- | :--- |
+| `Lazy<T>` | `GetLazy_T_Impl()` (dedicated resolver method) | Standalone resolver registered in `_localResolvers` |
+| `Func<T>` | `GetFunc_T_Impl()` (dedicated resolver method) | Standalone resolver registered in `_localResolvers` |
+| `KeyValuePair<K, V>` | `new KeyValuePair<K, V>(key, GetMyService())` | Key from service key or `default` |
+| `IDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
+| `IReadOnlyDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
+| `Dictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
+
+> **Note**: Nested wrappers are supported up to 2 levels. Inner types are still constructed **inline** (no dedicated resolver).
+>
+> - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => GetMyService()))`
+> - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => GetMyService()))`
+> - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => GetServices<T>())`
+> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Resolved via `GetServices<Lazy<T>>()` which uses the wrapper resolver methods
+
+```csharp
+#region Define:
+public interface IMyService;
+
+[IocRegister<IMyService>(ServiceLifetime.Singleton)]
+public class MyService : IMyService;
+
+[IocRegister(Lifetime = ServiceLifetime.Singleton)]
+public class Consumer(Lazy<IMyService> lazyService, Func<IMyService> factory);
+
+[IocContainer]
+public partial class AppContainer;
+#endregion
+
+#region Generate:
+partial class AppContainer
+{
+    // Standalone wrapper resolver methods
+    private global::System.Lazy<global::IMyService> GetLazy_IMyService_MyService()
+        => new global::System.Lazy<global::IMyService>(() => GetMyService());
+
+    private global::System.Func<global::IMyService> GetFunc_IMyService_MyService()
+        => new global::System.Func<global::IMyService>(() => GetMyService());
+
+    private global::Consumer GetConsumer()
+    {
+        // Direct Lazy/Func resolved via wrapper resolver methods
+        var instance = new global::Consumer(
+            GetLazy_IMyService_MyService(),
+            GetFunc_IMyService_MyService());
+        return instance;
+    }
+}
+#endregion
+```
+
+#### KeyValuePair Collection Resolvers
+
+When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`, or `IEnumerable<KeyValuePair<K, V>>`, the container generates dedicated KVP resolver methods and `_localResolvers` entries so that `GetServices<KeyValuePair<K, V>>()` returns all matching keyed service entries.
+
+**Generated components**:
+
+1. **Individual KVP resolver methods** — One per keyed service matching the `(K, V)` pair:
+
+   ```csharp
+   private KeyValuePair<string, IHandler> GetKvp_string_IHandler__h1_()
+       => new KeyValuePair<string, IHandler>("h1", GetHandler1__h1_());
+   ```
+
+2. **Array resolver method** — Collects all KVP entries:
+
+   ```csharp
+   private KeyValuePair<string, IHandler>[] GetAllKvp_string_IHandler_Array()
+       => [GetKvp_string_IHandler__h1_(), GetKvp_string_IHandler__h2_()];
+   ```
+
+3. **`_localResolvers` entries** — For `IEnumerable<KVP>`, `IReadOnlyCollection<KVP>`, `IReadOnlyList<KVP>`, and `KVP[]`:
+
+   ```csharp
+   new(new ServiceIdentifier(typeof(IEnumerable<KeyValuePair<string, IHandler>>), KeyedService.AnyKey),
+       static c => c.GetAllKvp_string_IHandler_Array()),
+   ```
 
 ### Partial Accessor (Fast-Path Service Resolution)
 

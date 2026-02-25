@@ -87,7 +87,7 @@ public sealed partial class RegisterAnalyzer
         Location? location)
     {
         // Get the registration key and tags from the attribute
-        var (key, _) = attribute.GetKey();
+        var (key, _, _) = attribute.GetKeyInfo();
         var tags = attribute.GetTags();
 
         // Build effective tags list using helper method

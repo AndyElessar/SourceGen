@@ -86,6 +86,42 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;
 
+        // Collect standalone Lazy<T>/Func<T> registrations from consumer dependencies
+        var lazyFuncEntries = CollectLazyFuncEntries(registrations);
+
+        // Group LazyFunc entries by tag key to emit them within the correct conditional blocks
+        var lazyFuncByTagKey = new Dictionary<string, List<LazyFuncRegistrationEntry>>(StringComparer.Ordinal);
+        foreach(var entry in lazyFuncEntries)
+        {
+            var tagKey = entry.Tags.Length > 0
+                ? string.Join(",", entry.Tags.OrderBy(static t => t, StringComparer.Ordinal))
+                : string.Empty;
+
+            if(!lazyFuncByTagKey.TryGetValue(tagKey, out var list))
+            {
+                list = [];
+                lazyFuncByTagKey[tagKey] = list;
+            }
+            list.Add(entry);
+        }
+
+        // Collect KVP registrations and group by tag key
+        var kvpEntries = CollectKeyValuePairEntries(registrations);
+        var kvpByTagKey = new Dictionary<string, List<KvpRegistrationEntry>>(StringComparer.Ordinal);
+        foreach(var entry in kvpEntries)
+        {
+            var tagKey = entry.Tags.Length > 0
+                ? string.Join(",", entry.Tags.OrderBy(static t => t, StringComparer.Ordinal))
+                : string.Empty;
+
+            if(!kvpByTagKey.TryGetValue(tagKey, out var list))
+            {
+                list = [];
+                kvpByTagKey[tagKey] = list;
+            }
+            list.Add(entry);
+        }
+
         // Write registrations grouped by tag conditions
         // Sort groups for deterministic output: no tags first, then by tag key
         var sortedGroups = tagGroups
@@ -102,6 +138,10 @@ partial class IocSourceGenerator
                 ? []
                 : groupKey.Split(',');
 
+            // Get matching wrapper entries for this tag group
+            lazyFuncByTagKey.TryGetValue(groupKey, out var groupLazyFuncEntries);
+            kvpByTagKey.TryGetValue(groupKey, out var groupKvpEntries);
+
             if(!isFirstGroup)
             {
                 mainWriter.WriteLine();
@@ -111,12 +151,12 @@ partial class IocSourceGenerator
             if(tagList.Length == 0)
             {
                 // No tags - only register when no tags passed (mutually exclusive model)
-                WriteNoTagConditionalBlock(mainWriter, groupRegistrations);
+                WriteNoTagConditionalBlock(mainWriter, groupRegistrations, groupLazyFuncEntries, groupKvpEntries);
             }
             else
             {
                 // Has tags - only register when tags match
-                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations);
+                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations, groupLazyFuncEntries, groupKvpEntries);
             }
         }
 
@@ -153,7 +193,9 @@ partial class IocSourceGenerator
     private static void WriteConditionalTagBlock(
         SourceWriter writer,
         string[] tags,
-        List<ServiceRegistrationModel> registrations)
+        List<ServiceRegistrationModel> registrations,
+        List<LazyFuncRegistrationEntry>? lazyFuncEntries = null,
+        List<KvpRegistrationEntry>? kvpEntries = null)
     {
         // Build the condition - only register when tags match
         var tagConditions = tags.Select(static tag => $"tags.Contains(\"{tag}\")");
@@ -168,6 +210,9 @@ partial class IocSourceGenerator
             WriteRegistration(writer, registration);
         }
 
+        WriteLazyFuncRegistrations(writer, lazyFuncEntries);
+        WriteKvpRegistrations(writer, kvpEntries);
+
         writer.Indentation--;
         writer.WriteLine("}");
     }
@@ -178,7 +223,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteNoTagConditionalBlock(
         SourceWriter writer,
-        List<ServiceRegistrationModel> registrations)
+        List<ServiceRegistrationModel> registrations,
+        List<LazyFuncRegistrationEntry>? lazyFuncEntries = null,
+        List<KvpRegistrationEntry>? kvpEntries = null)
     {
         writer.WriteLine("if (!tags.Any())");
         writer.WriteLine("{");
@@ -188,6 +235,9 @@ partial class IocSourceGenerator
         {
             WriteRegistration(writer, registration);
         }
+
+        WriteLazyFuncRegistrations(writer, lazyFuncEntries);
+        WriteKvpRegistrations(writer, kvpEntries);
 
         writer.Indentation--;
         writer.WriteLine("}");
@@ -268,11 +318,13 @@ partial class IocSourceGenerator
         // - [Inject] attribute on parameters: MS.DI doesn't recognize it
         // - Non-IEnumerable collection types (IList<T>, T[], etc.): MS.DI only supports IEnumerable<T>
         // - Has default value and is resolvable type: needs conditional handling (GetService + null check)
+        // - Nullable Lazy<T>?/Func<T>? (direct, non-nested): needs factory for optional resolution via GetService
         // Note: [FromKeyedServices], [ServiceKey], IServiceProvider are handled by MS.DI automatically
         var constructorParams = registration.ImplementationType.ConstructorParameters;
         bool hasSpecialConstructorParams = constructorParams?.Any(static p =>
             p.HasInjectAttribute ||
-            p.Type.IsNonEnumerableCollection ||
+            p.Type.NeedsWrapperResolution ||
+            (p.IsNullable && p.Type is LazyTypeData { InstanceType: not WrapperTypeData } or FuncTypeData { ReturnType: not WrapperTypeData }) ||
             (p.HasDefaultValue && !p.Type.IsBuiltInTypeResolvable)) == true;
 
         // Determine if factory construction is needed:
@@ -805,9 +857,15 @@ partial class IocSourceGenerator
         bool hasNonNullDefault,
         string? defaultValue)
     {
-        if(memberType is CollectionTypeData { CollectionKind: not CollectionKind.None })
+        if(memberType is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
         {
             WriteCollectionResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable);
+            return;
+        }
+
+        if(memberType is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData)
+        {
+            WriteWrapperResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable);
             return;
         }
 
@@ -1230,7 +1288,16 @@ partial class IocSourceGenerator
     {
         var isKeyed = serviceKey is not null;
 
-        if(type is not CollectionTypeData collectionType)
+        // Extract element type name based on collection type
+        var elementTypeName = type switch
+        {
+            EnumerableTypeData e => e.ElementType.Name,
+            ReadOnlyCollectionTypeData r => r.ElementType.Name,
+            CollectionTypeData c => c.ElementType.Name,
+            _ => null
+        };
+
+        if(elementTypeName is null)
         {
             // Fallback: not a collection type, use direct service resolution
             if(isKeyed)
@@ -1248,12 +1315,10 @@ partial class IocSourceGenerator
             return;
         }
 
-        var elementTypeName = collectionType.ElementType.Name;
-
-        // Use CollectionKind to determine the resolution method
-        switch(collectionType.CollectionKind)
+        // Use WrapperKind to determine the resolution method
+        switch(((WrapperTypeData)type).WrapperKind)
         {
-            case CollectionKind.Enumerable:
+            case WrapperKind.Enumerable:
                 // IEnumerable<T> - use GetServices directly
                 if(isKeyed)
                 {
@@ -1267,8 +1332,22 @@ partial class IocSourceGenerator
                 }
                 break;
 
-            case CollectionKind.ReadOnlyCollection:
+            case WrapperKind.ReadOnlyCollection:
                 // IReadOnlyCollection<T>, IReadOnlyList<T>, T[] - resolve as array
+                if(isKeyed)
+                {
+                    var call = BuildServiceCall(GetKeyedServices, elementTypeName, serviceKey);
+                    writer.WriteLine($"var {paramVar} = {call}.ToArray();");
+                }
+                else
+                {
+                    var call = BuildServiceCall(GetServices, elementTypeName, serviceKey: null);
+                    writer.WriteLine($"var {paramVar} = {call}.ToArray();");
+                }
+                break;
+
+            case WrapperKind.Collection:
+                // ICollection<T>, IList<T> - resolve as array
                 if(isKeyed)
                 {
                     var call = BuildServiceCall(GetKeyedServices, elementTypeName, serviceKey);
@@ -1297,6 +1376,145 @@ partial class IocSourceGenerator
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// Writes wrapper type resolution code for Lazy&lt;T&gt;, Func&lt;T&gt;, IDictionary&lt;TKey, TValue&gt;,
+    /// and KeyValuePair&lt;TKey, TValue&gt;. Supports nested wrapper types (e.g., Lazy&lt;KeyValuePair&lt;K, V&gt;&gt;).
+    /// </summary>
+    /// <param name="writer">The source writer.</param>
+    /// <param name="type">The wrapper type data.</param>
+    /// <param name="paramVar">The variable name for this parameter.</param>
+    /// <param name="serviceKey">The service key (null for non-keyed services).</param>
+    /// <param name="isOptional">Whether the parameter is optional.</param>
+    private static void WriteWrapperResolution(
+        SourceWriter writer,
+        TypeData type,
+        string paramVar,
+        string? serviceKey,
+        bool isOptional = false)
+    {
+        var expr = BuildWrapperExpression(type, serviceKey, isOptional);
+        writer.WriteLine($"var {paramVar} = {expr};");
+    }
+
+    /// <summary>
+    /// Builds an inline wrapper expression. Recursively handles nested wrappers.
+    /// </summary>
+    /// <param name="type">The wrapper type data to build an expression for.</param>
+    /// <param name="serviceKey">The service key (null for non-keyed services).</param>
+    /// <param name="isOptional">Whether this resolution is optional.</param>
+    /// <returns>A C# expression string that resolves the wrapper type.</returns>
+    private static string BuildWrapperExpression(TypeData type, string? serviceKey, bool isOptional)
+    {
+        switch(type)
+        {
+            case LazyTypeData lazy:
+            {
+                var innerType = lazy.InstanceType;
+                // Direct Lazy<T> where T is not a wrapper — resolve from DI (standalone registration exists)
+                if(innerType is not WrapperTypeData)
+                {
+                    var methodName = isOptional
+                        ? (serviceKey is not null ? GetKeyedService : GetService)
+                        : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+                    return BuildServiceCall(methodName, type.Name, serviceKey);
+                }
+                // Nested wrapper (e.g., Lazy<IEnumerable<T>>) — inline construction
+                var lazyInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional);
+                return $"new global::System.Lazy<{innerType.Name}>(() => {lazyInnerExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
+            }
+
+            case FuncTypeData func:
+            {
+                var innerType = func.ReturnType;
+                // Direct Func<T> where T is not a wrapper — resolve from DI (standalone registration exists)
+                if(innerType is not WrapperTypeData)
+                {
+                    var methodName = isOptional
+                        ? (serviceKey is not null ? GetKeyedService : GetService)
+                        : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+                    return BuildServiceCall(methodName, type.Name, serviceKey);
+                }
+                // Nested wrapper (e.g., Func<IEnumerable<T>>) — inline construction
+                var funcInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional);
+                return $"new global::System.Func<{innerType.Name}>(() => {funcInnerExpr})";
+            }
+
+            case KeyValuePairTypeData kvp:
+            {
+                var keyType = kvp.KeyType;
+                var valueType = kvp.ValueType;
+                // KeyValuePair uses the registration's service key as the key value
+                var keyExpr = serviceKey ?? "default";
+                var valueExpr = BuildInnerResolutionExpression(valueType, serviceKey, isOptional);
+                return $"new global::System.Collections.Generic.KeyValuePair<{keyType.Name}, {valueType.Name}>({keyExpr}, {valueExpr})";
+            }
+
+            case DictionaryTypeData dict:
+            {
+                // Dictionary resolution: collect all KeyValuePair<K,V> services and convert to dictionary.
+                var keyType = dict.KeyType;
+                var valueType = dict.ValueType;
+                var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyType.Name}, {valueType.Name}>";
+                var getServicesCall = BuildServiceCall(
+                    serviceKey is not null ? GetKeyedServices : GetServices,
+                    kvpTypeName,
+                    serviceKey);
+                return $"{getServicesCall}.ToDictionary()";
+            }
+
+            default:
+            {
+                // Fallback for non-wrapper types
+                var methodName = isOptional
+                    ? (serviceKey is not null ? GetKeyedService : GetService)
+                    : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+                return BuildServiceCall(methodName, type.Name, serviceKey);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds an inner resolution expression — either a nested wrapper expression, a collection
+    /// expression, or a direct service call. Supports nesting such as Lazy&lt;IEnumerable&lt;T&gt;&gt;.
+    /// </summary>
+    private static string BuildInnerResolutionExpression(TypeData innerType, string? serviceKey, bool isOptional)
+    {
+        // If the inner type is itself a wrapper, recurse to handle nesting (e.g., Lazy<KeyValuePair<K,V>>)
+        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData)
+        {
+            return BuildWrapperExpression(innerType, serviceKey, isOptional);
+        }
+
+        // Collection types inside wrappers (e.g., Lazy<IEnumerable<T>>)
+        if(innerType is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
+        {
+            var elementTypeName = innerType switch
+            {
+                EnumerableTypeData e => e.ElementType.Name,
+                ReadOnlyCollectionTypeData r => r.ElementType.Name,
+                CollectionTypeData c => c.ElementType.Name,
+                _ => null
+            };
+
+            if(elementTypeName is not null)
+            {
+                var getServicesCall = BuildServiceCall(
+                    serviceKey is not null ? GetKeyedServices : GetServices,
+                    elementTypeName,
+                    serviceKey);
+                return innerType is ReadOnlyCollectionTypeData or CollectionTypeData
+                    ? $"{getServicesCall}.ToArray()"
+                    : getServicesCall;
+            }
+        }
+
+        // Otherwise, use direct service resolution
+        var methodName = isOptional
+            ? (serviceKey is not null ? GetKeyedService : GetService)
+            : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+        return BuildServiceCall(methodName, innerType.Name, serviceKey);
     }
 
     /// <summary>
@@ -1335,9 +1553,16 @@ partial class IocSourceGenerator
             return true;
         }
 
-        if(param.Type is CollectionTypeData { CollectionKind: not CollectionKind.None })
+        if(param.Type is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
         {
             WriteCollectionResolution(writer, param.Type, paramVar, serviceKey, isOptional);
+            resolvedVar = paramVar;
+            return true;
+        }
+
+        if(param.Type is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData)
+        {
+            WriteWrapperResolution(writer, param.Type, paramVar, serviceKey, isOptional);
             resolvedVar = paramVar;
             return true;
         }

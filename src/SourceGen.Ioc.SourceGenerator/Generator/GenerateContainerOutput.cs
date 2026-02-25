@@ -348,6 +348,10 @@ partial class IocSourceGenerator
             }
         }
 
+        // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers)
+        var scopedLazyFuncEntries = CollectContainerLazyFuncEntries(groups);
+        WriteContainerLazyFuncFieldInitializations(writer, scopedLazyFuncEntries);
+
         // Because resolvers are immutable per container, they can be reused from parent
         if(!effectiveUseSwitchStatement)
         {
@@ -398,6 +402,10 @@ partial class IocSourceGenerator
                 writer.WriteLine($"{cached.FieldName} = {cached.ResolverMethodName}();");
             }
         }
+
+        // Initialize Lazy/Func wrapper fields
+        var lazyFuncEntries = CollectContainerLazyFuncEntries(groups);
+        WriteContainerLazyFuncFieldInitializations(writer, lazyFuncEntries);
 
         // Build FrozenDictionary
         if(!effectiveUseSwitchStatement)
@@ -459,6 +467,14 @@ partial class IocSourceGenerator
             WriteArrayResolverMethod(writer, serviceType, groups);
             writer.WriteLine();
         }
+
+        // Write KVP resolver methods for keyed services consumed as KeyValuePair/Dictionary
+        var containerKvpEntries = CollectContainerKvpEntries(groups);
+        WriteContainerKvpResolverMethods(writer, containerKvpEntries);
+
+        // Write Lazy/Func wrapper field declarations and array resolvers
+        var containerLazyFuncEntries = CollectContainerLazyFuncEntries(groups);
+        WriteContainerLazyFuncFields(writer, containerLazyFuncEntries);
 
         writer.WriteLine("#endregion");
         writer.WriteLine();
@@ -1346,7 +1362,7 @@ partial class IocSourceGenerator
         ContainerRegistrationGroups groups)
     {
         // Collection types - use collection resolver method if available
-        if(type is CollectionTypeData { CollectionKind: not CollectionKind.None })
+        if(type is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
         {
             var elementType = ExtractElementTypeForContainer(type);
 
@@ -1364,6 +1380,12 @@ partial class IocSourceGenerator
             }
 
             return $"GetServices<{elementType}>()";
+        }
+
+        // Wrapper types - Lazy<T>, Func<T>, KeyValuePair<K,V>
+        if(type is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData)
+        {
+            return BuildWrapperExpressionForContainer(type, key, isOptional, groups);
         }
 
         // Try to find direct resolver in this container
@@ -1391,6 +1413,111 @@ partial class IocSourceGenerator
             return $"GetService(typeof({type.Name})) as {type.Name}";
         }
         return $"({type.Name})GetRequiredService(typeof({type.Name}))";
+    }
+
+    /// <summary>
+    /// Builds a wrapper expression for container resolution (Lazy, Func, KeyValuePair, Dictionary).
+    /// Recursively handles nested wrapper types.
+    /// </summary>
+    private static string BuildWrapperExpressionForContainer(
+        TypeData type,
+        string? key,
+        bool isOptional,
+        ContainerRegistrationGroups groups,
+        bool useResolverMethods = true)
+    {
+        switch(type)
+        {
+            case LazyTypeData lazy:
+            {
+                var innerType = lazy.InstanceType;
+                // Direct Lazy<T> where T is not a wrapper — call wrapper resolver if available (only at top level)
+                if(innerType is not WrapperTypeData && useResolverMethods)
+                {
+                    if(groups.ByServiceTypeAndKey.TryGetValue((innerType.Name, key), out var innerRegs))
+                    {
+                        var lastReg = innerRegs[^1];
+                        var safeInnerType = GetSafeIdentifier(innerType.Name);
+                        var safeImplType = GetSafeIdentifier(lastReg.Registration.ImplementationType.Name);
+                        return $"_lazy_{safeInnerType}_{safeImplType}";
+                    }
+                    // Fallback: no matching inner service
+                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                }
+                // Nested wrapper or inside nested context — inline construction
+                var lazyInnerExpr = BuildInnerResolutionForContainer(innerType, key, isOptional, groups);
+                return $"new global::System.Lazy<{innerType.Name}>(() => {lazyInnerExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
+            }
+
+            case FuncTypeData func:
+            {
+                var innerType = func.ReturnType;
+                // Direct Func<T> where T is not a wrapper — call wrapper resolver if available (only at top level)
+                if(innerType is not WrapperTypeData && useResolverMethods)
+                {
+                    if(groups.ByServiceTypeAndKey.TryGetValue((innerType.Name, key), out var innerRegs))
+                    {
+                        var lastReg = innerRegs[^1];
+                        var safeInnerType = GetSafeIdentifier(innerType.Name);
+                        var safeImplType = GetSafeIdentifier(lastReg.Registration.ImplementationType.Name);
+                        return $"_func_{safeInnerType}_{safeImplType}";
+                    }
+                    // Fallback: no matching inner service
+                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                }
+                // Nested wrapper or inside nested context — inline construction
+                var funcInnerExpr = BuildInnerResolutionForContainer(innerType, key, isOptional, groups);
+                return $"new global::System.Func<{innerType.Name}>(() => {funcInnerExpr})";
+            }
+
+            case KeyValuePairTypeData kvp:
+            {
+                var keyType = kvp.KeyType;
+                var valueType = kvp.ValueType;
+                var keyExpr = key ?? "default";
+                var valueExpr = BuildInnerResolutionForContainer(valueType, key, isOptional, groups);
+                return $"new global::System.Collections.Generic.KeyValuePair<{keyType.Name}, {valueType.Name}>({keyExpr}, {valueExpr})";
+            }
+
+            case DictionaryTypeData dict:
+            {
+                // Dictionary resolution: collect all KeyValuePair<K,V> services and convert to dictionary.
+                var keyType = dict.KeyType;
+                var valueType = dict.ValueType;
+                var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyType.Name}, {valueType.Name}>";
+                if(key is not null)
+                {
+                    return $"GetKeyedServices<{kvpTypeName}>({key}).ToDictionary()";
+                }
+                return $"GetServices<{kvpTypeName}>().ToDictionary()";
+            }
+
+            default:
+                return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+        }
+    }
+
+    /// <summary>
+    /// Builds an inner resolution expression for container — handles nested wrappers, nested
+    /// collections (via <see cref="BuildServiceResolutionCallForContainer"/>), or direct resolution.
+    /// Supports nesting such as Lazy&lt;IEnumerable&lt;T&gt;&gt;.
+    /// </summary>
+    private static string BuildInnerResolutionForContainer(
+        TypeData innerType,
+        string? key,
+        bool isOptional,
+        ContainerRegistrationGroups groups)
+    {
+        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData)
+        {
+            // Inner wrappers always use inline construction (no resolver methods)
+            return BuildWrapperExpressionForContainer(innerType, key, isOptional, groups, useResolverMethods: false);
+        }
+
+        // Delegates to BuildServiceResolutionCallForContainer which handles:
+        // - Collection types (EnumerableTypeData, ReadOnlyCollectionTypeData, CollectionTypeData) via GetServices/array resolvers
+        // - Direct service resolution via resolver methods or GetRequiredService fallback
+        return BuildServiceResolutionCallForContainer(innerType, key, isOptional, groups);
     }
 
     /// <summary>
@@ -1934,7 +2061,7 @@ partial class IocSourceGenerator
             writer.WriteLine($"new(new ServiceIdentifier(typeof({kvp.Key.ServiceType}), {keyExpr}), {resolverExpr}),");
         }
 
-        // Add IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[] entries for collection service types
+        // Add IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[], ICollection<T>, IList<T> entries for collection service types
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
             var methodName = GetArrayResolverMethodName(serviceType);
@@ -1942,7 +2069,17 @@ partial class IocSourceGenerator
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
         }
+
+        // Add KeyValuePair<K,V> collection entries for keyed services consumed as KVP/Dictionary
+        var containerKvpEntries = CollectContainerKvpEntries(groups);
+        WriteContainerKvpLocalResolverEntries(writer, container.ContainerTypeName, containerKvpEntries);
+
+        // Add Lazy<T>/Func<T> wrapper entries for consumers that depend on Lazy<T>/Func<T>
+        var containerLazyFuncEntries = CollectContainerLazyFuncEntries(groups);
+        WriteContainerLazyFuncLocalResolverEntries(writer, container.ContainerTypeName, containerLazyFuncEntries);
 
         writer.Indentation--;
         writer.WriteLine("];");

@@ -10,6 +10,7 @@
 /// <param name="ServiceTypes">Explicit service types to register.</param>
 /// <param name="Key">The key for keyed registration.</param>
 /// <param name="KeyType">How to interpret the key.</param>
+/// <param name="KeyValueType">The type data of the key value, or null if unknown (treated as object).</param>
 /// <param name="HasExplicitLifetime">Whether the lifetime was explicitly set.</param>
 /// <param name="HasExplicitRegisterAllInterfaces">Whether RegisterAllInterfaces was explicitly set.</param>
 /// <param name="HasExplicitRegisterAllBaseClasses">Whether RegisterAllBaseClasses was explicitly set.</param>
@@ -27,6 +28,7 @@ internal sealed record class RegistrationData(
     ImmutableEquatableArray<TypeData> ServiceTypes,
     string? Key,
     int KeyType,
+    TypeData? KeyValueType,
     bool HasExplicitLifetime,
     bool HasExplicitRegisterAllInterfaces,
     bool HasExplicitRegisterAllBaseClasses,

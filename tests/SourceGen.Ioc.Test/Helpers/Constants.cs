@@ -24,6 +24,7 @@ internal static class Constants
     public const string GenericFactory = "GenericFactory";
     public const string ContainerOptions = "ContainerOptions";
     public const string PartialAccessor = "PartialAccessor";
+    public const string WrapperType = "WrapperType";
 
     public const string SGIOC001 = "SGIOC001";
     public const string SGIOC002 = "SGIOC002";

@@ -59,13 +59,15 @@ internal sealed record class TypeParameterTypeData(
         GenericArity: 0);
 
 /// <summary>
-/// Represents wrapper type information.
+/// Represents wrapper type information. Base type for all wrapper kinds (collections, Lazy, Func, etc.).
 /// </summary>
+/// <param name="WrapperKind">The kind of wrapper this type represents.</param>
 internal record class WrapperTypeData(
     string Name,
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    WrapperKind WrapperKind,
     bool IsNestedOpenGeneric = false,
     bool IsBuiltInType = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
@@ -89,7 +91,55 @@ internal record class WrapperTypeData(
         AllBaseClasses);
 
 /// <summary>
-/// Represents collection wrapper type information.
+/// Represents IEnumerable&lt;T&gt; wrapper type. Supported directly by MS.DI.
+/// </summary>
+internal sealed record class EnumerableTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.Enumerable,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
+/// Represents read-only collection types: IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[].
+/// Should be resolved using GetServices&lt;T&gt;().ToArray().
+/// </summary>
+internal sealed record class ReadOnlyCollectionTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.ReadOnlyCollection,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
+/// Represents mutable collection interface types: ICollection&lt;T&gt;, IList&lt;T&gt;.
+/// Should be resolved using GetServices&lt;T&gt;().ToArray().
 /// </summary>
 internal sealed record class CollectionTypeData(
     string Name,
@@ -98,7 +148,6 @@ internal sealed record class CollectionTypeData(
     int GenericArity,
     bool IsNestedOpenGeneric = false,
     bool IsBuiltInType = false,
-    CollectionKind CollectionKind = CollectionKind.None,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
@@ -106,26 +155,112 @@ internal sealed record class CollectionTypeData(
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : WrapperTypeData(
-        Name,
-        NameWithoutGeneric,
-        IsOpenGeneric,
-        GenericArity,
-        IsNestedOpenGeneric,
-        IsBuiltInType,
-        TypeParameters,
-        ConstructorParameters,
-        HasInjectConstructor,
-        InjectionMembers,
-        AllInterfaces,
-        AllBaseClasses);
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.Collection,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
 
 /// <summary>
-/// Represents the kind of collection for DI injection purposes.
+/// Represents Lazy&lt;T&gt; wrapper type. Lazy-initialized service wrapper.
 /// </summary>
-internal enum CollectionKind
+internal sealed record class LazyTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.Lazy,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
+/// Represents Func&lt;T&gt; wrapper type. Factory delegate wrapper.
+/// </summary>
+internal sealed record class FuncTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.Func,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
+/// Represents IDictionary&lt;TKey, TValue&gt; wrapper type. Dictionary of keyed services.
+/// </summary>
+internal sealed record class DictionaryTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.Dictionary,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
+/// Represents KeyValuePair&lt;TKey, TValue&gt; wrapper type. Single keyed service entry.
+/// </summary>
+internal sealed record class KeyValuePairTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    bool IsBuiltInType = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.KeyValuePair,
+        IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
+/// Represents the kind of wrapper for DI injection purposes.
+/// Each value has a corresponding sealed TypeData derived type.
+/// </summary>
+internal enum WrapperKind
 {
     /// <summary>
-    /// Not a collection type.
+    /// Not a wrapper type.
     /// </summary>
     None = 0,
 
@@ -138,7 +273,33 @@ internal enum CollectionKind
     /// Read-only collection types: IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[].
     /// Should be resolved using GetServices&lt;T&gt;().ToArray().
     /// </summary>
-    ReadOnlyCollection
+    ReadOnlyCollection,
+
+    /// <summary>
+    /// Mutable collection interface types: ICollection&lt;T&gt;, IList&lt;T&gt;.
+    /// Should be resolved using GetServices&lt;T&gt;().ToArray().
+    /// </summary>
+    Collection,
+
+    /// <summary>
+    /// Lazy&lt;T&gt; - lazy-initialized service wrapper.
+    /// </summary>
+    Lazy,
+
+    /// <summary>
+    /// Func&lt;T&gt; - factory delegate wrapper.
+    /// </summary>
+    Func,
+
+    /// <summary>
+    /// IDictionary&lt;TKey, TValue&gt; - dictionary of keyed services.
+    /// </summary>
+    Dictionary,
+
+    /// <summary>
+    /// KeyValuePair&lt;TKey, TValue&gt; - single keyed service entry.
+    /// </summary>
+    KeyValuePair
 }
 
 internal static class TypeDataExtensions
@@ -206,36 +367,66 @@ internal static class TypeDataExtensions
             new(Name, Name);
 
         /// <summary>
-        /// Creates a collection wrapper type data.
+        /// Creates a wrapper type data for the specified <see cref="WrapperKind"/>.
+        /// Returns the appropriate sealed derived type.
         /// </summary>
-        public static CollectionTypeData CreateCollection(
+        public static WrapperTypeData CreateWrapper(
             string Name,
             string NameWithoutGeneric,
             bool IsOpenGeneric,
             int GenericArity,
+            WrapperKind WrapperKind,
             bool IsNestedOpenGeneric = false,
             bool IsBuiltInType = false,
-            CollectionKind CollectionKind = CollectionKind.None,
             ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
             ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
             bool HasInjectConstructor = false,
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
-            new(
-                Name,
-                NameWithoutGeneric,
-                IsOpenGeneric,
-                GenericArity,
-                IsNestedOpenGeneric,
-                IsBuiltInType,
-                CollectionKind,
-                TypeParameters,
-                ConstructorParameters,
-                HasInjectConstructor,
-                InjectionMembers,
-                AllInterfaces,
-                AllBaseClasses);
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) => WrapperKind switch
+            {
+                WrapperKind.Enumerable => new EnumerableTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.ReadOnlyCollection => new ReadOnlyCollectionTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.Collection => new CollectionTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.Lazy => new LazyTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.Func => new FuncTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.Dictionary => new DictionaryTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.KeyValuePair => new KeyValuePairTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                _ => new WrapperTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    WrapperKind,
+                    IsNestedOpenGeneric, IsBuiltInType, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses)
+            };
 
         /// <summary>
         /// Checks if the type is an array type (e.g., T[]).
@@ -244,9 +435,9 @@ internal static class TypeDataExtensions
             typeData.Name.EndsWith("[]", StringComparison.Ordinal);
 
         /// <summary>
-        /// Tries to extract the element type from an enumerable-compatible type that is NOT a <see cref="CollectionTypeData"/>.
+        /// Tries to extract the element type from an enumerable-compatible type that is NOT a <see cref="WrapperTypeData"/>.
         /// Checks direct IEnumerable&lt;T&gt;-compatible generic types, then AllInterfaces for IEnumerable&lt;T&gt; implementation.
-        /// For <see cref="CollectionTypeData"/>, use <see cref="TypeDataExtensions.ElementType"/> directly instead.
+        /// For <see cref="WrapperTypeData"/>, use <see cref="TypeDataExtensions.ElementType"/> directly instead.
         /// </summary>
         /// <returns>The element type if this is an enumerable-compatible type; otherwise, null.</returns>
         public TypeData? TryGetEnumerableElementType()
@@ -284,23 +475,100 @@ internal static class TypeDataExtensions
 
         /// <summary>
         /// Determines whether this type is a built-in type that can't be resolved from DI.
-        /// For collections, checks whether the element type is built-in.
+        /// For wrapper types, checks whether the inner type is built-in.
         /// For other types, checks the type itself.
         /// </summary>
-        public bool IsBuiltInTypeResolvable => 
-            typeData is CollectionTypeData c
-            ? c.ElementType.IsBuiltInType
-            : typeData.IsBuiltInType;
+        public bool IsBuiltInTypeResolvable => typeData switch
+        {
+            EnumerableTypeData e => e.ElementType.IsBuiltInType,
+            ReadOnlyCollectionTypeData r => r.ElementType.IsBuiltInType,
+            CollectionTypeData c => c.ElementType.IsBuiltInType,
+            LazyTypeData l => l.InstanceType.IsBuiltInType,
+            FuncTypeData f => f.ReturnType.IsBuiltInType,
+            DictionaryTypeData d => d.ValueType.IsBuiltInType,
+            KeyValuePairTypeData k => k.ValueType.IsBuiltInType,
+            _ => typeData.IsBuiltInType
+        };
 
         /// <summary>
-        /// Checks if the type is a non-enumerable collection type.
+        /// Checks if the type is a non-enumerable wrapper type that requires factory construction.
+        /// Direct <c>Lazy&lt;T&gt;</c> and <c>Func&lt;T&gt;</c> (where T is not a wrapper) are excluded
+        /// because they now have standalone service registrations and can be resolved via DI directly.
+        /// Nested wrappers like <c>Lazy&lt;Func&lt;T&gt;&gt;</c> still require inline construction.
         /// </summary>
-        public bool IsNonEnumerableCollection =>
-            typeData is CollectionTypeData { CollectionKind: not CollectionKind.None and not CollectionKind.Enumerable };
+        public bool NeedsWrapperResolution =>
+            typeData switch
+            {
+                LazyTypeData lazy when lazy.InstanceType is not WrapperTypeData => false,
+                FuncTypeData func when func.ReturnType is not WrapperTypeData => false,
+                WrapperTypeData and not EnumerableTypeData => true,
+                _ => false
+            };
+    }
+
+    extension(EnumerableTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the element type of the IEnumerable&lt;T&gt; wrapper.
+        /// </summary>
+        public TypeData ElementType => typeData.TypeParameters![0].Type;
+    }
+
+    extension(ReadOnlyCollectionTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the element type of the read-only collection wrapper.
+        /// </summary>
+        public TypeData ElementType => typeData.TypeParameters![0].Type;
     }
 
     extension(CollectionTypeData typeData)
     {
+        /// <summary>
+        /// Gets the element type of the mutable collection wrapper.
+        /// </summary>
         public TypeData ElementType => typeData.TypeParameters![0].Type;
+    }
+
+    extension(LazyTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the instance type of the Lazy&lt;T&gt; wrapper.
+        /// </summary>
+        public TypeData InstanceType => typeData.TypeParameters![0].Type;
+    }
+
+    extension(FuncTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the return type of the Func&lt;T&gt; wrapper.
+        /// </summary>
+        public TypeData ReturnType => typeData.TypeParameters![^1].Type;
+    }
+
+    extension(DictionaryTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the key type of the IDictionary&lt;TKey, TValue&gt; wrapper.
+        /// </summary>
+        public TypeData KeyType => typeData.TypeParameters![0].Type;
+
+        /// <summary>
+        /// Gets the value type of the IDictionary&lt;TKey, TValue&gt; wrapper.
+        /// </summary>
+        public TypeData ValueType => typeData.TypeParameters![1].Type;
+    }
+
+    extension(KeyValuePairTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the key type of the KeyValuePair&lt;TKey, TValue&gt; wrapper.
+        /// </summary>
+        public TypeData KeyType => typeData.TypeParameters![0].Type;
+
+        /// <summary>
+        /// Gets the value type of the KeyValuePair&lt;TKey, TValue&gt; wrapper.
+        /// </summary>
+        public TypeData ValueType => typeData.TypeParameters![1].Type;
     }
 }

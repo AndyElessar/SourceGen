@@ -55,12 +55,12 @@ public sealed partial class RegisterAnalyzer
             var lifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
 
             // Get key type for SGIOC013/SGIOC014 analysis
-            var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
+            var (key, _, keyTypeSymbol) = attribute.GetKeyInfo();
 
             // Check for Factory and Instance (used by ServiceInfo)
             var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
-            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
+            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, key is not null, hasFactory, hasInstance);
         }
 
         return syntaxTreesBuilder.ToImmutable();
@@ -175,14 +175,14 @@ public sealed partial class RegisterAnalyzer
             var currentLifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
 
             // Get key type for SGIOC013/SGIOC014 analysis
-            var (hasKey, keyTypeSymbol) = attribute.GetKeySymbol();
+            var (key, _, keyTypeSymbol) = attribute.GetKeyInfo();
 
             // Check for Factory and Instance (used by ServiceInfo)
             var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
-            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
+            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, keyTypeSymbol, key is not null, hasFactory, hasInstance);
         }
     }
 
@@ -230,6 +230,13 @@ public sealed partial class RegisterAnalyzer
 
         if (!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
             return; // Already registered
+
+        // Only build type index for non-keyed services.
+        // Keyed services are resolved by key + type, not by type alone,
+        // so including them in the type-only index could lead to false positive
+        // circular dependency (SGIOC002) or lifetime conflict (SGIOC003-005) diagnostics.
+        if (hasKey)
+            return;
 
         // Build index for interfaces
         foreach (var iface in targetType.AllInterfaces)

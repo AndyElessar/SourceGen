@@ -755,6 +755,22 @@ internal static class RoslynExtensions
         s_readOnlyCollectionTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
+    /// Mutable collection interface type names (without generic part).
+    /// These should be resolved using GetServices&lt;T&gt;().ToArray().
+    /// </summary>
+    private static readonly HashSet<string> s_collectionTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.ICollection",
+        "global::System.Collections.Generic.IList",
+        "System.Collections.Generic.ICollection",
+        "System.Collections.Generic.IList",
+        "ICollection",
+        "IList"
+    };
+    public static bool IsCollectionType(string nameWithoutGeneric) =>
+        s_collectionTypes.Contains(nameWithoutGeneric);
+
+    /// <summary>
     /// Resolves the full access path of a symbol referenced in a nameof() expression.
     /// For example, resolves <c>nameof(Key)</c> to <c>global::Namespace.OuterClass.InnerClass.Key</c>
     /// when Key is a member of InnerClass inside OuterClass.

@@ -414,6 +414,7 @@ partial class IocSourceGenerator
             openGenericInfo.Lifetime,
             openGenericInfo.Key,
             openGenericInfo.KeyType,
+            openGenericInfo.KeyValueType,
             IsOpenGeneric: false,
             [],
             openGenericInfo.InjectionMembers,
@@ -456,6 +457,7 @@ partial class IocSourceGenerator
                 openGenericInfo.Lifetime,
                 openGenericInfo.Key,
                 openGenericInfo.KeyType,
+                openGenericInfo.KeyValueType,
                 IsOpenGeneric: false,
                 serviceTypeDecorators,
                 openGenericInfo.InjectionMembers,
@@ -504,6 +506,7 @@ partial class IocSourceGenerator
             openGenericInfo.Lifetime,
             openGenericInfo.Key,
             openGenericInfo.KeyType,
+            openGenericInfo.KeyValueType,
             IsOpenGeneric: false,
             serviceTypeDecorators,
             openGenericInfo.InjectionMembers,
@@ -913,21 +916,21 @@ partial class IocSourceGenerator
     {
         var newName = Name ?? source.Name;
         var sourceGenericType = source as GenericTypeData;
-        var sourceCollectionType = source as CollectionTypeData;
+        var sourceWrapperType = source as WrapperTypeData;
         var newIsOpenGeneric = IsOpenGeneric ?? sourceGenericType?.IsOpenGeneric ?? false;
         var newIsNestedOpenGeneric = IsNestedOpenGeneric ?? sourceGenericType?.IsNestedOpenGeneric ?? false;
         var newTypeParameters = OverrideTypeParameters ? TypeParameters : sourceGenericType?.TypeParameters;
 
-        if(sourceCollectionType is not null)
+        if(sourceWrapperType is not null)
         {
-            return TypeData.CreateCollection(
+            return TypeData.CreateWrapper(
                 newName,
-                sourceCollectionType.NameWithoutGeneric,
+                sourceWrapperType.NameWithoutGeneric,
                 newIsOpenGeneric,
-                sourceCollectionType.GenericArity,
+                sourceWrapperType.GenericArity,
+                sourceWrapperType.WrapperKind,
                 newIsNestedOpenGeneric,
                 source.IsBuiltInType,
-                sourceCollectionType.CollectionKind,
                 newTypeParameters,
                 source.ConstructorParameters,
                 source.HasInjectConstructor,

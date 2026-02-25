@@ -8,6 +8,7 @@
 /// <param name="Lifetime">The service lifetime (Singleton, Scoped, Transient).</param>
 /// <param name="Key">The key for keyed registration, or null for non-keyed.</param>
 /// <param name="KeyType">How to interpret the key (Value or Csharp code).</param>
+/// <param name="KeyValueType">The type data of the key value (e.g., string, enum, Guid), or null if unknown (treated as object).</param>
 /// <param name="IsOpenGeneric">Whether this is an open generic registration.</param>
 /// <param name="Decorators">The decorator types to apply, in order from outermost to innermost.</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection.</param>
@@ -19,6 +20,7 @@ internal sealed record class ServiceRegistrationModel(
     ServiceLifetime Lifetime,
     string? Key,
     int KeyType,
+    TypeData? KeyValueType,
     bool IsOpenGeneric,
     ImmutableEquatableArray<TypeData> Decorators,
     ImmutableEquatableArray<InjectionMemberData> InjectionMembers,

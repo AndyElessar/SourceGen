@@ -79,7 +79,8 @@ partial class IocSourceGenerator
         var serviceTypes = attributeData.GetServiceTypes();
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
-        var (key, keyType) = attributeData.GetKey(semanticModel);
+        var (key, keyType, keyValueTypeSymbol) = attributeData.GetKeyInfo(semanticModel);
+        var keyValueType = keyValueTypeSymbol?.GetTypeData();
         var instance = attributeData.GetInstance(semanticModel);
 
         // Get factory method data with parameter information
@@ -105,6 +106,7 @@ partial class IocSourceGenerator
             serviceTypes,
             key,
             keyType,
+            keyValueType,
             hasExplicitLifetime,
             hasExplicitRegisterAllInterfaces,
             hasExplicitRegisterAllBaseClasses,
@@ -137,7 +139,8 @@ partial class IocSourceGenerator
 
         var decorators = attributeData.GetDecorators();
         var tags = attributeData.GetTags();
-        var (key, keyType) = attributeData.GetKey(semanticModel);
+        var (key, keyType, keyValueTypeSymbol) = attributeData.GetKeyInfo(semanticModel);
+        var keyValueType = keyValueTypeSymbol?.GetTypeData();
         var instance = attributeData.GetInstance(semanticModel);
 
         // Get factory method data with parameter information
@@ -163,6 +166,7 @@ partial class IocSourceGenerator
             serviceTypes,
             key,
             keyType,
+            keyValueType,
             hasExplicitLifetime,
             hasExplicitRegisterAllInterfaces,
             hasExplicitRegisterAllBaseClasses,
@@ -187,7 +191,7 @@ partial class IocSourceGenerator
         foreach(var (member, injectAttribute) in typeSymbol.GetInjectedMembers())
         {
             // Extract key information from IocInjectAttribute/InjectAttribute
-            var (key, _) = injectAttribute.GetKey(semanticModel);
+            var (key, _, _) = injectAttribute.GetKeyInfo(semanticModel);
 
             InjectionMemberData? memberData = member switch
             {

@@ -89,6 +89,7 @@ partial class IocSourceGenerator
             data.Lifetime,
             data.Key,
             data.KeyType,
+            data.KeyValueType,
             data.ImplementationType is GenericTypeData { IsOpenGeneric: true },
             data.Decorators,
             data.InjectionMembers,

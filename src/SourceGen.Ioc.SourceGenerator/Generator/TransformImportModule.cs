@@ -245,7 +245,7 @@ partial class IocSourceGenerator
             var (hasExplicitLifetime, lifetime) = attr.TryGetLifetime();
             var decorators = attr.GetDecorators();
             var tags = attr.GetTags();
-            var (key, keyType) = attr.GetKey(null);
+            var (key, keyType, _) = attr.GetKeyInfo(null);
 
             // Create the OpenGenericRegistrationInfo
             // Note: We don't extract InjectionMembers for cross-assembly imports since we can't access method bodies
@@ -256,6 +256,7 @@ partial class IocSourceGenerator
                 hasExplicitLifetime ? lifetime : ServiceLifetime.Transient,
                 key,
                 keyType,
+                KeyValueType: null, // Cross-assembly imports cannot resolve key value type
                 decorators,
                 tags,
                 InjectionMembers: [],

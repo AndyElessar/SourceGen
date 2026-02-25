@@ -132,6 +132,30 @@ public class SGIOC002Tests
     }
 
     [Test]
+    public async Task SGIOC002_KeyedServicesDifferentKeys_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IKeyed { }
+
+            [IocRegister<IKeyed>(Key = "Key")]
+            public class Keyed : IKeyed { }
+
+            [IocRegister<IKeyed>(Key = "Other")]
+            public class KeyedOther([IocInject(Key = "Key")] IKeyed keyed) : IKeyed { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsEqualTo(0);
+    }
+
+    [Test]
     [Category(Constants.SGIOC003)]
     public async Task SGIOC002_Combined_CircularDependencyAndLifetimeConflict_ReportsBothDiagnostics()
     {

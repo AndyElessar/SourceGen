@@ -383,10 +383,9 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task FromKeyedServices_IListCollection_InConstructor_NotRecognizedAsCollection()
+    public async Task FromKeyedServices_IListCollection_InConstructor_RecognizedAsCollection()
     {
-        // IList<T> is NOT recognized as a collection type for special injection handling
-        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
+        // IList<T> is recognized as a collection type and resolved via GetKeyedServices<T>().ToArray()
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -556,10 +555,9 @@ public class SpecialParameterTests
     }
 
     [Test]
-    public async Task FromKeyedServices_ICollectionCollection_InConstructor_NotRecognizedAsCollection()
+    public async Task FromKeyedServices_ICollectionCollection_InConstructor_RecognizedAsCollection()
     {
-        // ICollection<T> is NOT recognized as a collection type for special injection handling
-        // Only IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, and T[] are supported
+        // ICollection<T> is recognized as a collection type and resolved via GetKeyedServices<T>().ToArray()
         const string source = """
             using System;
             using System.Collections.Generic;

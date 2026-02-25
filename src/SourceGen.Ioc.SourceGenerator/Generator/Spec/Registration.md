@@ -306,6 +306,7 @@ This source generator automatically generates extension methods for registering 
     - `[IocInject]` attribute with Key: Use keyed service resolution
     - `IServiceProvider` type: Pass the service provider directly
     - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
+    - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
     - Built-in types without attributes and without default value: Skip (unresolvable)
     - Parameters with default values: See rule for optional parameters below
 
@@ -316,6 +317,7 @@ This source generator automatically generates extension methods for registering 
     - `[IocInject]` attribute with Key: Use keyed service resolution (`GetRequiredKeyedService<T>(key)` or `GetKeyedService<T>(key)`)
     - `IServiceProvider` type: Pass the service provider directly
     - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
+    - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
     - Built-in types without Key and without initializer: Skip (unresolvable)
     - Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
     - Property/Field with initializer: Treated as having a default value, use optional resolution
@@ -326,6 +328,52 @@ This source generator automatically generates extension methods for registering 
     - If the type is resolvable from DI: Use `GetService<T>()` (non-required) and conditionally assign:
       - If the resolved value is not null: Use the resolved value
       - If the resolved value is null: Do not specify the argument (use default value)
+
+    **Wrapper Type Resolution**:
+    When a parameter or member type is a recognized wrapper type, the generator resolves it differently depending on whether it is a **direct wrapper** (inner type is a plain service) or a **nested wrapper** (inner type is itself a wrapper).
+
+    **Direct `Lazy<T>` / `Func<T>`**: A standalone registration is emitted so that `Lazy<T>` / `Func<T>` can be resolved directly from DI. The lifetime and tags of the registration match the inner service `T`. Consumers then resolve via `sp.GetRequiredService<Lazy<T>>()`.
+
+    | Wrapper Type | Standalone Registration | Consumer Resolution |
+    | --- | --- | --- |
+    | `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Lazy<T>>()` |
+    | `Func<T>` | `services.AddXXX<Func<T>>(sp => new Func<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Func<T>>()` |
+    | `KeyValuePair<K, V>` | `services.Add(new ServiceDescriptor(typeof(KVP<K,V>), sp => ..., lifetime))` | (used by Dictionary resolution) |
+    | `IDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+    | `IReadOnlyDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+    | `Dictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
+
+    - **Nullable wrapper types**: Use `GetService<T>()` (optional) instead of `GetRequiredService<T>()`
+    - **Nested wrappers**: Supported up to 2 levels. Inner wrapper types are recursively constructed **inline** (no standalone registration).
+      - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => sp.GetRequiredService<T>()))`
+      - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => sp.GetRequiredService<T>()))`
+      - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => sp.GetServices<T>())`
+      - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Consumers resolve via `sp.GetServices<Lazy<T>>()` (uses standalone registrations)
+    - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
+    - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
+    - **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
+
+    ```csharp
+    #region Define:
+    [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+    public class Consumer(Lazy<IMyService> lazyService, Func<IOtherService> factory) { }
+    #endregion
+
+    #region Generate:
+    // Standalone wrapper registrations
+    services.AddSingleton<Lazy<IMyService>>(sp => new Lazy<IMyService>(() => sp.GetRequiredService<IMyService>()));
+    services.AddSingleton<Func<IOtherService>>(sp => new Func<IOtherService>(() => sp.GetRequiredService<IOtherService>()));
+
+    // Consumer resolves wrappers from DI
+    services.AddSingleton<Consumer>((IServiceProvider sp) =>
+    {
+        var p0 = sp.GetRequiredService<global::System.Lazy<IMyService>>();
+        var p1 = sp.GetRequiredService<global::System.Func<IOtherService>>();
+        var s0 = new Consumer(p0, p1);
+        return s0;
+    });
+    #endregion
+    ```
 
     ```csharp
     #region Define:
@@ -1120,5 +1168,52 @@ This source generator automatically generates extension methods for registering 
         // Missing [IocGenericFactory] attribute on generic factory method
         public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
     }
+    #endregion
+    ```
+
+13. When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`, or `IEnumerable<KeyValuePair<K, V>>`, the generator also produces explicit `KeyValuePair<K, V>` service registrations for each matching keyed service.
+
+    **Purpose**: `IDictionary<K, V>` and similar types resolve via `sp.GetServices<KeyValuePair<K, V>>().ToDictionary()`. For this to work, `KeyValuePair<K, V>` must be registered as a service. Without explicit registrations, `GetServices<KeyValuePair<K, V>>()` returns an empty collection.
+
+    **Behavior**:
+    - Triggered by consumer dependencies — only keyed services that match a needed `(K, V)` pair produce KVP registrations
+    - **Key type filtering**: a keyed service is only matched when its `KeyValueType` is compatible with the consumer's key type `K`:
+      - `K` is `object` → matches **all** keyed services (regardless of their key type)
+      - `KeyValueType` is `null` (e.g., `KeyType=Csharp` without `nameof()`) → matches only `object` consumers
+      - Otherwise → `KeyValueType.Name` must match `K` exactly (case-sensitive)
+    - Lifetime matches the keyed value service's lifetime
+    - Uses `ServiceDescriptor` directly because `KeyValuePair<K, V>` is a struct (generic `AddXxx<T>` has a `class` constraint)
+    - Registrations are emitted after all normal service registrations, before `return services;`
+
+    ```csharp
+    #region Define:
+    [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "h1")]
+    public class Handler1 : IHandler { }
+
+    [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler)], Key = "h2")]
+    public class Handler2 : IHandler { }
+
+    [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+    public class Registry(IDictionary<string, IHandler> handlers) { }
+    #endregion
+
+    #region Generate:
+    services.AddKeyedSingleton<Handler1, Handler1>("h1");
+    services.AddKeyedSingleton<IHandler>("h1", (sp, key) => sp.GetRequiredKeyedService<Handler1>(key));
+    services.AddKeyedScoped<Handler2, Handler2>("h2");
+    services.AddKeyedScoped<IHandler>("h2", (sp, key) => sp.GetRequiredKeyedService<Handler2>(key));
+    services.AddSingleton<Registry>((sp) =>
+    {
+        var p0 = sp.GetServices<KeyValuePair<string, IHandler>>().ToDictionary();
+        return new Registry(p0);
+    });
+
+    // KeyValuePair registrations for keyed services
+    services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
+        (sp) => (object)new KeyValuePair<string, IHandler>("h1", sp.GetRequiredKeyedService<IHandler>("h1")),
+        ServiceLifetime.Singleton));
+    services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
+        (sp) => (object)new KeyValuePair<string, IHandler>("h2", sp.GetRequiredKeyedService<IHandler>("h2")),
+        ServiceLifetime.Scoped));
     #endregion
     ```

@@ -187,7 +187,7 @@ partial class IocSourceGenerator
         {
             if(attr.AttributeClass?.IsInject == true)
             {
-                var (key, _) = attr.GetKey(semanticModel);
+                var (key, _, _) = attr.GetKeyInfo(semanticModel);
                 return key;
             }
         }

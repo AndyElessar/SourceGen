@@ -90,23 +90,23 @@ internal static class TransformExtensions
                 allBaseClasses = typeSymbol.GetAllBaseClasses();
             }
 
-            // Check if this is a collection type for DI
+            // Check if this is a wrapper type (collection or non-collection) for DI
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
-            var collectionKind = typeSymbol.CollectionKind;
+            var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
 
             // Check if this is a built-in type
             var isBuiltInType = typeSymbol.IsBuiltInType;
 
-            if(collectionKind is not CollectionKind.None)
+            if(wrapperKind is not WrapperKind.None)
             {
-                return TypeData.CreateCollection(
+                return TypeData.CreateWrapper(
                     typeName,
                     nameWithoutGeneric,
                     typeSymbol.ContainsGenericParameters,
                     typeSymbol.Arity,
+                    wrapperKind,
                     typeSymbol.IsNestedOpenGeneric,
                     isBuiltInType,
-                    collectionKind,
                     typeParameters,
                     constructorParams,
                     hasInjectConstructor,
@@ -265,22 +265,22 @@ internal static class TransformExtensions
                 typeParameters = typeSymbol.ExtractTypeParameters(extractConstraints: false, depth);
             }
 
-            // Check if this is a collection type
-            var collectionKind = typeSymbol.CollectionKind;
+            // Check if this is a wrapper type (collection or non-collection)
+            var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
 
             // Check if this is a built-in type
             var isBuiltInType = typeSymbol.IsBuiltInType;
 
-            if(collectionKind is not CollectionKind.None)
+            if(wrapperKind is not WrapperKind.None)
             {
-                return TypeData.CreateCollection(
+                return TypeData.CreateWrapper(
                     typeName,
                     nameWithoutGeneric,
                     typeSymbol.ContainsGenericParameters,
                     typeSymbol.Arity,
+                    wrapperKind,
                     typeSymbol.IsNestedOpenGeneric,
                     isBuiltInType,
-                    collectionKind,
                     typeParameters);
             }
 
@@ -416,26 +416,42 @@ internal static class TransformExtensions
         }
 
         /// <summary>
-        /// Gets the CollectionKind for the given type symbol using the type and its implemented interfaces.
-        /// Priority: Set > MutableCollection > ReadOnlyCollection > Enumerable > None.
+        /// Gets the <see cref="WrapperKind"/> for the given type symbol.
+        /// Checks collection types first, then non-collection wrapper types.
         /// </summary>
-        /// <param name="typeSymbol">The type symbol to check.</param>
-        /// <returns>The CollectionKind based on the type and its interfaces.</returns>
-        public CollectionKind CollectionKind
+        /// <param name="nameWithoutGeneric">The type name without generic parameters.</param>
+        /// <returns>The <see cref="WrapperKind"/> for this type.</returns>
+        public WrapperKind GetWrapperKind(string nameWithoutGeneric)
         {
-            get
-            {
-                var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
+            if(IsReadOnlyCollectionType(nameWithoutGeneric) || typeSymbol.TypeKind == TypeKind.Array)
+                return WrapperKind.ReadOnlyCollection;
 
-                if(IsReadOnlyCollectionType(nameWithoutGeneric) || typeSymbol.TypeKind == TypeKind.Array)
-                    return CollectionKind.ReadOnlyCollection;
+            if(IsCollectionType(nameWithoutGeneric))
+                return WrapperKind.Collection;
 
-                if(IsEnumerableType(nameWithoutGeneric))
-                    return CollectionKind.Enumerable;
+            if(IsEnumerableType(nameWithoutGeneric))
+                return WrapperKind.Enumerable;
 
-                return CollectionKind.None;
-            }
+            return GetNonCollectionWrapperKind(nameWithoutGeneric);
         }
+
+        /// <summary>
+        /// Determines the <see cref="WrapperKind"/> for a given type name (without generic part).
+        /// Returns <see cref="WrapperKind.None"/> if the type is not a recognized non-collection wrapper type.
+        /// Collection types (IEnumerable, IReadOnlyCollection, etc.) are detected separately
+        /// in <see cref="TransformExtensions"/> via <c>GetWrapperKind</c>.
+        /// </summary>
+        public static WrapperKind GetNonCollectionWrapperKind(string nameWithoutGeneric) => nameWithoutGeneric switch
+        {
+            "global::System.Lazy" or "System.Lazy" or "Lazy" => WrapperKind.Lazy,
+            "global::System.Func" or "System.Func" or "Func" => WrapperKind.Func,
+            "global::System.Collections.Generic.IDictionary" or "System.Collections.Generic.IDictionary" or "IDictionary"
+                or "global::System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.IReadOnlyDictionary" or "IReadOnlyDictionary"
+                or "global::System.Collections.Generic.Dictionary" or "System.Collections.Generic.Dictionary" or "Dictionary"
+                => WrapperKind.Dictionary,
+            "global::System.Collections.Generic.KeyValuePair" or "System.Collections.Generic.KeyValuePair" or "KeyValuePair" => WrapperKind.KeyValuePair,
+            _ => WrapperKind.None
+        };
 
         public bool IsInject =>
             typeSymbol.Name is "IocInjectAttribute" or "InjectAttribute";
@@ -550,7 +566,7 @@ internal static class TransformExtensions
                     // Only use [Inject] key if no [FromKeyedServices] key was found
                     if(serviceKey is null)
                     {
-                        var (key, _) = attribute.GetKey(semanticModel);
+                        var (key, _, _) = attribute.GetKeyInfo(semanticModel);
                         serviceKey = key;
                     }
                 }
@@ -638,13 +654,13 @@ internal static class TransformExtensions
                 typeParameters = [new TypeParameter("T", elementTypeData)];
             }
 
-            return TypeData.CreateCollection(
+            return TypeData.CreateWrapper(
                 typeName,
                 typeName, // For arrays, use full name as NameWithoutGeneric
                 elementType.ContainsGenericParameters,
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
+                WrapperKind.ReadOnlyCollection, // Arrays are read-only collections
                 IsNestedOpenGeneric: false,
-                CollectionKind: CollectionKind.ReadOnlyCollection, // Arrays are read-only collections
                 IsBuiltInType: false, // Arrays are not built-in types; element type carries built-in info
                 TypeParameters: typeParameters);
         }
@@ -937,41 +953,20 @@ internal static class TransformExtensions
         }
 
         /// <summary>
-        /// Gets the Key information from the attribute (IoCRegisterAttribute or IoCRegisterForAttribute).
+        /// Gets all key-related information from the attribute in a single pass:
+        /// key string, key type, and key value type symbol (with optional nameof() resolution).
         /// </summary>
+        /// <param name="semanticModel">Optional semantic model to resolve nameof() expression types and full access paths.</param>
         /// <returns>
         /// A tuple containing:
-        /// - HasKey: True if a Key is specified (regardless of KeyType)
-        /// - KeyTypeSymbol: The type symbol of the key value, or null if no key is specified or KeyType is Csharp
+        /// - Key: The key string, or null if no key is specified.
+        /// - KeyType: The key type (0 = Value, 1 = Csharp).
+        /// - KeyValueTypeSymbol: The type symbol of the key value, or null when the type cannot be determined.
         /// </returns>
-        public (bool HasKey, ITypeSymbol? KeyTypeSymbol) GetKeySymbol()
+        public (string? Key, int KeyType, ITypeSymbol? KeyValueTypeSymbol) GetKeyInfo(SemanticModel? semanticModel = null)
         {
-            // When KeyType is Csharp (1), the key is a C# expression string, not a typed value
             var keyType = attribute.GetNamedArgument<int>("KeyType", 0);
             var isCsharpKeyType = keyType == 1;
-
-            // Check named arguments
-            foreach(var namedArg in attribute.NamedArguments)
-            {
-                if(namedArg.Key == "Key" && !namedArg.Value.IsNull)
-                {
-                    // Has key from named argument, but type is null if KeyType is Csharp
-                    return (true, isCsharpKeyType ? null : namedArg.Value.Type);
-                }
-            }
-
-            return (false, null);
-        }
-
-        /// <summary>
-        /// Gets the Key and KeyType from the attribute.
-        /// </summary>
-        /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
-        /// <returns>A tuple containing the key string and key type.</returns>
-        public (string? Key, int KeyType) GetKey(SemanticModel? semanticModel = null)
-        {
-            var keyType = attribute.GetNamedArgument<int>("KeyType", 0);
-            string? key = null;
 
             // First, check if key is passed as a constructor argument (e.g., InjectAttribute(object key))
             if(attribute.ConstructorArguments.Length > 0)
@@ -980,55 +975,127 @@ internal static class TransformExtensions
                 // Skip if the first argument is a type, lifetime enum, or array (e.g., IoCRegisterDefaultsAttribute)
                 if(ctorArg.Type?.Name != nameof(ServiceLifetime)
                     && ctorArg.Kind != TypedConstantKind.Type
-                    && ctorArg.Kind != TypedConstantKind.Array)
+                    && ctorArg.Kind != TypedConstantKind.Array
+                    && !ctorArg.IsNull)
                 {
-                    if(!ctorArg.IsNull)
+                    if(isCsharpKeyType)
                     {
-                        if(keyType == 1) // KeyType.Csharp
-                        {
-                            // Try to get original syntax for nameof() expressions with full access path resolution
-                            key = attribute.TryGetNameofFromConstructorArg(0, semanticModel)
-                                ?? ctorArg.Value?.ToString();
-                        }
-                        else
-                        {
-                            key = ctorArg.GetPrimitiveConstantString();
-                            keyType = 1; // Treat as CSharp code
-                        }
-
-                        return (key, keyType);
+                        // Try to get original syntax for nameof() expressions with full access path resolution
+                        var key = attribute.TryGetNameofFromConstructorArg(0, semanticModel)
+                            ?? ctorArg.Value?.ToString();
+                        var keyValueType = TryResolveNameofTypeFromConstructorArg(attribute, 0, semanticModel);
+                        return (key, keyType, keyValueType);
                     }
+
+                    // Value key: treat the primitive constant as CSharp code
+                    return (ctorArg.GetPrimitiveConstantString(), 1, ctorArg.Type);
                 }
             }
 
             // Fall back to named argument
             foreach(var namedArg in attribute.NamedArguments)
             {
-                if(namedArg.Key == "Key")
+                if(namedArg.Key != "Key")
+                    continue;
+
+                if(namedArg.Value.IsNull)
+                    return (null, keyType, null);
+
+                if(isCsharpKeyType)
                 {
-                    if(namedArg.Value.IsNull)
-                    {
-                        key = null;
-                    }
-                    else
-                    {
-                        if(keyType == 1) // KeyType.Csharp
-                        {
-                            // Try to get original syntax for nameof() expressions with full access path resolution
-                            key = attribute.TryGetNameof("Key", semanticModel)
-                                ?? namedArg.Value.Value?.ToString();
-                        }
-                        else
-                        {
-                            key = namedArg.Value.GetPrimitiveConstantString();
-                            keyType = 1; // Treat as CSharp code
-                        }
-                    }
-                    break;
+                    // Try to get original syntax for nameof() expressions with full access path resolution
+                    var key = attribute.TryGetNameof("Key", semanticModel)
+                        ?? namedArg.Value.Value?.ToString();
+                    var keyValueType = TryResolveNameofTypeFromNamedArg(attribute, "Key", semanticModel);
+                    return (key, keyType, keyValueType);
+                }
+
+                // Value key: treat the primitive constant as CSharp code
+                return (namedArg.Value.GetPrimitiveConstantString(), 1, namedArg.Value.Type);
+            }
+
+            return (null, keyType, null);
+        }
+
+        /// <summary>
+        /// Tries to resolve the type of a nameof() expression in a constructor argument.
+        /// Returns null if the argument is not a nameof() expression or cannot be resolved.
+        /// </summary>
+        private static ITypeSymbol? TryResolveNameofTypeFromConstructorArg(AttributeData attr, int argumentIndex, SemanticModel? semanticModel)
+        {
+            if(semanticModel is null)
+                return null;
+
+            var syntaxReference = attr.ApplicationSyntaxReference;
+            if(syntaxReference?.GetSyntax() is not AttributeSyntax attributeSyntax)
+                return null;
+
+            var argumentList = attributeSyntax.ArgumentList;
+            if(argumentList is null || argumentList.Arguments.Count <= argumentIndex)
+                return null;
+
+            var argument = argumentList.Arguments[argumentIndex];
+            if(argument.NameEquals is not null)
+                return null;
+
+            return ResolveNameofExpressionType(argument.Expression, semanticModel);
+        }
+
+        /// <summary>
+        /// Tries to resolve the type of a nameof() expression in a named argument.
+        /// Returns null if the argument is not a nameof() expression or cannot be resolved.
+        /// </summary>
+        private static ITypeSymbol? TryResolveNameofTypeFromNamedArg(AttributeData attr, string argumentName, SemanticModel? semanticModel)
+        {
+            if(semanticModel is null)
+                return null;
+
+            var syntaxReference = attr.ApplicationSyntaxReference;
+            if(syntaxReference?.GetSyntax() is not AttributeSyntax attributeSyntax)
+                return null;
+
+            var argumentList = attributeSyntax.ArgumentList;
+            if(argumentList is null)
+                return null;
+
+            foreach(var argument in argumentList.Arguments)
+            {
+                if(argument.NameEquals?.Name.Identifier.Text == argumentName)
+                {
+                    return ResolveNameofExpressionType(argument.Expression, semanticModel);
                 }
             }
 
-            return (key, keyType);
+            return null;
+        }
+
+        /// <summary>
+        /// If the expression is a nameof() invocation, resolves the referenced symbol's type.
+        /// Returns null for non-nameof expressions.
+        /// </summary>
+        private static ITypeSymbol? ResolveNameofExpressionType(ExpressionSyntax expression, SemanticModel semanticModel)
+        {
+            if(expression is not InvocationExpressionSyntax invocation
+                || invocation.Expression is not IdentifierNameSyntax identifierName
+                || identifierName.Identifier.Text != "nameof"
+                || invocation.ArgumentList.Arguments.Count != 1)
+            {
+                return null;
+            }
+
+            var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
+            var symbolInfo = semanticModel.GetSymbolInfo(nameofArgument);
+            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+
+            return symbol switch
+            {
+                IFieldSymbol field => field.Type,
+                IPropertySymbol property => property.Type,
+                IMethodSymbol method => method.ReturnType,
+                ILocalSymbol local => local.Type,
+                IParameterSymbol param => param.Type,
+                _ => null,
+            };
         }
 
         /// <summary>
@@ -1417,7 +1484,7 @@ internal static class TransformExtensions
             foreach(var (member, injectAttribute) in typeSymbol.GetInjectedMembers())
             {
                 // Extract key information from IocInjectAttribute/InjectAttribute
-                var (key, _) = injectAttribute.GetKey(semanticModel);
+                var (key, _, _) = injectAttribute.GetKeyInfo(semanticModel);
 
                 InjectionMemberData? memberData = member switch
                 {
