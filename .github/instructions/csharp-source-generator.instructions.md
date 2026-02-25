@@ -1,6 +1,5 @@
 ---
-description: 'Guidelines for building C# source generators'
-applyTo: '**/*.cs'
+description: "Use when writing or reviewing C# source generators. Covers incremental generator architecture, pipeline design, PolyType.Roslyn, and performance."
 ---
 
 # C# Source Generator Best Practices
@@ -169,4 +168,4 @@ This document contains best practices for developing C# Source Generators.
 - [Incremental Generators](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.md)
 - [Incremental Generators Cookbook](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.cookbook.md)
 - [Analyzer Actions Semantics](https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md)
-- [TUnit Best Practices](../prompts/csharp-tunit.prompt.md)
+- [TUnit Best Practices](../instructions/csharp-tunit.instructions.md)

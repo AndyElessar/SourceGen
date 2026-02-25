@@ -24,28 +24,6 @@ C# instructions can be found here: [C# Best Practices](./instructions/csharp.ins
 ### Source Generator Guidelines
 When working on source generators, follow the best practices outlined here: [C# Source Generator Best Practices](./instructions/csharp-source-generator.instructions.md)
 
-## File Organization
-
-```
-src/
-├── SourceGen.Ioc/                    # Main library, where attributes are defined
-├── SourceGen.Ioc.Cli/                # CLI tool for adding attributes
-└── SourceGen.Ioc.SourceGenerator/    # Source Generator project
-    ├── Analyzer/                     # Roslyn analyzer implementations
-    │   └── SPEC.md                   # Analyzer specification document
-    ├── Generator/                    # Generator implementations
-    │   └── Spec/                     # Generator specification documents
-    └── Models/                       # Data models for generation
-tests/
-├── SourceGen.Ioc.Benchmark/          # Benchmark tests
-├── SourceGen.Ioc.Cli.Test/           # CLI unit tests
-├── SourceGen.Ioc.Test/               # Generator unit tests
-├── SourceGen.Ioc.TestAot/            # AOT integration tests
-│   ├── TestCase/                     # Test modules and classes
-│   └── Tests/                        # TUnit test files
-└── SourceGen.Ioc.TestCase/           # Shared test case code
-```
-
 ## Specifications
 
 Always read the relevant spec before implementing or modifying features:
@@ -63,15 +41,14 @@ Always read the relevant spec before implementing or modifying features:
 
 ## Testing
 
-- **ALWAYS use the VS Code `runTests` tool** to run tests instead of terminal commands
-- If terminal is required, use TUnit's correct command format:
+- **ALWAYS run tests via terminal** using TUnit's correct command format:
   ```powershell
   # TUnit uses 'dotnet run' with --treenode-filter, NOT 'dotnet test'
   dotnet run --project path/to/TestProject.csproj -- --treenode-filter "/*/*/TestClass/*"
   ```
 - Never use `dotnet test` with `--filter` for TUnit projects
 - If facing issue where don't know is design decision or test failure, **ask user for clarification**
-- Test projects use TUnit framework - see [TUnit Best Practices](./prompts/csharp-tunit.prompt.md)
+- Test projects use TUnit framework - see [TUnit Best Practices](./instructions/csharp-tunit.instructions.md)
 
 ## AOT Testing
 
@@ -95,7 +72,31 @@ The `SourceGen.Ioc.TestAot` project validates that the Source Generator produces
    dotnet run --project tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
    ```
 
-> **Note**: Do NOT use the VS Code `runTests` tool for AOT tests. AOT tests must be published and executed as native binaries to properly validate AOT compatibility.
+> **Note**: AOT tests must be published and executed as native binaries to properly validate AOT compatibility.
+
+## Agent Workflow
+
+Delegate work to SubAgents for context isolation and parallel efficiency. Every modification must end with testing and review.
+
+### SubAgent Delegation
+
+| Task Type | Delegate To | Purpose |
+| --------- | ----------- | ------- |
+| Codebase exploration | `Explore` SubAgent | Read-only research, gather context before implementation |
+| Implementation | Main Agent | Apply changes with full tool access |
+| Test execution | Main Agent | Run tests via `runTests` tool |
+| Code review | `Explore` SubAgent | Review changes for correctness, conventions, and regressions |
+
+- **MUST**: Use `Explore` SubAgent for initial codebase research before making changes.
+- **MUST**: Use `Explore` SubAgent for post-change review — check for missed edge cases, convention violations, and unintended side effects.
+- **MUST NOT**: Use SubAgents for file edits — only the main agent should write code.
+
+### Mandatory Final Steps
+
+Every task that modifies code **MUST** complete these steps before finishing:
+
+1. **Run Tests**: Run all related tests via terminal. Fix any failing tests before proceeding.
+2. **SubAgent Review**: Launch an `Explore` SubAgent to review the completed changes against spec, conventions, and unintended side effects.
 
 ## Reference
 
@@ -103,4 +104,4 @@ The `SourceGen.Ioc.TestAot` project validates that the Source Generator produces
 - [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
 - [C# Best Practices](./instructions/csharp.instructions.md)
 - [C# Source Generator Best Practices](./instructions/csharp-source-generator.instructions.md)
-- [TUnit Best Practices](./prompts/csharp-tunit.prompt.md)
+- [TUnit Best Practices](./instructions/csharp-tunit.instructions.md)
