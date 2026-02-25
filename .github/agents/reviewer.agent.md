@@ -1,5 +1,6 @@
 ---
 description: "Use when: reviewing completed implementation against spec. Performs read-only code review for spec compliance, refactoring opportunities, and performance optimization."
+model: Claude Opus 4.6 (copilot)
 tools: [read, search, web, 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram]
 user-invocable: false
 argument-hint: "Provide the spec/plan and list of changed files to review"
