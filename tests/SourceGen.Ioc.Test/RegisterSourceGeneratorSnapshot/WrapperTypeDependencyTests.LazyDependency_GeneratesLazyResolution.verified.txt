@@ -25,7 +25,7 @@ namespace TestAssembly
                 services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
                 services.AddSingleton<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
 
-                // Lazy/Func wrapper registrations
+                // Lazy wrapper registrations
                 services.AddSingleton<global::System.Lazy<global::TestNamespace.IMyService>>((global::System.IServiceProvider sp) => new global::System.Lazy<global::TestNamespace.IMyService>(() => sp.GetRequiredService<global::TestNamespace.MyService>(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
             }
 

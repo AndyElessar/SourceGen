@@ -796,13 +796,11 @@ partial class IocSourceGenerator
         }
 
         // Check if this is any enumerable-compatible type and extract element type for closed generic dependency.
-        // Collection wrappers (EnumerableTypeData, ReadOnlyCollectionTypeData, CollectionTypeData) use ElementType directly;
+        // Collection wrappers use ElementType directly via CollectionWrapperTypeData;
         // other types check direct generic type name and AllInterfaces for IEnumerable<T> implementation.
         var elementType = paramType switch
         {
-            EnumerableTypeData e => e.ElementType,
-            ReadOnlyCollectionTypeData r => r.ElementType,
-            CollectionTypeData c => c.ElementType,
+            CollectionWrapperTypeData c => c.ElementType,
             _ => paramType.TryGetEnumerableElementType()
         };
         if(elementType is not null)

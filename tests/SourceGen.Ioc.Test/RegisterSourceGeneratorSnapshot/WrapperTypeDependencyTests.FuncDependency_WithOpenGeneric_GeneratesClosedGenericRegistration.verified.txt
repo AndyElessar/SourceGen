@@ -27,7 +27,7 @@ namespace TestAssembly
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.TestEntity>, global::TestNamespace.Handler<global::TestNamespace.TestEntity>>();
                 services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.TestEntity>>());
 
-                // Lazy/Func wrapper registrations
+                // Func wrapper registrations
                 services.AddSingleton<global::System.Func<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>>>((global::System.IServiceProvider sp) => new global::System.Func<global::TestNamespace.IHandler<global::TestNamespace.TestEntity>>(() => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.TestEntity>>()));
             }
 

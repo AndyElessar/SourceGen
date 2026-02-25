@@ -30,7 +30,7 @@ namespace TestAssembly
                     return s0;
                 });
 
-                // Lazy/Func wrapper registrations
+                // Lazy wrapper registrations
                 services.AddSingleton<global::System.Lazy<global::TestNamespace.IMyService>>((global::System.IServiceProvider sp) => new global::System.Lazy<global::TestNamespace.IMyService>(() => sp.GetRequiredService<global::TestNamespace.MyService>(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
             }
 

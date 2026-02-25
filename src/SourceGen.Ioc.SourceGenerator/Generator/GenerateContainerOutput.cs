@@ -1362,24 +1362,41 @@ partial class IocSourceGenerator
         ContainerRegistrationGroups groups)
     {
         // Collection types - use collection resolver method if available
-        if(type is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
+        if(type is CollectionWrapperTypeData collectionType)
         {
-            var elementType = ExtractElementTypeForContainer(type);
+            var elementTypeName = collectionType.ElementType.Name;
 
             // Keyed collection services - fallback to GetKeyedServices (no direct call support yet)
             if(key is not null)
             {
-                return $"GetKeyedServices<{elementType}>({key})";
+                return $"GetKeyedServices<{elementTypeName}>({key})";
+            }
+
+            // Check if element type is KeyValuePair<K,V> — use KVP resolver if available
+            if(collectionType.ElementType is KeyValuePairTypeData kvpElement)
+            {
+                var kvpKeyType = kvpElement.KeyType.Name;
+                var kvpValueType = kvpElement.ValueType.Name;
+                if(HasKvpRegistrations(kvpKeyType, kvpValueType, groups))
+                {
+                    // IEnumerable, IReadOnlyCollection, ICollection → Dictionary resolver
+                    // IReadOnlyList, IList, T[] → Array resolver (consistent with _localResolvers)
+                    var isArrayType = collectionType.WrapperKind is WrapperKind.ReadOnlyList or WrapperKind.List or WrapperKind.Array;
+                    var methodName = isArrayType
+                        ? GetKvpArrayResolverMethodName(kvpKeyType, kvpValueType)
+                        : GetKvpDictionaryResolverMethodName(kvpKeyType, kvpValueType);
+                    return $"{methodName}()";
+                }
             }
 
             // Check if we have a collection resolver for this element type
-            if(groups.CollectionRegistrations.ContainsKey(elementType))
+            if(groups.CollectionRegistrations.ContainsKey(elementTypeName))
             {
-                var methodName = GetArrayResolverMethodName(elementType);
+                var methodName = GetArrayResolverMethodName(elementTypeName);
                 return $"{methodName}()";
             }
 
-            return $"GetServices<{elementType}>()";
+            return $"GetServices<{elementTypeName}>()";
         }
 
         // Wrapper types - Lazy<T>, Func<T>, KeyValuePair<K,V>
@@ -1481,9 +1498,14 @@ partial class IocSourceGenerator
 
             case DictionaryTypeData dict:
             {
-                // Dictionary resolution: collect all KeyValuePair<K,V> services and convert to dictionary.
+                // Dictionary resolution: use KVP dictionary resolver if available, otherwise fallback.
                 var keyType = dict.KeyType;
                 var valueType = dict.ValueType;
+                if(key is null && HasKvpRegistrations(keyType.Name, valueType.Name, groups))
+                {
+                    var methodName = GetKvpDictionaryResolverMethodName(keyType.Name, valueType.Name);
+                    return $"{methodName}()";
+                }
                 var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyType.Name}, {valueType.Name}>";
                 if(key is not null)
                 {
@@ -1515,22 +1537,9 @@ partial class IocSourceGenerator
         }
 
         // Delegates to BuildServiceResolutionCallForContainer which handles:
-        // - Collection types (EnumerableTypeData, ReadOnlyCollectionTypeData, CollectionTypeData) via GetServices/array resolvers
+        // - Collection types (EnumerableTypeData, ReadOnlyCollectionTypeData, CollectionTypeData, ReadOnlyListTypeData, ListTypeData, ArrayTypeData) via GetServices/array resolvers
         // - Direct service resolution via resolver methods or GetRequiredService fallback
         return BuildServiceResolutionCallForContainer(innerType, key, isOptional, groups);
-    }
-
-    /// <summary>
-    /// Extracts the element type from a collection type using pre-computed TypeParameters.
-    /// </summary>
-    private static string ExtractElementTypeForContainer(TypeData type)
-    {
-        // Use TypeParameters for efficient element type extraction
-        if(type is GenericTypeData { TypeParameters: { Length: > 0 } typeParameters })
-        {
-            return typeParameters[0].Type.Name;
-        }
-        return "object";
     }
 
     /// <summary>
@@ -2061,16 +2070,16 @@ partial class IocSourceGenerator
             writer.WriteLine($"new(new ServiceIdentifier(typeof({kvp.Key.ServiceType}), {keyExpr}), {resolverExpr}),");
         }
 
-        // Add IEnumerable<T>, IReadOnlyCollection<T>, IReadOnlyList<T>, T[], ICollection<T>, IList<T> entries for collection service types
+        // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
             var methodName = GetArrayResolverMethodName(serviceType);
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
         }
 
         // Add KeyValuePair<K,V> collection entries for keyed services consumed as KVP/Dictionary

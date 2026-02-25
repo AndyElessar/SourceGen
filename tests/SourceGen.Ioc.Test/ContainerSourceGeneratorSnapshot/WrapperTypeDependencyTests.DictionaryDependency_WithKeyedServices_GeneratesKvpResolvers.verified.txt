@@ -72,7 +72,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         if(_testNamespace_HandlerRegistry is not null) return _testNamespace_HandlerRegistry;
 
-        var instance = new global::TestNamespace.HandlerRegistry(GetServices<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>().ToDictionary());
+        var instance = new global::TestNamespace.HandlerRegistry(GetAllKvp_string_TestNamespace_IHandler_Dictionary());
 
         _testNamespace_HandlerRegistry = instance;
         return instance;
@@ -273,6 +273,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IHandler_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IHandler_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IHandler_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
     ];
 
     #endregion

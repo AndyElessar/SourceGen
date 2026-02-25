@@ -423,11 +423,20 @@ internal static class TransformExtensions
         /// <returns>The <see cref="WrapperKind"/> for this type.</returns>
         public WrapperKind GetWrapperKind(string nameWithoutGeneric)
         {
-            if(IsReadOnlyCollectionType(nameWithoutGeneric) || typeSymbol.TypeKind == TypeKind.Array)
+            if(typeSymbol.TypeKind == TypeKind.Array)
+                return WrapperKind.Array;
+
+            if(IsReadOnlyCollectionType(nameWithoutGeneric))
                 return WrapperKind.ReadOnlyCollection;
+
+            if(IsReadOnlyListType(nameWithoutGeneric))
+                return WrapperKind.ReadOnlyList;
 
             if(IsCollectionType(nameWithoutGeneric))
                 return WrapperKind.Collection;
+
+            if(IsListType(nameWithoutGeneric))
+                return WrapperKind.List;
 
             if(IsEnumerableType(nameWithoutGeneric))
                 return WrapperKind.Enumerable;
@@ -659,7 +668,7 @@ internal static class TransformExtensions
                 typeName, // For arrays, use full name as NameWithoutGeneric
                 elementType.ContainsGenericParameters,
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
-                WrapperKind.ReadOnlyCollection, // Arrays are read-only collections
+                WrapperKind.Array, // Arrays are collections
                 IsNestedOpenGeneric: false,
                 IsBuiltInType: false, // Arrays are not built-in types; element type carries built-in info
                 TypeParameters: typeParameters);

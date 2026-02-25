@@ -739,36 +739,52 @@ internal static class RoslynExtensions
         nameWithoutGeneric is "global::System.Collections.Generic.IEnumerable" or "System.Collections.Generic.IEnumerable" or "IEnumerable";
 
     /// <summary>
-    /// Read-only collection type names (without generic part).
-    /// These should be resolved using GetServices&lt;T&gt;().ToArray().
+    /// Read-only collection type name (without generic part): IReadOnlyCollection&lt;T&gt;.
     /// </summary>
     private static readonly HashSet<string> s_readOnlyCollectionTypes = new(StringComparer.Ordinal)
     {
         "global::System.Collections.Generic.IReadOnlyCollection",
-        "global::System.Collections.Generic.IReadOnlyList",
         "System.Collections.Generic.IReadOnlyCollection",
-        "System.Collections.Generic.IReadOnlyList",
-        "IReadOnlyCollection",
-        "IReadOnlyList"
+        "IReadOnlyCollection"
     };
     public static bool IsReadOnlyCollectionType(string nameWithoutGeneric) =>
         s_readOnlyCollectionTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
-    /// Mutable collection interface type names (without generic part).
-    /// These should be resolved using GetServices&lt;T&gt;().ToArray().
+    /// Read-only list type name (without generic part): IReadOnlyList&lt;T&gt;.
+    /// </summary>
+    private static readonly HashSet<string> s_readOnlyListTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.IReadOnlyList",
+        "System.Collections.Generic.IReadOnlyList",
+        "IReadOnlyList"
+    };
+    public static bool IsReadOnlyListType(string nameWithoutGeneric) =>
+        s_readOnlyListTypes.Contains(nameWithoutGeneric);
+
+    /// <summary>
+    /// Mutable collection interface type name (without generic part): ICollection&lt;T&gt;.
     /// </summary>
     private static readonly HashSet<string> s_collectionTypes = new(StringComparer.Ordinal)
     {
         "global::System.Collections.Generic.ICollection",
-        "global::System.Collections.Generic.IList",
         "System.Collections.Generic.ICollection",
-        "System.Collections.Generic.IList",
-        "ICollection",
-        "IList"
+        "ICollection"
     };
     public static bool IsCollectionType(string nameWithoutGeneric) =>
         s_collectionTypes.Contains(nameWithoutGeneric);
+
+    /// <summary>
+    /// Mutable list interface type name (without generic part): IList&lt;T&gt;.
+    /// </summary>
+    private static readonly HashSet<string> s_listTypes = new(StringComparer.Ordinal)
+    {
+        "global::System.Collections.Generic.IList",
+        "System.Collections.Generic.IList",
+        "IList"
+    };
+    public static bool IsListType(string nameWithoutGeneric) =>
+        s_listTypes.Contains(nameWithoutGeneric);
 
     /// <summary>
     /// Resolves the full access path of a symbol referenced in a nameof() expression.

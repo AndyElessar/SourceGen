@@ -40,7 +40,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _testNamespace_MyService = GetTestNamespace_MyService();
         _testNamespace_Consumer = GetTestNamespace_Consumer();
 
-        // Initialize Lazy/Func wrapper fields
+        // Initialize Lazy wrapper fields
         _lazy_TestNamespace_IMyService_TestNamespace_MyService = new global::System.Lazy<global::TestNamespace.IMyService>(() => GetTestNamespace_MyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         _serviceResolvers = _localResolvers.ToFrozenDictionary();
@@ -53,7 +53,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _testNamespace_MyService = parent._testNamespace_MyService;
         _testNamespace_Consumer = parent._testNamespace_Consumer;
 
-        // Initialize Lazy/Func wrapper fields
+        // Initialize Lazy wrapper fields
         _lazy_TestNamespace_IMyService_TestNamespace_MyService = new global::System.Lazy<global::TestNamespace.IMyService>(() => GetTestNamespace_MyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
         _serviceResolvers = parent._serviceResolvers;
     }
@@ -84,7 +84,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         return instance;
     }
 
-    // Lazy/Func wrapper fields
+    // Lazy wrapper fields
 
     private readonly global::System.Lazy<global::TestNamespace.IMyService> _lazy_TestNamespace_IMyService_TestNamespace_MyService;
 
@@ -243,11 +243,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new(new ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
         new(new ServiceIdentifier(typeof(global::TestNamespace.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Consumer!),
 
-        // Lazy/Func wrapper resolvers
+        // Lazy wrapper resolvers
         new(new ServiceIdentifier(typeof(global::System.Lazy<global::TestNamespace.IMyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._lazy_TestNamespace_IMyService_TestNamespace_MyService),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::System.Lazy<global::TestNamespace.IMyService>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllLazy_TestNamespace_IMyService_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Lazy<global::TestNamespace.IMyService>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllLazy_TestNamespace_IMyService_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::System.Lazy<global::TestNamespace.IMyService>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllLazy_TestNamespace_IMyService_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Lazy<global::TestNamespace.IMyService>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllLazy_TestNamespace_IMyService_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::System.Lazy<global::TestNamespace.IMyService>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllLazy_TestNamespace_IMyService_Array()),
         new(new ServiceIdentifier(typeof(global::System.Lazy<global::TestNamespace.IMyService>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllLazy_TestNamespace_IMyService_Array()),
     ];
 

@@ -25,7 +25,7 @@ namespace TestAssembly
                 services.AddScoped<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
                 services.AddSingleton<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
 
-                // Lazy/Func wrapper registrations
+                // Func wrapper registrations
                 services.AddScoped<global::System.Func<global::TestNamespace.IMyService>>((global::System.IServiceProvider sp) => new global::System.Func<global::TestNamespace.IMyService>(() => sp.GetRequiredService<global::TestNamespace.MyService>()));
             }
 

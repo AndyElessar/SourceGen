@@ -41,7 +41,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _testNamespace_Plugin2 = GetTestNamespace_Plugin2();
         _testNamespace_PluginManager = GetTestNamespace_PluginManager();
 
-        // Initialize Lazy/Func wrapper fields
+        // Initialize Func wrapper fields
         _func_TestNamespace_IPlugin_TestNamespace_Plugin1 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetTestNamespace_Plugin1());
         _func_TestNamespace_IPlugin_TestNamespace_Plugin2 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetTestNamespace_Plugin2());
 
@@ -56,7 +56,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _testNamespace_Plugin2 = parent._testNamespace_Plugin2;
         _testNamespace_PluginManager = parent._testNamespace_PluginManager;
 
-        // Initialize Lazy/Func wrapper fields
+        // Initialize Func wrapper fields
         _func_TestNamespace_IPlugin_TestNamespace_Plugin1 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetTestNamespace_Plugin1());
         _func_TestNamespace_IPlugin_TestNamespace_Plugin2 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetTestNamespace_Plugin2());
         _serviceResolvers = parent._serviceResolvers;
@@ -105,7 +105,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
             GetTestNamespace_Plugin2(),
         ];
 
-    // Lazy/Func wrapper fields
+    // Func wrapper fields
 
     private readonly global::System.Func<global::TestNamespace.IPlugin> _func_TestNamespace_IPlugin_TestNamespace_Plugin1;
     private readonly global::System.Func<global::TestNamespace.IPlugin> _func_TestNamespace_IPlugin_TestNamespace_Plugin2;
@@ -268,16 +268,18 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new(new ServiceIdentifier(typeof(global::TestNamespace.PluginManager), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_PluginManager!),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
 
-        // Lazy/Func wrapper resolvers
+        // Func wrapper resolvers
         new(new ServiceIdentifier(typeof(global::System.Func<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._func_TestNamespace_IPlugin_TestNamespace_Plugin2),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::System.Func<global::TestNamespace.IPlugin>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_TestNamespace_IPlugin_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Func<global::TestNamespace.IPlugin>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_TestNamespace_IPlugin_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::System.Func<global::TestNamespace.IPlugin>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_TestNamespace_IPlugin_Array()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Func<global::TestNamespace.IPlugin>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_TestNamespace_IPlugin_Array()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::System.Func<global::TestNamespace.IPlugin>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_TestNamespace_IPlugin_Array()),
         new(new ServiceIdentifier(typeof(global::System.Func<global::TestNamespace.IPlugin>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_TestNamespace_IPlugin_Array()),
     ];
 

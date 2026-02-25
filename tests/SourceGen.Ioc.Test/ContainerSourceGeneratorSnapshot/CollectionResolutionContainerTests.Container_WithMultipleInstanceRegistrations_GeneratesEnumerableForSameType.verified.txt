@@ -209,10 +209,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new(new ServiceIdentifier(typeof(string), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static _ => global::TestNamespace.ConnectionStrings.Backup),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
-        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
-        new(new ServiceIdentifier(typeof(string[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
+        new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
+        new(new ServiceIdentifier(typeof(string[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllstringArray()),
     ];
 
     #endregion

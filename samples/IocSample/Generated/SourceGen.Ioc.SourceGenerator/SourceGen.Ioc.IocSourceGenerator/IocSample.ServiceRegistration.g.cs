@@ -65,7 +65,8 @@ namespace IocSample
                     var p2 = new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", sp.GetRequiredKeyedService<global::IocSample.IKeyed>("Key"));
                     var p3 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>();
                     var p4 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>().ToDictionary();
-                    var s0 = new global::IocSample.Consumer(p0, p1, p2, p3, p4);
+                    var p5 = sp.GetServices<global::System.Lazy<global::IocSample.IWrapperService<int>>>();
+                    var s0 = new global::IocSample.Consumer(p0, p1, p2, p3, p4, p5);
                     return s0;
                 });
                 services.AddScoped<global::IocSample.Basic, global::IocSample.Basic>();
@@ -121,8 +122,10 @@ namespace IocSample
                 services.AddSingleton<global::IocSample.IWrapperService<string>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.WrapperService<string>>());
                 services.AddSingleton<global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>>((global::System.IServiceProvider sp) => (global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>)global::IocSample.GenericFactory.Create<decimal>());
 
-                // Lazy/Func wrapper registrations
+                // Lazy wrapper registrations
                 services.AddSingleton<global::System.Lazy<global::IocSample.IWrapperService<int>>>((global::System.IServiceProvider sp) => new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => sp.GetRequiredService<global::IocSample.WrapperService<int>>(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+
+                // Func wrapper registrations
                 services.AddSingleton<global::System.Func<global::IocSample.IWrapperService<string>>>((global::System.IServiceProvider sp) => new global::System.Func<global::IocSample.IWrapperService<string>>(() => sp.GetRequiredService<global::IocSample.WrapperService<string>>()));
 
                 // KeyValuePair registrations for keyed services

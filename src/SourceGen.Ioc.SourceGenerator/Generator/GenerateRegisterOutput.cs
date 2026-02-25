@@ -857,7 +857,7 @@ partial class IocSourceGenerator
         bool hasNonNullDefault,
         string? defaultValue)
     {
-        if(memberType is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
+        if(memberType is CollectionWrapperTypeData)
         {
             WriteCollectionResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable);
             return;
@@ -1294,6 +1294,9 @@ partial class IocSourceGenerator
             EnumerableTypeData e => e.ElementType.Name,
             ReadOnlyCollectionTypeData r => r.ElementType.Name,
             CollectionTypeData c => c.ElementType.Name,
+            ReadOnlyListTypeData rl => rl.ElementType.Name,
+            ListTypeData l => l.ElementType.Name,
+            ArrayTypeData a => a.ElementType.Name,
             _ => null
         };
 
@@ -1333,21 +1336,11 @@ partial class IocSourceGenerator
                 break;
 
             case WrapperKind.ReadOnlyCollection:
-                // IReadOnlyCollection<T>, IReadOnlyList<T>, T[] - resolve as array
-                if(isKeyed)
-                {
-                    var call = BuildServiceCall(GetKeyedServices, elementTypeName, serviceKey);
-                    writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                }
-                else
-                {
-                    var call = BuildServiceCall(GetServices, elementTypeName, serviceKey: null);
-                    writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                }
-                break;
-
             case WrapperKind.Collection:
-                // ICollection<T>, IList<T> - resolve as array
+            case WrapperKind.ReadOnlyList:
+            case WrapperKind.List:
+            case WrapperKind.Array:
+                // IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] - resolve as array
                 if(isKeyed)
                 {
                     var call = BuildServiceCall(GetKeyedServices, elementTypeName, serviceKey);
@@ -1488,15 +1481,9 @@ partial class IocSourceGenerator
         }
 
         // Collection types inside wrappers (e.g., Lazy<IEnumerable<T>>)
-        if(innerType is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
+        if(innerType is CollectionWrapperTypeData collectionInner)
         {
-            var elementTypeName = innerType switch
-            {
-                EnumerableTypeData e => e.ElementType.Name,
-                ReadOnlyCollectionTypeData r => r.ElementType.Name,
-                CollectionTypeData c => c.ElementType.Name,
-                _ => null
-            };
+            var elementTypeName = (string?)collectionInner.ElementType.Name;
 
             if(elementTypeName is not null)
             {
@@ -1504,7 +1491,7 @@ partial class IocSourceGenerator
                     serviceKey is not null ? GetKeyedServices : GetServices,
                     elementTypeName,
                     serviceKey);
-                return innerType is ReadOnlyCollectionTypeData or CollectionTypeData
+                return innerType is CollectionWrapperTypeData and not EnumerableTypeData
                     ? $"{getServicesCall}.ToArray()"
                     : getServicesCall;
             }
@@ -1553,7 +1540,7 @@ partial class IocSourceGenerator
             return true;
         }
 
-        if(param.Type is EnumerableTypeData or ReadOnlyCollectionTypeData or CollectionTypeData)
+        if(param.Type is CollectionWrapperTypeData)
         {
             WriteCollectionResolution(writer, param.Type, paramVar, serviceKey, isOptional);
             resolvedVar = paramVar;

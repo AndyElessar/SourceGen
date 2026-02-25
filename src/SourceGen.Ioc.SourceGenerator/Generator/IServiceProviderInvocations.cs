@@ -125,9 +125,7 @@ partial class IocSourceGenerator
         // Check if this is a collection type — extract element type for closed generic dependency
         var collectionElementType = typeData switch
         {
-            EnumerableTypeData e => e.ElementType,
-            ReadOnlyCollectionTypeData r => r.ElementType,
-            CollectionTypeData c => c.ElementType,
+            CollectionWrapperTypeData c => c.ElementType,
             _ => null
         };
         if(collectionElementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)

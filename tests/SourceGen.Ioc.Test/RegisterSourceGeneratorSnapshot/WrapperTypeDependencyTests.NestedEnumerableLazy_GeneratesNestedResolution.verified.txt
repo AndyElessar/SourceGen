@@ -27,7 +27,7 @@ namespace TestAssembly
                 services.AddSingleton<global::TestNamespace.IPlugin>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Plugin2>());
                 services.AddSingleton<global::TestNamespace.PluginManager, global::TestNamespace.PluginManager>();
 
-                // Lazy/Func wrapper registrations
+                // Lazy wrapper registrations
                 services.AddSingleton<global::System.Lazy<global::TestNamespace.IPlugin>>((global::System.IServiceProvider sp) => new global::System.Lazy<global::TestNamespace.IPlugin>(() => sp.GetRequiredService<global::TestNamespace.Plugin1>(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
                 services.AddSingleton<global::System.Lazy<global::TestNamespace.IPlugin>>((global::System.IServiceProvider sp) => new global::System.Lazy<global::TestNamespace.IPlugin>(() => sp.GetRequiredService<global::TestNamespace.Plugin2>(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
             }

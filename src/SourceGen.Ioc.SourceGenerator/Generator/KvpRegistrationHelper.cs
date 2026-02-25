@@ -129,13 +129,7 @@ partial class IocSourceGenerator
             case DictionaryTypeData dict:
                 neededPairs.Add((dict.KeyType.Name, dict.ValueType.Name));
                 break;
-            case EnumerableTypeData { ElementType: KeyValuePairTypeData kvp }:
-                neededPairs.Add((kvp.KeyType.Name, kvp.ValueType.Name));
-                break;
-            case ReadOnlyCollectionTypeData { ElementType: KeyValuePairTypeData kvp }:
-                neededPairs.Add((kvp.KeyType.Name, kvp.ValueType.Name));
-                break;
-            case CollectionTypeData { ElementType: KeyValuePairTypeData kvp }:
+            case CollectionWrapperTypeData { ElementType: KeyValuePairTypeData kvp }:
                 neededPairs.Add((kvp.KeyType.Name, kvp.ValueType.Name));
                 break;
         }
@@ -367,6 +361,11 @@ partial class IocSourceGenerator
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof({kvpTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+
+            // IReadOnlyDictionary, IDictionary, Dictionary → Dictionary
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{keyTypeName}, {valueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<{keyTypeName}, {valueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
         }
     }
 
@@ -388,6 +387,28 @@ partial class IocSourceGenerator
         var safeKeyType = GetSafeIdentifier(keyTypeName);
         var safeValueType = GetSafeIdentifier(valueTypeName);
         return $"GetAllKvp_{safeKeyType}_{safeValueType}_Dictionary";
+    }
+
+    /// <summary>
+    /// Checks if any keyed registrations exist for the given KVP key/value type pair.
+    /// Used to determine whether a KVP resolver method will be generated.
+    /// </summary>
+    private static bool HasKvpRegistrations(string keyTypeName, string valueTypeName, ContainerRegistrationGroups groups)
+    {
+        foreach(var kvp in groups.ByServiceTypeAndKey)
+        {
+            if(kvp.Key.Key is null)
+                continue;
+
+            if(!string.Equals(kvp.Key.ServiceType, valueTypeName, StringComparison.Ordinal))
+                continue;
+
+            var cached = kvp.Value[^1];
+            if(IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

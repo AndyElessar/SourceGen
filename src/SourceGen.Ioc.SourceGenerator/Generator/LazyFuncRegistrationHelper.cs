@@ -136,33 +136,13 @@ partial class IocSourceGenerator
                 neededTypes.Add((WrapperKind.Func, func.ReturnType.Name));
                 break;
 
-            // IEnumerable<Lazy<T>> where T is not a wrapper
-            case EnumerableTypeData { ElementType: LazyTypeData lazy } when lazy.InstanceType is not WrapperTypeData:
+            // Collection<Lazy<T>> where T is not a wrapper
+            case CollectionWrapperTypeData { ElementType: LazyTypeData lazy } when lazy.InstanceType is not WrapperTypeData:
                 neededTypes.Add((WrapperKind.Lazy, lazy.InstanceType.Name));
                 break;
 
-            // IEnumerable<Func<T>> where T is not a wrapper
-            case EnumerableTypeData { ElementType: FuncTypeData func } when func.ReturnType is not WrapperTypeData:
-                neededTypes.Add((WrapperKind.Func, func.ReturnType.Name));
-                break;
-
-            // IReadOnlyCollection<Lazy<T>> / T[] etc.
-            case ReadOnlyCollectionTypeData { ElementType: LazyTypeData lazy } when lazy.InstanceType is not WrapperTypeData:
-                neededTypes.Add((WrapperKind.Lazy, lazy.InstanceType.Name));
-                break;
-
-            // IReadOnlyCollection<Func<T>> / T[] etc.
-            case ReadOnlyCollectionTypeData { ElementType: FuncTypeData func } when func.ReturnType is not WrapperTypeData:
-                neededTypes.Add((WrapperKind.Func, func.ReturnType.Name));
-                break;
-
-            // ICollection<Lazy<T>> / IList<Lazy<T>>
-            case CollectionTypeData { ElementType: LazyTypeData lazy } when lazy.InstanceType is not WrapperTypeData:
-                neededTypes.Add((WrapperKind.Lazy, lazy.InstanceType.Name));
-                break;
-
-            // ICollection<Func<T>> / IList<Func<T>>
-            case CollectionTypeData { ElementType: FuncTypeData func } when func.ReturnType is not WrapperTypeData:
+            // Collection<Func<T>> where T is not a wrapper
+            case CollectionWrapperTypeData { ElementType: FuncTypeData func } when func.ReturnType is not WrapperTypeData:
                 neededTypes.Add((WrapperKind.Func, func.ReturnType.Name));
                 break;
         }
@@ -171,6 +151,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes standalone <c>Lazy&lt;T&gt;</c> and <c>Func&lt;T&gt;</c> service registrations.
     /// These registrations are emitted within the appropriate tag group.
+    /// Lazy and Func registrations are emitted in separate sections.
     /// </summary>
     private static void WriteLazyFuncRegistrations(
         SourceWriter writer,
@@ -179,24 +160,39 @@ partial class IocSourceGenerator
         if(entries is null or { Count: 0 })
             return;
 
-        writer.WriteLine();
-        writer.WriteLine("// Lazy/Func wrapper registrations");
+        var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();
+        var funcEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Func).ToList();
 
-        foreach(var entry in entries)
+        if(lazyEntries.Count > 0)
         {
-            var wrapperPrefix = entry.WrapperKind == WrapperKind.Lazy
-                ? "global::System.Lazy"
-                : "global::System.Func";
-            var wrapperTypeName = $"{wrapperPrefix}<{entry.InnerServiceTypeName}>";
-            var lifetime = entry.Lifetime.Name;
-            var resolveCall = $"sp.{GetRequiredService}<{entry.ImplementationTypeName}>()";
+            writer.WriteLine();
+            writer.WriteLine("// Lazy wrapper registrations");
 
-            var lazyThreadSafetyArg = entry.WrapperKind == WrapperKind.Lazy
-                ? ", global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication"
-                : "";
-            writer.WriteLine(
-                $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
-                $"new {wrapperTypeName}(() => {resolveCall}{lazyThreadSafetyArg}));");
+            foreach(var entry in lazyEntries)
+            {
+                var wrapperTypeName = $"global::System.Lazy<{entry.InnerServiceTypeName}>";
+                var lifetime = entry.Lifetime.Name;
+                var resolveCall = $"sp.{GetRequiredService}<{entry.ImplementationTypeName}>()";
+                writer.WriteLine(
+                    $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
+                    $"new {wrapperTypeName}(() => {resolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));");
+            }
+        }
+
+        if(funcEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Func wrapper registrations");
+
+            foreach(var entry in funcEntries)
+            {
+                var wrapperTypeName = $"global::System.Func<{entry.InnerServiceTypeName}>";
+                var lifetime = entry.Lifetime.Name;
+                var resolveCall = $"sp.{GetRequiredService}<{entry.ImplementationTypeName}>()";
+                writer.WriteLine(
+                    $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
+                    $"new {wrapperTypeName}(() => {resolveCall}));");
+            }
         }
     }
 
@@ -287,6 +283,7 @@ partial class IocSourceGenerator
     /// Writes Lazy/Func readonly field declarations and array resolvers for container generation.
     /// Individual fields store a single <c>Lazy&lt;T&gt;</c> or <c>Func&lt;T&gt;</c> instance.
     /// The array resolvers collect all wrapper entries for <c>GetServices&lt;Lazy&lt;T&gt;&gt;</c>.
+    /// Lazy and Func fields and resolvers are emitted in separate sections.
     /// </summary>
     private static void WriteContainerLazyFuncFields(
         SourceWriter writer,
@@ -295,22 +292,49 @@ partial class IocSourceGenerator
         if(entries.Count == 0)
             return;
 
-        writer.WriteLine("// Lazy/Func wrapper fields");
-        writer.WriteLine();
+        var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();
+        var funcEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Func).ToList();
 
-        // Write readonly field declarations
-        foreach(var entry in entries)
+        // Write Lazy fields and array resolvers
+        if(lazyEntries.Count > 0)
         {
-            var wrapperPrefix = entry.WrapperKind == WrapperKind.Lazy
-                ? "global::System.Lazy"
-                : "global::System.Func";
-            var wrapperTypeName = $"{wrapperPrefix}<{entry.InnerServiceTypeName}>";
+            writer.WriteLine("// Lazy wrapper fields");
+            writer.WriteLine();
 
-            writer.WriteLine($"private readonly {wrapperTypeName} {entry.FieldName};");
+            foreach(var entry in lazyEntries)
+            {
+                var wrapperTypeName = $"global::System.Lazy<{entry.InnerServiceTypeName}>";
+                writer.WriteLine($"private readonly {wrapperTypeName} {entry.FieldName};");
+            }
+            writer.WriteLine();
+
+            WriteLazyFuncArrayResolvers(writer, lazyEntries);
         }
-        writer.WriteLine();
 
-        // Write array resolver methods grouped by (WrapperKind, InnerServiceTypeName)
+        // Write Func fields and array resolvers
+        if(funcEntries.Count > 0)
+        {
+            writer.WriteLine("// Func wrapper fields");
+            writer.WriteLine();
+
+            foreach(var entry in funcEntries)
+            {
+                var wrapperTypeName = $"global::System.Func<{entry.InnerServiceTypeName}>";
+                writer.WriteLine($"private readonly {wrapperTypeName} {entry.FieldName};");
+            }
+            writer.WriteLine();
+
+            WriteLazyFuncArrayResolvers(writer, funcEntries);
+        }
+    }
+
+    /// <summary>
+    /// Writes array resolver methods for a group of Lazy or Func entries.
+    /// </summary>
+    private static void WriteLazyFuncArrayResolvers(
+        SourceWriter writer,
+        List<ContainerLazyFuncEntry> entries)
+    {
         var grouped = entries
             .GroupBy(static e => (e.WrapperKind, e.InnerServiceTypeName))
             .ToList();
@@ -344,6 +368,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes field initialization statements for Lazy/Func wrapper fields.
     /// Called from both the default constructor and the scoped constructor.
+    /// Lazy and Func initializations are emitted in separate sections.
     /// </summary>
     private static void WriteContainerLazyFuncFieldInitializations(
         SourceWriter writer,
@@ -352,25 +377,36 @@ partial class IocSourceGenerator
         if(entries.Count == 0)
             return;
 
-        writer.WriteLine();
-        writer.WriteLine("// Initialize Lazy/Func wrapper fields");
-        foreach(var entry in entries)
-        {
-            var wrapperPrefix = entry.WrapperKind == WrapperKind.Lazy
-                ? "global::System.Lazy"
-                : "global::System.Func";
-            var wrapperTypeName = $"{wrapperPrefix}<{entry.InnerServiceTypeName}>";
+        var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();
+        var funcEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Func).ToList();
 
-            var lazyThreadSafetyArg = entry.WrapperKind == WrapperKind.Lazy
-                ? ", global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication"
-                : "";
-            writer.WriteLine($"{entry.FieldName} = new {wrapperTypeName}(() => {entry.ResolverMethodName}(){lazyThreadSafetyArg});");
+        if(lazyEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Initialize Lazy wrapper fields");
+            foreach(var entry in lazyEntries)
+            {
+                var wrapperTypeName = $"global::System.Lazy<{entry.InnerServiceTypeName}>";
+                writer.WriteLine($"{entry.FieldName} = new {wrapperTypeName}(() => {entry.ResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
+            }
+        }
+
+        if(funcEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Initialize Func wrapper fields");
+            foreach(var entry in funcEntries)
+            {
+                var wrapperTypeName = $"global::System.Func<{entry.InnerServiceTypeName}>";
+                writer.WriteLine($"{entry.FieldName} = new {wrapperTypeName}(() => {entry.ResolverMethodName}());");
+            }
         }
     }
 
     /// <summary>
     /// Writes <c>_localResolvers</c> entries for Lazy/Func wrapper services so that
     /// <c>GetServices&lt;Lazy&lt;T&gt;&gt;</c> and <c>GetRequiredService&lt;Lazy&lt;T&gt;&gt;</c> can resolve them.
+    /// Lazy and Func resolver entries are emitted in separate sections.
     /// </summary>
     private static void WriteContainerLazyFuncLocalResolverEntries(
         SourceWriter writer,
@@ -380,10 +416,31 @@ partial class IocSourceGenerator
         if(entries.Count == 0)
             return;
 
-        writer.WriteLine();
-        writer.WriteLine("// Lazy/Func wrapper resolvers");
+        var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();
+        var funcEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Func).ToList();
 
-        // Group by (WrapperKind, InnerServiceTypeName) for collection entries
+        if(lazyEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Lazy wrapper resolvers");
+            WriteLazyFuncResolverGroup(writer, lazyEntries);
+        }
+
+        if(funcEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Func wrapper resolvers");
+            WriteLazyFuncResolverGroup(writer, funcEntries);
+        }
+    }
+
+    /// <summary>
+    /// Writes _localResolvers entries for a group of Lazy or Func entries.
+    /// </summary>
+    private static void WriteLazyFuncResolverGroup(
+        SourceWriter writer,
+        List<ContainerLazyFuncEntry> entries)
+    {
         var grouped = entries
             .GroupBy(static e => (e.WrapperKind, e.InnerServiceTypeName))
             .ToList();
@@ -400,11 +457,13 @@ partial class IocSourceGenerator
             var lastEntry = group.Last();
             writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{lastEntry.FieldName}),");
 
-            // Collection entries (IEnumerable, IReadOnlyCollection, IReadOnlyList, T[])
+            // Collection entries (IEnumerable, IReadOnlyCollection, ICollection, IReadOnlyList, IList, T[])
             var arrayMethodName = GetLazyFuncArrayResolverMethodName(kind, innerServiceTypeName);
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
             writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
         }
     }
