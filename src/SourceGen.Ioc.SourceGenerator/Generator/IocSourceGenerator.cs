@@ -151,16 +151,21 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                     && lifetimeStr is { Length: > 0 } rawLifetime
                     && !string.IsNullOrWhiteSpace(rawLifetime))
                 {
-                    defaultLifetime = rawLifetime.Trim().ToLowerInvariant() switch
+                    var trimmed = rawLifetime.Trim();
+                    defaultLifetime = trimmed switch
                     {
-                        "singleton" => ServiceLifetime.Singleton,
-                        "scoped" => ServiceLifetime.Scoped,
-                        "transient" => ServiceLifetime.Transient,
+                        _ when trimmed.Equals("singleton", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Singleton,
+                        _ when trimmed.Equals("scoped", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Scoped,
+                        _ when trimmed.Equals("transient", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Transient,
                         _ => null
                     };
                 }
 
-                return (RootNamespace: rootNamespace, CustomIocName: customIocName, DefaultLifetime: defaultLifetime);
+                // Try to get enabled feature flags from MSBuild property
+                configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocFeaturesProperty, out var featuresStr);
+                var features = IocFeaturesHelper.Parse(featuresStr);
+
+                return new MsBuildProperties(rootNamespace, customIocName, defaultLifetime, features);
             });
 
         // Combine default settings from current assembly and imported modules
@@ -299,7 +304,7 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             var ((registrations, compilationInfo), msbuildProps) = source;
             // Use RootNamespace from MSBuild if available, otherwise fall back to assembly name
             var rootNamespace = msbuildProps.RootNamespace ?? compilationInfo.AssemblyName;
-            GenerateRegisterOutput(in ctx, registrations, rootNamespace, compilationInfo.AssemblyName, msbuildProps.CustomIocName);
+            GenerateRegisterOutput(in ctx, registrations, rootNamespace, compilationInfo.AssemblyName, msbuildProps);
         });
 
         // ========== Container Pipeline ==========
@@ -329,4 +334,5 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
         });
     }
+
 }

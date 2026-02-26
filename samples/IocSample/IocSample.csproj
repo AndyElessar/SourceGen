@@ -6,6 +6,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
+    <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject</SourceGenIocFeatures>
   </PropertyGroup>
 
   <ItemGroup>

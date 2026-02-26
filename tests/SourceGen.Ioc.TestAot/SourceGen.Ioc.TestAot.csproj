@@ -7,6 +7,7 @@
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject</SourceGenIocFeatures>
   </PropertyGroup>
 
   <ItemGroup>

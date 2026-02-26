@@ -11,10 +11,14 @@ partial class IocSourceGenerator
         in SourceProductionContext ctx,
         ContainerWithGroups containerWithGroups,
         string assemblyName,
-        (string? RootNamespace, string? CustomIocName, ServiceLifetime? DefaultLifetime) msbuildProps,
+        MsBuildProperties msbuildProps,
         bool hasDIPackage)
     {
-        var source = GenerateContainerSource(containerWithGroups, assemblyName, msbuildProps, hasDIPackage);
+        if((msbuildProps.Features & IocFeatures.Container) == 0)
+            return;
+
+        var filteredContainerWithGroups = FilterContainerWithGroupsForFeatures(containerWithGroups, msbuildProps.Features);
+        var source = GenerateContainerSource(filteredContainerWithGroups, assemblyName, msbuildProps, hasDIPackage);
         var fileName = $"{containerWithGroups.Container.ClassName}.Container.g.cs";
         ctx.AddSource(fileName, source);
     }
@@ -25,7 +29,7 @@ partial class IocSourceGenerator
     private static string GenerateContainerSource(
         ContainerWithGroups containerWithGroups,
         string assemblyName,
-        (string? RootNamespace, string? CustomIocName, ServiceLifetime? DefaultLifetime) msbuildProps,
+        MsBuildProperties msbuildProps,
         bool hasDIPackage)
     {
         var writer = new SourceWriter();
@@ -44,6 +48,72 @@ partial class IocSourceGenerator
         WriteContainerNamespaceAndClass(writer, container, groups, canGenerateServiceProviderFactory, effectiveUseSwitchStatement);
 
         return writer.ToString();
+    }
+
+    private static ContainerWithGroups FilterContainerWithGroupsForFeatures(ContainerWithGroups containerWithGroups, IocFeatures features)
+    {
+        if(IocFeaturesHelper.HasAllInjectionFeatures(features))
+            return containerWithGroups;
+
+        var groups = containerWithGroups.Groups;
+
+        var byServiceTypeAndKey = new Dictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>>();
+        foreach(var kvp in groups.ByServiceTypeAndKey)
+        {
+            byServiceTypeAndKey[kvp.Key] = FilterCachedRegistrations(kvp.Value, features);
+        }
+
+        var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<CachedRegistration>>();
+        foreach(var kvp in groups.CollectionRegistrations)
+        {
+            collectionRegistrations[kvp.Key] = FilterCachedRegistrations(kvp.Value, features);
+        }
+
+        var filteredGroups = groups with
+        {
+            ByServiceTypeAndKey = byServiceTypeAndKey.ToImmutableEquatableDictionary(),
+            Singletons = FilterCachedRegistrations(groups.Singletons, features),
+            Scoped = FilterCachedRegistrations(groups.Scoped, features),
+            Transients = FilterCachedRegistrations(groups.Transients, features),
+            CollectionRegistrations = collectionRegistrations.ToImmutableEquatableDictionary(),
+            ReversedSingletonsForDisposal = FilterCachedRegistrations(groups.ReversedSingletonsForDisposal, features),
+            ReversedScopedForDisposal = FilterCachedRegistrations(groups.ReversedScopedForDisposal, features)
+        };
+
+        return containerWithGroups with { Groups = filteredGroups };
+    }
+
+    private static ImmutableEquatableArray<CachedRegistration> FilterCachedRegistrations(
+        ImmutableEquatableArray<CachedRegistration> registrations,
+        IocFeatures features)
+    {
+        if(registrations.Length == 0)
+            return registrations;
+
+        List<CachedRegistration>? filteredRegistrations = null;
+        for(var i = 0; i < registrations.Length; i++)
+        {
+            var registration = registrations[i];
+            var filteredRegistration = FilterRegistrationForFeatures(registration.Registration, features);
+            if(ReferenceEquals(filteredRegistration, registration.Registration))
+            {
+                if(filteredRegistrations is not null)
+                    filteredRegistrations.Add(registration);
+
+                continue;
+            }
+
+            filteredRegistrations ??= new List<CachedRegistration>(registrations.Length);
+            if(filteredRegistrations.Count == 0)
+            {
+                for(var j = 0; j < i; j++)
+                    filteredRegistrations.Add(registrations[j]);
+            }
+
+            filteredRegistrations.Add(registration with { Registration = filteredRegistration });
+        }
+
+        return filteredRegistrations is null ? registrations : filteredRegistrations.ToImmutableEquatableArray();
     }
 
     /// <summary>

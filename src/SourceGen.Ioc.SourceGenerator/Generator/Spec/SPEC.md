@@ -60,6 +60,38 @@ Collect service types from invocations: `GetService<T>`, `GetRequiredService<T>`
 |Assembly Name|Compilation options|
 |Custom Method Name|`SourceGenIocName` MSBuild property|
 |Default Lifetime|`SourceGenIocDefaultLifetime` MSBuild property (fallback: Transient)|
+|Features|`SourceGenIocFeatures` MSBuild property (fallback: `Register,Container,PropertyInject,MethodInject`)|
+
+### 7. Feature Flags
+
+The `SourceGenIocFeatures` MSBuild property controls which outputs and injection member kinds are generated.
+
+Available features:
+
+|Feature|Description|
+|:------|:----------|
+|`Register`|Enable generation of the registration extension method output|
+|`Container`|Enable generation of the container class output|
+|`PropertyInject`|Enable property injection member generation|
+|`FieldInject`|Enable field injection member generation|
+|`MethodInject`|Enable method injection member generation|
+
+Default value:
+
+`Register,Container,PropertyInject,MethodInject`
+
+Behavior:
+
+- `Register`: Controls whether the registration extension method output is generated.
+- `Container`: Controls whether the container class output is generated.
+- `PropertyInject` / `FieldInject` / `MethodInject`: Control which injection member types are included in generated code.
+
+Parsing rules:
+
+- Comma-separated values.
+- Case-insensitive matching.
+- Whitespace is trimmed around each value.
+- Invalid values are ignored.
 
 ## Parse Logic
 

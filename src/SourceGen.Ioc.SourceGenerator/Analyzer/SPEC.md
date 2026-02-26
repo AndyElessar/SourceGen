@@ -312,3 +312,21 @@ Report when a partial method or property accessor in a container class reference
 When `ResolveIServiceCollection = false`, there is no fallback to an external `IServiceProvider`. If a partial accessor references a service type that is not registered, it cannot be resolved at runtime. Nullable accessors are exempt because they can safely return `null`.
 
 **Message format:** `Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.`
+
+---
+
+### SGIOC022 - Warning - Usage - Inject attribute ignored due to disabled feature
+
+Report when a member has `[IocInject]`/`[Inject]` but its corresponding feature is disabled by `SourceGenIocFeatures`.
+
+**Analysis:**
+
+- Reads `SourceGenIocFeatures` from `AnalyzerConfigOptionsProvider.GlobalOptions` once during `CompilationStart`.
+- Parses comma-separated feature names case-insensitively, trimming whitespace; missing/empty value defaults to `Register,Container,PropertyInject,MethodInject`.
+- Checks members marked with `[IocInject]`/`[Inject]`:
+  - `IPropertySymbol` requires `PropertyInject`
+  - `IFieldSymbol` requires `FieldInject`
+  - `IMethodSymbol` requires `MethodInject`
+- Reports when the required feature flag is not enabled.
+
+**Message format:** `'{MemberName}' has [IocInject] but {FeatureName} feature is not enabled. Add '{FeatureName}' to <SourceGenIocFeatures> in your project file.`

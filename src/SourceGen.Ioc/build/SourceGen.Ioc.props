@@ -24,5 +24,6 @@
   <ItemGroup>
     <CompilerVisibleProperty Include="SourceGenIocName" />
     <CompilerVisibleProperty Include="SourceGenIocDefaultLifetime" />
+    <CompilerVisibleProperty Include="SourceGenIocFeatures" />
   </ItemGroup>
 </Project>

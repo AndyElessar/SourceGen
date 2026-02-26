@@ -482,7 +482,8 @@ public sealed partial class RegisterAnalyzer
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         DefaultSettingsMap defaultSettings,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
-        ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes)
+        ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes,
+        IocFeatures features)
     {
         public IoCAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
@@ -523,6 +524,11 @@ public sealed partial class RegisterAnalyzer
         /// Key: (TargetType, AttributeLocation) to handle multiple registrations on the same type.
         /// </summary>
         public ConcurrentDictionary<(INamedTypeSymbol Type, Location? Location), ITypeSymbol> ResolvedCsharpKeyTypes { get; } = new(new SymbolLocationComparer());
+
+        /// <summary>
+        /// Enabled generation features parsed from SourceGenIocFeatures.
+        /// </summary>
+        public IocFeatures Features { get; } = features;
     }
 
     private sealed record ServiceInfo

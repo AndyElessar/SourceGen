@@ -59,7 +59,7 @@ public sealed partial class RegisterAnalyzer
     /// SGIOC007: Analyzes IocInjectAttribute/InjectAttribute usage on members.
     /// Reports error when IocInjectAttribute/InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
     /// </summary>
-    private static void AnalyzeInjectAttribute(SymbolAnalysisContext context)
+    private static void AnalyzeInjectAttribute(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
         var member = context.Symbol;
 
@@ -72,6 +72,23 @@ public sealed partial class RegisterAnalyzer
 
         var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
             ?? member.Locations.FirstOrDefault();
+
+        var (requiredFeature, featureName) = member switch
+        {
+            IPropertySymbol => (IocFeatures.PropertyInject, nameof(IocFeatures.PropertyInject)),
+            IFieldSymbol => (IocFeatures.FieldInject, nameof(IocFeatures.FieldInject)),
+            IMethodSymbol => (IocFeatures.MethodInject, nameof(IocFeatures.MethodInject)),
+            _ => (IocFeatures.None, string.Empty)
+        };
+
+        if(requiredFeature != IocFeatures.None && (analyzerContext.Features & requiredFeature) == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InjectFeatureDisabled,
+                location,
+                member.Name,
+                featureName));
+        }
 
         // Check if member is static
         if (member.IsStatic)

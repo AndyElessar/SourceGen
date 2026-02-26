@@ -9,13 +9,14 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceRegistrationWithTags> registrations,
         string rootNamespace,
         string assemblyName,
-        string? customIocName)
+        MsBuildProperties msbuildProps)
     {
-        if(registrations.Length == 0)
+        var features = msbuildProps.Features;
+        if((features & IocFeatures.Register) == 0 || registrations.Length == 0)
             return;
 
         // Generate source
-        var source = GenerateExtensionMethodSource(registrations, rootNamespace, assemblyName, customIocName);
+        var source = GenerateExtensionMethodSource(registrations, rootNamespace, assemblyName, msbuildProps.CustomIocName, features);
         ctx.AddSource($"{assemblyName}.ServiceRegistration.g.cs", source);
     }
 
@@ -23,7 +24,8 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceRegistrationWithTags> registrations,
         string rootNamespace,
         string assemblyName,
-        string? customIocName)
+        string? customIocName,
+        IocFeatures features)
     {
         // Use custom IoC name if provided, otherwise use assembly name
         var methodBaseName = !string.IsNullOrWhiteSpace(customIocName)
@@ -48,10 +50,13 @@ partial class IocSourceGenerator
         // Key: sorted comma-separated tags (empty string for no tags)
         // Value: list of registrations
         var tagGroups = new Dictionary<string, List<ServiceRegistrationModel>>(StringComparer.Ordinal);
+        var shouldFilterInjection = !IocFeaturesHelper.HasAllInjectionFeatures(features);
 
         foreach(var regWithTags in registrations)
         {
-            var registration = regWithTags.Registration;
+            var registration = shouldFilterInjection
+                ? FilterRegistrationForFeatures(regWithTags.Registration, features)
+                : regWithTags.Registration;
             var tags = regWithTags.Tags;
             var tagKey = tagKeyCache[tags];
 

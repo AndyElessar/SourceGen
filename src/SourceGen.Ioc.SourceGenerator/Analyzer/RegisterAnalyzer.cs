@@ -215,6 +215,18 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The placeholder types in [IocGenericFactory] (from second to last) must be unique. Duplicated types make it impossible to distinguish which type argument maps to which factory method type parameter.");
 
+    /// <summary>
+    /// SGIOC022: Inject attribute ignored due to disabled feature.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectFeatureDisabled = new(
+        id: "SGIOC022",
+        title: "Inject attribute ignored due to disabled feature",
+        messageFormat: "'{0}' has [IocInject] but {1} feature is not enabled. Add '{1}' to <SourceGenIocFeatures> in your project file.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "When SourceGenIocFeatures disables a member injection feature, [IocInject] on that member is ignored during generation.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -233,7 +245,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ServiceKeyNotRegistered,
         KeyValuePairKeyTypeMismatch,
         GenericFactoryMissingAttribute,
-        DuplicatedGenericFactoryPlaceholders
+        DuplicatedGenericFactoryPlaceholders,
+        InjectFeatureDisabled
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -247,6 +260,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
     private static void OnCompilationStart(CompilationStartAnalysisContext context)
     {
+        var features = ParseIocFeatures(context.Options);
+
         // Get attribute type symbols for faster lookup (including generic variants)
         var attributeSymbols = new IoCAttributeSymbols(context.Compilation);
 
@@ -271,7 +286,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             serviceTypeIndex,
             defaultSettings,
             duplicatedDefaults,
-            seenDefaultTargetTypes);
+            seenDefaultTargetTypes,
+            features);
 
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
@@ -282,8 +298,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC012: Analyze IoCRegisterDefaultsAttribute on types (class, struct, interface)
         context.RegisterSymbolAction(ctx => AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext), SymbolKind.NamedType);
 
-        // SGIOC007: Analyze InjectAttribute on members
-        context.RegisterSymbolAction(AnalyzeInjectAttribute, SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
+        // SGIOC007 + SGIOC022: Analyze InjectAttribute usage and feature gating on members
+        context.RegisterSymbolAction(ctx => AnalyzeInjectAttribute(ctx, analyzerContext), SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
 
         // SGIOC006: Analyze duplicated keyed service attributes on parameters
         context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
@@ -346,6 +362,12 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 pathStack,
                 context.CancellationToken);
         }
+    }
+
+    private static IocFeatures ParseIocFeatures(AnalyzerOptions options)
+    {
+        options.AnalyzerConfigOptionsProvider.GlobalOptions.TryGetValue(Constants.SourceGenIocFeaturesProperty, out var rawFeatures);
+        return IocFeaturesHelper.Parse(rawFeatures);
     }
 }
 

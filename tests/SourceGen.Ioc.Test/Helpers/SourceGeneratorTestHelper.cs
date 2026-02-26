@@ -309,7 +309,8 @@ public static class SourceGeneratorTestHelper
     /// </summary>
     public static async Task<ImmutableArray<Diagnostic>> RunAnalyzerAsync<TAnalyzer>(
         string source,
-        string assemblyName = "TestAssembly")
+        string assemblyName = "TestAssembly",
+        IReadOnlyDictionary<string, string>? analyzerConfigOptions = null)
         where TAnalyzer : DiagnosticAnalyzer, new()
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
@@ -321,7 +322,10 @@ public static class SourceGeneratorTestHelper
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var analyzer = new TAnalyzer();
-        var compilationWithAnalyzers = compilation.WithAnalyzers([analyzer]);
+        var analyzerOptions = analyzerConfigOptions is null
+            ? null
+            : new AnalyzerOptions([], new TestAnalyzerConfigOptionsProvider(analyzerConfigOptions));
+        var compilationWithAnalyzers = compilation.WithAnalyzers([analyzer], options: analyzerOptions);
 
         return await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
     }

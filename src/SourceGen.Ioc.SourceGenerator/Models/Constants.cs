@@ -51,6 +51,11 @@ internal static class Constants
     /// </remarks>
     public const string SourceGenIocDefaultLifetimeProperty = "build_property.SourceGenIocDefaultLifetime";
 
+    /// <summary>
+    /// The MSBuild property name for configuring enabled IoC generation features.
+    /// </summary>
+    public const string SourceGenIocFeaturesProperty = "build_property.SourceGenIocFeatures";
+
     public const string Category_Usage = "Usage";
     public const string Category_Design = "Design";
 
