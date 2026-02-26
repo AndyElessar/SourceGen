@@ -246,16 +246,20 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Select(static (registrations, _) => ProcessSingleRegistrationFromDefaults(registrations));
 
         // Collect all basic registration results
-        var allBasicResults = basicRegistrationResults1
-            .Collect()
+        var allBasicResults = basicRegistrationResults1.Collect()
             .Combine(basicRegistrationResults1_T1.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
             .Combine(basicRegistrationResults2.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
             .Combine(basicRegistrationResults2_T1.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right))
             .Combine(basicRegistrationResults3.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+            .Select(static (combined, _) =>
+            {
+                var results = combined.Left.Left.Left.Left;
+                results = results.AddRange(combined.Left.Left.Left.Right);
+                results = results.AddRange(combined.Left.Left.Right);
+                results = results.AddRange(combined.Left.Right);
+                results = results.AddRange(combined.Right);
+                return results;
+            });
 
         // ========== Pipeline 2: Combine results and resolve closed generics ==========
 
