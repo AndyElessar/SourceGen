@@ -204,7 +204,8 @@ Report when a `KeyValuePair<K, V>` is injected but the registered key type of `V
   - If at least one keyed registration for `V` exists but **none** have a key type compatible with `K`, reports the diagnostic.
 - Key type compatibility rules:
   - `K = object` is always compatible with any key type (no diagnostic).
-  - If a registration's `KeyTypeSymbol` is `null` (KeyType is `Csharp`), it is considered compatible (no diagnostic).
+  - If a registration uses `KeyType = Csharp` with `nameof()`, key type is resolved from the referenced symbol and checked for compatibility.
+  - If a registration uses `KeyType = Csharp` with a string literal key (not `nameof()`), `KeyTypeSymbol` is `null` and compatibility analysis is skipped (no diagnostic).
   - Otherwise, reports if the registration's `KeyTypeSymbol` is not assignable to `K`.
 - Skips parameters that have `[FromKeyedServices]` attribute (those resolve specific keyed services, not KVP aggregation).
 

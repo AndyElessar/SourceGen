@@ -187,6 +187,92 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
+    /// Resolves key type symbols for KeyType.Csharp registrations using AttributeSyntax + SemanticModel.
+    /// This runs in RegisterSyntaxNodeAction to avoid RS1030 (no Compilation.GetSemanticModel calls).
+    /// </summary>
+    private static void ResolveCsharpKeyTypes(
+        SyntaxNodeAnalysisContext context,
+        AnalyzerContext analyzerContext)
+    {
+        if (context.Node is not AttributeSyntax attributeSyntax)
+            return;
+
+        var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
+        if (attributeSymbol is not IMethodSymbol attributeConstructor)
+            return;
+
+        var attributeClass = attributeConstructor.ContainingType;
+        if (attributeClass is null)
+            return;
+
+        if (!AnalyzerHelpers.IsIoCRegistrationAttribute(attributeClass, analyzerContext.AttributeSymbols))
+            return;
+
+        var attributeData = GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
+        if (attributeData is null)
+            return;
+
+        if (attributeData.GetNamedArgument<int>("KeyType", 0) != 1)
+            return;
+
+        var (_, _, resolvedKeyType) = attributeData.GetKeyInfo(context.SemanticModel);
+        if (resolvedKeyType is null)
+            return;
+
+        var targetType = AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols)
+            ? attributeData.GetTargetTypeFromRegisterForAttribute()
+            : GetTypeLevelTargetType(context, attributeSyntax);
+
+        if (targetType is null)
+            return;
+
+        analyzerContext.ResolvedCsharpKeyTypes[(targetType, attributeSyntax.GetLocation())] = resolvedKeyType;
+    }
+
+    private static AttributeData? GetAttributeDataFromSyntax(
+        SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass)
+    {
+        if (attributeSyntax.Parent is not AttributeListSyntax attributeList)
+            return null;
+
+        var syntaxTree = attributeSyntax.SyntaxTree;
+
+        if (attributeList.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) is true)
+        {
+            return context.SemanticModel.Compilation.Assembly.GetAttributes()
+                .FirstOrDefault(attr =>
+                    SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attributeClass)
+                    && attr.ApplicationSyntaxReference?.SyntaxTree == syntaxTree
+                    && attr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).Span == attributeSyntax.Span);
+        }
+
+        var targetType = GetTypeLevelTargetType(context, attributeSyntax);
+        if (targetType is null)
+            return null;
+
+        return targetType.GetAttributes()
+            .FirstOrDefault(attr =>
+                SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attributeClass)
+                && attr.ApplicationSyntaxReference?.SyntaxTree == syntaxTree
+                && attr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).Span == attributeSyntax.Span);
+    }
+
+    private static INamedTypeSymbol? GetTypeLevelTargetType(
+        SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax)
+    {
+        var declaration = attributeSyntax.Parent?.Parent;
+
+        return declaration switch
+        {
+            TypeDeclarationSyntax typeDeclaration => context.SemanticModel.GetDeclaredSymbol(typeDeclaration, context.CancellationToken),
+            _ => null
+        };
+    }
+
+    /// <summary>
     /// Checks if the attribute is an IoC registration attribute and returns which type.
     /// Supports both non-generic and generic variants.
     /// </summary>
@@ -381,6 +467,15 @@ public sealed partial class RegisterAnalyzer
         return explicitLifetime;
     }
 
+    private readonly struct SymbolLocationComparer : IEqualityComparer<(INamedTypeSymbol Type, Location? Location)>
+    {
+        public bool Equals((INamedTypeSymbol Type, Location? Location) x, (INamedTypeSymbol Type, Location? Location) y)
+            => SymbolEqualityComparer.Default.Equals(x.Type, y.Type) && x.Location == y.Location;
+
+        public int GetHashCode((INamedTypeSymbol Type, Location? Location) obj)
+            => unchecked((SymbolEqualityComparer.Default.GetHashCode(obj.Type) * 397) ^ (obj.Location?.GetHashCode() ?? 0));
+    }
+
     private sealed class AnalyzerContext(
         IoCAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
@@ -421,6 +516,13 @@ public sealed partial class RegisterAnalyzer
         /// Value is the first registration location for diagnostic reporting.
         /// </summary>
         public ConcurrentDictionary<(string TypeName, string? Key, string Tag), Location?> RegistrationKeys { get; } = [];
+
+        /// <summary>
+        /// Stores resolved key type symbols for KeyType.Csharp registrations where nameof() was used.
+        /// Populated by RegisterSyntaxNodeAction, consumed by SGIOC015 in CompilationEnd.
+        /// Key: (TargetType, AttributeLocation) to handle multiple registrations on the same type.
+        /// </summary>
+        public ConcurrentDictionary<(INamedTypeSymbol Type, Location? Location), ITypeSymbol> ResolvedCsharpKeyTypes { get; } = new(new SymbolLocationComparer());
     }
 
     private sealed record ServiceInfo

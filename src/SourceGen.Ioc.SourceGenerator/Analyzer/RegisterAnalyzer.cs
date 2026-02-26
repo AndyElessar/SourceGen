@@ -292,6 +292,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // Using RegisterSyntaxNodeAction to avoid RS1030 warning (do not use Compilation.GetSemanticModel)
         context.RegisterSyntaxNodeAction(ctx => AnalyzeFactoryAndInstanceOnAttribute(ctx, analyzerContext), SyntaxKind.Attribute);
 
+        // Resolve nameof() key types for KeyType.Csharp registrations (avoids RS1030)
+        context.RegisterSyntaxNodeAction(ctx => ResolveCsharpKeyTypes(ctx, analyzerContext), SyntaxKind.Attribute);
+
         // SGIOC017: Analyze [IocGenericFactory] attribute for duplicated placeholder types
         context.RegisterSymbolAction(AnalyzeIocGenericFactoryAttribute, SymbolKind.Method);
 

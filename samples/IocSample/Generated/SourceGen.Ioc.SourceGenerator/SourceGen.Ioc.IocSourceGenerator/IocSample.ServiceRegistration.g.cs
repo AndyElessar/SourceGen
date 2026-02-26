@@ -58,13 +58,13 @@ namespace IocSample
                 });
                 services.AddTransient(typeof(global::IocSample.WrapperService<>), typeof(global::IocSample.WrapperService<>));
                 services.AddTransient(typeof(global::IocSample.IWrapperService<>), typeof(global::IocSample.WrapperService<>));
-                services.AddTransient<global::IocSample.Consumer>((global::System.IServiceProvider sp) =>
+                services.AddSingleton<global::IocSample.Consumer>((global::System.IServiceProvider sp) =>
                 {
                     var p0 = sp.GetRequiredService<global::System.Lazy<global::IocSample.IWrapperService<int>>>();
                     var p1 = sp.GetRequiredService<global::System.Func<global::IocSample.IWrapperService<string>>>();
                     var p2 = new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", sp.GetRequiredKeyedService<global::IocSample.IKeyed>("Key"));
                     var p3 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>();
-                    var p4 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<global::IocSample.KeyEnum, global::IocSample.IKeyed>>().ToDictionary();
+                    var p4 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>().ToDictionary();
                     var p5 = sp.GetServices<global::System.Lazy<global::IocSample.IWrapperService<string>>>();
                     var s0 = new global::IocSample.Consumer(p0, p1, p2, p3, p4, p5);
                     return s0;
@@ -133,7 +133,6 @@ namespace IocSample
                 services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof(global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>), (global::System.IServiceProvider sp) => (object)new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", sp.GetRequiredKeyedService<global::IocSample.IKeyed>("Key")), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Transient));
                 services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof(global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>), (global::System.IServiceProvider sp) => (object)new global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>("Key", sp.GetRequiredKeyedService<global::IocSample.IKeyed>("Key")), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Transient));
                 services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof(global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>), (global::System.IServiceProvider sp) => (object)new global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0, sp.GetRequiredKeyedService<global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Transient));
-                services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof(global::System.Collections.Generic.KeyValuePair<global::IocSample.KeyEnum, global::IocSample.IKeyed>), (global::System.IServiceProvider sp) => (object)new global::System.Collections.Generic.KeyValuePair<global::IocSample.KeyEnum, global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0, sp.GetRequiredKeyedService<global::IocSample.IKeyed>(global::IocSample.KeyEnum.Key0)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Transient));
                 services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof(global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>), (global::System.IServiceProvider sp) => (object)new global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>(global::IocSample.KeyedExtensions.Key, sp.GetRequiredKeyedService<global::IocSample.IKeyed>(global::IocSample.KeyedExtensions.Key)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Transient));
             }
 

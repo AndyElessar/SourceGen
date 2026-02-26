@@ -221,7 +221,68 @@ public class SGIOC015Tests
     }
 
     [Test]
-    public async Task SGIOC015_KVP_CsharpKeyType_NoDiagnostic()
+    public async Task SGIOC015_KVP_CsharpKeyType_Nameof_MismatchedKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Key = nameof(ServiceKey), KeyType = KeyType.Csharp)]
+            public class ServiceA : IService
+            {
+                public static Guid ServiceKey => Guid.Empty;
+            }
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<int, IService> kvp)
+            {
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015").ToList();
+
+        await Assert.That(sgioc015).Count().IsEqualTo(1);
+        await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int").And.Contains("IService");
+    }
+
+    [Test]
+    public async Task SGIOC015_ReadOnlyDictionary_CsharpKeyType_Nameof_MatchingGuid_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Key = nameof(ServiceKey), KeyType = KeyType.Csharp)]
+            public class ServiceA : IService
+            {
+                public static Guid ServiceKey => Guid.Empty;
+            }
+
+            [IocRegister]
+            public class Consumer(IReadOnlyDictionary<Guid, IService> services)
+            {
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015");
+
+        await Assert.That(sgioc015).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC015_KVP_CsharpKeyType_StringLiteral_NoDiagnostic()
     {
         const string source = """
             using System.Collections.Generic;

@@ -77,7 +77,7 @@ public sealed partial class RegisterAnalyzer
                 continue;
             }
 
-            // Skip type checking if KeyType is Csharp (keyTypeSymbol will be null)
+            // Skip type checking when the key type cannot be resolved in collection phase (e.g., KeyType.Csharp)
             if (keyTypeSymbol is null)
                 continue;
 
@@ -202,9 +202,24 @@ public sealed partial class RegisterAnalyzer
 
             hasAnyKeyedService = true;
 
-            // KeyTypeSymbol is null when KeyType is Csharp — treat as compatible
+            // KeyTypeSymbol is null for KeyType.Csharp in symbol collection phase.
             if (candidateInfo.KeyTypeSymbol is null)
             {
+                // Check whether nameof() resolution captured a concrete key type.
+                if (analyzerContext.ResolvedCsharpKeyTypes.TryGetValue(
+                    (candidateInfo.Type, candidateInfo.Location), out var resolvedKeyType))
+                {
+                    if (IsAssignable(keyType, resolvedKeyType))
+                    {
+                        hasCompatibleKeyType = true;
+                        break;
+                    }
+
+                    // nameof() resolved but incompatible; continue searching other registrations.
+                    continue;
+                }
+
+                // String literal key (or unresolved nameof) cannot infer type, treat as compatible.
                 hasCompatibleKeyType = true;
                 break;
             }
