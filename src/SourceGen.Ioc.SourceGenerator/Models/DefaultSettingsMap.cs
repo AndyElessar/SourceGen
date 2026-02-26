@@ -58,10 +58,16 @@ internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, 
 
     public override int GetHashCode()
     {
-        // Simple hash code based on length and fallback lifetime to avoid iterating array
         unchecked
         {
-            return (Settings.Length * 397) ^ (int)FallbackLifetime;
+            var hash = (Settings.Length * 397) ^ (int)FallbackLifetime;
+            var count = Math.Min(Settings.Length, 3);
+            for(int i = 0; i < count; i++)
+            {
+                hash = hash * 31 + Settings[i].GetHashCode();
+            }
+
+            return hash;
         }
     }
 

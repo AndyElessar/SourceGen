@@ -181,7 +181,7 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         var invocations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => PredicateInvocations(node),
-                transform: TransformInvocations)
+                transform: static (ctx, ct) => TransformInvocations(ctx, ct))
             .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
@@ -253,12 +253,22 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Combine(basicRegistrationResults3.Collect())
             .Select(static (combined, _) =>
             {
-                var results = combined.Left.Left.Left.Left;
-                results = results.AddRange(combined.Left.Left.Left.Right);
-                results = results.AddRange(combined.Left.Left.Right);
-                results = results.AddRange(combined.Left.Right);
-                results = results.AddRange(combined.Right);
-                return results;
+                var part1 = combined.Left.Left.Left.Left;
+                var part2 = combined.Left.Left.Left.Right;
+                var part3 = combined.Left.Left.Right;
+                var part4 = combined.Left.Right;
+                var part5 = combined.Right;
+
+                var builder = ImmutableArray.CreateBuilder<BasicRegistrationResult>(
+                    part1.Length + part2.Length + part3.Length + part4.Length + part5.Length);
+
+                builder.AddRange(part1);
+                builder.AddRange(part2);
+                builder.AddRange(part3);
+                builder.AddRange(part4);
+                builder.AddRange(part5);
+
+                return builder.MoveToImmutable();
             });
 
         // ========== Pipeline 2: Combine results and resolve closed generics ==========

@@ -1,7 +1,7 @@
 ---
 description: "Use when: reviewing completed implementation against spec. Performs read-only code review for spec compliance, refactoring opportunities, and performance optimization."
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, read, search, todo]
+tools: [vscode/memory, execute/getTerminalOutput, read, search, web, github/get_file_contents, github/issue_read, github/get_file_contents, github/issue_read, 'microsoftdocs/mcp/*', github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, todo]
 user-invocable: false
 argument-hint: "Provide the spec/plan and list of changed files to review"
 ---

@@ -30,6 +30,20 @@ partial class IocSourceGenerator
             ? GetSafeIdentifier(customIocName!)
             : GetSafeIdentifier(assemblyName);
 
+        var tagKeyCache = new Dictionary<ImmutableEquatableArray<string>, string>();
+        foreach(var regWithTags in registrations)
+        {
+            var tags = regWithTags.Tags;
+            if(tagKeyCache.ContainsKey(tags))
+            {
+                continue;
+            }
+
+            tagKeyCache[tags] = tags.Length > 0
+                ? string.Join(",", tags.OrderBy(static t => t, StringComparer.Ordinal))
+                : string.Empty;
+        }
+
         // Group registrations by their tag conditions for generating conditional blocks
         // Key: sorted comma-separated tags (empty string for no tags)
         // Value: list of registrations
@@ -39,11 +53,7 @@ partial class IocSourceGenerator
         {
             var registration = regWithTags.Registration;
             var tags = regWithTags.Tags;
-
-            // Create a key based on sorted tags
-            var tagKey = tags.Length > 0
-                ? string.Join(",", tags.OrderBy(static t => t, StringComparer.Ordinal))
-                : string.Empty;
+            var tagKey = tagKeyCache[tags];
 
             if(!tagGroups.TryGetValue(tagKey, out var group))
             {
@@ -93,9 +103,7 @@ partial class IocSourceGenerator
         var lazyFuncByTagKey = new Dictionary<string, List<LazyFuncRegistrationEntry>>(StringComparer.Ordinal);
         foreach(var entry in lazyFuncEntries)
         {
-            var tagKey = entry.Tags.Length > 0
-                ? string.Join(",", entry.Tags.OrderBy(static t => t, StringComparer.Ordinal))
-                : string.Empty;
+            var tagKey = tagKeyCache[entry.Tags];
 
             if(!lazyFuncByTagKey.TryGetValue(tagKey, out var list))
             {
@@ -110,9 +118,7 @@ partial class IocSourceGenerator
         var kvpByTagKey = new Dictionary<string, List<KvpRegistrationEntry>>(StringComparer.Ordinal);
         foreach(var entry in kvpEntries)
         {
-            var tagKey = entry.Tags.Length > 0
-                ? string.Join(",", entry.Tags.OrderBy(static t => t, StringComparer.Ordinal))
-                : string.Empty;
+            var tagKey = tagKeyCache[entry.Tags];
 
             if(!kvpByTagKey.TryGetValue(tagKey, out var list))
             {

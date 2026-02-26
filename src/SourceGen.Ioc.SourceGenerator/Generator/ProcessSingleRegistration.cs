@@ -35,7 +35,7 @@ partial class IocSourceGenerator
         DefaultSettingsMap defaultSettings)
     {
         // Reusable buffers for default settings lookup
-        var matchedDefaultIndices = new HashSet<int>();
+        var matchedDefaultIndices = new List<int>();
         var matchedServiceTypes = new List<TypeData>();
 
         // Find matching default settings from base classes and interfaces
@@ -114,7 +114,7 @@ partial class IocSourceGenerator
         FactoryMethodData? factory,
         IEnumerable<TypeData>? additionalServiceTypesFromDefaults)
     {
-        var serviceTypesToRegister = new HashSet<TypeData>
+        var serviceTypesToRegister = new List<TypeData>
         {
             // Always register the implementation type itself
             registration.ImplementationType
@@ -123,7 +123,10 @@ partial class IocSourceGenerator
         // Add explicit service types from registration
         foreach(var st in registration.ServiceTypes)
         {
-            serviceTypesToRegister.Add(st);
+            if(!serviceTypesToRegister.Contains(st))
+            {
+                serviceTypesToRegister.Add(st);
+            }
         }
 
         // Add service types from default settings
@@ -131,7 +134,10 @@ partial class IocSourceGenerator
         {
             foreach(var st in additionalServiceTypesFromDefaults)
             {
-                serviceTypesToRegister.Add(st);
+                if(!serviceTypesToRegister.Contains(st))
+                {
+                    serviceTypesToRegister.Add(st);
+                }
             }
         }
 
@@ -140,7 +146,10 @@ partial class IocSourceGenerator
         {
             foreach(var iface in registration.AllInterfaces)
             {
-                serviceTypesToRegister.Add(iface);
+                if(!serviceTypesToRegister.Contains(iface))
+                {
+                    serviceTypesToRegister.Add(iface);
+                }
             }
         }
 
@@ -149,7 +158,10 @@ partial class IocSourceGenerator
         {
             foreach(var baseClass in registration.AllBaseClasses)
             {
-                serviceTypesToRegister.Add(baseClass);
+                if(!serviceTypesToRegister.Contains(baseClass))
+                {
+                    serviceTypesToRegister.Add(baseClass);
+                }
             }
         }
 
@@ -189,7 +201,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<TypeData> baseClasses,
         ImmutableEquatableArray<TypeData> interfaces,
         DefaultSettingsMap defaultSettings,
-        HashSet<int> matchedDefaultIndices,
+        List<int> matchedDefaultIndices,
         List<TypeData> matchedServiceTypes)
     {
         int bestDefaultIndex = -1;
@@ -213,13 +225,14 @@ partial class IocSourceGenerator
     private static void TryMatchDefaultSettings(
         TypeData candidate,
         DefaultSettingsMap defaultSettings,
-        HashSet<int> matchedDefaultIndices,
+        List<int> matchedDefaultIndices,
         List<TypeData> matchedServiceTypes,
         ref int bestDefaultIndex)
     {
         // Check exact matches
-        if(defaultSettings.TryGetExactMatches(candidate.Name, out var index) && matchedDefaultIndices.Add(index))
+        if(defaultSettings.TryGetExactMatches(candidate.Name, out var index) && !matchedDefaultIndices.Contains(index))
         {
+            matchedDefaultIndices.Add(index);
             matchedServiceTypes.Add(candidate);
             if(bestDefaultIndex < 0) bestDefaultIndex = index;
         }
@@ -229,8 +242,9 @@ partial class IocSourceGenerator
             && (candidateGeneric.IsOpenGeneric || candidate.Name != candidateGeneric.NameWithoutGeneric))
         {
             if(defaultSettings.TryGetGenericMatches(candidateGeneric.NameWithoutGeneric, candidateGeneric.GenericArity, out var gIndex)
-                && matchedDefaultIndices.Add(gIndex))
+                && !matchedDefaultIndices.Contains(gIndex))
             {
+                matchedDefaultIndices.Add(gIndex);
                 matchedServiceTypes.Add(candidate);
                 if(bestDefaultIndex < 0) bestDefaultIndex = gIndex;
             }
@@ -265,7 +279,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<ServiceRegistrationModel> CreateServiceRegistrations(
         RegistrationData registration,
-        HashSet<TypeData> serviceTypesToRegister,
+        List<TypeData> serviceTypesToRegister,
         ServiceLifetime lifetime,
         ImmutableEquatableArray<TypeData> decorators,
         FactoryMethodData? factory)
@@ -580,7 +594,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<OpenGenericEntry> CreateOpenGenericEntries(
         RegistrationData registration,
-        HashSet<TypeData> serviceTypesToRegister,
+        List<TypeData> serviceTypesToRegister,
         ServiceLifetime lifetime,
         ImmutableEquatableArray<TypeData> decorators,
         ImmutableEquatableArray<string> tags,
@@ -609,7 +623,7 @@ partial class IocSourceGenerator
             registration.Instance);
 
         var entries = new List<OpenGenericEntry>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var addedKeys = new List<string>();
 
         // Index by each open generic service type
         foreach(var serviceType in serviceTypesToRegister)
@@ -620,8 +634,9 @@ partial class IocSourceGenerator
             }
 
             var key = genericServiceType.NameWithoutGeneric;
-            if(addedKeys.Add(key))
+            if(!addedKeys.Contains(key))
             {
+                addedKeys.Add(key);
                 entries.Add(new OpenGenericEntry(key, info));
             }
         }
@@ -635,8 +650,9 @@ partial class IocSourceGenerator
             }
 
             var key = genericInterface.NameWithoutGeneric;
-            if(addedKeys.Add(key))
+            if(!addedKeys.Contains(key))
             {
+                addedKeys.Add(key);
                 entries.Add(new OpenGenericEntry(key, info));
             }
         }
@@ -734,10 +750,11 @@ partial class IocSourceGenerator
             foreach(var decorator in reg.Decorators)
             {
                 // Collect from constructor parameters (skip first parameter - it's the decorated service)
-                if(decorator.ConstructorParameters is { Length: > 0 })
+                if(decorator.ConstructorParameters is { Length: > 1 })
                 {
-                    foreach(var param in decorator.ConstructorParameters.Skip(1))
+                    for(int i = 1; i < decorator.ConstructorParameters.Length; i++)
                     {
+                        var param = decorator.ConstructorParameters[i];
                         CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
                     }
                 }
