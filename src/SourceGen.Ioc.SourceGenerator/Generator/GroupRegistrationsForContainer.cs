@@ -236,12 +236,38 @@ partial class IocSourceGenerator
                 kvp => kvp.Key,
                 kvp => kvp.Value.ToImmutableEquatableArray());
 
+        var immutableSingletons = singletons.ToImmutableEquatableArray();
+        var immutableScoped = scoped.ToImmutableEquatableArray();
+        var immutableTransients = transients.ToImmutableEquatableArray();
+
+        var eagerSingletons = immutableSingletons
+            .Where(static c => c.IsEager)
+            .ToImmutableEquatableArray();
+        var eagerScoped = immutableScoped
+            .Where(static c => c.IsEager)
+            .ToImmutableEquatableArray();
+
+        var lazyFuncEntries = CollectContainerLazyFuncEntries(
+            immutableSingletons,
+            immutableScoped,
+            immutableTransients,
+            immutableByServiceTypeAndKey);
+        var kvpEntries = CollectContainerKvpEntries(
+            immutableSingletons,
+            immutableScoped,
+            immutableTransients,
+            immutableByServiceTypeAndKey);
+
         return new ContainerRegistrationGroups(
             immutableByServiceTypeAndKey,
             allServiceTypes.ToImmutableEquatableSet(),
-            singletons.ToImmutableEquatableArray(),
-            scoped.ToImmutableEquatableArray(),
-            transients.ToImmutableEquatableArray(),
+            immutableSingletons,
+            immutableScoped,
+            immutableTransients,
+            eagerSingletons,
+            eagerScoped,
+            lazyFuncEntries,
+            kvpEntries,
             hasOpenGenerics,
             hasKeyedServices,
             collectionServiceTypes.ToImmutableEquatableArray(),

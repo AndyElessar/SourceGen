@@ -167,31 +167,19 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Represents a KeyValuePair resolver entry for container code generation.
-    /// </summary>
-    /// <param name="KeyTypeName">The fully-qualified key type name.</param>
-    /// <param name="ValueTypeName">The fully-qualified value type name.</param>
-    /// <param name="KeyExpr">The key literal expression.</param>
-    /// <param name="ResolverMethodName">The method name of the value service resolver.</param>
-    /// <param name="KvpResolverMethodName">The method name for this KVP resolver.</param>
-    private readonly record struct ContainerKvpEntry(
-        string KeyTypeName,
-        string ValueTypeName,
-        string KeyExpr,
-        string ResolverMethodName,
-        string KvpResolverMethodName);
-
-    /// <summary>
     /// Collects KeyValuePair resolver entries for container code generation.
     /// Scans all container registrations for KVP dependencies and finds matching keyed services.
     /// </summary>
-    private static List<ContainerKvpEntry> CollectContainerKvpEntries(
-        ContainerRegistrationGroups groups)
+    private static ImmutableEquatableArray<ContainerKvpEntry> CollectContainerKvpEntries(
+        ImmutableEquatableArray<CachedRegistration> singletons,
+        ImmutableEquatableArray<CachedRegistration> scoped,
+        ImmutableEquatableArray<CachedRegistration> transients,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
     {
         // Step 1: Scan all registrations for KVP needs
         var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
 
-        foreach(var lifetime in new[] { groups.Singletons, groups.Scoped, groups.Transients })
+        foreach(var lifetime in new[] { singletons, scoped, transients })
         {
             foreach(var cached in lifetime)
             {
@@ -208,7 +196,7 @@ partial class IocSourceGenerator
         var entries = new List<ContainerKvpEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach(var kvp in groups.ByServiceTypeAndKey)
+        foreach(var kvp in byServiceTypeAndKey)
         {
             var key = kvp.Key.Key;
             if(key is null)
@@ -247,7 +235,7 @@ partial class IocSourceGenerator
             }
         }
 
-        return entries;
+        return entries.ToImmutableEquatableArray();
     }
 
     /// <summary>
@@ -257,9 +245,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteContainerKvpResolverMethods(
         SourceWriter writer,
-        List<ContainerKvpEntry> entries)
+        ImmutableEquatableArray<ContainerKvpEntry> entries)
     {
-        if(entries.Count == 0)
+        if(entries.Length == 0)
             return;
 
         writer.WriteLine("// KeyValuePair resolver methods");
@@ -332,9 +320,9 @@ partial class IocSourceGenerator
     private static void WriteContainerKvpLocalResolverEntries(
         SourceWriter writer,
         string containerTypeName,
-        List<ContainerKvpEntry> entries)
+        ImmutableEquatableArray<ContainerKvpEntry> entries)
     {
-        if(entries.Count == 0)
+        if(entries.Length == 0)
             return;
 
         writer.WriteLine();

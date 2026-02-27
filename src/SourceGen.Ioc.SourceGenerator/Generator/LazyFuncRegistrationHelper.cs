@@ -199,29 +199,19 @@ partial class IocSourceGenerator
     // ── Container Lazy/Func helper methods ──
 
     /// <summary>
-    /// Represents a Lazy/Func resolver entry for container code generation.
-    /// </summary>
-    /// <param name="WrapperKind">Whether this is Lazy or Func.</param>
-    /// <param name="InnerServiceTypeName">The fully-qualified inner service type name.</param>
-    /// <param name="ResolverMethodName">The method name of the inner service resolver.</param>
-    /// <param name="FieldName">The field name for storing the wrapper instance.</param>
-    private readonly record struct ContainerLazyFuncEntry(
-        WrapperKind WrapperKind,
-        string InnerServiceTypeName,
-        string ResolverMethodName,
-        string FieldName);
-
-    /// <summary>
     /// Collects Lazy/Func resolver entries for container code generation.
     /// Scans all container registrations for Lazy/Func dependencies and finds matching service resolvers.
     /// </summary>
-    private static List<ContainerLazyFuncEntry> CollectContainerLazyFuncEntries(
-        ContainerRegistrationGroups groups)
+    private static ImmutableEquatableArray<ContainerLazyFuncEntry> CollectContainerLazyFuncEntries(
+        ImmutableEquatableArray<CachedRegistration> singletons,
+        ImmutableEquatableArray<CachedRegistration> scoped,
+        ImmutableEquatableArray<CachedRegistration> transients,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
     {
         // Step 1: Scan all registrations for Lazy/Func needs
         var neededTypes = new HashSet<(WrapperKind Kind, string InnerTypeName)>();
 
-        foreach(var lifetime in new[] { groups.Singletons, groups.Scoped, groups.Transients })
+        foreach(var lifetime in new[] { singletons, scoped, transients })
         {
             foreach(var cached in lifetime)
             {
@@ -238,7 +228,7 @@ partial class IocSourceGenerator
         var entries = new List<ContainerLazyFuncEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach(var kvp in groups.ByServiceTypeAndKey)
+        foreach(var kvp in byServiceTypeAndKey)
         {
             var serviceType = kvp.Key.ServiceType;
             var key = kvp.Key.Key;
@@ -276,7 +266,7 @@ partial class IocSourceGenerator
             }
         }
 
-        return entries;
+        return entries.ToImmutableEquatableArray();
     }
 
     /// <summary>
@@ -287,9 +277,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteContainerLazyFuncFields(
         SourceWriter writer,
-        List<ContainerLazyFuncEntry> entries)
+        ImmutableEquatableArray<ContainerLazyFuncEntry> entries)
     {
-        if(entries.Count == 0)
+        if(entries.Length == 0)
             return;
 
         var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();
@@ -372,9 +362,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteContainerLazyFuncFieldInitializations(
         SourceWriter writer,
-        List<ContainerLazyFuncEntry> entries)
+        ImmutableEquatableArray<ContainerLazyFuncEntry> entries)
     {
-        if(entries.Count == 0)
+        if(entries.Length == 0)
             return;
 
         var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();
@@ -411,9 +401,9 @@ partial class IocSourceGenerator
     private static void WriteContainerLazyFuncLocalResolverEntries(
         SourceWriter writer,
         string containerTypeName,
-        List<ContainerLazyFuncEntry> entries)
+        ImmutableEquatableArray<ContainerLazyFuncEntry> entries)
     {
-        if(entries.Count == 0)
+        if(entries.Length == 0)
             return;
 
         var lazyEntries = entries.Where(static e => e.WrapperKind == WrapperKind.Lazy).ToList();

@@ -63,6 +63,12 @@ partial class IocSourceGenerator
             byServiceTypeAndKey[kvp.Key] = FilterCachedRegistrations(kvp.Value, features);
         }
 
+        var filteredByServiceTypeAndKey = byServiceTypeAndKey.ToImmutableEquatableDictionary();
+
+        var filteredSingletons = FilterCachedRegistrations(groups.Singletons, features);
+        var filteredScoped = FilterCachedRegistrations(groups.Scoped, features);
+        var filteredTransients = FilterCachedRegistrations(groups.Transients, features);
+
         var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<CachedRegistration>>();
         foreach(var kvp in groups.CollectionRegistrations)
         {
@@ -71,13 +77,17 @@ partial class IocSourceGenerator
 
         var filteredGroups = groups with
         {
-            ByServiceTypeAndKey = byServiceTypeAndKey.ToImmutableEquatableDictionary(),
-            Singletons = FilterCachedRegistrations(groups.Singletons, features),
-            Scoped = FilterCachedRegistrations(groups.Scoped, features),
-            Transients = FilterCachedRegistrations(groups.Transients, features),
+            ByServiceTypeAndKey = filteredByServiceTypeAndKey,
+            Singletons = filteredSingletons,
+            Scoped = filteredScoped,
+            Transients = filteredTransients,
             CollectionRegistrations = collectionRegistrations.ToImmutableEquatableDictionary(),
             ReversedSingletonsForDisposal = FilterCachedRegistrations(groups.ReversedSingletonsForDisposal, features),
-            ReversedScopedForDisposal = FilterCachedRegistrations(groups.ReversedScopedForDisposal, features)
+            ReversedScopedForDisposal = FilterCachedRegistrations(groups.ReversedScopedForDisposal, features),
+            EagerSingletons = filteredSingletons.Where(static c => c.IsEager).ToImmutableEquatableArray(),
+            EagerScoped = filteredScoped.Where(static c => c.IsEager).ToImmutableEquatableArray(),
+            LazyFuncEntries = CollectContainerLazyFuncEntries(filteredSingletons, filteredScoped, filteredTransients, filteredByServiceTypeAndKey),
+            KvpEntries = CollectContainerKvpEntries(filteredSingletons, filteredScoped, filteredTransients, filteredByServiceTypeAndKey)
         };
 
         return containerWithGroups with { Groups = filteredGroups };
@@ -407,8 +417,8 @@ partial class IocSourceGenerator
         }
 
         // Initialize eager scoped services by calling their Get methods
-        var eagerScoped = groups.Scoped.Where(static c => c.IsEager).ToList();
-        if(eagerScoped.Count > 0)
+        var eagerScoped = groups.EagerScoped;
+        if(eagerScoped.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager scoped services");
@@ -419,8 +429,7 @@ partial class IocSourceGenerator
         }
 
         // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers)
-        var scopedLazyFuncEntries = CollectContainerLazyFuncEntries(groups);
-        WriteContainerLazyFuncFieldInitializations(writer, scopedLazyFuncEntries);
+        WriteContainerLazyFuncFieldInitializations(writer, groups.LazyFuncEntries);
 
         // Because resolvers are immutable per container, they can be reused from parent
         if(!effectiveUseSwitchStatement)
@@ -462,8 +471,8 @@ partial class IocSourceGenerator
 
         // Initialize eager singletons by calling their Get methods
         // This ensures dependencies are resolved in the correct order
-        var eagerSingletons = groups.Singletons.Where(static c => c.IsEager).ToList();
-        if(eagerSingletons.Count > 0)
+        var eagerSingletons = groups.EagerSingletons;
+        if(eagerSingletons.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager singletons");
@@ -474,8 +483,7 @@ partial class IocSourceGenerator
         }
 
         // Initialize Lazy/Func wrapper fields
-        var lazyFuncEntries = CollectContainerLazyFuncEntries(groups);
-        WriteContainerLazyFuncFieldInitializations(writer, lazyFuncEntries);
+        WriteContainerLazyFuncFieldInitializations(writer, groups.LazyFuncEntries);
 
         // Build FrozenDictionary
         if(!effectiveUseSwitchStatement)
@@ -539,12 +547,10 @@ partial class IocSourceGenerator
         }
 
         // Write KVP resolver methods for keyed services consumed as KeyValuePair/Dictionary
-        var containerKvpEntries = CollectContainerKvpEntries(groups);
-        WriteContainerKvpResolverMethods(writer, containerKvpEntries);
+        WriteContainerKvpResolverMethods(writer, groups.KvpEntries);
 
         // Write Lazy/Func wrapper field declarations and array resolvers
-        var containerLazyFuncEntries = CollectContainerLazyFuncEntries(groups);
-        WriteContainerLazyFuncFields(writer, containerLazyFuncEntries);
+        WriteContainerLazyFuncFields(writer, groups.LazyFuncEntries);
 
         writer.WriteLine("#endregion");
         writer.WriteLine();
@@ -2153,12 +2159,10 @@ partial class IocSourceGenerator
         }
 
         // Add KeyValuePair<K,V> collection entries for keyed services consumed as KVP/Dictionary
-        var containerKvpEntries = CollectContainerKvpEntries(groups);
-        WriteContainerKvpLocalResolverEntries(writer, container.ContainerTypeName, containerKvpEntries);
+        WriteContainerKvpLocalResolverEntries(writer, container.ContainerTypeName, groups.KvpEntries);
 
         // Add Lazy<T>/Func<T> wrapper entries for consumers that depend on Lazy<T>/Func<T>
-        var containerLazyFuncEntries = CollectContainerLazyFuncEntries(groups);
-        WriteContainerLazyFuncLocalResolverEntries(writer, container.ContainerTypeName, containerLazyFuncEntries);
+        WriteContainerLazyFuncLocalResolverEntries(writer, container.ContainerTypeName, groups.LazyFuncEntries);
 
         writer.Indentation--;
         writer.WriteLine("];");

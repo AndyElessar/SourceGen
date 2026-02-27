@@ -18,6 +18,10 @@ internal sealed record ContainerWithGroups(
 /// <param name="Singletons">Singleton registrations with pre-computed names.</param>
 /// <param name="Scoped">Scoped registrations with pre-computed names.</param>
 /// <param name="Transients">Transient registrations with pre-computed names.</param>
+/// <param name="EagerSingletons">Singleton registrations that should be eagerly resolved.</param>
+/// <param name="EagerScoped">Scoped registrations that should be eagerly resolved.</param>
+/// <param name="LazyFuncEntries">Pre-computed Lazy/Func wrapper entries for container code generation.</param>
+/// <param name="KvpEntries">Pre-computed KeyValuePair entries for container code generation.</param>
 /// <param name="HasOpenGenerics">Whether there are any open generic registrations.</param>
 /// <param name="HasKeyedServices">Whether there are any keyed service registrations.</param>
 /// <param name="CollectionServiceTypes">Service types with multiple implementations for IEnumerable resolution.</param>
@@ -30,6 +34,10 @@ internal sealed record ContainerRegistrationGroups(
     ImmutableEquatableArray<CachedRegistration> Singletons,
     ImmutableEquatableArray<CachedRegistration> Scoped,
     ImmutableEquatableArray<CachedRegistration> Transients,
+    ImmutableEquatableArray<CachedRegistration> EagerSingletons,
+    ImmutableEquatableArray<CachedRegistration> EagerScoped,
+    ImmutableEquatableArray<ContainerLazyFuncEntry> LazyFuncEntries,
+    ImmutableEquatableArray<ContainerKvpEntry> KvpEntries,
     bool HasOpenGenerics,
     bool HasKeyedServices,
     ImmutableEquatableArray<string> CollectionServiceTypes,
@@ -49,3 +57,31 @@ internal readonly record struct CachedRegistration(
     string FieldName,
     string ResolverMethodName,
     bool IsEager);
+
+/// <summary>
+/// Represents a Lazy/Func resolver entry for container code generation.
+/// </summary>
+/// <param name="WrapperKind">Whether this is Lazy or Func.</param>
+/// <param name="InnerServiceTypeName">The fully-qualified inner service type name.</param>
+/// <param name="ResolverMethodName">The method name of the inner service resolver.</param>
+/// <param name="FieldName">The field name for storing the wrapper instance.</param>
+internal readonly record struct ContainerLazyFuncEntry(
+    WrapperKind WrapperKind,
+    string InnerServiceTypeName,
+    string ResolverMethodName,
+    string FieldName);
+
+/// <summary>
+/// Represents a KeyValuePair resolver entry for container code generation.
+/// </summary>
+/// <param name="KeyTypeName">The fully-qualified key type name.</param>
+/// <param name="ValueTypeName">The fully-qualified value type name.</param>
+/// <param name="KeyExpr">The key literal expression.</param>
+/// <param name="ResolverMethodName">The method name of the value service resolver.</param>
+/// <param name="KvpResolverMethodName">The method name for this KVP resolver.</param>
+internal readonly record struct ContainerKvpEntry(
+    string KeyTypeName,
+    string ValueTypeName,
+    string KeyExpr,
+    string ResolverMethodName,
+    string KvpResolverMethodName);
