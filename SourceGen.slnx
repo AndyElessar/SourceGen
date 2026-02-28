@@ -30,17 +30,17 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/docs/" />
-  <Folder Name="/docs/SourceGen.Ioc/">
-    <File Path="docs/SourceGen.Ioc/01_Overview.md" />
-    <File Path="docs/SourceGen.Ioc/02_Basic.md" />
-    <File Path="docs/SourceGen.Ioc/03_Defaults.md" />
-    <File Path="docs/SourceGen.Ioc/04_Field_Property_Method_Injection.md" />
-    <File Path="docs/SourceGen.Ioc/05_Keyed.md" />
-    <File Path="docs/SourceGen.Ioc/06_Decorator.md" />
-    <File Path="docs/SourceGen.Ioc/07_Tags.md" />
-    <File Path="docs/SourceGen.Ioc/08_Factory_Instance.md" />
-    <File Path="docs/SourceGen.Ioc/09_OpenGeneric.md" />
-    <File Path="docs/SourceGen.Ioc/10_CliTool.md" />
+  <Folder Name="/docs/Ioc/">
+    <File Path="docs/Ioc/01_Overview.md" />
+    <File Path="docs/Ioc/02_Basic.md" />
+    <File Path="docs/Ioc/03_Defaults.md" />
+    <File Path="docs/Ioc/04_Field_Property_Method_Injection.md" />
+    <File Path="docs/Ioc/05_Keyed.md" />
+    <File Path="docs/Ioc/06_Decorator.md" />
+    <File Path="docs/Ioc/07_Tags.md" />
+    <File Path="docs/Ioc/08_Factory_Instance.md" />
+    <File Path="docs/Ioc/09_OpenGeneric.md" />
+    <File Path="docs/Ioc/10_CliTool.md" />
   </Folder>
   <Folder Name="/samples/">
     <File Path="samples/Directory.Build.props" />
