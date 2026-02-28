@@ -10,7 +10,7 @@ When a registered service depends on a wrapper type, the generator emits factory
 |`Lazy<T>`|`new Lazy<T>(() => sp.GetRequiredService<T>())`|
 |`Func<T>`|`() => sp.GetRequiredService<T>()`|
 |`Func<T1, ..., TReturn>`|Parameterized factory delegate|
-|`IEnumerable<T>`|MS.DI native collection support|
+|`IEnumerable<T>`|`MS.E.DI` native collection support|
 |`IReadOnlyCollection<T>`|`GetServices<T>().ToArray()`|
 |`ICollection<T>`|`GetServices<T>().ToArray()`|
 |`IReadOnlyList<T>`|`GetServices<T>().ToArray()`|
@@ -181,7 +181,7 @@ services.AddSingleton<global::MyNamespace.PluginHost>((global::System.IServicePr
 </details>
 
 > [!NOTE]
-> `IEnumerable<T>` is resolved natively by MS.DI. Other collection types (`IReadOnlyList<T>`, `IList<T>`, `T[]`, etc.) are resolved via `GetServices<T>().ToArray()`.
+> `IEnumerable<T>` is resolved natively by `MS.E.DI`. Other collection types (`IReadOnlyList<T>`, `IList<T>`, `T[]`, etc.) are resolved via `GetServices<T>().ToArray()`.
 
 ## `IDictionary<TKey, TValue>`
 
@@ -397,4 +397,4 @@ services.AddSingleton<global::MyNamespace.CacheConsumer>((global::System.IServic
 
 ---
 
-[← Back to Overview](01_Overview.md)
+[← Back to Overview](01_Overview.md#table-of-contents)

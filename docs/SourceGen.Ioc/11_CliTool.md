@@ -92,7 +92,7 @@ sourcegen-ioc generate ioc-for [options]
 |`-t`, `--target`|Target directory or file, defaults to current directory|`null` (current directory)|
 |`-f`, `--file-pattern`|File pattern to filter files|`*.cs`|
 |`-s`, `--search-sub-directories`|Whether to search sub directories|`false`|
-|`-cn`, `--class-name-regex`|Regex pattern to match class names|`null`|
+|`-cn`, `--class-name-regex`|Regex pattern to match class names (required)|N/A|
 |`-m`, `--max-apply`|How many matches should apply, 0 means unlimited|`0`|
 |`-ig`, `--is-generic-attribute`|Whether to generate generic attribute syntax|`false`|
 |`-n`, `--dry-run`|Dry run, does not create file|`false`|
@@ -164,8 +164,8 @@ sourcegen-ioc generate ioc-defaults [options]
 |`-t`, `--target`|Target directory or file, defaults to current directory|`null` (current directory)|
 |`-f`, `--file-pattern`|File pattern to filter files|`*.cs`|
 |`-s`, `--search-sub-directories`|Whether to search sub directories|`false`|
-|`-cn`, `--class-name-regex`|Regex pattern to match class names|`null`|
-|`-b`, `--base-type-regex`|Regex pattern to match interface/base class|`null`|
+|`-cn`, `--class-name-regex`|Regex pattern to match class names (required)|N/A|
+|`-b`, `--base-type-regex`|Regex pattern to match interface/base class (required)|N/A|
 |`-m`, `--max-apply`|How many matches should apply, 0 means unlimited|`0`|
 |`-ig`, `--is-generic-attribute`|Whether to generate generic attribute syntax|`false`|
 |`-l`, `--lifetime`|Lifetime for the service registration. Valid values: `Singleton`, `Scoped`, `Transient`|`Transient`|
@@ -331,4 +331,4 @@ sourcegen-ioc add -t ./src/Repositories -s -cn ".*Repository"
 
 ---
 
-[← Back to Overview](01_Overview.md)
+[← Back to Overview](01_Overview.md#table-of-contents)

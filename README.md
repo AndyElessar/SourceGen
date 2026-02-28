@@ -36,9 +36,19 @@ Compared to `Microsoft.Extensions.DependencyInjection` aka. `MS.E.DI`:
 
 5. **Decorator Pattern with Type Constraint Validation** - Built-in decorator chain support with automatic type constraint checking, skips non-matching decorators
 
-6. **Centralized Default Settings** - Use `[IoCRegisterDefaults<T>]` to define default lifetime, decorators, and tags for all implementations of interface/base class
+6. **Centralized Default Settings** - Use `[IocRegisterDefaults<T>]` to define default lifetime, decorators, and tags for all implementations of interface/base class
 
-7. **Tag-based Registration Groups** - Generate multiple registration methods (e.g., `AddMyProject_Feature1()`) to organize services into logical groups
+7. **Tag-based Registration** - Use `Tags` parameter to group services, then selectively register them at runtime via `services.AddMyProject("Feature1")`
+
+8. **External Type Registration** - Use `[IocRegisterFor<T>]` to register types you don't own (e.g., third-party library classes)
+
+9. **Module Import** - Use `[IocImportModule<T>]` to share `[IocRegisterDefaults]` settings across projects/assemblies
+
+10. **Wrapper Types** - Built-in support for `Lazy<T>`, `Func<T>`, collection types, and `IDictionary<TKey, TValue>` for keyed services
+
+11. **Factory & Instance Registration** - Use `Factory` or `Instance` properties on `[IocRegister]` for custom creation logic
+
+12. **Compile-time Container** - Use `[IocContainer]` to generate a high-performance container with typed resolution APIs
 
 ### Installation
 
@@ -55,7 +65,7 @@ using Microsoft.Extensions.DependencyInjection;
 // Basic registration
 public interface IMyService;
 
-[IoCRegister<IMyService>(ServiceLifetime.Scoped)]
+[IocRegister<IMyService>(ServiceLifetime.Scoped)]
 internal class MyService : IMyService;
 
 // Register in DI container

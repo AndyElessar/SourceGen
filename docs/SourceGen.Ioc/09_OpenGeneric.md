@@ -82,7 +82,7 @@ services.AddSingleton<global::MyNamespace.UserService>((global::System.IServiceP
 
 ## Nested Generic Types
 
-SourceGen.Ioc supports nested open generic service interfaces that `MS.DI` cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.DI` cannot properly map from the open generic registration to the correct closed generic type.
+SourceGen.Ioc supports nested open generic service interfaces that `MS.E.DI` cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.E.DI` cannot properly map from the open generic registration to the correct closed generic type.
 
 ```csharp
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
@@ -117,7 +117,7 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Ge
 </details>
 
 > [!NOTE]  
-> The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. SourceGen.Ioc handles this through compile-time code generation.
+> The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.E.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. SourceGen.Ioc handles this through compile-time code generation.
 
 ## Manual Discovery with `[IocDiscover]`
 
@@ -217,4 +217,4 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Te
 
 ---
 
-[← Back to Overview](01_Overview.md)
+[← Back to Overview](01_Overview.md#table-of-contents)

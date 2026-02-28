@@ -176,7 +176,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 You can also use the standard `[FromKeyedServices]` attribute from `Microsoft.Extensions.DependencyInjection`.
 
 > [!NOTE]  
-> `[FromKeyedServices]` is natively handled by MS.DI, so the generator uses simple type-based registration instead of factory methods.
+> `[FromKeyedServices]` is natively handled by `MS.E.DI`, so the generator uses simple type-based registration instead of factory methods.
 
 ```csharp
 [IocRegister<IMyService>]
@@ -199,7 +199,7 @@ services.AddSingleton<global::MyNamespace.IMyService, global::MyNamespace.MyServ
 
 ### Difference from `[IocInject]`
 
-`[IocInject]` attribute requires factory method registration because it's a SourceGen.Ioc-specific feature that MS.DI doesn't recognize:
+`[IocInject]` attribute requires factory method registration because it's a SourceGen.Ioc-specific feature that `MS.E.DI` doesn't recognize:
 
 ```csharp
 [IocRegister<IMyService>]
@@ -225,7 +225,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 </details>
 
-## Using `[Inject]` from `Microsoft.AspNetCore.Components` or other libraries
+## Using `[Inject]` from `Microsoft.AspNetCore.Components`
 
 You can also use any attribute that name is `[Inject]` or `[IocInject]`, for example `Microsoft.AspNetCore.Components.InjectAttribute`:
 
@@ -297,4 +297,4 @@ services.AddKeyedSingleton<global::MyNamespace.KeyService>("Key", (IServiceProvi
 
 ---
 
-[← Back to Overview](01_Overview.md)
+[← Back to Overview](01_Overview.md#table-of-contents)

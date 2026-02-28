@@ -116,8 +116,48 @@ internal class GenericHandler<T> : IHandler<T>;
 [IocRegister<IService>(Tags = ["Feature1"])]
 internal class Feature1Service : IService;
 
-// Generates: services.AddMyProject_Feature1();
+// Register selectively at runtime:
+// services.AddMyProject("Feature1");
 ```
+
+### External Type Registration
+
+```csharp
+[IocRegisterFor<ThirdPartyService>(ServiceTypes = [typeof(IService)])]
+internal partial class Registrations;
+```
+
+### Module Import
+
+Share `[IocRegisterDefaults]` settings across assemblies:
+
+```csharp
+[IocImportModule<SharedModule>]
+internal partial class Registrations;
+```
+
+### Factory & Instance Registration
+
+```csharp
+[IocRegister<IService>(Factory = nameof(Create))]
+internal class MyService : IService
+{
+    public static MyService Create(ILogger logger) => new(logger);
+}
+```
+
+### Wrapper Types
+
+Built-in support for `Lazy<T>`, `Func<T>`, collection types (`IEnumerable<T>`, `T[]`, etc.), and `IDictionary<TKey, TValue>` for keyed services.
+
+### Compile-time Container
+
+```csharp
+[IocContainer]
+internal partial class MyContainer;
+```
+
+Generates a high-performance container with typed resolution APIs, supporting thread-safe strategies and eager resolve options.
 
 ## Custom Method Name
 
@@ -128,6 +168,24 @@ internal class Feature1Service : IService;
 ```
 
 This generates `services.AddMyApp()` instead of `services.AddMyProject()`.
+
+## All Features
+
+|Feature|Description|
+|:---|:---|
+|`[IocRegister]`|Basic DI registration with lifetime, keyed, tags support|
+|`[IocRegisterFor]`|Register external types you don't own|
+|`[IocRegisterDefaults]`|Centralized default settings for target type implementations|
+|`[IocImportModule]`|Import defaults from another module/assembly|
+|`[IocInject]`|Field, property, method, and parameter injection|
+|`[IocDiscover]`|Manual closed generic type discovery|
+|`[IocGenericFactory]`|Map discovered generics to factory method type parameters|
+|`[IocContainer]`|Generate compile-time container with typed resolution|
+|Decorator chains|Ordered decorator support with generic constraint validation|
+|Wrapper types|`Lazy<T>`, `Func<T>`, collections, `IDictionary<TKey, TValue>`|
+|Factory / Instance|Static factory methods or static instance registration|
+|Tag-based groups|Runtime tag filtering for selective registration|
+|Compile-time analyzers|Lifecycle, circular dependency, and usage validation|
 
 ## Documentation
 

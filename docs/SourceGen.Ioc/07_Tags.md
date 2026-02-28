@@ -119,4 +119,4 @@ internal class Mediator : IMediator;  // Only registered with AddMyProject("Medi
 
 ---
 
-[← Back to Overview](01_Overview.md)
+[← Back to Overview](01_Overview.md#table-of-contents)
