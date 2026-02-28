@@ -1835,7 +1835,7 @@ public partial class AppContainer : IControllerActivator;
 #region Generate:
 partial class AppContainer : IControllerActivator, /* ... other interfaces */
 {
-    private static readonly ConcurrentDictionary<Type, ObjectFactory> _controllerFactories = new();
+    private static readonly ConcurrentDictionary<Type, ObjectFactory> _controllerFactoryCache = new();
 
     object IControllerActivator.Create(ControllerContext context)
     {
@@ -1843,9 +1843,11 @@ partial class AppContainer : IControllerActivator, /* ... other interfaces */
         var instance = GetService(controllerType);
         if(instance is not null) return instance;
 
-        var factory = _controllerFactories.GetOrAdd(
-            controllerType,
-            static t => global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(t, Type.EmptyTypes));
+        if (!_controllerFactoryCache.TryGetValue(controllerType, out var factory))
+        {
+            factory = global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(controllerType, Type.EmptyTypes);
+            _controllerFactoryCache.TryAdd(controllerType, factory);
+        }
 
         return factory(this, null);
     }
@@ -1873,16 +1875,18 @@ public partial class AppContainer : IComponentActivator;
 #region Generate:
 partial class AppContainer : IComponentActivator, /* ... other interfaces */
 {
-    private static readonly ConcurrentDictionary<Type, ObjectFactory> _componentFactories = new();
+    private static readonly ConcurrentDictionary<Type, ObjectFactory> _componentFactoryCache = new();
 
     IComponent IComponentActivator.CreateInstance(Type componentType)
     {
         var instance = GetService(componentType);
         if(instance is IComponent component) return component;
 
-        var factory = _componentFactories.GetOrAdd(
-            componentType,
-            static t => global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(t, Type.EmptyTypes));
+        if (!_componentFactoryCache.TryGetValue(componentType, out var factory))
+        {
+            factory = global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(componentType, Type.EmptyTypes);
+            _componentFactoryCache.TryAdd(componentType, factory);
+        }
 
         return (IComponent)factory(this, null);
     }

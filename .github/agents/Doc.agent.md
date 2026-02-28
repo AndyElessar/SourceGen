@@ -14,10 +14,11 @@ End users of the SourceGen NuGet package — C# developers who want to use sourc
 
 ## Startup
 
-1. Read existing docs under `docs/` to understand current structure and conventions
-2. Read relevant source code (attributes, specs) to ensure documentation accuracy
-3. Use #tool:todo to create a todo list tracking each documentation step
-4. Execute each step sequentially
+1. If a plan exists at `/memories/session/plan.md`, use #tool:vscode/memory to read it and follow the plan
+2. Read existing docs under `docs/` to understand current structure and conventions
+3. Read relevant source code (attributes, specs) to ensure documentation accuracy
+4. Use #tool:todo to create a todo list tracking each documentation step
+5. Execute each step sequentially
 
 ## Writing Guidelines
 

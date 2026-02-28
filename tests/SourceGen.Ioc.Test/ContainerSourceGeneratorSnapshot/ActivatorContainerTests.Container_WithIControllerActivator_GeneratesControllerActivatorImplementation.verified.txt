@@ -274,9 +274,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         var instance = GetService(controllerType);
         if (instance is not null) return instance;
 
-        #pragma warning disable IL2111
-        var factory = _controllerFactoryCache.GetOrAdd(controllerType, CreateControllerFactory);
-        #pragma warning restore IL2111
+        if (!_controllerFactoryCache.TryGetValue(controllerType, out var factory))
+        {
+            factory = CreateControllerFactory(controllerType);
+            _controllerFactoryCache.TryAdd(controllerType, factory);
+        }
+
         return factory(this, []);
     }
 

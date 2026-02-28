@@ -287,9 +287,12 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
         var instance = GetService(componentType);
         if (instance is global::Microsoft.AspNetCore.Components.IComponent component) return component;
 
-        #pragma warning disable IL2111
-        var factory = _componentFactoryCache.GetOrAdd(componentType, CreateComponentFactory);
-        #pragma warning restore IL2111
+        if (!_componentFactoryCache.TryGetValue(componentType, out var factory))
+        {
+            factory = CreateComponentFactory(componentType);
+            _componentFactoryCache.TryAdd(componentType, factory);
+        }
+
         return (global::Microsoft.AspNetCore.Components.IComponent)factory(this, []);
     }
 
