@@ -45,6 +45,14 @@ partial class IocSourceGenerator
         var effectiveUseSwitchStatement = container.UseSwitchStatement && container.ImportedModules.Length == 0;
 
         WriteContainerHeader(writer);
+
+        // Write [assembly: MetadataUpdateHandler] attribute for hot reload cache invalidation
+        if(container.ImplementComponentActivator || container.ImplementComponentPropertyActivator)
+        {
+            writer.WriteLine($"[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof({container.ContainerTypeName}.__HotReloadHandler))]");
+            writer.WriteLine();
+        }
+
         WriteContainerNamespaceAndClass(writer, container, groups, canGenerateServiceProviderFactory, effectiveUseSwitchStatement);
 
         return writer.ToString();
@@ -231,6 +239,12 @@ partial class IocSourceGenerator
         if(container.ImplementComponentPropertyActivator)
         {
             WriteIComponentPropertyActivatorImplementation(writer, container, effectiveUseSwitchStatement);
+        }
+
+        // Write hot reload handler (if either component activator interface is implemented)
+        if(container.ImplementComponentActivator || container.ImplementComponentPropertyActivator)
+        {
+            WriteHotReloadHandler(writer, container);
         }
 
         writer.Indentation--;
@@ -2640,6 +2654,32 @@ partial class IocSourceGenerator
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes the __HotReloadHandler nested class for hot reload cache invalidation.
+    /// </summary>
+    private static void WriteHotReloadHandler(SourceWriter writer, ContainerModel container)
+    {
+        writer.WriteLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+        writer.WriteLine("internal static class __HotReloadHandler");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("public static void ClearCache(global::System.Type[]? _)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        if(container.ImplementComponentActivator)
+        {
+            writer.WriteLine("_componentFactoryCache.Clear();");
+        }
+        if(container.ImplementComponentPropertyActivator)
+        {
+            writer.WriteLine("_propertyActivatorCache.Clear();");
+        }
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
     }
 
     /// <summary>

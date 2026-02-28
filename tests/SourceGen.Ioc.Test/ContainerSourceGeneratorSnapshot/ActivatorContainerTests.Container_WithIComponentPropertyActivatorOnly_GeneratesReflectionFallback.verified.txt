@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
 
+[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof(global::TestNamespace.TestContainer.__HotReloadHandler))]
+
 namespace TestNamespace;
 
 partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
@@ -322,4 +324,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #endregion
 
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    internal static class __HotReloadHandler
+    {
+        public static void ClearCache(global::System.Type[]? _)
+        {
+            _propertyActivatorCache.Clear();
+        }
+    }
 }

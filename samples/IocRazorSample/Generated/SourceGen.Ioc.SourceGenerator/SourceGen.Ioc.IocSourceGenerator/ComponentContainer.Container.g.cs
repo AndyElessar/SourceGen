@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
 
+[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof(global::IocRazorSample.ComponentContainer.__HotReloadHandler))]
+
 namespace IocRazorSample;
 
 partial class ComponentContainer : IIocContainer<global::IocRazorSample.ComponentContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
@@ -298,4 +300,12 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
 
     #endregion
 
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    internal static class __HotReloadHandler
+    {
+        public static void ClearCache(global::System.Type[]? _)
+        {
+            _componentFactoryCache.Clear();
+        }
+    }
 }

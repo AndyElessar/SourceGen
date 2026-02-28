@@ -1817,8 +1817,8 @@ The container can generate host-specific activator implementations for ASP.NET C
 |Interface|Generation Trigger|Generated Behavior|
 |:---|:---|:---|
 |`IControllerActivator`|Container partial class declares `IControllerActivator` **AND** `Microsoft.AspNetCore.Mvc.Core` is referenced|Generates controller activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
-|`IComponentActivator`|Container partial class declares `IComponentActivator` **AND** `Microsoft.AspNetCore.Components` is referenced|Generates component activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
-|`IComponentPropertyActivator`|Container partial class declares `IComponentPropertyActivator` **AND** `Microsoft.AspNetCore.Components` ≥ 11 (which exposes the type)|For registered components (when also implementing `IComponentActivator`): returns no-op delegate. For unregistered/unknown components: uses reflection to inject `[Inject]`/`[InjectAttribute]` properties, caching activators in `ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>>`|
+|`IComponentActivator`|Container partial class declares `IComponentActivator` **AND** `Microsoft.AspNetCore.Components` is referenced|Generates component activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`; includes hot reload cache invalidation handler|
+|`IComponentPropertyActivator`|Container partial class declares `IComponentPropertyActivator` **AND** `Microsoft.AspNetCore.Components` ≥ 11 (which exposes the type)|For registered components (when also implementing `IComponentActivator`): returns no-op delegate. For unregistered/unknown components: uses reflection to inject `[Inject]`/`[InjectAttribute]` properties, caching activators in `ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>>`; includes hot reload cache invalidation handler|
 
 Both activators use the container instance (`this`) as the service provider when invoking cached factories.
 
@@ -1851,7 +1851,7 @@ partial class AppContainer : IControllerActivator, /* ... other interfaces */
             _controllerFactoryCache.TryAdd(controllerType, factory);
         }
 
-        return factory(this, null);
+        return factory(this, []);
     }
 
     void IControllerActivator.Release(ControllerContext context, object controller)
@@ -1875,6 +1875,8 @@ public partial class AppContainer : IComponentActivator;
 #endregion
 
 #region Generate:
+[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof(global::MyApp.AppContainer.__HotReloadHandler))]
+
 partial class AppContainer : IComponentActivator, /* ... other interfaces */
 {
     private static readonly ConcurrentDictionary<Type, ObjectFactory> _componentFactoryCache = new();
@@ -1890,7 +1892,16 @@ partial class AppContainer : IComponentActivator, /* ... other interfaces */
             _componentFactoryCache.TryAdd(componentType, factory);
         }
 
-        return (IComponent)factory(this, null);
+        return (IComponent)factory(this, []);
+    }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    internal static class __HotReloadHandler
+    {
+        public static void ClearCache(Type[]? _)
+        {
+            _componentFactoryCache.Clear();
+        }
     }
 }
 #endregion
@@ -1908,8 +1919,11 @@ public partial class AppContainer : IComponentActivator, IComponentPropertyActiv
 #endregion
 
 #region Generate:
+[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof(global::MyApp.AppContainer.__HotReloadHandler))]
+
 partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /* ... other interfaces */
 {
+    private static readonly ConcurrentDictionary<Type, ObjectFactory> _componentFactoryCache = new();
     private static readonly ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>> _propertyActivatorCache = new();
 
     global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> global::Microsoft.AspNetCore.Components.IComponentPropertyActivator.GetActivator(
@@ -1934,6 +1948,16 @@ partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /
         // Supports keyed services via InjectAttribute.Key
         // ...
     }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    internal static class __HotReloadHandler
+    {
+        public static void ClearCache(Type[]? _)
+        {
+            _componentFactoryCache.Clear();
+            _propertyActivatorCache.Clear();
+        }
+    }
 }
 #endregion
 ```
@@ -1953,6 +1977,25 @@ partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /
 1. Generated activator members are explicit interface implementations (`IControllerActivator.Create`, `IControllerActivator.Release`, `IComponentActivator.CreateInstance`).
 2. Explicit implementation avoids naming collisions with user-defined members on the same partial container class.
 3. Consumers call these members through the interface contract (for example, via ASP.NET Core host infrastructure), not as public container methods.
+
+#### Hot Reload Support
+
+When `IComponentActivator` or `IComponentPropertyActivator` is implemented, the generator also emits:
+
+1. **`[assembly: MetadataUpdateHandler]` attribute**: Points to an internal nested `__HotReloadHandler` static class on the container, registering it as a handler for hot reload events.
+
+2. **`__HotReloadHandler` nested class**: Contains a static `ClearCache(Type[]?)` method that the .NET runtime calls when a hot reload occurs. The method clears:
+   - `_componentFactoryCache` (if `IComponentActivator` is implemented)
+   - `_propertyActivatorCache` (if `IComponentPropertyActivator` is implemented)
+   - Both caches if both interfaces are implemented
+
+**When Generated**:
+
+- Hot reload handler is **only generated** when at least one of `IComponentActivator` or `IComponentPropertyActivator` is implemented.
+- The `ClearCache` method only clears the caches that exist based on which interfaces are implemented.
+- If neither interface is implemented, no hot reload handler is generated.
+
+**Example**: See the updated `IComponentActivator` and `IComponentPropertyActivator` examples above, which show the generated `[assembly: MetadataUpdateHandler]` attribute and `__HotReloadHandler` nested class.
 
 ## Thread Safety
 
