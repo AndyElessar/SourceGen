@@ -46,25 +46,24 @@
     <File Path="samples/Directory.Build.props" />
     <File Path="samples/Directory.Build.targets" />
   </Folder>
-  <Folder Name="/samples/Ioc/">
-    <Project Path="samples/IocSample.Shared/IocSample.Shared.csproj" Id="2bd603d7-eb72-4991-ae47-5d846256f628" />
-    <Project Path="samples/IocSample/IocSample.csproj" Id="a90a7e50-edbe-4c7a-a9aa-4ab2cf625394" />
-    <Project Path="samples/IocRazorSample/IocRazorSample.csproj" />
+  <Folder Name="/Ioc/samples/">
+    <Project Path="samples/Ioc/IocSample.Shared/IocSample.Shared.csproj" Id="2bd603d7-eb72-4991-ae47-5d846256f628" />
+    <Project Path="samples/Ioc/IocSample/IocSample.csproj" Id="a90a7e50-edbe-4c7a-a9aa-4ab2cf625394" />
+    <Project Path="samples/Ioc/IocRazorSample/IocRazorSample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <File Path="src/Directory.Build.props" />
   </Folder>
-  <Folder Name="/src/Ioc/">
-    <Project Path="src/SourceGen.Ioc.Cli/SourceGen.Ioc.Cli.csproj" Id="953e1dcf-4065-4986-a8f2-2de7ecee0300" />
-    <Project Path="src/SourceGen.Ioc.SourceGenerator/SourceGen.Ioc.SourceGenerator.csproj" Id="e66a64bb-4183-4c30-a816-70949c20f0d4" />
-    <Project Path="src/SourceGen.Ioc/SourceGen.Ioc.csproj" Id="cd7c687f-e209-41e9-827a-da3d19babf64" />
+  <Folder Name="/Ioc/src/">
+    <Project Path="src/Ioc/src/SourceGen.Ioc.Cli/SourceGen.Ioc.Cli.csproj" Id="953e1dcf-4065-4986-a8f2-2de7ecee0300" />
+    <Project Path="src/Ioc/src/SourceGen.Ioc.SourceGenerator/SourceGen.Ioc.SourceGenerator.csproj" Id="e66a64bb-4183-4c30-a816-70949c20f0d4" />
+    <Project Path="src/Ioc/src/SourceGen.Ioc/SourceGen.Ioc.csproj" Id="cd7c687f-e209-41e9-827a-da3d19babf64" />
   </Folder>
-  <Folder Name="/tests/" />
-  <Folder Name="/tests/Ioc/">
-    <Project Path="tests/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj" Id="b7c2e8a3-1f4d-4a9e-b5c6-d8e9f0a1b2c3" />
-    <Project Path="tests/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj" Id="2cfa6123-d7a5-4815-aefb-fb1295acf950" />
-    <Project Path="tests/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj" Id="e7497f6b-c4d9-4ffe-852d-ba670719088f" />
-    <Project Path="tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj" />
-    <Project Path="tests/SourceGen.Ioc.TestCase/SourceGen.Ioc.TestCase.csproj" />
+  <Folder Name="/Ioc/test/">
+    <Project Path="src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj" Id="b7c2e8a3-1f4d-4a9e-b5c6-d8e9f0a1b2c3" />
+    <Project Path="src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj" Id="2cfa6123-d7a5-4815-aefb-fb1295acf950" />
+    <Project Path="src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj" Id="e7497f6b-c4d9-4ffe-852d-ba670719088f" />
+    <Project Path="src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj" />
+    <Project Path="src/Ioc/test/SourceGen.Ioc.TestCase/SourceGen.Ioc.TestCase.csproj" />
   </Folder>
 </Solution>

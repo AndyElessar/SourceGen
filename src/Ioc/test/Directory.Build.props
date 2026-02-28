@@ -1,0 +1,4 @@
+<Project>
+  <!-- Skip src/Directory.Build.props (packaging/publishing settings) and import root directly -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..\..\..\'))" />
+</Project>

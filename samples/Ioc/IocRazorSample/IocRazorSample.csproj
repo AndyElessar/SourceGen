@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <!-- Import the props file to define SOURCEGEN_IOC constant (simulating PackageReference behavior) -->
-  <Import Project="..\..\src\SourceGen.Ioc\build\SourceGen.Ioc.props" />
+  <Import Project="..\..\..\src\Ioc\src\SourceGen.Ioc\build\SourceGen.Ioc.props" />
 
   <PropertyGroup>
     <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject</SourceGenIocFeatures>
@@ -12,9 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
-    <ProjectReference Include="..\..\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\samples\IocSample.Shared\IocSample.Shared.csproj" />
+    <ProjectReference Include="..\..\..\src\Ioc\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
+    <ProjectReference Include="..\..\..\src\Ioc\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\IocSample.Shared\IocSample.Shared.csproj" />
 
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
   </ItemGroup>

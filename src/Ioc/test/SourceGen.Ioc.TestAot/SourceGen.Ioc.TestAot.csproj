@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
     <ProjectReference Include="..\..\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\tests\SourceGen.Ioc.TestCase\SourceGen.Ioc.TestCase.csproj" />
+    <ProjectReference Include="..\SourceGen.Ioc.TestCase\SourceGen.Ioc.TestCase.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 

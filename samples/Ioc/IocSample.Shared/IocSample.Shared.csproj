@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Import the props file to define SOURCEGEN_IOC constant (simulating PackageReference behavior) -->
+  <Import Project="..\..\..\src\Ioc\src\SourceGen.Ioc\build\SourceGen.Ioc.props" />
+
+  <PropertyGroup>
+    <SourceGenIocName>Shared</SourceGenIocName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Ioc\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
+    <ProjectReference Include="..\..\..\src\Ioc\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Generated\" />
+  </ItemGroup>
+</Project>
