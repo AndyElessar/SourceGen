@@ -1,7 +1,7 @@
 ---
 description: "Use when: writing or updating user-facing documentation files (docs/ folder). Creates progressive, beginner-friendly guides with generated code examples for the SourceGen repository."
-model: GPT-5.3-Codex (copilot)
-tools: [vscode/memory, vscode/askQuestions, read, agent, edit, search, todo]
+model: Claude Opus 4.6 (copilot)
+tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/runInTerminal, read, agent, edit, search, web, 'microsoftdocs/mcp/*', todo]
 agents: [Explore, DocReview]
 user-invocable: true
 argument-hint: "Provide the documentation topic or feature to document, and which doc files to create or update"

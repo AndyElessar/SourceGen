@@ -96,6 +96,7 @@ For the complete and authoritative list, see `src/SourceGen.Ioc.SourceGenerator/
 |7|[07_Tags.md](07_Tags.md)|Tag-based registration and mutually exclusive tag model.|
 |8|[08_Factory_Instance.md](08_Factory_Instance.md)|Factory/instance registration and generic factory mapping.|
 |9|[09_OpenGeneric.md](09_OpenGeneric.md)|Open generic registration, auto discovery, and manual discover.|
-|10|[10_CliTool.md](10_CliTool.md)|CLI workflows for attribute and registration file generation.|
-|11|[11_Container.md](11_Container.md)|Compile-time container generation and options.|
-|12|[12_MSBuild_Configuration.md](12_MSBuild_Configuration.md)|MSBuild properties controlling generation behavior.|
+|10|[10_Wrapper.md](10_Wrapper.md)|Wrapper types: Lazy, Func, collections, and dictionary resolution.|
+|11|[11_CliTool.md](11_CliTool.md)|CLI workflows for attribute and registration file generation.|
+|12|[12_Container.md](12_Container.md)|Compile-time container generation and options.|
+|13|[13_MSBuild_Configuration.md](13_MSBuild_Configuration.md)|MSBuild properties controlling generation behavior.|
