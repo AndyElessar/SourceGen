@@ -1,4 +1,4 @@
-﻿using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.SourceGenerator.Models.Constants;
 
 namespace SourceGen.Ioc;
 
@@ -37,8 +37,8 @@ partial class IocSourceGenerator
         var groups = containerWithGroups.Groups;
 
         // Determine if IServiceProviderFactory should be generated
-        // Only generate if ResolveIServiceCollection is true AND the DI package is referenced
-        var canGenerateServiceProviderFactory = container.ResolveIServiceCollection && hasDIPackage;
+        // Only generate if IntegrateServiceProvider is true AND the DI package is referenced
+        var canGenerateServiceProviderFactory = container.IntegrateServiceProvider && hasDIPackage;
 
         // Effective UseSwitchStatement: when there are imported modules, always use FrozenDictionary
         // because combining services from multiple sources requires dictionary-based lookup
@@ -252,8 +252,8 @@ partial class IocSourceGenerator
         ContainerModel container,
         bool effectiveUseSwitchStatement)
     {
-        // Fallback provider field (only if ResolveIServiceCollection is enabled)
-        if(container.ResolveIServiceCollection)
+        // Fallback provider field (only if IntegrateServiceProvider is enabled)
+        if(container.IntegrateServiceProvider)
         {
             writer.WriteLine("private readonly IServiceProvider? _fallbackProvider;");
         }
@@ -353,8 +353,8 @@ partial class IocSourceGenerator
         writer.WriteLine("/// Creates a new standalone container without external service provider fallback.");
         writer.WriteLine("/// </summary>");
 
-        // Need fallback provider constructor if ResolveIServiceCollection is enabled
-        var needsFallbackProvider = container.ResolveIServiceCollection;
+        // Need fallback provider constructor if IntegrateServiceProvider is enabled
+        var needsFallbackProvider = container.IntegrateServiceProvider;
 
         if(needsFallbackProvider)
         {
@@ -461,7 +461,7 @@ partial class IocSourceGenerator
         foreach(var module in container.ImportedModules)
         {
             var fieldName = GetModuleFieldName(module.Name);
-            if(container.ResolveIServiceCollection && hasParameter)
+            if(container.IntegrateServiceProvider && hasParameter)
             {
                 writer.WriteLine($"{fieldName} = new {module.Name}(fallbackProvider);");
             }
@@ -625,8 +625,8 @@ partial class IocSourceGenerator
             return $"{cached.ResolverMethodName}()";
         }
 
-        // Fallback to GetService/GetRequiredService (only when ResolveIServiceCollection is enabled)
-        if(container.ResolveIServiceCollection)
+        // Fallback to GetService/GetRequiredService (only when IntegrateServiceProvider is enabled)
+        if(container.IntegrateServiceProvider)
         {
             if(key is not null)
             {
@@ -1793,7 +1793,7 @@ partial class IocSourceGenerator
         }
 
         // Fallback
-        if(container.ResolveIServiceCollection)
+        if(container.IntegrateServiceProvider)
         {
             writer.WriteLine("return _fallbackProvider?.GetService(serviceType);");
         }
@@ -1852,7 +1852,7 @@ partial class IocSourceGenerator
                 }
 
                 // Fallback in switch default case
-                if(container.ResolveIServiceCollection)
+                if(container.IntegrateServiceProvider)
                 {
                     writer.WriteLine("_ => _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null");
                 }
@@ -1867,7 +1867,7 @@ partial class IocSourceGenerator
             else
             {
                 // No keyed services, just return fallback
-                if(container.ResolveIServiceCollection)
+                if(container.IntegrateServiceProvider)
                 {
                     writer.WriteLine("return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
                 }
@@ -1886,7 +1886,7 @@ partial class IocSourceGenerator
             writer.WriteLine();
 
             // Fallback
-            if(container.ResolveIServiceCollection)
+            if(container.IntegrateServiceProvider)
             {
                 writer.WriteLine("return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
             }
@@ -2142,7 +2142,7 @@ partial class IocSourceGenerator
             writer.WriteLine();
         }
 
-        if(container.ResolveIServiceCollection)
+        if(container.IntegrateServiceProvider)
         {
             writer.WriteLine("return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);");
         }
@@ -2170,7 +2170,7 @@ partial class IocSourceGenerator
 
         writer.WriteLine();
 
-        if(container.ResolveIServiceCollection)
+        if(container.IntegrateServiceProvider)
         {
             writer.WriteLine("return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);");
         }

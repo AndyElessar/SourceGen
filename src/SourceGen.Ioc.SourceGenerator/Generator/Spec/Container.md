@@ -37,7 +37,7 @@ The generated container implements the following interfaces:
 |`ISupportRequiredService`|Required service resolution|
 |`IServiceScopeFactory`|Create service scopes|
 |`IServiceScope`|Represents a service scope (container is its own scope)|
-|`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `ResolveIServiceCollection = true` AND DI package is referenced)|
+|`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `IntegrateServiceProvider = true` AND DI package is referenced)|
 |`IDisposable`|Synchronous disposal|
 |`IAsyncDisposable`|Asynchronous disposal|
 
@@ -63,7 +63,7 @@ The container generates generic instance methods matching the signatures from `S
 
 ```csharp
 [IocContainer(
-    ResolveIServiceCollection = true,  // Allow fallback to IServiceCollection and implement IServiceProviderFactory
+    IntegrateServiceProvider = true,   // Allow fallback to IServiceCollection and implement IServiceProviderFactory
     ExplicitOnly = false,              // Only register explicitly marked services
     IncludeTags = ["Tag1", "Tag2"],    // Only include services with specified tags
     UseSwitchStatement = false,        // Use FrozenDictionary by default; set true to use switch statement
@@ -75,7 +75,7 @@ public partial class MyContainer;
 
 |Property|Default|Description|
 |:---|:---|:---|
-|`ResolveIServiceCollection`|`true`|When true, unknown dependencies fallback to external IServiceProvider and implement `IServiceProviderFactory<IServiceCollection>`|
+|`IntegrateServiceProvider`|`true`|Whether the container should integrate with external IServiceProvider and implement `IServiceProviderFactory<IServiceCollection>`|
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|
@@ -1609,8 +1609,8 @@ Users can declare partial methods or partial properties in the `[IocContainer]` 
 1. The return type is matched against registered service types (using fully qualified name)
 2. If `[IocInject]` attribute is present, the `Key` value is used for keyed service resolution
 3. If a matching internal resolver exists, it is called directly (fast-path)
-4. If no internal resolver exists but `ResolveIServiceCollection = true`, fallback to `GetService`/`GetRequiredService`
-5. If no resolver exists and `ResolveIServiceCollection = false`, nullable returns `default`, non-nullable throws
+4. If no internal resolver exists but `IntegrateServiceProvider = true`, fallback to `GetService`/`GetRequiredService`
+5. If no resolver exists and `IntegrateServiceProvider = false`, nullable returns `default`, non-nullable throws
 
 **Naming Conflict Handling:**
 If a user-declared partial method name conflicts with an internally generated resolver method name (e.g., both named `GetMyService`), the internal resolver is automatically renamed with a `_Resolve` suffix to avoid compilation errors.
@@ -1662,15 +1662,15 @@ partial class AppContainer
 #endregion
 ```
 
-**Analyzer Diagnostic**: When `ResolveIServiceCollection = false` and a non-nullable partial accessor's return type is not registered, report error `SGIOC021: Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.`
+**Analyzer Diagnostic**: When `IntegrateServiceProvider = false` and a non-nullable partial accessor's return type is not registered, report error `SGIOC021: Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.`
 
-### ResolveIServiceCollection = false
+### IntegrateServiceProvider = false
 
 When disabled, the container operates in standalone mode without fallback to external `IServiceProvider`.
 
 ```csharp
 #region Define:
-[IocContainer(ResolveIServiceCollection = false)]
+[IocContainer(IntegrateServiceProvider = false)]
 public partial class StandaloneContainer;
 #endregion
 
@@ -1701,7 +1701,7 @@ partial class StandaloneContainer
 #endregion
 ```
 
-**Analyzer Diagnostic**: When a dependency cannot be resolved and `ResolveIServiceCollection = false`, report error `SGIOC018: Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`
+**Analyzer Diagnostic**: When a dependency cannot be resolved and `IntegrateServiceProvider = false`, report error `SGIOC018: Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`
 
 ### ExplicitOnly = true
 
@@ -1757,11 +1757,11 @@ public partial class FeatureContainer;
 
 ### IServiceProviderFactory Implementation
 
-When `ResolveIServiceCollection = true` **AND** the `Microsoft.Extensions.DependencyInjection` package is referenced, the container implements `IServiceProviderFactory<IServiceCollection>` to integrate with ASP.NET Core and other hosts:
+When `IntegrateServiceProvider = true` **AND** the `Microsoft.Extensions.DependencyInjection` package is referenced, the container implements `IServiceProviderFactory<IServiceCollection>` to integrate with ASP.NET Core and other hosts:
 
 ```csharp
 #region Define:
-[IocContainer(ResolveIServiceCollection = true)]
+[IocContainer(IntegrateServiceProvider = true)]
 public partial class AppContainer;
 #endregion
 
@@ -1840,7 +1840,7 @@ When resolving services, the container follows this order:
 1. **Built-in services**: `IServiceProvider`, `IServiceScopeFactory`, and the container type itself are registered as entries in `_localResolvers`. In **dictionary mode** (default), they are resolved via `_serviceResolvers` FrozenDictionary like any other service — no separate hardcoded `if`-checks are needed. In **switch mode** (`UseSwitchStatement = true`), they are resolved via hardcoded `if`-checks at the top of `GetService(Type)` and `IsService(Type)`.
 2. **Local services**: Services registered in this container (also in `_localResolvers`)
 3. **Imported modules**: Services from `IocImportModuleAttribute`
-4. **Fallback provider**: External `IServiceProvider` (if `ResolveIServiceCollection = true`)
+4. **Fallback provider**: External `IServiceProvider` (if `IntegrateServiceProvider = true`)
 
 For duplicate registrations (same service type and key):
 
@@ -2004,7 +2004,7 @@ ExplicitOnly = false AND IncludeTags empty  →  All registrations included
 
 |ID|Severity|Message|Trigger|
 |:---|:---|:---|:---|
-|`SGIOC018`|Error|Unable to resolve service '{ServiceType}' for container '{ContainerType}'|Unresolvable dependency when `ResolveIServiceCollection = false`|
+|`SGIOC018`|Error|Unable to resolve service '{ServiceType}' for container '{ContainerType}'|Unresolvable dependency when `IntegrateServiceProvider = false`|
 |`SGIOC019`|Error|Container class '{ClassName}' must be declared as partial and cannot be static|Missing `partial` keyword or has `static` modifier|
 |`SGIOC020`|Warning|Container '{ContainerType}' specifies UseSwitchStatement = true but has imported modules|`UseSwitchStatement = true` with `[IocImportModule]`|
-|`SGIOC021`|Error|Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'|Partial accessor return type not registered when `ResolveIServiceCollection = false`|
+|`SGIOC021`|Error|Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'|Partial accessor return type not registered when `IntegrateServiceProvider = false`|

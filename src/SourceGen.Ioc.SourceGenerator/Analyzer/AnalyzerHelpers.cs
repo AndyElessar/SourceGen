@@ -30,7 +30,7 @@ internal static class AnalyzerHelpers
 
     /// <summary>
     /// Checks if a service type can always be resolved (well-known types only).
-    /// Note: IEnumerable&lt;T&gt; is NOT always resolvable when ResolveIServiceCollection = false,
+    /// Note: IEnumerable&lt;T&gt; is NOT always resolvable when IntegrateServiceProvider = false,
     /// as T must be registered to have any elements.
     /// </summary>
     /// <param name="serviceType">The service type to check.</param>
@@ -304,7 +304,7 @@ internal static class AnalyzerHelpers
             return true;
 
         // Note: IEnumerable<T> is handled separately by the caller
-        // as it depends on whether T is registered when ResolveIServiceCollection = false
+        // as it depends on whether T is registered when IntegrateServiceProvider = false
 
         // Check for special attributes that make the parameter resolvable
         foreach (var attribute in param.GetAttributes())

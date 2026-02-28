@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 namespace SourceGen.Ioc;
 
@@ -13,7 +13,7 @@ public sealed class IocContainerAttribute : Attribute
     /// Gets a value indicating whether the container should be able to resolve services from external IServiceProvider
     /// and implement IServiceProviderFactory&lt;IServiceCollection&gt;.
     /// </summary>
-    public bool ResolveIServiceCollection { get; init; } = true;
+    public bool IntegrateServiceProvider { get; init; } = true;
 
     /// <summary>
     /// Gets a value indicating whether only explicitly annotated on the class should be included in the generated container.

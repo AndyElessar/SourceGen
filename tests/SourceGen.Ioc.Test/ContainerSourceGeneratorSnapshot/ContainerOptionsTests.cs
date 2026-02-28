@@ -9,7 +9,7 @@ namespace SourceGen.Ioc.Test.ContainerSourceGeneratorSnapshot;
 public class ContainerOptionsTests
 {
     [Test]
-    public async Task Container_WithResolveIServiceCollectionFalse_DoesNotGenerateServiceProviderFactory()
+    public async Task Container_WithIntegrateServiceProviderFalse_DoesNotGenerateServiceProviderFactory()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +22,7 @@ public class ContainerOptionsTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -68,7 +68,7 @@ public class ContainerOptionsTests
     public async Task Container_WithoutDIPackage_DoesNotGenerateIServiceProviderFactory()
     {
         // When Microsoft.Extensions.DependencyInjection package is not referenced,
-        // IServiceProviderFactory should not be generated even if ResolveIServiceCollection = true
+        // IServiceProviderFactory should not be generated even if IntegrateServiceProvider = true
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -80,7 +80,7 @@ public class ContainerOptionsTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
             public class MyService : IMyService { }
 
-            [IocContainer(ResolveIServiceCollection = true)]
+            [IocContainer(IntegrateServiceProvider = true)]
             public partial class TestContainer { }
             """;
 
@@ -217,3 +217,4 @@ public class ContainerOptionsTests
         await Verify(generatedSource);
     }
 }
+

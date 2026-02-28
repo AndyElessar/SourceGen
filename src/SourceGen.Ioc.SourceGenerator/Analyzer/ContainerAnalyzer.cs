@@ -11,7 +11,7 @@ namespace SourceGen.Ioc;
 public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 {
     /// <summary>
-    /// SGIOC018: Unable to resolve service - A dependency cannot be resolved when ResolveIServiceCollection = false.
+    /// SGIOC018: Unable to resolve service - A dependency cannot be resolved when IntegrateServiceProvider = false.
     /// </summary>
     public static readonly DiagnosticDescriptor UnableToResolveService = new(
         id: "SGIOC018",
@@ -20,7 +20,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When ResolveIServiceCollection is false, all dependencies must be registered in the container. No fallback to external IServiceProvider is available.",
+        description: "When IntegrateServiceProvider is false, all dependencies must be registered in the container. No fallback to external IServiceProvider is available.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
@@ -48,7 +48,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         description: "When a container has one or more [IocImportModule] attributes, UseSwitchStatement is ignored and FrozenDictionary is always used for service resolution.");
 
     /// <summary>
-    /// SGIOC021: Unable to resolve partial accessor service - A partial method/property's return type cannot be resolved when ResolveIServiceCollection = false.
+    /// SGIOC021: Unable to resolve partial accessor service - A partial method/property's return type cannot be resolved when IntegrateServiceProvider = false.
     /// </summary>
     public static readonly DiagnosticDescriptor UnableToResolvePartialAccessor = new(
         id: "SGIOC021",
@@ -57,7 +57,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When ResolveIServiceCollection is false, the return type of a partial method or property accessor must be a registered service. No fallback to external IServiceProvider is available.",
+        description: "When IntegrateServiceProvider is false, the return type of a partial method or property accessor must be a registered service. No fallback to external IServiceProvider is available.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
@@ -86,7 +86,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         // Collect registered services for SGIOC018 analysis
         var registeredServiceTypes = new ConcurrentDictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
 
-        // Collect containers with ResolveIServiceCollection = false for SGIOC018 analysis
+        // Collect containers with IntegrateServiceProvider = false for SGIOC018 analysis
         var containersWithNoFallback = new ConcurrentBag<INamedTypeSymbol>();
 
         var analyzerContext = new ContainerAnalyzerContext(
@@ -95,7 +95,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             containersWithNoFallback);
 
         // SGIOC019: Check for partial modifier and static modifier on container classes
-        // Also collect containers with ResolveIServiceCollection = false for SGIOC018
+        // Also collect containers with IntegrateServiceProvider = false for SGIOC018
         context.RegisterSymbolAction(ctx => AnalyzeContainerClass(ctx, analyzerContext), SymbolKind.NamedType);
 
         // Collect all registered services for SGIOC018 analysis
@@ -144,14 +144,14 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Collect containers with ResolveIServiceCollection = false for SGIOC018
-        var resolveIServiceCollection = true;
+        // Collect containers with IntegrateServiceProvider = false for SGIOC018
+        var integrateServiceProvider = true;
         var useSwitchStatement = false;
         foreach (var namedArg in containerAttribute.NamedArguments)
         {
-            if (namedArg.Key is "ResolveIServiceCollection" && namedArg.Value.Value is bool resolveValue)
+            if (namedArg.Key is "IntegrateServiceProvider" && namedArg.Value.Value is bool integrateValue)
             {
-                resolveIServiceCollection = resolveValue;
+                integrateServiceProvider = integrateValue;
             }
             else if (namedArg.Key is "UseSwitchStatement" && namedArg.Value.Value is bool switchValue)
             {
@@ -159,7 +159,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        if (!resolveIServiceCollection)
+        if (!integrateServiceProvider)
         {
             analyzerContext.ContainersWithNoFallback.Add(typeSymbol);
         }
@@ -243,11 +243,11 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC018: Analyzes container dependencies when ResolveIServiceCollection = false.
+    /// SGIOC018: Analyzes container dependencies when IntegrateServiceProvider = false.
     /// </summary>
     private static void AnalyzeContainerDependencies(CompilationAnalysisContext context, ContainerAnalyzerContext analyzerContext)
     {
-        // Skip if no containers with ResolveIServiceCollection = false
+        // Skip if no containers with IntegrateServiceProvider = false
         if (analyzerContext.ContainersWithNoFallback.IsEmpty)
             return;
 
@@ -306,7 +306,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// SGIOC021: Analyzes partial method/property accessors in a container class to ensure their return types are registered.
-    /// Only applies when ResolveIServiceCollection = false.
+    /// Only applies when IntegrateServiceProvider = false.
     /// </summary>
     private static void AnalyzePartialAccessorDependencies(
         CompilationAnalysisContext context,
@@ -492,3 +492,4 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         public ConcurrentBag<INamedTypeSymbol> ContainersWithNoFallback { get; } = containersWithNoFallback;
     }
 }
+

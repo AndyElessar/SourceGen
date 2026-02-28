@@ -35,9 +35,9 @@ public class GenericServiceContainerTests
     }
 
     [Test]
-    public async Task Container_WithOpenGenerics_NoResolveIServiceCollection_FallbacksToProviderForGenericTypes()
+    public async Task Container_WithOpenGenerics_NoIntegrateServiceProvider_FallbacksToProviderForGenericTypes()
     {
-        // When ResolveIServiceCollection = false but there are open generic registrations,
+        // When IntegrateServiceProvider = false but there are open generic registrations,
         // the generated code should still fallback to _fallbackProvider for generic types
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -61,7 +61,7 @@ public class GenericServiceContainerTests
                 public MyService(ILogger<MyService> logger) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -101,7 +101,7 @@ public class GenericServiceContainerTests
                 public UserService(IRepository<User> userRepo) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false, UseSwitchStatement = true)]
+            [IocContainer(IntegrateServiceProvider = false, UseSwitchStatement = true)]
             public partial class TestContainer { }
             """;
 
@@ -112,3 +112,4 @@ public class GenericServiceContainerTests
         await Verify(generatedSource);
     }
 }
+

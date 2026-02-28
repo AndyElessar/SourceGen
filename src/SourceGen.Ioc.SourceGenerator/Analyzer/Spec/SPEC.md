@@ -249,11 +249,11 @@ Report when:
 
 ### SGIOC018 - Error - Design - Unable to resolve service
 
-Report when a container has `ResolveIServiceCollection = false` and a constructor dependency cannot be resolved from registered services.
+Report when a container has `IntegrateServiceProvider = false` and a constructor dependency cannot be resolved from registered services.
 
 **Analysis:**
 
-- Applies only when `[IocContainer(ResolveIServiceCollection = false)]` is used.
+- Applies only when `[IocContainer(IntegrateServiceProvider = false)]` is used.
 - Analyzes all registered services in the container scope.
 - For each service's dependencies:
   - Constructor parameters: Checks if the dependency type is registered in the container.
@@ -302,18 +302,18 @@ When a container imports modules, service registrations come from multiple sourc
 
 ### SGIOC021 - Error - Design - Unable to resolve partial accessor service
 
-Report when a partial method or property accessor in a container class references a service type that is not registered and `ResolveIServiceCollection = false`.
+Report when a partial method or property accessor in a container class references a service type that is not registered and `IntegrateServiceProvider = false`.
 
 **Analysis:**
 
-- Checks classes marked with `[IocContainer]` attribute that have `ResolveIServiceCollection = false`.
+- Checks classes marked with `[IocContainer]` attribute that have `IntegrateServiceProvider = false`.
 - Scans the container class members for partial methods (non-void, parameterless, non-generic) and partial properties (with getter).
 - Checks if the return type of each non-nullable partial accessor is a registered service type.
 - Reports when a non-nullable partial accessor's return type is not found among registered services.
 
 **Rationale:**
 
-When `ResolveIServiceCollection = false`, there is no fallback to an external `IServiceProvider`. If a partial accessor references a service type that is not registered, it cannot be resolved at runtime. Nullable accessors are exempt because they can safely return `null`.
+When `IntegrateServiceProvider = false`, there is no fallback to an external `IServiceProvider`. If a partial accessor references a service type that is not registered, it cannot be resolved at runtime. Nullable accessors are exempt because they can safely return `null`.
 
 **Message format:** `Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.`
 

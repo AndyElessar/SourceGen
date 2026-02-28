@@ -10,7 +10,7 @@ You are an implementation specialist for the SourceGen C# source generator proje
 
 ## Startup
 
-1. Read `/memories/session/plan.md` using the memory tool to load the approved plan
+1. Read `/memories/session/plan.md` via #tool:vscode/memory to load the approved plan
 2. Use #tool:todo to create a todo list tracking each step from the plan
 3. Execute each step sequentially
 

@@ -1,14 +1,14 @@
 namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC018: Unable to resolve service when ResolveIServiceCollection = false.
+/// Tests for SGIOC018: Unable to resolve service when IntegrateServiceProvider = false.
 /// </summary>
 [Category(Constants.Analyzer)]
 [Category(Constants.SGIOC018)]
 public class SGIOC018Tests
 {
     [Test]
-    public async Task SGIOC018_UnregisteredDependency_WithResolveIServiceCollectionFalse_ReportsDiagnostic()
+    public async Task SGIOC018_UnregisteredDependency_WithIntegrateServiceProviderFalse_ReportsDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +26,7 @@ public class SGIOC018Tests
                 public MyService(IUnregisteredService unregistered) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -38,7 +38,7 @@ public class SGIOC018Tests
     }
 
     [Test]
-    public async Task SGIOC018_RegisteredDependency_WithResolveIServiceCollectionFalse_NoDiagnostic()
+    public async Task SGIOC018_RegisteredDependency_WithIntegrateServiceProviderFalse_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -59,7 +59,7 @@ public class SGIOC018Tests
                 public MyService(IDependency dependency) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -70,7 +70,7 @@ public class SGIOC018Tests
     }
 
     [Test]
-    public async Task SGIOC018_UnregisteredDependency_WithResolveIServiceCollectionTrue_NoDiagnostic()
+    public async Task SGIOC018_UnregisteredDependency_WithIntegrateServiceProviderTrue_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -88,7 +88,7 @@ public class SGIOC018Tests
                 public MyService(IUnregisteredService unregistered) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = true)]
+            [IocContainer(IntegrateServiceProvider = true)]
             public partial class TestContainer { }
             """;
 
@@ -99,7 +99,7 @@ public class SGIOC018Tests
     }
 
     [Test]
-    public async Task SGIOC018_DefaultResolveIServiceCollection_NoDiagnostic()
+    public async Task SGIOC018_DefaultIntegrateServiceProvider_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -145,7 +145,7 @@ public class SGIOC018Tests
                 public MyService(IServiceProvider serviceProvider) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -178,7 +178,7 @@ public class SGIOC018Tests
                 public MyService(IEnumerable<IPlugin> plugins) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -208,7 +208,7 @@ public class SGIOC018Tests
                 public MyService(IEnumerable<IPlugin> plugins) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -238,7 +238,7 @@ public class SGIOC018Tests
                 public MyService(IOptionalService? optional = null) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -268,7 +268,7 @@ public class SGIOC018Tests
                 public IUnregisteredService Dependency { get; set; } = default!;
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -299,7 +299,7 @@ public class SGIOC018Tests
                 public void Initialize(IUnregisteredService dependency) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -330,7 +330,7 @@ public class SGIOC018Tests
                 public MyService(IUnregistered1 dep1, IUnregistered2 dep2) { }
             }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer { }
             """;
 
@@ -340,3 +340,4 @@ public class SGIOC018Tests
         await Assert.That(sgioc018).Count().IsEqualTo(2);
     }
 }
+

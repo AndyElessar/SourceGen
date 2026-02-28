@@ -165,7 +165,7 @@ public class PartialAccessorTests
 
             public interface IUnknownService { }
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public partial class TestContainer
             {
                 public partial IUnknownService GetUnknownService();
@@ -240,3 +240,4 @@ public class PartialAccessorTests
         await Verify(generatedSource);
     }
 }
+

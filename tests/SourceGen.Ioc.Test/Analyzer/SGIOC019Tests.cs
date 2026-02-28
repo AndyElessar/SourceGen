@@ -100,7 +100,7 @@ public class SGIOC019Tests
 
             namespace TestNamespace;
 
-            [IocContainer(ResolveIServiceCollection = false)]
+            [IocContainer(IntegrateServiceProvider = false)]
             public class TestContainer { }
             """;
 
@@ -190,3 +190,4 @@ public class SGIOC019Tests
         await Assert.That(sgioc019[0].GetMessage()).Contains("StaticNonPartialContainer");
     }
 }
+

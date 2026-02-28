@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc;
+namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
@@ -28,7 +28,7 @@ partial class IocSourceGenerator
             return null;
 
         // Extract container options from attribute
-        var resolveIServiceCollection = true;
+        var integrateServiceProvider = true;
         var explicitOnly = false;
         var useSwitchStatement = false;
         var threadSafeStrategy = ThreadSafeStrategy.Lock;
@@ -39,9 +39,9 @@ partial class IocSourceGenerator
         {
             switch(namedArg.Key)
             {
-                case "ResolveIServiceCollection":
-                    if(namedArg.Value.Value is bool resolveValue)
-                        resolveIServiceCollection = resolveValue;
+                case "IntegrateServiceProvider":
+                    if(namedArg.Value.Value is bool integrateValue)
+                        integrateServiceProvider = integrateValue;
                     break;
 
                 case "ExplicitOnly":
@@ -98,7 +98,7 @@ partial class IocSourceGenerator
             containerTypeName,
             containerNamespace,
             className,
-            resolveIServiceCollection,
+            integrateServiceProvider,
             explicitOnly,
             includeTags ?? [],
             useSwitchStatement,
@@ -299,3 +299,4 @@ partial class IocSourceGenerator
         return registrations.ToImmutableEquatableArray();
     }
 }
+

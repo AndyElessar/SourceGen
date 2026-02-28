@@ -87,7 +87,7 @@ The generated container can implement the following interfaces (depending on opt
 |`ISupportRequiredService`|Supports required-service semantics.|
 |`IServiceScopeFactory`|Creates child scopes.|
 |`IServiceScope`|Container instance is also a scope.|
-|`IServiceProviderFactory<IServiceCollection>`|Generated only when `ResolveIServiceCollection = true` and DI package support is available; integrates the generated container with `IServiceCollection` (`CreateBuilder` / `CreateServiceProvider`).|
+|`IServiceProviderFactory<IServiceCollection>`|Generated only when `IntegrateServiceProvider = true` and DI package support is available; integrates the generated container with `IServiceCollection` (`CreateBuilder` / `CreateServiceProvider`).|
 |`IDisposable` / `IAsyncDisposable`|Disposes tracked services and scope resources.|
 
 ## Container Options
@@ -96,7 +96,7 @@ Configure generation with `IocContainerAttribute` properties:
 
 |Property|Default|Description|
 |:---|:---|:---|
-|`ResolveIServiceCollection`|`true`|Allow fallback to external `IServiceProvider` for unknown services. The generated container does not resolve `IServiceCollection` by itself.|
+|`IntegrateServiceProvider`|`true`|Allow fallback to external `IServiceProvider` for unknown services. The generated container does not resolve `IServiceCollection` by itself.|
 |`ExplicitOnly`|`false`|Only include services explicitly associated with this container class.|
 |`IncludeTags`|`[]`|Include only services that match at least one tag.|
 |`UseSwitchStatement`|`false`|Use switch/if resolver path instead of `FrozenDictionary` (typically only beneficial for small service counts).|
@@ -110,12 +110,12 @@ Configure generation with `IocContainerAttribute` properties:
 > If modules are imported with `[IocImportModule]`, `UseSwitchStatement = true` is ignored and analyzer `SGIOC020` is reported.
 
 > [!IMPORTANT]
-> `ResolveIServiceCollection` means "enable fallback to an external `IServiceProvider`", not "resolve `IServiceCollection` inside the generated container".
+> `IntegrateServiceProvider` means "enable fallback to an external `IServiceProvider`", not "resolve `IServiceCollection` inside the generated container".
 > If you need that fallback behavior, provide an external provider (via `new AppContainer(fallbackProvider)`).
 
 ### Default Values at a Glance
 
-- `ResolveIServiceCollection = true`
+- `IntegrateServiceProvider = true`
 - `ExplicitOnly = false`
 - `IncludeTags = []`
 - `UseSwitchStatement = false`
@@ -250,10 +250,10 @@ private AppContainer(AppContainer parent)
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC018|Error|Container cannot resolve a dependency when `ResolveIServiceCollection = false`.|
+|SGIOC018|Error|Container cannot resolve a dependency when `IntegrateServiceProvider = false`.|
 |SGIOC019|Error|Container class must be `partial` and cannot be `static`.|
 |SGIOC020|Warning|`UseSwitchStatement = true` is ignored when importing modules.|
-|SGIOC021|Error|Partial accessor return type cannot be resolved when `ResolveIServiceCollection = false`.|
+|SGIOC021|Error|Partial accessor return type cannot be resolved when `IntegrateServiceProvider = false`.|
 
 ---
 
