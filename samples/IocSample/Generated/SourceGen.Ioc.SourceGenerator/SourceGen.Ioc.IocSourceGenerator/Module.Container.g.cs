@@ -787,7 +787,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
-        var fallbackProvider = containerBuilder.BuildServiceProvider();
+        var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
         return new Module(fallbackProvider);
     }
 

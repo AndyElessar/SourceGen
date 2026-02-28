@@ -696,7 +696,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
-        var fallbackProvider = containerBuilder.BuildServiceProvider();
+        var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
         return new AppContainer(fallbackProvider);
     }
 
@@ -1781,7 +1781,7 @@ partial class AppContainer : IServiceProviderFactory<IServiceCollection>, /* ...
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         // Build the fallback provider from IServiceCollection
-        var fallbackProvider = containerBuilder.BuildServiceProvider();
+        var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
         return new AppContainer(fallbackProvider);
     }
 }

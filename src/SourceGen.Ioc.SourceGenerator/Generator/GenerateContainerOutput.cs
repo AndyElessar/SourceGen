@@ -2318,7 +2318,7 @@ partial class IocSourceGenerator
         writer.WriteLine("public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)");
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine("var fallbackProvider = containerBuilder.BuildServiceProvider();");
+        writer.WriteLine("var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);");
         writer.WriteLine($"return new {container.ClassName}(fallbackProvider);");
         writer.Indentation--;
         writer.WriteLine("}");

@@ -32,7 +32,7 @@ End users of the SourceGen NuGet package — C# developers who want to use sourc
 
 - **Overview.md** — Must list all documentation files as a Table of Contents with links and brief descriptions, serving as the entry point for users
 - **Feature files** — Each feature gets its own numbered file (e.g., `02_Basic.md`, `05_Keyed.md`)
-- Every document ends with a navigation link back to Overview: `[← Back to Overview](01_Overview.md)`
+- Every document ends with a navigation link back to Overview
 
 ### Generated Code Examples
 

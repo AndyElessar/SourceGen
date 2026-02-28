@@ -161,7 +161,7 @@ services.AddScoped<IMyService>((IServiceProvider sp) =>
 
 ### With Tags
 
-Use tags to control which registration methods include the implementation types:
+Use tags to control which implementations are registered when calling the generated method with tags:
 
 ```csharp
 [assembly: IocRegisterDefaults<IMyService>(
@@ -172,7 +172,6 @@ Use tags to control which registration methods include the implementation types:
 [assembly: IocRegisterDefaults<IMyService>(
     ServiceLifetime.Scoped,
     Tags = ["Development"],
-    TagOnly = true,
     ImplementationTypes = [typeof(MockService)])]
 
 public interface IMyService;
@@ -180,34 +179,30 @@ public interface IMyService;
 public class ProductionService : IMyService;
 public class MockService : IMyService;
 
-// Generated methods:
-// - AddMyAssembly() includes ProductionService
-// - AddMyAssembly_Production() includes ProductionService
-// - AddMyAssembly_Development() includes MockService only
+// Usage:
+// - AddMyAssembly() registers services without tags only (none in this example)
+// - AddMyAssembly(["Production"]) registers ProductionService
+// - AddMyAssembly(["Development"]) registers MockService
 ```
 
 <details>
 <summary>Generated Code</summary>
 
 ```csharp
-public static IServiceCollection AddMyAssembly(this IServiceCollection services)
+public static IServiceCollection AddMyAssembly(this IServiceCollection services, params IEnumerable<string> tags)
 {
-    services.AddScoped<ProductionService, ProductionService>();
-    services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ProductionService>());
-    return services;
-}
+    if (tags.Contains("Production"))
+    {
+        services.AddScoped<ProductionService, ProductionService>();
+        services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ProductionService>());
+    }
 
-public static IServiceCollection AddMyAssembly_Production(this IServiceCollection services)
-{
-    services.AddScoped<ProductionService, ProductionService>();
-    services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<ProductionService>());
-    return services;
-}
+    if (tags.Contains("Development"))
+    {
+        services.AddScoped<MockService, MockService>();
+        services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MockService>());
+    }
 
-public static IServiceCollection AddMyAssembly_Development(this IServiceCollection services)
-{
-    services.AddScoped<MockService, MockService>();
-    services.AddScoped<IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<MockService>());
     return services;
 }
 ```

@@ -33,6 +33,9 @@ sourcegen-ioc add [options]
 |`-v`, `--verbose`|Detailed logging message|`false`|
 |`--log`|Logging file path|`""`|
 
+> [!NOTE]
+> You must specify at least one matcher: `-cn/--class-name-regex` or `--full-regex`.
+
 #### Class Name Regex
 
 When using `-cn` or `--class-name-regex` option, the actual regex used is:
@@ -50,10 +53,10 @@ This matches non-static `public` or `internal` classes.
 
 ```bash
 # Search all .cs files in current directory and add attributes
-sourcegen-ioc add
+sourcegen-ioc add -cn ".*"
 
 # Search specified directory including subdirectories
-sourcegen-ioc add -t ./src -s
+sourcegen-ioc add -t ./src -s -cn ".*"
 
 # Match only classes ending with Service
 sourcegen-ioc add -cn ".*Service"
@@ -177,7 +180,7 @@ sourcegen-ioc generate ioc-defaults [options]
 When using `-cn` and `-b` options, the actual regex used is:
 
 ```regex
-(public|internal)\s+(?!static\s+)[\w\s]*class\s+(classNameRegex)\s*:\s*[\w\s,<>]*?(baseTypeRegex)
+(public|internal)\s+(?!static\s+)[\w\s]*class\s+(classNameRegex)\s*:\s*(?:[^,{\n]+,\s*)*(baseTypeRegex)(?=\s*[,{]|$)
 ```
 
 This matches non-static `public` or `internal` classes that inherit from the specified base type/interface.
@@ -186,7 +189,10 @@ This matches non-static `public` or `internal` classes that inherit from the spe
 - **Group 3**: Base type/interface (matched by `baseTypeRegex`)
 
 > [!IMPORTANT]
-> The tool automatically converts `.*` to `\w*` and `.+` to `\w+` in your pattern to ensure only valid identifier characters are matched.
+> The tool sanitizes wildcard patterns before building the regex:
+>
+> - For `-cn` (class name): `.*` -> `\w*`, `.+` -> `\w+`
+> - For `-b` (base type): `.*` -> `[\w.<>]*`, `.+` -> `[\w.<>]+`
 
 #### Class Name and Namespace Extraction
 
@@ -214,6 +220,9 @@ sourcegen-ioc generate ioc-defaults -o ./output.cs -cn ".*Handler" -b "IHandler<
 #### Output Format
 
 The command generates a file with the following format:
+
+> [!WARNING]
+> Current `generate ioc-defaults` output does not include the required `ServiceLifetime` constructor argument for `IocRegisterDefaults`. Add the lifetime manually after generation.
 
 **Standard syntax (default):**
 
@@ -272,7 +281,7 @@ sourcegen-ioc cli-schema -t ./cli-schema.json
 
 ### Add DI Registration to Existing Project
 
-When you have an existing project and want to batch add `[IoCRegister]` attributes:
+When you have an existing project and want to batch add `[IocRegister]` attributes:
 
 ```bash
 # 1. Use dry-run first to preview which files will be affected

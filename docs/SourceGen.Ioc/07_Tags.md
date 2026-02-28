@@ -71,15 +71,15 @@ public static IServiceCollection AddMyProject(this IServiceCollection services, 
     // Services without tags - only register when no tags passed
     if (!tags.Any())
     {
-        services.AddSingleton<global::MyNamespace.DefaultService, global::MyNamespace.DefaultService>();
-        services.AddSingleton<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.DefaultService>());
+        services.AddTransient<global::MyNamespace.DefaultService, global::MyNamespace.DefaultService>();
+        services.AddTransient<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.DefaultService>());
     }
 
     // Services with tags - only register when tags match
     if (tags.Contains("Feature1"))
     {
-        services.AddSingleton<global::MyNamespace.FeatureService, global::MyNamespace.FeatureService>();
-        services.AddSingleton<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.FeatureService>());
+        services.AddTransient<global::MyNamespace.FeatureService, global::MyNamespace.FeatureService>();
+        services.AddTransient<global::MyNamespace.IService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.FeatureService>());
     }
 
     return services;
@@ -93,10 +93,10 @@ public static IServiceCollection AddMyProject(this IServiceCollection services, 
 services.AddMyProject();
 
 // Register only services matching "Mediator" tag (NOT services without tags)
-services.AddMyProject("Mediator");
+services.AddMyProject(["Mediator"]);
 
 // Register only services matching "Feature1" or "Feature2" tags (NOT services without tags)
-services.AddMyProject("Feature1", "Feature2");
+services.AddMyProject(["Feature1", "Feature2"]);
 
 // Using an array of tags
 string[] myTags = ["Mediator", "Feature1"];
@@ -113,7 +113,7 @@ Apply tags to all implementations via `IocRegisterDefaults`:
     Tags = ["Mediator"])]  // All IMediator implementations only register when "Mediator" tag is passed
 public interface IMediator;
 
-[IoCRegister]
+[IocRegister]
 internal class Mediator : IMediator;  // Only registered with AddMyProject("Mediator")
 ```
 

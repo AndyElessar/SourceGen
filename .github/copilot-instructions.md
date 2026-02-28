@@ -29,7 +29,7 @@ When working on source generators, follow the best practices outlined here: [C# 
 Always read the relevant spec before implementing or modifying features:
 
 - [Generator Spec](../src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md) — Source Generator data flow, parse logic, and architecture
-- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
+- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
 
 ## Code Style
 
@@ -85,10 +85,11 @@ Delegate work to SubAgents for context isolation and parallel efficiency. Every 
 | Codebase exploration | `Explore` SubAgent | Read-only research, gather context before implementation |
 | Implementation | Main Agent | Apply changes with full tool access |
 | Test execution | Main Agent | Run tests via `runTests` tool |
-| Code review | `Explore` SubAgent | Review changes for correctness, conventions, and regressions |
+| Code review (code changes) | `Review` SubAgent (via `Dev.agent.md`) | Validate spec compliance, refactoring opportunities, and performance |
+| Documentation review | `DocReview` SubAgent (via `Doc.agent.md`) | Validate documentation accuracy, links, and consistency |
 
 - **MUST**: Use `Explore` SubAgent for initial codebase research before making changes.
-- **MUST**: Use `Explore` SubAgent for post-change review — check for missed edge cases, convention violations, and unintended side effects.
+- **MUST**: Use the review flow defined by the active workflow agent (`Dev.agent.md` or `Doc.agent.md`) for post-change review.
 - **MUST NOT**: Use SubAgents for file edits — only the main agent should write code.
 
 ### Mandatory Final Steps
@@ -96,12 +97,14 @@ Delegate work to SubAgents for context isolation and parallel efficiency. Every 
 Every task that modifies code **MUST** complete these steps before finishing:
 
 1. **Run Tests**: Run all related tests via terminal. Fix any failing tests before proceeding.
-2. **SubAgent Review**: Launch an `Explore` SubAgent to review the completed changes against spec, conventions, and unintended side effects.
+2. **SubAgent Review**: Follow the workflow agent's review step.
+  - For code implementation, use the `Review` SubAgent as defined in `Dev.agent.md`.
+  - For documentation updates, use the `DocReview` SubAgent as defined in `Doc.agent.md`.
 
 ## Reference
 
 - [Generator Spec](../src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md) — Data flow, parse logic, architecture
-- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
+- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
 - [C# Best Practices](./instructions/csharp.instructions.md)
 - [C# Source Generator Best Practices](./instructions/csharp-source-generator.instructions.md)
 - [TUnit Best Practices](./instructions/csharp-tunit.instructions.md)
