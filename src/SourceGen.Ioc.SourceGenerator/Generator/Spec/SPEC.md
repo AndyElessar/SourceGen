@@ -161,7 +161,7 @@ Only members with `[IocInject]` or `[Inject]`:
 |`List`|`ListTypeData`|`IList<T>`|`GetServices<T>().ToArray()`|
 |`Array`|`ArrayTypeData`|`T[]`|`GetServices<T>().ToArray()`|
 |`Lazy`|`LazyTypeData`|`Lazy<T>`|Lazy-initialized service wrapper|
-|`Func`|`FuncTypeData`|`Func<T>`|Factory delegate wrapper|
+|`Func`|`FuncTypeData`|`Func<T>` / `Func<T1,...,TReturn>`|Factory delegate wrapper|
 |`Dictionary`|`DictionaryTypeData`|`IDictionary<TKey, TValue>`|Dictionary of keyed services|
 |`KeyValuePair`|`KeyValuePairTypeData`|`KeyValuePair<TKey, TValue>`|Single keyed service entry|
 
@@ -240,7 +240,8 @@ src/SourceGen.Ioc.SourceGenerator/
 │   ├── IServiceProviderInvocations.cs     # Collect IServiceProvider invocations
 │   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation
 │   ├── Generate*Output.cs                 # Code emitters (Register, Container)
-│   ├── LazyFuncRegistrationHelper.cs      # Lazy/Func wrapper registration helper
+│   ├── LazyRegistrationHelper.cs          # Lazy wrapper registration helper
+│   ├── FuncRegistrationHelper.cs          # Func wrapper registration helper
 │   ├── KvpRegistrationHelper.cs           # KeyValuePair registration helper
 │   └── Spec/                              # SPEC.md, Registration.md, Container.md
 ├── Models/                                # Immutable data models (RegistrationData, TypeData, etc.)

@@ -222,10 +222,6 @@ internal static class AnalyzerHelpers
     {
         var fieldType = field.Type;
 
-        // Skip built-in types
-        if (fieldType.IsBuiltInTypeOrBuiltInElement)
-            return true;
-
         // Skip well-known service types
         if (IsWellKnownServiceType(fieldType))
             return true;
@@ -299,10 +295,6 @@ internal static class AnalyzerHelpers
     {
         var paramType = param.Type;
 
-        // Skip built-in types (resolved as default values)
-        if (paramType.IsBuiltInTypeOrBuiltInElement)
-            return true;
-
         // Skip if parameter has default value
         if (param.HasExplicitDefaultValue)
             return true;
@@ -352,10 +344,6 @@ internal static class AnalyzerHelpers
     public static bool IsPropertyAlwaysResolvable(IPropertySymbol property, AttributeData injectAttribute)
     {
         var propertyType = property.Type;
-
-        // Skip built-in types
-        if (propertyType.IsBuiltInTypeOrBuiltInElement)
-            return true;
 
         // Skip well-known service types
         if (IsWellKnownServiceType(propertyType))

@@ -319,7 +319,6 @@ Method parameters marked with `[IocInject]` must be analyzed using the same logi
 - `IServiceProvider` type: Pass the service provider directly
 - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
 - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
-- Built-in types without attributes and without default value: Skip (unresolvable)
 - Parameters with default values: See rule for optional parameters below
 
 **Property/Field Analysis**:
@@ -331,27 +330,26 @@ Properties and fields marked with `[IocInject]` or `[Inject]` are analyzed for i
 - `IServiceProvider` type: Pass the service provider directly
 - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
 - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
-- Built-in types without Key and without initializer: Skip (unresolvable)
 - Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
 - Property/Field with initializer: Treated as having a default value, use optional resolution
 
 **Optional Parameter Handling (constructor and method parameters)**:
 When a parameter has a default value:
 
-- If the type is a built-in type (int, string, etc.) or collection of built-in types: Skip (use default value)
-- If the type is resolvable from DI: Use `GetService<T>()` (non-required) and conditionally assign:
+- Use `GetService<T>()` (non-required) and conditionally assign:
   - If the resolved value is not null: Use the resolved value
   - If the resolved value is null: Do not specify the argument (use default value)
 
 **Wrapper Type Resolution**:
 When a parameter or member type is a recognized wrapper type, the generator resolves it differently depending on whether it is a **direct wrapper** (inner type is a plain service) or a **nested wrapper** (inner type is itself a wrapper).
 
-**Direct `Lazy<T>` / `Func<T>`**: A standalone registration is emitted so that `Lazy<T>` / `Func<T>` can be resolved directly from DI. The lifetime and tags of the registration match the inner service `T`. Consumers then resolve via `sp.GetRequiredService<Lazy<T>>()`.
+**Direct `Lazy<T>` / `Func<...>`**: Standalone registrations are emitted so wrapper services can be resolved directly from DI. Lifetimes and tags are inherited from the matched inner service `T`.
 
 | Wrapper Type | Standalone Registration | Consumer Resolution |
 | --- | --- | --- |
 | `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Lazy<T>>()` |
 | `Func<T>` | `services.AddXXX<Func<T>>(sp => new Func<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Func<T>>()` |
+| `Func<T1, ..., TReturn>` | `services.AddXXX<Func<T1,...,TReturn>>(sp => new Func<T1,...,TReturn>((arg0,...) => ...))` | `sp.GetRequiredService<Func<T1,...,TReturn>>()` |
 | `KeyValuePair<K, V>` | `services.Add(new ServiceDescriptor(typeof(KVP<K,V>), sp => ..., lifetime))` | (used by Dictionary resolution) |
 | `IDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
 | `IReadOnlyDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
@@ -363,6 +361,8 @@ When a parameter or member type is a recognized wrapper type, the generator reso
   - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => sp.GetRequiredService<T>()))`
   - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => sp.GetServices<T>())`
   - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Consumers resolve via `sp.GetServices<Lazy<T>>()` (uses standalone registrations)
+- **Multi-parameter Func matching**: For `Func<T1,...,TN-1,TReturn>`, constructor parameters and injectable members are matched by type against Func inputs using first-unused semantics. Unmatched dependencies are resolved from DI.
+- **Nested multi-parameter Func**: Not supported (e.g., `Lazy<Func<string, IService>>` with input parameters).
 - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
 - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
 - **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
@@ -482,16 +482,16 @@ When a parameter or member type is a recognized wrapper type, the generator reso
     services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
     {
         var s0_m0 = sp.GetService<IOptionalDependency>();
-        // timeout is built-in type with default value - skip
+        var s0_m1 = (int)(sp.GetService(typeof(int)) ?? 30);
         var s0 = new MyService();
         // Use named argument only when value is not null
         if (s0_m0 is not null)
         {
-            s0.Initialize(optDep: s0_m0);
+            s0.Initialize(optDep: s0_m0, timeout: s0_m1);
         }
         else
         {
-            s0.Initialize();
+            s0.Initialize(timeout: s0_m1);
         }
         return s0;
     });

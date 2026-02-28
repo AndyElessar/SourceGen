@@ -102,18 +102,33 @@ partial class IocSourceGenerator
         mainWriter.Indentation++;
 
         // Collect standalone Lazy<T>/Func<T> registrations from consumer dependencies
-        var lazyFuncEntries = CollectLazyFuncEntries(registrations);
+        var lazyEntries = CollectLazyEntries(registrations);
+        var funcEntries = CollectFuncEntries(registrations);
 
-        // Group LazyFunc entries by tag key to emit them within the correct conditional blocks
-        var lazyFuncByTagKey = new Dictionary<string, List<LazyFuncRegistrationEntry>>(StringComparer.Ordinal);
-        foreach(var entry in lazyFuncEntries)
+        // Group Lazy entries by tag key to emit them within the correct conditional blocks
+        var lazyByTagKey = new Dictionary<string, List<LazyRegistrationEntry>>(StringComparer.Ordinal);
+        foreach(var entry in lazyEntries)
         {
             var tagKey = tagKeyCache[entry.Tags];
 
-            if(!lazyFuncByTagKey.TryGetValue(tagKey, out var list))
+            if(!lazyByTagKey.TryGetValue(tagKey, out var list))
             {
                 list = [];
-                lazyFuncByTagKey[tagKey] = list;
+                lazyByTagKey[tagKey] = list;
+            }
+            list.Add(entry);
+        }
+
+        // Group Func entries by tag key to emit them within the correct conditional blocks
+        var funcByTagKey = new Dictionary<string, List<FuncRegistrationEntry>>(StringComparer.Ordinal);
+        foreach(var entry in funcEntries)
+        {
+            var tagKey = tagKeyCache[entry.Tags];
+
+            if(!funcByTagKey.TryGetValue(tagKey, out var list))
+            {
+                list = [];
+                funcByTagKey[tagKey] = list;
             }
             list.Add(entry);
         }
@@ -150,7 +165,8 @@ partial class IocSourceGenerator
                 : groupKey.Split(',');
 
             // Get matching wrapper entries for this tag group
-            lazyFuncByTagKey.TryGetValue(groupKey, out var groupLazyFuncEntries);
+            lazyByTagKey.TryGetValue(groupKey, out var groupLazyEntries);
+            funcByTagKey.TryGetValue(groupKey, out var groupFuncEntries);
             kvpByTagKey.TryGetValue(groupKey, out var groupKvpEntries);
 
             if(!isFirstGroup)
@@ -162,12 +178,12 @@ partial class IocSourceGenerator
             if(tagList.Length == 0)
             {
                 // No tags - only register when no tags passed (mutually exclusive model)
-                WriteNoTagConditionalBlock(mainWriter, groupRegistrations, groupLazyFuncEntries, groupKvpEntries);
+                WriteNoTagConditionalBlock(mainWriter, groupRegistrations, groupLazyEntries, groupFuncEntries, groupKvpEntries);
             }
             else
             {
                 // Has tags - only register when tags match
-                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations, groupLazyFuncEntries, groupKvpEntries);
+                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations, groupLazyEntries, groupFuncEntries, groupKvpEntries);
             }
         }
 
@@ -205,7 +221,8 @@ partial class IocSourceGenerator
         SourceWriter writer,
         string[] tags,
         List<ServiceRegistrationModel> registrations,
-        List<LazyFuncRegistrationEntry>? lazyFuncEntries = null,
+        List<LazyRegistrationEntry>? lazyEntries = null,
+        List<FuncRegistrationEntry>? funcEntries = null,
         List<KvpRegistrationEntry>? kvpEntries = null)
     {
         // Build the condition - only register when tags match
@@ -221,7 +238,8 @@ partial class IocSourceGenerator
             WriteRegistration(writer, registration);
         }
 
-        WriteLazyFuncRegistrations(writer, lazyFuncEntries);
+        WriteLazyRegistrations(writer, lazyEntries);
+        WriteFuncRegistrations(writer, funcEntries);
         WriteKvpRegistrations(writer, kvpEntries);
 
         writer.Indentation--;
@@ -235,7 +253,8 @@ partial class IocSourceGenerator
     private static void WriteNoTagConditionalBlock(
         SourceWriter writer,
         List<ServiceRegistrationModel> registrations,
-        List<LazyFuncRegistrationEntry>? lazyFuncEntries = null,
+        List<LazyRegistrationEntry>? lazyEntries = null,
+        List<FuncRegistrationEntry>? funcEntries = null,
         List<KvpRegistrationEntry>? kvpEntries = null)
     {
         writer.WriteLine("if (!tags.Any())");
@@ -247,7 +266,8 @@ partial class IocSourceGenerator
             WriteRegistration(writer, registration);
         }
 
-        WriteLazyFuncRegistrations(writer, lazyFuncEntries);
+        WriteLazyRegistrations(writer, lazyEntries);
+        WriteFuncRegistrations(writer, funcEntries);
         WriteKvpRegistrations(writer, kvpEntries);
 
         writer.Indentation--;
@@ -336,7 +356,7 @@ partial class IocSourceGenerator
             p.HasInjectAttribute ||
             p.Type.NeedsWrapperResolution ||
             (p.IsNullable && p.Type is LazyTypeData { InstanceType: not WrapperTypeData } or FuncTypeData { ReturnType: not WrapperTypeData }) ||
-            (p.HasDefaultValue && !p.Type.IsBuiltInTypeResolvable)) == true;
+            p.HasDefaultValue) == true;
 
         // Determine if factory construction is needed:
         // - Injection members (properties, fields, methods) always require factory
@@ -912,13 +932,8 @@ partial class IocSourceGenerator
             return resolvedVar!;
         }
 
-        if(param.HasDefaultValue && param.Type.IsBuiltInTypeResolvable)
-        {
-            return null;
-        }
-
         var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
-        if(param.HasDefaultValue && !param.Type.IsBuiltInTypeResolvable)
+        if(param.HasDefaultValue)
         {
             var defExpr = param.DefaultValue ?? "default";
             var svcCall = BuildServiceCall(GetKeyedService, resolvedTypeName, methodKey);
@@ -1238,7 +1253,6 @@ partial class IocSourceGenerator
     /// Produces lines like:
     /// var p = sp.GetService<T>() ?? <default>;
     /// var p = sp.GetKeyedService<T>(key) ?? <default>;
-    /// var p = default(int); // for built-in types without [ServiceKey]
     /// or returns "sp" for IServiceProvider parameters (no var emitted).
     /// </summary>
     private static string ResolveParamAndEmitVar(
@@ -1253,14 +1267,6 @@ partial class IocSourceGenerator
         if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, param.ServiceKey, param.IsOptional, typeNameResolver: null, out var resolvedVar))
         {
             return resolvedVar!;
-        }
-
-        // Case: Built-in type (no [ServiceKey]) - use default expression, do not call sp
-        if(param.Type.IsBuiltInTypeResolvable && !param.HasServiceKeyAttribute)
-        {
-            var defaultExpr = param.HasDefaultValue ? (param.DefaultValue ?? $"default({param.Type.Name})") : $"default({param.Type.Name})";
-            writer.WriteLine($"var {paramVar} = {defaultExpr};");
-            return paramVar;
         }
 
         // General case: if the parameter is optional (HasDefaultValue or IsOptional), use GetService + ?? default; otherwise use GetRequiredService
@@ -1432,6 +1438,14 @@ partial class IocSourceGenerator
             case FuncTypeData func:
             {
                 var innerType = func.ReturnType;
+                if(func.HasInputParameters)
+                {
+                    var methodName = isOptional
+                        ? (serviceKey is not null ? GetKeyedService : GetService)
+                        : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+                    return BuildServiceCall(methodName, type.Name, serviceKey);
+                }
+
                 // Direct Func<T> where T is not a wrapper — resolve from DI (standalone registration exists)
                 if(innerType is not WrapperTypeData)
                 {

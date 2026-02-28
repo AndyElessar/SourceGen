@@ -247,7 +247,12 @@ partial class IocSourceGenerator
             .Where(static c => c.IsEager)
             .ToImmutableEquatableArray();
 
-        var lazyFuncEntries = CollectContainerLazyFuncEntries(
+        var lazyEntries = CollectContainerLazyEntries(
+            immutableSingletons,
+            immutableScoped,
+            immutableTransients,
+            immutableByServiceTypeAndKey);
+        var funcEntries = CollectContainerFuncEntries(
             immutableSingletons,
             immutableScoped,
             immutableTransients,
@@ -266,7 +271,8 @@ partial class IocSourceGenerator
             immutableTransients,
             eagerSingletons,
             eagerScoped,
-            lazyFuncEntries,
+            lazyEntries,
+            funcEntries,
             kvpEntries,
             hasOpenGenerics,
             hasKeyedServices,

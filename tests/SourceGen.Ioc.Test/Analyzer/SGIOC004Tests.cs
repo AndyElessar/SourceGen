@@ -123,4 +123,91 @@ public class SGIOC004Tests
         // Should report lifetime conflict: Singleton depends on Transient
         await Assert.That(sgioc004).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC004_SingletonDependsOnTransientViaFunc_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            public class TransientService : ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Func<ITransientService> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC004_SingletonDependsOnTransientViaLazy_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            public class TransientService : ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Lazy<ITransientService> lazy) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC004_SingletonDependsOnTransientViaMultiParamFunc_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            public class TransientService : ITransientService
+            {
+                public TransientService(string name) { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Func<string, ITransientService> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
 }

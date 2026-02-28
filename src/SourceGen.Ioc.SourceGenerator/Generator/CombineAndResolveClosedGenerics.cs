@@ -761,7 +761,6 @@ partial class IocSourceGenerator
             IsOpenGeneric: false,
             openImplType.GenericArity,
             IsNestedOpenGeneric: false,
-            IsBuiltInType: false, // Implementation types are not built-in types
             TypeParameters: closedTypeParams,
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: openImplType.HasInjectConstructor);
@@ -818,7 +817,6 @@ partial class IocSourceGenerator
                 IsOpenGeneric: false,
                 openGenericServiceType.GenericArity,
                 IsNestedOpenGeneric: false,
-                IsBuiltInType: false, // Service types are not built-in types
                 TypeParameters: SubstituteTypeParameters(openGenericServiceType.TypeParameters, serviceTypeArgMap));
 
             result.Add(closedServiceType);
@@ -930,7 +928,6 @@ partial class IocSourceGenerator
                 sourceWrapperType.GenericArity,
                 sourceWrapperType.WrapperKind,
                 newIsNestedOpenGeneric,
-                source.IsBuiltInType,
                 newTypeParameters,
                 source.ConstructorParameters,
                 source.HasInjectConstructor,
@@ -947,7 +944,6 @@ partial class IocSourceGenerator
                 newIsOpenGeneric,
                 sourceGenericType.GenericArity,
                 newIsNestedOpenGeneric,
-                source.IsBuiltInType,
                 newTypeParameters,
                 source.ConstructorParameters,
                 source.HasInjectConstructor,
@@ -958,7 +954,6 @@ partial class IocSourceGenerator
 
         return TypeData.CreateSimple(
             newName,
-            source.IsBuiltInType,
             source.ConstructorParameters,
             source.HasInjectConstructor,
             source.InjectionMembers,
@@ -1081,7 +1076,6 @@ partial class IocSourceGenerator
             IsOpenGeneric: false,
             genericDecorator.GenericArity,
             IsNestedOpenGeneric: false,
-            IsBuiltInType: false, // Decorator types are not built-in types
             TypeParameters: newTypeParams,
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: false,

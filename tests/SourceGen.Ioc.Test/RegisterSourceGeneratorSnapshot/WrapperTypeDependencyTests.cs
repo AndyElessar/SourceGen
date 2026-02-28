@@ -82,6 +82,123 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task FuncDependency_WithSingleInputParameter_MatchesConstructorParameterByType()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+            public interface ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ILogger)])]
+            public sealed class Logger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IService)])]
+            public sealed class MyService(string name, ILogger logger) : IService
+            {
+                public string Name { get; } = name;
+                public ILogger Logger { get; } = logger;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(Func<string, IService> factory)
+            {
+                private readonly Func<string, IService> _factory = factory;
+                public IService Create(string name) => _factory(name);
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncDependency_WithMultipleInputParameters_UsesFirstUnusedTypeMatches()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+            public interface ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ILogger)])]
+            public sealed class Logger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IService)])]
+            public sealed class MyService(string name, int count, string alias, ILogger logger) : IService
+            {
+                public string Name { get; } = name;
+                public int Count { get; } = count;
+                public string Alias { get; } = alias;
+                public ILogger Logger { get; } = logger;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(Func<string, int, IService> factory)
+            {
+                private readonly Func<string, int, IService> _factory = factory;
+                public IService Create(string name, int count) => _factory(name, count);
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncDependency_WithUnmatchedInputType_IgnoresInputAndResolvesFromDi()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public sealed class SomeType;
+
+            public interface IService { }
+            public interface ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ILogger)])]
+            public sealed class Logger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IService)])]
+            public sealed class MyService(ILogger logger) : IService
+            {
+                public ILogger Logger { get; } = logger;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(Func<SomeType, IService> factory)
+            {
+                private readonly Func<SomeType, IService> _factory = factory;
+                public IService Create(SomeType value) => _factory(value);
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task KeyValuePairDependency_GeneratesKvpResolution()
     {
         const string source = """

@@ -23,9 +23,7 @@ internal static class TransformExtensions
                 return arrayTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
 
             var name = typeSymbol.FullyQualifiedName;
-            return TypeData.CreateSimple(
-                name,
-                IsBuiltInType: typeSymbol.IsBuiltInType);
+            return TypeData.CreateSimple(name);
         }
     }
 
@@ -94,9 +92,6 @@ internal static class TransformExtensions
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
             var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
 
-            // Check if this is a built-in type
-            var isBuiltInType = typeSymbol.IsBuiltInType;
-
             if(wrapperKind is not WrapperKind.None)
             {
                 return TypeData.CreateWrapper(
@@ -106,7 +101,6 @@ internal static class TransformExtensions
                     typeSymbol.Arity,
                     wrapperKind,
                     typeSymbol.IsNestedOpenGeneric,
-                    isBuiltInType,
                     typeParameters,
                     constructorParams,
                     hasInjectConstructor,
@@ -123,7 +117,6 @@ internal static class TransformExtensions
                     typeSymbol.ContainsGenericParameters,
                     typeSymbol.Arity,
                     typeSymbol.IsNestedOpenGeneric,
-                    isBuiltInType,
                     typeParameters,
                     constructorParams,
                     hasInjectConstructor,
@@ -134,7 +127,6 @@ internal static class TransformExtensions
 
             return TypeData.CreateSimple(
                 typeName,
-                isBuiltInType,
                 constructorParams,
                 hasInjectConstructor,
                 injectionMembers,
@@ -268,9 +260,6 @@ internal static class TransformExtensions
             // Check if this is a wrapper type (collection or non-collection)
             var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
 
-            // Check if this is a built-in type
-            var isBuiltInType = typeSymbol.IsBuiltInType;
-
             if(wrapperKind is not WrapperKind.None)
             {
                 return TypeData.CreateWrapper(
@@ -280,7 +269,6 @@ internal static class TransformExtensions
                     typeSymbol.Arity,
                     wrapperKind,
                     typeSymbol.IsNestedOpenGeneric,
-                    isBuiltInType,
                     typeParameters);
             }
 
@@ -292,11 +280,10 @@ internal static class TransformExtensions
                     typeSymbol.ContainsGenericParameters,
                     typeSymbol.Arity,
                     typeSymbol.IsNestedOpenGeneric,
-                    isBuiltInType,
                     typeParameters);
             }
 
-            return TypeData.CreateSimple(typeName, isBuiltInType);
+                    return TypeData.CreateSimple(typeName);
         }
 
         public IMethodSymbol? SpecifiedOrPrimaryOrMostParametersConstructor
@@ -670,7 +657,6 @@ internal static class TransformExtensions
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 WrapperKind.Array, // Arrays are collections
                 IsNestedOpenGeneric: false,
-                IsBuiltInType: false, // Arrays are not built-in types; element type carries built-in info
                 TypeParameters: typeParameters);
         }
     }

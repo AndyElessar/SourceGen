@@ -382,4 +382,119 @@ public class SGIOC003Tests
         // No lifetime conflict when both are Singleton
         await Assert.That(sgioc003).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC003_SingletonDependsOnScopedViaFunc_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+            public class ScopedService : IScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Func<IScopedService> scopedFactory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_SingletonDependsOnScopedViaLazy_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+            public class ScopedService : IScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Lazy<IScopedService> scopedLazy) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_SingletonDependsOnScopedViaMultiParamFunc_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+            public class ScopedService : IScopedService
+            {
+                public ScopedService(string name, int id) { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Func<string, int, IScopedService> scopedFactory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_SingletonDependsOnSingletonViaFunc_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ISingletonService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ISingletonService)])]
+            public class SingletonDependency : ISingletonService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public SingletonService(Func<ISingletonService> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(0);
+    }
 }

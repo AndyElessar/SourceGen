@@ -24,6 +24,7 @@ Report when circular dependencies are detected among registered services.
 
 - Collects all registered services and their constructor parameter dependencies.
 - Builds a service type index (interface/base class → implementation type) for fast dependency lookup.
+- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to extract the inner service type for dependency resolution.
 - Uses depth-first search to traverse the dependency graph.
 - Reports when starting from a service and following the dependency path leads back to the same service.
 
@@ -37,6 +38,7 @@ Report when there are singleton service depending on scoped service.
 
 - Collects all registered services with their lifetimes (Singleton/Scoped/Transient).
 - Analyzes each service's constructor parameters and queries the dependency's lifetime.
+- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to detect captive dependencies through wrappers.
 - Reports when a Singleton service depends on a Scoped service.
 
 ---
@@ -48,6 +50,7 @@ Report when there are singleton service depending on transient service.
 **Analysis:**
 
 - Same as SGIOC003, analyzes lifetime relationships between services.
+- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types.
 - Reports when a Singleton service depends on a Transient service.
 
 ---
@@ -59,6 +62,7 @@ Report when there are scoped service depending on transient service.
 **Analysis:**
 
 - Same as SGIOC003, analyzes lifetime relationships between services.
+- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types.
 - Reports when a Scoped service depends on a Transient service.
 
 ---

@@ -86,7 +86,8 @@ partial class IocSourceGenerator
             ReversedScopedForDisposal = FilterCachedRegistrations(groups.ReversedScopedForDisposal, features),
             EagerSingletons = filteredSingletons.Where(static c => c.IsEager).ToImmutableEquatableArray(),
             EagerScoped = filteredScoped.Where(static c => c.IsEager).ToImmutableEquatableArray(),
-            LazyFuncEntries = CollectContainerLazyFuncEntries(filteredSingletons, filteredScoped, filteredTransients, filteredByServiceTypeAndKey),
+            LazyEntries = CollectContainerLazyEntries(filteredSingletons, filteredScoped, filteredTransients, filteredByServiceTypeAndKey),
+            FuncEntries = CollectContainerFuncEntries(filteredSingletons, filteredScoped, filteredTransients, filteredByServiceTypeAndKey),
             KvpEntries = CollectContainerKvpEntries(filteredSingletons, filteredScoped, filteredTransients, filteredByServiceTypeAndKey)
         };
 
@@ -429,7 +430,8 @@ partial class IocSourceGenerator
         }
 
         // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers)
-        WriteContainerLazyFuncFieldInitializations(writer, groups.LazyFuncEntries);
+        WriteContainerLazyFieldInitializations(writer, groups.LazyEntries);
+        WriteContainerFuncFieldInitializations(writer, groups.FuncEntries);
 
         // Because resolvers are immutable per container, they can be reused from parent
         if(!effectiveUseSwitchStatement)
@@ -483,7 +485,8 @@ partial class IocSourceGenerator
         }
 
         // Initialize Lazy/Func wrapper fields
-        WriteContainerLazyFuncFieldInitializations(writer, groups.LazyFuncEntries);
+        WriteContainerLazyFieldInitializations(writer, groups.LazyEntries);
+        WriteContainerFuncFieldInitializations(writer, groups.FuncEntries);
 
         // Build FrozenDictionary
         if(!effectiveUseSwitchStatement)
@@ -549,8 +552,11 @@ partial class IocSourceGenerator
         // Write KVP resolver methods for keyed services consumed as KeyValuePair/Dictionary
         WriteContainerKvpResolverMethods(writer, groups.KvpEntries);
 
-        // Write Lazy/Func wrapper field declarations and array resolvers
-        WriteContainerLazyFuncFields(writer, groups.LazyFuncEntries);
+        // Write Lazy wrapper field declarations and array resolvers
+        WriteContainerLazyFields(writer, groups.LazyEntries);
+
+        // Write Func wrapper field declarations and array resolvers
+        WriteContainerFuncFields(writer, groups.FuncEntries);
 
         writer.WriteLine("#endregion");
         writer.WriteLine();
@@ -1545,6 +1551,18 @@ partial class IocSourceGenerator
             case FuncTypeData func:
             {
                 var innerType = func.ReturnType;
+
+                if(func.HasInputParameters)
+                {
+                    if(groups.ByServiceTypeAndKey.TryGetValue((innerType.Name, key), out var innerRegs))
+                    {
+                        var targetRegistration = innerRegs[^1].Registration;
+                        return BuildContainerMultiParamFuncExpression(func, targetRegistration, groups);
+                    }
+
+                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                }
+
                 // Direct Func<T> where T is not a wrapper — call wrapper resolver if available (only at top level)
                 if(innerType is not WrapperTypeData && useResolverMethods)
                 {
@@ -1616,6 +1634,113 @@ partial class IocSourceGenerator
         // - Collection types (EnumerableTypeData, ReadOnlyCollectionTypeData, CollectionTypeData, ReadOnlyListTypeData, ListTypeData, ArrayTypeData) via GetServices/array resolvers
         // - Direct service resolution via resolver methods or GetRequiredService fallback
         return BuildServiceResolutionCallForContainer(innerType, key, isOptional, groups);
+    }
+
+    /// <summary>
+    /// Builds an inline multi-parameter Func expression for container resolution.
+    /// Uses first-unused type matching from Func input args to constructor/method/property injection targets.
+    /// </summary>
+    private static string BuildContainerMultiParamFuncExpression(
+        FuncTypeData funcType,
+        ServiceRegistrationModel registration,
+        ContainerRegistrationGroups groups)
+    {
+        var inputTypes = funcType.InputTypes;
+        var inputArgNames = new string[inputTypes.Length];
+        var inputArgTypeNames = new string[inputTypes.Length];
+        var inputArgUsed = new bool[inputTypes.Length];
+
+        for(var i = 0; i < inputTypes.Length; i++)
+        {
+            inputArgNames[i] = $"arg{i}";
+            inputArgTypeNames[i] = inputTypes[i].Type.Name;
+            inputArgUsed[i] = false;
+        }
+
+        var lambdaParams = string.Join(", ", inputTypes.Select(static (t, i) => $"{t.Type.Name} arg{i}"));
+
+        var statements = new List<string>();
+        var ctorParams = registration.ImplementationType.ConstructorParameters ?? [];
+        var ctorEntries = new List<(string Name, string? Value, bool NeedsConditional)>(ctorParams.Length);
+
+        var resolvedParamIndex = 0;
+        foreach(var param in ctorParams)
+        {
+            var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
+            if(matchedArg is not null)
+            {
+                ctorEntries.Add((param.Name, matchedArg, false));
+                continue;
+            }
+
+            var paramVar = $"p{resolvedParamIndex}";
+            var expr = BuildServiceResolutionCallForContainer(param.Type, param.ServiceKey, param.IsOptional, groups);
+            statements.Add($"var {paramVar} = {expr};");
+            ctorEntries.Add((param.Name, paramVar, false));
+            resolvedParamIndex++;
+        }
+
+        var propertyInits = new List<string>();
+        var propertyIndex = 0;
+        foreach(var member in registration.InjectionMembers)
+        {
+            if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                continue;
+
+            var memberType = member.Type;
+            if(memberType is null)
+                continue;
+
+            var matchedArg = TryConsumeMatchingFuncInputArg(memberType.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
+            if(matchedArg is not null)
+            {
+                propertyInits.Add($"{member.Name} = {matchedArg}");
+                continue;
+            }
+
+            var memberVar = $"s0_p{propertyIndex}";
+            var expr = BuildServiceResolutionCallForContainer(memberType, member.Key, member.IsNullable, groups);
+            statements.Add($"var {memberVar} = {expr};");
+            propertyInits.Add($"{member.Name} = {memberVar}");
+            propertyIndex++;
+        }
+
+        var ctorArgs = BuildArgumentListFromEntries([.. ctorEntries]);
+        var initializerPart = propertyInits.Count > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : string.Empty;
+        var ctorInvocation = BuildConstructorInvocation(registration.ImplementationType.Name, ctorArgs, initializerPart);
+        statements.Add($"var s0 = {ctorInvocation};");
+
+        var methodIndex = 0;
+        foreach(var method in registration.InjectionMembers)
+        {
+            if(method.MemberType != InjectionMemberType.Method)
+                continue;
+
+            var methodParams = method.Parameters ?? [];
+            var methodEntries = new List<(string Name, string? Value, bool NeedsConditional)>(methodParams.Length);
+            foreach(var param in methodParams)
+            {
+                var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
+                if(matchedArg is not null)
+                {
+                    methodEntries.Add((param.Name, matchedArg, false));
+                    continue;
+                }
+
+                var paramVar = $"s0_m{methodIndex}";
+                var expr = BuildServiceResolutionCallForContainer(param.Type, method.Key ?? param.ServiceKey, param.IsOptional, groups);
+                statements.Add($"var {paramVar} = {expr};");
+                methodEntries.Add((param.Name, paramVar, false));
+                methodIndex++;
+            }
+
+            var methodArgs = BuildArgumentListFromEntries([.. methodEntries]);
+            statements.Add($"s0.{method.Name}({methodArgs});");
+        }
+
+        statements.Add("return s0;");
+
+        return $"new {funcType.Name}(({lambdaParams}) => {{ {string.Join(" ", statements)} }})";
     }
 
     /// <summary>
@@ -2162,7 +2287,8 @@ partial class IocSourceGenerator
         WriteContainerKvpLocalResolverEntries(writer, container.ContainerTypeName, groups.KvpEntries);
 
         // Add Lazy<T>/Func<T> wrapper entries for consumers that depend on Lazy<T>/Func<T>
-        WriteContainerLazyFuncLocalResolverEntries(writer, container.ContainerTypeName, groups.LazyFuncEntries);
+        WriteContainerLazyLocalResolverEntries(writer, container.ContainerTypeName, groups.LazyEntries);
+        WriteContainerFuncLocalResolverEntries(writer, container.ContainerTypeName, groups.FuncEntries);
 
         writer.Indentation--;
         writer.WriteLine("];");

@@ -32,8 +32,12 @@ public sealed partial class RegisterAnalyzer
             if (parameter.Type is not INamedTypeSymbol parameterType)
                 continue;
 
-            // Find the dependency's implementation type and lifetime using index
-            var dependencyInfo = FindRegisteredDependency(analyzerContext, parameterType);
+            // Find the dependency's implementation type and lifetime using index.
+            // If direct lookup fails, try unwrapping Func<...>/Lazy<T> wrapper types.
+            var dependencyInfo = FindRegisteredDependency(analyzerContext, parameterType)
+                ?? (TryUnwrapServiceType(parameterType, out var unwrappedType)
+                    ? FindRegisteredDependency(analyzerContext, unwrappedType)
+                    : null);
             if (dependencyInfo is null)
                 continue;
 
@@ -149,7 +153,11 @@ public sealed partial class RegisterAnalyzer
             if (parameter.Type is not INamedTypeSymbol parameterType)
                 continue;
 
-            var dependency = FindRegisteredDependency(analyzerContext, parameterType);
+            // Unwrap Func<...>/Lazy<T> wrapper types for circular dependency detection
+            var dependency = FindRegisteredDependency(analyzerContext, parameterType)
+                ?? (TryUnwrapServiceType(parameterType, out var unwrappedType)
+                    ? FindRegisteredDependency(analyzerContext, unwrappedType)
+                    : null);
             if (dependency is null)
                 continue;
 
@@ -180,5 +188,43 @@ public sealed partial class RegisterAnalyzer
             return ScopedDependsOnTransient;
 
         return null;
+    }
+
+    /// <summary>
+    /// Unwraps <c>Func&lt;...&gt;</c> and <c>Lazy&lt;T&gt;</c> wrapper types to extract the inner service type.
+    /// For <c>Lazy&lt;T&gt;</c> and <c>Func&lt;T&gt;</c>, returns the single type argument.
+    /// For <c>Func&lt;T1, ..., TReturn&gt;</c>, returns the last type argument (the return type).
+    /// </summary>
+    private static bool TryUnwrapServiceType(INamedTypeSymbol parameterType, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out INamedTypeSymbol? serviceType)
+    {
+        serviceType = null;
+
+        if (!parameterType.IsGenericType)
+            return false;
+
+        var originalDefinition = parameterType.OriginalDefinition;
+        var containingNamespace = originalDefinition.ContainingNamespace;
+
+        // Must be in the System namespace
+        if (containingNamespace is not { Name: "System", ContainingNamespace.IsGlobalNamespace: true })
+            return false;
+
+        var name = originalDefinition.MetadataName;
+
+        // Lazy<T> — arity 1, extract T
+        if (name is "Lazy`1")
+        {
+            serviceType = parameterType.TypeArguments[0] as INamedTypeSymbol;
+            return serviceType is not null;
+        }
+
+        // Func<...> — arity >= 1, extract last type argument (the return type)
+        if (name.StartsWith("Func`", StringComparison.Ordinal))
+        {
+            serviceType = parameterType.TypeArguments[^1] as INamedTypeSymbol;
+            return serviceType is not null;
+        }
+
+        return false;
     }
 }

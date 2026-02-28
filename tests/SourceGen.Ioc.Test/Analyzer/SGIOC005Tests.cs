@@ -109,4 +109,91 @@ public class SGIOC005Tests
 
         await Assert.That(sgioc005).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC005_ScopedDependsOnTransientViaFunc_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            public class TransientService : ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedService
+            {
+                public ScopedService(Func<ITransientService> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc005 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC005");
+
+        await Assert.That(sgioc005).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC005_ScopedDependsOnTransientViaLazy_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            public class TransientService : ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedService
+            {
+                public ScopedService(Lazy<ITransientService> lazy) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc005 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC005");
+
+        await Assert.That(sgioc005).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC005_ScopedDependsOnTransientViaMultiParamFunc_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
+            public class TransientService : ITransientService
+            {
+                public TransientService(string name, int id) { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedService
+            {
+                public ScopedService(Func<string, int, ITransientService> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc005 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC005");
+
+        await Assert.That(sgioc005).Count().IsEqualTo(1);
+    }
 }
