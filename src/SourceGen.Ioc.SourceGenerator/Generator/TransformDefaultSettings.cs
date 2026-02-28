@@ -148,6 +148,16 @@ partial class IocSourceGenerator
                 implementationType,
                 defaultSettings.TargetServiceType,
                 defaultSettings.ServiceTypes);
+
+            // Fallback: when ImplementationTypes explicitly specified but no matching interface found
+            // (e.g., Razor components where IComponent isn't visible to the source generator),
+            // use TargetServiceType directly as the service type
+            if(serviceTypes.Length == 0)
+            {
+                serviceTypes = defaultSettings.ServiceTypes.Length > 0
+                    ? defaultSettings.ServiceTypes.Append(defaultSettings.TargetServiceType).ToImmutableEquatableArray()
+                    : [defaultSettings.TargetServiceType];
+            }
         }
 
         // For closed generic implementations (e.g., Handler<Entity>), do NOT inherit Factory from defaults

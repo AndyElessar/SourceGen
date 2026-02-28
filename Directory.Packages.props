@@ -17,7 +17,7 @@
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <!-- Testing dependencies -->
     <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.1.0" />
-    <PackageVersion Include="TUnit" Version="1.17.7" />
+    <PackageVersion Include="TUnit" Version="1.17.54" />
     <PackageVersion Include="Verify.TUnit" Version="31.13.2" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->
@@ -28,5 +28,7 @@
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
     <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.7.13" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
+    <!-- Samples -->
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.3" />
   </ItemGroup>
 </Project>

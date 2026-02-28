@@ -38,6 +38,8 @@ The generated container implements the following interfaces:
 |`IServiceScopeFactory`|Create service scopes|
 |`IServiceScope`|Represents a service scope (container is its own scope)|
 |`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `IntegrateServiceProvider = true` AND DI package is referenced)|
+|`IControllerActivator`|Generates MVC controller activation (only when container class declares this interface AND `Microsoft.AspNetCore.Mvc.Core` package is referenced)|
+|`IComponentActivator`|Generates Blazor component activation (only when container class declares this interface AND `Microsoft.AspNetCore.Components` package is referenced)|
 |`IDisposable`|Synchronous disposal|
 |`IAsyncDisposable`|Asynchronous disposal|
 
@@ -1806,6 +1808,93 @@ var host = Host.CreateDefaultBuilder(args)
     .UseServiceProviderFactory(new AppContainer())
     .Build();
 ```
+
+### MVC and Blazor Activator Interfaces
+
+The container can generate host-specific activator implementations for ASP.NET Core MVC and Blazor when the container partial class explicitly declares these interfaces.
+
+|Interface|Generation Trigger|Generated Behavior|
+|:---|:---|:---|
+|`IControllerActivator`|Container partial class declares `IControllerActivator` **AND** `Microsoft.AspNetCore.Mvc.Core` is referenced|Generates controller activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
+|`IComponentActivator`|Container partial class declares `IComponentActivator` **AND** `Microsoft.AspNetCore.Components` is referenced|Generates component activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
+
+Both activators use the container instance (`this`) as the service provider when invoking cached factories.
+
+> **Important**: SourceGen.Ioc's source generator only analyzes `.cs` files. For Blazor components, the `[IocContainer]` attribute and interface declarations (e.g., `: IComponentActivator`) **must** be placed in a code-behind file (`.razor.cs` or a separate `.cs` file), not in a `.razor` file. The source generator cannot read `.razor` files, so attributes declared there will not trigger code generation.
+
+#### `IControllerActivator` Example
+
+```csharp
+#region Define:
+using Microsoft.AspNetCore.Mvc.Controllers;
+
+[IocContainer]
+public partial class AppContainer : IControllerActivator;
+#endregion
+
+#region Generate:
+partial class AppContainer : IControllerActivator, /* ... other interfaces */
+{
+    private static readonly ConcurrentDictionary<Type, ObjectFactory> _controllerFactories = new();
+
+    object IControllerActivator.Create(ControllerContext context)
+    {
+        var controllerType = context.ActionDescriptor.ControllerTypeInfo.AsType();
+        var instance = GetService(controllerType);
+        if(instance is not null) return instance;
+
+        var factory = _controllerFactories.GetOrAdd(
+            controllerType,
+            static t => global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(t, Type.EmptyTypes));
+
+        return factory(this, null);
+    }
+
+    void IControllerActivator.Release(ControllerContext context, object controller)
+    {
+        if(controller is IDisposable disposable) disposable.Dispose();
+    }
+}
+#endregion
+```
+
+#### `IComponentActivator` Example
+
+```csharp
+#region Define:
+// NOTE: Must be in a .cs file (code-behind), not in a .razor file.
+// The source generator only reads .cs files.
+using Microsoft.AspNetCore.Components;
+
+[IocContainer]
+public partial class AppContainer : IComponentActivator;
+#endregion
+
+#region Generate:
+partial class AppContainer : IComponentActivator, /* ... other interfaces */
+{
+    private static readonly ConcurrentDictionary<Type, ObjectFactory> _componentFactories = new();
+
+    IComponent IComponentActivator.CreateInstance(Type componentType)
+    {
+        var instance = GetService(componentType);
+        if(instance is IComponent component) return component;
+
+        var factory = _componentFactories.GetOrAdd(
+            componentType,
+            static t => global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(t, Type.EmptyTypes));
+
+        return (IComponent)factory(this, null);
+    }
+}
+#endregion
+```
+
+**Explicit Interface Implementation Notes**:
+
+1. Generated activator members are explicit interface implementations (`IControllerActivator.Create`, `IControllerActivator.Release`, `IComponentActivator.CreateInstance`).
+2. Explicit implementation avoids naming collisions with user-defined members on the same partial container class.
+3. Consumers call these members through the interface contract (for example, via ASP.NET Core host infrastructure), not as public container methods.
 
 ## Thread Safety
 

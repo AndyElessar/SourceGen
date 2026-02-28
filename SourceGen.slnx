@@ -49,6 +49,7 @@
   <Folder Name="/samples/Ioc/">
     <Project Path="samples/IocSample.Shared/IocSample.Shared.csproj" Id="2bd603d7-eb72-4991-ae47-5d846256f628" />
     <Project Path="samples/IocSample/IocSample.csproj" Id="a90a7e50-edbe-4c7a-a9aa-4ab2cf625394" />
+    <Project Path="samples/IocRazorSample/IocRazorSample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <File Path="src/Directory.Build.props" />

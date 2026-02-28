@@ -88,6 +88,19 @@ internal static class TransformExtensions
                 allBaseClasses = typeSymbol.GetAllBaseClasses();
             }
 
+            // Error types (e.g., types from other source generators not yet resolved)
+            // should be treated as simple types, not open generics
+            if(typeSymbol.TypeKind == TypeKind.Error)
+            {
+                return TypeData.CreateSimple(
+                    typeName,
+                    constructorParams,
+                    hasInjectConstructor,
+                    injectionMembers,
+                    allInterfaces,
+                    allBaseClasses);
+            }
+
             // Check if this is a wrapper type (collection or non-collection) for DI
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
             var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);

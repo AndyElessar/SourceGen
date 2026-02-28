@@ -110,6 +110,35 @@ When multiple defaults match an implementation type:
 2. On closest base class
 3. On first interface in `AllInterfaces`
 
+### 2.1 Service Type Determination for `ImplementationTypes`
+
+When `IocRegisterDefaults` provides `ImplementationTypes`, the generator derives service types per implementation with the following rules:
+
+|Condition|Behavior|
+|:--------|:-------|
+|Implementation type is open generic|MUST use `TargetServiceType` and append configured `ServiceTypes` (if any).|
+|Implementation type is closed generic or non-generic and matching closed types are found from `AllInterfaces`/`AllBaseClasses`|MUST use those matched closed types as service types.|
+|Implementation type is closed generic or non-generic and no closed type matches `TargetServiceType` (for example, framework metadata is not visible during generation)|MUST fall back to `TargetServiceType` directly instead of leaving `ServiceTypes` empty.|
+
+This fallback is required for scenarios such as Razor components where `IComponent` might not be visible to the source generator from the implementation type hierarchy.
+
+```csharp
+// Valid: fallback to TargetServiceType when the hierarchy scan cannot resolve IComponent.
+[assembly: IocRegisterDefaults(
+    typeof(Microsoft.AspNetCore.Components.IComponent),
+    ServiceLifetime.Scoped,
+    ImplementationTypes = [typeof(MyAppComponent)])]
+
+public partial class MyAppComponent : Microsoft.AspNetCore.Components.ComponentBase
+{
+}
+```
+
+```csharp
+// Invalid outcome (must not happen): ServiceTypes becomes empty for MyAppComponent.
+// Required behavior is to include TargetServiceType as fallback.
+```
+
 ### 3. Settings Merge Order
 
 `Explicit attribute` → `Matching defaults` → `MSBuild SourceGenIocDefaultLifetime` → `Transient`

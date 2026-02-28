@@ -94,6 +94,16 @@ partial class IocSourceGenerator
             : typeSymbol.ContainingNamespace.ToDisplayString();
         var className = typeSymbol.Name;
 
+        var controllerActivatorType = ctx.SemanticModel.Compilation
+            .GetTypeByMetadataName("Microsoft.AspNetCore.Mvc.Controllers.IControllerActivator");
+        var implementControllerActivator = controllerActivatorType is not null
+            && typeSymbol.AllInterfaces.Contains(controllerActivatorType, SymbolEqualityComparer.Default);
+
+        var componentActivatorType = ctx.SemanticModel.Compilation
+            .GetTypeByMetadataName("Microsoft.AspNetCore.Components.IComponentActivator");
+        var implementComponentActivator = componentActivatorType is not null
+            && typeSymbol.AllInterfaces.Contains(componentActivatorType, SymbolEqualityComparer.Default);
+
         return new ContainerModel(
             containerTypeName,
             containerNamespace,
@@ -106,7 +116,9 @@ partial class IocSourceGenerator
             eagerResolveOptions,
             importedModules,
             explicitRegistrations,
-            partialAccessors);
+            partialAccessors,
+            implementControllerActivator,
+            implementComponentActivator);
     }
 
     /// <summary>

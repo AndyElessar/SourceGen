@@ -215,6 +215,18 @@ partial class IocSourceGenerator
         // Write Disposal implementation
         WriteDisposalImplementation(writer, container, groups);
 
+        // Write IControllerActivator implementation (if container declares the interface)
+        if(container.ImplementControllerActivator)
+        {
+            WriteIControllerActivatorImplementation(writer, container);
+        }
+
+        // Write IComponentActivator implementation (if container declares the interface)
+        if(container.ImplementComponentActivator)
+        {
+            WriteIComponentActivatorImplementation(writer, container);
+        }
+
         writer.Indentation--;
         writer.WriteLine("}");
     }
@@ -2364,6 +2376,120 @@ partial class IocSourceGenerator
         WriteDisposalHelperMethods(writer);
 
         writer.WriteLine("#endregion");
+    }
+
+    /// <summary>
+    /// Writes IControllerActivator implementation using ActivatorUtilities with ObjectFactory caching.
+    /// </summary>
+    private static void WriteIControllerActivatorImplementation(SourceWriter writer, ContainerModel container)
+    {
+        writer.WriteLine("#region IControllerActivator");
+        writer.WriteLine();
+
+        // Static cache field
+        writer.WriteLine("private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::Microsoft.Extensions.DependencyInjection.ObjectFactory> _controllerFactoryCache = new();");
+        writer.WriteLine("private static global::Microsoft.Extensions.DependencyInjection.ObjectFactory CreateControllerFactory(");
+        writer.WriteLine("    [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(");
+        writer.WriteLine("        global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicConstructors)] global::System.Type t)");
+        writer.WriteLine("    => global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(t, global::System.Type.EmptyTypes);");
+        writer.WriteLine();
+
+        // Create method
+        writer.WriteLine("object global::Microsoft.AspNetCore.Mvc.Controllers.IControllerActivator.Create(global::Microsoft.AspNetCore.Mvc.ControllerContext controllerContext)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("global::System.ArgumentNullException.ThrowIfNull(controllerContext);");
+        writer.WriteLine("var controllerType = controllerContext.ActionDescriptor.ControllerTypeInfo.AsType();");
+        writer.WriteLine("var instance = GetService(controllerType);");
+        writer.WriteLine("if (instance is not null) return instance;");
+        writer.WriteLine();
+        writer.WriteLine("#pragma warning disable IL2111");
+        writer.WriteLine("var factory = _controllerFactoryCache.GetOrAdd(controllerType, CreateControllerFactory);");
+        writer.WriteLine("#pragma warning restore IL2111");
+        writer.WriteLine("return factory(this, []);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // Release method
+        writer.WriteLine("void global::Microsoft.AspNetCore.Mvc.Controllers.IControllerActivator.Release(global::Microsoft.AspNetCore.Mvc.ControllerContext context, object controller)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("global::System.ArgumentNullException.ThrowIfNull(context);");
+        writer.WriteLine("global::System.ArgumentNullException.ThrowIfNull(controller);");
+        writer.WriteLine("if (controller is global::System.IDisposable disposable)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("disposable.Dispose();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // ReleaseAsync method
+        writer.WriteLine("global::System.Threading.Tasks.ValueTask global::Microsoft.AspNetCore.Mvc.Controllers.IControllerActivator.ReleaseAsync(global::Microsoft.AspNetCore.Mvc.ControllerContext context, object controller)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("global::System.ArgumentNullException.ThrowIfNull(context);");
+        writer.WriteLine("global::System.ArgumentNullException.ThrowIfNull(controller);");
+        writer.WriteLine("if (controller is global::System.IAsyncDisposable asyncDisposable)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("return asyncDisposable.DisposeAsync();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("((global::Microsoft.AspNetCore.Mvc.Controllers.IControllerActivator)this).Release(context, controller);");
+        writer.WriteLine("return default;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes IComponentActivator implementation using ActivatorUtilities with ObjectFactory caching.
+    /// </summary>
+    private static void WriteIComponentActivatorImplementation(SourceWriter writer, ContainerModel container)
+    {
+        writer.WriteLine("#region IComponentActivator");
+        writer.WriteLine();
+
+        // Static cache field
+        writer.WriteLine("private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::Microsoft.Extensions.DependencyInjection.ObjectFactory> _componentFactoryCache = new();");
+        writer.WriteLine("private static global::Microsoft.Extensions.DependencyInjection.ObjectFactory CreateComponentFactory(");
+        writer.WriteLine("    [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(");
+        writer.WriteLine("        global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicConstructors)] global::System.Type t)");
+        writer.WriteLine("    => global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(t, global::System.Type.EmptyTypes);");
+        writer.WriteLine();
+
+        // CreateInstance method
+        writer.WriteLine("global::Microsoft.AspNetCore.Components.IComponent global::Microsoft.AspNetCore.Components.IComponentActivator.CreateInstance([global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicConstructors)] global::System.Type componentType)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if (!typeof(global::Microsoft.AspNetCore.Components.IComponent).IsAssignableFrom(componentType))");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("throw new global::System.ArgumentException($\"The type {componentType.FullName} does not implement {nameof(global::Microsoft.AspNetCore.Components.IComponent)}.\", nameof(componentType));");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("var instance = GetService(componentType);");
+        writer.WriteLine("if (instance is global::Microsoft.AspNetCore.Components.IComponent component) return component;");
+        writer.WriteLine();
+        writer.WriteLine("#pragma warning disable IL2111");
+        writer.WriteLine("var factory = _componentFactoryCache.GetOrAdd(componentType, CreateComponentFactory);");
+        writer.WriteLine("#pragma warning restore IL2111");
+        writer.WriteLine("return (global::Microsoft.AspNetCore.Components.IComponent)factory(this, []);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
     }
 
     /// <summary>

@@ -1,7 +1,7 @@
 ---
 description: "Use when: reviewing completed documentation updates under docs/ for accuracy, consistency, links, and generated code examples."
 name: "DocReview"
-model: GPT-5.3-Codex (copilot)
+model: Claude Haiku 4.5 (copilot)
 tools: [vscode/memory, vscode/askQuestions, read, search, todo]
 user-invocable: false
 argument-hint: "Provide changed docs files and related source/spec paths to validate"
