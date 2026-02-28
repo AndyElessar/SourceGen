@@ -1,6 +1,6 @@
 # CLI Tool
 
-`SourceGen.Ioc.Cli` is a command-line tool that helps you quickly add `[IoCRegister]` attributes to existing classes or generate `[IocRegisterFor]` annotations in your project.
+`SourceGen.Ioc.Cli` is a command-line tool that helps you quickly add `[IocRegister]` attributes to existing classes or generate `[IocRegisterFor]` annotations in your project.
 
 ## Installation
 
@@ -12,7 +12,7 @@ dotnet tool install -g SourceGen.Ioc.Cli
 
 ### Add Attribute Command
 
-Add `[IoCRegister]` attribute to classes matching the specified criteria.
+Add `[IocRegister]` attribute to classes matching the specified criteria.
 
 ```bash
 sourcegen-ioc add [options]

@@ -1,39 +1,42 @@
 # SourceGen.Ioc Overview
 
-SourceGen.Ioc is a C# source generator that extends the capabilities of `Microsoft.Extensions.DependencyInjection.Abstractions` by generating registration code.
+SourceGen.Ioc is a C# source-generator-based dependency injection library built on top of `Microsoft.Extensions.DependencyInjection.Abstractions`.
+
+It generates registration code and (optionally) a compile-time container, so your app avoids runtime reflection-heavy registration logic.
 
 ## Why Use SourceGen.Ioc?
 
-### Better Generic support
+### Better Generic Support
 
-- **Open Generic Auto-Discovery** - Automatically discovers closed generic types from constructor/property/method injection and `IServiceProvider` invocations
-- **Nested Open Generic Support** - Supports nested open generic service interfaces (e.g., `IHandler<Request<T>, Response<T>>`) that `MS.E.DI` cannot resolve at runtime, with both auto-discovery and manual `[Discover]` attribute
+- **Open Generic Auto-Discovery** - Automatically discovers closed generic services from constructor/property/field/method injection and `IServiceProvider` invocations.
+- **Nested Generic Support** - Supports nested open generic patterns (for example, `IHandler<Request<T>, List<T>>`) that are difficult for runtime-only registration.
 
 ### Compile-time Safety
 
-- **Lifecycle Analysis** - Analyzer detects lifetime conflicts (e.g., Singleton depending on Scoped)
-- **Circular Dependency Detection** - Analyzer detects circular dependencies at compile time
-- **Decorator Type Constraint Validation** - Automatically validates decorator type constraints and skips non-matching decorators
+- **Lifecycle Analysis** - Detects risky lifetime chains (for example, singleton -> scoped/transient).
+- **Circular Dependency Detection** - Detects circular constructor dependencies at compile time.
+- **Decorator Constraint Validation** - Skips invalid decorators when generic constraints are not satisfied.
 
 |ID|Severity|Description|
 |:---|:---|:---|
 |SGIOC002|Error|Circular dependency detected among registered services.|
-|SGIOC003|Error|Singleton service cannot depend on Scoped service.|
-|SGIOC004|Error|Singleton service cannot depend on Transient service.|
-|SGIOC005|Error|Scoped service cannot depend on Transient service.|
+|SGIOC003|Error|Singleton service depends on a scoped service.|
+|SGIOC004|Error|Singleton service depends on a transient service.|
+|SGIOC005|Error|Scoped service depends on a transient service.|
 
 ### Flexible Configuration
 
-- **Field, Property & Method Injection** - Supports `[IocInject]` attribute on fields, properties, methods and constructors
-- **Centralized Defaults** - Use `[IocRegisterDefaults<T>]` to define default settings for all implementations, with ability to override per-registration
-- **Decorator Pattern** - Built-in support for decorator chains with type constraint validation
-- **Keyed Services** - Full support for keyed service registration with string, enum, or C# expression keys
-- **Tags** - Organize registrations into groups with tag-based extension methods
-- **Factory & Instance** - Support custom factory methods and static instance registration
+- **Property/Field/Method Injection** - Supports `[IocInject]` (and `[Inject]`-named attributes) for member and parameter injection.
+- **Defaults and Modules** - Use `[IocRegisterDefaults]` and `[IocImportModule]` for centralized registration policy.
+- **Decorators** - Build ordered decorator chains with generic constraint checking.
+- **Keyed Services** - Register and resolve keyed services with value keys or C# expression keys.
+- **Tags** - Group registrations behind runtime tag filters.
+- **Factory and Instance Registration** - Use static factory methods or static instances.
+- **Generated Container** - Use `[IocContainer]` to generate a high-performance compile-time container.
 
 ### Developer Experience
 
-- **CLI Tool** - `SourceGen.Ioc.Cli` helps add attributes to existing projects quickly
+- **CLI Tool** - `SourceGen.Ioc.Cli` can add attributes and generate registration attribute files for existing projects.
 
 ## Core Concepts
 
@@ -41,46 +44,58 @@ SourceGen.Ioc is a C# source generator that extends the capabilities of `Microso
 
 |Attribute|Description|
 |:---|:---|
-|`[IocRegister]`<br/>`[IocRegister<T>]`|Mark a class for DI registration|
-|`[IocRegisterFor]`<br/>`[IocRegisterFor<T>]`|Register an external type|
-|`[IocRegisterDefaults]`<br/>`[IocRegisterDefaults<T>]`|Define default settings for types implementing T|
-|`[IocInject]`|Mark property/field/method/constructor for injection, or parameter for keyed services|
-|`[IocImportModule]`<br/>`[IocImportModule<T>]`|Import defaults from another module|
-|`[IocDiscover]`<br/>`[IocDiscover<T>]`|Discover closed generic types for open generic registration|
+|`[IocRegister]`<br/>`[IocRegister<T>]`|Mark a class for DI registration.|
+|`[IocRegisterFor]`<br/>`[IocRegisterFor<T>]`|Register external types you do not own.|
+|`[IocRegisterDefaults]`<br/>`[IocRegisterDefaults<T>]`|Define default settings for implementations of a target type.|
+|`[IocImportModule]`<br/>`[IocImportModule<T>]`|Import default settings from another module type/assembly.|
+|`[IocDiscover]`<br/>`[IocDiscover<T>]`|Manually discover closed generic types for open-generic registration.|
+|`[IocInject]`|Mark constructor/property/field/method/parameter for generator-aware injection behavior.|
+|`[IocGenericFactory]`|Map discovered closed generic types to generic factory method type parameters.|
+|`[IocContainer]`|Generate a compile-time container on a partial class.|
 
-> [!NOTE]  
-> Generic attribute only supported in C# 11 and later.
+> [!NOTE]
+> Generic attributes (`[Attribute<T>]`) require C# 11 or later.
 
-### Generated Code
+### Generated Outputs
 
-The generator creates an extension method for `IServiceCollection`:
+SourceGen.Ioc can generate:
+
+1. `IServiceCollection` extension method (`Add{ProjectName}`)
+2. Optional container implementation (`[IocContainer]`) with typed resolution APIs
 
 ```csharp
-// Generated
+// Generated registration extension
 public static IServiceCollection AddMyProject(this IServiceCollection services)
 {
-    // Registration code here
+    // registration code...
     return services;
 }
 ```
 
-## Service Lifetimes
+## Diagnostics
 
-```csharp
-[IocRegister<IService>(ServiceLifetime.Transient)]  // Default
-[IocRegister<IService>(ServiceLifetime.Scoped)]
-[IocRegister<IService>(ServiceLifetime.Transient)]
-```
+SourceGen.Ioc analyzers currently define `SGIOC001` to `SGIOC022`.
+
+- Usage validation: attribute misuse, incompatible settings, invalid injection members.
+- Design validation: cycles, lifetime issues, duplicate registrations/defaults.
+- Keyed/factory validation: key type mismatches, generic factory mapping issues.
+- Container validation: unresolved dependencies and container option conflicts.
+
+For the complete and authoritative list, see `src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md`.
 
 ## Table of Contents
 
-1. [Overview](01_Overview.md) - Introduction and core concepts
-2. [Basic Usage](02_Basic.md) - Basic registration patterns
-3. [Default Settings](03_Defaults.md) - Configure default registration settings
-4. [Field, Property & Method Injection](04_Field_Property_Method_Injection.md) - Injection patterns
-5. [Keyed Services](05_Keyed.md) - Keyed service registration
-6. [Decorators](06_Decorator.md) - Decorator pattern support
-7. [Tags](07_Tags.md) - Tag-based registration methods
-8. [Factory & Instance](08_Factory_Instance.md) - Factory and instance registration
-9. [Open Generics](09_OpenGeneric.md) - Open generic type support
-10. [CLI Tool](10_CliTool.md) - Command-line tool for adding attributes
+|#|Document|Description|
+|:---|:---|:---|
+|1|[01_Overview.md](01_Overview.md)|Entry point and feature map.|
+|2|[02_Basic.md](02_Basic.md)|Basic registration patterns and method naming.|
+|3|[03_Defaults.md](03_Defaults.md)|Defaults, implementation lists, module import, and precedence.|
+|4|[04_Field_Property_Method_Injection.md](04_Field_Property_Method_Injection.md)|Property/field/method/constructor injection behavior.|
+|5|[05_Keyed.md](05_Keyed.md)|Keyed registration and keyed injection patterns.|
+|6|[06_Decorator.md](06_Decorator.md)|Decorator registration and type-constraint behavior.|
+|7|[07_Tags.md](07_Tags.md)|Tag-based registration and mutually exclusive tag model.|
+|8|[08_Factory_Instance.md](08_Factory_Instance.md)|Factory/instance registration and generic factory mapping.|
+|9|[09_OpenGeneric.md](09_OpenGeneric.md)|Open generic registration, auto discovery, and manual discover.|
+|10|[10_CliTool.md](10_CliTool.md)|CLI workflows for attribute and registration file generation.|
+|11|[11_Container.md](11_Container.md)|Compile-time container generation and options.|
+|12|[12_MSBuild_Configuration.md](12_MSBuild_Configuration.md)|MSBuild properties controlling generation behavior.|

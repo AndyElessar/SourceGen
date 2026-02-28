@@ -74,9 +74,9 @@ internal class MultiService : IService1, IService2;
 <summary>Generated Code</summary>
 
 ```csharp
-services.AddSingleton<MultiService, MultiService>();
-services.AddSingleton<IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MultiService>());
-services.AddSingleton<IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MultiService>());
+services.AddTransient<MultiService, MultiService>();
+services.AddTransient<IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MultiService>());
+services.AddTransient<IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MultiService>());
 ```
 
 </details>
@@ -112,17 +112,23 @@ services.AddSingleton<BaseService>((global::System.IServiceProvider sp) => sp.Ge
 
 ## Registering External Types
 
-Use `[IocRegisterFor<T>]` to register types you don't own:
+Use `[IocRegisterFor<T>]` (generic) or `[IocRegisterFor]` (non-generic) to register types you don't own:
 
 ```csharp
-// On assembly level
+// Assembly-level registration
 [assembly: IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
+[assembly: IocRegisterFor(typeof(AnotherExternal), ServiceLifetime.Scoped, ServiceTypes = [typeof(IExternal)])]
 
-// Or on a marker class
+// Type-level marker registration
 [IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
 [IocRegisterFor<AnotherExternal>(ServiceTypes = [typeof(IExternal)])]
 public class RegistrationMarker;
 ```
+
+> [!NOTE]
+> Generic attributes require C# 11+. If your project targets an older language version, use the non-generic form: `[IocRegisterFor(typeof(ExternalService))]`.
+
+`IocRegisterFor` supports the same key options as `IocRegister` (`Key`, `KeyType`, `Tags`, `Decorators`, `Factory`, `Instance`, and lifetime settings).
 
 <details>
 <summary>Generated Code</summary>

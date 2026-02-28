@@ -121,6 +121,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 |ID|Severity|Description|
 |:---|:---|:---|
 |SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, inaccessible members (private setter, no setter, private field, readonly field, private method), or methods that do not return `void`.|
+|SGIOC022|Warning|`[IocInject]` is ignored when the corresponding feature (`PropertyInject`, `FieldInject`, or `MethodInject`) is disabled in `SourceGenIocFeatures`.|
 
 ---
 

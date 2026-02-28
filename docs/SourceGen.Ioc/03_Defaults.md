@@ -55,7 +55,7 @@ internal class MyService : IMyService1, IMyService2;
 ```csharp
 services.AddTransient<MyService, MyService>();
 services.AddTransient<IMyService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
-services.AddSingleton<IMyService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddTransient<IMyService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
 ```
 
 </details>
@@ -238,20 +238,34 @@ public interface IRequestHandler<TRequest, TResponse>;
 [IocRegisterDefaults(typeof(IRequestHandler<,>), ServiceLifetime.Transient)]
 public sealed class SharedMarker;
 
-// In consuming project, **only** import defaults from attribute on `SharedMarker` or its assembly
+// In consuming project, import via a class marker.
+// IocImportModule is class-only and reads defaults from the module type and its assembly.
 [IocImportModule(typeof(SharedMarker))]
 public sealed class Module;
 ```
 
 ## Registration Priority
 
-When multiple registration mechanisms are available, the following priority order applies:
+SourceGen.Ioc uses two related precedence rules:
+
+### 1) Settings merge order
+
+When applying settings to a registration, the merge order is:
+
+1. Explicit settings on `[IocRegister]` or `[IocRegisterFor]`
+2. Matching `[IocRegisterDefaults]`
+3. MSBuild `SourceGenIocDefaultLifetime` (for lifetime fallback)
+4. Built-in fallback `Transient`
+
+### 2) Registration mechanism for discovered closed generics
+
+When a closed generic type is discovered (for example via `[IocDiscover]` or dependency analysis), generation uses:
 
 |Priority|Mechanism|Description|
 |:-:|:-|:-|
-|1|`[IocRegister]`|Explicit attribute on implementation type|
-|2|`ImplementationTypes`|Closed generics specified in `IocRegisterDefaults`|
-|3|`Factory`|Factory method for discovered types via `IocDiscover`|
+|1|`[IocRegister]` on implementation type|Use explicit registration behavior|
+|2|`ImplementationTypes` in defaults|Use direct constructor-based registration for listed implementations|
+|3|`Factory` in defaults|Use factory fallback for discovered types not covered by `ImplementationTypes`|
 
 ### Example: Factory with ImplementationTypes
 
