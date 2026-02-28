@@ -74,6 +74,7 @@ internal enum ThreadSafeStrategy
 /// <param name="PartialAccessors">User-declared partial methods/properties that serve as fast-path service accessors.</param>
 /// <param name="ImplementControllerActivator">Whether to generate IControllerActivator explicit implementation for this container.</param>
 /// <param name="ImplementComponentActivator">Whether to generate IComponentActivator explicit implementation for this container.</param>
+/// <param name="ImplementComponentPropertyActivator">Whether to generate IComponentPropertyActivator explicit implementation for this container.</param>
 internal sealed record class ContainerModel(
     string ContainerTypeName,
     string ContainerNamespace,
@@ -88,4 +89,5 @@ internal sealed record class ContainerModel(
     ImmutableEquatableArray<RegistrationData> ExplicitRegistrations,
     ImmutableEquatableArray<PartialAccessorData> PartialAccessors,
     bool ImplementControllerActivator,
-    bool ImplementComponentActivator);
+    bool ImplementComponentActivator,
+    bool ImplementComponentPropertyActivator);

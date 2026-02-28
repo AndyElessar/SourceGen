@@ -40,6 +40,7 @@ The generated container implements the following interfaces:
 |`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `IntegrateServiceProvider = true` AND DI package is referenced)|
 |`IControllerActivator`|Generates MVC controller activation (only when container class declares this interface AND `Microsoft.AspNetCore.Mvc.Core` package is referenced)|
 |`IComponentActivator`|Generates Blazor component activation (only when container class declares this interface AND `Microsoft.AspNetCore.Components` package is referenced)|
+|`IComponentPropertyActivator`|Generates Blazor component property activation (only when container class declares this interface AND `Microsoft.AspNetCore.Components` package version ≥ 11 is referenced, which defines this type)|
 |`IDisposable`|Synchronous disposal|
 |`IAsyncDisposable`|Asynchronous disposal|
 
@@ -1817,6 +1818,7 @@ The container can generate host-specific activator implementations for ASP.NET C
 |:---|:---|:---|
 |`IControllerActivator`|Container partial class declares `IControllerActivator` **AND** `Microsoft.AspNetCore.Mvc.Core` is referenced|Generates controller activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
 |`IComponentActivator`|Container partial class declares `IComponentActivator` **AND** `Microsoft.AspNetCore.Components` is referenced|Generates component activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
+|`IComponentPropertyActivator`|Container partial class declares `IComponentPropertyActivator` **AND** `Microsoft.AspNetCore.Components` ≥ 11 (which exposes the type)|For registered components (when also implementing `IComponentActivator`): returns no-op delegate. For unregistered/unknown components: uses reflection to inject `[Inject]`/`[InjectAttribute]` properties, caching activators in `ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>>`|
 
 Both activators use the container instance (`this`) as the service provider when invoking cached factories.
 
@@ -1893,6 +1895,58 @@ partial class AppContainer : IComponentActivator, /* ... other interfaces */
 }
 #endregion
 ```
+
+#### `IComponentPropertyActivator` Example
+
+```csharp
+#region Define:
+// NOTE: Must be in a .cs file (code-behind), not in a .razor file.
+using Microsoft.AspNetCore.Components;
+
+[IocContainer]
+public partial class AppContainer : IComponentActivator, IComponentPropertyActivator;
+#endregion
+
+#region Generate:
+partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /* ... other interfaces */
+{
+    private static readonly ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>> _propertyActivatorCache = new();
+
+    global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> global::Microsoft.AspNetCore.Components.IComponentPropertyActivator.GetActivator(
+        [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)
+    {
+        if (!_propertyActivatorCache.TryGetValue(componentType, out var activator))
+        {
+            // When also implementing IComponentActivator, registered components
+            // already have property injection done by the container's resolver → no-op
+            activator = _serviceResolvers.ContainsKey(new ServiceIdentifier(componentType, KeyedService.AnyKey))
+                ? static (_, _) => { }
+                : CreateComponentPropertyInjector(componentType);
+            _propertyActivatorCache.TryAdd(componentType, activator);
+        }
+        return activator;
+    }
+
+    private static Action<IServiceProvider, IComponent> CreateComponentPropertyInjector(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType)
+    {
+        // Uses reflection to find [InjectAttribute] properties and create injection delegate
+        // Supports keyed services via InjectAttribute.Key
+        // ...
+    }
+}
+#endregion
+```
+
+**Key Design Notes for `IComponentPropertyActivator`**:
+
+1. **Version Detection**: `IComponentPropertyActivator` type only exists in `Microsoft.AspNetCore.Components` v11+. Detection uses `GetTypeByMetadataName()` — if the type doesn't exist, generation is skipped.
+
+2. **No-op Optimization**: When the container also implements `IComponentActivator`, registered components already have their `[Inject]` properties injected during `CreateInstance` (which routes through the container's resolver with property/field/method injection). In this case, `GetActivator` returns a no-op delegate to avoid redundant injection.
+
+3. **Reflection Fallback**: For unregistered components (not in `_serviceResolvers`), or when only `IComponentPropertyActivator` is implemented without `IComponentActivator`, the generator produces a reflection-based fallback that walks the type hierarchy for `[InjectAttribute]` properties and injects them at runtime. This mirrors `DefaultComponentPropertyActivator` from ASP.NET Core.
+
+4. **Important Note**: When implementing only `IComponentPropertyActivator` without `IComponentActivator`, the no-op optimization is NOT applied because there's no guarantee the component's constructor injection went through the container. All components use the reflection fallback in this case.
 
 **Explicit Interface Implementation Notes**:
 

@@ -227,6 +227,12 @@ partial class IocSourceGenerator
             WriteIComponentActivatorImplementation(writer, container);
         }
 
+        // Write IComponentPropertyActivator implementation (if container declares the interface)
+        if(container.ImplementComponentPropertyActivator)
+        {
+            WriteIComponentPropertyActivatorImplementation(writer, container, effectiveUseSwitchStatement);
+        }
+
         writer.Indentation--;
         writer.WriteLine("}");
     }
@@ -2499,6 +2505,140 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    private static void WriteIComponentPropertyActivatorImplementation(SourceWriter writer, ContainerModel container, bool effectiveUseSwitchStatement)
+    {
+        writer.WriteLine("#region IComponentPropertyActivator");
+        writer.WriteLine();
+
+        // Static cache field
+        writer.WriteLine("private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent>> _propertyActivatorCache = new();");
+        writer.WriteLine();
+
+        // GetActivator method - explicit interface implementation
+        writer.WriteLine("global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> global::Microsoft.AspNetCore.Components.IComponentPropertyActivator.GetActivator(");
+        writer.WriteLine("    [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine("if (!_propertyActivatorCache.TryGetValue(componentType, out var activator))");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // No-op optimization: only when also implementing IComponentActivator
+        if(container.ImplementComponentActivator)
+        {
+            if(effectiveUseSwitchStatement)
+            {
+                writer.WriteLine("activator = global::System.Array.Exists(_localResolvers, e => e.Key.Equals(new ServiceIdentifier(componentType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)))");
+            }
+            else
+            {
+                writer.WriteLine("activator = _serviceResolvers.ContainsKey(new ServiceIdentifier(componentType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))");
+            }
+            writer.WriteLine("    ? static (_, _) => { }");
+            writer.WriteLine("    : CreateComponentPropertyInjector(componentType);");
+        }
+        else
+        {
+            writer.WriteLine("activator = CreateComponentPropertyInjector(componentType);");
+        }
+
+        writer.WriteLine("_propertyActivatorCache.TryAdd(componentType, activator);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        writer.WriteLine("return activator;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // CreateComponentPropertyInjector - reflection fallback method
+        WriteCreateComponentPropertyInjectorMethod(writer);
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    private static void WriteCreateComponentPropertyInjectorMethod(SourceWriter writer)
+    {
+        writer.WriteLine("private static global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> CreateComponentPropertyInjector(");
+        writer.WriteLine("    [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine("const global::System.Reflection.BindingFlags flags = global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic;");
+        writer.WriteLine("global::System.Collections.Generic.List<(global::System.Reflection.PropertyInfo Property, object? Key)>? injectables = null;");
+        writer.WriteLine();
+
+        // Walk inheritance chain
+        writer.WriteLine("for (var type = componentType; type is not null; type = type.BaseType)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine("foreach (var property in type.GetProperties(flags))");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine("if (property.DeclaringType != type) continue;");
+        writer.WriteLine("var injectAttr = property.GetCustomAttributes(true)");
+        writer.WriteLine("    .FirstOrDefault(a => a.GetType().Name is \"InjectAttribute\" or \"IocInjectAttribute\");");
+        writer.WriteLine("if (injectAttr is null) continue;");
+        writer.WriteLine();
+        writer.WriteLine("var keyProp = injectAttr.GetType().GetProperty(\"Key\");");
+        writer.WriteLine("var key = keyProp?.GetValue(injectAttr);");
+        writer.WriteLine("injectables ??= new();");
+        writer.WriteLine("injectables.Add((property, key));");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // Return no-op if no injectables found
+        writer.WriteLine("if (injectables is null) return static (_, _) => { };");
+        writer.WriteLine();
+
+        // Return injection delegate
+        writer.WriteLine("return (serviceProvider, component) =>");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("foreach (var (property, serviceKey) in injectables)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine("object? value;");
+        writer.WriteLine("if (serviceKey is not null)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if (serviceProvider is not global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyedProvider)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("throw new global::System.InvalidOperationException($\"Cannot provide a value for property '{property.Name}' on type '{componentType.FullName}'. The service provider does not implement 'IKeyedServiceProvider'.\");");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("value = keyedProvider.GetRequiredKeyedService(property.PropertyType, serviceKey);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("else");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("value = serviceProvider.GetService(property.PropertyType) ?? throw new global::System.InvalidOperationException($\"Cannot provide a value for property '{property.Name}' on type '{componentType.FullName}'. There is no registered service of type '{property.PropertyType}'.\");");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("property.SetValue(component, value);");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("};");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
         writer.WriteLine();
     }
 

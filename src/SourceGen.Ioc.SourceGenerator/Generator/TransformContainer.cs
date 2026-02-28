@@ -104,6 +104,11 @@ partial class IocSourceGenerator
         var implementComponentActivator = componentActivatorType is not null
             && typeSymbol.AllInterfaces.Contains(componentActivatorType, SymbolEqualityComparer.Default);
 
+        var componentPropertyActivatorType = ctx.SemanticModel.Compilation
+            .GetTypeByMetadataName("Microsoft.AspNetCore.Components.IComponentPropertyActivator");
+        var implementComponentPropertyActivator = componentPropertyActivatorType is not null
+            && typeSymbol.AllInterfaces.Contains(componentPropertyActivatorType, SymbolEqualityComparer.Default);
+
         return new ContainerModel(
             containerTypeName,
             containerNamespace,
@@ -118,7 +123,8 @@ partial class IocSourceGenerator
             explicitRegistrations,
             partialAccessors,
             implementControllerActivator,
-            implementComponentActivator);
+            implementComponentActivator,
+            implementComponentPropertyActivator);
     }
 
     /// <summary>
