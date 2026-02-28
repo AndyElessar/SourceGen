@@ -2,7 +2,7 @@
 description: "Use when: writing or updating user-facing documentation files (docs/ folder). Creates progressive, beginner-friendly guides with generated code examples for the SourceGen repository."
 model: GPT-5.3-Codex (copilot)
 tools: [vscode/memory, vscode/askQuestions, read, agent, edit, search, todo]
-agents: [Explore]
+agents: [Explore, DocReview]
 user-invocable: true
 argument-hint: "Provide the documentation topic or feature to document, and which doc files to create or update"
 ---
@@ -81,6 +81,16 @@ Use #tool:todo throughout to give visibility into progress:
 - Create the full todo list at startup from the documentation plan
 - Mark each todo **in-progress** before starting work on it
 - Mark each todo **completed** immediately after finishing
+
+## Validation & Review
+
+After completing all documentation edits:
+1. Delegate to `DocReview` subagent with the list of changed doc files
+2. Include relevant source/spec paths so the reviewer can validate technical accuracy
+3. Fix any issues reported by `DocReview` before returning the final report
+
+> [!NOTE]
+> Documentation changes are still repository modifications and require a review pass before completion.
 
 ## Output Format
 
