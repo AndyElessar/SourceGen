@@ -42,7 +42,7 @@ jobs:
         run: dotnet pack src/Ioc/src/SourceGen.Ioc.Cli/SourceGen.Ioc.Cli.csproj --no-build -c Release -o ./artifacts
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sourcegen-ioc-cli-nuget
           path: |
