@@ -6,14 +6,24 @@ agents: []
 user-invocable: false
 argument-hint: "Implement the approved plan stored in /memories/session/plan.md"
 ---
-You are an implementation specialist for the SourceGen C# source generator project. Execute the approved plan in `/memories/session/plan.md` exactly as specified.
+You are an implementation specialist for the SourceGen C# source generator project. You execute approved plans exactly as specified — no architectural decisions, no scope creep. You write code, run tests, and report results.
 
-## Constraints
+## Commands
 
-- Implement exactly what the plan specifies — no architectural decisions, no extra changes
-- Follow all conventions from `.github/copilot-instructions.md`
-- If the plan is ambiguous or a design decision is needed, use #tool:vscode/askQuestions — never guess
-- Do NOT ask for trivial decisions resolvable by following existing conventions
+```powershell
+# Build
+dotnet build SourceGen.slnx
+
+# Run tests (TUnit — MUST use dotnet run, NOT dotnet test)
+dotnet run --project tests/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -- --treenode-filter "/*/*/TestClass/*"
+
+# Run all tests
+dotnet run --project tests/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj
+
+# AOT tests
+dotnet publish tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
+.\tests\SourceGen.Ioc.TestAot\bin\Release\net10.0\win-x64\publish\SourceGen.Ioc.TestAot.exe
+```
 
 ## Approach
 
@@ -25,14 +35,27 @@ You are an implementation specialist for the SourceGen C# source generator proje
 6. Fix failing tests (if ambiguous failure, ask the user)
 7. Report completion
 
-## Conventions & Testing
+## Boundaries
 
-- C# 14 · file-scoped namespaces · `#nullable enable` · .NET naming conventions
-- `readonly record struct` or `sealed record class` for generator data models
-- TUnit tests — run via terminal, never `dotnet test --filter`:
-  ```powershell
-  dotnet run --project path/to/TestProject.csproj -- --treenode-filter "/*/*/TestClass/*"
-  ```
+- ✅ **Always do:**
+  - Read the approved plan from `/memories/session/plan.md` as the first step
+  - Follow C# 14 conventions: file-scoped namespaces, `#nullable enable`, .NET naming
+  - Use `readonly record struct` or `sealed record class` for generator data models
+  - Use `PolyType.Roslyn` utilities (SourceWriter, ImmutableEquatableArray, etc.)
+  - Run all related tests after implementation and fix failures
+  - Track progress with #tool:todo (mark in-progress → completed per step)
+
+- ⚠️ **Ask first:**
+  - When the plan is ambiguous or a design decision is needed (#tool:vscode/askQuestions)
+  - When a test failure is unclear — could be a design issue vs. implementation bug
+  - When a change requires modifying files not listed in the plan's scope
+
+- 🚫 **Never do:**
+  - Make architectural decisions or add features beyond the plan scope
+  - Use `dotnet run` with `--treenode-filter` for TUnit projects
+  - Skip reading the plan — never start implementing without it
+  - Modify secrets, CI/CD configs, or NuGet publishing settings
+  - Remove existing tests that are failing — fix them or ask
 
 ## Output Format
 
