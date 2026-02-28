@@ -1,4 +1,4 @@
-name: SourceGen.Ioc.Cli CI
+name: SourceGen.Ioc AOT CI
 
 on:
   workflow_dispatch:
@@ -6,25 +6,29 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/Ioc/src/SourceGen.Ioc.Cli/**'
-      - 'src/Ioc/test/SourceGen.Ioc.Cli.Test/**'
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
-      - '.github/workflows/ioc.cli.ci.yml'
+      - '.github/workflows/ioc.aot.ci.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'src/Ioc/src/SourceGen.Ioc.Cli/**'
-      - 'src/Ioc/test/SourceGen.Ioc.Cli.Test/**'
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
-      - '.github/workflows/ioc.cli.ci.yml'
+      - '.github/workflows/ioc.aot.ci.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,7 +40,7 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  build:
+  aot-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -50,11 +54,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore
+      - name: Publish AOT
+        run: dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -o ./publish-aot
 
-      - name: Build
-        run: dotnet build --no-restore -c Release
-
-      - name: Test
-        run: dotnet run --project src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj -c Release --no-build
+      - name: Run AOT tests
+        run: ./publish-aot/SourceGen.Ioc.TestAot

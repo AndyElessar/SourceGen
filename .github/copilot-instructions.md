@@ -2,17 +2,15 @@
 
 This repository contains C# Source Generator projects. Follow these instructions when assisting with code in this repository.
 
-## Project Overview
+## Project Goal
 
-- **SourceGen.Ioc.SourceGenerator**: Source Generator library targeting .NET Standard 2.0
-- **SourceGen.Ioc**: IoC (Inversion of Control) library targeting .NET 10
-- **SourceGen.Ioc.Cli**: Command-line tool for adding attributes, generate attributes annotation in C# projects
-- **Tests**:
-  - **SourceGen.Ioc.Test**: Unit and snapshot tests for the Source Generator
-  - **SourceGen.Ioc.Cli.Test**: CLI unit tests
-  - **SourceGen.Ioc.Benchmark**: Benchmark tests
-  - **SourceGen.Ioc.TestAot**: AOT integration tests (validates Native AOT compatibility)
-  - **SourceGen.Ioc.TestCase**: Shared test case code
+SourceGen is a collection of C# incremental source generators for compile-time code generation.
+
+**Design priorities** (highest first):
+1. **Correctness** — Generated code must be semantically correct and compile-time validated.
+2. **AOT compatibility** — All generated code must pass Native AOT publishing without warnings.
+3. **Incremental performance** — Generators must be incremental (`IIncrementalGenerator`) and avoid allocations in hot paths.
+4. **Developer experience** — Clear diagnostics, minimal boilerplate, intuitive attribute API.
 
 ## Project Requirements
 
@@ -26,10 +24,7 @@ When working on source generators, follow the best practices outlined here: [C# 
 
 ## Specifications
 
-Always read the relevant spec before implementing or modifying features:
-
-- [Generator Spec](../src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md) — Source Generator data flow, parse logic, and architecture
-- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
+Always read the relevant spec (`**/Spec/*.md`) before implementing or modifying features.
 
 ## Code Style
 
@@ -78,33 +73,15 @@ The `SourceGen.Ioc.TestAot` project validates that the Source Generator produces
 
 Delegate work to SubAgents for context isolation and parallel efficiency. Every modification must end with testing and review.
 
-### SubAgent Delegation
-
-| Task Type | Delegate To | Purpose |
-| --------- | ----------- | ------- |
-| Codebase exploration | `Explore` SubAgent | Read-only research, gather context before implementation |
-| Implementation | Main Agent | Apply changes with full tool access |
-| Test execution | Main Agent | Run tests via `runTests` tool |
-| Code review (code changes) | `Review` SubAgent (via `Dev.agent.md`) | Validate spec compliance, refactoring opportunities, and performance |
-| Documentation review | `DocReview` SubAgent (via `Doc.agent.md`) | Validate documentation accuracy, links, and consistency |
-
-- **MUST**: Use `Explore` SubAgent for initial codebase research before making changes.
-- **MUST**: Use the review flow defined by the active workflow agent (`Dev.agent.md` or `Doc.agent.md`) for post-change review.
-- **MUST NOT**: Use SubAgents for file edits — only the main agent should write code.
-
 ### Mandatory Final Steps
 
 Every task that modifies code **MUST** complete these steps before finishing:
 
 1. **Run Tests**: Run all related tests via terminal. Fix any failing tests before proceeding.
 2. **SubAgent Review**: Follow the workflow agent's review step.
-  - For code implementation, use the `Review` SubAgent as defined in `Dev.agent.md`.
-  - For documentation updates, use the `DocReview` SubAgent as defined in `Doc.agent.md`.
 
 ## Reference
 
-- [Generator Spec](../src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md) — Data flow, parse logic, architecture
-- [Analyzer Spec](../src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.md) — Diagnostic rules (SGIOC001–SGIOC021)
 - [C# Best Practices](./instructions/csharp.instructions.md)
 - [C# Source Generator Best Practices](./instructions/csharp-source-generator.instructions.md)
 - [TUnit Best Practices](./instructions/csharp-tunit.instructions.md)
