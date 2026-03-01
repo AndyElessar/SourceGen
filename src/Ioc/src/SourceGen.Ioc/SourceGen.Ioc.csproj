@@ -20,6 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="..\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <None Include="..\SourceGen.Ioc.SourceGenerator\bin\$(Configuration)\netstandard2.0\SourceGen.Ioc.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <PackageReference Include="PolyType.Roslyn" GeneratePathProperty="true" PrivateAssets="all" />
+    <None Include="$(PkgPolyType_Roslyn)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="PACKAGE.md" Pack="true" PackagePath="/" />
 
     <!-- Include build props to define SOURCEGEN_IOC constant for consuming projects -->
