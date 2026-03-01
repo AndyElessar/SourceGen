@@ -45,7 +45,7 @@ services.AddMyProject(); // Generated extension method
 
 ### Documentation
 
-See [full documentation](docs/Ioc/01_Overview.md) for all features including defaults, keyed services, decorators, open generics, tags, modules, wrappers, factory/instance registration, and compile-time containers.
+See [full documentation](https://andyelessar.github.io/SourceGen/) for all features including defaults, keyed services, decorators, open generics, tags, modules, wrappers, factory/instance registration, and compile-time containers.
 
 ## License
 
