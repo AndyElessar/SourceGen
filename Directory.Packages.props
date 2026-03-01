@@ -23,6 +23,8 @@
     <!-- SourceGen.Ioc -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
+    <!-- SourceGen.Validation -->
+    <PackageVersion Include="Microsoft.Extensions.Validation" Version="10.0.3" />
     <!-- Tool -->
     <PackageVersion Include="System.IO.Abstractions" Version="22.1.0" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
