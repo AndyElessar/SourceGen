@@ -1,0 +1,80 @@
+name: SourceGen.Ioc Benchmark NativeAOT
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches: [main]
+    paths:
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.Benchmark/**'
+      - 'src/Directory.Build.props'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/ioc.benchmark.nativeaot.yml'
+
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.Benchmark/**'
+      - 'src/Directory.Build.props'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/ioc.benchmark.nativeaot.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  nativeaot-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install NativeAOT prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Restore benchmark project
+        run: dotnet restore src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj
+
+      - name: Run ThreadSafeStrategy and RealisticApp benchmarks (NativeAOT)
+        run: |
+          dotnet run \
+            --project src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj \
+            -c Release \
+            -f net10.0 \
+            -- \
+            --runtimes nativeaot10.0 \
+            --filter "*ThreadSafeStrategyBenchmark*" "*RealisticAppBenchmark*"
+
+      - name: Upload BenchmarkDotNet artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ioc-benchmark-nativeaot-${{ github.run_id }}
+          path: src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts
+          if-no-files-found: warn
+          retention-days: 7
