@@ -1,4 +1,8 @@
-﻿# SourceGen
+﻿<div align="center">
+  <img src="icon.png" alt="SourceGen" width="128" height="128" />
+</div>
+
+# SourceGen
 
 A collection of C# Source Generators for compile-time code generation.
 

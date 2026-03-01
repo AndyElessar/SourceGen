@@ -4,7 +4,9 @@ export default defineConfig({
   title: 'SourceGen',
   description: 'A collection of C# Source Generators for compile-time code generation',
   base: '/SourceGen/',
+  head: [['link', { rel: 'icon', href: '/SourceGen/icon.png' }]],
   themeConfig: {
+    logo: '/icon.png',
     nav: [
       { text: 'Guide', link: '/Ioc/01_Overview' },
       { text: 'GitHub', link: 'https://github.com/AndyElessar/SourceGen' }
