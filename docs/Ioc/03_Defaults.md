@@ -62,7 +62,7 @@ services.AddTransient<IMyService2>((global::System.IServiceProvider sp) => sp.Ge
 
 ## Implementation Types
 
-Use `ImplementationTypes` to directly register implementation types without marking each one with `[IocRegister]`:
+Use `ImplementationTypes` to directly register implementation types without marking each one with `[IocRegister]` or `[IocRegisterFor]`:
 
 ```csharp
 [assembly: IocRegisterDefaults<IMyService>(
@@ -71,7 +71,7 @@ Use `ImplementationTypes` to directly register implementation types without mark
 
 public interface IMyService;
 
-// Registered directly via ImplementationTypes - no [IocRegister] needed
+// Registered directly via ImplementationTypes - no [IocRegister] or [IocRegisterFor] needed
 public class MyService : IMyService;
 public class AnotherService : IMyService;
 ```

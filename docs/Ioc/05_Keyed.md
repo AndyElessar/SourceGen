@@ -109,7 +109,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 </details>
 
 > [!TIP]
-> If you don't need `KeyType.Csharp`, use `[FromKeyedServices]` instead for better performance, because it avoids generate factory methods. See [Using `[FromKeyedServices]`](#using-fromkeyedservices).
+> If you don't need `KeyType.Csharp`, use `[FromKeyedServices]` to align with `MS.E.DI`. See [Using `[FromKeyedServices]`](#using-fromkeyedservices).
 
 ### Property Injection
 
@@ -227,7 +227,7 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 ## Using `[Inject]` from `Microsoft.AspNetCore.Components`
 
-You can also use any attribute that name is `[Inject]` or `[IocInject]`, for example `Microsoft.AspNetCore.Components.InjectAttribute`:
+You can also use any attribute that name is `[Inject]`, for example `Microsoft.AspNetCore.Components.InjectAttribute`:
 
 ```csharp
 [IocRegister<IMyService>]

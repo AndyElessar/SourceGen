@@ -2,6 +2,17 @@
 
 SourceGen.Ioc generates factory method registration when `[IocInject]` attribute is used on fields, properties, methods, or constructor parameters.
 
+> [!NOTE]
+> `FieldInject` is not enabled in the default `SourceGenIocFeatures` value.
+> The default is `Register,Container,PropertyInject,MethodInject`.
+> To use `[IocInject]` on fields, add `FieldInject` in your project configuration (see [MSBuild Configuration](13_MSBuild_Configuration.md#sourcegeniocfeatures)):
+>
+> ```xml
+> <PropertyGroup>
+>   <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject</SourceGenIocFeatures>
+> </PropertyGroup>
+> ```
+
 ## Property & Field Injection
 
 Use `[IocInject]` to inject dependencies into properties or fields:

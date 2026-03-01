@@ -14,8 +14,10 @@ internal class MyHandler : IHandler;
 
 This generates a single method with a `params IEnumerable<string> tags` parameter:
 
+<details>
+<summary>Generated Code</summary>
+
 ```csharp
-// Generated
 public static IServiceCollection AddMyProject(this IServiceCollection services, params IEnumerable<string> tags)
 {
     // Services with tags: only register when matching tags are passed
@@ -28,6 +30,8 @@ public static IServiceCollection AddMyProject(this IServiceCollection services, 
     return services;
 }
 ```
+
+</details>
 
 ## Behavior (Mutually Exclusive Model)
 
@@ -45,12 +49,17 @@ internal class MyService : IService;
 
 The service is registered when any of the specified tags match:
 
+<details>
+<summary>Generated Code</summary>
+
 ```csharp
 if (tags.Contains("Feature1") || tags.Contains("Feature2"))
 {
     // Register MyService
 }
 ```
+
+</details>
 
 ## Mixed Services
 
@@ -64,8 +73,10 @@ internal class DefaultService : IService;
 
 This generates:
 
+<details>
+<summary>Generated Code</summary>
+
 ```csharp
-// Generated
 public static IServiceCollection AddMyProject(this IServiceCollection services, params IEnumerable<string> tags)
 {
     // Services without tags - only register when no tags passed
@@ -85,6 +96,8 @@ public static IServiceCollection AddMyProject(this IServiceCollection services, 
     return services;
 }
 ```
+
+</details>
 
 ## Using Tags
 
@@ -114,7 +127,7 @@ Apply tags to all implementations via `IocRegisterDefaults`:
 public interface IMediator;
 
 [IocRegister]
-internal class Mediator : IMediator;  // Only registered with AddMyProject("Mediator")
+internal class Mediator : IMediator;  // Only registered with AddMyProject(["Mediator"])
 ```
 
 ---
