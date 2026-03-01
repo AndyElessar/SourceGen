@@ -72,7 +72,7 @@ dotnet test
 - Use value equality data models (`readonly record struct` or `sealed record class`)
 - Use `PolyType.Roslyn.ImmutableEquatableArray<T>`, `PolyType.Roslyn.ImmutableEquatableDictionary<TKey, TValue>`, `PolyType.Roslyn.ImmutableEquatableSet<T>` for collections in data models
 - Always check `CancellationToken`
-- Read Andrew Lock's wonderful blogs!  
+- Read Andrew Lock's great blogs!  
   > [Creating a source generator](https://andrewlock.net/series/creating-a-source-generator/)
 
 ### Testing
@@ -81,20 +81,6 @@ dotnet test
 - Use `Verify` for snapshot testing
 - Test both positive and negative cases
 - Check [TUnit Best Practices](https://tunit.dev/docs/guides/best-practices)
-
-## Project Structure
-
-```
-src/
-├── SourceGen.Ioc/                    # Main library with attributes
-├── SourceGen.Ioc.Cli/                # CLI tool
-└── SourceGen.Ioc.SourceGenerator/    # Source generator implementation
-tests/
-├── SourceGen.Ioc.Cli.Test/           # CLI unit tests
-└── SourceGen.Ioc.Test/               # Generator unit tests
-docs/
-└── SourceGen.Ioc/                    # Documentation
-```
 
 ## Code of Conduct
 
