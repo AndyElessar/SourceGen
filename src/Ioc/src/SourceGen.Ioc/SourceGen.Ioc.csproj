@@ -10,6 +10,7 @@
     <Description>Dependency injection source generator</Description>
     <PackageTags>SourceGen, sourcegenerator, generator, dependencyinjection, di, ioc, decorator</PackageTags>
     <PackageId>SourceGen.Ioc</PackageId>
+    <ReleaseTagPrefix>ioc-</ReleaseTagPrefix>
   </PropertyGroup>
 
   <ItemGroup>

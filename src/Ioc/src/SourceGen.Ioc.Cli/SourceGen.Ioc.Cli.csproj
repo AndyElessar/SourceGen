@@ -10,6 +10,7 @@
     <Description>SourceGen.Ioc CLI tool</Description>
     <PackageTags>SourceGen, sourcegenerator, generator, dependencyinjection, di, ioc, commandline, cli</PackageTags>
     <PackageId>SourceGen.Ioc.Cli</PackageId>
+    <ReleaseTagPrefix>ioc-cli-</ReleaseTagPrefix>
   </PropertyGroup>
 
   <ItemGroup>
