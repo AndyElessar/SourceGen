@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
+    <!-- NuGet Package Metadata -->
+    <Description>Validation source generator</Description>
+    <PackageTags>SourceGen, sourcegenerator, generator, validation</PackageTags>
+    <PackageId>SourceGen.Validation</PackageId>
+    <ReleaseTagPrefix>validation-</ReleaseTagPrefix>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Validation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SourceGen.Validation.SourceGenerator\SourceGen.Validation.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <None Include="..\SourceGen.Validation.SourceGenerator\bin\$(Configuration)\netstandard2.0\SourceGen.Validation.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <PackageReference Include="PolyType.Roslyn" GeneratePathProperty="true" PrivateAssets="all" />
+    <None Include="$(PkgPolyType_Roslyn)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="PACKAGE.md" Pack="true" PackagePath="/" />
+
+    <PackageReference Include="StyleCop.Analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
