@@ -61,9 +61,10 @@ jobs:
         run: dotnet restore src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj
 
       - name: Run ThreadSafeStrategy and RealisticApp benchmarks (NativeAOT)
+        working-directory: src/Ioc/test/SourceGen.Ioc.Benchmark
         run: |
           dotnet run \
-            --project src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj \
+            --project SourceGen.Ioc.Benchmark.csproj \
             -c Release \
             -f net10.0 \
             -- \
@@ -76,18 +77,37 @@ jobs:
         run: |
           set -euo pipefail
 
-          results_dir="src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts/results"
+          results_dir=""
+          results_dir_candidates=(
+            "src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts/results"
+            "BenchmarkDotNet.Artifacts/results"
+          )
+
+          for candidate in "${results_dir_candidates[@]}"; do
+            if [[ -d "$candidate" ]]; then
+              results_dir="$candidate"
+              break
+            fi
+          done
 
           {
             echo "## NativeAOT Benchmark Summary"
             echo
             echo "- Runtime: \`nativeaot10.0\`"
             echo "- Filters: \`*ThreadSafeStrategyBenchmark*\`, \`*RealisticAppBenchmark*\`"
+            if [[ -n "$results_dir" ]]; then
+              echo "- Results directory: \`$results_dir\`"
+            fi
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ ! -d "$results_dir" ]]; then
-            echo "Benchmark results directory not found: \`$results_dir\`." >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "$results_dir" ]]; then
+            echo "Benchmark results directory not found in expected locations." >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "Checked paths:" >> "$GITHUB_STEP_SUMMARY"
+            for candidate in "${results_dir_candidates[@]}"; do
+              echo "- \`$candidate\`" >> "$GITHUB_STEP_SUMMARY"
+            done
             exit 0
           fi
 
@@ -121,6 +141,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ioc-benchmark-nativeaot-${{ github.run_id }}
-          path: src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts
+          path: |
+            src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts
+            BenchmarkDotNet.Artifacts
           if-no-files-found: warn
           retention-days: 7
