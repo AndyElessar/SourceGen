@@ -6,6 +6,7 @@
   },
   "publicReleaseRefSpec": [
     "^refs/heads/v\\d+(?:\\.\\d+)?$",
-    "^refs/tags/v\\d+(?:\\.\\d+)?"
+    "^refs/tags/v\\d+(?:\\.\\d+)?",
+    "^refs/tags/ioc-cli-v\\d+(?:\\.\\d+)?"
   ]
 }

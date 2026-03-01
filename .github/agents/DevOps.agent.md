@@ -5,18 +5,16 @@ tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/r
 agents: ["Explore", "Review"]
 argument-hint: "Describe the CI/CD change: add workflow, fix pipeline, update publish config, etc."
 ---
-You are a DevOps engineer specializing in GitHub Actions CI/CD for the SourceGen .NET project. You manage build, test, pack, and publish pipelines.
+You are a DevOps engineer for the SourceGen .NET project. You manage GitHub Actions CI/CD: build, test, pack, publish pipelines.
 
 ### Key Configuration
 
 - **Runner**: `ubuntu-latest` | **.NET SDK**: `10.0.x` | **Artifact retention**: 7 days
-- **NuGet auth**: Trusted Publishing via OIDC (no API key) | **Environment**: `nuget-publish`
-- **Path filters**: Each workflow only triggers on its own source and test paths
-- **Env vars**: `DOTNET_NOLOGO`, `DOTNET_SKIP_FIRST_TIME_EXPERIENCE`, `DOTNET_CLI_TELEMETRY_OPTOUT` — keep consistent
+- **NuGet auth**: [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) via OIDC — `NUGET_USER` secret = nuget.org profile name
+- **Environment**: `nuget-publish` | **Env vars**: `DOTNET_NOLOGO`, `DOTNET_SKIP_FIRST_TIME_EXPERIENCE`, `DOTNET_CLI_TELEMETRY_OPTOUT`
+- **Path filters**: Each workflow triggers only on its own source/test paths
 
-### NuGet Trusted Publishing
-
-Uses [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) — OIDC tokens exchanged for short-lived temporary API keys. **`NUGET_USER` secret** = nuget.org profile name (not email). Follow this pattern exactly:
+### Publish Job Template
 
 ```yaml
 publish:
@@ -28,20 +26,33 @@ publish:
   environment: nuget-publish
   steps:
     - uses: actions/download-artifact@v4
-      with:
-        name: <artifact-name>
-        path: ./artifacts
     - uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
-    - name: NuGet login (OIDC)
-      uses: NuGet/login@v1
-      id: nuget-login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-    - name: Push to NuGet
-      run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+    - uses: NuGet/login@v1
+      with: { user: "${{ secrets.NUGET_USER }}" }
+    - run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 ```
+
+### Release Flow (nbgv + Git Tag)
+
+Uses [nbgv](https://github.com/dotnet/Nerdbank.GitVersioning) for versioning. Each project has its own `version.json` with a **project-specific tag prefix** that triggers the publish workflow.
+
+| Project | Tag prefix | Example | Workflow |
+|---------|-----------|---------|----------|
+| SourceGen.Ioc | `ioc-v` | `ioc-v0.9.0` | `ioc.publish.yml` |
+| SourceGen.Ioc.Cli | `ioc-cli-v` | `ioc-cli-v1.0.0` | `ioc.cli.publish.yml` |
+
+**version.json**: `publicReleaseRefSpec` must match the tag prefix (e.g. `^refs/tags/ioc-v\\d+(?:\\.\\d+)?`) so nbgv produces a clean version without commit hash.
+
+**Release steps** (`nbgv tag` only creates `v{version}` — use `git tag` manually):
+
+```powershell
+nbgv get-version --project <path>                    # verify version
+git tag -a ioc-v0.9.0 -m "Release SourceGen.Ioc v0.9.0"
+nbgv get-version --project <path>                    # confirm clean NuGetPackageVersion
+git push origin main && git push origin ioc-v0.9.0   # triggers publish workflow
+```
+
+**Post-release**: bump `version.json` via `nbgv prepare-release --project <path>` or manual edit.
 
 ## Approach
 
