@@ -1,6 +1,6 @@
 ---
 description: "Use when: managing CI/CD pipelines, GitHub Actions workflows, build/test/pack/publish automation, NuGet Trusted Publishing, or release processes. Handles .github/workflows/ files and DevOps configuration."
-model: Claude Opus 4.6 (copilot)
+model: GPT-5.3-Codex (copilot)
 tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/runInTerminal, read, agent, edit, search, web, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, 'microsoftdocs/mcp/*', todo]
 agents: ["Explore", "Review"]
 argument-hint: "Describe the CI/CD change: add workflow, fix pipeline, update publish config, etc."

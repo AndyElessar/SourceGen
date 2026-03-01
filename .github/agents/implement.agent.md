@@ -1,6 +1,6 @@
 ---
 description: "Use when: implementing approved plan from /memories/session/plan.md. Executes code changes, runs tests, and follows project conventions."
-model: Claude Opus 4.6 (copilot)
+model: GPT-5.3-Codex (copilot)
 tools: [vscode/memory, vscode/askQuestions, execute, read, edit, search, web, 'microsoftdocs/mcp/*', todo]
 agents: []
 user-invocable: false
