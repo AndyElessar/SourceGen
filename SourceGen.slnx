@@ -11,7 +11,6 @@
   <Folder Name="/.github/workflows/">
     <File Path=".github/dependabot.yml" />
     <File Path=".github/workflows/docs.yml" />
-    <File Path=".github/workflows/ioc.aot.ci.yml" />
     <File Path=".github/workflows/ioc.ci.yml" />
     <File Path=".github/workflows/ioc.cli.ci.yml" />
     <File Path=".github/workflows/ioc.cli.publish.yml" />
