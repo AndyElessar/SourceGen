@@ -30,3 +30,9 @@ internal sealed class FakeLogger<T> : ILogger<T>
         _logs.Add((logLevel, formatter(state, exception)));
     }
 }
+
+internal static class TestPaths
+{
+    internal static readonly string Root = OperatingSystem.IsWindows() ? @"C:\TestDir" : "/TestDir";
+    internal static string Combine(params string[] segments) => Path.Combine([Root, .. segments]);
+}

@@ -1,4 +1,4 @@
-﻿using System.IO.Abstractions.TestingHelpers;
+using System.IO.Abstractions.TestingHelpers;
 using Microsoft.Extensions.Logging;
 
 namespace SourceGen.Ioc.Cli.Test.GenerateIocFor;
@@ -17,7 +17,7 @@ public class IntegrationTests
     public void Setup()
     {
         fileSystem = new MockFileSystem();
-        environmentProvider = new FakeEnvironmentProvider { CurrentDirectory = @"C:\TestDir" };
+        environmentProvider = new FakeEnvironmentProvider { CurrentDirectory = TestPaths.Root };
         logger = new FakeLogger<GenerateCommands>();
         globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
         sut = new GenerateCommands(logger, globalOptions, fileSystem, environmentProvider);
@@ -29,22 +29,22 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_DirectoryWithMatchingFiles_GeneratesOutputFile(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddFile(@"C:\TestDir\Handler1.cs", new MockFileData("public class CommandHandler { }"));
-        fileSystem.AddFile(@"C:\TestDir\Handler2.cs", new MockFileData("public class QueryHandler { }"));
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddFile(TestPaths.Combine("Handler1.cs"), new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler2.cs"), new MockFileData("public class QueryHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        await Assert.That(fileSystem.File.Exists(@"C:\TestDir\Generated.cs")).IsTrue();
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        await Assert.That(fileSystem.File.Exists(TestPaths.Combine("Generated.cs"))).IsTrue();
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("[assembly: IocRegisterFor(typeof(CommandHandler))]");
         await Assert.That(content).Contains("[assembly: IocRegisterFor(typeof(QueryHandler))]");
     }
@@ -53,22 +53,22 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_SubDirectories_ProcessesRecursively(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddDirectory(@"C:\TestDir\SubDir");
-        fileSystem.AddFile(@"C:\TestDir\Handler1.cs", new MockFileData("public class CommandHandler { }"));
-        fileSystem.AddFile(@"C:\TestDir\SubDir\Handler2.cs", new MockFileData("public class QueryHandler { }"));
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddDirectory(TestPaths.Combine("SubDir"));
+        fileSystem.AddFile(TestPaths.Combine("Handler1.cs"), new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("SubDir", "Handler2.cs"), new MockFileData("public class QueryHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: true,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("CommandHandler");
         await Assert.That(content).Contains("QueryHandler");
     }
@@ -77,22 +77,22 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_SubDirectoriesDisabled_ProcessesOnlyTopLevel(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddDirectory(@"C:\TestDir\SubDir");
-        fileSystem.AddFile(@"C:\TestDir\Handler1.cs", new MockFileData("public class CommandHandler { }"));
-        fileSystem.AddFile(@"C:\TestDir\SubDir\Handler2.cs", new MockFileData("public class QueryHandler { }"));
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddDirectory(TestPaths.Combine("SubDir"));
+        fileSystem.AddFile(TestPaths.Combine("Handler1.cs"), new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("SubDir", "Handler2.cs"), new MockFileData("public class QueryHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("CommandHandler");
         await Assert.That(content).DoesNotContain("QueryHandler");
     }
@@ -101,12 +101,12 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_NullTarget_UsesCurrentDirectory(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
             target: null,
             filePattern: "*.cs",
             searchSubDirectories: false,
@@ -114,7 +114,7 @@ public class IntegrationTests
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("CommandHandler");
     }
 
@@ -126,19 +126,19 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_SingleFile_ProcessesCorrectly(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("CommandHandler");
     }
 
@@ -147,8 +147,8 @@ public class IntegrationTests
     {
         // Arrange & Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\NonExistent\File.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("..", "NonExistent", "File.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -166,8 +166,8 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_MaxApply_StopsAfterLimit(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddFile(@"C:\TestDir\Handlers.cs", new MockFileData("""
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddFile(TestPaths.Combine("Handlers.cs"), new MockFileData("""
             public class CommandHandler { }
             public class QueryHandler { }
             public class EventHandler { }
@@ -175,8 +175,8 @@ public class IntegrationTests
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -184,7 +184,7 @@ public class IntegrationTests
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         var matchCount = CountIocRegisterForOccurrences(content);
         await Assert.That(matchCount).IsEqualTo(2);
     }
@@ -193,15 +193,15 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_MaxApplyAcrossFiles_StopsAfterTotalLimit(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddFile(@"C:\TestDir\Handler1.cs", new MockFileData("public class CommandHandler { }"));
-        fileSystem.AddFile(@"C:\TestDir\Handler2.cs", new MockFileData("public class QueryHandler { }"));
-        fileSystem.AddFile(@"C:\TestDir\Handler3.cs", new MockFileData("public class EventHandler { }"));
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddFile(TestPaths.Combine("Handler1.cs"), new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler2.cs"), new MockFileData("public class QueryHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler3.cs"), new MockFileData("public class EventHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -209,7 +209,7 @@ public class IntegrationTests
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         var matchCount = CountIocRegisterForOccurrences(content);
         await Assert.That(matchCount).IsEqualTo(2);
     }
@@ -222,21 +222,21 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_FilePattern_FiltersCorrectly(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
-        fileSystem.AddFile(@"C:\TestDir\Handler.txt", new MockFileData("public class QueryHandler { }"));
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.txt"), new MockFileData("public class QueryHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("CommandHandler");
         await Assert.That(content).DoesNotContain("QueryHandler");
     }
@@ -245,12 +245,12 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_EmptyFilePattern_LogsError(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddDirectory(@"C:\TestDir");
+        fileSystem.AddDirectory(TestPaths.Root);
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -268,12 +268,12 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_ClassNameRegexNull_LogsError(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: null,
@@ -291,12 +291,12 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_IsGenericAttribute_GeneratesGenericSyntax(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -304,7 +304,7 @@ public class IntegrationTests
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("[assembly: IocRegisterFor<");
         await Assert.That(content).DoesNotContain("typeof(");
     }
@@ -313,12 +313,12 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_NotGenericAttribute_GeneratesTypeofSyntax(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -326,7 +326,7 @@ public class IntegrationTests
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).Contains("[assembly: IocRegisterFor(typeof(");
         await Assert.That(content).DoesNotContain("IocRegisterFor<");
     }
@@ -341,19 +341,19 @@ public class IntegrationTests
         // Arrange
         var dryRunOptions = new GlobalOptions(DryRun: true, Verbose: false, LoggingFile: "");
         var dryRunSut = new GenerateCommands(logger, dryRunOptions, fileSystem, environmentProvider);
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await dryRunSut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        await Assert.That(fileSystem.File.Exists(@"C:\TestDir\Generated.cs")).IsFalse();
+        await Assert.That(fileSystem.File.Exists(TestPaths.Combine("Generated.cs"))).IsFalse();
         await Assert.That(logger.HasLoggedLevel(LogLevel.Information)).IsTrue();
     }
 
@@ -365,19 +365,19 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_OutputFormat_ContainsRequiredElements(CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
             ct: ct);
 
         // Assert
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Assert.That(content).StartsWith("// <auto-generated />");
         await Assert.That(content).Contains("using SourceGen.Ioc;");
     }
@@ -392,12 +392,12 @@ public class IntegrationTests
     public async Task GenerateIocRegisterFor_EmptyOrWhitespaceOutputPath_LogsError(string outputPath, CancellationToken ct)
     {
         // Arrange
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("public class CommandHandler { }"));
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("public class CommandHandler { }"));
 
         // Act
         await sut.GenerateIocRegisterFor(
             outputPath: outputPath,
-            target: @"C:\TestDir\Handler.cs",
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",

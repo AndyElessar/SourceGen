@@ -16,7 +16,7 @@ public class SnapshotTests
     public void Setup()
     {
         fileSystem = new MockFileSystem();
-        environmentProvider = new FakeEnvironmentProvider { CurrentDirectory = @"C:\TestDir" };
+        environmentProvider = new FakeEnvironmentProvider { CurrentDirectory = TestPaths.Root };
         logger = new FakeLogger<GenerateCommands>();
         globalOptions = new GlobalOptions(DryRun: false, Verbose: false, LoggingFile: "");
         sut = new GenerateCommands(logger, globalOptions, fileSystem, environmentProvider);
@@ -25,7 +25,7 @@ public class SnapshotTests
     [Test]
     public async Task GenerateIocRegisterDefaults_SingleClass_TypeofSyntax(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CommandHandler : ICommandHandler
@@ -35,8 +35,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -44,14 +44,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_SingleClass_GenericSyntax(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CommandHandler : ICommandHandler
@@ -61,8 +61,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -70,14 +70,14 @@ public class SnapshotTests
             isGenericAttribute: true,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_MultipleClasses_SameBaseType_TypeofSyntax(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handlers.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handlers.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CreateCommandHandler : ICommandHandler
@@ -97,8 +97,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handlers.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handlers.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -106,14 +106,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_MultipleClasses_DifferentBaseTypes_TypeofSyntax(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handlers.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handlers.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CreateCommandHandler : ICommandHandler
@@ -138,8 +138,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handlers.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handlers.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -147,14 +147,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_MixedClassTypes_ExcludesStatic(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Services.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Services.cs"), new MockFileData("""
             namespace MyApp.Services;
 
             public class UserService : IUserService
@@ -179,8 +179,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Services.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Services.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Service",
@@ -188,15 +188,15 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_MultipleFiles_TypeofSyntax(CancellationToken ct)
     {
-        fileSystem.AddDirectory(@"C:\TestDir");
-        fileSystem.AddFile(@"C:\TestDir\CommandHandler.cs", new MockFileData("""
+        fileSystem.AddDirectory(TestPaths.Root);
+        fileSystem.AddFile(TestPaths.Combine("CommandHandler.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CommandHandler : IHandler
@@ -204,7 +204,7 @@ public class SnapshotTests
                 public void Handle() { }
             }
             """));
-        fileSystem.AddFile(@"C:\TestDir\QueryHandler.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("QueryHandler.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class QueryHandler : IHandler
@@ -212,7 +212,7 @@ public class SnapshotTests
                 public void Handle() { }
             }
             """));
-        fileSystem.AddFile(@"C:\TestDir\EventHandler.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("EventHandler.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class EventHandler : IHandler
@@ -222,8 +222,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Root,
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -231,14 +231,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_WithMaxApply_LimitsOutput(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handlers.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handlers.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CreateHandler : IHandler { }
@@ -249,8 +249,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handlers.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handlers.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -259,14 +259,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_NoMatches_GeneratesEmptyFile(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Models.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Models.cs"), new MockFileData("""
             namespace MyApp.Models;
 
             public class User { }
@@ -274,8 +274,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Models.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Models.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -283,14 +283,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_GenericInterface_TypeofSyntax(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handlers.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handlers.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CreateUserHandler : IHandler<CreateUserCommand>
@@ -305,8 +305,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handlers.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handlers.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -314,14 +314,14 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 
     [Test]
     public async Task GenerateIocRegisterDefaults_MultipleInterfaces_MatchesLastOne(CancellationToken ct)
     {
-        fileSystem.AddFile(@"C:\TestDir\Handler.cs", new MockFileData("""
+        fileSystem.AddFile(TestPaths.Combine("Handler.cs"), new MockFileData("""
             namespace MyApp.Handlers;
 
             public class CommandHandler : IDisposable, IHandler
@@ -332,8 +332,8 @@ public class SnapshotTests
             """));
 
         await sut.GenerateIocRegisterDefaults(
-            outputPath: @"C:\TestDir\Generated.cs",
-            target: @"C:\TestDir\Handler.cs",
+            outputPath: TestPaths.Combine("Generated.cs"),
+            target: TestPaths.Combine("Handler.cs"),
             filePattern: "*.cs",
             searchSubDirectories: false,
             classNameRegex: @".*Handler",
@@ -341,7 +341,7 @@ public class SnapshotTests
             isGenericAttribute: false,
             ct: ct);
 
-        var content = await fileSystem.File.ReadAllTextAsync(@"C:\TestDir\Generated.cs", ct);
+        var content = await fileSystem.File.ReadAllTextAsync(TestPaths.Combine("Generated.cs"), ct);
         await Verify(content);
     }
 }
