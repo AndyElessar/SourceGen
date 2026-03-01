@@ -1,5 +1,5 @@
 ﻿<div align="center">
-  <img src="icon.png" alt="SourceGen" width="128" height="128" />
+  <img src="./assets/source-gen-social-preview-full.png" alt="SourceGen" />
 </div>
 
 # SourceGen
