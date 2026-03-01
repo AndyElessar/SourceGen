@@ -35,11 +35,12 @@ dotnet publish tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Relea
 
 1. **Plan** — Use `Explore` to research; use #tool:vscode/askQuestions to clarify ambiguities; draft a plan with Goal, Scope, Spec Updates, Approach, and Acceptance Criteria; present to user
 2. **Approve** — Wait for explicit user approval before proceeding
-3. **Save** — Use #tool:vscode/memory to save the approved plan to `/memories/session/plan.md`
-4. **Spec** — If plan includes spec updates, delegate to `Spec`
-5. **Implement** — Delegate to `Implement`; review its report; re-delegate if issues found
-6. **Review** — Delegate to `Review` with the plan and list of changed files; address any findings via `Implement`
-7. **Complete** — Summarize changes, list files, note follow-ups
+3. **Save** — Use #tool:vscode/memory to save the approved plan to `/memories/session/plan.md`, then immediately read it back via #tool:vscode/memory and verify content is present and non-empty
+4. **Gate** — If memory read-back fails or content is empty, use #tool:vscode/askQuestions to request correction, then stop and return `BLOCKED_NO_PLAN_MEMORY`
+5. **Spec** — If plan includes spec updates, delegate to `Spec`
+6. **Implement** — Delegate to `Implement`; review its report; re-delegate if issues found
+7. **Review** — Delegate to `Review` with the plan and list of changed files; address any findings via `Implement`
+8. **Complete** — Summarize changes, list files, note follow-ups
 
 ## Boundaries
 
@@ -47,6 +48,8 @@ dotnet publish tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Relea
   - Use the `Explore` subagent for codebase research before planning
   - Wait for explicit user approval before implementation
   - Use #tool:vscode/memory to save the approved plan to `/memories/session/plan.md` before delegating
+  - Verify memory write succeeded by reading back `/memories/session/plan.md` and confirming non-empty content
+  - Delegate to `Spec`, `Implement`, `Review`, or `Doc` only after memory read-back verification succeeds
   - Delegate to the `Review` subagent after every implementation
   - Run all related tests after implementation
   - Follow conventions from `.github/copilot-instructions.md` and instruction files
@@ -59,6 +62,7 @@ dotnet publish tests/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Relea
 
 - 🚫 **Never do:**
   - Skip the approval gate — never implement without user confirmation
+  - Delegate to `Spec`, `Implement`, `Review`, or `Doc` when memory verification failed
   - Skip the review phase — always delegate to `Review` after implementation
   - Implement code directly — always delegate to the `Implement` subagent
   - Modify secrets, CI/CD configs, or NuGet publishing settings
