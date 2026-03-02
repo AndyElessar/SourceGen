@@ -1,8 +1,11 @@
 ---
 description: "Repository directory structure with read/write annotations for agent boundary enforcement."
+applyTo: ".github/**"
 ---
 
 # Project Structure
+
+See also: [AGENTS.md](../../AGENTS.md) for project principles and agent topology.
 
 ## Directory Layout
 
