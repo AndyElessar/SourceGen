@@ -52,13 +52,6 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
     public string[] Tags { get; init; } = [];
 
     /// <summary>
-    /// Gets the generic factory type mapping for the factory method.
-    /// The first type is the service type template with placeholders,
-    /// subsequent types are placeholder types mapping to factory method type parameters.
-    /// </summary>
-    public Type[]? GenericFactoryTypeMapping { get; init; }
-
-    /// <summary>
     /// Gets the members to inject via dependency injection.
     /// Each element is either:
     /// <list type="bullet">
@@ -71,6 +64,30 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
 
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
+
+    /// <summary>
+    /// Gets the generic factory type mapping for the factory method.<br/>
+    /// The first type is the service type template with placeholders,
+    /// subsequent types are placeholder types mapping to factory method type parameters.
+    /// </summary>
+    /// <remarks>
+    /// <code>
+    /// Define:
+    /// [IocRegisterFor(typeof(IRequestHandler❮❯),
+    ///     Factory = nameof(FactoryContainer.Create),
+    ///     GenericFactoryTypeMapping = [typeof(IRequestHandler❮Task❮int❯❯), typeof(int)])]
+    /// public class FactoryContainer                                 ↑              ↑
+    /// {                                                             └--------------┘
+    ///                                     "int" is a placeholder, make sure placeholders is unique
+    ///                                      in the context of the generic type mapping.
+    ///     public static Create❮T❯() = new Handler❮T❯();
+    /// }
+    ///
+    /// Generate:
+    /// services.AddSingleton❮IRequestHandler❮Task❮Entity❯❯❯(sp => FactoryContainer.Create❮Entity❯());
+    /// </code>
+    /// </remarks>
+    public Type[]? GenericFactoryTypeMapping { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Instance"/>
     public string? Instance { get; init; }
@@ -127,26 +144,14 @@ public sealed class IocRegisterForAttribute<T> : Attribute
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
-    /// <summary>
-    /// Gets the generic factory type mapping for the factory method.
-    /// The first type is the service type template with placeholders,
-    /// subsequent types are placeholder types mapping to factory method type parameters.
-    /// </summary>
-    public Type[]? GenericFactoryTypeMapping { get; init; }
-
-    /// <summary>
-    /// Gets the members to inject via dependency injection.
-    /// Each element is either:
-    /// <list type="bullet">
-    /// <item><description><c>nameof(member)</c>: inject without key</description></item>
-    /// <item><description><c>new object[] { nameof(member), key }</c>: inject with keyed service (KeyType = Value)</description></item>
-    /// <item><description><c>new object[] { nameof(member), key, KeyType.Csharp }</c>: inject with explicit KeyType</description></item>
-    /// </list>
-    /// </summary>
+    /// <inheritdoc cref="IocRegisterForAttribute.InjectMembers"/>
     public object[]? InjectMembers { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
+
+    /// <inheritdoc cref="IocRegisterForAttribute.GenericFactoryTypeMapping"/>
+    public Type[]? GenericFactoryTypeMapping { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Instance"/>
     public string? Instance { get; init; }
