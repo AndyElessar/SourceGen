@@ -51,6 +51,24 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
+    /// <summary>
+    /// Gets the generic factory type mapping for the factory method.
+    /// The first type is the service type template with placeholders,
+    /// subsequent types are placeholder types mapping to factory method type parameters.
+    /// </summary>
+    public Type[]? GenericFactoryTypeMapping { get; init; }
+
+    /// <summary>
+    /// Gets the members to inject via dependency injection.
+    /// Each element is either:
+    /// <list type="bullet">
+    /// <item><description><c>nameof(member)</c>: inject without key</description></item>
+    /// <item><description><c>new object[] { nameof(member), key }</c>: inject with keyed service (KeyType = Value)</description></item>
+    /// <item><description><c>new object[] { nameof(member), key, KeyType.Csharp }</c>: inject with explicit KeyType</description></item>
+    /// </list>
+    /// </summary>
+    public object[]? InjectMembers { get; init; }
+
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
 
@@ -108,6 +126,24 @@ public sealed class IocRegisterForAttribute<T> : Attribute
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets the generic factory type mapping for the factory method.
+    /// The first type is the service type template with placeholders,
+    /// subsequent types are placeholder types mapping to factory method type parameters.
+    /// </summary>
+    public Type[]? GenericFactoryTypeMapping { get; init; }
+
+    /// <summary>
+    /// Gets the members to inject via dependency injection.
+    /// Each element is either:
+    /// <list type="bullet">
+    /// <item><description><c>nameof(member)</c>: inject without key</description></item>
+    /// <item><description><c>new object[] { nameof(member), key }</c>: inject with keyed service (KeyType = Value)</description></item>
+    /// <item><description><c>new object[] { nameof(member), key, KeyType.Csharp }</c>: inject with explicit KeyType</description></item>
+    /// </list>
+    /// </summary>
+    public object[]? InjectMembers { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }

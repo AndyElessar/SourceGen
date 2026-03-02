@@ -227,6 +227,30 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "When SourceGenIocFeatures disables a member injection feature, [IocInject] on that member is ignored during generation.");
 
+    /// <summary>
+    /// SGIOC023: Invalid InjectMembers element format.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectMembersInvalidFormat = new(
+        id: "SGIOC023",
+        title: "Invalid InjectMembers element format",
+        messageFormat: "InjectMembers element at index {0} is invalid; expected nameof(member) or new object[] {{ nameof(member), key [, KeyType] }}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Each element in InjectMembers must be either a nameof() expression or an array literal with member name, optional key, and optional KeyType.");
+
+    /// <summary>
+    /// SGIOC024: InjectMembers specifies non-injectable member.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectMembersNonInjectableMember = new(
+        id: "SGIOC024",
+        title: "InjectMembers specifies non-injectable member",
+        messageFormat: "Member '{0}' specified in InjectMembers cannot be injected: {1}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Members specified in InjectMembers must be injectable: non-static properties with setters, non-readonly non-private fields, or non-private void-returning methods.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -246,7 +270,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         KeyValuePairKeyTypeMismatch,
         GenericFactoryMissingAttribute,
         DuplicatedGenericFactoryPlaceholders,
-        InjectFeatureDisabled
+        InjectFeatureDisabled,
+        InjectMembersInvalidFormat,
+        InjectMembersNonInjectableMember
     ];
 
     public override void Initialize(AnalysisContext context)

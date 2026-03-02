@@ -1,7 +1,7 @@
 ---
 description: "Use when: implementing features, fixing bugs, or making code changes that require planning, approval, and review. Analyzes requirements, writes plan.md, and delegates to subagents."
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, vscode/askQuestions, execute/testFailure, execute/getTerminalOutput, execute/runInTerminal, read, agent, search, web, browser, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, todo]
+tools: [vscode/memory, vscode/askQuestions, execute/testFailure, execute/getTerminalOutput, execute/runInTerminal, read, agent, search, web, github/get_copilot_job_status, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, github/get_file_contents, github/issue_read, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'microsoftdocs/mcp/*', browser, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, todo]
 agents: ["Explore", "Implement", "Review", "Spec", "Doc", "DocReview"]
 user-invocable: true
 disable-model-invocation: true

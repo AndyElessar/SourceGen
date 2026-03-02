@@ -10,6 +10,7 @@ internal static class Constants
     public const string Tags = "Tags";
     public const string Decorator = "Decorator";
     public const string InjectAttribute = "InjectAttribute";
+    public const string InjectMembers = "InjectMembers";
     public const string ImportModule = "ImportModule";
     public const string SpecialParameter = "SpecialParameter";
     public const string Collection = "Collection";
@@ -48,4 +49,6 @@ internal static class Constants
     public const string SGIOC020 = "SGIOC020";
     public const string SGIOC021 = "SGIOC021";
     public const string SGIOC022 = "SGIOC022";
+    public const string SGIOC023 = "SGIOC023";
+    public const string SGIOC024 = "SGIOC024";
 }

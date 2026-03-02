@@ -9,8 +9,9 @@ SourceGen is a collection of C# incremental source generators for compile-time c
 **Design priorities** (highest first):
 1. **Correctness** — Generated code must be semantically correct and compile-time validated.
 2. **AOT compatibility** — All generated code must pass Native AOT publishing without warnings.
-3. **Incremental performance** — Generators must be incremental (`IIncrementalGenerator`) and avoid allocations in hot paths.
-4. **Developer experience** — Clear diagnostics, minimal boilerplate, intuitive attribute API.
+3. **Performance** — Generated code must be efficient and avoid unnecessary allocations.
+4. **Incremental performance** — Generators must be incremental (`IIncrementalGenerator`) and avoid allocations in hot paths.
+5. **Developer experience** — Clear diagnostics, minimal boilerplate, intuitive attribute API.
 
 ## Project Requirements
 

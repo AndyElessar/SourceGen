@@ -228,7 +228,8 @@ Report when:
 - Checks Factory member specified via `nameof()` on `[IocRegister]`, `[IoCRegisterFor]`, or `[IoCRegisterDefaults]` attributes.
 - When the Factory references a method symbol, checks if the method is generic (has type parameters).
 - If the method is generic, checks if it has `[IocGenericFactory]` attribute.
-- Reports when the factory method is generic but does not have `[IocGenericFactory]` attribute.
+- The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterAttribute`, `IocRegisterForAttribute`, or `IocRegisterDefaultsAttribute`).
+- Reports when the factory method is generic but neither `[IocGenericFactory]` attribute on the method NOR `GenericFactoryTypeMapping` on the registration attribute provides the type mapping.
 
 ---
 
@@ -334,3 +335,40 @@ Report when a member has `[IocInject]`/`[Inject]` but its corresponding feature 
 - Reports when the required feature flag is not enabled.
 
 **Message format:** `'{MemberName}' has [IocInject] but {FeatureName} feature is not enabled. Add '{FeatureName}' to <SourceGenIocFeatures> in your project file.`
+
+---
+
+### SGIOC023 - Error - Usage - Invalid InjectMembers element format
+
+Report when an element in the `InjectMembers` array is not in a recognized format.
+
+**Analysis:**
+
+- Checks the `InjectMembers` named argument array on `[IocRegisterFor]` registration attributes.
+- Validates each array element:
+  - Must be one of:
+    - A `nameof()` expression resolving to a valid member
+    - A `new object[]` with exactly 2 or 3 elements where:
+      - First element is a `nameof()` expression
+      - Second element is a key (of any type)
+      - Optional third element is a `KeyType` enum constant (`KeyType.Value` or `KeyType.Csharp`)
+  - Arrays with more than 3 elements are rejected.
+  - If 3 elements, the third must be a valid `KeyType` enum constant.
+- Reports when an element does not match one of the recognized formats.
+
+---
+
+### SGIOC024 - Error - Usage - Member specified in InjectMembers cannot be injected
+
+Report when a member resolved from `nameof()` in `InjectMembers` cannot be injected.
+
+**Analysis:**
+
+- Checks members specified via `nameof()` in the `InjectMembers` array.
+- Reports when the member is:
+  - static
+  - property without setter or with private setter
+  - readonly field
+  - private field
+  - method that is private, doesn't return void, or is generic
+- This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.
