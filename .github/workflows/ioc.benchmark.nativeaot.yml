@@ -39,6 +39,8 @@ env:
 jobs:
   nativeaot-benchmark:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 120
 
     steps:

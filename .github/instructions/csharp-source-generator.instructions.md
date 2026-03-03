@@ -1,5 +1,6 @@
 ---
 description: "Use when writing or reviewing C# source generators. Covers incremental generator architecture, pipeline design, PolyType.Roslyn, and performance."
+applyTo: "src/**/SourceGenerator/**/*.cs"
 ---
 
 # C# Source Generator Best Practices
