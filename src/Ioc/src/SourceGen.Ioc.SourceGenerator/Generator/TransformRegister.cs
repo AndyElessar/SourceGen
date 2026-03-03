@@ -90,8 +90,7 @@ partial class IocSourceGenerator
             factory = attributeData.GetFactoryMethodData(semanticModel);
         }
 
-        // Extract injection members (properties, fields, methods marked with IocInjectAttribute/InjectAttribute)
-        var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
+        var injectionMembers = ExtractAndMergeInjectionMembers(typeSymbol, attributeData, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
         var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
@@ -150,8 +149,7 @@ partial class IocSourceGenerator
             factory = attributeData.GetFactoryMethodData(semanticModel);
         }
 
-        // Extract injection members (properties, fields, methods marked with InjectAttribute)
-        var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
+        var injectionMembers = ExtractAndMergeInjectionMembers(typeSymbol, attributeData, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
         var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
@@ -390,4 +388,226 @@ partial class IocSourceGenerator
 
         return result.ToImmutableEquatableSet();
     }
+
+    /// <summary>
+    /// Extracts and merges injection members from both <c>[IocInject]</c> attributes on the type
+    /// and the <c>InjectMembers</c> attribute property. <c>[IocInject]</c> takes priority.
+    /// </summary>
+    private static ImmutableEquatableArray<InjectionMemberData> ExtractAndMergeInjectionMembers(
+        INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel? semanticModel)
+    {
+        var iocInjectMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
+
+        ImmutableEquatableArray<InjectionMemberData> attrInjectMembers = semanticModel is not null
+            ? ExtractInjectMembersFromAttribute(attributeData, semanticModel)
+            : [];
+
+        return MergeInjectionMembers(iocInjectMembers, attrInjectMembers);
+    }
+
+    /// <summary>
+    /// Merges injection members from <c>[IocInject]</c> attributes and the <c>InjectMembers</c> attribute property.
+    /// <c>[IocInject]</c> on the member takes priority: if the same member appears in both, the <c>[IocInject]</c> entry wins.
+    /// </summary>
+    private static ImmutableEquatableArray<InjectionMemberData> MergeInjectionMembers(
+        ImmutableEquatableArray<InjectionMemberData> iocInjectMembers,
+        ImmutableEquatableArray<InjectionMemberData> attributeMembers)
+    {
+        if(attributeMembers.Length == 0)
+            return iocInjectMembers;
+
+        if(iocInjectMembers.Length == 0)
+            return attributeMembers;
+
+        // [IocInject] takes priority – only add attribute members whose name is not already in [IocInject] set
+        var iocInjectNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach(var m in iocInjectMembers)
+            iocInjectNames.Add(m.Name);
+
+        List<InjectionMemberData> merged = new(iocInjectMembers);
+        foreach(var m in attributeMembers)
+        {
+            if(!iocInjectNames.Contains(m.Name))
+                merged.Add(m);
+        }
+
+        return merged.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Extracts injection members from the registration attribute's <c>InjectMembers</c> property.
+    /// Uses <see cref="AttributeSyntax"/> + <see cref="SemanticModel"/> to resolve <c>nameof()</c> expressions.
+    /// </summary>
+    private static ImmutableEquatableArray<InjectionMemberData> ExtractInjectMembersFromAttribute(
+        AttributeData attributeData,
+        SemanticModel semanticModel)
+    {
+        var syntaxReference = attributeData.ApplicationSyntaxReference;
+        if(syntaxReference?.GetSyntax() is not AttributeSyntax attributeSyntax)
+            return [];
+
+        var argumentList = attributeSyntax.ArgumentList;
+        if(argumentList is null)
+            return [];
+
+        AttributeArgumentSyntax? injectMembersArg = null;
+        foreach(var arg in argumentList.Arguments)
+        {
+            if(arg.NameEquals?.Name.Identifier.Text == "InjectMembers")
+            {
+                injectMembersArg = arg;
+                break;
+            }
+        }
+
+        if(injectMembersArg is null)
+            return [];
+
+        var elements = GetInjectMembersArrayElements(injectMembersArg.Expression);
+        if(elements is null || elements.Length == 0)
+            return [];
+
+        List<InjectionMemberData>? result = null;
+        foreach(var elementExpr in elements)
+        {
+            var memberData = ParseInjectMemberElement(elementExpr, semanticModel);
+            if(memberData is not null)
+            {
+                result ??= [];
+                result.Add(memberData);
+            }
+        }
+
+        return result?.ToImmutableEquatableArray() ?? [];
+    }
+
+    private static ExpressionSyntax[]? GetInjectMembersArrayElements(ExpressionSyntax expression)
+        => expression switch
+        {
+            ArrayCreationExpressionSyntax { Initializer: not null } arr
+                => [.. arr.Initializer.Expressions],
+            ImplicitArrayCreationExpressionSyntax implicitArr
+                => [.. implicitArr.Initializer.Expressions],
+            CollectionExpressionSyntax coll
+                => [.. coll.Elements.OfType<ExpressionElementSyntax>().Select(static e => e.Expression)],
+            _ => null
+        };
+
+    private static InjectionMemberData? ParseInjectMemberElement(ExpressionSyntax expression, SemanticModel semanticModel)
+    {
+        // Case 1: nameof(X) — inject without key
+        if(IsNameofInvocation(expression))
+        {
+            var symbol = ResolveInjectMemberSymbolFromNameof(expression, semanticModel);
+            return symbol is not null && IsInjectableMember(symbol) ? CreateInjectionMemberFromSymbol(symbol, key: null, semanticModel) : null;
+        }
+
+        // Case 2: { nameof(X), key [, KeyType] } — keyed injection
+        var nested = GetInjectMembersArrayElements(expression);
+        if(nested is null || nested.Length < 2)
+            return null;
+
+        if(!IsNameofInvocation(nested[0]))
+            return null;
+
+        // Reject arrays with more than 3 elements
+        if(nested.Length > 3)
+            return null;
+
+        var memberSymbol = ResolveInjectMemberSymbolFromNameof(nested[0], semanticModel);
+        if(memberSymbol is null || !IsInjectableMember(memberSymbol))
+            return null;
+
+        // Parse KeyType from optional element [2] (default = 0 = Value)
+        int keyType = 0;
+        if(nested.Length > 2)
+        {
+            var ktConst = semanticModel.GetConstantValue(nested[2]);
+            if(ktConst.HasValue && ktConst.Value is int kt && kt is 0 or 1)
+                keyType = kt;
+            else
+                return null; // Invalid KeyType — skip this element
+        }
+
+        // Parse key value from element [1]
+        string? key;
+        if(keyType == 1) // Csharp
+        {
+            if(IsNameofInvocation(nested[1]))
+            {
+                var inner = ((InvocationExpressionSyntax)nested[1]).ArgumentList.Arguments[0].Expression;
+                // Resolve to fully qualified path, consistent with TryGetNameof
+                key = RoslynExtensions.ResolveNameofExpression(inner, semanticModel)
+                    ?? inner.ToString();
+            }
+            else
+            {
+                key = nested[1].ToFullString().Trim();
+            }
+        }
+        else // Value
+        {
+            var constVal = semanticModel.GetConstantValue(nested[1]);
+            if(constVal.HasValue && constVal.Value is not null)
+            {
+                var typeInfo = semanticModel.GetTypeInfo(nested[1]);
+                key = typeInfo.Type is not null
+                    ? RoslynExtensions.FormatPrimitiveConstant(typeInfo.Type, constVal.Value)
+                    : constVal.Value.ToString();
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return CreateInjectionMemberFromSymbol(memberSymbol, key, semanticModel);
+    }
+
+    /// <summary>
+    /// Checks whether a symbol is considered injectable: non-static, with suitable accessibility,
+    /// and meeting the specific criteria for properties, fields, or methods.
+    /// </summary>
+    private static bool IsInjectableMember(ISymbol symbol)
+    {
+        if(symbol.IsStatic)
+            return false;
+
+        return symbol switch
+        {
+            IPropertySymbol property => property.SetMethod is not null
+                && property.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal
+                && property.SetMethod.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
+            IFieldSymbol field => !field.IsReadOnly
+                && field.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
+            IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
+                && method.ReturnsVoid
+                && !method.IsGenericMethod
+                && method.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
+            _ => false
+        };
+    }
+
+    private static bool IsNameofInvocation(ExpressionSyntax expression)
+        => expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" } } invocation
+            && invocation.ArgumentList.Arguments.Count == 1;
+
+    private static ISymbol? ResolveInjectMemberSymbolFromNameof(ExpressionSyntax nameofExpr, SemanticModel semanticModel)
+    {
+        if(nameofExpr is not InvocationExpressionSyntax invocation)
+            return null;
+        var inner = invocation.ArgumentList.Arguments[0].Expression;
+        var info = semanticModel.GetSymbolInfo(inner);
+        return info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
+    }
+
+    private static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel)
+        => symbol switch
+        {
+            IPropertySymbol property => CreatePropertyInjection(property, key),
+            IFieldSymbol field => CreateFieldInjection(field, key),
+            IMethodSymbol method => CreateMethodInjection(method, key, semanticModel),
+            _ => null
+        };
+
 }

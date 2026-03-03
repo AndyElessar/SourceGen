@@ -15,6 +15,24 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Invoke-Native
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Description,
+
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$Command
+    )
+
+    & $Command
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "$Description failed with exit code $LASTEXITCODE."
+    }
+}
+
 $config = @{
     "ioc" = @{
         Project = "src/Ioc/src/SourceGen.Ioc/SourceGen.Ioc.csproj"
@@ -51,21 +69,30 @@ if ($ReleaseType -eq "prerelease" -and $Version -notmatch "-")
 $tag = "$($c.TagPrefix)$Version"
 
 Write-Host "Setting version to $Version for $ProjectKey"
-nbgv set-version $Version --project $c.Project
-nbgv get-version --project $c.Project
+Invoke-Native -Description "nbgv set-version" -Command { nbgv set-version $Version --project $c.Project }
+
+$versionFile = Get-Content -Raw $c.VersionFile | ConvertFrom-Json
+if ($versionFile.version -ne $Version)
+{
+    throw "Version file '$($c.VersionFile)' expected '$Version' but found '$($versionFile.version)'."
+}
+
+Write-Host "Version file verified: $($versionFile.version)"
 
 Write-Host "Running tests"
-dotnet run --project $c.TestProject -c Release -- --treenode-filter "/*/*/*/*"
+Invoke-Native -Description "dotnet run tests" -Command {
+    dotnet run --project $c.TestProject -c Release -- --treenode-filter "/*/*/*/*"
+}
 
 Write-Host "Committing version file"
-git add $c.VersionFile
-git commit -m "chore($ProjectKey): set version to $Version"
+Invoke-Native -Description "git add version file" -Command { git add $c.VersionFile }
+Invoke-Native -Description "git commit" -Command { git commit -m "chore($ProjectKey): set version to $Version" }
 
 Write-Host "Creating tag $tag"
-git tag -a $tag -m "Release $ProjectKey v$Version"
+Invoke-Native -Description "git tag" -Command { git tag -a $tag -m "Release $ProjectKey v$Version" }
 
 Write-Host "Pushing commit and tag"
-git push origin main
-git push origin $tag
+Invoke-Native -Description "git push main" -Command { git push origin main }
+Invoke-Native -Description "git push tag" -Command { git push origin $tag }
 
 Write-Host "Publish workflow triggered by tag $tag ($($c.Workflow))."

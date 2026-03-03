@@ -249,7 +249,7 @@ services.AddScoped<global::TestNamespace.IHandler>((global::System.IServiceProvi
 When working with open generic services, you can use a **generic factory method** to create instances. This requires the `[IocGenericFactory]` attribute to map service type placeholders to factory method type parameters.
 
 > [!WARNING]
-> If `Factory` points to a generic method but that method does not have `[IocGenericFactory]`, analyzer `SGIOC016` is reported and registration will not be generated.
+> If `Factory` points to a generic method but that method does not have `[IocGenericFactory]` and no valid `GenericFactoryTypeMapping` is specified on the registration attribute, analyzer `SGIOC016` is reported and registration will not be generated. When using `GenericFactoryTypeMapping`, the number of placeholder types must match the factory method's type parameter count.
 
 ### Basic Generic Factory
 
@@ -409,6 +409,34 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 
 </details>
 
+## Generic Factory Without `[IocGenericFactory]`
+
+As an alternative to placing `[IocGenericFactory]` on the factory method, you can specify the type mapping directly on the registration attribute via `GenericFactoryTypeMapping`. This is useful when you cannot modify the factory method (e.g., a third-party library).
+
+```csharp
+// No [IocGenericFactory] attribute needed on the factory method
+[assembly: IocRegisterDefaults(
+    typeof(IRequestHandler<>),
+    ServiceLifetime.Singleton,
+    Factory = nameof(ExternalFactory.Create),
+    GenericFactoryTypeMapping = [typeof(IRequestHandler<Task<int>>), typeof(int)])]
+
+public static class ExternalFactory
+{
+    // Third-party or shared factory — cannot be modified
+    public static IRequestHandler<Task<T>> Create<T>() 
+        => throw new NotImplementedException();
+}
+```
+
+The `GenericFactoryTypeMapping` property uses the same format as `[IocGenericFactory]`:
+
+- **First element**: the service type template with concrete placeholder types (e.g., `typeof(IRequestHandler<Task<int>>)`)
+- **Remaining elements**: the placeholder types that map to factory method type parameters in order
+
+> [!NOTE]
+> `GenericFactoryTypeMapping` is available on `[IocRegisterDefaults]` and `[IocRegisterFor]`. When both `GenericFactoryTypeMapping` on the attribute and `[IocGenericFactory]` on the method are present, `[IocGenericFactory]` takes precedence.
+
 ## Diagnostics
 
 |ID|Severity|Description|
@@ -416,8 +444,8 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
 |SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Factory` takes precedence.|
-|SGIOC016|Error|Generic factory method does not have `[IocGenericFactory]` attribute.|
-|SGIOC017|Error|`[IocGenericFactory]` placeholder types are duplicated. Each placeholder type must be unique.|
+|SGIOC016|Error|Generic factory method does not have `[IocGenericFactory]` attribute and `GenericFactoryTypeMapping` is not specified on the registration attribute, or the placeholder count does not match the factory method's type parameters.|
+|SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
 
 ---
 

@@ -190,7 +190,7 @@ sourcegen-ioc cli-schema [options]
 
 ## Documentation
 
-For complete documentation, see the [GitHub repository](https://github.com/AndyElessar/SourceGen).
+For complete documentation, see the [documentation site](https://andyelessar.github.io/SourceGen/).
 
 ## License
 

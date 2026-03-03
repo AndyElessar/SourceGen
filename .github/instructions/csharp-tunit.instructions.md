@@ -1,5 +1,6 @@
 ---
 description: "Use when writing or reviewing TUnit tests. Covers TUnit assertions, data-driven tests, lifecycle hooks, and test filtering."
+applyTo: "src/**/test/**/*.cs"
 ---
 
 # TUnit Best Practices

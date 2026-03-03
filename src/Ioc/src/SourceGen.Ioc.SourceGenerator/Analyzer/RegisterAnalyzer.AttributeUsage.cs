@@ -90,91 +90,20 @@ public sealed partial class RegisterAnalyzer
                 featureName));
         }
 
-        // Check if member is static
-        if (member.IsStatic)
+        // Container-class partial definitions are valid injection targets (keyed service accessors)
+        if (member is IPropertySymbol { IsPartialDefinition: true } && IsInContainerClass(member.ContainingType))
+            return;
+        if (member is IMethodSymbol { IsPartialDefinition: true } && IsInContainerClass(member.ContainingType))
+            return;
+
+        var reason = GetMemberInjectabilityIssue(member);
+        if (reason is not null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 InvalidInjectAttributeUsage,
                 location,
                 member.Name,
-                "it is static"));
-            return;
-        }
-
-        switch (member)
-        {
-            case IPropertySymbol property:
-                // Allow [IocInject] on partial properties in [IocContainer] classes (for keyed service accessor)
-                if (property.IsPartialDefinition && IsInContainerClass(member.ContainingType))
-                    return;
-
-                // Check if property has no setter or setter is private
-                if (property.SetMethod is null)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InvalidInjectAttributeUsage,
-                        location,
-                        member.Name,
-                        "property has no setter"));
-                }
-                else if (property.SetMethod.DeclaredAccessibility is Accessibility.Private)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InvalidInjectAttributeUsage,
-                        location,
-                        member.Name,
-                        "property setter is private"));
-                }
-
-                break;
-
-            case IFieldSymbol field:
-                // Check if field is readonly
-                if (field.IsReadOnly)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InvalidInjectAttributeUsage,
-                        location,
-                        member.Name,
-                        "field is readonly"));
-                }
-                // Check if field is private
-                else if (field.DeclaredAccessibility is Accessibility.Private)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InvalidInjectAttributeUsage,
-                        location,
-                        member.Name,
-                        "field is private"));
-                }
-
-                break;
-
-            case IMethodSymbol method:
-                // Allow [IocInject] on partial methods in [IocContainer] classes (for keyed service accessor)
-                if (method.IsPartialDefinition && IsInContainerClass(member.ContainingType))
-                    return;
-
-                // Check if method is private
-                if (method.DeclaredAccessibility is Accessibility.Private)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InvalidInjectAttributeUsage,
-                        location,
-                        member.Name,
-                        "method is private"));
-                }
-                // Check if method does not return void
-                else if (!method.ReturnsVoid)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InvalidInjectAttributeUsage,
-                        location,
-                        member.Name,
-                        "method must return void"));
-                }
-
-                break;
+                reason));
         }
     }
 
@@ -224,6 +153,12 @@ public sealed partial class RegisterAnalyzer
         if (!isDefaultsAttribute)
         {
             AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Instance");
+        }
+
+        // SGIOC023 + SGIOC024: Validate InjectMembers elements - only for IoCRegisterFor attributes
+        if (!isDefaultsAttribute)
+        {
+            AnalyzeInjectMembersOnAttribute(context, argumentList);
         }
     }
 
@@ -321,7 +256,62 @@ public sealed partial class RegisterAnalyzer
                     }
                 }
 
-                if (!hasIocGenericFactory)
+                // Suppress SGIOC016 if the registration attribute provides GenericFactoryTypeMapping
+                var hasGenericFactoryTypeMappingOnAttr = false;
+                // Always check GenericFactoryTypeMapping for duplicate placeholders (SGIOC017), regardless of [IocGenericFactory]
+                foreach (var arg in argumentList.Arguments)
+                {
+                    if (arg.NameEquals?.Name.Identifier.Text == "GenericFactoryTypeMapping")
+                    {
+                        ExpressionSyntax[] mappingElements = arg.Expression switch
+                        {
+                            CollectionExpressionSyntax coll => [.. coll.Elements.OfType<ExpressionElementSyntax>().Select(static e => e.Expression)],
+                            ArrayCreationExpressionSyntax { Initializer: not null } arr => [.. arr.Initializer.Expressions],
+                            ImplicitArrayCreationExpressionSyntax implicitArr => [.. implicitArr.Initializer.Expressions],
+                            _ => []
+                        };
+
+                        if (mappingElements.Length >= 2)
+                        {
+                            // Check for duplicate placeholder types (index 1+)
+                            var seenTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+                            ITypeSymbol? duplicateType = null;
+                            for (int i = 1; i < mappingElements.Length; i++)
+                            {
+                                if (mappingElements[i] is TypeOfExpressionSyntax typeofExpr)
+                                {
+                                    var typeInfo = context.SemanticModel.GetTypeInfo(typeofExpr.Type, context.CancellationToken);
+                                    if (typeInfo.Type is { } placeholderType)
+                                    {
+                                        if (!seenTypes.Add(placeholderType))
+                                        {
+                                            duplicateType = placeholderType;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (duplicateType is not null)
+                            {
+                                // Duplicate placeholders: report SGIOC017
+                                context.ReportDiagnostic(Diagnostic.Create(
+                                    DuplicatedGenericFactoryPlaceholders,
+                                    arg.Expression.GetLocation(),
+                                    duplicateType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                            }
+                            else if (!hasIocGenericFactory && mappingElements.Length - 1 == methodSymbol.TypeParameters.Length)
+                            {
+                                // Only suppress SGIOC016 when [IocGenericFactory] is NOT present
+                                // AND the mapping provides exactly one placeholder per factory type parameter
+                                hasGenericFactoryTypeMappingOnAttr = true;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!hasIocGenericFactory && !hasGenericFactoryTypeMappingOnAttr)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         GenericFactoryMissingAttribute,
@@ -371,14 +361,12 @@ public sealed partial class RegisterAnalyzer
             return; // Need at least service type template and one placeholder
 
         // Check for duplicates in placeholder types (from index 1 to end)
-        var seenTypes = new HashSet<string>(StringComparer.Ordinal);
+        var seenTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         for (int i = 1; i < typeArray.Length; i++)
         {
             if (typeArray[i].Value is ITypeSymbol placeholderType)
             {
-                var typeName = placeholderType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-                if (!seenTypes.Add(typeName))
+                if (!seenTypes.Add(placeholderType))
                 {
                     // Duplicate found
                     var location = genericFactoryAttr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
@@ -470,4 +458,163 @@ public sealed partial class RegisterAnalyzer
 
         return false;
     }
+
+    /// <summary>
+    /// SGIOC023 + SGIOC024: Validates InjectMembers array elements on a registration attribute.
+    /// SGIOC023: Fires when an element is not nameof(...) or a valid array literal { nameof(...), key [, KeyType] }.
+    /// SGIOC024: Fires when the resolved member is not injectable.
+    /// </summary>
+    private static void AnalyzeInjectMembersOnAttribute(
+        SyntaxNodeAnalysisContext context,
+        AttributeArgumentListSyntax argumentList)
+    {
+        AttributeArgumentSyntax? injectMembersArg = null;
+        foreach (var arg in argumentList.Arguments)
+        {
+            if (arg.NameEquals?.Name.Identifier.Text == "InjectMembers")
+            {
+                injectMembersArg = arg;
+                break;
+            }
+        }
+
+        if (injectMembersArg is null)
+            return;
+
+        var elements = GetInjectMembersElements(injectMembersArg.Expression);
+        if (elements is null || elements.Length == 0)
+            return;
+
+        for (int i = 0; i < elements.Length; i++)
+        {
+            var element = elements[i];
+            ExpressionSyntax? nameofExpr = null;
+
+            if (IsNameofExpression(element))
+            {
+                // Format: nameof(Member)
+                nameofExpr = element;
+            }
+            else
+            {
+                // Format: { nameof(Member), key [, KeyType] }
+                var nested = GetInjectMembersElements(element);
+                if (nested is null || nested.Length < 2 || !IsNameofExpression(nested[0]))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InjectMembersInvalidFormat,
+                        element.GetLocation(),
+                        i));
+                    continue;
+                }
+
+                // Reject arrays with more than 3 elements
+                if (nested.Length > 3)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InjectMembersInvalidFormat,
+                        element.GetLocation(),
+                        i));
+                    continue;
+                }
+
+                // If 3 elements, validate 3rd is a valid KeyType constant (Value=0 or Csharp=1)
+                if (nested.Length == 3)
+                {
+                    var ktConst = context.SemanticModel.GetConstantValue(nested[2], context.CancellationToken);
+                    if (!ktConst.HasValue || ktConst.Value is not int ktVal || ktVal is not (0 or 1))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InjectMembersInvalidFormat,
+                            element.GetLocation(),
+                            i));
+                        continue;
+                    }
+                }
+
+                nameofExpr = nested[0];
+            }
+
+            // Resolve the member symbol from nameof(...)
+            if (nameofExpr is not InvocationExpressionSyntax nameofInvocation)
+                continue;
+
+            var inner = nameofInvocation.ArgumentList.Arguments[0].Expression;
+            var symbolInfo = context.SemanticModel.GetSymbolInfo(inner, context.CancellationToken);
+            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+
+            if (symbol is null)
+                continue; // unresolvable — a compile error will already be reported
+
+            // SGIOC024: Check if member is injectable
+            var (isInjectable, reason) = ValidateInjectableMember(symbol);
+            if (!isInjectable)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InjectMembersNonInjectableMember,
+                    nameofExpr.GetLocation(),
+                    symbol.Name,
+                    reason));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the reason a member is not injectable, or <see langword="null"/> if it is valid.
+    /// Shared by SGIOC007 (<see cref="AnalyzeInjectAttribute"/>) and SGIOC024 (<see cref="ValidateInjectableMember"/>).
+    /// </summary>
+    private static string? GetMemberInjectabilityIssue(ISymbol symbol)
+    {
+        if (symbol.IsStatic)
+            return "it is static";
+
+        return symbol switch
+        {
+            IPropertySymbol p when p.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
+                => "property is not accessible",
+            IPropertySymbol { SetMethod: null } => "property has no setter",
+            IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is Accessibility.Private
+                => "property setter is private",
+            IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
+                => "property setter is not accessible",
+            IFieldSymbol { IsReadOnly: true } => "field is readonly",
+            IFieldSymbol f when f.DeclaredAccessibility is Accessibility.Private
+                => "field is private",
+            IFieldSymbol f when f.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
+                => "field is not accessible",
+            IMethodSymbol { MethodKind: MethodKind.Constructor } => null,
+            IMethodSymbol m when m.DeclaredAccessibility is Accessibility.Private
+                => "method is private",
+            IMethodSymbol m when m.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
+                => "method is not accessible",
+            IMethodSymbol m when m.MethodKind != MethodKind.Ordinary
+                => "method is not an ordinary method",
+            IMethodSymbol { ReturnsVoid: false } => "method does not return void",
+            IMethodSymbol { IsGenericMethod: true } => "method is generic",
+            IPropertySymbol or IFieldSymbol or IMethodSymbol => null,
+            _ => "member is not a property, field, or method"
+        };
+    }
+
+    private static (bool IsInjectable, string Reason) ValidateInjectableMember(ISymbol symbol)
+    {
+        var reason = GetMemberInjectabilityIssue(symbol);
+        return reason is null ? (true, string.Empty) : (false, reason);
+    }
+
+    private static ExpressionSyntax[]? GetInjectMembersElements(ExpressionSyntax expression)
+        => expression switch
+        {
+            ArrayCreationExpressionSyntax { Initializer: not null } arr
+                => [.. arr.Initializer.Expressions],
+            ImplicitArrayCreationExpressionSyntax implicitArr
+                => [.. implicitArr.Initializer.Expressions],
+            CollectionExpressionSyntax coll
+                => [.. coll.Elements.OfType<ExpressionElementSyntax>().Select(static e => e.Expression)],
+            _ => null
+        };
+
+    private static bool IsNameofExpression(ExpressionSyntax expression)
+        => expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" } } inv
+            && inv.ArgumentList.Arguments.Count == 1;
 }

@@ -9,6 +9,8 @@ on:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
       - 'src/Ioc/test/SourceGen.Ioc.Test/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
       - 'Directory.Build.props'
@@ -21,6 +23,8 @@ on:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
       - 'src/Ioc/test/SourceGen.Ioc.Test/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
+      - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
       - 'Directory.Build.props'
@@ -40,6 +44,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -60,3 +66,25 @@ jobs:
 
       - name: Test
         run: dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -c Release --no-build
+
+  aot-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish AOT
+        run: dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -o ./publish-aot
+
+      - name: Run AOT tests
+        run: ./publish-aot/SourceGen.Ioc.TestAot

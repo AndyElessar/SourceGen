@@ -1,10 +1,11 @@
-
-// dotnet run -c Release -f net10.0 --runtimes nativeaot10.0
-
 using SourceGen.Ioc.Benchmark.Benchmarks;
 
-// Choose which benchmark to run:
-//BenchmarkRunner.Run<MSDI_RegistrationBenchmark>();
-//BenchmarkRunner.Run<Switch_Vs_FrozenDictionaryBenchmark>();
-//BenchmarkRunner.Run<ThreadSafeStrategyBenchmark>();
-BenchmarkRunner.Run<RealisticAppBenchmark>();
+// dotnet run --project src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj -c Release -f net10.0 -- --runtimes nativeaot10.0
+
+var benchmarkSwitcher = BenchmarkSwitcher.FromTypes(
+[
+	typeof(ThreadSafeStrategyBenchmark),
+	typeof(RealisticAppBenchmark),
+]);
+
+benchmarkSwitcher.Run(args);

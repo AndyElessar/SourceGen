@@ -17,6 +17,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -56,6 +58,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       id-token: write
+      contents: read
     environment:
       name: nuget-publish
 
@@ -100,4 +103,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
-        run: gh release create "$TAG" ./artifacts/*.nupkg --generate-notes --title "$TAG" --repo "$REPO" --draft
+        run: gh release create "$TAG" ./artifacts/*.nupkg --generate-notes --title "$TAG" --repo "$REPO"

@@ -4,6 +4,12 @@
 
 Use this when you want typed, reflection-free service resolution without manually wiring every service.
 
+## Feature Coverage
+
+`[IocContainer]` supports all registration patterns introduced in the earlier docs (`02_Basic` through `10_Wrapper`): defaults, field/property/method injection, keyed services, decorators, tags, factory/instance registrations, open generics, wrappers, and imported modules.
+
+Feature-gated behavior still follows `SourceGenIocFeatures` (for example, field injection requires `FieldInject` to be enabled), and host-specific integrations still require the corresponding interfaces and package references.
+
 ## Basic Container
 
 Start with the smallest setup:

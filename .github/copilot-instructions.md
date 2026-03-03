@@ -1,16 +1,6 @@
 ﻿# Copilot Instructions for SourceGen
 
-This repository contains C# Source Generator projects. Follow these instructions when assisting with code in this repository.
-
-## Project Goal
-
-SourceGen is a collection of C# incremental source generators for compile-time code generation.
-
-**Design priorities** (highest first):
-1. **Correctness** — Generated code must be semantically correct and compile-time validated.
-2. **AOT compatibility** — All generated code must pass Native AOT publishing without warnings.
-3. **Incremental performance** — Generators must be incremental (`IIncrementalGenerator`) and avoid allocations in hot paths.
-4. **Developer experience** — Clear diagnostics, minimal boilerplate, intuitive attribute API.
+This repository contains C# Source Generator projects. Follow the project principles defined in [AGENTS.md](../AGENTS.md).
 
 ## Project Requirements
 

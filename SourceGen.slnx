@@ -14,14 +14,16 @@
   </Folder>
   <Folder Name="/.github/instructions/">
     <File Path=".github/instructions/csharp-source-generator.instructions.md" />
+    <File Path=".github/instructions/csharp-tunit.instructions.md" />
     <File Path=".github/instructions/csharp.instructions.md" />
   </Folder>
-  <Folder Name="/.github/prompts/">
-    <File Path=".github/prompts/csharp-tunit.prompt.md" />
-  </Folder>
   <Folder Name="/.github/workflows/">
+    <File Path=".github/dependabot.yml" />
+    <File Path=".github/workflows/docs.yml" />
     <File Path=".github/workflows/ioc.ci.yml" />
     <File Path=".github/workflows/ioc.cli.ci.yml" />
+    <File Path=".github/workflows/ioc.cli.publish.yml" />
+    <File Path=".github/workflows/ioc.publish.yml" />
   </Folder>
   <Folder Name="/.github/ISSUE_TEMPLATE/">
     <File Path=".github/ISSUE_TEMPLATE/bug_report.md" />
@@ -37,8 +39,17 @@
     <File Path="global.json" />
     <File Path="LICENSE.txt" />
     <File Path="README.md" />
+    <File Path="icon.png" />
   </Folder>
-  <Folder Name="/docs/" />
+  <Folder Name="/docs/">
+    <File Path="docs/package.json" />
+    <File Path="docs/package-lock.json" />
+    <File Path="docs/index.md" />
+    <File Path="docs/.gitignore" />
+  </Folder>
+  <Folder Name="/docs/.vitepress/">
+    <File Path="docs/.vitepress/config.js" />
+  </Folder>
   <Folder Name="/docs/Ioc/">
     <File Path="docs/Ioc/01_Overview.md" />
     <File Path="docs/Ioc/02_Basic.md" />

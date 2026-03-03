@@ -83,21 +83,24 @@ Report when `FromKeyedServicesAttribute` and `IocInjectAttribute`/`InjectAttribu
 Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
 
 - static member
-- private setter
-- setter not exists
-- private field
+- member without public, internal, or protected internal accessibility
+- property without setter or with private setter
 - readonly field
-- private method
-- method is not return void.
+- method that does not return void
+- method that is generic (has type parameters)
+- method that is not an ordinary method (e.g., constructor, operator)
 
 **Analysis:**
 
 - Checks members (properties, fields, methods) marked with `[IocInject]` or `[Inject]`.
 - Reports when:
   - Member is static.
+  - Member is not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated code runs in a public static context).
   - Property has no setter or setter is private.
-  - Field is readonly or private.
-  - Method is private or does not return void.
+  - Field is readonly.
+  - Method does not return void.
+  - Method is generic (has type parameters).
+  - Method is not an ordinary method (i.e., constructors, operators, and other special methods are rejected).
 
 ---
 
@@ -228,7 +231,8 @@ Report when:
 - Checks Factory member specified via `nameof()` on `[IocRegister]`, `[IoCRegisterFor]`, or `[IoCRegisterDefaults]` attributes.
 - When the Factory references a method symbol, checks if the method is generic (has type parameters).
 - If the method is generic, checks if it has `[IocGenericFactory]` attribute.
-- Reports when the factory method is generic but does not have `[IocGenericFactory]` attribute.
+- The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterForAttribute` or `IocRegisterDefaultsAttribute`) AND the number of placeholder types (mapping array length minus 1) equals the factory method's type parameter count.
+- Reports when the factory method is generic but neither `[IocGenericFactory]` attribute on the method NOR a valid `GenericFactoryTypeMapping` on the registration attribute provides the type mapping.
 
 ---
 
@@ -237,13 +241,17 @@ Report when:
 Report when:
 
 - `[IocGenericFactory]`'s type parameters from second to end have duplicated types, they must be unique.
+- `GenericFactoryTypeMapping` property on `[IocRegisterFor]` or `[IocRegisterDefaults]` attribute contains duplicate placeholder types.
 
 **Analysis:**
 
 - Checks methods marked with `[IocGenericFactory]` attribute.
-- Extracts the type array from the attribute's constructor arguments.
-- Starting from the second type (index 1), checks if any type appears more than once.
-- Reports when duplicate placeholder types are found, as each type must uniquely map to a factory method type parameter.
+  - Extracts the type array from the attribute's constructor arguments.
+  - Starting from the second type (index 1), checks if any type appears more than once.
+  - Reports when duplicate placeholder types are found, as each type must uniquely map to a factory method type parameter.
+- Checks the `GenericFactoryTypeMapping` property on `[IocRegisterFor]` or `[IocRegisterDefaults]` attributes.
+  - Validates that all placeholder types in the mapping are unique.
+  - Reports when duplicate placeholder types are detected in the mapping.
 
 ---
 
@@ -334,3 +342,41 @@ Report when a member has `[IocInject]`/`[Inject]` but its corresponding feature 
 - Reports when the required feature flag is not enabled.
 
 **Message format:** `'{MemberName}' has [IocInject] but {FeatureName} feature is not enabled. Add '{FeatureName}' to <SourceGenIocFeatures> in your project file.`
+
+---
+
+### SGIOC023 - Error - Usage - Invalid InjectMembers element format
+
+Report when an element in the `InjectMembers` array is not in a recognized format.
+
+**Analysis:**
+
+- Checks the `InjectMembers` named argument array on `[IocRegisterFor]` registration attributes.
+- Validates each array element:
+  - Must be one of:
+    - A `nameof()` expression resolving to a valid member
+    - A `new object[]` with exactly 2 or 3 elements where:
+      - First element is a `nameof()` expression
+      - Second element is a key (of any type)
+      - Optional third element is a `KeyType` enum constant (`KeyType.Value` or `KeyType.Csharp`)
+  - Arrays with more than 3 elements are rejected.
+  - If 3 elements, the third must be a valid `KeyType` enum constant.
+- Reports when an element does not match one of the recognized formats.
+
+---
+
+### SGIOC024 - Error - Usage - Member specified in InjectMembers cannot be injected
+
+Report when a member resolved from `nameof()` in `InjectMembers` cannot be injected.
+
+**Analysis:**
+
+- Checks members specified via `nameof()` in the `InjectMembers` array.
+- Reports when the member is:
+  - static
+  - not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated registration code runs in a public static context)
+  - property without setter or with private setter
+  - readonly field
+  - method that doesn't return void or is generic
+  - method that is not an ordinary method (i.e., constructors, operators, and other special methods are rejected)
+- This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.

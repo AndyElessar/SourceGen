@@ -1012,4 +1012,43 @@ public class FactoryAndInstanceTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task GenericFactory_TypeMappingOnAttribute_SingleTypeParameter_GeneratesGenericFactoryCall()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create),
+                GenericFactoryTypeMapping = [typeof(IRequestHandler<Task<int>>), typeof(int)])]
+            public static class FactoryContainer
+            {
+                // Generic factory without [IocGenericFactory]; mapping provided on attribute
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IRequestHandler<>)])]
+            public class Handler<T> : IRequestHandler<Task<T>> { }
+
+            public class Entity { }
+
+            [IocDiscover(typeof(IRequestHandler<Task<Entity>>))]
+            public sealed class App { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

@@ -65,7 +65,7 @@ SourceGen.Ioc can generate:
 
 ```csharp
 // Generated registration extension
-public static IServiceCollection AddMyProject(this IServiceCollection services)
+public static IServiceCollection AddMyProject(this IServiceCollection services, params IEnumerable<string> tags)
 {
     // registration code...
     return services;
@@ -80,8 +80,6 @@ SourceGen.Ioc analyzers currently define `SGIOC001` to `SGIOC022`.
 - Design validation: cycles, lifetime issues, duplicate registrations/defaults.
 - Keyed/factory validation: key type mismatches, generic factory mapping issues.
 - Container validation: unresolved dependencies and container option conflicts.
-
-For the complete and authoritative list, see `src/SourceGen.Ioc.SourceGenerator/Analyzer/SPEC.md`.
 
 ## Table of Contents
 
@@ -100,3 +98,4 @@ For the complete and authoritative list, see `src/SourceGen.Ioc.SourceGenerator/
 |11|[11_CliTool.md](11_CliTool.md)|CLI workflows for attribute and registration file generation.|
 |12|[12_Container.md](12_Container.md)|Compile-time container generation and options.|
 |13|[13_MSBuild_Configuration.md](13_MSBuild_Configuration.md)|MSBuild properties controlling generation behavior.|
+|14|[14_Best_Practices.md](14_Best_Practices.md)|Production-safe patterns, decision matrix, and diagnostics quick-fix guide.|

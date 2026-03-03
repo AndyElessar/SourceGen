@@ -2,6 +2,17 @@
 
 SourceGen.Ioc generates factory method registration when `[IocInject]` attribute is used on fields, properties, methods, or constructor parameters.
 
+> [!NOTE]
+> `FieldInject` is not enabled in the default `SourceGenIocFeatures` value.
+> The default is `Register,Container,PropertyInject,MethodInject`.
+> To use `[IocInject]` on fields, add `FieldInject` in your project configuration (see [MSBuild Configuration](13_MSBuild_Configuration.md#sourcegeniocfeatures)):
+>
+> ```xml
+> <PropertyGroup>
+>   <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject</SourceGenIocFeatures>
+> </PropertyGroup>
+> ```
+
 ## Property & Field Injection
 
 Use `[IocInject]` to inject dependencies into properties or fields:
@@ -120,8 +131,32 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, inaccessible members (private setter, no setter, private field, readonly field, private method), or methods that do not return `void`.|
+|SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), properties without a setter or with an inaccessible setter, `readonly` fields, generic methods, non-ordinary methods (e.g., constructors, operators), or methods that do not return `void`.|
 |SGIOC022|Warning|`[IocInject]` is ignored when the corresponding feature (`PropertyInject`, `FieldInject`, or `MethodInject`) is disabled in `SourceGenIocFeatures`.|
+|SGIOC023|Error|An element in the `InjectMembers` array is not in a recognized format. Each element must be `nameof(member)` or `new object[] { nameof(member), key [, KeyType] }`.|
+|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method that does not return `void`).|
+
+## InjectMembers: Attribute-Level Injection Without `[IocInject]`
+
+When you cannot add `[IocInject]` directly to a type's members (e.g., a third-party type), use the `InjectMembers` property on `[IocRegisterFor]` to specify injection points from the registration site:
+
+```csharp
+// Register ThirdPartyService without modifying it
+[IocRegisterFor(typeof(ThirdPartyService),
+    InjectMembers = [nameof(ThirdPartyService.Logger)])]
+public static class ThirdPartyModule { }
+```
+
+Each element is one of:
+
+| Format | Description |
+| :--- | :--- |
+| `nameof(T.Member)` | Inject without a key (resolves `T` from the container) |
+| `new object[] { nameof(T.Member), "key" }` | Inject a keyed service |
+| `new object[] { nameof(T.Member), nameof(SomeKey), KeyType.Csharp }` | Inject using a C# expression key |
+
+> [!NOTE]
+> When the same member is specified in both `InjectMembers` and via `[IocInject]` on the member itself, `[IocInject]` takes priority.
 
 ---
 
