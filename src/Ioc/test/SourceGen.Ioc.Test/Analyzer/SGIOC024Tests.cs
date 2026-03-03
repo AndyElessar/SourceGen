@@ -273,4 +273,154 @@ public class SGIOC024Tests
         await Assert.That(sgioc024).Count().IsEqualTo(1);
         await Assert.That(sgioc024[0].GetMessage()).Contains("InjectDep").And.Contains("generic");
     }
+
+    [Test]
+    public async Task SGIOC024_ProtectedProperty_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(Dep)])]
+            public class MyService
+            {
+                protected IDependency? Dep { get; protected set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("Dep").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC024_ProtectedField_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(Dep)])]
+            public class MyService
+            {
+                protected IDependency? Dep;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("Dep").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC024_PrivateProtectedField_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(_dep)])]
+            public class MyService
+            {
+                private protected IDependency? _dep;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("_dep").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC024_ProtectedMethod_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(InjectDep)])]
+            public class MyService
+            {
+                protected void InjectDep(IDependency dep) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("InjectDep").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC024_PrivateProtectedMethod_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(InjectDep)])]
+            public class MyService
+            {
+                private protected void InjectDep(IDependency dep) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("InjectDep").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC024_PrivateProtectedProperty_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(Dep)])]
+            public class MyService
+            {
+                private protected IDependency? Dep { get; private protected set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("Dep").And.Contains("not accessible");
+    }
 }

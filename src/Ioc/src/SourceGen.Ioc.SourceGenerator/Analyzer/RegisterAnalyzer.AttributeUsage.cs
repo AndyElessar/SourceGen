@@ -258,22 +258,55 @@ public sealed partial class RegisterAnalyzer
 
                 // Suppress SGIOC016 if the registration attribute provides GenericFactoryTypeMapping
                 var hasGenericFactoryTypeMappingOnAttr = false;
-                if (!hasIocGenericFactory)
+                // Always check GenericFactoryTypeMapping for duplicate placeholders (SGIOC017), regardless of [IocGenericFactory]
+                foreach (var arg in argumentList.Arguments)
                 {
-                    foreach (var arg in argumentList.Arguments)
+                    if (arg.NameEquals?.Name.Identifier.Text == "GenericFactoryTypeMapping")
                     {
-                        if (arg.NameEquals?.Name.Identifier.Text == "GenericFactoryTypeMapping")
+                        ExpressionSyntax[] mappingElements = arg.Expression switch
                         {
-                            var elementCount = arg.Expression switch
+                            CollectionExpressionSyntax coll => [.. coll.Elements.OfType<ExpressionElementSyntax>().Select(static e => e.Expression)],
+                            ArrayCreationExpressionSyntax { Initializer: not null } arr => [.. arr.Initializer.Expressions],
+                            ImplicitArrayCreationExpressionSyntax implicitArr => [.. implicitArr.Initializer.Expressions],
+                            _ => []
+                        };
+
+                        if (mappingElements.Length >= 2)
+                        {
+                            // Check for duplicate placeholder types (index 1+)
+                            var seenTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+                            ITypeSymbol? duplicateType = null;
+                            for (int i = 1; i < mappingElements.Length; i++)
                             {
-                                CollectionExpressionSyntax coll => coll.Elements.Count,
-                                ArrayCreationExpressionSyntax { Initializer: not null } arr => arr.Initializer.Expressions.Count,
-                                ImplicitArrayCreationExpressionSyntax implicitArr => implicitArr.Initializer.Expressions.Count,
-                                _ => 0
-                            };
-                            hasGenericFactoryTypeMappingOnAttr = elementCount >= 2;
-                            break;
+                                if (mappingElements[i] is TypeOfExpressionSyntax typeofExpr)
+                                {
+                                    var typeInfo = context.SemanticModel.GetTypeInfo(typeofExpr.Type, context.CancellationToken);
+                                    if (typeInfo.Type is { } placeholderType)
+                                    {
+                                        if (!seenTypes.Add(placeholderType))
+                                        {
+                                            duplicateType = placeholderType;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (duplicateType is not null)
+                            {
+                                // Duplicate placeholders: report SGIOC017
+                                context.ReportDiagnostic(Diagnostic.Create(
+                                    DuplicatedGenericFactoryPlaceholders,
+                                    arg.Expression.GetLocation(),
+                                    duplicateType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                            }
+                            else if (!hasIocGenericFactory)
+                            {
+                                // Only suppress SGIOC016 when [IocGenericFactory] is NOT present
+                                hasGenericFactoryTypeMappingOnAttr = true;
+                            }
                         }
+                        break;
                     }
                 }
 
@@ -327,14 +360,12 @@ public sealed partial class RegisterAnalyzer
             return; // Need at least service type template and one placeholder
 
         // Check for duplicates in placeholder types (from index 1 to end)
-        var seenTypes = new HashSet<string>(StringComparer.Ordinal);
+        var seenTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         for (int i = 1; i < typeArray.Length; i++)
         {
             if (typeArray[i].Value is ITypeSymbol placeholderType)
             {
-                var typeName = placeholderType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-                if (!seenTypes.Add(typeName))
+                if (!seenTypes.Add(placeholderType))
                 {
                     // Duplicate found
                     var location = genericFactoryAttr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
@@ -538,14 +569,22 @@ public sealed partial class RegisterAnalyzer
 
         return symbol switch
         {
+            IPropertySymbol p when p.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+                => "property is not accessible",
             IPropertySymbol { SetMethod: null } => "property has no setter",
             IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is Accessibility.Private
                 => "property setter is private",
+            IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+                => "property setter is not accessible",
             IFieldSymbol { IsReadOnly: true } => "field is readonly",
             IFieldSymbol f when f.DeclaredAccessibility is Accessibility.Private
                 => "field is private",
+            IFieldSymbol f when f.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+                => "field is not accessible",
             IMethodSymbol m when m.DeclaredAccessibility is Accessibility.Private
                 => "method is private",
+            IMethodSymbol m when m.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+                => "method is not accessible",
             IMethodSymbol { ReturnsVoid: false } => "method does not return void",
             IMethodSymbol { IsGenericMethod: true } => "method is generic",
             IPropertySymbol or IFieldSymbol or IMethodSymbol => null,

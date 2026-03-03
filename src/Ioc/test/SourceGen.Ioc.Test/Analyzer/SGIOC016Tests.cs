@@ -257,4 +257,35 @@ public class SGIOC016Tests
 
         await Assert.That(sgioc016).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC016_GenericFactory_WithDuplicateGenericFactoryTypeMappingOnAttribute_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create),
+                GenericFactoryTypeMapping = [typeof(IRequestHandler<Task<int>>), typeof(int), typeof(int)])]
+            public static class FactoryContainer
+            {
+                // Generic factory with duplicate placeholders in GenericFactoryTypeMapping - SGIOC016 should still fire
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016").ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("Create");
+    }
 }

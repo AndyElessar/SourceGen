@@ -209,11 +209,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor DuplicatedGenericFactoryPlaceholders = new(
         id: "SGIOC017",
         title: "Generic Factory Method's type parameters are duplicated",
-        messageFormat: "[IocGenericFactory] has duplicated placeholder type '{0}'; each placeholder type must be unique",
+        messageFormat: "[IocGenericFactory] or GenericFactoryTypeMapping has duplicated placeholder type '{0}'; each placeholder type must be unique",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The placeholder types in [IocGenericFactory] (from second to last) must be unique. Duplicated types make it impossible to distinguish which type argument maps to which factory method type parameter.");
+        description: "The placeholder types in [IocGenericFactory] or GenericFactoryTypeMapping (from second to last) must be unique. Duplicated types make it impossible to distinguish which type argument maps to which factory method type parameter.");
 
     /// <summary>
     /// SGIOC022: Inject attribute ignored due to disabled feature.

@@ -516,4 +516,160 @@ public class SGIOC007Tests
 
         await Assert.That(sgioc007).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnProtectedProperty_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                protected IService? Dependency { get; protected set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("Dependency").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnProtectedField_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                protected IService? _dependency;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("_dependency").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnProtectedMethod_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                protected void Initialize(IService service) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("Initialize").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnPrivateProtectedProperty_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                private protected IService? Dependency { get; private protected set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("Dependency").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnPrivateProtectedField_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                private protected IService? _dependency;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("_dependency").And.Contains("not accessible");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnPrivateProtectedMethod_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                private protected void Initialize(IService service) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("Initialize").And.Contains("not accessible");
+    }
 }

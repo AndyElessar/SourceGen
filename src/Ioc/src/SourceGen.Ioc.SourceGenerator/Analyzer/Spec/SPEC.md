@@ -83,21 +83,20 @@ Report when `FromKeyedServicesAttribute` and `IocInjectAttribute`/`InjectAttribu
 Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
 
 - static member
-- private setter
-- setter not exists
-- private field
+- member without public or internal accessibility
+- property without setter or with private setter
 - readonly field
-- private method
-- method is not return void.
+- method that does not return void
 
 **Analysis:**
 
 - Checks members (properties, fields, methods) marked with `[IocInject]` or `[Inject]`.
 - Reports when:
   - Member is static.
+  - Member is not `public` or `internal` (protected, private, or private protected members are rejected because generated code runs in a public static context).
   - Property has no setter or setter is private.
-  - Field is readonly or private.
-  - Method is private or does not return void.
+  - Field is readonly.
+  - Method does not return void.
 
 ---
 
@@ -238,13 +237,17 @@ Report when:
 Report when:
 
 - `[IocGenericFactory]`'s type parameters from second to end have duplicated types, they must be unique.
+- `GenericFactoryTypeMapping` property on `[IocRegisterFor]` or `[IocRegisterDefaults]` attribute contains duplicate placeholder types.
 
 **Analysis:**
 
 - Checks methods marked with `[IocGenericFactory]` attribute.
-- Extracts the type array from the attribute's constructor arguments.
-- Starting from the second type (index 1), checks if any type appears more than once.
-- Reports when duplicate placeholder types are found, as each type must uniquely map to a factory method type parameter.
+  - Extracts the type array from the attribute's constructor arguments.
+  - Starting from the second type (index 1), checks if any type appears more than once.
+  - Reports when duplicate placeholder types are found, as each type must uniquely map to a factory method type parameter.
+- Checks the `GenericFactoryTypeMapping` property on `[IocRegisterFor]` or `[IocRegisterDefaults]` attributes.
+  - Validates that all placeholder types in the mapping are unique.
+  - Reports when duplicate placeholder types are detected in the mapping.
 
 ---
 
@@ -367,8 +370,8 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
 - Checks members specified via `nameof()` in the `InjectMembers` array.
 - Reports when the member is:
   - static
+  - not `public` or `internal` (protected, private, or private protected members are rejected because generated registration code runs in a public static context)
   - property without setter or with private setter
   - readonly field
-  - private field
-  - method that is private, doesn't return void, or is generic
+  - method that doesn't return void or is generic
 - This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.
