@@ -1,7 +1,7 @@
 ---
 description: "Use when: implementing approved plan from /memories/session/plan.md. Executes code changes, runs tests, and follows project conventions."
-model: Claude Sonnet 4.6 (copilot)
-tools: [vscode/memory, execute, read, edit, search, web, 'microsoftdocs/mcp/*', todo]
+model: GPT-5.3-Codex (copilot)
+tools: [vscode/memory, execute, read, edit, search, web, 'codegraphcontext/*', 'microsoftdocs/mcp/*', todo]
 agents: []
 user-invocable: false
 argument-hint: "Implement the approved plan stored in /memories/session/plan.md"

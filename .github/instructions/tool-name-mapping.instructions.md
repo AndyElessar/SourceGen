@@ -13,7 +13,7 @@ Agent `.agent.md` files declare tools using `#tool:` prefixes in YAML frontmatte
 | `vscode/memory` | `memory` |
 | `vscode/askQuestions` | `vscode_askQuestions` |
 | `agent` | `runSubagent`, `search_subagent` |
-| `read` | `read_file` |
+| `read` | `read_file`, `list_dir`, `get_errors` |
 | `search` | `grep_search`, `semantic_search`, `file_search` |
 | `edit` | `replace_string_in_file`, `multi_replace_string_in_file`, `create_file`, `create_directory` |
 | `todo` | `manage_todo_list` |
@@ -34,9 +34,10 @@ Agent `.agent.md` files declare tools using `#tool:` prefixes in YAML frontmatte
 | Agent Tool Declaration | Runtime Function Pattern |
 |------------------------|--------------------------|
 | `microsoftdocs/mcp/*` | `mcp_microsoftdocs_*` |
-| `github/*` | `mcp_github_*` or `mcp_io_github_git_*` |
+| `github/*` | `mcp_github_*` |
+| `codegraphcontext/*` | `mcp_codegraphcont_*` |
 | `github.vscode-pull-request-github/*` | `github-pull-request_*` |
-| `vscode.mermaid-chat-features/*` | Mermaid rendering tools |
+| `vscode.mermaid-chat-features/*` | `renderMermaidDiagram` |
 
 ## Notes
 
