@@ -1,0 +1,20 @@
+# Ignore build artifacts
+/dist/
+/build/
+/tmp/
+bin/
+obj/
+[Gg]enerated/
+*[Aa]rtifacts/
+
+# Ignore dependencies
+node_modules/
+
+# Ignore logs
+*.log
+
+# Git
+/.git/
+
+# IDE
+/.vscode/
