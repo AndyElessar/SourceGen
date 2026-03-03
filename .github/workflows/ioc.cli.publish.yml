@@ -17,6 +17,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -56,6 +58,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       id-token: write
+      contents: read
     environment:
       name: nuget-publish
 
