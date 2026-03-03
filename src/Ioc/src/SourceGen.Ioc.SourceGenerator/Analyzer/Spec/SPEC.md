@@ -228,7 +228,7 @@ Report when:
 - Checks Factory member specified via `nameof()` on `[IocRegister]`, `[IoCRegisterFor]`, or `[IoCRegisterDefaults]` attributes.
 - When the Factory references a method symbol, checks if the method is generic (has type parameters).
 - If the method is generic, checks if it has `[IocGenericFactory]` attribute.
-- The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterAttribute`, `IocRegisterForAttribute`, or `IocRegisterDefaultsAttribute`).
+- The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterForAttribute` or `IocRegisterDefaultsAttribute`).
 - Reports when the factory method is generic but neither `[IocGenericFactory]` attribute on the method NOR `GenericFactoryTypeMapping` on the registration attribute provides the type mapping.
 
 ---

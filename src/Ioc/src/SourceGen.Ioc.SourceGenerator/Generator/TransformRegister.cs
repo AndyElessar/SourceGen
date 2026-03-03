@@ -552,12 +552,12 @@ partial class IocSourceGenerator
             {
                 var typeInfo = semanticModel.GetTypeInfo(nested[1]);
                 key = typeInfo.Type is not null
-                    ? GetPrimitiveConstantString(typeInfo.Type, constVal.Value)
+                    ? RoslynExtensions.FormatPrimitiveConstant(typeInfo.Type, constVal.Value)
                     : constVal.Value.ToString();
             }
             else
             {
-                key = null;
+                return null;
             }
         }
 
@@ -575,11 +575,15 @@ partial class IocSourceGenerator
 
         return symbol switch
         {
-            IPropertySymbol property => property.SetMethod is not null,
-            IFieldSymbol field => !field.IsReadOnly,
+            IPropertySymbol property => property.SetMethod is not null
+                && property.DeclaredAccessibility is not Accessibility.Private
+                && property.SetMethod.DeclaredAccessibility is not Accessibility.Private,
+            IFieldSymbol field => !field.IsReadOnly
+                && field.DeclaredAccessibility is not Accessibility.Private,
             IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
                 && method.ReturnsVoid
-                && !method.IsGenericMethod,
+                && !method.IsGenericMethod
+                && method.DeclaredAccessibility is not Accessibility.Private,
             _ => false
         };
     }
@@ -606,15 +610,4 @@ partial class IocSourceGenerator
             _ => null
         };
 
-    private static string GetPrimitiveConstantString(ITypeSymbol type, object value)
-    {
-        var specialType = type.SpecialType;
-        return specialType switch
-        {
-            SpecialType.System_String   => $"\"{value}\"",
-            SpecialType.System_Char     => $"'{value}'",
-            SpecialType.System_Boolean  => (bool)value ? "true" : "false",
-            _ => value.ToString() ?? "null"
-        };
-    }
 }

@@ -264,7 +264,14 @@ public sealed partial class RegisterAnalyzer
                     {
                         if (arg.NameEquals?.Name.Identifier.Text == "GenericFactoryTypeMapping")
                         {
-                            hasGenericFactoryTypeMappingOnAttr = true;
+                            var elementCount = arg.Expression switch
+                            {
+                                CollectionExpressionSyntax coll => coll.Elements.Count,
+                                ArrayCreationExpressionSyntax { Initializer: not null } arr => arr.Initializer.Expressions.Count,
+                                ImplicitArrayCreationExpressionSyntax implicitArr => implicitArr.Initializer.Expressions.Count,
+                                _ => 0
+                            };
+                            hasGenericFactoryTypeMappingOnAttr = elementCount >= 2;
                             break;
                         }
                     }

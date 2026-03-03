@@ -73,18 +73,18 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
     /// <remarks>
     /// <code>
     /// Define:
-    /// [IocRegisterFor(typeof(IRequestHandler❮❯),
+    /// [IocRegisterFor(typeof(IRequestHandler&lt;&gt;),
     ///     Factory = nameof(FactoryContainer.Create),
-    ///     GenericFactoryTypeMapping = [typeof(IRequestHandler❮Task❮int❯❯), typeof(int)])]
-    /// public class FactoryContainer                                 ↑              ↑
-    /// {                                                             └--------------┘
-    ///                                     "int" is a placeholder, make sure placeholders is unique
+    ///     GenericFactoryTypeMapping = [typeof(IRequestHandler&lt;Task&lt;int&gt;&gt;), typeof(int)])]
+    /// public class FactoryContainer                                       ↑                    ↑
+    /// {                                                                   └--------------------┘
+    ///                                     "int" is a placeholder, make sure each placeholder is unique
     ///                                      in the context of the generic type mapping.
-    ///     public static Create❮T❯() = new Handler❮T❯();
+    ///     public static Create&lt;T&gt;() = new Handler&lt;T&gt;();
     /// }
     ///
     /// Generate:
-    /// services.AddSingleton❮IRequestHandler❮Task❮Entity❯❯❯(sp => FactoryContainer.Create❮Entity❯());
+    /// services.AddSingleton&lt;IRequestHandler&lt;Task&lt;Entity&gt;&gt;&gt;(sp => FactoryContainer.Create&lt;Entity&gt;());
     /// </code>
     /// </remarks>
     public Type[]? GenericFactoryTypeMapping { get; init; }
