@@ -83,20 +83,22 @@ Report when `FromKeyedServicesAttribute` and `IocInjectAttribute`/`InjectAttribu
 Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
 
 - static member
-- member without public or internal accessibility
+- member without public, internal, or protected internal accessibility
 - property without setter or with private setter
 - readonly field
 - method that does not return void
+- method that is not an ordinary method (e.g., constructor, operator)
 
 **Analysis:**
 
 - Checks members (properties, fields, methods) marked with `[IocInject]` or `[Inject]`.
 - Reports when:
   - Member is static.
-  - Member is not `public` or `internal` (protected, private, or private protected members are rejected because generated code runs in a public static context).
+  - Member is not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated code runs in a public static context).
   - Property has no setter or setter is private.
   - Field is readonly.
   - Method does not return void.
+  - Method is not an ordinary method (i.e., constructors, operators, and other special methods are rejected).
 
 ---
 
@@ -370,8 +372,9 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
 - Checks members specified via `nameof()` in the `InjectMembers` array.
 - Reports when the member is:
   - static
-  - not `public` or `internal` (protected, private, or private protected members are rejected because generated registration code runs in a public static context)
+  - not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated registration code runs in a public static context)
   - property without setter or with private setter
   - readonly field
   - method that doesn't return void or is generic
+  - method that is not an ordinary method (i.e., constructors, operators, and other special methods are rejected)
 - This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.

@@ -445,7 +445,7 @@ The `GenericFactoryTypeMapping` property uses the same format as `[IocGenericFac
 |SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Factory` takes precedence.|
 |SGIOC016|Error|Generic factory method does not have `[IocGenericFactory]` attribute and `GenericFactoryTypeMapping` is not specified on the registration attribute.|
-|SGIOC017|Error|`[IocGenericFactory]` placeholder types are duplicated. Each placeholder type must be unique.|
+|SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
 
 ---
 

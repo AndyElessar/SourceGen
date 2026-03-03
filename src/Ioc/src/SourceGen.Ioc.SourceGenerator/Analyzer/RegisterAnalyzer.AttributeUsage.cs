@@ -569,22 +569,24 @@ public sealed partial class RegisterAnalyzer
 
         return symbol switch
         {
-            IPropertySymbol p when p.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+            IPropertySymbol p when p.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                 => "property is not accessible",
             IPropertySymbol { SetMethod: null } => "property has no setter",
             IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is Accessibility.Private
                 => "property setter is private",
-            IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+            IPropertySymbol p when p.SetMethod!.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                 => "property setter is not accessible",
             IFieldSymbol { IsReadOnly: true } => "field is readonly",
             IFieldSymbol f when f.DeclaredAccessibility is Accessibility.Private
                 => "field is private",
-            IFieldSymbol f when f.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+            IFieldSymbol f when f.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                 => "field is not accessible",
             IMethodSymbol m when m.DeclaredAccessibility is Accessibility.Private
                 => "method is private",
-            IMethodSymbol m when m.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal)
+            IMethodSymbol m when m.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                 => "method is not accessible",
+            IMethodSymbol m when m.MethodKind != MethodKind.Ordinary
+                => "method is not an ordinary method",
             IMethodSymbol { ReturnsVoid: false } => "method does not return void",
             IMethodSymbol { IsGenericMethod: true } => "method is generic",
             IPropertySymbol or IFieldSymbol or IMethodSymbol => null,

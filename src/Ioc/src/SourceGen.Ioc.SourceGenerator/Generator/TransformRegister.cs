@@ -576,14 +576,14 @@ partial class IocSourceGenerator
         return symbol switch
         {
             IPropertySymbol property => property.SetMethod is not null
-                && property.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal
-                && property.SetMethod.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal,
+                && property.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal
+                && property.SetMethod.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
             IFieldSymbol field => !field.IsReadOnly
-                && field.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal,
+                && field.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
             IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
                 && method.ReturnsVoid
                 && !method.IsGenericMethod
-                && method.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal,
+                && method.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
             _ => false
         };
     }

@@ -131,10 +131,10 @@ services.AddSingleton<global::MyNamespace.IMyService>((global::System.IServicePr
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, inaccessible members (private setter, no setter, private field, readonly field, private method), or methods that do not return `void`.|
+|SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), properties without a setter or with an inaccessible setter, `readonly` fields, generic methods, non-ordinary methods (e.g., constructors, operators), or methods that do not return `void`.|
 |SGIOC022|Warning|`[IocInject]` is ignored when the corresponding feature (`PropertyInject`, `FieldInject`, or `MethodInject`) is disabled in `SourceGenIocFeatures`.|
 |SGIOC023|Error|An element in the `InjectMembers` array is not in a recognized format. Each element must be `nameof(member)` or `new object[] { nameof(member), key [, KeyType] }`.|
-|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., static, no setter, readonly field, private, non-void method, or generic method).|
+|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method that does not return `void`).|
 
 ## InjectMembers: Attribute-Level Injection Without `[IocInject]`
 
