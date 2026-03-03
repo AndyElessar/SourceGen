@@ -582,6 +582,7 @@ public sealed partial class RegisterAnalyzer
                 => "field is private",
             IFieldSymbol f when f.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                 => "field is not accessible",
+            IMethodSymbol { MethodKind: MethodKind.Constructor } => null,
             IMethodSymbol m when m.DeclaredAccessibility is Accessibility.Private
                 => "method is private",
             IMethodSymbol m when m.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)

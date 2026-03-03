@@ -672,4 +672,111 @@ public class SGIOC007Tests
         await Assert.That(sgioc007).Count().IsEqualTo(1);
         await Assert.That(sgioc007[0].GetMessage()).Contains("Initialize").And.Contains("not accessible");
     }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnConstructor_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                public TestService() { }
+
+                [IocInject]
+                public TestService(IService service) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007");
+
+        await Assert.That(sgioc007).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnStaticConstructor_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                static TestService() { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("static");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnPrivateConstructor_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                public TestService() { }
+
+                [IocInject]
+                private TestService(IService service) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007");
+
+        await Assert.That(sgioc007).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnProtectedConstructor_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                public TestService() { }
+
+                [IocInject]
+                protected TestService(IService service) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007");
+
+        await Assert.That(sgioc007).Count().IsEqualTo(0);
+    }
 }
