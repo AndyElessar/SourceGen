@@ -565,8 +565,8 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Checks whether a symbol is injectable, matching the same filters applied in
-    /// <see cref="TypeSymbolExtensions.GetInjectedMembers"/>.
+    /// Checks whether a symbol is considered injectable: non-static, with suitable accessibility,
+    /// and meeting the specific criteria for properties, fields, or methods.
     /// </summary>
     private static bool IsInjectableMember(ISymbol symbol)
     {
