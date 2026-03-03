@@ -209,11 +209,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor DuplicatedGenericFactoryPlaceholders = new(
         id: "SGIOC017",
         title: "Generic Factory Method's type parameters are duplicated",
-        messageFormat: "[IocGenericFactory] has duplicated placeholder type '{0}'; each placeholder type must be unique",
+        messageFormat: "[IocGenericFactory] or GenericFactoryTypeMapping has duplicated placeholder type '{0}'; each placeholder type must be unique",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The placeholder types in [IocGenericFactory] (from second to last) must be unique. Duplicated types make it impossible to distinguish which type argument maps to which factory method type parameter.");
+        description: "The placeholder types in [IocGenericFactory] or GenericFactoryTypeMapping (from second to last) must be unique. Duplicated types make it impossible to distinguish which type argument maps to which factory method type parameter.");
 
     /// <summary>
     /// SGIOC022: Inject attribute ignored due to disabled feature.
@@ -226,6 +226,30 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "When SourceGenIocFeatures disables a member injection feature, [IocInject] on that member is ignored during generation.");
+
+    /// <summary>
+    /// SGIOC023: Invalid InjectMembers element format.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectMembersInvalidFormat = new(
+        id: "SGIOC023",
+        title: "Invalid InjectMembers element format",
+        messageFormat: "InjectMembers element at index {0} is invalid; expected nameof(member) or new object[] {{ nameof(member), key [, KeyType] }}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Each element in InjectMembers must be either a nameof() expression or an array literal with member name, optional key, and optional KeyType.");
+
+    /// <summary>
+    /// SGIOC024: InjectMembers specifies non-injectable member.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectMembersNonInjectableMember = new(
+        id: "SGIOC024",
+        title: "InjectMembers specifies non-injectable member",
+        messageFormat: "Member '{0}' specified in InjectMembers cannot be injected: {1}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Members specified in InjectMembers must be injectable: instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods, all of which must be public, internal, or protected internal.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
@@ -246,7 +270,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         KeyValuePairKeyTypeMismatch,
         GenericFactoryMissingAttribute,
         DuplicatedGenericFactoryPlaceholders,
-        InjectFeatureDisabled
+        InjectFeatureDisabled,
+        InjectMembersInvalidFormat,
+        InjectMembersNonInjectableMember
     ];
 
     public override void Initialize(AnalysisContext context)

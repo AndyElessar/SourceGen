@@ -4,28 +4,8 @@ on:
   workflow_dispatch:
 
   push:
-    branches: [main]
-    paths:
-      - 'src/Ioc/src/SourceGen.Ioc/**'
-      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
-      - 'src/Ioc/test/SourceGen.Ioc.Benchmark/**'
-      - 'src/Directory.Build.props'
-      - 'Directory.Build.props'
-      - 'Directory.Packages.props'
-      - 'global.json'
-      - '.github/workflows/ioc.benchmark.nativeaot.yml'
-
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/Ioc/src/SourceGen.Ioc/**'
-      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
-      - 'src/Ioc/test/SourceGen.Ioc.Benchmark/**'
-      - 'src/Directory.Build.props'
-      - 'Directory.Build.props'
-      - 'Directory.Packages.props'
-      - 'global.json'
-      - '.github/workflows/ioc.benchmark.nativeaot.yml'
+    tags:
+      - 'ioc-v*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

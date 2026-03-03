@@ -176,4 +176,35 @@ public class SGIOC017Tests
         await Assert.That(sgioc017).Count().IsEqualTo(1);
         await Assert.That(sgioc017[0].GetMessage()).Contains("List<int>");
     }
+
+    [Test]
+    public async Task SGIOC017_GenericFactoryTypeMapping_WithDuplicatePlaceholders_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create),
+                GenericFactoryTypeMapping = [typeof(IRequestHandler<Task<int>>), typeof(int), typeof(int)])]
+            public static class FactoryContainer
+            {
+                // Duplicate placeholders in GenericFactoryTypeMapping - should report SGIOC017
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc017 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC017").ToList();
+
+        await Assert.That(sgioc017).Count().IsEqualTo(1);
+        await Assert.That(sgioc017[0].GetMessage()).Contains("int").And.Contains("duplicated");
+    }
 }

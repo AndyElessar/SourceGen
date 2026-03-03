@@ -38,6 +38,13 @@ public sealed class IocRegisterDefaultsAttribute(Type targetServiceType, Service
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
 
+    /// <summary>
+    /// Gets the generic factory type mapping for the factory method.
+    /// The first type is the service type template with placeholders,
+    /// subsequent types are placeholder types mapping to factory method type parameters.
+    /// </summary>
+    public Type[]? GenericFactoryTypeMapping { get; init; }
+
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
 
@@ -77,6 +84,13 @@ public sealed class IocRegisterDefaultsAttribute<T>(ServiceLifetime lifetime) : 
 
     /// <inheritdoc cref="IocRegisterAttribute.Tags"/>
     public string[] Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets the generic factory type mapping for the factory method.
+    /// The first type is the service type template with placeholders,
+    /// subsequent types are placeholder types mapping to factory method type parameters.
+    /// </summary>
+    public Type[]? GenericFactoryTypeMapping { get; init; }
 
     /// <inheritdoc cref="IocRegisterAttribute.Factory"/>
     public string? Factory { get; init; }
