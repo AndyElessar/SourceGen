@@ -300,9 +300,10 @@ public sealed partial class RegisterAnalyzer
                                     arg.Expression.GetLocation(),
                                     duplicateType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
                             }
-                            else if (!hasIocGenericFactory)
+                            else if (!hasIocGenericFactory && mappingElements.Length - 1 == methodSymbol.TypeParameters.Length)
                             {
                                 // Only suppress SGIOC016 when [IocGenericFactory] is NOT present
+                                // AND the mapping provides exactly one placeholder per factory type parameter
                                 hasGenericFactoryTypeMappingOnAttr = true;
                             }
                         }

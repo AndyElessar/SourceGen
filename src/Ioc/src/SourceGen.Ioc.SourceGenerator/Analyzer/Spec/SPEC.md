@@ -87,6 +87,7 @@ Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
 - property without setter or with private setter
 - readonly field
 - method that does not return void
+- method that is generic (has type parameters)
 - method that is not an ordinary method (e.g., constructor, operator)
 
 **Analysis:**
@@ -98,6 +99,7 @@ Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
   - Property has no setter or setter is private.
   - Field is readonly.
   - Method does not return void.
+  - Method is generic (has type parameters).
   - Method is not an ordinary method (i.e., constructors, operators, and other special methods are rejected).
 
 ---
@@ -229,8 +231,8 @@ Report when:
 - Checks Factory member specified via `nameof()` on `[IocRegister]`, `[IoCRegisterFor]`, or `[IoCRegisterDefaults]` attributes.
 - When the Factory references a method symbol, checks if the method is generic (has type parameters).
 - If the method is generic, checks if it has `[IocGenericFactory]` attribute.
-- The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterForAttribute` or `IocRegisterDefaultsAttribute`).
-- Reports when the factory method is generic but neither `[IocGenericFactory]` attribute on the method NOR `GenericFactoryTypeMapping` on the registration attribute provides the type mapping.
+- The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterForAttribute` or `IocRegisterDefaultsAttribute`) AND the number of placeholder types (mapping array length minus 1) equals the factory method's type parameter count.
+- Reports when the factory method is generic but neither `[IocGenericFactory]` attribute on the method NOR a valid `GenericFactoryTypeMapping` on the registration attribute provides the type mapping.
 
 ---
 

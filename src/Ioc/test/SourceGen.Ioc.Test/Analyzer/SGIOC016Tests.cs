@@ -288,4 +288,68 @@ public class SGIOC016Tests
         await Assert.That(sgioc016).Count().IsEqualTo(1);
         await Assert.That(sgioc016[0].GetMessage()).Contains("Create");
     }
+
+    [Test]
+    public async Task SGIOC016_GenericFactory_WithInsufficientGenericFactoryTypeMapping_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TRequest, TResponse> { }
+
+            [IocRegisterDefaults(typeof(IRequestHandler<,>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create),
+                GenericFactoryTypeMapping = [typeof(IRequestHandler<Task<int>, List<string>>), typeof(int)])]
+            public static class FactoryContainer
+            {
+                // 2 type params but mapping only provides 1 placeholder - SGIOC016 should fire
+                public static IRequestHandler<Task<T1>, List<T2>> Create<T1, T2>() => throw new NotImplementedException();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016").ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("Create");
+    }
+
+    [Test]
+    public async Task SGIOC016_GenericFactory_WithExcessiveGenericFactoryTypeMapping_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create),
+                GenericFactoryTypeMapping = [typeof(IRequestHandler<Task<int>>), typeof(int), typeof(string)])]
+            public static class FactoryContainer
+            {
+                // 1 type param but mapping provides 2 placeholders - SGIOC016 should fire
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016").ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("Create");
+    }
 }

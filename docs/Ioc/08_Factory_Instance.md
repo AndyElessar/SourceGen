@@ -249,7 +249,7 @@ services.AddScoped<global::TestNamespace.IHandler>((global::System.IServiceProvi
 When working with open generic services, you can use a **generic factory method** to create instances. This requires the `[IocGenericFactory]` attribute to map service type placeholders to factory method type parameters.
 
 > [!WARNING]
-> If `Factory` points to a generic method but that method does not have `[IocGenericFactory]`, analyzer `SGIOC016` is reported and registration will not be generated.
+> If `Factory` points to a generic method but that method does not have `[IocGenericFactory]` and no valid `GenericFactoryTypeMapping` is specified on the registration attribute, analyzer `SGIOC016` is reported and registration will not be generated. When using `GenericFactoryTypeMapping`, the number of placeholder types must match the factory method's type parameter count.
 
 ### Basic Generic Factory
 
@@ -444,7 +444,7 @@ The `GenericFactoryTypeMapping` property uses the same format as `[IocGenericFac
 |SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
 |SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Factory` takes precedence.|
-|SGIOC016|Error|Generic factory method does not have `[IocGenericFactory]` attribute and `GenericFactoryTypeMapping` is not specified on the registration attribute.|
+|SGIOC016|Error|Generic factory method does not have `[IocGenericFactory]` attribute and `GenericFactoryTypeMapping` is not specified on the registration attribute, or the placeholder count does not match the factory method's type parameters.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
 
 ---
