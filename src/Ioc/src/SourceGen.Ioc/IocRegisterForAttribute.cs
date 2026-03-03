@@ -80,7 +80,7 @@ public sealed class IocRegisterForAttribute(Type implementationType) : Attribute
     /// {                                                                   └--------------------┘
     ///                                     "int" is a placeholder, make sure each placeholder is unique
     ///                                      in the context of the generic type mapping.
-    ///     public static Create&lt;T&gt;() = new Handler&lt;T&gt;();
+    ///     public static IRequestHandler&lt;Task&lt;T&gt;&gt; Create&lt;T&gt;() =&gt; new Handler&lt;T&gt;();
     /// }
     ///
     /// Generate:
