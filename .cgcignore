@@ -4,6 +4,7 @@
 /tmp/
 bin/
 obj/
+cache/
 [Gg]enerated/
 *[Aa]rtifacts/
 
