@@ -1,6 +1,6 @@
 # MSBuild Configuration
 
-SourceGen.Ioc reads several MSBuild properties during generation.
+`SourceGen.Ioc` reads several MSBuild properties during generation.
 
 Start with this minimal setup in your `.csproj`:
 
@@ -114,12 +114,8 @@ Parsing behavior:
 // MethodInject and FieldInject disabled -> only property injection is emitted.
 services.AddSingleton<global::MyNamespace.MyService>((global::System.IServiceProvider sp) =>
 {
-    var p0 = sp.GetRequiredService<global::MyNamespace.IMyDependency>();
-    var s0 = new global::MyNamespace.MyService
-    {
-        Dependency = p0,
-    };
-
+    var s0_p0 = sp.GetRequiredService<global::MyNamespace.IMyDependency>();
+    var s0 = new global::MyNamespace.MyService() { Dependency = s0_p0 };
     return s0;
 });
 ```

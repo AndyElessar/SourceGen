@@ -1,6 +1,6 @@
 # Decorators
 
-SourceGen.Ioc supports the decorator pattern for service registration.
+`SourceGen.Ioc` supports the decorator pattern for service registration.
 
 ## Basic Decorator
 

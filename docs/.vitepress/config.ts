@@ -8,12 +8,12 @@ export default defineConfig({
   themeConfig: {
     logo: '/icon.png',
     nav: [
-      { text: 'Guide', link: '/Ioc/01_Overview' },
+      { text: 'IOC', link: '/Ioc/01_Overview' },
       { text: 'GitHub', link: 'https://github.com/AndyElessar/SourceGen' }
     ],
     sidebar: [
       {
-        text: 'Guide',
+        text: 'IOC',
         items: [
           { text: 'Overview', link: '/Ioc/01_Overview' },
           { text: 'Basic Usage', link: '/Ioc/02_Basic' },

@@ -1,6 +1,6 @@
 ---
 description: "Use when: reviewing completed documentation updates under docs/ for accuracy, consistency, links, and generated code examples."
-model: Claude Haiku 4.5 (copilot)
+model: GPT-5.3-Codex (copilot)
 tools: [vscode/memory, read, search, web, 'microsoftdocs/mcp/*', todo]
 agents: []
 user-invocable: false

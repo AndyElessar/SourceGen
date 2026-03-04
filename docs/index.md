@@ -13,12 +13,12 @@ hero:
       link: https://github.com/AndyElessar/SourceGen
 features:
   - icon: ⚡
-    title: Compile-Time Generation
-    details: All code is generated at compile time with zero runtime reflection overhead
+    title: Reduce Boilerplate
+    details: Automatically generate DI registration code — eliminate repetitive manual service registration
   - icon: 🎯
     title: Native AOT Compatible
-    details: Fully compatible with .NET Native AOT publishing — no trimming warnings
-  - icon: 🔧
-    title: IoC / Dependency Injection
-    details: Source-generated service registration replacing Microsoft.Extensions.DependencyInjection patterns
+    details: Fully compatible with .NET Native AOT publishing — zero runtime reflection, no trimming warnings
+  - icon: 🚀
+    title: High Performance
+    details: Compile-time code generation with optional typed container for reflection-free, high-throughput service resolution
 ---
