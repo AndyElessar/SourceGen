@@ -1,6 +1,44 @@
-# Source Generator Spec
+# IocSourceGenerator Specification
 
-Source generators based on `Microsoft.Extensions.DependencyInjection.Abstractions`.
+Source generators for compile-time IoC container generation based on `Microsoft.Extensions.DependencyInjection.Abstractions`. This Overview page provides index and consolidated specification data. Feature documentation is split into focused spec files under `Register.*.md` and `Container.*.md`.
+
+## Spec Index
+
+Find detailed documentation for each feature:
+
+### Registration Features
+
+|Feature|File|Description|
+|:---|:---|:---|
+|Basic Registration|[Register.Basic.md](Register.Basic.md)|Core service registration patterns including implementation types and keyed services|
+|Decorators|[Register.Decorators.md](Register.Decorators.md)|Decorator pattern for composing services with multiple layers|
+|Tags|[Register.Tags.md](Register.Tags.md)|Tag-based mutually exclusive service registration|
+|Injection Members|[Register.Injection.md](Register.Injection.md)|Field, property, method, and constructor injection patterns|
+|Imported Modules|[Register.ImportModule.md](Register.ImportModule.md)|Cross-assembly module importing and sharing registrations|
+|Open Generics|[Register.Generics.md](Register.Generics.md)|Generic service types, closed generic discovery, and generic factory mapping|
+|IServiceProvider|[Register.ServiceProviderInvocation.md](Register.ServiceProviderInvocation.md)|Automatic service discovery from IServiceProvider invocations|
+|MSBuild Configuration|[Register.MSBuild.md](Register.MSBuild.md)|MSBuild property configuration for generator behavior|
+|Factory & Instance|[Register.Factory.md](Register.Factory.md)|Factory method and static instance registration|
+|KeyValuePair|[Register.KeyValuePair.md](Register.KeyValuePair.md)|KeyValuePair and Dictionary registrations for keyed service collections|
+
+### Container Features
+
+|Feature|File|Description|
+|:---|:---|:---|
+|Basic Container|[Container.Basic.md](Container.Basic.md)|Generated container overview and service resolution|
+|Service Lifetime|[Container.Lifetime.md](Container.Lifetime.md)|Singleton, Scoped, and Transient lifecycle management|
+|Keyed Services|[Container.KeyedServices.md](Container.KeyedServices.md)|Keyed service resolution with multiple key types|
+|Injection|[Container.Injection.md](Container.Injection.md)|Constructor, property, field, and method injection in containers|
+|Decorators|[Container.Decorators.md](Container.Decorators.md)|Decorator ordering and composition within containers|
+|Imported Modules|[Container.ImportModule.md](Container.ImportModule.md)|FrozenDictionary-based service resolution with module composition|
+|Factory & Instance|[Container.Factory.md](Container.Factory.md)|Factory-created and static instance service handling|
+|Open Generics|[Container.Generics.md](Container.Generics.md)|Open generic service resolution|
+|Collections & Wrappers|[Container.Collections.md](Container.Collections.md)|Collection types (IEnumerable, arrays) and wrapper types (Lazy, Func, KeyValuePair)|
+|Container Options|[Container.Options.md](Container.Options.md)|Configuration attributes and behavior flags (IntegrateServiceProvider, ExplicitOnly, etc.)|
+|Thread Safety|[Container.ThreadSafety.md](Container.ThreadSafety.md)|Thread-safe service initialization strategies (Lock, SemaphoreSlim, SpinLock, CompareExchange)|
+|Partial Accessors|[Container.PartialAccessors.md](Container.PartialAccessors.md)|Fast-path service resolution via partial members|
+|MVC & Blazor|[Container.AspNetCore.md](Container.AspNetCore.md)|IControllerActivator, IComponentActivator, and IComponentPropertyActivator support|
+|Performance|[Container.Performance.md](Container.Performance.md)|Disposal order, eager resolution, and code generation efficiency|
 
 ## Collecting Information
 
@@ -247,10 +285,10 @@ public class FactoryContainer
 ## Generators
 
 1. Registration generator: generate `IServiceCollection` register code.\
-[Registration features spec](Registration.md)
+[Registration features spec](#registration-features)
 
 2. Container generator: generate container that implement `IServiceProvider`.\
-[Container features spec](Container.md)
+[Container features spec](#container-features)
 
 ## Implementation Requirements
 
@@ -272,7 +310,7 @@ src/SourceGen.Ioc.SourceGenerator/
 │   ├── LazyRegistrationHelper.cs          # Lazy wrapper registration helper
 │   ├── FuncRegistrationHelper.cs          # Func wrapper registration helper
 │   ├── KvpRegistrationHelper.cs           # KeyValuePair registration helper
-│   └── Spec/                              # SPEC.md, Registration.md, Container.md
+│   └── Spec/                              # SPEC.md + Register.*.md + Container.*.md
 ├── Models/                                # Immutable data models (RegistrationData, TypeData, etc.)
 └── Analyzer/                              # Diagnostic analyzers & SPEC.md
 ```
