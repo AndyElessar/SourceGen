@@ -74,10 +74,11 @@ For every source generator feature, **always** include a generated code example 
   - End every doc file with a navigation link back to Overview
   - Run through the `DocReview` subagent before completing
 
-- ⚠️ **Ask first:**
+- ⚠️ **Ask first** (use `#tool:vscode/askQuestions` to ask the user):
+  - Requirements are ambiguous or incomplete — clarify before planning
   - Before modifying existing documents in a major way (restructuring, renaming, reordering)
   - Before adding a new doc file that doesn't fit the current numbering scheme
-  - When uncertain about intended behavior — use the `Explore` subagent or #tool:vscode/askQuestions
+  - When uncertain about intended behavior — use the `Explore` subagent or ask the user
 
 - 🚫 **Never do:**
   - Modify source code files (`src/`, `tests/`, `samples/`)

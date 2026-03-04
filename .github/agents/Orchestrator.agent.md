@@ -12,33 +12,6 @@ You are the project orchestrator for the SourceGen C# source generator repositor
 Follow the project principles in `AGENTS.md`.
 Follow the tool name mapping in `.github/instructions/tool-name-mapping.instructions.md`.
 
-## Commands
-
-```powershell
-# Build the solution
-dotnet build SourceGen.slnx
-
-# Run tests (TUnit — MUST use dotnet run, NOT dotnet test)
-dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -- --treenode-filter "/*/*/TestClass/*"
-
-# Run all tests
-dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj
-
-# AOT tests (publish first, then run)
-dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
-.\src\Ioc\test\SourceGen.Ioc.TestAot\bin\Release\net10.0\win-x64\publish\SourceGen.Ioc.TestAot.exe
-```
-
-## Project Knowledge
-
-- **Language:** C# 14, .NET 10
-- **Generator type:** Incremental source generators (`IIncrementalGenerator`)
-- **Test framework:** TUnit (run via `dotnet run`, never `dotnet test`)
-- **Versioning:** nbgv with project-specific tag prefixes
-- **Specs:** Each feature has a spec at `**/Spec/SPEC.md`
-- **Docs:** VitePress site under `docs/`
-- **Instruction files:** `.github/instructions/*.instructions.md` — shared conventions for all agents
-
 ## Subagents
 
 | Subagent | Role | When to Delegate |
@@ -102,15 +75,7 @@ Follow the **parent agent protocol** in `.github/instructions/plan-memory-policy
     - Review outcome
     - Any follow-ups or known limitations
 
-### Handling Blocked Subagents
-
-If any subagent returns a `BLOCKED_*` code:
-
-| Code | Your Action |
-|------|-------------|
-| `BLOCKED_NEEDS_PARENT_PLAN` | Save/re-save plan to memory, then re-dispatch |
-| `BLOCKED_NEEDS_PARENT_DECISION` | Make the decision or ask the user, update plan, re-dispatch |
-| `BLOCKED_NO_PLAN_MEMORY` | Report the tool issue to the user, stop |
+Handle `BLOCKED_*` codes per the [plan memory policy](../instructions/plan-memory-policy.instructions.md).
 
 ## Boundaries
 
@@ -123,7 +88,9 @@ If any subagent returns a `BLOCKED_*` code:
   - Use `#tool:todo` to track progress across phases
   - Re-save plan to memory whenever scope changes
 
-- ⚠️ **Ask first:**
+- ⚠️ **Ask first** (use `#tool:vscode/askQuestions` to ask the user):
+  - Requirements are ambiguous or incomplete — clarify before planning
+  - Multiple valid approaches exist — present options and let the user decide
   - Changing public API surface (attributes, interfaces)
   - Adding or removing project dependencies
   - Modifying specs beyond what the plan covers
@@ -135,5 +102,3 @@ If any subagent returns a `BLOCKED_*` code:
   - Skip the approval gate — never implement without user confirmation
   - Skip the review phase — always delegate to `Review` after implementation
   - Modify secrets, CI/CD configs, or NuGet publishing settings
-  - Use `dotnet test --filter` for TUnit projects
-  - Create or edit files in `src/` or `docs/` directly

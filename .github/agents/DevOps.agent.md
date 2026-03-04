@@ -67,7 +67,9 @@ Follow the **parent agent protocol** in `.github/instructions/plan-memory-policy
 	- Validate YAML after edits
 	- Use `--skip-duplicate` for NuGet push
 
-- ⚠️ **Ask first:**
+- ⚠️ **Ask first** (use `#tool:vscode/askQuestions` to ask the user):
+	- Requirements are ambiguous or incomplete — clarify before planning
+	- Multiple valid approaches exist — present options and let the user decide
 	- New workflows
 	- Trigger, tag, or branch changes
 	- Environment, runner, or SDK changes
