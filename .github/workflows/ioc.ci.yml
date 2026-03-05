@@ -8,6 +8,8 @@ on:
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/Spec/**'
+      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/*.spec.md'
       - 'src/Ioc/test/SourceGen.Ioc.Test/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
@@ -22,6 +24,8 @@ on:
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/Spec/**'
+      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/*.spec.md'
       - 'src/Ioc/test/SourceGen.Ioc.Test/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
