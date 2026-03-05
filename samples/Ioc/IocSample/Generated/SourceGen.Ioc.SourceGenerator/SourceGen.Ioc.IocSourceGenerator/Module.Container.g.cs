@@ -19,8 +19,6 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Module, object>> _serviceResolvers;
-
     private readonly global::IocSample.Shared.SharedModule _iocSample_Shared_SharedModule;
 
     #region Constructors
@@ -57,11 +55,6 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
         // Initialize Func wrapper fields
         _func_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_());
-
-        _serviceResolvers =
-        _iocSample_Shared_SharedModule.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::IocSample.Module, object>>(kvp.Key, c => kvp.Value(c._iocSample_Shared_SharedModule)))
-            .Concat(_localResolvers)
-            .ToFrozenDictionary();
     }
 
     private Module(Module parent)
@@ -86,7 +79,6 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
         // Initialize Func wrapper fields
         _func_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_());
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #endregion
@@ -638,7 +630,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocSample.Module, object>>> Resolvers => _serviceResolvers;
+    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocSample.Module, object>>> Resolvers => _serviceResolvers;
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocSample.Module, object>>[] _localResolvers =
     [
@@ -772,6 +764,11 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::System.Func<global::IocSample.IWrapperService<string>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_IocSample_IWrapperService_string__Array()),
         new(new ServiceIdentifier(typeof(global::System.Func<global::IocSample.IWrapperService<string>>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllFunc_IocSample_IWrapperService_string__Array()),
     ];
+
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Module, object>> _serviceResolvers =
+        global::IocSample.Shared.SharedModule.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::IocSample.Module, object>>(kvp.Key, c => kvp.Value(c._iocSample_Shared_SharedModule)))
+        .Concat(_localResolvers)
+        .ToFrozenDictionary();
 
     #endregion
 

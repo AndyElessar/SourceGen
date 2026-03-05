@@ -21,8 +21,6 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers;
-
     #region Constructors
 
     /// <summary>
@@ -37,15 +35,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public TestContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #endregion
@@ -191,7 +186,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
+    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
@@ -199,6 +194,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
     ];
+
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
     #endregion
 

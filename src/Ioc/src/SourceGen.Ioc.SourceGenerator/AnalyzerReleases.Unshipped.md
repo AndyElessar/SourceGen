@@ -26,4 +26,5 @@ SGIOC021 | Design | Error | Unable to resolve partial accessor service - A parti
 SGIOC022 | Usage | Warning | Inject attribute ignored due to disabled feature - [IocInject]/[Inject] on property/field/method is ignored when its SourceGenIocFeatures flag is not enabled.
 SGIOC023 | Usage | Error | Invalid InjectMembers element format - Each element in InjectMembers must be nameof(member) or new object[] { nameof(member), key [, KeyType] }.
 SGIOC024 | Usage | Error | InjectMembers specifies non-injectable member - Members in InjectMembers must be injectable (instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods, all of which must be public, internal, or protected internal).
+SGIOC025 | Design | Error | Circular module import detected - A container has a circular [IocImportModule] dependency that would cause a static initializer deadlock.
 
