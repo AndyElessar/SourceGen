@@ -84,5 +84,5 @@ partial class AppContainer
 
 ## See Also
 
-- [Generic Registration](Register.Generics.md)
-- [Explicit Closed Generic Discovery](Register.Generics.md)
+- [Generic Registration](Register.Generics.spec.md)
+- [Explicit Closed Generic Discovery](Register.Generics.spec.md)

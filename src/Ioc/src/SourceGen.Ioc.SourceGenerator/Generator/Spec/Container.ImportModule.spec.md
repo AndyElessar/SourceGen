@@ -110,5 +110,5 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
 ## See Also
 
-- [Import Module Registration](Register.ImportModule.md)
-- [Service Resolution Strategy](Container.Options.md)
+- [Import Module Registration](Register.ImportModule.spec.md)
+- [Service Resolution Strategy](Container.Options.spec.md)

@@ -60,6 +60,6 @@ services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
 
 ## See Also
 
-- [Keyed Services](Register.Basic.md)
-- [Injection](Register.Injection.md)
-- [Container Collections](Container.Collections.md)
+- [Keyed Services](Register.Basic.spec.md)
+- [Injection](Register.Injection.spec.md)
+- [Container Collections](Container.Collections.spec.md)

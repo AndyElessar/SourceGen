@@ -111,6 +111,6 @@ partial class AppContainer
 
 ## See Also
 
-- [Basic Container Generation](Container.Basic.md)
-- [Thread Safety](Container.ThreadSafety.md)
-- [Eager Resolution Options](Container.Options.md)
+- [Basic Container Generation](Container.Basic.spec.md)
+- [Thread Safety](Container.ThreadSafety.spec.md)
+- [Eager Resolution Options](Container.Options.spec.md)

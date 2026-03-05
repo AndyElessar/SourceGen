@@ -31,5 +31,5 @@ services.AddSingleton<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>
 
 ## See Also
 
-- [Generic Registration](Register.Generics.md)
-- [Container Generics](Container.Generics.md)
+- [Generic Registration](Register.Generics.spec.md)
+- [Container Generics](Container.Generics.spec.md)

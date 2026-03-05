@@ -34,12 +34,10 @@ dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -
 
 ## Specifications
 
-| Spec                                                                             | Scope                                      |
-| -------------------------------------------------------------------------------- | ------------------------------------------ |
-| [Generator SPEC](src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.md)       | Service registration, container generation |
-| [Registration](src/SourceGen.Ioc.SourceGenerator/Generator/Spec/Registration.md) | Registration rules and resolution          |
-| [Container](src/SourceGen.Ioc.SourceGenerator/Generator/Spec/Container.md)       | Container API and lifecycle                |
-| [Analyzer SPEC](src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.md)         | Diagnostic rules and analyzers             |
+| Spec | Scope |
+| --- | --- |
+| [Generator SPEC](src/SourceGen.Ioc.SourceGenerator/Generator/Spec/SPEC.spec.md) | Index — registration, container generation, all sub-specs |
+| [Analyzer SPEC](src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.spec.md) | Diagnostic rules and analyzers |
 
 ## Domain Rules
 

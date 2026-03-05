@@ -201,6 +201,6 @@ services.AddSingleton<IMyService>(MyService.Default);
 
 ## See Also
 
-- [Generic Registration](Register.Generics.md)
-- [Injection](Register.Injection.md)
-- [Container Factory](Container.Factory.md)
+- [Generic Registration](Register.Generics.spec.md)
+- [Injection](Register.Injection.spec.md)
+- [Container Factory](Container.Factory.spec.md)

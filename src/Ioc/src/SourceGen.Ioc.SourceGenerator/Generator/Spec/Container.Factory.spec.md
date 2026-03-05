@@ -93,6 +93,6 @@ partial class AppContainer
 
 ## See Also
 
-- [Factory Registration](Register.Factory.md)
-- [Service Lifetime Management](Container.Lifetime.md)
-- [Disposal Order](Container.Performance.md)
+- [Factory Registration](Register.Factory.spec.md)
+- [Service Lifetime Management](Container.Lifetime.spec.md)
+- [Disposal Order](Container.Performance.spec.md)

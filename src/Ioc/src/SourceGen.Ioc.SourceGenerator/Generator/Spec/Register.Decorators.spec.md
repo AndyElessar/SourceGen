@@ -137,6 +137,6 @@ services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvi
 
 ## See Also
 
-- [Basic Registration](Register.Basic.md)
-- [Injection](Register.Injection.md)
-- [Container Decorators](Container.Decorators.md)
+- [Basic Registration](Register.Basic.spec.md)
+- [Injection](Register.Injection.spec.md)
+- [Container Decorators](Container.Decorators.spec.md)

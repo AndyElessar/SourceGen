@@ -1,6 +1,6 @@
 ---
 description: "Use when making commits, creating branches, or submitting PRs. Covers commit conventions, branch strategy, and release tagging."
-applyTo: ".github/workflows/**"
+applyTo: ".github/**"
 ---
 
 # Git Workflow

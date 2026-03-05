@@ -14,7 +14,7 @@ When working on source generators, follow the best practices outlined here: [C# 
 
 ## Specifications
 
-Always read the relevant spec (`**/Spec/*.md`) before implementing or modifying features.
+Always read the relevant spec (`**/Spec/*.spec.md`) before implementing or modifying features.
 
 ## Code Style
 

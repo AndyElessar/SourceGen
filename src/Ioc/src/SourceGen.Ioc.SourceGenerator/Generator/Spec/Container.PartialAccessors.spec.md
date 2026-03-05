@@ -80,5 +80,5 @@ When `IntegrateServiceProvider = false` and a non-nullable partial accessor's re
 
 ## See Also
 
-- [Container Options](Container.Options.md)
-- [Basic Container Generation](Container.Basic.md)
+- [Container Options](Container.Options.spec.md)
+- [Basic Container Generation](Container.Basic.spec.md)

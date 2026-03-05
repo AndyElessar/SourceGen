@@ -67,5 +67,5 @@ partial class AppContainer
 
 ## See Also
 
-- [Decorator Registration](Register.Decorators.md)
-- [Basic Container Generation](Container.Basic.md)
+- [Decorator Registration](Register.Decorators.spec.md)
+- [Basic Container Generation](Container.Basic.spec.md)

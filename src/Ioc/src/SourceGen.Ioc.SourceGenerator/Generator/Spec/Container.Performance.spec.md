@@ -240,7 +240,7 @@ partial class AppContainer
 
 ## See Also
 
-- [Service Lifetime Management](Container.Lifetime.md)
-- [Container Options](Container.Options.md)
-- [Thread Safety](Container.ThreadSafety.md)
-- [Disposal and Async Disposal Patterns](Container.Lifetime.md)
+- [Service Lifetime Management](Container.Lifetime.spec.md)
+- [Container Options](Container.Options.spec.md)
+- [Thread Safety](Container.ThreadSafety.spec.md)
+- [Disposal and Async Disposal Patterns](Container.Lifetime.spec.md)

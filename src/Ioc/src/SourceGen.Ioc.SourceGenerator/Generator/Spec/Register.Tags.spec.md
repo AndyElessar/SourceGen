@@ -82,5 +82,5 @@ services.Add{ProjectName}(myTags);
 
 ## See Also
 
-- [Basic Registration](Register.Basic.md)
-- [Container IncludeTags](Container.Options.md)
+- [Basic Registration](Register.Basic.spec.md)
+- [Container IncludeTags](Container.Options.spec.md)

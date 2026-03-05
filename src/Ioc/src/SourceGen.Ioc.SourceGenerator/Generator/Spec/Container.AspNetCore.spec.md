@@ -189,5 +189,5 @@ When `IComponentActivator` or `IComponentPropertyActivator` is implemented, the 
 
 ## See Also
 
-- [Basic Container Generation](Container.Basic.md)
-- [IServiceProviderFactory](Container.Options.md)
+- [Basic Container Generation](Container.Basic.spec.md)
+- [IServiceProviderFactory](Container.Options.spec.md)

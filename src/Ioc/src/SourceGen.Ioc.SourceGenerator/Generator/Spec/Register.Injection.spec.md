@@ -308,6 +308,6 @@ services.AddSingleton<Consumer>((IServiceProvider sp) =>
 
 ## See Also
 
-- [Decorators](Register.Decorators.md)
-- [Factory Method Registration](Register.Factory.md)
-- [Container Injection](Container.Injection.md)
+- [Decorators](Register.Decorators.spec.md)
+- [Factory Method Registration](Register.Factory.spec.md)
+- [Container Injection](Container.Injection.spec.md)

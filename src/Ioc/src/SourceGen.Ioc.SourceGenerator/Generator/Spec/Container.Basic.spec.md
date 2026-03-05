@@ -341,6 +341,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
 ## See Also
 
-- [Lifetime Management](Container.Lifetime.md)
-- [Keyed Services](Container.KeyedServices.md)
-- [Container Options](Container.Options.md)
+- [Lifetime Management](Container.Lifetime.spec.md)
+- [Keyed Services](Container.KeyedServices.spec.md)
+- [Container Options](Container.Options.spec.md)

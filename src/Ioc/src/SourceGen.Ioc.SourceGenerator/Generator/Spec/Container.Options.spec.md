@@ -24,7 +24,7 @@ public partial class MyContainer;
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|
-|`ThreadSafeStrategy`|`Lock`|Thread safety strategy for singleton and scoped service resolution. See [ThreadSafeStrategy](Container.ThreadSafety.md) for details.|
+|`ThreadSafeStrategy`|`Lock`|Thread safety strategy for singleton and scoped service resolution. See [ThreadSafeStrategy](Container.ThreadSafety.spec.md) for details.|
 |`EagerResolveOptions`|`Singleton`|Controls which service lifetimes should be eagerly resolved during container/scope construction. See [EagerResolveOptions](#eagerresolveoptions-enum) for details.|
 
 > **Priority**: `ExplicitOnly` takes precedence over `IncludeTags`. When `ExplicitOnly = true`, `IncludeTags` is ignored.
@@ -135,10 +135,10 @@ The `EagerResolveOptions` enum controls which service lifetimes should be eagerl
 
 > **Note**: `Transient` services are not supported for eager resolution, as they create a new instance on every access by design.
 
-See [Eager Resolution](Container.Performance.md) for detailed generated code examples.
+See [Eager Resolution](Container.Performance.spec.md) for detailed generated code examples.
 
 ## See Also
 
-- [Thread Safety](Container.ThreadSafety.md)
-- [Partial Accessors](Container.PartialAccessors.md)
-- [IServiceProviderFactory](Container.Options.md#integrateserviceprovider--false)
+- [Thread Safety](Container.ThreadSafety.spec.md)
+- [Partial Accessors](Container.PartialAccessors.spec.md)
+- [IServiceProviderFactory](Container.Options.spec.md#integrateserviceprovider--false)

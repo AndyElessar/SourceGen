@@ -10,35 +10,35 @@ Find detailed documentation for each feature:
 
 |Feature|File|Description|
 |:---|:---|:---|
-|Basic Registration|[Register.Basic.md](Register.Basic.md)|Core service registration patterns including implementation types and keyed services|
-|Decorators|[Register.Decorators.md](Register.Decorators.md)|Decorator pattern for composing services with multiple layers|
-|Tags|[Register.Tags.md](Register.Tags.md)|Tag-based mutually exclusive service registration|
-|Injection Members|[Register.Injection.md](Register.Injection.md)|Field, property, method, and constructor injection patterns|
-|Imported Modules|[Register.ImportModule.md](Register.ImportModule.md)|Cross-assembly module importing and sharing registrations|
-|Open Generics|[Register.Generics.md](Register.Generics.md)|Generic service types, closed generic discovery, and generic factory mapping|
-|IServiceProvider|[Register.ServiceProviderInvocation.md](Register.ServiceProviderInvocation.md)|Automatic service discovery from IServiceProvider invocations|
-|MSBuild Configuration|[Register.MSBuild.md](Register.MSBuild.md)|MSBuild property configuration for generator behavior|
-|Factory & Instance|[Register.Factory.md](Register.Factory.md)|Factory method and static instance registration|
-|KeyValuePair|[Register.KeyValuePair.md](Register.KeyValuePair.md)|KeyValuePair and Dictionary registrations for keyed service collections|
+|Basic Registration|[Register.Basic.spec.md](Register.Basic.spec.md)|Core service registration patterns including implementation types and keyed services|
+|Decorators|[Register.Decorators.spec.md](Register.Decorators.spec.md)|Decorator pattern for composing services with multiple layers|
+|Tags|[Register.Tags.spec.md](Register.Tags.spec.md)|Tag-based mutually exclusive service registration|
+|Injection Members|[Register.Injection.spec.md](Register.Injection.spec.md)|Field, property, method, and constructor injection patterns|
+|Imported Modules|[Register.ImportModule.spec.md](Register.ImportModule.spec.md)|Cross-assembly module importing and sharing registrations|
+|Open Generics|[Register.Generics.spec.md](Register.Generics.spec.md)|Generic service types, closed generic discovery, and generic factory mapping|
+|IServiceProvider|[Register.ServiceProviderInvocation.spec.md](Register.ServiceProviderInvocation.spec.md)|Automatic service discovery from IServiceProvider invocations|
+|MSBuild Configuration|[Register.MSBuild.spec.md](Register.MSBuild.spec.md)|MSBuild property configuration for generator behavior|
+|Factory & Instance|[Register.Factory.spec.md](Register.Factory.spec.md)|Factory method and static instance registration|
+|KeyValuePair|[Register.KeyValuePair.spec.md](Register.KeyValuePair.spec.md)|KeyValuePair and Dictionary registrations for keyed service collections|
 
 ### Container Features
 
 |Feature|File|Description|
 |:---|:---|:---|
-|Basic Container|[Container.Basic.md](Container.Basic.md)|Generated container overview and service resolution|
-|Service Lifetime|[Container.Lifetime.md](Container.Lifetime.md)|Singleton, Scoped, and Transient lifecycle management|
-|Keyed Services|[Container.KeyedServices.md](Container.KeyedServices.md)|Keyed service resolution with multiple key types|
-|Injection|[Container.Injection.md](Container.Injection.md)|Constructor, property, field, and method injection in containers|
-|Decorators|[Container.Decorators.md](Container.Decorators.md)|Decorator ordering and composition within containers|
-|Imported Modules|[Container.ImportModule.md](Container.ImportModule.md)|FrozenDictionary-based service resolution with module composition|
-|Factory & Instance|[Container.Factory.md](Container.Factory.md)|Factory-created and static instance service handling|
-|Open Generics|[Container.Generics.md](Container.Generics.md)|Open generic service resolution|
-|Collections & Wrappers|[Container.Collections.md](Container.Collections.md)|Collection types (IEnumerable, arrays) and wrapper types (Lazy, Func, KeyValuePair)|
-|Container Options|[Container.Options.md](Container.Options.md)|Configuration attributes and behavior flags (IntegrateServiceProvider, ExplicitOnly, etc.)|
-|Thread Safety|[Container.ThreadSafety.md](Container.ThreadSafety.md)|Thread-safe service initialization strategies (Lock, SemaphoreSlim, SpinLock, CompareExchange)|
-|Partial Accessors|[Container.PartialAccessors.md](Container.PartialAccessors.md)|Fast-path service resolution via partial members|
-|MVC & Blazor|[Container.AspNetCore.md](Container.AspNetCore.md)|IControllerActivator, IComponentActivator, and IComponentPropertyActivator support|
-|Performance|[Container.Performance.md](Container.Performance.md)|Disposal order, eager resolution, and code generation efficiency|
+|Basic Container|[Container.Basic.spec.md](Container.Basic.spec.md)|Generated container overview and service resolution|
+|Service Lifetime|[Container.Lifetime.spec.md](Container.Lifetime.spec.md)|Singleton, Scoped, and Transient lifecycle management|
+|Keyed Services|[Container.KeyedServices.spec.md](Container.KeyedServices.spec.md)|Keyed service resolution with multiple key types|
+|Injection|[Container.Injection.spec.md](Container.Injection.spec.md)|Constructor, property, field, and method injection in containers|
+|Decorators|[Container.Decorators.spec.md](Container.Decorators.spec.md)|Decorator ordering and composition within containers|
+|Imported Modules|[Container.ImportModule.spec.md](Container.ImportModule.spec.md)|FrozenDictionary-based service resolution with module composition|
+|Factory & Instance|[Container.Factory.spec.md](Container.Factory.spec.md)|Factory-created and static instance service handling|
+|Open Generics|[Container.Generics.spec.md](Container.Generics.spec.md)|Open generic service resolution|
+|Collections & Wrappers|[Container.Collections.spec.md](Container.Collections.spec.md)|Collection types (IEnumerable, arrays) and wrapper types (Lazy, Func, KeyValuePair)|
+|Container Options|[Container.Options.spec.md](Container.Options.spec.md)|Configuration attributes and behavior flags (IntegrateServiceProvider, ExplicitOnly, etc.)|
+|Thread Safety|[Container.ThreadSafety.spec.md](Container.ThreadSafety.spec.md)|Thread-safe service initialization strategies (Lock, SemaphoreSlim, SpinLock, CompareExchange)|
+|Partial Accessors|[Container.PartialAccessors.spec.md](Container.PartialAccessors.spec.md)|Fast-path service resolution via partial members|
+|MVC & Blazor|[Container.AspNetCore.spec.md](Container.AspNetCore.spec.md)|IControllerActivator, IComponentActivator, and IComponentPropertyActivator support|
+|Performance|[Container.Performance.spec.md](Container.Performance.spec.md)|Disposal order, eager resolution, and code generation efficiency|
 
 ## Collecting Information
 
@@ -310,9 +310,9 @@ src/SourceGen.Ioc.SourceGenerator/
 │   ├── LazyRegistrationHelper.cs          # Lazy wrapper registration helper
 │   ├── FuncRegistrationHelper.cs          # Func wrapper registration helper
 │   ├── KvpRegistrationHelper.cs           # KeyValuePair registration helper
-│   └── Spec/                              # SPEC.md + Register.*.md + Container.*.md
+│   └── Spec/                              # SPEC.spec.md + Register.*.md + Container.*.md
 ├── Models/                                # Immutable data models (RegistrationData, TypeData, etc.)
-└── Analyzer/                              # Diagnostic analyzers & SPEC.md
+└── Analyzer/                              # Diagnostic analyzers & SPEC.spec.md
 ```
 
 ### Data Flow

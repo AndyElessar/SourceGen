@@ -65,7 +65,7 @@ public static class ServiceCollectionExtensions
 
 ## See Also
 
-- [Keyed Services](Register.Basic.md#keyed-service-registration) (this feature)
-- [Registration Attributes](SPEC.md)
-- [Decorators](Register.Decorators.md)
-- [Generics](Register.Generics.md)
+- [Keyed Services](Register.Basic.spec.md#keyed-service-registration) (this feature)
+- [Registration Attributes](SPEC.spec.md)
+- [Decorators](Register.Decorators.spec.md)
+- [Generics](Register.Generics.spec.md)

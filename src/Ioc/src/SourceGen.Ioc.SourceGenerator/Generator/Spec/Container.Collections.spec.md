@@ -198,5 +198,5 @@ When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `I
 
 ## See Also
 
-- [KeyValuePair Registration](Register.KeyValuePair.md)
-- [Injection](Container.Injection.md)
+- [KeyValuePair Registration](Register.KeyValuePair.spec.md)
+- [Injection](Container.Injection.spec.md)

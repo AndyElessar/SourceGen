@@ -375,5 +375,5 @@ public static class FactoryContainer
 
 ## See Also
 
-- [Container Generics](Container.Generics.md)
-- [Factory Method Registration](Register.Factory.md)
+- [Container Generics](Container.Generics.spec.md)
+- [Factory Method Registration](Register.Factory.spec.md)

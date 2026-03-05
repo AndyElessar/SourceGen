@@ -173,5 +173,5 @@ private AppContainer(AppContainer parent)
 
 ## See Also
 
-- [Service Lifetime Management](Container.Lifetime.md)
-- [Container Options](Container.Options.md)
+- [Service Lifetime Management](Container.Lifetime.spec.md)
+- [Container Options](Container.Options.spec.md)

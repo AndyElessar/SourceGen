@@ -71,5 +71,5 @@ partial class AppContainer
 
 ## See Also
 
-- [Injection Registration](Register.Injection.md)
-- [Wrapper Types](Container.Collections.md)
+- [Injection Registration](Register.Injection.spec.md)
+- [Wrapper Types](Container.Collections.spec.md)

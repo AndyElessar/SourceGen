@@ -22,7 +22,7 @@ Controls the default lifetime for registrations when not explicitly specified. I
 
 ### SourceGenIocFeatures
 
-Controls which outputs and injection member kinds are generated. See [Feature Flags](SPEC.md#7-feature-flags) for details.
+Controls which outputs and injection member kinds are generated. See [Feature Flags](SPEC.spec.md#7-feature-flags) for details.
 
 ### Configuration Example
 
@@ -66,5 +66,5 @@ public static class ServiceCollectionExtensions
 
 ## See Also
 
-- [Feature Flags](SPEC.md#7-feature-flags)
-- [Compilation Info](SPEC.md#6-compilation-info)
+- [Feature Flags](SPEC.spec.md#7-feature-flags)
+- [Compilation Info](SPEC.spec.md#6-compilation-info)

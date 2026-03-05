@@ -70,6 +70,6 @@ partial class AppContainer
 
 ## See Also
 
-- [Basic Registration](Register.Basic.md)
-- [KeyValuePair Registration](Register.KeyValuePair.md)
-- [Dictionary Resolution](Container.Collections.md)
+- [Basic Registration](Register.Basic.spec.md)
+- [KeyValuePair Registration](Register.KeyValuePair.spec.md)
+- [Dictionary Resolution](Container.Collections.spec.md)
