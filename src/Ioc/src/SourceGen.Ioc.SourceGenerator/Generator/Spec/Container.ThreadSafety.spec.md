@@ -166,8 +166,6 @@ private AppContainer(AppContainer parent)
 
     // Initialize eager scoped services
     _eagerScopedService = GetEagerScopedService();
-
-    _serviceResolvers = parent._serviceResolvers;
 }
 ```
 

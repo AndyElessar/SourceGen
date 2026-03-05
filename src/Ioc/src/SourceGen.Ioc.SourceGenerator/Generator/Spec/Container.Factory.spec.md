@@ -40,7 +40,6 @@ partial class AppContainer
         // Copy only factory-based singleton fields from parent
         // Instance registrations don't have fields, no need to copy
         _connection = parent._connection;
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #region Service Resolution
