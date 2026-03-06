@@ -182,7 +182,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Write fields
-        WriteContainerFields(writer, container, effectiveUseSwitchStatement);
+        WriteContainerFields(writer, container);
 
         // Write constructors
         WriteContainerConstructors(writer, container, groups, effectiveUseSwitchStatement);
@@ -281,8 +281,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteContainerFields(
         SourceWriter writer,
-        ContainerModel container,
-        bool effectiveUseSwitchStatement)
+        ContainerModel container)
     {
         // Fallback provider field (only if IntegrateServiceProvider is enabled)
         if(container.IntegrateServiceProvider)
@@ -294,13 +293,6 @@ partial class IocSourceGenerator
         writer.WriteLine("private readonly bool _isRootScope = true;");
         writer.WriteLine("private int _disposed;");
         writer.WriteLine();
-
-        // Service resolver dictionary
-        if(!effectiveUseSwitchStatement)
-        {
-            writer.WriteLine($"private readonly FrozenDictionary<ServiceIdentifier, Func<{container.ContainerTypeName}, object>> _serviceResolvers;");
-            writer.WriteLine();
-        }
 
         // Imported module fields
         foreach(var module in container.ImportedModules)
@@ -465,12 +457,6 @@ partial class IocSourceGenerator
         WriteContainerLazyFieldInitializations(writer, groups.LazyEntries);
         WriteContainerFuncFieldInitializations(writer, groups.FuncEntries);
 
-        // Because resolvers are immutable per container, they can be reused from parent
-        if(!effectiveUseSwitchStatement)
-        {
-            writer.WriteLine("_serviceResolvers = parent._serviceResolvers;");
-        }
-
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -519,41 +505,6 @@ partial class IocSourceGenerator
         // Initialize Lazy/Func wrapper fields
         WriteContainerLazyFieldInitializations(writer, groups.LazyEntries);
         WriteContainerFuncFieldInitializations(writer, groups.FuncEntries);
-
-        // Build FrozenDictionary
-        if(!effectiveUseSwitchStatement)
-        {
-            writer.WriteLine();
-            if(container.ImportedModules.Length > 0)
-            {
-                // Combine with imported modules - wrap module resolvers to pass the correct module instance
-                writer.WriteLine("_serviceResolvers =");
-
-                var isFirst = true;
-                foreach(var module in container.ImportedModules)
-                {
-                    var fieldName = GetModuleFieldName(module.Name);
-                    var source = $"{fieldName}.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
-
-                    if(isFirst)
-                    {
-                        writer.WriteLine(source);
-                        isFirst = false;
-                    }
-                    else
-                    {
-                        writer.WriteLine($"    .Concat({source})");
-                    }
-                }
-
-                writer.WriteLine("    .Concat(_localResolvers)");
-                writer.WriteLine("    .ToFrozenDictionary();");
-            }
-            else
-            {
-                writer.WriteLine("_serviceResolvers = _localResolvers.ToFrozenDictionary();");
-            }
-        }
     }
 
     /// <summary>
@@ -2258,11 +2209,11 @@ partial class IocSourceGenerator
 
         if(effectiveUseSwitchStatement)
         {
-            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _localResolvers;");
+            writer.WriteLine($"public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _localResolvers;");
         }
         else
         {
-            writer.WriteLine($"public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _serviceResolvers;");
+            writer.WriteLine($"public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>> Resolvers => _serviceResolvers;");
         }
         writer.WriteLine();
 
@@ -2324,6 +2275,44 @@ partial class IocSourceGenerator
 
         writer.Indentation--;
         writer.WriteLine("];");
+
+        // Write _serviceResolvers as static field (only when not using switch statement)
+        if(!effectiveUseSwitchStatement)
+        {
+            writer.WriteLine();
+            if(container.ImportedModules.Length > 0)
+            {
+                // Combine with imported modules - wrap module resolvers to pass the correct module instance
+                // Use static access (module.Name is the fully qualified type name) for static abstract Resolvers
+                writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<{container.ContainerTypeName}, object>> _serviceResolvers =");
+                writer.Indentation++;
+
+                var isFirst = true;
+                foreach(var module in container.ImportedModules)
+                {
+                    var fieldName = GetModuleFieldName(module.Name);
+                    var source = $"{module.Name}.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
+
+                    if(isFirst)
+                    {
+                        writer.WriteLine(source);
+                        isFirst = false;
+                    }
+                    else
+                    {
+                        writer.WriteLine($".Concat({source})");
+                    }
+                }
+
+                writer.WriteLine(".Concat(_localResolvers)");
+                writer.WriteLine(".ToFrozenDictionary();");
+                writer.Indentation--;
+            }
+            else
+            {
+                writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<{container.ContainerTypeName}, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();");
+            }
+        }
 
         writer.WriteLine();
         writer.WriteLine("#endregion");

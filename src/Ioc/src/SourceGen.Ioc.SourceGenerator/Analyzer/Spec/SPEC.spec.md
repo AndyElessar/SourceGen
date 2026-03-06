@@ -380,3 +380,26 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
   - method that doesn't return void or is generic
   - method that is not an ordinary method (i.e., constructors, operators, and other special methods are rejected)
 - This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.
+
+---
+
+### SGIOC025 - Error - Design - Circular module import detected
+
+Report when a container has a circular module import dependency (direct or transitive).
+
+**Analysis:**
+
+- Checks all classes marked with `[IocContainer]` attribute.
+- Scans for `[IocImportModule]` or `[IocImportModule<T>]` attributes on each container class.
+- Builds a directed graph of container → imported module relationships.
+- Uses depth-first search to detect cycles in the import graph.
+- Detects direct cycles (A imports B, B imports A) and transitive cycles (A imports B, B imports C, C imports A).
+- Reports on each container participating in the cycle.
+
+**Rationale:**
+
+Circular module imports create static initializer deadlocks. When `_serviceResolvers` is a `private static readonly` field, the CLR's static type initializer runs on first access. If Container A's static initializer accesses `ModuleB.Resolvers` and Module B's static initializer accesses `ModuleA.Resolvers`, a deadlock occurs.
+
+**Message format:** `Container 'TestNamespace.ModuleA' has a circular module import dependency: TestNamespace.ModuleA → TestNamespace.ModuleB → TestNamespace.ModuleA`
+
+Both `{ContainerType}` and types in `{CyclePath}` use `NameAndContainingTypesAndNamespaces` display format (without `global::` prefix). For types in the global namespace, this format may produce simple names.

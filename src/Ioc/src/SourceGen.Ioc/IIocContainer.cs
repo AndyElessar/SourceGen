@@ -26,7 +26,7 @@ public interface IIocContainer<TContainer> :
     /// The factory function takes the container instance and returns the resolver.
     /// </summary>
     [Experimental("SGIOCEXP001", Message = "This API is used by SourceGen.Ioc and may change or be removed in future versions.")]
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<TContainer, object>>> Resolvers { get; }
+    static abstract IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<TContainer, object>>> Resolvers { get; }
 
     /// <inheritdoc cref="ServiceProviderServiceExtensions.GetService{T}"/>
     public T? GetService<T>()

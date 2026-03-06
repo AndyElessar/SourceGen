@@ -86,8 +86,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers;
-
     #region Constructors
 
     /// <summary>
@@ -106,8 +104,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         // Initialize eager singletons (calls Get methods to handle dependencies)
         _myDependency = GetMyDependency();
         _myService = GetMyService();
-
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private AppContainer(AppContainer parent)
@@ -117,7 +113,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         // Copy eager singleton references from parent
         _myDependency = parent._myDependency;
         _myService = parent._myService;
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #endregion
@@ -253,7 +248,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
+    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
@@ -267,6 +262,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         new(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
         new(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
     ];
+
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
+    // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. If reversed, _localResolvers would be null when _serviceResolvers initializes.
 
     #endregion
 

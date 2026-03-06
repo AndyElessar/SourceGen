@@ -1,7 +1,7 @@
 ---
 description: "Use when: managing CI/CD pipelines, GitHub Actions workflows, build/test/pack/publish automation, NuGet Trusted Publishing, or release processes. Handles .github/workflows/ files and DevOps configuration."
-model: GPT-5.3-Codex (copilot)
-tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/runInTerminal, read, agent, edit, search, web, github/get_copilot_job_status, github/get_file_contents, github/get_latest_release, github/get_release_by_tag, github/get_tag, github/issue_read, github/list_branches, github/list_releases, github/list_tags, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'microsoftdocs/mcp/*', github.vscode-pull-request-github/notification_fetch, todo]
+model: GPT-5.4 (copilot)
+tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/runInTerminal, read, agent, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', edit, search, web, github/get_copilot_job_status, github/get_file_contents, github/get_latest_release, github/get_release_by_tag, github/get_tag, github/issue_read, github/list_branches, github/list_releases, github/list_tags, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, github.vscode-pull-request-github/notification_fetch, todo]
 agents: ["Explore"]
 user-invocable: true
 argument-hint: "Describe the CI/CD change: add workflow, fix pipeline, update publish config, etc."

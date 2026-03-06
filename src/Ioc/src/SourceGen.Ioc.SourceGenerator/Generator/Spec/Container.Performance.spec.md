@@ -105,6 +105,7 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
     private global::IEagerService _eagerService;  // Not nullable (eagerly initialized)
 
     public AppContainer() : this((IServiceProvider?)null) { }
@@ -115,8 +116,6 @@ partial class AppContainer
 
         // Eagerly resolve singleton services
         _eagerService = GetEagerService_Internal();
-
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private global::IEagerService GetEagerService_Internal()
@@ -152,7 +151,6 @@ partial class AppContainer
     {
         _fallbackProvider = fallbackProvider;
         _isRootScope = true;
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private AppContainer(AppContainer parent)
@@ -162,8 +160,6 @@ partial class AppContainer
 
         // Root scope doesn't have scoped instances yet
         // Eager resolution happens only when creating child scopes
-
-        _serviceResolvers = parent._serviceResolvers;
 
         // Eagerly resolve scoped services for this scope
         _eagerScoped = GetEagerScoped_Internal();

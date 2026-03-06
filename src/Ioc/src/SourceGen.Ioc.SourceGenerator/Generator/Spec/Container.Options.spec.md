@@ -48,9 +48,10 @@ partial class StandaloneContainer
 
     #region Constructors
 
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::StandaloneContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
+
     public StandaloneContainer()
     {
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     #endregion

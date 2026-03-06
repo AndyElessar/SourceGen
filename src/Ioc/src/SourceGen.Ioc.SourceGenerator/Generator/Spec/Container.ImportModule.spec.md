@@ -29,7 +29,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 {
     private readonly global::SharedModule1 _sharedModule1;
     private readonly global::SharedModule2 _sharedModule2;
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers;
 
     public AppContainer() : this((IServiceProvider?)null) { }
 
@@ -38,16 +37,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         _fallbackProvider = fallbackProvider;
         _sharedModule1 = new global::SharedModule1(fallbackProvider);
         _sharedModule2 = new global::SharedModule2(fallbackProvider);
-
-        // Build FrozenDictionary from local services and imported modules
-        // Module resolvers are wrapped to pass the correct module instance
-        // Local services take precedence (added last, will override imported)
-        _serviceResolvers = _sharedModule1.Resolvers.Select(static kvp => 
-                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
-            .Concat(_sharedModule2.Resolvers.Select(static kvp => 
-                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
-            .Concat(_localResolvers)
-            .ToFrozenDictionary();
     }
 
     private AppContainer(AppContainer parent)
@@ -57,7 +46,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         // Create scopes for imported modules (so their scoped services are properly isolated)
         _sharedModule1 = (global::SharedModule1)parent._sharedModule1.CreateScope().ServiceProvider;
         _sharedModule2 = (global::SharedModule2)parent._sharedModule2.CreateScope().ServiceProvider;
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     // Local services array with container-typed resolvers
@@ -71,9 +59,18 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         // ... more local services
     ];
 
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = 
+        global::SharedModule1.Resolvers.Select(static kvp => 
+                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
+            .Concat(global::SharedModule2.Resolvers.Select(static kvp => 
+                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
+            .Concat(_localResolvers)
+            .ToFrozenDictionary();
+    // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. This initializer references imported module Resolvers and _localResolvers; if reversed, _localResolvers would be null when _serviceResolvers initializes.
+
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
+    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
 
     #endregion
 

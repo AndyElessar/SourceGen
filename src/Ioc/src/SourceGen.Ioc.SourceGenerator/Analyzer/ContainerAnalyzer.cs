@@ -60,12 +60,29 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         description: "When IntegrateServiceProvider is false, the return type of a partial method or property accessor must be a registered service. No fallback to external IServiceProvider is available.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC025: Circular module import detected - A container has a circular [IocImportModule] dependency.
+    /// </summary>
+    public static readonly DiagnosticDescriptor CircularModuleImport = new(
+        id: "SGIOC025",
+        title: "Circular module import detected",
+        messageFormat: "Container '{0}' has a circular module import dependency: {1}",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Circular module imports create static initializer deadlocks. Remove the circular dependency.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    private static readonly SymbolDisplayFormat s_qualifiedFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         UnableToResolveService,
         ContainerMustBePartialAndNotStatic,
         UseSwitchStatementIgnoredWithImportedModules,
-        UnableToResolvePartialAccessor
+        UnableToResolvePartialAccessor,
+        CircularModuleImport
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -89,10 +106,14 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         // Collect containers with IntegrateServiceProvider = false for SGIOC018 analysis
         var containersWithNoFallback = new ConcurrentBag<INamedTypeSymbol>();
 
+        // Collect import edges for SGIOC025 circular import analysis
+        var importEdges = new ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)>();
+
         var analyzerContext = new ContainerAnalyzerContext(
             attributeSymbols,
             registeredServiceTypes,
-            containersWithNoFallback);
+            containersWithNoFallback,
+            importEdges);
 
         // SGIOC019: Check for partial modifier and static modifier on container classes
         // Also collect containers with IntegrateServiceProvider = false for SGIOC018
@@ -103,6 +124,9 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
         // SGIOC018: Analyze dependencies at compilation end
         context.RegisterCompilationEndAction(ctx => AnalyzeContainerDependencies(ctx, analyzerContext));
+
+        // SGIOC025: Detect circular module import dependencies at compilation end
+        context.RegisterCompilationEndAction(ctx => AnalyzeCircularImports(ctx, analyzerContext));
     }
 
     /// <summary>
@@ -182,6 +206,16 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                         location,
                         typeSymbol.Name));
                 }
+            }
+        }
+
+        // Collect import edges for SGIOC025 circular import detection
+        foreach (var attr in typeSymbol.GetAttributes())
+        {
+            var importedModuleType = GetImportedModuleType(attr, analyzerContext.AttributeSymbols);
+            if (importedModuleType is not null)
+            {
+                analyzerContext.ImportEdges.Add((typeSymbol, importedModuleType));
             }
         }
     }
@@ -482,14 +516,149 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
+    /// <summary>
+    /// Extracts the imported module type from an [IocImportModule] or [IocImportModule&lt;T&gt;] attribute.
+    /// Returns null if the attribute is not an import module attribute or the type cannot be resolved.
+    /// </summary>
+    private static INamedTypeSymbol? GetImportedModuleType(AttributeData attr, IoCAttributeSymbols attributeSymbols)
+    {
+        var attrClass = attr.AttributeClass;
+        if (attrClass is null)
+            return null;
+
+        // Non-generic form: [IocImportModule(typeof(T))]
+        if (AnalyzerHelpers.IsAttributeMatch(attrClass, attributeSymbols.IocImportModuleAttribute))
+        {
+            return attr.ConstructorArguments.Length > 0
+                ? attr.ConstructorArguments[0].Value as INamedTypeSymbol
+                : null;
+        }
+
+        // Generic form: [IocImportModule<T>] — OriginalDefinition comparison is handled inside IsAttributeMatch
+        if (AnalyzerHelpers.IsAttributeMatch(attrClass, attributeSymbols.IocImportModuleAttribute_T1))
+        {
+            return attrClass.IsGenericType && attrClass.TypeArguments.Length > 0
+                ? attrClass.TypeArguments[0] as INamedTypeSymbol
+                : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// SGIOC025: Detects circular [IocImportModule] dependencies using DFS cycle detection.
+    /// </summary>
+    private static void AnalyzeCircularImports(CompilationAnalysisContext context, ContainerAnalyzerContext analyzerContext)
+    {
+        if (analyzerContext.ImportEdges.IsEmpty)
+            return;
+
+        // Build adjacency list: container → list of imported module types
+        var graph = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
+        foreach (var (container, module) in analyzerContext.ImportEdges)
+        {
+            if (!graph.TryGetValue(container, out var edges))
+            {
+                edges = [];
+                graph[container] = edges;
+            }
+
+            edges.Add(module);
+        }
+
+        var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var inStack = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var reported = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var node in graph.Keys)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            if (!visited.Contains(node))
+            {
+                var path = new List<INamedTypeSymbol>();
+                DetectCycles(context, graph, node, visited, inStack, reported, path, analyzerContext);
+            }
+        }
+    }
+
+    private static void DetectCycles(
+        CompilationAnalysisContext context,
+        Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> graph,
+        INamedTypeSymbol node,
+        HashSet<INamedTypeSymbol> visited,
+        HashSet<INamedTypeSymbol> inStack,
+        HashSet<INamedTypeSymbol> reported,
+        List<INamedTypeSymbol> path,
+        ContainerAnalyzerContext analyzerContext)
+    {
+        visited.Add(node);
+        inStack.Add(node);
+        path.Add(node);
+
+        if (graph.TryGetValue(node, out var neighbors))
+        {
+            foreach (var neighbor in neighbors)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+
+                if (!visited.Contains(neighbor))
+                {
+                    DetectCycles(context, graph, neighbor, visited, inStack, reported, path, analyzerContext);
+                }
+                else if (inStack.Contains(neighbor))
+                {
+                    // Back-edge found — locate where the cycle starts in the current path
+                    var cycleStartIdx = -1;
+                    for (var i = 0; i < path.Count; i++)
+                    {
+                        if (SymbolEqualityComparer.Default.Equals(path[i], neighbor))
+                        {
+                            cycleStartIdx = i;
+                            break;
+                        }
+                    }
+
+                    if (cycleStartIdx < 0)
+                        continue;
+
+                    var cycleStr = string.Join(" → ", path.Skip(cycleStartIdx).Append(neighbor).Select(s => s.ToDisplayString(s_qualifiedFormat)));
+
+                    // Report a diagnostic for every container in the cycle
+                    for (var i = cycleStartIdx; i < path.Count; i++)
+                    {
+                        var containerInCycle = path[i];
+                        if (!reported.Add(containerInCycle))
+                            continue;
+
+                        var location = GetContainerLocation(containerInCycle);
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            CircularModuleImport,
+                            location,
+                            containerInCycle.ToDisplayString(s_qualifiedFormat),
+                            cycleStr));
+                    }
+                }
+            }
+        }
+
+        path.RemoveAt(path.Count - 1);
+        inStack.Remove(node);
+    }
+
+    private static Location? GetContainerLocation(INamedTypeSymbol containerSymbol)
+        => containerSymbol.Locations.FirstOrDefault();
+
     private sealed class ContainerAnalyzerContext(
         IoCAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, bool> registeredServiceTypes,
-        ConcurrentBag<INamedTypeSymbol> containersWithNoFallback)
+        ConcurrentBag<INamedTypeSymbol> containersWithNoFallback,
+        ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)> importEdges)
     {
         public IoCAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
         public ConcurrentDictionary<INamedTypeSymbol, bool> RegisteredServiceTypes { get; } = registeredServiceTypes;
         public ConcurrentBag<INamedTypeSymbol> ContainersWithNoFallback { get; } = containersWithNoFallback;
+        public ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)> ImportEdges { get; } = importEdges;
     }
 }
 

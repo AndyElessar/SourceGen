@@ -19,8 +19,6 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>> _serviceResolvers;
-
     #region Constructors
 
     /// <summary>
@@ -45,8 +43,6 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___();
         _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
         _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__();
-
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private SharedModule(SharedModule parent)
@@ -61,7 +57,6 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = parent._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
         _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = parent._iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
         _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = parent._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #endregion
@@ -305,7 +300,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>> Resolvers => _serviceResolvers;
+    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>> Resolvers => _serviceResolvers;
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>>[] _localResolvers =
     [
@@ -329,6 +324,8 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         new(new ServiceIdentifier(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__!),
         new(new ServiceIdentifier(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__!),
     ];
+
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Shared.SharedModule, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
     #endregion
 
