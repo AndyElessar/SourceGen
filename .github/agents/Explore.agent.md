@@ -1,6 +1,6 @@
 ---
 description: "Fast read-only codebase exploration and Q&A subagent. Prefer over manually chaining multiple search and file-reading operations to avoid cluttering the main conversation. Safe to call in parallel. Specify thoroughness: quick, medium, or thorough."
-model: GPT-5.4 (copilot)
+model: Claude Haiku 4.5 (copilot)
 tools: [vscode/memory, execute/getTerminalOutput, execute/testFailure, read, codegraphcontext/analyze_code_relationships, codegraphcontext/calculate_cyclomatic_complexity, codegraphcontext/execute_cypher_query, codegraphcontext/find_code, codegraphcontext/find_dead_code, codegraphcontext/find_most_complex_functions, codegraphcontext/get_repository_stats, codegraphcontext/load_bundle, codegraphcontext/search_registry_bundles, codegraphcontext/visualize_graph_query, 'microsoft/markitdown/*', 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', search, web, github/get_commit, github/get_file_contents, github/issue_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest]
 agents: []
 user-invocable: false
