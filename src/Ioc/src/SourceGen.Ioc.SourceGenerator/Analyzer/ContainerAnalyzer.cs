@@ -73,6 +73,9 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         description: "Circular module imports create static initializer deadlocks. Remove the circular dependency.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    private static readonly SymbolDisplayFormat s_qualifiedFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         UnableToResolveService,
@@ -619,7 +622,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                     if (cycleStartIdx < 0)
                         continue;
 
-                    var cycleStr = string.Join(" → ", path.Skip(cycleStartIdx).Append(neighbor).Select(s => s.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                    var cycleStr = string.Join(" → ", path.Skip(cycleStartIdx).Append(neighbor).Select(s => s.ToDisplayString(s_qualifiedFormat)));
 
                     // Report a diagnostic for every container in the cycle
                     for (var i = cycleStartIdx; i < path.Count; i++)
@@ -632,7 +635,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                         context.ReportDiagnostic(Diagnostic.Create(
                             CircularModuleImport,
                             location,
-                            containerInCycle.Name,
+                            containerInCycle.ToDisplayString(s_qualifiedFormat),
                             cycleStr));
                     }
                 }

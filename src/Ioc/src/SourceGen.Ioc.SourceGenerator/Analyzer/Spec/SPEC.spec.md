@@ -400,4 +400,6 @@ Report when a container has a circular module import dependency (direct or trans
 
 Circular module imports create static initializer deadlocks. When `_serviceResolvers` is a `private static readonly` field, the CLR's static type initializer runs on first access. If Container A's static initializer accesses `ModuleB.Resolvers` and Module B's static initializer accesses `ModuleA.Resolvers`, a deadlock occurs.
 
-**Message format:** `Container '{ContainerType}' has a circular module import dependency: {CyclePath}`
+**Message format:** `Container 'TestNamespace.ModuleA' has a circular module import dependency: TestNamespace.ModuleA → TestNamespace.ModuleB → TestNamespace.ModuleA`
+
+Both `{ContainerType}` and types in `{CyclePath}` use `NameAndContainingTypesAndNamespaces` display format (without `global::` prefix). For types in the global namespace, this format may produce simple names.

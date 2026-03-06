@@ -2285,6 +2285,7 @@ partial class IocSourceGenerator
                 // Combine with imported modules - wrap module resolvers to pass the correct module instance
                 // Use static access (module.Name is the fully qualified type name) for static abstract Resolvers
                 writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<{container.ContainerTypeName}, object>> _serviceResolvers =");
+                writer.Indentation++;
 
                 var isFirst = true;
                 foreach(var module in container.ImportedModules)
@@ -2294,17 +2295,18 @@ partial class IocSourceGenerator
 
                     if(isFirst)
                     {
-                        writer.WriteLine($"    {source}");
+                        writer.WriteLine(source);
                         isFirst = false;
                     }
                     else
                     {
-                        writer.WriteLine($"    .Concat({source})");
+                        writer.WriteLine($".Concat({source})");
                     }
                 }
 
-                writer.WriteLine("    .Concat(_localResolvers)");
-                writer.WriteLine("    .ToFrozenDictionary();");
+                writer.WriteLine(".Concat(_localResolvers)");
+                writer.WriteLine(".ToFrozenDictionary();");
+                writer.Indentation--;
             }
             else
             {

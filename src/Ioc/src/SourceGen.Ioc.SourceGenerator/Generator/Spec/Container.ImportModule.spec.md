@@ -29,13 +29,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 {
     private readonly global::SharedModule1 _sharedModule1;
     private readonly global::SharedModule2 _sharedModule2;
-    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = 
-        global::SharedModule1.Resolvers.Select(static kvp => 
-                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
-            .Concat(global::SharedModule2.Resolvers.Select(static kvp => 
-                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
-            .Concat(_localResolvers)
-            .ToFrozenDictionary();
 
     public AppContainer() : this((IServiceProvider?)null) { }
 
@@ -65,6 +58,15 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         new(new ServiceIdentifier(typeof(global::ILocalService2), KeyedService.AnyKey), static c => c.GetLocalService2()),
         // ... more local services
     ];
+
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = 
+        global::SharedModule1.Resolvers.Select(static kvp => 
+                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
+            .Concat(global::SharedModule2.Resolvers.Select(static kvp => 
+                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
+            .Concat(_localResolvers)
+            .ToFrozenDictionary();
+    // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. This initializer references imported module Resolvers and _localResolvers; if reversed, _localResolvers would be null when _serviceResolvers initializes.
 
     #region IIocContainer
 

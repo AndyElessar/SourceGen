@@ -1,7 +1,7 @@
 ---
 description: "Use when: implementing features, fixing bugs, or making code changes that require planning, approval, and review. Analyzes requirements, writes plan.md, and delegates to subagents."
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, vscode/askQuestions, execute/testFailure, execute/getTerminalOutput, read, agent, search, web, github/get_copilot_job_status, github/issue_read, github/pull_request_read, 'codegraphcontext/*', 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/activePullRequest, todo]
+tools: [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/testFailure, read, agent, 'codegraphcontext/*', 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', search, web, github/add_reply_to_pull_request_comment, github/get_commit, github/get_copilot_job_status, github/issue_read, github/pull_request_read, github/search_issues, github/search_pull_requests, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, todo]
 agents: ["Explore", "Implement", "Review", "Spec", "Doc", "DocReview"]
 user-invocable: true
 disable-model-invocation: true

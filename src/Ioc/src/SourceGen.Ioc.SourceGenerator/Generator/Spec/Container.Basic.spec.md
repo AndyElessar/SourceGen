@@ -86,8 +86,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
-
     #region Constructors
 
     /// <summary>
@@ -264,6 +262,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         new(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
         new(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
     ];
+
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
+    // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. If reversed, _localResolvers would be null when _serviceResolvers initializes.
 
     #endregion
 

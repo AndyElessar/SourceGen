@@ -60,9 +60,9 @@ public class SGIOC025Tests
         // All three containers in the transitive cycle should be reported
         await Assert.That(sgioc025).Count().IsGreaterThanOrEqualTo(3);
         var firstMessage = sgioc025[0].GetMessage();
-        await Assert.That(firstMessage).Contains("ModuleA");
-        await Assert.That(firstMessage).Contains("ModuleB");
-        await Assert.That(firstMessage).Contains("ModuleC");
+        await Assert.That(firstMessage).Contains("TestNamespace.ModuleA");
+        await Assert.That(firstMessage).Contains("TestNamespace.ModuleB");
+        await Assert.That(firstMessage).Contains("TestNamespace.ModuleC");
     }
 
     [Test]
