@@ -23,7 +23,11 @@ Refer to the relevant domain `AGENTS.md` (e.g., `src/Ioc/AGENTS.md`) for domain-
 
 ## Approach
 
-1. Follow the child agent protocol in plan memory policy: load plan, validate, block if missing.
+1. **Load plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:
+   Call `memory({ command: "view", path: "/memories/session/plan.md" })` as your very first tool call.
+   - If plan is present and non-empty → proceed to step 2.
+   - If plan is missing or empty → STOP and return `BLOCKED_NEEDS_PARENT_PLAN`.
+   - If memory tool fails → STOP and return `BLOCKED_NO_PLAN_MEMORY`.
 2. Create the full todo list from plan steps via #tool:todo
 3. For each step: mark **in-progress** → implement → mark **completed** (do not batch)
 4. If anything is unclear or blocked, return `BLOCKED_NEEDS_PARENT_DECISION` with the exact clarification needed

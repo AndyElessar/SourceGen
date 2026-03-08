@@ -2,6 +2,15 @@
 
 All queries use `execute_cypher_query`. Queries are read-only. Always add `LIMIT` to avoid unbounded results.
 
+## Contents
+
+- [Discovery](#discovery)
+- [Imports](#imports)
+- [Call Graph](#call-graph)
+- [Classes and Inheritance](#classes-and-inheritance)
+- [Code Quality and Refactoring](#code-quality-and-refactoring)
+- [Security](#security)
+
 ---
 
 ## Discovery

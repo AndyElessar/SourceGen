@@ -2,6 +2,14 @@
 
 Concrete tool invocation examples organized by category. Each recipe shows the tool name, JSON arguments, and optional natural-language trigger.
 
+## Contents
+
+- [Repository Setup and Monitoring](#repository-setup-and-monitoring)
+- [Code Search](#code-search)
+- [Relationship Analysis](#relationship-analysis)
+- [Quality and Maintainability](#quality-and-maintainability)
+- [Visualization](#visualization)
+
 ---
 
 ## Repository Setup and Monitoring

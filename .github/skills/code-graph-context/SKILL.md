@@ -1,6 +1,6 @@
 ---
 name: code-graph-context
-description: "Use when: exploring a codebase with CodeGraphContext MCP (sometimes informally called CodeContextGraph), indexing repositories or packages, loading bundles, watching directories, finding symbols, tracing callers/callees/importers, analyzing class hierarchies or overrides, finding dead code, checking complexity, repository stats, or running Cypher queries over the code graph."
+description: "Use when: exploring a codebase with CodeGraphContext MCP (sometimes informally called CodeContextGraph), indexing repositories or packages, finding symbols, tracing callers/callees/importers, analyzing class hierarchies or overrides, finding dead code, checking complexity, or running Cypher queries over the code graph. Also use when the user asks structural questions like 'who uses this class', 'where is this defined across files', 'show me the dependency graph', 'trace the call chain from A to B', or any cross-file relationship question that plain text search cannot answer well — even if the user does not explicitly mention CodeGraphContext."
 argument-hint: "question=<where is X / who calls Y / load bundle Z> [path=<repo-or-file>]"
 user-invocable: true
 ---
@@ -13,14 +13,13 @@ This guide is based on the official cookbook and MCP tools reference. It helps y
 
 ## Environment Check
 
-The official docs use logical tool names such as `find_code`, `add_code_to_graph`, and `execute_cypher_query`.
+The official docs use logical tool names such as `find_code`, `add_code_to_graph`, and `execute_cypher_query`. However, different integrations may expose the same capabilities under server-specific prefixes — for example, `mcp_codegraphcont_find_code` instead of `find_code`. Confirming the actual tool names up front prevents failed calls later.
 
-Before following the full workflow, first check what the current environment actually exposes:
+Before following the full workflow:
 
-- List available MCP tools to confirm which tool names and prefixes exist.
-- Some integrations expose the same capabilities under server-specific prefixes.
-- Some integrations expose only a subset of CodeGraphContext capabilities.
-- If indexing or watching tools are unavailable, work with the existing indexed graph or loaded bundles and clearly report that graph preparation cannot be performed from the current environment.
+1. Use `tool_search` (or list available MCP tools) to discover which CodeGraphContext tool names and prefixes exist in the current environment.
+2. Map the logical names in this guide to the actual tool names. Common prefix pattern: `mcp_codegraphcont_<logical_name>` (e.g., `mcp_codegraphcont_add_code_to_graph`).
+3. If indexing or watching tools are unavailable, work with the existing indexed graph or loaded bundles and clearly report that graph preparation cannot be performed from the current environment.
 
 ## When to Use
 
@@ -47,37 +46,47 @@ Do not reach for this skill first when the user only needs:
 - a simple text search or grep-style match — use `grep_search`
 - one small code snippet that does not require graph relationships — use `semantic_search`
 
-Prefer this skill when the question is semantic, structural, cross-file, graph-shaped, or needs repository indexing.
+**Rule of thumb:** if the question involves **relationships between symbols** (who calls, who imports, what inherits) or requires **transitive traversal** (all indirect callers/callees), use this skill. If the user just wants to find where `Foo` appears in text, grep is enough.
 
 ## Supported Languages
 
-`add_package_to_graph` supports: python, javascript, typescript, java, c, go, ruby, php, cpp. The indexing and Cypher workflow generalizes to any repository represented in the graph.
+`add_code_to_graph` works with **any language** — it indexes source files directly, so C#, Rust, Swift, and other languages not listed below are fully supported for local repositories.
+
+`add_package_to_graph` (external package registry lookup) is limited to: python, javascript, typescript, java, c, go, ruby, php, cpp. For languages outside this list (e.g., C# NuGet packages), index the local source instead with `add_code_to_graph`.
 
 ## Core Workflow
 
-1. **Check available graph capabilities in the current environment.**
+1. **Check available graph capabilities in the current environment** (see Environment Check above).
    - If indexing and monitoring tools are available, follow the full graph-preparation flow below.
    - If only analysis or Cypher tools are available, use the existing graph data and explicitly note any limitations.
-2. **Make sure the graph has the data you need.**
+2. **Make sure the graph has the data you need.** Queries against an empty or incomplete graph return misleading results, so always prepare the graph before querying.
    - Use `add_code_to_graph` for a local repository or folder.
    - Use `add_package_to_graph` for an external dependency.
    - Use `load_bundle` when a pre-indexed `.cgc` bundle is available.
-   - Use `watch_directory` when the codebase is actively changing.
-3. **Wait until indexing is usable.**
+   - Use `watch_directory` when the codebase is actively changing and you want the graph to stay current without re-indexing.
+3. **Wait until indexing is usable.** Indexing runs in the background; querying before it completes can produce empty or partial results.
    - Check `check_job_status` for a specific job.
    - Use `list_jobs` for all background jobs.
    - Use `list_indexed_repositories` or `get_repository_stats` to confirm coverage.
-4. **Choose the lightest tool that can answer the question** (see Tool Selection Guide).
-5. **Add context when names are ambiguous.**
+4. **Choose the lightest tool that can answer the question** (see Tool Selection Guide). Simpler tools return faster and are less likely to produce noise than raw Cypher.
+5. **Add context when names are ambiguous.** Many codebases define the same symbol name in multiple files; without context the tool may return the wrong definition.
    - If multiple files define the same symbol, pass a file path in the `context` parameter.
    - Narrow Cypher queries by file name, path suffix, or node type.
 6. **Answer with evidence.**
    - Include the relevant file path, line number, symbol name, and why it matters.
-7. **If the result is empty or noisy, iterate.**
+7. **If the result is empty or noisy, iterate.** Common causes: indexing not yet finished, ambiguous symbol name, or overly broad query.
    - Verify indexing completed successfully.
    - Switch from exact to fuzzy search (`fuzzy_search: true`, `edit_distance`).
    - Add a file path context.
    - Fall back to a Cypher query for sharper filters.
+
+### Quick Example
+
+User: "Who calls the `ResolveService` method?"
+
+1. Confirm graph is indexed → `list_indexed_repositories`
+2. Trace callers → `analyze_code_relationships` with `query_type: "find_callers"`, `target: "ResolveService"`
+3. Return each caller with its file path and line number.
 
 ## Tool Selection Guide
 
@@ -111,6 +120,7 @@ Prefer this skill when the question is semantic, structural, cross-file, graph-s
 | `call_chain` | Path between two functions (`"source->target"`) |
 | `find_functions_by_decorator` | Functions using a specific decorator |
 | `find_functions_by_argument` | Functions accepting a named argument |
+| `module_deps` | Module-level dependencies |
 
 ## Decision Rules
 
@@ -146,9 +156,9 @@ Before finishing, make sure you can say yes to these:
 
 ## Practical Notes
 
-- The official cookbook uses logical tool names like `find_code` and `execute_cypher_query`. Some integrations expose the same capabilities under server-specific prefixes. Use the tool names that exist in the current environment.
 - If the current environment exposes only part of the CodeGraphContext toolset, prefer the available graph tools and be explicit about what cannot be done without indexing, monitoring, or bundle-management support.
 - Prefer built-in graph tools for common tasks, and save raw Cypher for questions that need custom aggregation or graph traversal.
+- Cypher queries must be **read-only**. Always add `LIMIT` to avoid unbounded result sets.
 
 ## Resources
 
