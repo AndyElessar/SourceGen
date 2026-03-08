@@ -83,7 +83,7 @@ Handle `BLOCKED_*` codes per the [plan memory policy](../instructions/plan-memor
   - Wait for explicit user approval before implementation
   - Save and verify plan in `/memories/session/plan.md` via #tool:vscode/memory before delegating post-Explore subagents
   - Delegate to `Review` after every `Implement` round
-  - Follow conventions from `.github/copilot-instructions.md` and instruction files
+  - Follow conventions from `AGENTS.md` and instruction files
   - Use `#tool:todo` to track progress across phases
   - Re-save plan to memory whenever scope changes
 
