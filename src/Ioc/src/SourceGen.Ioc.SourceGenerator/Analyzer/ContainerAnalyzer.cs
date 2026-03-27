@@ -73,6 +73,32 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         description: "Circular module imports create static initializer deadlocks. Remove the circular dependency.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC027: Partial accessor must return Task&lt;T&gt; for an async-init service.
+    /// </summary>
+    public static readonly DiagnosticDescriptor PartialAccessorMustReturnTask = new(
+        id: "SGIOC027",
+        title: "Partial accessor must return Task<T> for async-init service",
+        messageFormat: "Partial accessor '{0}' returns '{1}' but the implementation has async inject methods. Use 'Task<{1}>'.",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When a registered implementation has async inject methods (methods returning Task decorated with [IocInject]), partial accessors targeting that service must return Task<TService> so the generator can emit an awaitable resolver.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
+    /// SGIOC029: Unsupported async partial accessor type.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedAsyncPartialAccessorType = new(
+        id: "SGIOC029",
+        title: "Unsupported async partial accessor type",
+        messageFormat: "Partial accessor '{0}' returns '{1}' which is not a supported async type. Only 'Task<T>' is supported.",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When an async-init service is targeted by a partial accessor, only Task<TService> is a valid return type. ValueTask<T> and other async variants are not supported.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     private static readonly SymbolDisplayFormat s_qualifiedFormat = new(
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
 
@@ -82,7 +108,9 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         ContainerMustBePartialAndNotStatic,
         UseSwitchStatementIgnoredWithImportedModules,
         UnableToResolvePartialAccessor,
-        CircularModuleImport
+        CircularModuleImport,
+        PartialAccessorMustReturnTask,
+        UnsupportedAsyncPartialAccessorType
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -399,6 +427,15 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                     memberName,
                     containerSymbol.Name));
             }
+
+            // TODO (SGIOC027 / SGIOC029): After generator-phase data is available for identifying
+            // which registered implementations have async inject methods (InjectionMemberType.AsyncMethod),
+            // add validation here to check whether the accessor's return type matches Task<TService>.
+            // SGIOC027: fires when accessor returns plain TService for an async-init implementation.
+            // SGIOC029: fires when accessor returns a non-Task<T> async type (ValueTask, ValueTask<T>, etc.)
+            // for an async-init implementation.
+            // This validation requires knowing the implementation type behind the service type, which
+            // can be resolved by scanning IoC registration attributes on the collected registered types.
         }
     }
 

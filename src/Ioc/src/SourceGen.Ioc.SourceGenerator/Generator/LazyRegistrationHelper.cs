@@ -178,6 +178,10 @@ partial class IocSourceGenerator
                 if(reg.IsOpenGeneric)
                     continue;
 
+                // Async-init services cannot be resolved synchronously — exclude from Lazy<T> entries
+                if(HasAsyncInitMembers(reg))
+                    continue;
+
                 var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";
                 if(!addedKeys.Add(entryKey))
                     continue;

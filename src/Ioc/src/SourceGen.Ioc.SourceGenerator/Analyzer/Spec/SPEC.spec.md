@@ -86,7 +86,7 @@ Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
 - member without public, internal, or protected internal accessibility
 - property without setter or with private setter
 - readonly field
-- method that does not return void
+- method with an unsupported return type
 - method that is generic (has type parameters)
 - method that is not an ordinary method (e.g., constructor, operator)
 
@@ -98,9 +98,21 @@ Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
   - Member is not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated code runs in a public static context).
   - Property has no setter or setter is private.
   - Field is readonly.
-  - Method does not return void.
+  - Method returns a type other than `void` or supported non-generic `Task`. `async void` is handled separately by `SGIOC031`.
   - Method is generic (has type parameters).
   - Method is not an ordinary method (i.e., constructors, operators, and other special methods are rejected).
+
+#### Method Return-Type Truth Table
+
+|Method shape|`AsyncMethodInject` enabled|Diagnostic result|
+|:-----------|:--------------------------|:----------------|
+|`void Initialize(...)`|No/Yes|No return-type diagnostic.|
+|`void Initialize(...)` declared as `async void`|No/Yes|`SGIOC031` MUST report. `SGIOC007` SHOULD NOT duplicate the return-type diagnostic.|
+|`Task InitializeAsync(...)`|Yes|No `SGIOC007` return-type diagnostic.|
+|`Task InitializeAsync(...)`|No|`SGIOC022` MUST report the disabled feature. `SGIOC007` MUST NOT report a duplicate return-type diagnostic.|
+|`Task<T> InitializeAsync(...)`|No/Yes|`SGIOC007` MUST report.|
+|`ValueTask InitializeAsync(...)` or `ValueTask<T> InitializeAsync(...)`|No/Yes|`SGIOC007` MUST report.|
+|Any other non-void return type|No/Yes|`SGIOC007` MUST report.|
 
 ---
 
@@ -338,8 +350,18 @@ Report when a member has `[IocInject]`/`[Inject]` but its corresponding feature 
 - Checks members marked with `[IocInject]`/`[Inject]`:
   - `IPropertySymbol` requires `PropertyInject`
   - `IFieldSymbol` requires `FieldInject`
-  - `IMethodSymbol` requires `MethodInject`
+  - `IMethodSymbol` returning `void` requires `MethodInject`
+  - `IMethodSymbol` returning non-generic `Task` requires `AsyncMethodInject`
 - Reports when the required feature flag is not enabled.
+
+#### Feature Gate Mapping
+
+|Member shape|Required feature|Notes|
+|:-----------|:---------------|:----|
+|Property|`PropertyInject`|Unchanged.|
+|Field|`FieldInject`|Unchanged.|
+|Method returning `void`|`MethodInject`|Covers synchronous method injection.|
+|Method returning non-generic `Task`|`AsyncMethodInject`|`MethodInject` remains a project-level prerequisite when `AsyncMethodInject` is enabled; invalid combinations are reported by `SGIOC026`.|
 
 **Message format:** `'{MemberName}' has [IocInject] but {FeatureName} feature is not enabled. Add '{FeatureName}' to <SourceGenIocFeatures> in your project file.`
 
@@ -377,7 +399,8 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
   - not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated registration code runs in a public static context)
   - property without setter or with private setter
   - readonly field
-  - method that doesn't return void or is generic
+  - method that doesn't return `void` (or non-generic `Task` when `AsyncMethodInject` is enabled)
+  - generic method
   - method that is not an ordinary method (i.e., constructors, operators, and other special methods are rejected)
 - This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.
 
@@ -403,3 +426,77 @@ Circular module imports create static initializer deadlocks. When `_serviceResol
 **Message format:** `Container 'TestNamespace.ModuleA' has a circular module import dependency: TestNamespace.ModuleA → TestNamespace.ModuleB → TestNamespace.ModuleA`
 
 Both `{ContainerType}` and types in `{CyclePath}` use `NameAndContainingTypesAndNamespaces` display format (without `global::` prefix). For types in the global namespace, this format may produce simple names.
+
+---
+
+### SGIOC026 - Error - Usage - Invalid feature combination
+
+Report when `SourceGenIocFeatures` enables `AsyncMethodInject` without also enabling `MethodInject`.
+
+**Analysis:**
+
+- Reads and parses `SourceGenIocFeatures` during `CompilationStart`.
+- If `AsyncMethodInject` is enabled and `MethodInject` is disabled, the analyzer MUST report `SGIOC026`.
+- The diagnostic SHOULD be reported once per compilation because the problem is project-wide rather than member-specific.
+
+**Message format:** `'AsyncMethodInject' feature requires 'MethodInject' to be enabled.`
+
+---
+
+### SGIOC027 - Error - Design - Partial accessor must return `Task<T>` for async-init service
+
+Report when a partial accessor returns a synchronous service type even though the matched implementation has async inject methods.
+
+**Analysis:**
+
+- Applies to partial methods and partial properties declared in `[IocContainer]` types.
+- Matches the accessor's service type and key against container registrations.
+- If the matched implementation contains async inject methods and the accessor returns `TService` instead of `Task<TService>`, the analyzer MUST report `SGIOC027`.
+- `SGIOC029` owns unsupported async-shaped accessor return types; `SGIOC027` is only for the synchronous `TService` case.
+
+**Message format:** `Partial accessor '{MemberName}' returns '{ServiceType}' but the implementation has async inject methods. Use 'Task<{ServiceType}>'.`
+
+---
+
+### SGIOC029 - Error - Design - Unsupported async partial accessor type
+
+Report when a partial accessor targets an async-init service but returns an async type other than `Task<T>`.
+
+**Analysis:**
+
+- Applies to partial methods and partial properties declared in `[IocContainer]` types.
+- Checks accessors that target registrations whose implementation contains async inject methods.
+- The only supported async accessor return shape is `Task<TService>`.
+- The analyzer MUST report for unsupported return types such as non-generic `Task`, `ValueTask`, `ValueTask<T>`, nested wrappers, and collection shapes such as `IEnumerable<Task<T>>`.
+
+**Message format:** `Partial accessor '{MemberName}' returns '{ReturnType}' which is not a supported async type. Only 'Task<T>' is supported.`
+
+---
+
+### SGIOC030 - Error - Usage - Synchronous dependency requested for async-init service
+
+Report when a consumer requests `TService` but the matched registration can only be resolved asynchronously.
+
+**Analysis:**
+
+- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods.
+- Matches the requested service type and key against available registrations.
+- If the matched service has async inject methods and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`.
+- Consumers SHOULD request `Task<TService>` instead of `TService` in this scenario.
+- Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
+
+**Message format:** `'{MemberName}' requires '{ServiceType}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
+
+---
+
+### SGIOC031 - Warning - Usage - `async void` injection method cannot be awaited
+
+Report when an `[IocInject]`/`[Inject]` method is declared as `async void`.
+
+**Analysis:**
+
+- Checks methods marked with `[IocInject]` or `[Inject]`.
+- If a method is declared `async` and returns `void`, the analyzer MUST report `SGIOC031` because the generator cannot await it.
+- `SGIOC031` SHOULD be the user-facing diagnostic for this case; `SGIOC007` SHOULD NOT add a duplicate return-type diagnostic for the same method.
+
+**Message format:** `[IocInject] method '{MethodName}' is 'async void' which cannot be awaited. Change return type to 'Task'.`

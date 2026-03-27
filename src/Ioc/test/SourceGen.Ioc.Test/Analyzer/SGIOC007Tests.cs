@@ -392,8 +392,10 @@ public class SGIOC007Tests
     }
 
     [Test]
-    public async Task SGIOC007_InjectAttribute_OnAsyncMethod_ReportsDiagnostic()
+    public async Task SGIOC007_InjectAttribute_OnAsyncMethod_ReportsSGIOC022NotSGIOC007()
     {
+        // Per spec: Task-returning methods require AsyncMethodInject feature.
+        // When that feature is OFF (default), SGIOC022 MUST fire and SGIOC007 MUST NOT.
         const string source = """
             using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
@@ -413,9 +415,14 @@ public class SGIOC007Tests
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+        var sgioc022 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC022").ToList();
 
-        await Assert.That(sgioc007).Count().IsEqualTo(1);
-        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void");
+        // SGIOC007 must NOT fire (no duplicate return-type error)
+        await Assert.That(sgioc007).Count().IsEqualTo(0);
+
+        // SGIOC022 MUST fire with AsyncMethodInject feature name
+        await Assert.That(sgioc022).Count().IsEqualTo(1);
+        await Assert.That(sgioc022[0].GetMessage()).Contains("InitializeAsync").And.Contains("AsyncMethodInject");
     }
 
     [Test]
@@ -778,5 +785,106 @@ public class SGIOC007Tests
         var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007");
 
         await Assert.That(sgioc007).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnTaskMethod_WithAsyncMethodInjectEnabled_NoDiagnostic()
+    {
+        // When AsyncMethodInject is ON, non-generic Task return type is allowed — SGIOC007 must not fire.
+        const string source = """
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                public Task InitializeAsync(IService service) => Task.CompletedTask;
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007");
+
+        await Assert.That(sgioc007).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnGenericTaskMethod_WithAsyncMethodInjectEnabled_ReportsDiagnostic()
+    {
+        // Task<T> (generic Task) is NOT allowed even when AsyncMethodInject is ON — only non-generic Task.
+        const string source = """
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                public Task<int> InitializeAsync(IService service) => Task.FromResult(0);
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void");
+    }
+
+    [Test]
+    public async Task SGIOC007_InjectAttribute_OnValueTaskMethod_WithAsyncMethodInjectEnabled_ReportsDiagnostic()
+    {
+        // ValueTask is NOT allowed even when AsyncMethodInject is ON — only non-generic Task is accepted.
+        const string source = """
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class TestService : IService
+            {
+                [IocInject]
+                public ValueTask InitializeAsync(IService service) => ValueTask.CompletedTask;
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void");
     }
 }

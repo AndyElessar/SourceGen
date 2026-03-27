@@ -459,6 +459,7 @@ internal static class TransformExtensions
                 or "global::System.Collections.Generic.Dictionary" or "System.Collections.Generic.Dictionary" or "Dictionary"
                 => WrapperKind.Dictionary,
             "global::System.Collections.Generic.KeyValuePair" or "System.Collections.Generic.KeyValuePair" or "KeyValuePair" => WrapperKind.KeyValuePair,
+            "global::System.Threading.Tasks.Task" or "System.Threading.Tasks.Task" or "Task" => WrapperKind.Task,
             _ => WrapperKind.None
         };
 
@@ -474,7 +475,9 @@ internal static class TransformExtensions
         /// - Non-static members only
         /// - Properties with a setter
         /// - Non-readonly fields
-        /// - Ordinary methods that return void and are not generic
+        /// - Ordinary methods that return <see langword="void"/> (sync) or non-generic
+        ///   <see cref="System.Threading.Tasks.Task"/> (async, when <c>AsyncMethodInject</c>
+        ///   feature is enabled), and are not generic
         /// </remarks>
         /// <returns>
         /// An enumerable of tuples containing the member symbol and its inject attribute.
@@ -505,7 +508,7 @@ internal static class TransformExtensions
                     IPropertySymbol property => property.SetMethod is not null,
                     IFieldSymbol field => !field.IsReadOnly,
                     IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
-                        && method.ReturnsVoid
+                        && (method.ReturnsVoid || IsNonGenericTaskReturnType(method))
                         && !method.IsGenericMethod,
                     _ => false
                 };
@@ -516,6 +519,14 @@ internal static class TransformExtensions
                 }
             }
         }
+
+        /// <summary>
+        /// Returns <see langword="true"/> when the method returns the non-generic
+        /// <see cref="System.Threading.Tasks.Task"/> type (arity 0).
+        /// </summary>
+        private static bool IsNonGenericTaskReturnType(IMethodSymbol method)
+            => method.ReturnType is INamedTypeSymbol { Arity: 0, Name: "Task" } named
+                && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
     }
 
     extension(IParameterSymbol param)

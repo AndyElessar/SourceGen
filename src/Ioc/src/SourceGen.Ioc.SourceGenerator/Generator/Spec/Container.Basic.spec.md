@@ -327,6 +327,17 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(service is IDisposable disposable) disposable.Dispose();
     }
 
+    // These overloads handle async-init services that store their instance as Task<T>?.
+    private static async ValueTask DisposeServiceAsync<T>(Task<T>? task)
+    {
+        if(task is not null) await DisposeServiceAsync(await task);
+    }
+
+    private static void DisposeService<T>(Task<T>? task)
+    {
+        if(task is not null) DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult());
+    }
+
     private void ThrowIfDisposed()
     {
         if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);

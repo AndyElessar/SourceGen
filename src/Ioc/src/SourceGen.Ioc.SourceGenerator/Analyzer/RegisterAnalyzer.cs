@@ -251,6 +251,43 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Members specified in InjectMembers must be injectable: instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods, all of which must be public, internal, or protected internal.");
 
+    /// <summary>
+    /// SGIOC026: AsyncMethodInject feature requires MethodInject to be enabled.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AsyncMethodInjectRequiresMethodInject = new(
+        id: "SGIOC026",
+        title: "Invalid feature combination",
+        messageFormat: "'AsyncMethodInject' feature requires 'MethodInject' to be enabled. Add 'MethodInject' to <SourceGenIocFeatures>.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "AsyncMethodInject delegates async method injection to the source generator, which requires MethodInject to already be enabled. Add MethodInject alongside AsyncMethodInject in SourceGenIocFeatures.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
+    /// SGIOC030: Synchronous dependency requested for async-init-only service.
+    /// </summary>
+    public static readonly DiagnosticDescriptor SyncDependencyOnAsyncInitService = new(
+        id: "SGIOC030",
+        title: "Synchronous dependency requested for async-init service",
+        messageFormat: "'{0}' requires '{1}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{1}>'.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When a service is registered with async inject methods, consumers must request Task<T> instead of T because no synchronous resolution path exists.");
+
+    /// <summary>
+    /// SGIOC031: [IocInject] method is declared as async void, which cannot be awaited.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AsyncVoidInjectMethod = new(
+        id: "SGIOC031",
+        title: "async void injection method cannot be awaited",
+        messageFormat: "[IocInject] method '{0}' is 'async void' which cannot be awaited. Change return type to 'Task' for async initialization, or remove the 'async' modifier for synchronous injection.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Methods marked with [IocInject] that are declared as async void cannot be awaited by the source generator. Change the return type to Task to enable async injection, or remove the async modifier if the method is synchronous.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -272,7 +309,10 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedGenericFactoryPlaceholders,
         InjectFeatureDisabled,
         InjectMembersInvalidFormat,
-        InjectMembersNonInjectableMember
+        InjectMembersNonInjectableMember,
+        AsyncMethodInjectRequiresMethodInject,
+        SyncDependencyOnAsyncInitService,
+        AsyncVoidInjectMethod
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -287,6 +327,13 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     private static void OnCompilationStart(CompilationStartAnalysisContext context)
     {
         var features = ParseIocFeatures(context.Options);
+
+        // SGIOC026: AsyncMethodInject requires MethodInject — report once per compilation
+        if ((features & IocFeatures.AsyncMethodInject) != 0 && (features & IocFeatures.MethodInject) == 0)
+        {
+            context.RegisterCompilationEndAction(static ctx =>
+                ctx.ReportDiagnostic(Diagnostic.Create(AsyncMethodInjectRequiresMethodInject, Location.None)));
+        }
 
         // Get attribute type symbols for faster lookup (including generic variants)
         var attributeSymbols = new IoCAttributeSymbols(context.Compilation);
@@ -388,6 +435,14 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 pathStack,
                 context.CancellationToken);
         }
+
+        // TODO (SGIOC030): After generator-phase data is available for identifying which registered
+        // services have async inject methods (InjectionMemberType.AsyncMethod), add validation here
+        // to detect when a constructor parameter, injected property, injected field, or inject-method
+        // parameter requests plain T and the matched registration is async-init-only.
+        // SGIOC030 should report when no synchronous registration exists for the same service type/key.
+        // Consumers should use Task<T> in those scenarios. This validation requires the same
+        // async-init detection logic as SGIOC027/029 in ContainerAnalyzer.
     }
 
     private static IocFeatures ParseIocFeatures(AnalyzerOptions options)

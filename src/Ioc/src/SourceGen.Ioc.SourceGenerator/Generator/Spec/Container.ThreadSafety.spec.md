@@ -16,6 +16,100 @@ The `ThreadSafeStrategy` enum controls how the container ensures thread-safe ini
 |`SpinLock`|Uses `SpinLock` with double-checked locking pattern.|High-performance scenarios with very short initialization times. Not recommended for I/O-bound initialization.|
 |`CompareExchange`|Uses `Interlocked.CompareExchange` (CAS) for lock-free thread safety.|Best performance for lightweight constructors. No synchronization overhead. May create duplicate instances under contention; duplicates are disposed via `DisposeService`.|
 
+## Async-init Strategy Override
+
+Registrations that contain one or more `InjectionMemberType.AsyncMethod` members generate async-init resolver paths and cached fields of type `Task<T>`. Those resolver paths MUST use an async-compatible synchronization strategy.
+
+### Effective Strategy Rules for Async-init Services
+
+|Container `ThreadSafeStrategy`|Effective strategy for async-init field declarations and resolver methods|Required behavior|
+|:---|:---|:---|
+|`None`|`None`|The generator MUST preserve `None` as-is. This remains an explicit opt-in for single-threaded or externally synchronized usage.|
+|`SemaphoreSlim`|`SemaphoreSlim`|The generator MUST use `SemaphoreSlim` for async-init services.|
+|`Lock`|`SemaphoreSlim`|The generator MUST automatically override the configured strategy to `SemaphoreSlim` for async-init field declarations and resolver methods because `lock` cannot span `await`.|
+|`SpinLock`|`SemaphoreSlim`|The generator MUST automatically override the configured strategy to `SemaphoreSlim` for async-init field declarations and resolver methods because `SpinLock` cannot span `await`.|
+|`CompareExchange`|`SemaphoreSlim`|The generator MUST automatically override the configured strategy to `SemaphoreSlim` for async-init field declarations and resolver methods because the CAS path is not compatible with awaited first-initialization.|
+
+> **Scope**: This override applies only to async-init services. Non-async resolver paths MUST continue to use the container's configured `ThreadSafeStrategy`.
+
+```mermaid
+flowchart TD
+    A[Container ThreadSafeStrategy] --> B{Registration has\nInjectionMemberType.AsyncMethod?}
+    B -- No --> C[Use configured strategy as-is]
+    B -- Yes --> D{Configured strategy == None?}
+    D -- Yes --> E[Keep None]
+    D -- No --> F[Override to SemaphoreSlim]
+```
+
+### Example: `Lock` Container Strategy with Async-init Service
+
+```csharp
+#region Define:
+using System.Threading.Tasks;
+
+public interface IAsyncInitializer
+{
+    Task InitializeAsync(object instance);
+}
+
+[IocRegister(ServiceLifetime.Singleton)]
+public sealed class MyService
+{
+    [IocInject]
+    public async Task InitializeAsync(IAsyncInitializer initializer)
+    {
+        await initializer.InitializeAsync(this);
+    }
+}
+
+[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock)]
+public partial class AppContainer;
+#endregion
+
+#region Generate:
+partial class AppContainer
+{
+    private global::System.Threading.Tasks.Task<global::MyService>? _myService;
+    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = new(1, 1);
+
+    private async global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync()
+    {
+        if(_myService is not null)
+            return await _myService;
+
+        await _myServiceSemaphore.WaitAsync();
+        try
+        {
+            if(_myService is null)
+            {
+                _myService = CreateMyServiceAsync();
+            }
+        }
+        finally
+        {
+            _myServiceSemaphore.Release();
+        }
+
+        return await _myService;
+    }
+}
+#endregion
+```
+
+```csharp
+// Invalid outcome (must not happen): async-init resolver paths cannot use lock-based strategies.
+private readonly Lock _myServiceLock = new();
+private async global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync()
+{
+    lock(_myServiceLock)
+    {
+        _myService ??= CreateMyServiceAsync();
+    }
+
+    return await _myService;
+}
+```
+
 ## Generated Code Examples
 
 ### ThreadSafeStrategy.None

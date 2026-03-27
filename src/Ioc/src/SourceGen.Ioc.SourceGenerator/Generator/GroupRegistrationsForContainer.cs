@@ -193,6 +193,7 @@ partial class IocSourceGenerator
         var transients = transientMap.Values.Select(static v => v.Cached).ToList();
 
         // Collect service types with multiple registrations for IEnumerable<T> resolution
+        // Async-init services are excluded from collection resolution (only Task<T> can access them).
         var collectionServiceTypes = new List<string>();
         var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<CachedRegistration>>();
 
@@ -201,9 +202,12 @@ partial class IocSourceGenerator
             // Include non-keyed service types with multiple registrations
             if(kvp.Key.Key is null && kvp.Value.Count > 1)
             {
+                // Filter out async-init registrations — they cannot appear in IEnumerable<T> resolvers
+                var effectiveRegistrations = kvp.Value.Where(static c => !HasAsyncInitMembers(c.Registration)).ToImmutableEquatableArray();
+
                 // Deduplicate resolver method names to count unique implementations
                 var uniqueResolvers = new HashSet<string>();
-                foreach(var cached in kvp.Value)
+                foreach(var cached in effectiveRegistrations)
                 {
                     uniqueResolvers.Add(cached.ResolverMethodName);
                 }
@@ -212,7 +216,7 @@ partial class IocSourceGenerator
                 if(uniqueResolvers.Count > 1)
                 {
                     collectionServiceTypes.Add(kvp.Key.ServiceType);
-                    collectionRegistrations[kvp.Key.ServiceType] = kvp.Value.ToImmutableEquatableArray();
+                    collectionRegistrations[kvp.Key.ServiceType] = effectiveRegistrations;
                 }
             }
         }
@@ -302,7 +306,8 @@ partial class IocSourceGenerator
         // Determine if this registration should be eagerly resolved
         // Instance registrations are inherently eager (no field caching needed)
         // Transient services are not supported for eager resolution
-        var isEager = reg.Instance is null && reg.Lifetime switch
+        // Async-init services must always be lazy (cannot be started in constructor)
+        var isEager = reg.Instance is null && !HasAsyncInitMembers(reg) && reg.Lifetime switch
         {
             ServiceLifetime.Singleton => (eagerResolveOptions & EagerResolveOptions.Singleton) != 0,
             ServiceLifetime.Scoped => (eagerResolveOptions & EagerResolveOptions.Scoped) != 0,
@@ -310,6 +315,20 @@ partial class IocSourceGenerator
         };
 
         return new CachedRegistration(reg, fieldName, methodName, isEager);
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the registration has at least one
+    /// <see cref="InjectionMemberType.AsyncMethod"/> member, making it an async-init service.
+    /// </summary>
+    private static bool HasAsyncInitMembers(ServiceRegistrationModel reg)
+    {
+        foreach(var m in reg.InjectionMembers)
+        {
+            if(m.MemberType == InjectionMemberType.AsyncMethod)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

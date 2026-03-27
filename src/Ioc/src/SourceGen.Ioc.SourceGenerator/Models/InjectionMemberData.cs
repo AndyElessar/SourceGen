@@ -45,5 +45,10 @@ internal enum InjectionMemberType
     /// <summary>
     /// A method to be called after object creation.
     /// </summary>
-    Method
+    Method,
+
+    /// <summary>
+    /// An async method (returning <c>Task</c>) to be awaited after object creation.
+    /// </summary>
+    AsyncMethod
 }
