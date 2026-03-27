@@ -203,14 +203,18 @@ private global::System.Threading.Tasks.Task<global::FooBar>? _fooBar_IBar;
 
 ## Disposal of Async-init Fields
 
-Cached async-init singleton/scoped services use fields of type `Task<T>?`. Generated disposal code MUST unwrap the completed service instance before calling `DisposeServiceAsync` or `DisposeService`.
+Cached async-init singleton/scoped services use fields of type `Task<T>?`. Generated disposal code MUST unwrap the completed service instance before calling `DisposeServiceAsync` or `DisposeService`, but only when the cached task completed successfully.
+
+If accessing the cached task result or disposing the resolved service throws, the generated code MUST catch the exception, invoke `global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex)`, and continue disposal without rethrowing.
+
+`global::SourceGen.Ioc.IocContainerGlobalOptions` is a static configuration type in the `SourceGen.Ioc` namespace. It exposes `public static Action<Exception>? OnDisposeException`, which users MAY assign to observe or log disposal-time exceptions.
 
 ### Disposal Rules
 
 |Disposal path|Field type|Required generated pattern|Forbidden pattern|
 |:---|:---|:---|:---|
-|`DisposeAsync`|`Task<T>?`|`if(_field is not null) await DisposeServiceAsync(await _field);`|`await DisposeServiceAsync(_field);`|
-|`Dispose`|`Task<T>?`|`if(_field is not null) DisposeService(_field.ConfigureAwait(false).GetAwaiter().GetResult());`|`DisposeService(_field);`|
+|`DisposeAsync`|`Task<T>?`|Check `task.IsCompletedSuccessfully`, then try-catch `await DisposeServiceAsync(await _field)`|Direct `await task` without status check or try-catch|
+|`Dispose`|`Task<T>?`|Check `task.IsCompletedSuccessfully`, then try-catch `DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult())`|Direct `.GetResult()` without status check or try-catch|
 
 These rules apply regardless of the container's `ThreadSafeStrategy`. Disposal behavior depends on the cached field type (`Task<T>?`), not on the synchronization primitive used during first initialization.
 
@@ -222,33 +226,71 @@ partial class AppContainer : IAsyncDisposable, IDisposable
 {
     private global::System.Threading.Tasks.Task<global::FooBar>? _fooBar;
 
+    private static async ValueTask DisposeServiceAsync<T>(Task<T>? task)
+    {
+        if(task is { IsCompletedSuccessfully: true })
+        {
+            try
+            {
+                await DisposeServiceAsync(await task);
+            }
+            catch(Exception ex)
+            {
+                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
+            }
+        }
+    }
+
+    private static void DisposeService<T>(Task<T>? task)
+    {
+        if(task is { IsCompletedSuccessfully: true })
+        {
+            try
+            {
+                DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult());
+            }
+            catch(Exception ex)
+            {
+                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
+            }
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if(_fooBar is not null)
-            await DisposeServiceAsync(await _fooBar);
+        await DisposeServiceAsync(_fooBar);
     }
 
     public void Dispose()
     {
-        if(_fooBar is not null)
-            DisposeService(_fooBar.ConfigureAwait(false).GetAwaiter().GetResult());
+        DisposeService(_fooBar);
     }
 }
 #endregion
 ```
 
 ```csharp
-// Invalid outcome (must not happen): the disposal helpers operate on the resolved service instance, not Task<T>.
+#region Configure:
+global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException = static ex =>
+{
+    Console.Error.WriteLine(ex);
+};
+#endregion
+```
+
+```csharp
+// Invalid outcome (must not happen): Task<T> disposal must not read the result
+// unless the task completed successfully, and must not let disposal exceptions escape.
 public async ValueTask DisposeAsync()
 {
     if(_fooBar is not null)
-        await DisposeServiceAsync(_fooBar);
+        await DisposeServiceAsync(await _fooBar);
 }
 
 public void Dispose()
 {
     if(_fooBar is not null)
-        DisposeService(_fooBar);
+        DisposeService(_fooBar.ConfigureAwait(false).GetAwaiter().GetResult());
 }
 ```
 
