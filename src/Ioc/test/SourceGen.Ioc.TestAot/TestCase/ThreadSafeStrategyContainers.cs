@@ -1,6 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using SourceGen.Ioc.TestCase;
-
 namespace SourceGen.Ioc.TestAot.TestCase;
 
 #pragma warning disable SGIOC011 // Duplicated Registration Detected

@@ -9,5 +9,11 @@ namespace SourceGen.Ioc.TestCase;
 [IocImportModule<InjectionModule>]
 [IocImportModule<DecoratorModule>]
 [IocImportModule<OpenGenericModule>]
+[IocImportModule<WrapperModule>]
+[IocImportModule<KeyedCollectionModule>]
+[IocImportModule<FactoryModule>]
+[IocImportModule<TagsModule>]
+[IocImportModule<AsyncInjectionModule>]
+[IocImportModule<RegisterAllInterfacesModule>]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class TestCaseModule;

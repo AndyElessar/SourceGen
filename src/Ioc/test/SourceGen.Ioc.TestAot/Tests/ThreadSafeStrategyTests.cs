@@ -1,7 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using SourceGen.Ioc.TestAot.TestCase;
-using SourceGen.Ioc.TestCase;
-
 namespace SourceGen.Ioc.TestAot.Tests;
 
 /// <summary>

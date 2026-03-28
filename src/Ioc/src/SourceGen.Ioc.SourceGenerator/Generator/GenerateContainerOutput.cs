@@ -1911,8 +1911,15 @@ partial class IocSourceGenerator
                         var safeImplType = GetSafeIdentifier(lastReg.Registration.ImplementationType.Name);
                         return $"_lazy_{safeInnerType}_{safeImplType}";
                     }
-                    // Fallback: no matching inner service
-                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                    // Fallback: inner type not in this container — build inline via IServiceProvider
+                    var lazyFallbackExpr = key is not null
+                        ? isOptional
+                            ? $"GetKeyedService(typeof({innerType.Name}), {key}) as {innerType.Name}"
+                            : $"({innerType.Name})GetRequiredKeyedService(typeof({innerType.Name}), {key})"
+                        : isOptional
+                            ? $"GetService(typeof({innerType.Name})) as {innerType.Name}"
+                            : $"({innerType.Name})GetRequiredService(typeof({innerType.Name}))";
+                    return $"new global::System.Lazy<{innerType.Name}>(() => {lazyFallbackExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
                 }
                 // Nested wrapper or inside nested context — inline construction
                 var lazyInnerExpr = BuildInnerResolutionForContainer(innerType, key, isOptional, groups);
@@ -1944,8 +1951,15 @@ partial class IocSourceGenerator
                         var safeImplType = GetSafeIdentifier(lastReg.Registration.ImplementationType.Name);
                         return $"_func_{safeInnerType}_{safeImplType}";
                     }
-                    // Fallback: no matching inner service
-                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                    // Fallback: inner type not in this container — build inline via IServiceProvider
+                    var funcFallbackExpr = key is not null
+                        ? isOptional
+                            ? $"GetKeyedService(typeof({innerType.Name}), {key}) as {innerType.Name}"
+                            : $"({innerType.Name})GetRequiredKeyedService(typeof({innerType.Name}), {key})"
+                        : isOptional
+                            ? $"GetService(typeof({innerType.Name})) as {innerType.Name}"
+                            : $"({innerType.Name})GetRequiredService(typeof({innerType.Name}))";
+                    return $"new global::System.Func<{innerType.Name}>(() => {funcFallbackExpr})";
                 }
                 // Nested wrapper or inside nested context — inline construction
                 var funcInnerExpr = BuildInnerResolutionForContainer(innerType, key, isOptional, groups);
