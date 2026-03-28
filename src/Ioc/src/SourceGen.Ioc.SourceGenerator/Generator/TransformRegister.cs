@@ -352,7 +352,7 @@ partial class IocSourceGenerator
             .ToImmutableEquatableArray();
 
         // Detect async injection methods: non-generic Task return type → AsyncMethod
-        var memberType = IsNonGenericTaskReturnType(method)
+        var memberType = RoslynExtensions.IsNonGenericTaskReturnType(method)
             ? InjectionMemberType.AsyncMethod
             : InjectionMemberType.Method;
 
@@ -363,14 +363,6 @@ partial class IocSourceGenerator
             parameters,
             key);
     }
-
-    /// <summary>
-    /// Returns <see langword="true"/> when the method returns the non-generic
-    /// <see cref="System.Threading.Tasks.Task"/> type (arity 0).
-    /// </summary>
-    private static bool IsNonGenericTaskReturnType(IMethodSymbol method)
-        => method.ReturnType is INamedTypeSymbol { Arity: 0, Name: "Task" } named
-            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
 
     /// <summary>
     /// Builds a set of valid open generic service type names (NameWithoutGeneric + Arity) that can be properly registered.

@@ -945,11 +945,57 @@ partial class IocSourceGenerator
         }
 
         // Resolve sync method parameters before instance creation
-        var methodParamResolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
         int memberParamIndex = pfIdxCounter;
+        var methodParamResolutions = ResolveMethodParamResolutions(
+            writer, injectionMembers, InjectionMemberType.Method, instanceVarName, ref memberParamIndex,
+            isKeyedRegistration, registrationKey, memberTypeNameResolver, asyncInitServiceTypeNames);
+
+        // Resolve async method parameters before instance creation (only when in async mode)
+        var asyncMethodParamResolutions = isAsyncMode
+            ? ResolveMethodParamResolutions(
+                writer, injectionMembers, InjectionMemberType.AsyncMethod, instanceVarName, ref memberParamIndex,
+                isKeyedRegistration, registrationKey, memberTypeNameResolver, asyncInitServiceTypeNames)
+            : [];
+
+        // Property/field values are resolved upfront; include all properties in the object initializer
+        var propertyInits = preProps.Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
+        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
+        var initializerPart = propertyInits.Length > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : "";
+        var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
+        writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
+
+        // Call sync methods
+        EmitMethodInvocations(writer, instanceVarName, methodParamResolutions, useAwait: false);
+
+        // Await async methods (only in async mode)
+        EmitMethodInvocations(writer, instanceVarName, asyncMethodParamResolutions, useAwait: true);
+    }
+
+    /// <summary>
+    /// Builds a constructor invocation expression with an optional initializer.
+    /// </summary>
+    private static string BuildConstructorInvocation(string implTypeName, string args, string initializerPart) =>
+        $"new {implTypeName}({args}){initializerPart}";
+
+    /// <summary>
+    /// Resolves method parameters of a given <paramref name="targetType"/> and emits their variable declarations.
+    /// Shared by sync (<see cref="InjectionMemberType.Method"/>) and async (<see cref="InjectionMemberType.AsyncMethod"/>) resolution loops.
+    /// </summary>
+    private static List<(string MethodName, string?[] ParamVars, string[] ParamNames)> ResolveMethodParamResolutions(
+        SourceWriter writer,
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers,
+        InjectionMemberType targetType,
+        string instanceVarName,
+        ref int memberParamIndex,
+        bool isKeyedRegistration,
+        string? registrationKey,
+        Func<TypeData, string>? memberTypeNameResolver,
+        HashSet<string>? asyncInitServiceTypeNames)
+    {
+        var resolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
         foreach(var method in injectionMembers)
         {
-            if(method.MemberType != InjectionMemberType.Method)
+            if(method.MemberType != targetType)
                 continue;
             var mParams = method.Parameters ?? [];
             var mVars = new string?[mParams.Length];
@@ -973,88 +1019,37 @@ partial class IocSourceGenerator
                 }
                 else
                 {
-                    var resolvedVar = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
-                    mVars[mi] = resolvedVar;
+                    mVars[mi] = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
                 }
                 mi++;
                 memberParamIndex++;
             }
-            methodParamResolutions.Add((method.Name, mVars, mNames));
+            resolutions.Add((method.Name, mVars, mNames));
         }
-
-        // Resolve async method parameters before instance creation (only when in async mode)
-        var asyncMethodParamResolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
-        if(isAsyncMode)
-        {
-            foreach(var method in injectionMembers)
-            {
-                if(method.MemberType != InjectionMemberType.AsyncMethod)
-                    continue;
-                var mParams = method.Parameters ?? [];
-                var mVars = new string?[mParams.Length];
-                var mNames = new string[mParams.Length];
-                int mi = 0;
-                foreach(var p in mParams)
-                {
-                    var pVar = $"{instanceVarName}_m{memberParamIndex}";
-                    mNames[mi] = p.Name;
-                    if(method.Key is not null)
-                    {
-                        mVars[mi] = ResolveMethodParameterWithKey(
-                            writer,
-                            p,
-                            pVar,
-                            method.Key,
-                            isKeyedRegistration,
-                            registrationKey,
-                            memberTypeNameResolver,
-                            asyncInitServiceTypeNames);
-                    }
-                    else
-                    {
-                        var resolvedVar = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
-                        mVars[mi] = resolvedVar;
-                    }
-                    mi++;
-                    memberParamIndex++;
-                }
-                asyncMethodParamResolutions.Add((method.Name, mVars, mNames));
-            }
-        }
-
-        // Property/field values are resolved upfront; include all properties in the object initializer
-        var propertyInits = preProps.Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
-        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
-        var initializerPart = propertyInits.Length > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : "";
-        var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
-        writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
-
-        // Call sync methods
-        foreach(var (mName, mVars, mNames) in methodParamResolutions)
-        {
-            var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
-            for(int i = 0; i < mVars.Length; i++)
-                entries.Add((mNames[i], mVars[i], false));
-            var args = BuildArgumentListFromEntries([.. entries]);
-            writer.WriteLine($"{instanceVarName}.{mName}({args});");
-        }
-
-        // Await async methods (only in async mode)
-        foreach(var (mName, mVars, mNames) in asyncMethodParamResolutions)
-        {
-            var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
-            for(int i = 0; i < mVars.Length; i++)
-                entries.Add((mNames[i], mVars[i], false));
-            var args = BuildArgumentListFromEntries([.. entries]);
-            writer.WriteLine($"await {instanceVarName}.{mName}({args});");
-        }
+        return resolutions;
     }
 
     /// <summary>
-    /// Builds a constructor invocation expression with an optional initializer.
+    /// Emits method invocation statements for the given <paramref name="resolutions"/>.
+    /// When <paramref name="useAwait"/> is <see langword="true"/>, each call is prefixed with <c>await</c>.
     /// </summary>
-    private static string BuildConstructorInvocation(string implTypeName, string args, string initializerPart) =>
-        $"new {implTypeName}({args}){initializerPart}";
+    private static void EmitMethodInvocations(
+        SourceWriter writer,
+        string instanceVarName,
+        List<(string MethodName, string?[] ParamVars, string[] ParamNames)> resolutions,
+        bool useAwait)
+    {
+        foreach(var (mName, mVars, mNames) in resolutions)
+        {
+            var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
+            for(int i = 0; i < mVars.Length; i++)
+                entries.Add((mNames[i], mVars[i], false));
+            var args = BuildArgumentListFromEntries([.. entries]);
+            writer.WriteLine(useAwait
+                ? $"await {instanceVarName}.{mName}({args});"
+                : $"{instanceVarName}.{mName}({args});");
+        }
+    }
 
     /// <summary>
     /// Resolves a property or field injection value and emits its variable declaration.

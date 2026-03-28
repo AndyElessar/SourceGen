@@ -508,7 +508,7 @@ internal static class TransformExtensions
                     IPropertySymbol property => property.SetMethod is not null,
                     IFieldSymbol field => !field.IsReadOnly,
                     IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
-                        && (method.ReturnsVoid || IsNonGenericTaskReturnType(method))
+                        && (method.ReturnsVoid || RoslynExtensions.IsNonGenericTaskReturnType(method))
                         && !method.IsGenericMethod,
                     _ => false
                 };
@@ -519,14 +519,6 @@ internal static class TransformExtensions
                 }
             }
         }
-
-        /// <summary>
-        /// Returns <see langword="true"/> when the method returns the non-generic
-        /// <see cref="System.Threading.Tasks.Task"/> type (arity 0).
-        /// </summary>
-        private static bool IsNonGenericTaskReturnType(IMethodSymbol method)
-            => method.ReturnType is INamedTypeSymbol { Arity: 0, Name: "Task" } named
-                && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
     }
 
     extension(IParameterSymbol param)

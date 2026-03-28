@@ -368,7 +368,7 @@ partial class IocSourceGenerator
                     continue;
 
                 // Async-init services cannot be resolved synchronously — exclude from Func<T> entries
-                if(HasAsyncInitMembers(reg))
+                if(cached.IsAsyncInit)
                     continue;
 
                 var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";

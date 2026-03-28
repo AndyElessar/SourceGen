@@ -129,7 +129,7 @@ partial class IocSourceGenerator
                     filteredRegistrations.Add(registrations[j]);
             }
 
-            filteredRegistrations.Add(registration with { Registration = filteredRegistration });
+            filteredRegistrations.Add(registration with { Registration = filteredRegistration, IsAsyncInit = HasAsyncInitMembers(filteredRegistration) });
         }
 
         return filteredRegistrations is null ? registrations : filteredRegistrations.ToImmutableEquatableArray();
@@ -613,7 +613,7 @@ partial class IocSourceGenerator
             {
                 var cached = taskRegistrations[^1]; // Last registration wins
 
-                if(IsAsyncInitService(cached.Registration))
+                if(cached.IsAsyncInit)
                 {
                     // Async-init: await the shared async resolver and let the async method wrap the cast.
                     var asyncMethodName = GetAsyncResolverMethodName(cached.ResolverMethodName);
@@ -777,7 +777,7 @@ partial class IocSourceGenerator
         }
 
         // For async-init services: generate async resolver instead of sync resolver
-        if(IsAsyncInitService(reg))
+        if(cached.IsAsyncInit)
         {
             switch(reg.Lifetime)
             {
@@ -1137,13 +1137,6 @@ partial class IocSourceGenerator
     // ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns <see langword="true"/> when the registration has at least one
-    /// <see cref="InjectionMemberType.AsyncMethod"/> member, making it an async-init service.
-    /// </summary>
-    private static bool IsAsyncInitService(ServiceRegistrationModel reg)
-        => HasAsyncInitMembers(reg);
-
-    /// <summary>
     /// Returns the async routing resolver method name by appending "Async" to the sync method name.
     /// </summary>
     private static string GetAsyncResolverMethodName(string syncMethodName)
@@ -1165,17 +1158,12 @@ partial class IocSourceGenerator
     /// </summary>
     private static ThreadSafeStrategy GetEffectiveThreadSafeStrategy(
         ThreadSafeStrategy strategy,
-        ServiceRegistrationModel reg)
+        bool isAsyncInit)
     {
-        if(!IsAsyncInitService(reg))
+        if(!isAsyncInit)
             return strategy;
 
-        return strategy switch
-        {
-            ThreadSafeStrategy.None => ThreadSafeStrategy.None,
-            ThreadSafeStrategy.SemaphoreSlim => ThreadSafeStrategy.SemaphoreSlim,
-            _ => ThreadSafeStrategy.SemaphoreSlim
-        };
+        return strategy is ThreadSafeStrategy.None ? ThreadSafeStrategy.None : ThreadSafeStrategy.SemaphoreSlim;
     }
 
     /// <summary>
@@ -1214,7 +1202,7 @@ partial class IocSourceGenerator
         var asyncMethodName = GetAsyncResolverMethodName(syncMethodName);
         var createMethodName = GetAsyncCreateMethodName(syncMethodName);
         var taskReturnType = $"global::System.Threading.Tasks.Task<{returnType}>";
-        var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, reg);
+        var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, true);
 
         // Write the Task<T>? instance field (+ semaphore if SemaphoreSlim)
         WriteAsyncServiceInstanceField(writer, effectiveStrategy, fieldName, taskReturnType);
@@ -1868,7 +1856,7 @@ partial class IocSourceGenerator
             // Async-init services: the sync method was not generated; use the async method instead.
             // Callers that depend on an async-init service should be taking Task<T>, not T directly.
             // The analyzer (SGIOC027/029) normally prevents this, but fall back gracefully.
-            if(IsAsyncInitService(cached.Registration))
+            if(cached.IsAsyncInit)
             {
                 if(cached.Registration.Lifetime == ServiceLifetime.Transient)
                     return $"{GetAsyncCreateMethodName(cached.ResolverMethodName)}()";
@@ -2000,7 +1988,7 @@ partial class IocSourceGenerator
                 if(groups.ByServiceTypeAndKey.TryGetValue((innerTypeName, key), out var innerRegs))
                 {
                     var lastReg = innerRegs[^1];
-                    if(IsAsyncInitService(lastReg.Registration))
+                    if(lastReg.IsAsyncInit)
                     {
                         // Async-init: project Task<ImplType> → Task<ServiceType> via async lambda (not ContinueWith)
                         // so that exceptions propagate as-awaited rather than wrapped in AggregateException.
@@ -2677,7 +2665,7 @@ partial class IocSourceGenerator
                 // Instance registration: directly return the instance
                 resolverExpr = $"static _ => {cached.Registration.Instance}";
             }
-            else if(IsAsyncInitService(cached.Registration))
+            else if(cached.IsAsyncInit)
             {
                 // Async-init services: expose Task<T> from GetService.
                 // Singleton/Scoped: call the routing async resolver method.
@@ -2835,8 +2823,8 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
-        var hasAsyncInitServices = groups.ReversedSingletonsForDisposal.Any(static c => IsAsyncInitService(c.Registration))
-            || groups.ReversedScopedForDisposal.Any(static c => IsAsyncInitService(c.Registration));
+        var hasAsyncInitServices = groups.ReversedSingletonsForDisposal.Any(static c => c.IsAsyncInit)
+            || groups.ReversedScopedForDisposal.Any(static c => c.IsAsyncInit);
         WriteDisposalHelperMethods(writer, hasAsyncInitServices);
 
         writer.WriteLine("#endregion");
@@ -3171,7 +3159,7 @@ partial class IocSourceGenerator
             if(cached.Registration.Instance is not null)
                 continue;
 
-            var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, cached.Registration);
+            var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, cached.IsAsyncInit);
 
             writer.WriteLine($"{serviceMethod}({cached.FieldName});");
 

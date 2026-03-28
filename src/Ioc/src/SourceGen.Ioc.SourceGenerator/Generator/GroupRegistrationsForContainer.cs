@@ -203,7 +203,7 @@ partial class IocSourceGenerator
             if(kvp.Key.Key is null && kvp.Value.Count > 1)
             {
                 // Filter out async-init registrations — they cannot appear in IEnumerable<T> resolvers
-                var effectiveRegistrations = kvp.Value.Where(static c => !HasAsyncInitMembers(c.Registration)).ToImmutableEquatableArray();
+                var effectiveRegistrations = kvp.Value.Where(static c => !c.IsAsyncInit).ToImmutableEquatableArray();
 
                 // Deduplicate resolver method names to count unique implementations
                 var uniqueResolvers = new HashSet<string>();
@@ -307,14 +307,15 @@ partial class IocSourceGenerator
         // Instance registrations are inherently eager (no field caching needed)
         // Transient services are not supported for eager resolution
         // Async-init services must always be lazy (cannot be started in constructor)
-        var isEager = reg.Instance is null && !HasAsyncInitMembers(reg) && reg.Lifetime switch
+        var isAsyncInit = HasAsyncInitMembers(reg);
+        var isEager = reg.Instance is null && !isAsyncInit && reg.Lifetime switch
         {
             ServiceLifetime.Singleton => (eagerResolveOptions & EagerResolveOptions.Singleton) != 0,
             ServiceLifetime.Scoped => (eagerResolveOptions & EagerResolveOptions.Scoped) != 0,
             _ => false // Transient is never eager
         };
 
-        return new CachedRegistration(reg, fieldName, methodName, isEager);
+        return new CachedRegistration(reg, fieldName, methodName, isEager, isAsyncInit);
     }
 
     /// <summary>
