@@ -18,7 +18,7 @@
     <!-- Testing dependencies -->
     <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.1.0" />
     <PackageVersion Include="TUnit" Version="1.22.3" />
-    <PackageVersion Include="Verify.TUnit" Version="31.13.2" />
+    <PackageVersion Include="Verify.TUnit" Version="31.13.5" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
