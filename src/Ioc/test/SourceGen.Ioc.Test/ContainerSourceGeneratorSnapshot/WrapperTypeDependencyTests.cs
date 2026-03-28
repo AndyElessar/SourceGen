@@ -679,4 +679,97 @@ public class WrapperTypeDependencyTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task FuncDependency_WithMultiParamFunc_InExplicitOnlyContainer_WhenReturnTypeNotRegistered_FallsBackToServiceProvider()
+    {
+        // Regression test: when ExplicitOnly container has a consumer depending on Func<string, IService>
+        // and IService is NOT explicitly registered, the generator must NOT recurse into
+        // BuildWrapperExpressionForContainer via BuildServiceResolutionCallForContainer.
+        // Expected: generated code uses GetRequiredService(typeof(Func<string, IService>)) fallback.
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            // IService is intentionally NOT registered — not via [IocRegister] and not via [IocRegisterFor]
+            // Consumer is registered via [IocRegisterFor] on the ExplicitOnly container
+            public class Consumer(Func<string, IService> serviceFactory)
+            {
+                public Func<string, IService> ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Consumer), Lifetime = ServiceLifetime.Singleton)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncDependency_WithMultiParamFunc_InExplicitOnlyContainer_WithKeyedService_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            public class Consumer([IocInject(Key = "myKey")] Func<string, IService> serviceFactory)
+            {
+                public Func<string, IService> ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Consumer), Lifetime = ServiceLifetime.Singleton)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncDependency_WithMultiParamFunc_InExplicitOnlyContainer_WhenOptional_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            public class Consumer(Func<string, IService>? serviceFactory)
+            {
+                public Func<string, IService>? ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Consumer), Lifetime = ServiceLifetime.Singleton)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }

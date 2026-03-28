@@ -1795,6 +1795,20 @@ partial class IocSourceGenerator
             yield return BuildParameterForContainer(param, reg, groups);
     }
 
+    private static string BuildServiceProviderFallbackExpression(
+        string typeName,
+        string? key,
+        bool isOptional)
+    {
+        if(key is not null)
+            return isOptional
+                ? $"GetKeyedService(typeof({typeName}), {key}) as {typeName}"
+                : $"({typeName})GetRequiredKeyedService(typeof({typeName}), {key})";
+        return isOptional
+            ? $"GetService(typeof({typeName})) as {typeName}"
+            : $"({typeName})GetRequiredService(typeof({typeName}))";
+    }
+
     /// <summary>
     /// Builds a service resolution call for container (direct call or GetService/GetRequiredService).
     /// When the dependency is registered in the same container, calls the resolver method directly.
@@ -1866,23 +1880,7 @@ partial class IocSourceGenerator
         }
 
         // Fallback to GetService/GetRequiredService for dependencies not in this container
-
-        // Keyed services
-        if(key is not null)
-        {
-            if(isOptional)
-            {
-                return $"GetKeyedService(typeof({type.Name}), {key}) as {type.Name}";
-            }
-            return $"({type.Name})GetRequiredKeyedService(typeof({type.Name}), {key})";
-        }
-
-        // Regular services
-        if(isOptional)
-        {
-            return $"GetService(typeof({type.Name})) as {type.Name}";
-        }
-        return $"({type.Name})GetRequiredService(typeof({type.Name}))";
+        return BuildServiceProviderFallbackExpression(type.Name, key, isOptional);
     }
 
     /// <summary>
@@ -1912,13 +1910,7 @@ partial class IocSourceGenerator
                         return $"_lazy_{safeInnerType}_{safeImplType}";
                     }
                     // Fallback: inner type not in this container — build inline via IServiceProvider
-                    var lazyFallbackExpr = key is not null
-                        ? isOptional
-                            ? $"GetKeyedService(typeof({innerType.Name}), {key}) as {innerType.Name}"
-                            : $"({innerType.Name})GetRequiredKeyedService(typeof({innerType.Name}), {key})"
-                        : isOptional
-                            ? $"GetService(typeof({innerType.Name})) as {innerType.Name}"
-                            : $"({innerType.Name})GetRequiredService(typeof({innerType.Name}))";
+                    var lazyFallbackExpr = BuildServiceProviderFallbackExpression(innerType.Name, key, isOptional);
                     return $"new global::System.Lazy<{innerType.Name}>(() => {lazyFallbackExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
                 }
                 // Nested wrapper or inside nested context — inline construction
@@ -1938,7 +1930,11 @@ partial class IocSourceGenerator
                         return BuildContainerMultiParamFuncExpression(func, targetRegistration, groups);
                     }
 
-                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                    // Fallback: inner return type not in this container — resolve the full Func<...> type
+                    // directly from IServiceProvider. Do NOT call BuildServiceResolutionCallForContainer
+                    // here as that would route FuncTypeData back to BuildWrapperExpressionForContainer,
+                    // causing infinite recursion.
+                    return BuildServiceProviderFallbackExpression(type.Name, key, isOptional);
                 }
 
                 // Direct Func<T> where T is not a wrapper — call wrapper resolver if available (only at top level)
@@ -1952,13 +1948,7 @@ partial class IocSourceGenerator
                         return $"_func_{safeInnerType}_{safeImplType}";
                     }
                     // Fallback: inner type not in this container — build inline via IServiceProvider
-                    var funcFallbackExpr = key is not null
-                        ? isOptional
-                            ? $"GetKeyedService(typeof({innerType.Name}), {key}) as {innerType.Name}"
-                            : $"({innerType.Name})GetRequiredKeyedService(typeof({innerType.Name}), {key})"
-                        : isOptional
-                            ? $"GetService(typeof({innerType.Name})) as {innerType.Name}"
-                            : $"({innerType.Name})GetRequiredService(typeof({innerType.Name}))";
+                    var funcFallbackExpr = BuildServiceProviderFallbackExpression(innerType.Name, key, isOptional);
                     return $"new global::System.Func<{innerType.Name}>(() => {funcFallbackExpr})";
                 }
                 // Nested wrapper or inside nested context — inline construction
@@ -2017,14 +2007,7 @@ partial class IocSourceGenerator
                 }
 
                 // Fallback to IServiceProvider
-                if(key is not null)
-                    return isOptional
-                        ? $"GetKeyedService(typeof({type.Name}), {key}) as {type.Name}"
-                        : $"({type.Name})GetRequiredKeyedService(typeof({type.Name}), {key})";
-
-                return isOptional
-                    ? $"GetService(typeof({type.Name})) as {type.Name}"
-                    : $"({type.Name})GetRequiredService(typeof({type.Name}))";
+                return BuildServiceProviderFallbackExpression(type.Name, key, isOptional);
             }
 
             default:
