@@ -6,7 +6,7 @@ namespace SourceGen.Ioc;
 public static class IocContainerGlobalOptions
 {
     /// <summary>
-    /// Gets or sets a action to be called when an exception occurs during disposal of a <see cref="Task{T}"/> service.
+    /// Gets or sets an action to be called when an exception occurs during disposal of a <see cref="Task{T}"/> service.
     /// Set this to a logging delegate to capture disposal errors.
     /// </summary>
     public static Action<Exception>? OnDisposeException { get; set; }

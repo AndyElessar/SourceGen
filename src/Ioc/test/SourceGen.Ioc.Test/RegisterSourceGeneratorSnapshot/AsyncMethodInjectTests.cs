@@ -191,6 +191,40 @@ public class AsyncMethodInjectTests
     }
 
     [Test]
+    public async Task AsyncMethodInject_NonGenericTaskDependency_TreatedAsPlainService()
+    {
+        // Non-generic Task (arity 0) must NOT be classified as WrapperKind.Task.
+        // Before the fix, GetNonCollectionWrapperKind("Task") returned WrapperKind.Task
+        // for arity-0 Task, causing a NullReferenceException when TaskTypeData.InnerType
+        // tried to access TypeParameters![0].
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Task nonGenericTask)
+            {
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        // Generator must not throw NRE — arity-0 Task is a plain service dependency.
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task AsyncMethodInject_TaskWrapperDependency_SyncService_UsesTaskFromResult()
     {
         // Consumer takes Task<ISyncService> — resolved as Task.FromResult(sp.GetRequiredService<ISyncService>())

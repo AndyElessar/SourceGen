@@ -509,4 +509,40 @@ public class AsyncMethodInjectTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task AsyncMethodInject_NonGenericTaskDependency_TreatedAsPlainServiceInContainer()
+    {
+        // Non-generic Task (arity 0) must NOT be classified as WrapperKind.Task in the
+        // container output path. The container should resolve it as a plain service, not
+        // attempt to unwrap a Task<T>.InnerType (which would cause a NullReferenceException).
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Task nonGenericTask)
+            {
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        // Generator must not throw NRE — arity-0 Task is a plain service dependency.
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }
