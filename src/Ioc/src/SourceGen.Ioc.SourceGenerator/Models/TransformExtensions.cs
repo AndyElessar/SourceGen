@@ -105,6 +105,19 @@ internal static class TransformExtensions
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
             var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
 
+            // Downgrade nested Task<Wrapper> or Wrapper<Task> shapes to WrapperKind.None.
+            // These shapes are not supported by the spec and fall back to IServiceProvider resolution.
+            if(wrapperKind == WrapperKind.Task && typeParameters is { Length: > 0 } && typeParameters[0].Type is WrapperTypeData)
+            {
+                wrapperKind = WrapperKind.None;
+            }
+            else if(wrapperKind is not WrapperKind.None
+                && typeParameters is not null
+                && typeParameters.Any(p => p.Type is TaskTypeData))
+            {
+                wrapperKind = WrapperKind.None;
+            }
+
             if(wrapperKind is not WrapperKind.None)
             {
                 return TypeData.CreateWrapper(

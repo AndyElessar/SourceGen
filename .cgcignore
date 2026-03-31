@@ -4,9 +4,11 @@
 /tmp/
 bin/
 obj/
+TestResults/
 cache/
 [Gg]enerated/
 *[Aa]rtifacts/
+.vitepress/
 
 # Ignore dependencies
 node_modules/
@@ -16,6 +18,8 @@ node_modules/
 
 # Git
 /.git/
+
+/.github/
 
 # IDE
 /.vscode/

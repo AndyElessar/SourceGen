@@ -2030,8 +2030,8 @@ partial class IocSourceGenerator
         {
             // Inner wrappers always use inline construction (no resolver methods).
             // NOTE: Nested Task<T> shapes such as Lazy<Task<T>> or IEnumerable<Task<T>> are not
-            // supported by the spec and should ideally be rejected by a diagnostic (TODO: add
-            // SGIOC diagnostic for nested-Task wrapper shapes). They fall back to IServiceProvider.
+            // supported by the spec. The transform layer prevents these from reaching code generation
+            // by downgrading their WrapperKind to None, so they fall back to IServiceProvider.
             return BuildWrapperExpressionForContainer(innerType, key, isOptional, groups, useResolverMethods: false);
         }
 
