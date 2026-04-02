@@ -10,7 +10,7 @@ You are a documentation reviewer for the SourceGen repository. You perform read-
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **child agent protocol** in `.github/instructions/plan-memory-policy.instructions.md`.
+Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 1. **Load plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:
@@ -35,7 +35,7 @@ Follow the **child agent protocol** in `.github/instructions/plan-memory-policy.
 ## Boundaries
 
 - ✅ **Always do:**
-  - Follow the plan memory policy in `.github/instructions/plan-memory-policy.instructions.md`
+  - Follow the plan memory policy in `.github/instructions/memory-policy.instructions.md`
   - Read and cross-reference all changed docs against source code and specs
   - Verify internal links resolve correctly
   - Check that `<details>` generated code sections exist for source-generator features

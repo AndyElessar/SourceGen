@@ -47,7 +47,7 @@ Orchestrator (parent)
 
 - **Parent agents** (Orchestrator, Doc, DevOps) manage `/memories/session/plan.md`
 - **Child agents** (Implement, Review, DocReview, Spec) load plan before work; return `BLOCKED_*` if missing
-- Protocol: [plan-memory-policy.instructions.md](.github/instructions/plan-memory-policy.instructions.md)
+- Protocol: [memory-policy.instructions.md](.github/instructions/memory-policy.instructions.md)
 
 ## Hierarchy
 

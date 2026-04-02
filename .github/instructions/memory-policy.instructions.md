@@ -1,17 +1,25 @@
 ---
-description: "Use when executing agent workflows that coordinate through /memories/session/plan.md. Defines the plan memory protocol for parent and child agents."
-applyTo: "src/**"
+description: "Use when executing agent workflows that coordinate through /memories/session/. Defines the memory protocol for parent and child agents."
 ---
 
-# Plan Memory Policy
+# Memory Policy
 
-All agents that participate in the plan→approve→implement→review workflow MUST follow this protocol for `/memories/session/plan.md`.
+All agents that participate in the plan→approve→implement→review workflow MUST follow this protocol for `/memories/session/` paths.
+
+## Session Memory Paths
+
+| Path | Owner | Purpose |
+|------|-------|---------|
+| `/memories/session/plan.md` | Parent agents (Orchestrator, Doc, DevOps) | Approved plan — read by all child agents |
+| `/memories/session/changes.md` | Implement agent | Changed files, decisions, issues, concerns from implementation |
+| `/memories/session/review.md` | Review agent | Structured review report |
 
 ## Memory Access Rules
 
-- **ONLY** use #tool:vscode/memory (the `memory` tool) to read and write `/memories/session/plan.md`.
-- Do NOT use #tool:read (`read_file`) for `/memories/session/plan.md`; this path is memory-only.
-- Do NOT use #tool:edit (`replace_string_in_file`) for `/memories/session/plan.md`; this path is memory-only.
+- **ONLY** use #tool:vscode/memory (the `memory` tool) to read and write `/memories/session/` paths.
+- Use #tool:vscode/resolveMemoryFileUri to resolve a `/memories/` path to a file URI when another tool requires a real file path instead of a memory abstraction. This is read-only and does not replace #tool:vscode/memory for content operations.
+- Do NOT use #tool:read for `/memories/session/` paths; these are memory-only.
+- Do NOT use #tool:edit for `/memories/session/` paths; these are memory-only.
 
 ### Exact Tool Call Syntax
 
@@ -23,6 +31,10 @@ memory({ command: "view", path: "/memories/session/plan.md" })
 **Saving the plan** — use the `create` command (for new) or `str_replace` command (for updates):
 ```
 memory({ command: "create", path: "/memories/session/plan.md", file_text: "<plan content>" })
+```
+
+```
+memory({ command: "str_replace", path: "/memories/session/plan.md", old_str: "<existing text>", new_str: "<replacement text>" })
 ```
 
 ## Parent Agent Protocol
@@ -78,10 +90,11 @@ If the active agent definition does not require a structured preconditions block
 
 ## Boundaries
 
-- ✅ **Always:** Access `/memories/session/plan.md` exclusively via #tool:vscode/memory
+- ✅ **Always:** Access `/memories/session/` paths exclusively via #tool:vscode/memory
+- ✅ **Always:** Use #tool:vscode/resolveMemoryFileUri when another tool needs a file URI for a memory path
 - ✅ **Always:** Verify plan content after every save operation
 - ✅ **Always:** Handle all `BLOCKED_*` responses at the appropriate level
-- 🚫 **Never:** Use #tool:read for `/memories/session/plan.md`
-- 🚫 **Never:** Use #tool:edit for `/memories/session/plan.md`
+- 🚫 **Never:** Use #tool:read for `/memories/session/` paths
+- 🚫 **Never:** Use #tool:edit for `/memories/session/` paths
 - 🚫 **Never:** Delegate to any subagent (after initial Explore) before saving and verifying plan
 - 🚫 **Never:** Have child agents ask users directly for plan content or approvals

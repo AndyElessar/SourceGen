@@ -43,7 +43,7 @@ git push origin main && git push origin ioc-v0.9.1-alpha           # triggers pu
 
 **Post-release**: bump `version.json` via `nbgv prepare-release --project <path>` or manual edit.
 
-Follow the **parent agent protocol** in `.github/instructions/plan-memory-policy.instructions.md`.
+Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 
@@ -58,7 +58,7 @@ Follow the **parent agent protocol** in `.github/instructions/plan-memory-policy
 ## Boundaries
 
 - ✅ **Always do:**
-	- Follow the plan memory policy in `.github/instructions/plan-memory-policy.instructions.md`
+	- Follow the plan memory policy in `.github/instructions/memory-policy.instructions.md`
 	- Read workflow files before editing
 	- Follow the three-job pattern: `build -> publish -> release`
 	- Pin explicit stable action major versions (examples: `actions/checkout@v6`, `actions/setup-dotnet@v5`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `NuGet/login@v1`; never `@latest` or branch refs)

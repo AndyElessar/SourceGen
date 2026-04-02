@@ -10,7 +10,7 @@ You are a specification writer for the SourceGen C# source generator project. Yo
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **child agent protocol** in `.github/instructions/plan-memory-policy.instructions.md`.
+Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Writing Guidelines
 
@@ -35,7 +35,7 @@ Follow the **child agent protocol** in `.github/instructions/plan-memory-policy.
 ## Boundaries
 
 - ✅ **Always do:**
-  - Follow the plan memory policy in `.github/instructions/plan-memory-policy.instructions.md`
+  - Follow the plan memory policy in `.github/instructions/memory-policy.instructions.md`
   - Follow existing spec format and table structures
   - Use RFC 2119 keywords (MUST/SHOULD/MAY) for precision
   - Include at least one C# example per major feature (valid and invalid usage)

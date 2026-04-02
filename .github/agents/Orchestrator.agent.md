@@ -25,7 +25,7 @@ Follow the project principles in `AGENTS.md`.
 | `DocReview` | Read-only docs review | After documentation updates |
 | `DevOps` | CI/CD workflows under `.github/workflows/` | Plan includes CI/CD or release workflow changes |
 
-Follow the **parent agent protocol** in `.github/instructions/plan-memory-policy.instructions.md`.
+Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Workflow
 
@@ -80,10 +80,10 @@ On user input after showing the plan:
 
 7. **Verify plan in memory** — Read `/memories/session/plan.md` via #tool:vscode/memory and confirm it matches the approved plan. If it doesn't match or is missing, re-save and verify before proceeding. If save fails, stop and return `BLOCKED_NO_PLAN_MEMORY_WRITE`.
 8. **Spec** (if needed) — Delegate to `Spec` to update specification documents.
-9. **Implement** — Delegate to `Implement` with the approved plan. Review its report:
+9. **Implement** — Delegate to `Implement` with the approved plan. After Implement completes, read `/memories/session/changes.md` via #tool:vscode/memory to retrieve the structured changes log (changed files, decisions, issues, concerns). Review its report:
    - If tests pass and report is clean → proceed to Review.
    - If issues found → provide specific feedback and re-delegate to `Implement`.
-10. **Review** — Delegate to `Review` with the plan and the list of changed files. After Review completes, read `/memories/session/review.md` via #tool:vscode/memory to retrieve the structured review report. If Review finds high-severity issues, delegate back to `Implement` to fix, then re-review.
+10. **Review** — Delegate to `Review` with the plan and the list of changed files (from `changes.md`). After Review completes, read `/memories/session/review.md` via #tool:vscode/memory to retrieve the structured review report. If Review finds high-severity issues, delegate back to `Implement` to fix, then re-review.
 
 ### Phase 6 — Verify & Complete
 
@@ -94,7 +94,7 @@ On user input after showing the plan:
     - Review outcome
     - Any follow-ups or known limitations
 
-Handle `BLOCKED_*` codes per the [plan memory policy](../instructions/plan-memory-policy.instructions.md).
+Handle `BLOCKED_*` codes per the [memory policy](../instructions/memory-policy.instructions.md).
 
 ## Plan Format
 

@@ -15,6 +15,7 @@ node_modules/
 
 # Ignore logs
 *.log
+*.txt
 
 # Git
 /.git/

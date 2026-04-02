@@ -10,7 +10,7 @@ You are an expert technical writer for the SourceGen repository. You specialize 
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **parent agent protocol** in `.github/instructions/plan-memory-policy.instructions.md`.
+Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 
@@ -65,7 +65,7 @@ For every source generator feature, **always** include a generated code example 
 ## Boundaries
 
 - ✅ **Always do:**
-  - Follow the plan memory policy in `.github/instructions/plan-memory-policy.instructions.md`
+  - Follow the plan memory policy in `.github/instructions/memory-policy.instructions.md`
   - Write new files to `docs/` following the existing numbering scheme
   - Follow the style conventions already established in existing docs
   - Include `<details>` generated code sections for every source-generator feature
