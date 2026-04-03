@@ -1,7 +1,7 @@
 ---
 description: "Use when: implementing features, fixing bugs, or making code changes that require planning, approval, and review. Analyzes requirements, writes plan.md, and delegates to subagents."
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/askQuestions, vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, execute/testFailure, read, agent, search, web, github/add_reply_to_pull_request_comment, github/get_commit, github/get_copilot_job_status, github/issue_read, github/pull_request_read, github/search_issues, github/search_pull_requests, 'codegraphcontext/*', 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest]
+tools: [vscode/memory, vscode/resolveMemoryFileUri, vscode/askQuestions, execute/getTerminalOutput, execute/testFailure, read, agent, search, web, 'codegraphcontext/*', 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', github/add_reply_to_pull_request_comment, github/get_commit, github/get_copilot_job_status, github/issue_read, github/pull_request_read, github/search_issues, github/search_pull_requests, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, github.vscode-pull-request-github/resolveReviewThread, todo]
 agents: ["Explore", "Implement", "Review", "PlanReview", "Spec", "Doc", "DocReview", "DevOps"]
 user-invocable: true
 disable-model-invocation: true
@@ -66,23 +66,24 @@ If Discovery reveals ambiguities, multiple valid approaches, or unvalidated assu
 
 Once context is clear and ambiguities are resolved:
 
-4. **Draft plan** — Write a comprehensive plan following the [plan format](#plan-format) below. During drafting, actively analyze which steps can be parallelized:
+4. **Draft plan** — Write a comprehensive plan following the [plan format](#plan-format) below. For each step, list the specific files it will modify (`Files:` field). This is required input for the parallelism analysis.
 
-    **Parallelism analysis (mandatory):**
-    - Identify steps that touch **disjoint file sets** — no two parallel steps may modify the same file.
+5. **Parallelism analysis** (mandatory, never skip) — After drafting steps, analyze which can run in parallel:
+    - Compare each step's `Files:` list — no two parallel steps may modify the same file.
     - Each parallel step must be **independently compilable** — after applying only that step's changes, `dotnet build` must succeed.
     - Each parallel step must be **independently testable** — its related tests must pass without depending on changes from other parallel steps.
     - Steps that share a modified file, introduce types consumed by another step, or require a specific application order are **sequential** — mark them with *depends on step N*.
     - Group truly independent steps into the same wave and mark them with *parallel with step N*.
     - If unsure whether two steps are independent, treat them as sequential.
+    - Record the result in the **Parallelism Schedule** table (always required — if all steps are sequential, include the table and state why).
 
-5. **Save draft** — Save the plan to `/memories/session/plan.md` via #tool:vscode/memory immediately after drafting, **before** presenting to the user. This is a persistence checkpoint — the file is not a substitute for showing the plan to the user.
+6. **Save draft** — Save the plan to `/memories/session/plan.md` via #tool:vscode/memory immediately after drafting, **before** presenting to the user. This is a persistence checkpoint — the file is not a substitute for showing the plan to the user.
 
-6. **Delegate to PlanReview** — Delegate to `PlanReview` subagent to verify the plan against the codebase. After it completes, read `/memories/session/plan-review.md` via #tool:vscode/memory to retrieve the review report.
+7. **Delegate to PlanReview** — Delegate to `PlanReview` subagent to verify the plan against the codebase. After it completes, read `/memories/session/plan-review.md` via #tool:vscode/memory to retrieve the review report.
    - If the report contains **High** severity findings → revise the plan to fix the issues, re-save to memory, then re-delegate to `PlanReview`. Repeat until no High severity findings remain.
    - If the report contains only Medium/Low findings or no findings → proceed to Present & Approve.
 
-7. **Present & Approve** — Show the full plan to the user in the conversation. **Do not proceed to execution until the user explicitly approves.** The plan MUST be presented inline — don't just reference the plan file. If PlanReview surfaced Medium/Low findings, summarize them for the user alongside the plan.
+8. **Present & Approve** — Show the full plan to the user in the conversation. **Do not proceed to execution until the user explicitly approves.** The plan MUST be presented inline — don't just reference the plan file. If PlanReview surfaced Medium/Low findings, summarize them for the user alongside the plan.
 
 ### Phase 4 — Refinement
 
@@ -95,16 +96,27 @@ On user input after showing the plan:
 
 ### Phase 5 — Execute
 
-8. **Verify plan in memory** — Read `/memories/session/plan.md` via #tool:vscode/memory and confirm it matches the approved plan. If it doesn't match or is missing, re-save and verify before proceeding. If save fails, stop and return `BLOCKED_NO_PLAN_MEMORY_WRITE`.
-9. **Spec** (if needed) — Delegate to `Spec` to update specification documents.
-10. **Implement** — Execute per the plan's **Parallelism Schedule**. For each wave, delegate one `Implement` subagent per step **in parallel** (each receives the full plan, its owned step(s), and the goal). Each subagent writes `/memories/session/changes-wave-{N}.md`. After a wave completes, merge into `/memories/session/changes.md`. Fix any failures before the next wave. If the plan has no parallelism schedule, delegate a single `Implement` subagent with the entire plan.
+9. **Verify plan in memory** — Read `/memories/session/plan.md` via #tool:vscode/memory and confirm it matches the approved plan. If it doesn't match or is missing, re-save and verify before proceeding. If save fails, stop and return `BLOCKED_NO_PLAN_MEMORY_WRITE`.
+10. **Spec** (if needed) — Delegate to `Spec` to update specification documents.
+11. **Implement** — Execute per the plan's **Parallelism Schedule**, processing one wave at a time:
 
-11. **Review** — Delegate to `Review` with the plan and the list of changed files (from `changes.md`). After Review completes, read `/memories/session/review.md` via #tool:vscode/memory to retrieve the structured review report. If Review finds high-severity issues, delegate back to `Implement` to fix, then re-review.
+    **For each wave (sequential across waves):**
+    1. Identify all steps assigned to this wave from the Parallelism Schedule.
+    2. Delegate one `Implement` subagent **per step** — launch all subagents for the current wave **in parallel**. Each subagent receives: the full plan, only its assigned step number(s), and the goal.
+    3. Each subagent writes its results to `/memories/session/changes-step-{step_number}.md`.
+    4. Wait for **all** subagents in the wave to complete.
+    5. If any subagent fails → fix the failure (delegate a new `Implement` for just the failing step) before proceeding.
+    6. After the wave succeeds, merge all `changes-step-*.md` from this wave into `/memories/session/changes.md`.
+    7. Proceed to the next wave.
+
+    **Single-step plans:** If the Parallelism Schedule has only one wave with one step, delegate a single `Implement` subagent with the entire plan.
+
+12. **Review** — Delegate to `Review` with the plan and the list of changed files (from `changes.md`). After Review completes, read `/memories/session/review.md` via #tool:vscode/memory to retrieve the structured review report. If Review finds high-severity issues, delegate back to `Implement` to fix, then re-review.
 
 ### Phase 6 — Verify & Complete
 
-12. **Doc** (if needed) — Delegate to `Doc` for documentation updates, then `DocReview` to verify.
-13. **Complete** — Summarize:
+13. **Doc** (if needed) — Delegate to `Doc` for documentation updates, then `DocReview` to verify.
+14. **Complete** — Summarize:
     - What changed (list of files)
     - Test results
     - Review outcome
@@ -126,14 +138,16 @@ Plans saved to `/memories/session/plan.md` and presented to the user MUST follow
 
 **Steps**
 1. {Implementation step — note dependency ("*depends on step N*") or parallelism ("*parallel with step N*") when applicable}
+   **Files:** `path/to/file1.cs`, `path/to/file2.cs`
 2. {For plans with 5+ steps, group into named phases that are each independently verifiable}
+   **Files:** `path/to/file3.cs`
 
 **Parallelism Schedule**
 | Wave | Steps | Rationale |
 |------|-------|-----------|
-| 1 | {step numbers} | {why these are independent: disjoint files, no shared types, each compiles & tests alone} |
+| 1 | {step numbers} | {why these are independent: disjoint file sets, no shared types, each compiles & tests alone} |
 | 2 | {step numbers} | {depends on wave 1 because …} |
-{Omit this section if all steps are sequential.}
+*If all steps must be sequential, include this table with a single wave and explain why parallelism is not possible.*
 
 **Relevant Files**
 - `{full/path/to/file}` — {what to modify or reuse, referencing specific functions, types, or patterns}

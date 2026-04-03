@@ -851,7 +851,7 @@ public class SGIOC007Tests
         var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
 
         await Assert.That(sgioc007).Count().IsEqualTo(1);
-        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void");
+        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void or non-generic Task");
     }
 
     [Test]
@@ -885,6 +885,6 @@ public class SGIOC007Tests
         var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
 
         await Assert.That(sgioc007).Count().IsEqualTo(1);
-        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void");
+        await Assert.That(sgioc007[0].GetMessage()).Contains("InitializeAsync").And.Contains("void or non-generic Task");
     }
 }

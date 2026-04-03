@@ -613,7 +613,7 @@ public sealed partial class RegisterAnalyzer
                 => "method is not an ordinary method",
             // Allow non-generic Task return type only when AsyncMethodInject feature is enabled
             IMethodSymbol { ReturnsVoid: false } m when !(asyncMethodInjectEnabled && IsNonGenericTaskType(m.ReturnType))
-                => "method does not return void",
+                => asyncMethodInjectEnabled ? "method does not return void or non-generic Task" : "method does not return void",
             IMethodSymbol { IsGenericMethod: true } => "method is generic",
             IPropertySymbol or IFieldSymbol or IMethodSymbol => null,
             _ => "member is not a property, field, or method"
