@@ -66,7 +66,7 @@ If Discovery reveals ambiguities, multiple valid approaches, or unvalidated assu
 
 Once context is clear and ambiguities are resolved:
 
-4. **Draft plan** — Write a comprehensive plan following the [plan format](#plan-format) below. For each step, list the specific files it will modify (`Files:` field). This is required input for the parallelism analysis.
+4. **Draft plan** — Write a comprehensive plan following the [plan format](#plan-format) below. For each step, specify the responsible agent (`Agent:` field) and the specific files it will modify (`Files:` field). Use `Doc` for documentation, `DevOps` for CI/CD workflows, and `Implement` for all other code changes. List spec updates in the **Spec Updates** section. These fields are required input for the parallelism analysis.
 
 5. **Parallelism analysis** (mandatory, never skip) — After drafting steps, analyze which can run in parallel:
     - Compare each step's `Files:` list — no two parallel steps may modify the same file.
@@ -97,25 +97,25 @@ On user input after showing the plan:
 ### Phase 5 — Execute
 
 9. **Verify plan in memory** — Read `/memories/session/plan.md` via #tool:vscode/memory and confirm it matches the approved plan. If it doesn't match or is missing, re-save and verify before proceeding. If save fails, stop and return `BLOCKED_NO_PLAN_MEMORY_WRITE`.
-10. **Spec** (if needed) — Delegate to `Spec` to update specification documents.
-11. **Implement** — Execute per the plan's **Parallelism Schedule**, processing one wave at a time:
+10. **Spec** (if plan has Spec Updates) — Delegate to `Spec` to update specification documents listed in the plan's **Spec Updates** section. Spec changes MUST complete before any other execution step begins — specs define the contract that code and docs implement against.
+11. **Execute** — Execute per the plan's **Parallelism Schedule**, processing one wave at a time. Each step specifies its agent via the `Agent:` field (`Implement`, `Doc`, or `DevOps`).
 
     **For each wave (sequential across waves):**
     1. Identify all steps assigned to this wave from the Parallelism Schedule.
-    2. Delegate one `Implement` subagent **per step** — launch all subagents for the current wave **in parallel**. Each subagent receives: the full plan, only its assigned step number(s), and the goal.
+    2. Delegate one subagent **per step** using the agent specified in the step's `Agent:` field — launch all subagents for the current wave **in parallel**. Each subagent receives: the full plan, only its assigned step number(s), and the goal.
     3. Each subagent writes its results to `/memories/session/changes-step-{step_number}.md`.
     4. Wait for **all** subagents in the wave to complete.
-    5. If any subagent fails → fix the failure (delegate a new `Implement` for just the failing step) before proceeding.
+    5. If any subagent fails → fix the failure (delegate a new subagent of the same agent type for just the failing step) before proceeding.
     6. After the wave succeeds, merge all `changes-step-*.md` from this wave into `/memories/session/changes.md`.
     7. Proceed to the next wave.
 
-    **Single-step plans:** If the Parallelism Schedule has only one wave with one step, delegate a single `Implement` subagent with the entire plan.
+    **Single-step plans:** If the Parallelism Schedule has only one wave with one step, delegate a single subagent (using the step's `Agent:` field) with the entire plan.
 
-12. **Review** — Delegate to `Review` with the plan and the list of changed files (from `changes.md`). After Review completes, read `/memories/session/review.md` via #tool:vscode/memory to retrieve the structured review report. If Review finds high-severity issues, delegate back to `Implement` to fix, then re-review.
+12. **Review** — Delegate to `Review` with the plan and the list of changed files (from `changes.md`). After Review completes, read `/memories/session/review.md` via #tool:vscode/memory to retrieve the structured review report. If Review finds high-severity issues, delegate back to the appropriate agent to fix, then re-review.
 
 ### Phase 6 — Verify & Complete
 
-13. **Doc** (if needed) — Delegate to `Doc` for documentation updates, then `DocReview` to verify.
+13. **DocReview** (if any step used `Doc` agent) — Delegate to `DocReview` to verify documentation updates.
 14. **Complete** — Summarize:
     - What changed (list of files)
     - Test results
@@ -134,12 +134,14 @@ Plans saved to `/memories/session/plan.md` and presented to the user MUST follow
 {TL;DR — what, why, and how (your recommended approach).}
 
 **Spec Updates**
-{List any `**/Spec/*.spec.md` changes needed, or "None".}
+{List any `**/Spec/*.spec.md` changes needed. Write "None" if no spec changes.}
 
 **Steps**
 1. {Implementation step — note dependency ("*depends on step N*") or parallelism ("*parallel with step N*") when applicable}
+   **Agent:** `Implement` | `Doc` | `DevOps`
    **Files:** `path/to/file1.cs`, `path/to/file2.cs`
 2. {For plans with 5+ steps, group into named phases that are each independently verifiable}
+   **Agent:** `Implement` | `Doc` | `DevOps`
    **Files:** `path/to/file3.cs`
 
 **Parallelism Schedule**
@@ -147,7 +149,7 @@ Plans saved to `/memories/session/plan.md` and presented to the user MUST follow
 |------|-------|-----------|
 | 1 | {step numbers} | {why these are independent: disjoint file sets, no shared types, each compiles & tests alone} |
 | 2 | {step numbers} | {depends on wave 1 because …} |
-*If all steps must be sequential, include this table with a single wave and explain why parallelism is not possible.*
+*If all steps must be sequential, include the table with a single wave and explain why parallelism is not possible.*
 
 **Relevant Files**
 - `{full/path/to/file}` — {what to modify or reuse, referencing specific functions, types, or patterns}
@@ -213,13 +215,13 @@ Plans saved to `/memories/session/plan.md` and presented to the user MUST follow
   - Wait for explicit user approval before execution
   - Verify plan in memory before delegating to any post-Explore subagent
   - Re-save plan to memory whenever scope changes
-  - Delegate to `Review` after every `Implement` round
+  - Delegate to `Review` after every execution round
   - Follow conventions from `AGENTS.md` and instruction files
   - Use #tool:todo to track progress across phases
   - Present the plan inline — never rely on the plan file as a substitute
 
 - 🚫 **Never:**
-  - Implement code directly — always delegate to `Implement`
+  - Implement code directly — always delegate to the appropriate subagent (`Implement`, `Spec`, `Doc`, or `DevOps`)
   - Skip the approval gate — never implement without user confirmation
   - Skip the review phase — always delegate to `Review` after implementation
   - Put blocking questions in the plan — ask during Alignment, not at the end
