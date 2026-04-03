@@ -2,11 +2,11 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <RoslynVersion>5.0.0</RoslynVersion>
+    <RoslynVersion>5.3.0</RoslynVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- Source Generator dependencies -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="$(RoslynVersion)" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(RoslynVersion)" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="$(RoslynVersion)" />
@@ -17,20 +17,20 @@
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <!-- Testing dependencies -->
     <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.1.0" />
-    <PackageVersion Include="TUnit" Version="1.17.54" />
-    <PackageVersion Include="Verify.TUnit" Version="31.13.2" />
+    <PackageVersion Include="TUnit" Version="1.22.3" />
+    <PackageVersion Include="Verify.TUnit" Version="31.13.5" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
     <!-- SourceGen.Validation -->
-    <PackageVersion Include="Microsoft.Extensions.Validation" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.Validation" Version="10.0.5" />
     <!-- Tool -->
     <PackageVersion Include="System.IO.Abstractions" Version="22.1.0" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
     <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.7.13" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
     <!-- Samples -->
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.5" />
   </ItemGroup>
 </Project>

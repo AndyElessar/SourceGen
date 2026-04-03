@@ -1,6 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using SourceGen.Ioc;
-
 [assembly: IocRegisterDefaults(
     typeof(SourceGen.Ioc.TestCase.IHandler<,>),
     ServiceLifetime.Transient)]

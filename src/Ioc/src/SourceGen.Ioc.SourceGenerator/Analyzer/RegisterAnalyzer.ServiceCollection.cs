@@ -15,38 +15,20 @@ public sealed partial class RegisterAnalyzer
     {
         var syntaxTreesBuilder = ImmutableHashSet.CreateBuilder<SyntaxTree>();
 
-        // Check if any IoCRegisterForAttribute variant is available
-        if (analyzerContext.AttributeSymbols.IocRegisterForAttribute is null && analyzerContext.AttributeSymbols.IocRegisterForAttribute_T1 is null)
-            return syntaxTreesBuilder.ToImmutable();
-
-        foreach (var attribute in compilation.Assembly.GetAttributes())
+        foreach(var (attribute, targetType) in AnalyzerHelpers.EnumerateAssemblyLevelRegisterForAttributes(
+            compilation, analyzerContext.AttributeSymbols, cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var attributeClass = attribute.AttributeClass;
-            if (attributeClass is null)
-                continue;
-
-            // Check if this is an IoCRegisterForAttribute (non-generic or generic)
-            if (!AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols))
-                continue;
-
             // Track which syntax tree contains this attribute
             var syntaxReference = attribute.ApplicationSyntaxReference;
-            if (syntaxReference?.SyntaxTree is { } syntaxTree)
+            if(syntaxReference?.SyntaxTree is { } syntaxTree)
             {
                 syntaxTreesBuilder.Add(syntaxTree);
             }
 
-            // Get target type from attribute (constructor arg for non-generic, type parameter for generic)
-            var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
-            if (targetType is null)
-                continue;
-
             // Skip invalid types
-            if (targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
+            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
                 continue;
-            if (targetType.DeclaredAccessibility is Accessibility.Private)
+            if(targetType.DeclaredAccessibility is Accessibility.Private)
                 continue;
 
             var location = syntaxReference?.GetSyntax(cancellationToken).GetLocation();
@@ -60,7 +42,9 @@ public sealed partial class RegisterAnalyzer
             // Check for Factory and Instance (used by ServiceInfo)
             var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
-            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, keyTypeSymbol, key is not null, hasFactory, hasInstance);
+            var assemblyServiceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(
+                targetType, attribute, analyzerContext.AttributeSymbols).ToList();
+            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, key is not null, hasFactory, hasInstance, assemblyServiceTypes);
         }
 
         return syntaxTreesBuilder.ToImmutable();
@@ -71,34 +55,16 @@ public sealed partial class RegisterAnalyzer
         AnalyzerContext analyzerContext,
         ImmutableHashSet<SyntaxTree> assemblyAttributeSyntaxTrees)
     {
-        // Check if any IoCRegisterForAttribute variant is available
-        if (analyzerContext.AttributeSymbols.IocRegisterForAttribute is null && analyzerContext.AttributeSymbols.IocRegisterForAttribute_T1 is null)
-            return;
-
         // Only analyze if this syntax tree contains assembly-level attributes
-        if (!assemblyAttributeSyntaxTrees.Contains(context.SemanticModel.SyntaxTree))
+        if(!assemblyAttributeSyntaxTrees.Contains(context.SemanticModel.SyntaxTree))
             return;
 
-        foreach (var attribute in context.SemanticModel.Compilation.Assembly.GetAttributes())
+        foreach(var (attribute, targetType) in AnalyzerHelpers.EnumerateAssemblyLevelRegisterForAttributes(
+            context.SemanticModel.Compilation, analyzerContext.AttributeSymbols, context.CancellationToken))
         {
-            context.CancellationToken.ThrowIfCancellationRequested();
-
             // Only process attributes from the current syntax tree
             var syntaxReference = attribute.ApplicationSyntaxReference;
-            if (syntaxReference?.SyntaxTree != context.SemanticModel.SyntaxTree)
-                continue;
-
-            var attributeClass = attribute.AttributeClass;
-            if (attributeClass is null)
-                continue;
-
-            // Check if this is an IoCRegisterForAttribute (non-generic or generic)
-            if (!AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols))
-                continue;
-
-            // Get target type from attribute (constructor arg for non-generic, type parameter for generic)
-            var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
-            if (targetType is null)
+            if(syntaxReference?.SyntaxTree != context.SemanticModel.SyntaxTree)
                 continue;
 
             var location = syntaxReference.GetSyntax(context.CancellationToken).GetLocation();
@@ -123,23 +89,23 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
-        if (context.Symbol is not INamedTypeSymbol typeSymbol)
+        if(context.Symbol is not INamedTypeSymbol typeSymbol)
             return;
 
-        foreach (var attribute in typeSymbol.GetAttributes())
+        foreach(var attribute in typeSymbol.GetAttributes())
         {
             context.CancellationToken.ThrowIfCancellationRequested();
 
-            if (!TryGetIoCAttribute(attribute, analyzerContext, out var isIoCRegisterFor))
+            if(!TryGetIoCAttribute(attribute, analyzerContext, out var isIoCRegisterFor))
                 continue;
 
             INamedTypeSymbol targetType;
 
-            if (isIoCRegisterFor)
+            if(isIoCRegisterFor)
             {
                 // Use extension method to get target type (supports both generic and non-generic variants)
                 var target = attribute.GetTargetTypeFromRegisterForAttribute();
-                if (target is null)
+                if(target is null)
                     continue;
 
                 targetType = target;
@@ -165,9 +131,9 @@ public sealed partial class RegisterAnalyzer
             AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
 
             // Skip registration if type is invalid
-            if (targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
+            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
                 continue;
-            if (targetType.DeclaredAccessibility is Accessibility.Private)
+            if(targetType.DeclaredAccessibility is Accessibility.Private)
                 continue;
 
             // Get lifetime of current service (considering default settings)
@@ -182,7 +148,9 @@ public sealed partial class RegisterAnalyzer
 
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
-            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, keyTypeSymbol, key is not null, hasFactory, hasInstance);
+            var serviceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(
+                targetType, attribute, analyzerContext.AttributeSymbols).ToList();
+            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, key, keyTypeSymbol, key is not null, hasFactory, hasInstance, serviceTypes);
         }
     }
 
@@ -194,36 +162,36 @@ public sealed partial class RegisterAnalyzer
         SyntaxNodeAnalysisContext context,
         AnalyzerContext analyzerContext)
     {
-        if (context.Node is not AttributeSyntax attributeSyntax)
+        if(context.Node is not AttributeSyntax attributeSyntax)
             return;
 
         var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
-        if (attributeSymbol is not IMethodSymbol attributeConstructor)
+        if(attributeSymbol is not IMethodSymbol attributeConstructor)
             return;
 
         var attributeClass = attributeConstructor.ContainingType;
-        if (attributeClass is null)
+        if(attributeClass is null)
             return;
 
-        if (!AnalyzerHelpers.IsIoCRegistrationAttribute(attributeClass, analyzerContext.AttributeSymbols))
+        if(!AnalyzerHelpers.IsIoCRegistrationAttribute(attributeClass, analyzerContext.AttributeSymbols))
             return;
 
         var attributeData = GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
-        if (attributeData is null)
+        if(attributeData is null)
             return;
 
-        if (attributeData.GetNamedArgument<int>("KeyType", 0) != 1)
+        if(attributeData.GetNamedArgument<int>("KeyType", 0) != 1)
             return;
 
         var (_, _, resolvedKeyType) = attributeData.GetKeyInfo(context.SemanticModel);
-        if (resolvedKeyType is null)
+        if(resolvedKeyType is null)
             return;
 
         var targetType = AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols)
             ? attributeData.GetTargetTypeFromRegisterForAttribute()
             : GetTypeLevelTargetType(context, attributeSyntax);
 
-        if (targetType is null)
+        if(targetType is null)
             return;
 
         analyzerContext.ResolvedCsharpKeyTypes[(targetType, attributeSyntax.GetLocation())] = resolvedKeyType;
@@ -234,12 +202,12 @@ public sealed partial class RegisterAnalyzer
         AttributeSyntax attributeSyntax,
         INamedTypeSymbol attributeClass)
     {
-        if (attributeSyntax.Parent is not AttributeListSyntax attributeList)
+        if(attributeSyntax.Parent is not AttributeListSyntax attributeList)
             return null;
 
         var syntaxTree = attributeSyntax.SyntaxTree;
 
-        if (attributeList.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) is true)
+        if(attributeList.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) is true)
         {
             return context.SemanticModel.Compilation.Assembly.GetAttributes()
                 .FirstOrDefault(attr =>
@@ -249,7 +217,7 @@ public sealed partial class RegisterAnalyzer
         }
 
         var targetType = GetTypeLevelTargetType(context, attributeSyntax);
-        if (targetType is null)
+        if(targetType is null)
             return null;
 
         return targetType.GetAttributes()
@@ -280,17 +248,17 @@ public sealed partial class RegisterAnalyzer
     {
         isIoCRegisterFor = false;
         var attributeClass = attribute.AttributeClass;
-        if (attributeClass is null)
+        if(attributeClass is null)
             return false;
 
         // Check IoCRegisterAttribute variants (non-generic and generic)
-        if (AnalyzerHelpers.IsIoCRegisterAttribute(attributeClass, analyzerContext.AttributeSymbols))
+        if(AnalyzerHelpers.IsIoCRegisterAttribute(attributeClass, analyzerContext.AttributeSymbols))
         {
             return true;
         }
 
         // Check IoCRegisterForAttribute variants (non-generic and generic)
-        if (AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols))
+        if(AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols))
         {
             isIoCRegisterFor = true;
             return true;
@@ -307,32 +275,49 @@ public sealed partial class RegisterAnalyzer
         INamedTypeSymbol targetType,
         ServiceLifetime lifetime,
         Location? location,
+        string? serviceKey = null,
         ITypeSymbol? keyTypeSymbol = null,
         bool hasKey = false,
         bool hasFactory = false,
-        bool hasInstance = false)
+        bool hasInstance = false,
+        IReadOnlyCollection<INamedTypeSymbol>? registrationServiceTypes = null)
     {
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, keyTypeSymbol, hasKey, hasFactory, hasInstance);
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance);
 
-        if (!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
-            return; // Already registered
+        if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
+        {
+            // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
+            // attributes targeting the same impl type with different keys). Record the additional
+            // (service type, key) pairs on the existing entry so SGIOC030 analysis sees all registrations.
+            if(registrationServiceTypes is not null
+                && analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
+            {
+                foreach(var st in registrationServiceTypes)
+                    existingInfo.AllRegistrations.Add((st, serviceKey));
+            }
+            return;
+        }
+
+        if(registrationServiceTypes is not null)
+            foreach(var st in registrationServiceTypes)
+                serviceInfo.AllRegistrations.Add((st, serviceKey));
 
         // Only build type index for non-keyed services.
         // Keyed services are resolved by key + type, not by type alone,
         // so including them in the type-only index could lead to false positive
         // circular dependency (SGIOC002) or lifetime conflict (SGIOC003-005) diagnostics.
-        if (hasKey)
+        if(hasKey)
             return;
 
         // Build index for interfaces
-        foreach (var iface in targetType.AllInterfaces)
+        foreach(var iface in targetType.AllInterfaces)
         {
             analyzerContext.ServiceTypeIndex.TryAdd(iface, serviceInfo);
         }
 
         // Build index for base classes
         var baseType = targetType.BaseType;
-        while (baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
+        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
         {
             analyzerContext.ServiceTypeIndex.TryAdd(baseType, serviceInfo);
             baseType = baseType.BaseType;
@@ -346,26 +331,26 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static DefaultSettingsMap CollectDefaults(
         Compilation compilation,
-        IoCAttributeSymbols attributeSymbols,
+        IocAttributeSymbols attributeSymbols,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenTargetTypes,
         CancellationToken cancellationToken)
     {
-        if (attributeSymbols.IocRegisterDefaultsAttribute is null && attributeSymbols.IocRegisterDefaultsAttribute_T1 is null)
+        if(attributeSymbols.IocRegisterDefaultsAttribute is null && attributeSymbols.IocRegisterDefaultsAttribute_T1 is null)
             return new DefaultSettingsMap([]);
 
         var settingsBuilder = ImmutableArray.CreateBuilder<DefaultSettingsModel>();
 
-        foreach (var attribute in compilation.Assembly.GetAttributes())
+        foreach(var attribute in compilation.Assembly.GetAttributes())
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var attributeClass = attribute.AttributeClass;
-            if (attributeClass is null)
+            if(attributeClass is null)
                 continue;
 
             // Check if this is an IoCRegisterDefaultsAttribute (non-generic or generic)
-            if (!AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols))
+            if(!AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols))
             {
                 continue;
             }
@@ -375,7 +360,7 @@ public sealed partial class RegisterAnalyzer
             var settings = attributeClass.IsGenericType
                 ? attribute.ExtractDefaultSettingsFromGenericAttribute()
                 : attribute.ExtractDefaultSettings();
-            if (settings is not null)
+            if(settings is not null)
             {
                 var targetTypeName = settings.TargetServiceType.Name;
                 var tags = settings.Tags;
@@ -385,17 +370,17 @@ public sealed partial class RegisterAnalyzer
 
                 // SGIOC012: Check each effective tag for duplicates
                 var hasDuplicate = false;
-                foreach (var tag in effectiveTags)
+                foreach(var tag in effectiveTags)
                 {
                     var defaultKey = (targetTypeName, tag);
-                    if (!seenTargetTypes.TryAdd(defaultKey, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()))
+                    if(!seenTargetTypes.TryAdd(defaultKey, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()))
                     {
                         hasDuplicate = true;
                         break; // Only need to find one duplicate
                     }
                 }
 
-                if (hasDuplicate)
+                if(hasDuplicate)
                 {
                     var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
                     duplicatedDefaults.Add((targetTypeName, location));
@@ -421,24 +406,24 @@ public sealed partial class RegisterAnalyzer
         ServiceLifetime explicitLifetime)
     {
         // If lifetime is explicitly set, use it
-        if (hasExplicitLifetime)
+        if(hasExplicitLifetime)
             return explicitLifetime;
 
         var defaultSettings = analyzerContext.DefaultSettings;
-        if (defaultSettings.IsEmpty)
+        if(defaultSettings.IsEmpty)
             return explicitLifetime;
 
         // Check default settings for matching interfaces
-        foreach (var iface in targetType.AllInterfaces)
+        foreach(var iface in targetType.AllInterfaces)
         {
             var ifaceTypeData = iface.GetTypeData();
 
             // Try exact match first
-            if (defaultSettings.TryGetExactMatches(ifaceTypeData.Name, out var exactIndex))
+            if(defaultSettings.TryGetExactMatches(ifaceTypeData.Name, out var exactIndex))
                 return defaultSettings[exactIndex].Lifetime;
 
             // Try generic match (e.g., IGenericTest<> matches IGenericTest<T>)
-            if (iface.IsGenericType
+            if(iface.IsGenericType
                 && ifaceTypeData is GenericTypeData genericInterfaceTypeData
                 && defaultSettings.TryGetGenericMatches(genericInterfaceTypeData.NameWithoutGeneric, genericInterfaceTypeData.GenericArity, out var genericIndex))
                 return defaultSettings[genericIndex].Lifetime;
@@ -446,16 +431,16 @@ public sealed partial class RegisterAnalyzer
 
         // Check default settings for matching base classes
         var baseType = targetType.BaseType;
-        while (baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
+        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
         {
             var baseTypeData = baseType.GetTypeData();
 
             // Try exact match first
-            if (defaultSettings.TryGetExactMatches(baseTypeData.Name, out var exactIndex))
+            if(defaultSettings.TryGetExactMatches(baseTypeData.Name, out var exactIndex))
                 return defaultSettings[exactIndex].Lifetime;
 
             // Try generic match for base classes
-            if (baseType.IsGenericType
+            if(baseType.IsGenericType
                 && baseTypeData is GenericTypeData genericBaseTypeData
                 && defaultSettings.TryGetGenericMatches(genericBaseTypeData.NameWithoutGeneric, genericBaseTypeData.GenericArity, out var genericIndex))
                 return defaultSettings[genericIndex].Lifetime;
@@ -477,7 +462,7 @@ public sealed partial class RegisterAnalyzer
     }
 
     private sealed class AnalyzerContext(
-        IoCAttributeSymbols attributeSymbols,
+        IocAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         DefaultSettingsMap defaultSettings,
@@ -485,7 +470,7 @@ public sealed partial class RegisterAnalyzer
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes,
         IocFeatures features)
     {
-        public IoCAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
+        public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
 
         /// <summary>
@@ -543,6 +528,11 @@ public sealed partial class RegisterAnalyzer
         public string FullyQualifiedName { get; }
 
         /// <summary>
+        /// The registration key string, or null if the service is unkeyed.
+        /// </summary>
+        public string? ServiceKey { get; }
+
+        /// <summary>
         /// The type symbol of the registration key, or null if no key is specified or KeyType is Csharp.
         /// </summary>
         public ITypeSymbol? KeyTypeSymbol { get; }
@@ -563,6 +553,14 @@ public sealed partial class RegisterAnalyzer
         public bool HasInstance { get; }
 
         /// <summary>
+        /// All (service type, key) pairs from every registration that maps to this implementation type.
+        /// Populated during collection to capture all registrations including assembly-level duplicates
+        /// where <see cref="RegisteredServices"/> only stores the first entry per implementation type.
+        /// Used by SGIOC030 analysis to correctly identify all async-init-only service type/key pairs.
+        /// </summary>
+        public ConcurrentBag<(INamedTypeSymbol ServiceType, string? Key)> AllRegistrations { get; } = [];
+
+        /// <summary>
         /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
         /// </summary>
         public IMethodSymbol? Constructor { get; }
@@ -576,6 +574,7 @@ public sealed partial class RegisterAnalyzer
             INamedTypeSymbol type,
             ServiceLifetime lifetime,
             Location? location,
+            string? serviceKey = null,
             ITypeSymbol? keyTypeSymbol = null,
             bool hasKey = false,
             bool hasFactory = false,
@@ -585,6 +584,7 @@ public sealed partial class RegisterAnalyzer
             Lifetime = lifetime;
             Location = location;
             FullyQualifiedName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            ServiceKey = serviceKey;
             KeyTypeSymbol = keyTypeSymbol;
             HasKey = hasKey;
             HasFactory = hasFactory;

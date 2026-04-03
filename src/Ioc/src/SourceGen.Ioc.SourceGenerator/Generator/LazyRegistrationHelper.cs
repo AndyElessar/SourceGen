@@ -105,6 +105,13 @@ partial class IocSourceGenerator
     {
         switch(type)
         {
+            // Nested wrappers are intentionally excluded from standalone field generation. This is a
+            // deliberate pragmatic choice: direct container resolution of nested wrappers (for example,
+            // container.GetService<Lazy<Func<T>>>()) is extremely rare, and constructor injection is
+            // already fully covered by inline construction. Keeping nested wrappers inline avoids
+            // expanding field scanning, naming conventions, and scoped-container infrastructure for all
+            // nested shapes. Nested wrappers also usually do not require cross-consumer instance
+            // sharing, so per-consumer inline instances are semantically correct.
             case LazyTypeData lazy when lazy.InstanceType is not WrapperTypeData:
                 neededTypes.Add(lazy.InstanceType.Name);
                 break;
@@ -176,6 +183,10 @@ partial class IocSourceGenerator
             {
                 var reg = cached.Registration;
                 if(reg.IsOpenGeneric)
+                    continue;
+
+                // Async-init services cannot be resolved synchronously — exclude from Lazy<T> entries
+                if(cached.IsAsyncInit)
                     continue;
 
                 var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";

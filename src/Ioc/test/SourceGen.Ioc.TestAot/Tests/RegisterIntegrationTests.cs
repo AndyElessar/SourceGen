@@ -1,7 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using SourceGen.Ioc.TestAot.TestCase;
-using SourceGen.Ioc.TestCase;
-
 namespace SourceGen.Ioc.TestAot.Tests;
 
 /// <summary>
@@ -294,6 +290,81 @@ public sealed class RegisterIntegrationTests
 
         // Assert - Should have at least KeyedServiceA and KeyedServiceB
         await Assert.That(keyedServices.Count).IsGreaterThanOrEqualTo(2);
+    }
+
+    #endregion
+
+    #region Cross-Assembly Collection / Factory / Wrapper Integration Tests
+
+    [Test]
+    public async Task CrossAssembly_Collection_ResolvesAllPlugins()
+    {
+        // Arrange
+        await using var provider = CreateServiceProvider();
+
+        // Act — IPlugin registrations come from CollectionModule inside TestCase assembly
+        var plugins = provider.GetServices<IPlugin>().ToList();
+
+        // Assert
+        await Assert.That(plugins.Count).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task CrossAssembly_Factory_ReturnsFactoryCreatedInstanceWithDep()
+    {
+        // Arrange
+        await using var provider = CreateServiceProvider();
+
+        // Act — IFactoryService uses a factory method that injects ISingletonService
+        var service = provider.GetRequiredService<IFactoryService>();
+
+        // Assert
+        await Assert.That(service).IsNotNull();
+        await Assert.That(service.CreatedBy).IsEqualTo("FactoryServiceFactory");
+        await Assert.That(service.DepName).IsEqualTo("FactoryDep");
+    }
+
+    [Test]
+    public async Task CrossAssembly_Instance_ReturnsPredefinedStaticInstance()
+    {
+        // Arrange
+        await using var provider = CreateServiceProvider();
+
+        // Act — IInstanceService is registered via Instance = nameof(Default)
+        var service = provider.GetRequiredService<IInstanceService>();
+
+        // Assert
+        await Assert.That(service).IsNotNull();
+        await Assert.That(service.Name).IsEqualTo("InstanceService");
+    }
+
+    [Test]
+    public async Task CrossAssembly_LazyPluginConsumer_LazyWrapperResolvesPlugin()
+    {
+        // Arrange
+        await using var provider = CreateServiceProvider();
+
+        // Act — LazyPluginConsumer receives Lazy<IPlugin> from the cross-assembly CollectionModule
+        var consumer = provider.GetRequiredService<LazyPluginConsumer>();
+
+        // Assert
+        await Assert.That(consumer).IsNotNull();
+        var plugin = consumer.LazyPlugin.Value;
+        await Assert.That(plugin).IsNotNull();
+    }
+
+    [Test]
+    public async Task CrossAssembly_LazyPluginConsumer_FuncWrapperResolvesPlugin()
+    {
+        // Arrange
+        await using var provider = CreateServiceProvider();
+
+        // Act
+        var consumer = provider.GetRequiredService<LazyPluginConsumer>();
+        var plugin = consumer.PluginFactory();
+
+        // Assert
+        await Assert.That(plugin).IsNotNull();
     }
 
     #endregion

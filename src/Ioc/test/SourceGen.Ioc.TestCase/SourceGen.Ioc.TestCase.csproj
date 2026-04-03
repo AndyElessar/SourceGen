@@ -5,7 +5,7 @@
 
   <PropertyGroup>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject</SourceGenIocFeatures>
+    <SourceGenIocFeatures>Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject</SourceGenIocFeatures>
   </PropertyGroup>
 
   <ItemGroup>

@@ -73,10 +73,24 @@ public sealed partial class RegisterAnalyzer
         var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
             ?? member.Locations.FirstOrDefault();
 
+        // SGIOC028: async void methods cannot be awaited - report before any other method check
+        if (member is IMethodSymbol { IsAsync: true, ReturnsVoid: true })
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                AsyncVoidInjectMethod,
+                location,
+                member.Name));
+            return;
+        }
+
+        var asyncMethodInjectEnabled = (analyzerContext.Features & IocFeatures.AsyncMethodInject) != 0;
+        var isTaskReturningMethod = member is IMethodSymbol taskMethod && IsNonGenericTaskType(taskMethod.ReturnType);
+
         var (requiredFeature, featureName) = member switch
         {
             IPropertySymbol => (IocFeatures.PropertyInject, nameof(IocFeatures.PropertyInject)),
             IFieldSymbol => (IocFeatures.FieldInject, nameof(IocFeatures.FieldInject)),
+            IMethodSymbol when isTaskReturningMethod => (IocFeatures.AsyncMethodInject, nameof(IocFeatures.AsyncMethodInject)),
             IMethodSymbol => (IocFeatures.MethodInject, nameof(IocFeatures.MethodInject)),
             _ => (IocFeatures.None, string.Empty)
         };
@@ -88,6 +102,9 @@ public sealed partial class RegisterAnalyzer
                 location,
                 member.Name,
                 featureName));
+            // For Task-returning methods: SGIOC022 already fired; do NOT also report SGIOC007 return-type error
+            if (isTaskReturningMethod)
+                return;
         }
 
         // Container-class partial definitions are valid injection targets (keyed service accessors)
@@ -96,7 +113,7 @@ public sealed partial class RegisterAnalyzer
         if (member is IMethodSymbol { IsPartialDefinition: true } && IsInContainerClass(member.ContainingType))
             return;
 
-        var reason = GetMemberInjectabilityIssue(member);
+        var reason = GetMemberInjectabilityIssue(member, asyncMethodInjectEnabled);
         if (reason is not null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -158,7 +175,7 @@ public sealed partial class RegisterAnalyzer
         // SGIOC023 + SGIOC024: Validate InjectMembers elements - only for IoCRegisterFor attributes
         if (!isDefaultsAttribute)
         {
-            AnalyzeInjectMembersOnAttribute(context, argumentList);
+            AnalyzeInjectMembersOnAttribute(context, argumentList, (analyzerContext.Features & IocFeatures.AsyncMethodInject) != 0);
         }
     }
 
@@ -466,7 +483,8 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static void AnalyzeInjectMembersOnAttribute(
         SyntaxNodeAnalysisContext context,
-        AttributeArgumentListSyntax argumentList)
+        AttributeArgumentListSyntax argumentList,
+        bool asyncMethodInjectEnabled = false)
     {
         AttributeArgumentSyntax? injectMembersArg = null;
         foreach (var arg in argumentList.Arguments)
@@ -547,7 +565,7 @@ public sealed partial class RegisterAnalyzer
                 continue; // unresolvable — a compile error will already be reported
 
             // SGIOC024: Check if member is injectable
-            var (isInjectable, reason) = ValidateInjectableMember(symbol);
+            var (isInjectable, reason) = ValidateInjectableMember(symbol, asyncMethodInjectEnabled);
             if (!isInjectable)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -563,7 +581,11 @@ public sealed partial class RegisterAnalyzer
     /// Returns the reason a member is not injectable, or <see langword="null"/> if it is valid.
     /// Shared by SGIOC007 (<see cref="AnalyzeInjectAttribute"/>) and SGIOC024 (<see cref="ValidateInjectableMember"/>).
     /// </summary>
-    private static string? GetMemberInjectabilityIssue(ISymbol symbol)
+    /// <param name="asyncMethodInjectEnabled">
+    /// When <see langword="true"/>, methods returning non-generic <see cref="System.Threading.Tasks.Task"/> are
+    /// considered valid injection targets (allowed by AsyncMethodInject feature).
+    /// </param>
+    private static string? GetMemberInjectabilityIssue(ISymbol symbol, bool asyncMethodInjectEnabled = false)
     {
         if (symbol.IsStatic)
             return "it is static";
@@ -589,18 +611,28 @@ public sealed partial class RegisterAnalyzer
                 => "method is not accessible",
             IMethodSymbol m when m.MethodKind != MethodKind.Ordinary
                 => "method is not an ordinary method",
-            IMethodSymbol { ReturnsVoid: false } => "method does not return void",
+            // Allow non-generic Task return type only when AsyncMethodInject feature is enabled
+            IMethodSymbol { ReturnsVoid: false } m when !(asyncMethodInjectEnabled && IsNonGenericTaskType(m.ReturnType))
+                => asyncMethodInjectEnabled ? "method does not return void or non-generic Task" : "method does not return void",
             IMethodSymbol { IsGenericMethod: true } => "method is generic",
             IPropertySymbol or IFieldSymbol or IMethodSymbol => null,
             _ => "member is not a property, field, or method"
         };
     }
 
-    private static (bool IsInjectable, string Reason) ValidateInjectableMember(ISymbol symbol)
+    private static (bool IsInjectable, string Reason) ValidateInjectableMember(ISymbol symbol, bool asyncMethodInjectEnabled = false)
     {
-        var reason = GetMemberInjectabilityIssue(symbol);
+        var reason = GetMemberInjectabilityIssue(symbol, asyncMethodInjectEnabled);
         return reason is null ? (true, string.Empty) : (false, reason);
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="type"/> is the non-generic
+    /// <see cref="System.Threading.Tasks.Task"/> class (i.e., <c>Task</c> with arity 0).
+    /// </summary>
+    private static bool IsNonGenericTaskType(ITypeSymbol? type)
+        => type is INamedTypeSymbol { Arity: 0, Name: "Task" } named
+            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
 
     private static ExpressionSyntax[]? GetInjectMembersElements(ExpressionSyntax expression)
         => expression switch

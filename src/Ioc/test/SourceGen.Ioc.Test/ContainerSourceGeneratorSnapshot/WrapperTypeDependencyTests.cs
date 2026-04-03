@@ -679,4 +679,412 @@ public class WrapperTypeDependencyTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task FuncDependency_WithMultiParamFunc_InExplicitOnlyContainer_WhenReturnTypeNotRegistered_FallsBackToServiceProvider()
+    {
+        // Regression test: when ExplicitOnly container has a consumer depending on Func<string, IService>
+        // and IService is NOT explicitly registered, the generator must NOT recurse into
+        // BuildWrapperExpressionForContainer via BuildServiceResolutionCallForContainer.
+        // Expected: generated code uses GetRequiredService(typeof(Func<string, IService>)) fallback.
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            // IService is intentionally NOT registered — not via [IocRegister] and not via [IocRegisterFor]
+            // Consumer is registered via [IocRegisterFor] on the ExplicitOnly container
+            public class Consumer(Func<string, IService> serviceFactory)
+            {
+                public Func<string, IService> ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Consumer), Lifetime = ServiceLifetime.Singleton)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncDependency_WithMultiParamFunc_InExplicitOnlyContainer_WithKeyedService_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            public class Consumer([IocInject(Key = "myKey")] Func<string, IService> serviceFactory)
+            {
+                public Func<string, IService> ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Consumer), Lifetime = ServiceLifetime.Singleton)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncDependency_WithMultiParamFunc_InExplicitOnlyContainer_WhenOptional_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            public class Consumer(Func<string, IService>? serviceFactory)
+            {
+                public Func<string, IService>? ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Consumer), Lifetime = ServiceLifetime.Singleton)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task TaskLazy_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(System.Threading.Tasks.Task<Lazy<IMyService>> service)
+            {
+                public System.Threading.Tasks.Task<Lazy<IMyService>> Service { get; } = service;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task LazyTask_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Lazy<System.Threading.Tasks.Task<IMyService>> service)
+            {
+                public Lazy<System.Threading.Tasks.Task<IMyService>> Service { get; } = service;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task TaskFunc_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(System.Threading.Tasks.Task<Func<IMyService>> service)
+            {
+                public System.Threading.Tasks.Task<Func<IMyService>> Service { get; } = service;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task FuncTask_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Func<System.Threading.Tasks.Task<IMyService>> service)
+            {
+                public Func<System.Threading.Tasks.Task<IMyService>> Service { get; } = service;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task TaskEnumerable_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(System.Threading.Tasks.Task<IEnumerable<IMyService>> service)
+            {
+                public System.Threading.Tasks.Task<IEnumerable<IMyService>> Service { get; } = service;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task EnumerableTask_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IEnumerable<System.Threading.Tasks.Task<IMyService>> service)
+            {
+                public IEnumerable<System.Threading.Tasks.Task<IMyService>> Service { get; } = service;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task TripleNested_LazyFuncLazy_GeneratesNestedResolution()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Lazy<Func<Lazy<IMyService>>> triple)
+            {
+                public Lazy<Func<Lazy<IMyService>>> Triple { get; } = triple;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task TripleNested_EnumerableLazyFunc_FallsBackToServiceProvider()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IEnumerable<Lazy<Func<IMyService>>> triple)
+            {
+                public IEnumerable<Lazy<Func<IMyService>>> Triple { get; } = triple;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task TripleNested_FuncLazyEnumerable_GeneratesNestedResolution()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Func<Lazy<IEnumerable<IMyService>>> triple)
+            {
+                public Func<Lazy<IEnumerable<IMyService>>> Triple { get; } = triple;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IMyService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }

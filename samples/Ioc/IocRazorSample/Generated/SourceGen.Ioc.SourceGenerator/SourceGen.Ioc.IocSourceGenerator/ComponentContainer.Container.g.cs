@@ -21,8 +21,6 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
     private readonly bool _isRootScope = true;
     private int _disposed;
 
-    private readonly FrozenDictionary<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>> _serviceResolvers;
-
     #region Constructors
 
     /// <summary>
@@ -37,15 +35,12 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
     public ComponentContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-
-        _serviceResolvers = _localResolvers.ToFrozenDictionary();
     }
 
     private ComponentContainer(ComponentContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #endregion
@@ -200,7 +195,7 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
 
     #region IIocContainer
 
-    public IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>>> Resolvers => _serviceResolvers;
+    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>>> Resolvers => _serviceResolvers;
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>>[] _localResolvers =
     [
@@ -209,6 +204,8 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
         new(new ServiceIdentifier(typeof(global::IocRazorSample.ComponentContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::IocRazorSample.LoadData), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
     ];
+
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
     #endregion
 

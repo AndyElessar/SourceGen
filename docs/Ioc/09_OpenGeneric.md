@@ -2,7 +2,7 @@
 
 In `Microsoft.Extensions.DependencyInjection`, open generic types can be registered and resolved at runtime.  
 However, this involves runtime reflection which can be costly in terms of performance, and does not support nested generic types.  
-SourceGen.Ioc can automatically discover closed generic types used in constructor/property/method injection or `IServiceProvider` resolution, generating registration code at compile time to eliminate runtime reflection overhead and support nested generic types.
+`SourceGen.Ioc` can automatically discover closed generic types used in constructor/property/method injection or `IServiceProvider` resolution, generating registration code at compile time to eliminate runtime reflection overhead and support nested generic types.
 
 ## Basic Open Generic
 
@@ -29,7 +29,7 @@ services.AddScoped(typeof(global::MyNamespace.IRepository<>), typeof(global::MyN
 The generator automatically discovers closed generic types used in:
 
 - Constructor parameters
-- Property/field types marked with `[IocInject]`
+- Property/field types marked with `[IocInject]` / `[Inject]`
 - Method parameters that method are marked with `[IocInject]`
 - `IServiceProvider` invocations:
   - `GetService(typeof(T))`
@@ -82,7 +82,7 @@ services.AddSingleton<global::MyNamespace.UserService>((global::System.IServiceP
 
 ## Nested Generic Types
 
-SourceGen.Ioc supports nested open generic service interfaces that `MS.E.DI` cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.E.DI` cannot properly map from the open generic registration to the correct closed generic type.
+`SourceGen.Ioc` supports nested open generic service interfaces that `MS.E.DI` cannot resolve at runtime. When the service interface itself contains nested generics (e.g., `IRequestHandler<GenericRequest<T>, List<T>>`), `MS.E.DI` cannot properly map from the open generic registration to the correct closed generic type.
 
 ```csharp
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
@@ -111,13 +111,13 @@ services.AddSingleton(typeof(global::MyNamespace.GenericRequestHandler<>), typeo
 
 // Discovered nested generic service interface
 services.AddSingleton<global::MyNamespace.GenericRequestHandler<global::MyNamespace.Entity>, global::MyNamespace.GenericRequestHandler<global::MyNamespace.Entity>>();
-services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.GenericRequest<global::MyNamespace.Entity>, global::System.Collections.Generic.List<global::MyNamespace.Entity>>, global::MyNamespace.GenericRequestHandler<global::MyNamespace.Entity>>();
+services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.GenericRequest<global::MyNamespace.Entity>, global::System.Collections.Generic.List<global::MyNamespace.Entity>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.GenericRequestHandler<global::MyNamespace.Entity>>());
 ```
 
 </details>
 
 > [!NOTE]  
-> The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.E.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. SourceGen.Ioc handles this through compile-time code generation.
+> The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.E.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. `SourceGen.Ioc` handles this through compile-time code generation.
 
 ## Manual Discovery with `[IocDiscover]`
 
@@ -150,9 +150,9 @@ internal class Consumer
 // Open generic registration
 services.AddSingleton(typeof(global::MyNamespace.TestRequestHandler<>), typeof(global::MyNamespace.TestRequestHandler<>));
 
-// Discovered from [Discover] attribute
+// Discovered from [IocDiscover] attribute
 services.AddSingleton<global::MyNamespace.TestRequestHandler<string>, global::MyNamespace.TestRequestHandler<string>>();
-services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.TestRequest<string>, global::System.Collections.Generic.List<string>>, global::MyNamespace.TestRequestHandler<string>>();
+services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.TestRequest<string>, global::System.Collections.Generic.List<string>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::MyNamespace.TestRequestHandler<string>>());
 ```
 
 </details>

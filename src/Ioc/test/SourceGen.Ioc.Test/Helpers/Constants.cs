@@ -26,6 +26,7 @@ internal static class Constants
     public const string ContainerOptions = "ContainerOptions";
     public const string PartialAccessor = "PartialAccessor";
     public const string WrapperType = "WrapperType";
+    public const string AsyncMethodInject = "AsyncMethodInject";
 
     public const string SGIOC001 = "SGIOC001";
     public const string SGIOC002 = "SGIOC002";
@@ -51,4 +52,10 @@ internal static class Constants
     public const string SGIOC022 = "SGIOC022";
     public const string SGIOC023 = "SGIOC023";
     public const string SGIOC024 = "SGIOC024";
+    public const string SGIOC025 = "SGIOC025";
+    public const string SGIOC026 = "SGIOC026";
+    public const string SGIOC027 = "SGIOC027";
+    public const string SGIOC028 = "SGIOC028";
+    public const string SGIOC029 = "SGIOC029";
+    public const string SGIOC030 = "SGIOC030";
 }

@@ -1,8 +1,48 @@
 # Basic Usage
 
-## Simple Registration
+`SourceGen.Ioc` provides two main approaches for service registration:
 
-Mark a class with `[IocRegister]` to register it for dependency injection:
+1. **Non-intrusive** — `[IocRegisterFor]` registers types externally, keeping your service code attribute-free.
+2. **Direct annotation** — `[IocRegister]` marks the class at its declaration (best for infrastructure types you own).
+
+> [!TIP]
+> Prefer `[IocRegisterFor]` for domain/business types and `[IocRegister]` for infrastructure types. This keeps your domain layer free of DI framework concerns.
+
+## Registering External Types (Non-Intrusive)
+
+Use `[IocRegisterFor<T>]` (generic) or `[IocRegisterFor]` (non-generic) to register types **without modifying their source code**:
+
+```csharp
+// In a dedicated registration file — service types stay attribute-free
+[assembly: IocRegisterFor<UserService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IUserService)])]
+[assembly: IocRegisterFor<OrderService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IOrderService)])]
+
+// Or on a marker class
+[IocRegisterFor<UserService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IUserService)])]
+[IocRegisterFor<OrderService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IOrderService)])]
+public class RegistrationMarker;
+```
+
+> [!NOTE]
+> Generic attributes require C# 11+. If your project targets an older language version, use the non-generic form: `[IocRegisterFor(typeof(UserService))]`.
+
+`IocRegisterFor` supports the same options as `IocRegister` (`Key`, `KeyType`, `Tags`, `Decorators`, `Factory`, `Instance`, and lifetime settings).
+
+<details>
+<summary>Generated Code</summary>
+
+```csharp
+services.AddScoped<UserService, UserService>();
+services.AddScoped<IUserService>((global::System.IServiceProvider sp) => sp.GetRequiredService<UserService>());
+services.AddScoped<OrderService, OrderService>();
+services.AddScoped<IOrderService>((global::System.IServiceProvider sp) => sp.GetRequiredService<OrderService>());
+```
+
+</details>
+
+## Simple Registration (Direct Annotation)
+
+Mark a class with `[IocRegister]` to register it directly:
 
 ```csharp
 public interface IMyService;
@@ -106,37 +146,6 @@ services.AddSingleton<IDisposable>((global::System.IServiceProvider sp) => sp.Ge
 // RegisterAllBaseClasses
 services.AddSingleton<DerivedService, DerivedService>();
 services.AddSingleton<BaseService>((global::System.IServiceProvider sp) => sp.GetRequiredService<DerivedService>());
-```
-
-</details>
-
-## Registering External Types
-
-Use `[IocRegisterFor<T>]` (generic) or `[IocRegisterFor]` (non-generic) to register types you don't own:
-
-```csharp
-// Assembly-level registration
-[assembly: IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
-[assembly: IocRegisterFor(typeof(AnotherExternal), ServiceLifetime.Scoped, ServiceTypes = [typeof(IExternal)])]
-
-// Type-level marker registration
-[IocRegisterFor<ExternalService>(ServiceLifetime.Singleton)]
-[IocRegisterFor<AnotherExternal>(ServiceTypes = [typeof(IExternal)])]
-public class RegistrationMarker;
-```
-
-> [!NOTE]
-> Generic attributes require C# 11+. If your project targets an older language version, use the non-generic form: `[IocRegisterFor(typeof(ExternalService))]`.
-
-`IocRegisterFor` supports the same key options as `IocRegister` (`Key`, `KeyType`, `Tags`, `Decorators`, `Factory`, `Instance`, and lifetime settings).
-
-<details>
-<summary>Generated Code</summary>
-
-```csharp
-services.AddSingleton<ExternalService, ExternalService>();
-services.AddSingleton<AnotherExternal, AnotherExternal>();
-services.AddSingleton<IExternal>((global::System.IServiceProvider sp) => sp.GetRequiredService<AnotherExternal>());
 ```
 
 </details>

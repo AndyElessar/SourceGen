@@ -339,5 +339,40 @@ public class SGIOC018Tests
 
         await Assert.That(sgioc018).Count().IsEqualTo(2);
     }
+
+    [Test]
+    public async Task SGIOC018_AssemblyLevelRegisterFor_NonGeneric_DependencyRegistered_NoDiagnostic()
+    {
+        // IDependency is registered via assembly-level [IocRegisterFor] (non-generic).
+        // IMyService depends on IDependency. SGIOC018 should NOT fire.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyDependency), ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IDependency)])]
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public class MyDependency : IDependency { }
+
+            public interface IMyService { }
+
+            [IocRegister<IMyService>(ServiceLifetime.Singleton)]
+            public class MyService : IMyService
+            {
+                public MyService(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018");
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
 }
 

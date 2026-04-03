@@ -80,7 +80,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "InjectAttribute cannot be applied to static members, members that cannot be assigned/invoked, or methods that do not return void.");
+        description: "InjectAttribute cannot be applied to static members, members that cannot be assigned/invoked, or methods that do not return void (or non-generic Task when AsyncMethodInject is enabled).");
 
     /// <summary>
     /// SGIOC008: Invalid Attribute Usage - Factory or Instance uses nameof() but the referenced member is not static or is inaccessible.
@@ -249,7 +249,44 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Members specified in InjectMembers must be injectable: instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods, all of which must be public, internal, or protected internal.");
+        description: "Members specified in InjectMembers must be injectable: instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods (or non-generic Task-returning when AsyncMethodInject is enabled), all of which must be public, internal, or protected internal.");
+
+    /// <summary>
+    /// SGIOC026: AsyncMethodInject feature requires MethodInject to be enabled.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AsyncMethodInjectRequiresMethodInject = new(
+        id: "SGIOC026",
+        title: "Invalid feature combination",
+        messageFormat: "'AsyncMethodInject' feature requires 'MethodInject' to be enabled. Add 'MethodInject' to <SourceGenIocFeatures>.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "AsyncMethodInject delegates async method injection to the source generator, which requires MethodInject to already be enabled. Add MethodInject alongside AsyncMethodInject in SourceGenIocFeatures.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
+    /// SGIOC030: Synchronous dependency requested for async-init-only service.
+    /// </summary>
+    public static readonly DiagnosticDescriptor SyncDependencyOnAsyncInitService = new(
+        id: "SGIOC030",
+        title: "Synchronous dependency requested for async-init service",
+        messageFormat: "'{0}' requires '{1}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{1}>'.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When a service is registered with async inject methods, consumers must request Task<T> instead of T because no synchronous resolution path exists.");
+
+    /// <summary>
+    /// SGIOC028: [IocInject] method is declared as async void, which cannot be awaited.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AsyncVoidInjectMethod = new(
+        id: "SGIOC028",
+        title: "async void injection method cannot be awaited",
+        messageFormat: "[IocInject] method '{0}' is 'async void' which cannot be awaited. Change return type to 'Task' for async initialization, or remove the 'async' modifier for synchronous injection.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Methods marked with [IocInject] that are declared as async void cannot be awaited by the source generator. Change the return type to Task to enable async injection, or remove the async modifier if the method is synchronous.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
@@ -272,7 +309,10 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedGenericFactoryPlaceholders,
         InjectFeatureDisabled,
         InjectMembersInvalidFormat,
-        InjectMembersNonInjectableMember
+        InjectMembersNonInjectableMember,
+        AsyncMethodInjectRequiresMethodInject,
+        SyncDependencyOnAsyncInitService,
+        AsyncVoidInjectMethod
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -288,11 +328,18 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     {
         var features = ParseIocFeatures(context.Options);
 
+        // SGIOC026: AsyncMethodInject requires MethodInject — report once per compilation
+        if((features & IocFeatures.AsyncMethodInject) != 0 && (features & IocFeatures.MethodInject) == 0)
+        {
+            context.RegisterCompilationEndAction(static ctx =>
+                ctx.ReportDiagnostic(Diagnostic.Create(AsyncMethodInjectRequiresMethodInject, Location.None)));
+        }
+
         // Get attribute type symbols for faster lookup (including generic variants)
-        var attributeSymbols = new IoCAttributeSymbols(context.Compilation);
+        var attributeSymbols = new IocAttributeSymbols(context.Compilation);
 
         // Check if any IoC attribute is available
-        if (!attributeSymbols.HasAnyRegistrationAttribute)
+        if(!attributeSymbols.HasAnyRegistrationAttribute)
             return;
 
         // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis
@@ -356,7 +403,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
     {
         // SGIOC012: Report duplicated IoCRegisterDefaults
-        foreach (var (targetTypeName, location) in analyzerContext.DuplicatedDefaults)
+        foreach(var (targetTypeName, location) in analyzerContext.DuplicatedDefaults)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DuplicatedDefaultSettings,
@@ -368,7 +415,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var pathStack = new Stack<INamedTypeSymbol>();
 
-        foreach (var kvp in analyzerContext.RegisteredServices)
+        foreach(var kvp in analyzerContext.RegisteredServices)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -388,6 +435,206 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 pathStack,
                 context.CancellationToken);
         }
+
+        var asyncInitOnlyServiceTypes = BuildAsyncInitOnlyServiceTypes(analyzerContext);
+        if(asyncInitOnlyServiceTypes.Count == 0)
+            return;
+
+        foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            AnalyzeSyncDependenciesOnAsyncInitServices(
+                context.ReportDiagnostic,
+                serviceInfo,
+                asyncInitOnlyServiceTypes,
+                context.CancellationToken);
+        }
+    }
+
+    private static ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
+    {
+        var serviceTypeStates = new Dictionary<(INamedTypeSymbol ServiceType, string? Key), (bool HasAsync, bool HasSync)>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+
+        foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
+        {
+            var isAsyncInit = AnalyzerHelpers.IsAsyncInitImplementation(serviceInfo.Type, analyzerContext.Features);
+
+            // Use pre-computed AllRegistrations (populated at collection time from attribute data) when
+            // available. This correctly handles assembly-level registrations where multiple IocRegisterFor
+            // attributes target the same impl type with different keys — the second and subsequent
+            // registrations are not stored in RegisteredServices but are recorded in AllRegistrations.
+            IEnumerable<(INamedTypeSymbol ServiceType, string? Key)> serviceTypes =
+                serviceInfo.AllRegistrations.IsEmpty
+                    ? CollectRegisteredServiceTypesForAnalysis(serviceInfo, analyzerContext.AttributeSymbols)
+                    : serviceInfo.AllRegistrations;
+
+            foreach(var serviceType in serviceTypes)
+            {
+                serviceTypeStates.TryGetValue(serviceType, out var state);
+                serviceTypeStates[serviceType] = isAsyncInit
+                    ? (HasAsync: true, HasSync: state.HasSync)
+                    : (HasAsync: state.HasAsync, HasSync: true);
+            }
+        }
+
+        var asyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder<(INamedTypeSymbol ServiceType, string? Key)>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+        foreach(var kvp in serviceTypeStates)
+        {
+            var serviceType = kvp.Key;
+            var state = kvp.Value;
+            if(state is { HasAsync: true, HasSync: false })
+                asyncOnlyServiceTypes.Add(serviceType);
+        }
+
+        return asyncOnlyServiceTypes.ToImmutable();
+    }
+
+    private static HashSet<(INamedTypeSymbol ServiceType, string? Key)> CollectRegisteredServiceTypesForAnalysis(
+        ServiceInfo serviceInfo,
+        IocAttributeSymbols attributeSymbols)
+    {
+        var serviceTypes = new HashSet<(INamedTypeSymbol ServiceType, string? Key)>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+        var hasRegistrationAttribute = false;
+
+        var implementationType = serviceInfo.Type;
+
+        foreach(var attribute in implementationType.GetAttributes())
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass is null || !AnalyzerHelpers.IsIoCRegistrationAttribute(attrClass, attributeSymbols))
+                continue;
+
+            hasRegistrationAttribute = true;
+            var (serviceKey, _, _) = attribute.GetKeyInfo();
+            foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(implementationType, attribute, attributeSymbols))
+            {
+                serviceTypes.Add((serviceType, serviceKey));
+            }
+        }
+
+        if(!hasRegistrationAttribute)
+        {
+            foreach(var serviceType in AnalyzerHelpers.EnumerateImplicitServiceTypes(implementationType))
+            {
+                serviceTypes.Add((serviceType, serviceInfo.ServiceKey));
+            }
+        }
+
+        return serviceTypes;
+    }
+
+    private static void AnalyzeSyncDependenciesOnAsyncInitServices(
+        Action<Diagnostic> reportDiagnostic,
+        ServiceInfo serviceInfo,
+        ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> asyncInitOnlyServiceTypes,
+        CancellationToken cancellationToken)
+    {
+        if(serviceInfo.Constructor is not null)
+        {
+            AnalyzeParameterDependenciesOnAsyncInitServices(
+                reportDiagnostic,
+                serviceInfo.Constructor.Parameters,
+                asyncInitOnlyServiceTypes,
+                cancellationToken);
+        }
+
+        foreach(var (member, injectAttribute) in serviceInfo.InjectedMembers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            switch(member)
+            {
+                case IPropertySymbol property:
+                    AnalyzeDependencyOnAsyncInitService(
+                        reportDiagnostic,
+                        property.Name,
+                        property.Type,
+                        injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+                            ?? property.Locations.FirstOrDefault(),
+                        injectAttribute.GetKeyInfo().Key,
+                        asyncInitOnlyServiceTypes);
+                    break;
+
+                case IFieldSymbol field:
+                    AnalyzeDependencyOnAsyncInitService(
+                        reportDiagnostic,
+                        field.Name,
+                        field.Type,
+                        injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+                            ?? field.Locations.FirstOrDefault(),
+                        injectAttribute.GetKeyInfo().Key,
+                        asyncInitOnlyServiceTypes);
+                    break;
+
+                case IMethodSymbol method:
+                    AnalyzeParameterDependenciesOnAsyncInitServices(
+                        reportDiagnostic,
+                        method.Parameters,
+                        asyncInitOnlyServiceTypes,
+                        cancellationToken);
+                    break;
+            }
+        }
+    }
+
+    private static void AnalyzeParameterDependenciesOnAsyncInitServices(
+        Action<Diagnostic> reportDiagnostic,
+        ImmutableArray<IParameterSymbol> parameters,
+        ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> asyncInitOnlyServiceTypes,
+        CancellationToken cancellationToken)
+    {
+        foreach(var parameter in parameters)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(ShouldSkipAsyncInitDependencyCheck(parameter))
+                continue;
+
+            AnalyzeDependencyOnAsyncInitService(
+                reportDiagnostic,
+                parameter.Name,
+                parameter.Type,
+                parameter.Locations.FirstOrDefault(),
+                parameter.GetServiceKeyAndAttributeInfo().ServiceKey,
+                asyncInitOnlyServiceTypes);
+        }
+    }
+
+    private static void AnalyzeDependencyOnAsyncInitService(
+        Action<Diagnostic> reportDiagnostic,
+        string memberName,
+        ITypeSymbol dependencyType,
+        Location? location,
+        string? serviceKey,
+        ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> asyncInitOnlyServiceTypes)
+    {
+        if(AnalyzerHelpers.TryGetAsyncWrapperElementType(dependencyType) is not null)
+            return;
+
+        if(dependencyType.WithNullableAnnotation(NullableAnnotation.NotAnnotated) is not INamedTypeSymbol namedDependencyType)
+            return;
+
+        if(!asyncInitOnlyServiceTypes.Contains((namedDependencyType, serviceKey)))
+            return;
+
+        reportDiagnostic(Diagnostic.Create(
+            SyncDependencyOnAsyncInitService,
+            location,
+            memberName,
+            namedDependencyType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+    }
+
+    private static bool ShouldSkipAsyncInitDependencyCheck(IParameterSymbol parameter)
+    {
+        if(parameter.HasExplicitDefaultValue)
+            return true;
+
+        if(AnalyzerHelpers.IsWellKnownServiceType(parameter.Type))
+            return true;
+
+        return parameter.GetAttributes().Any(static attr =>
+            attr.AttributeClass?.Name == "ServiceKeyAttribute"
+            && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection");
     }
 
     private static IocFeatures ParseIocFeatures(AnalyzerOptions options)

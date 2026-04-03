@@ -1,6 +1,9 @@
 # Default Settings
 
-Use `[IocRegisterDefaults<T>]` to define default registration settings for all types that implement or inherit from `T`.
+`[IocRegisterDefaults]` defines shared registration policy (lifetime, decorators, tags) for all implementations of a target service type. Combined with `ImplementationTypes`, it can also register multiple types in one declaration — without adding any attribute to the implementation classes themselves.
+
+> [!TIP]
+> `[IocRegisterDefaults]` is most powerful when used with `ImplementationTypes` — you get centralized, non-intrusive registration without any per-class attributes.
 
 ## Basic Defaults
 
@@ -149,7 +152,7 @@ public class LoggingDecorator(IMyService inner) : IMyService
 
 ```csharp
 services.AddScoped<MyService, MyService>();
-services.AddScoped<IMyService>((IServiceProvider sp) =>
+services.AddScoped<IMyService>((global::System.IServiceProvider sp) =>
 {
     var s0 = sp.GetRequiredService<MyService>();
     var s1 = new LoggingDecorator(s0);
@@ -241,7 +244,7 @@ public sealed class Module;
 
 ## Registration Priority
 
-SourceGen.Ioc uses two related precedence rules:
+`SourceGen.Ioc` uses two related precedence rules:
 
 ### 1) Settings merge order
 

@@ -335,6 +335,29 @@ internal sealed record class KeyValuePairTypeData(
         AllInterfaces, AllBaseClasses);
 
 /// <summary>
+/// Represents Task&lt;T&gt; wrapper type. Async-initialized service wrapper.
+/// Resolved via an async resolver method that awaits async inject methods.
+/// </summary>
+internal sealed record class TaskTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+        WrapperKind.Task,
+        IsNestedOpenGeneric, TypeParameters,
+        ConstructorParameters, HasInjectConstructor, InjectionMembers,
+        AllInterfaces, AllBaseClasses);
+
+/// <summary>
 /// Represents the kind of wrapper for DI injection purposes.
 /// Each value has a corresponding sealed TypeData derived type.
 /// </summary>
@@ -398,7 +421,13 @@ internal enum WrapperKind
     /// <summary>
     /// KeyValuePair&lt;TKey, TValue&gt; - single keyed service entry.
     /// </summary>
-    KeyValuePair
+    KeyValuePair,
+
+    /// <summary>
+    /// Task&lt;T&gt; - async-initialized service wrapper.
+    /// Resolved via an async resolver method that awaits async inject methods.
+    /// </summary>
+    Task
 }
 
 internal static class TypeDataExtensions
@@ -525,6 +554,11 @@ internal static class TypeDataExtensions
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
                     AllInterfaces, AllBaseClasses),
                 WrapperKind.KeyValuePair => new KeyValuePairTypeData(
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    IsNestedOpenGeneric, TypeParameters,
+                    ConstructorParameters, HasInjectConstructor, InjectionMembers,
+                    AllInterfaces, AllBaseClasses),
+                WrapperKind.Task => new TaskTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
@@ -661,5 +695,13 @@ internal static class TypeDataExtensions
         /// Gets the value type of the KeyValuePair&lt;TKey, TValue&gt; wrapper.
         /// </summary>
         public TypeData ValueType => typeData.TypeParameters![1].Type;
+    }
+
+    extension(TaskTypeData typeData)
+    {
+        /// <summary>
+        /// Gets the inner service type of the Task&lt;T&gt; wrapper.
+        /// </summary>
+        public TypeData InnerType => typeData.TypeParameters![0].Type;
     }
 }

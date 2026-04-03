@@ -1,5 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-
 namespace SourceGen.Ioc.TestCase;
 
 /// <summary>Keyed service interface for testing keyed service resolution.</summary>

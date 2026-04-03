@@ -1,6 +1,44 @@
-# Source Generator Spec
+# IocSourceGenerator Specification
 
-Source generators based on `Microsoft.Extensions.DependencyInjection.Abstractions`.
+Source generators for compile-time IoC container generation based on `Microsoft.Extensions.DependencyInjection.Abstractions`. This Overview page provides index and consolidated specification data. Feature documentation is split into focused spec files under `Register.*.md` and `Container.*.md`.
+
+## Spec Index
+
+Find detailed documentation for each feature:
+
+### Registration Features
+
+|Feature|File|Description|
+|:---|:---|:---|
+|Basic Registration|[Register.Basic.spec.md](Register.Basic.spec.md)|Core service registration patterns including implementation types and keyed services|
+|Decorators|[Register.Decorators.spec.md](Register.Decorators.spec.md)|Decorator pattern for composing services with multiple layers|
+|Tags|[Register.Tags.spec.md](Register.Tags.spec.md)|Tag-based mutually exclusive service registration|
+|Injection Members|[Register.Injection.spec.md](Register.Injection.spec.md)|Field, property, method, async method, and constructor injection patterns|
+|Imported Modules|[Register.ImportModule.spec.md](Register.ImportModule.spec.md)|Cross-assembly module importing and sharing registrations|
+|Open Generics|[Register.Generics.spec.md](Register.Generics.spec.md)|Generic service types, closed generic discovery, and generic factory mapping|
+|IServiceProvider|[Register.ServiceProviderInvocation.spec.md](Register.ServiceProviderInvocation.spec.md)|Automatic service discovery from IServiceProvider invocations|
+|MSBuild Configuration|[Register.MSBuild.spec.md](Register.MSBuild.spec.md)|MSBuild property configuration for generator behavior|
+|Factory & Instance|[Register.Factory.spec.md](Register.Factory.spec.md)|Factory method and static instance registration|
+|KeyValuePair|[Register.KeyValuePair.spec.md](Register.KeyValuePair.spec.md)|KeyValuePair and Dictionary registrations for keyed service collections|
+
+### Container Features
+
+|Feature|File|Description|
+|:---|:---|:---|
+|Basic Container|[Container.Basic.spec.md](Container.Basic.spec.md)|Generated container overview and service resolution|
+|Service Lifetime|[Container.Lifetime.spec.md](Container.Lifetime.spec.md)|Singleton, Scoped, and Transient lifecycle management|
+|Keyed Services|[Container.KeyedServices.spec.md](Container.KeyedServices.spec.md)|Keyed service resolution with multiple key types|
+|Injection|[Container.Injection.spec.md](Container.Injection.spec.md)|Constructor, property, field, and method injection in containers|
+|Decorators|[Container.Decorators.spec.md](Container.Decorators.spec.md)|Decorator ordering and composition within containers|
+|Imported Modules|[Container.ImportModule.spec.md](Container.ImportModule.spec.md)|FrozenDictionary-based service resolution with module composition|
+|Factory & Instance|[Container.Factory.spec.md](Container.Factory.spec.md)|Factory-created and static instance service handling|
+|Open Generics|[Container.Generics.spec.md](Container.Generics.spec.md)|Open generic service resolution|
+|Collections & Wrappers|[Container.Collections.spec.md](Container.Collections.spec.md)|Collection types (IEnumerable, arrays) and wrapper types (Lazy, Func, Task, KeyValuePair)|
+|Container Options|[Container.Options.spec.md](Container.Options.spec.md)|Configuration attributes and behavior flags (IntegrateServiceProvider, ExplicitOnly, etc.)|
+|Thread Safety|[Container.ThreadSafety.spec.md](Container.ThreadSafety.spec.md)|Thread-safe service initialization strategies (Lock, SemaphoreSlim, SpinLock, CompareExchange)|
+|Partial Accessors|[Container.PartialAccessors.spec.md](Container.PartialAccessors.spec.md)|Fast-path service resolution via partial members|
+|MVC & Blazor|[Container.AspNetCore.spec.md](Container.AspNetCore.spec.md)|IControllerActivator, IComponentActivator, and IComponentPropertyActivator support|
+|Performance|[Container.Performance.spec.md](Container.Performance.spec.md)|Disposal order, eager resolution, and code generation efficiency|
 
 ## Collecting Information
 
@@ -38,7 +76,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |`AllBaseClasses`|All base classes (excluding `System.Object`)|
 |`TypeParameters`|Generic type parameters with constraints|
 |`ConstructorParameters`|Constructor parameters (for decorators)|
-|`WrapperKind`|`None`, `Enumerable`, `ReadOnlyCollection`, `Collection`, `ReadOnlyList`, `List`, `Array`, `Lazy`, `Func`, `Dictionary`, or `KeyValuePair`|
+|`WrapperKind`|`None`, `Enumerable`, `ReadOnlyCollection`, `Collection`, `ReadOnlyList`, `List`, `Array`, `Lazy`, `Func`, `Task`, `Dictionary`, or `KeyValuePair`|
 
 ### 4. Injection Members
 
@@ -47,6 +85,7 @@ Source generators based on `Microsoft.Extensions.DependencyInjection.Abstraction
 |Property|With `[IocInject]`/`[Inject]`, set via object initializer|
 |Field|With `[IocInject]`/`[Inject]`, set via object initializer|
 |Method|With `[IocInject]`/`[Inject]`, called after construction|
+|AsyncMethod|With `[IocInject]`/`[Inject]`, awaited after synchronous member injection when `AsyncMethodInject` is enabled|
 
 ### 5. IServiceProvider Invocations
 
@@ -68,23 +107,42 @@ The `SourceGenIocFeatures` MSBuild property controls which outputs and injection
 
 Available features:
 
-|Feature|Description|
-|:------|:----------|
-|`Register`|Enable generation of the registration extension method output|
-|`Container`|Enable generation of the container class output|
-|`PropertyInject`|Enable property injection member generation|
-|`FieldInject`|Enable field injection member generation|
-|`MethodInject`|Enable method injection member generation|
+|Feature|Value|Description|
+|:------|:----|:----------|
+|`Register`|`1 << 0`|Enable generation of the registration extension method output.|
+|`Container`|`1 << 1`|Enable generation of the container class output.|
+|`PropertyInject`|`1 << 2`|Enable property injection member generation.|
+|`FieldInject`|`1 << 3`|Enable field injection member generation.|
+|`MethodInject`|`1 << 4`|Enable synchronous method injection member generation.|
+|`AsyncMethodInject`|`1 << 5`|Enable awaited `[IocInject]`/`[Inject]` methods that return non-generic `Task`. This feature MUST be combined with `MethodInject`; otherwise the analyzer MUST report `SGIOC026`.|
 
 Default value:
 
 `Register,Container,PropertyInject,MethodInject`
 
+`AsyncMethodInject` is **NOT** part of `Default`.
+
 Behavior:
 
 - `Register`: Controls whether the registration extension method output is generated.
 - `Container`: Controls whether the container class output is generated.
-- `PropertyInject` / `FieldInject` / `MethodInject`: Control which injection member types are included in generated code.
+- `PropertyInject` / `FieldInject` / `MethodInject`: Control which synchronous injection member types are included in generated code.
+- `AsyncMethodInject`: Controls awaited async method injection for `[IocInject]` methods that return `Task`.
+
+Feature dependency rules:
+
+|Condition|Required behavior|
+|:--------|:----------------|
+|`AsyncMethodInject` enabled and `MethodInject` disabled|The configuration is invalid. The analyzer MUST report `SGIOC026`: `'AsyncMethodInject' feature requires 'MethodInject' to be enabled.`|
+|`AsyncMethodInject` omitted|`Task`-returning injection methods are not enabled and MUST NOT participate in generated injection code.|
+
+Enabling example:
+
+```xml
+<PropertyGroup>
+    <SourceGenIocFeatures>Register,Container,PropertyInject,MethodInject,AsyncMethodInject</SourceGenIocFeatures>
+</PropertyGroup>
+```
 
 Parsing rules:
 
@@ -191,6 +249,7 @@ Only members with `[IocInject]` or `[Inject]`:
 |`Array`|`ArrayTypeData`|`T[]`|`GetServices<T>().ToArray()`|
 |`Lazy`|`LazyTypeData`|`Lazy<T>`|Lazy-initialized service wrapper|
 |`Func`|`FuncTypeData`|`Func<T>` / `Func<T1,...,TReturn>`|Factory delegate wrapper|
+|`Task`|`TaskTypeData`|`Task<T>`|Async-init wrapper; resolve `Task<T>` directly for async-init services or wrap sync resolution with `Task.FromResult(...)` for sync-only services.|
 |`Dictionary`|`DictionaryTypeData`|`IDictionary<TKey, TValue>`|Dictionary of keyed services|
 |`KeyValuePair`|`KeyValuePairTypeData`|`KeyValuePair<TKey, TValue>`|Single keyed service entry|
 
@@ -210,6 +269,7 @@ TypeData
         │   └── ArrayTypeData               (Array)
         ├── LazyTypeData                    (Lazy)
         ├── FuncTypeData                    (Func)
+        ├── TaskTypeData                    (Task)
         ├── DictionaryTypeData              (Dictionary)
         └── KeyValuePairTypeData            (KeyValuePair)
 ```
@@ -247,10 +307,10 @@ public class FactoryContainer
 ## Generators
 
 1. Registration generator: generate `IServiceCollection` register code.\
-[Registration features spec](Registration.md)
+[Registration features spec](#registration-features)
 
 2. Container generator: generate container that implement `IServiceProvider`.\
-[Container features spec](Container.md)
+[Container features spec](#container-features)
 
 ## Implementation Requirements
 
@@ -272,9 +332,9 @@ src/SourceGen.Ioc.SourceGenerator/
 │   ├── LazyRegistrationHelper.cs          # Lazy wrapper registration helper
 │   ├── FuncRegistrationHelper.cs          # Func wrapper registration helper
 │   ├── KvpRegistrationHelper.cs           # KeyValuePair registration helper
-│   └── Spec/                              # SPEC.md, Registration.md, Container.md
+│   └── Spec/                              # SPEC.spec.md + Register.*.md + Container.*.md
 ├── Models/                                # Immutable data models (RegistrationData, TypeData, etc.)
-└── Analyzer/                              # Diagnostic analyzers & SPEC.md
+└── Analyzer/                              # Diagnostic analyzers & SPEC.spec.md
 ```
 
 ### Data Flow
