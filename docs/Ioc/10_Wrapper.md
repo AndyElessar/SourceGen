@@ -425,6 +425,14 @@ Wrapper nesting behavior is **shape-dependent**:
 - **Non-collection outer wrappers** (`Lazy<T>`, `Func<T>`): recursively resolved to arbitrary depth via inline construction.
 - **Collection outer wrappers** (`IEnumerable<T>`, `IList<T>`, etc.): support at most **1 level of inner wrapping** (2 levels total). Deeper nesting falls back to default behavior.
 
+#### Why Inline Construction?
+
+Inline construction for nested wrappers is a deliberate pragmatic choice.
+
+- Directly resolving nested wrappers from the container (for example, `container.GetService<Lazy<Func<T>>>()`) is extremely rare; the primary use case is constructor injection, which inline construction fully covers.
+- Keeping nested wrappers inline avoids extending field scanning, naming conventions, and scoped container infrastructure for every nested wrapper shape.
+- Nested wrappers typically do not require cross-consumer instance sharing, so each consumer holding its own inline-constructed instance is semantically correct.
+
 #### Supported
 
 | Pattern | Behavior |

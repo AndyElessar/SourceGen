@@ -2028,7 +2028,14 @@ partial class IocSourceGenerator
     {
         if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
         {
-            // Inner wrappers always use inline construction (no resolver methods).
+            // Inner wrappers always use inline construction (no resolver methods). This is a deliberate
+            // pragmatic choice: direct container resolution of nested wrappers (for example,
+            // container.GetService<Lazy<Func<T>>>()) is extremely rare, while constructor injection is
+            // fully covered by inline construction. This keeps implementation simple by avoiding
+            // extensions to field scanning, naming conventions, and scoped-container infrastructure for
+            // every nested wrapper shape. Nested wrappers also typically do not require cross-consumer
+            // instance sharing, so each consumer owning its own inline-constructed instance is
+            // semantically correct.
             // NOTE: Nested Task<T> shapes such as Lazy<Task<T>> or IEnumerable<Task<T>> are not
             // supported by the spec. The transform layer prevents these from reaching code generation
             // by downgrading their WrapperKind to None, so they fall back to IServiceProvider.

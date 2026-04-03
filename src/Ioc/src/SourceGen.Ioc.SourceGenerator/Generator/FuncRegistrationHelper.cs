@@ -123,6 +123,13 @@ partial class IocSourceGenerator
     {
         switch(type)
         {
+            // Nested wrappers are intentionally excluded from standalone field generation. This is a
+            // deliberate pragmatic choice: direct container resolution of nested wrappers (for example,
+            // container.GetService<Lazy<Func<T>>>()) is extremely rare, and constructor injection is
+            // already fully covered by inline construction. Keeping nested wrappers inline avoids
+            // expanding field scanning, naming conventions, and scoped-container infrastructure for all
+            // nested shapes. Nested wrappers also usually do not require cross-consumer instance
+            // sharing, so per-consumer inline instances are semantically correct.
             case FuncTypeData func when func.ReturnType is not WrapperTypeData:
                 if(!neededFuncTypes.ContainsKey(func.Name))
                     neededFuncTypes[func.Name] = func;
@@ -432,6 +439,13 @@ partial class IocSourceGenerator
     {
         switch(type)
         {
+            // Nested wrappers are intentionally excluded from standalone field generation. This is a
+            // deliberate pragmatic choice: direct container resolution of nested wrappers (for example,
+            // container.GetService<Lazy<Func<T>>>()) is extremely rare, and constructor injection is
+            // already fully covered by inline construction. Keeping nested wrappers inline avoids
+            // expanding field scanning, naming conventions, and scoped-container infrastructure for all
+            // nested shapes. Nested wrappers also usually do not require cross-consumer instance
+            // sharing, so per-consumer inline instances are semantically correct.
             case FuncTypeData func when !func.HasInputParameters && func.ReturnType is not WrapperTypeData:
                 neededTypes.Add(func.ReturnType.Name);
                 break;

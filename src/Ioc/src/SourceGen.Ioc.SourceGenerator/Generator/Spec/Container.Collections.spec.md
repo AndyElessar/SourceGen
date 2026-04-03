@@ -126,12 +126,19 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 | `IReadOnlyDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `Dictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 
-> **Note**: Nested wrappers are supported up to 2 levels. Inner types are still constructed **inline** (no dedicated resolver).
+> **Note**: Nested wrapper behavior is shape-dependent. For non-collection outer wrappers, inner wrappers are recursively constructed **inline** (no dedicated resolver). For collection outer wrappers, wrapper resolution relies on standalone wrapper registrations and has stricter nesting behavior.
 >
 > - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => GetMyService()))`
 > - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => GetMyService()))`
 > - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => GetServices<T>())`
 > - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Resolved via `GetServices<Lazy<T>>()` which uses the wrapper resolver methods
+>
+> **Design rationale (inline nested wrappers):**
+>
+> - Pragmatic choice: inline construction for nested wrappers is deliberate.
+> - Rare usage: directly resolving nested wrappers from the container (for example, `container.GetService<Lazy<Func<T>>>()`) is extremely rare; the primary use case is constructor injection, which inline construction fully covers.
+> - Implementation simplicity: this avoids extending field scanning, naming conventions, and scoped container infrastructure for nested wrapper shapes.
+> - No instance-sharing requirement: nested wrappers typically do not require cross-consumer instance sharing; each consumer holding its own inline-constructed instance is semantically correct.
 >
 > Non-collection outer wrappers (`Lazy<T>`, `Func<T>`) are recursively resolved to arbitrary depth. Collection outer wrappers (`IEnumerable<T>`, etc.) support at most **1 level of inner wrapping** (2 levels total); deeper nesting (e.g., `IEnumerable<Lazy<Func<T>>>`) falls back to `IServiceProvider` resolution via `GetRequiredService(typeof(...))`.
 >
