@@ -154,6 +154,22 @@ partial class IocSourceGenerator
             .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
             .ToList();
 
+        // Compute the set of service type names (and impl type names) that have async-init injection.
+        // Used by Task<T> wrapper resolution to distinguish async-init vs sync-only services.
+        var asyncInitServiceTypeSet = new HashSet<string>(StringComparer.Ordinal);
+        foreach(var group in tagGroups.Values)
+        {
+            foreach(var reg in group)
+            {
+                if(reg.InjectionMembers.Any(m => m.MemberType == InjectionMemberType.AsyncMethod))
+                {
+                    asyncInitServiceTypeSet.Add(reg.ServiceType.Name);
+                    asyncInitServiceTypeSet.Add(reg.ImplementationType.Name);
+                }
+            }
+        }
+        HashSet<string>? asyncInitServiceTypeNames = asyncInitServiceTypeSet.Count > 0 ? asyncInitServiceTypeSet : null;
+
         bool isFirstGroup = true;
         foreach(var kvp in sortedGroups)
         {
@@ -178,12 +194,12 @@ partial class IocSourceGenerator
             if(tagList.Length == 0)
             {
                 // No tags - only register when no tags passed (mutually exclusive model)
-                WriteNoTagConditionalBlock(mainWriter, groupRegistrations, groupLazyEntries, groupFuncEntries, groupKvpEntries);
+                WriteNoTagConditionalBlock(mainWriter, groupRegistrations, groupLazyEntries, groupFuncEntries, groupKvpEntries, asyncInitServiceTypeNames);
             }
             else
             {
                 // Has tags - only register when tags match
-                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations, groupLazyEntries, groupFuncEntries, groupKvpEntries);
+                WriteConditionalTagBlock(mainWriter, tagList, groupRegistrations, groupLazyEntries, groupFuncEntries, groupKvpEntries, asyncInitServiceTypeNames);
             }
         }
 
@@ -205,11 +221,11 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes a group of registrations without any conditional wrapper.
     /// </summary>
-    private static void WriteRegistrationGroup(SourceWriter writer, List<ServiceRegistrationModel> registrations)
+    private static void WriteRegistrationGroup(SourceWriter writer, List<ServiceRegistrationModel> registrations, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         foreach(var registration in registrations)
         {
-            WriteRegistration(writer, registration);
+            WriteRegistration(writer, registration, asyncInitServiceTypeNames);
         }
     }
 
@@ -223,7 +239,8 @@ partial class IocSourceGenerator
         List<ServiceRegistrationModel> registrations,
         List<LazyRegistrationEntry>? lazyEntries = null,
         List<FuncRegistrationEntry>? funcEntries = null,
-        List<KvpRegistrationEntry>? kvpEntries = null)
+        List<KvpRegistrationEntry>? kvpEntries = null,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
         // Build the condition - only register when tags match
         var tagConditions = tags.Select(static tag => $"tags.Contains(\"{tag}\")");
@@ -235,7 +252,7 @@ partial class IocSourceGenerator
 
         foreach(var registration in registrations)
         {
-            WriteRegistration(writer, registration);
+            WriteRegistration(writer, registration, asyncInitServiceTypeNames);
         }
 
         WriteLazyRegistrations(writer, lazyEntries);
@@ -255,7 +272,8 @@ partial class IocSourceGenerator
         List<ServiceRegistrationModel> registrations,
         List<LazyRegistrationEntry>? lazyEntries = null,
         List<FuncRegistrationEntry>? funcEntries = null,
-        List<KvpRegistrationEntry>? kvpEntries = null)
+        List<KvpRegistrationEntry>? kvpEntries = null,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
         writer.WriteLine("if (!tags.Any())");
         writer.WriteLine("{");
@@ -263,7 +281,7 @@ partial class IocSourceGenerator
 
         foreach(var registration in registrations)
         {
-            WriteRegistration(writer, registration);
+            WriteRegistration(writer, registration, asyncInitServiceTypeNames);
         }
 
         WriteLazyRegistrations(writer, lazyEntries);
@@ -292,7 +310,7 @@ partial class IocSourceGenerator
         writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
     }
 
-    private static void WriteRegistration(SourceWriter writer, ServiceRegistrationModel registration)
+    private static void WriteRegistration(SourceWriter writer, ServiceRegistrationModel registration, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         var lifetime = registration.Lifetime.Name;
         var serviceTypeName = registration.ServiceType.Name;
@@ -306,7 +324,7 @@ partial class IocSourceGenerator
         // Handle Factory registration first (takes precedence)
         if(hasFactory)
         {
-            WriteFactoryMethodRegistration(writer, registration, lifetime);
+            WriteFactoryMethodRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
             return;
         }
 
@@ -334,7 +352,7 @@ partial class IocSourceGenerator
             }
             else
             {
-                WriteDecoratorRegistration(writer, registration, lifetime);
+                WriteDecoratorRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
                 return;
             }
         }
@@ -367,17 +385,26 @@ partial class IocSourceGenerator
         // For non-open-generic, service type registrations (interface/base class):
         // Always use forwarding to implementation type to ensure single instance per scope/lifetime
         // This generates: sp => sp.GetRequiredService<ImplementationType>()
+        // When impl is async-init, forwards Task<ServiceType> → Task<ImplType> instead.
         if(!registration.IsOpenGeneric && isServiceTypeRegistration)
         {
             // Service type registration (interface/base class) forwards to implementation
-            WriteServiceTypeForwardingRegistration(writer, registration, lifetime);
+            WriteServiceTypeForwardingRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
             return;
         }
 
         if(needsFactoryConstruction && !registration.IsOpenGeneric)
         {
             // Self registration with injection members or constructor params with special handling - generate factory method
-            WriteInjectionRegistration(writer, registration, lifetime);
+            bool hasAsyncInjectionMembers = registration.InjectionMembers.Any(m => m.MemberType == InjectionMemberType.AsyncMethod);
+            if(hasAsyncInjectionMembers)
+            {
+                WriteAsyncInjectionRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
+            }
+            else
+            {
+                WriteInjectionRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
+            }
             return;
         }
 
@@ -423,7 +450,7 @@ partial class IocSourceGenerator
     /// </list>
     /// If the factory return type differs from the service type, adds a cast.
     /// </remarks>
-    private static void WriteFactoryMethodRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    private static void WriteFactoryMethodRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         var serviceTypeName = registration.ServiceType.Name;
         var factory = registration.Factory!;
@@ -452,7 +479,7 @@ partial class IocSourceGenerator
             // Use multi-line lambda format for readability
             WriteFactoryMethodRegistrationWithAdditionalParams(
                 writer, registration, lifetime, serviceTypeName, factoryPath,
-                hasServiceProvider, hasKey, returnTypeName, additionalParameters, isKeyedRegistration, genericTypeArgs);
+                hasServiceProvider, hasKey, returnTypeName, additionalParameters, isKeyedRegistration, genericTypeArgs, asyncInitServiceTypeNames);
             return;
         }
 
@@ -484,7 +511,8 @@ partial class IocSourceGenerator
         string? returnTypeName,
         ImmutableEquatableArray<ParameterData> additionalParameters,
         bool isKeyedRegistration,
-        string? genericTypeArgs = null)
+        string? genericTypeArgs = null,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
         // Open the registration lambda
         WriteServiceRegistrationLambdaStart(writer, lifetime, serviceTypeName, registration.Key);
@@ -498,7 +526,7 @@ partial class IocSourceGenerator
         foreach(var param in additionalParameters)
         {
             var paramVar = $"f_p{paramIndex}";
-            var varName = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration, registration.Key);
+            var varName = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration, registration.Key, asyncInitServiceTypeNames);
 
             // Use the resolved variable name
             paramVars.Add(varName);
@@ -622,10 +650,34 @@ partial class IocSourceGenerator
     /// services.AddTransient&lt;IMyService&gt;(sp => sp.GetRequiredService&lt;MyService&gt;());
     /// </code>
     /// </remarks>
-    private static void WriteServiceTypeForwardingRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    private static void WriteServiceTypeForwardingRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         var serviceTypeName = registration.ServiceType.Name;
         var implTypeName = registration.ImplementationType.Name;
+
+        // When the implementation type is registered as async-init (Task<ImplType>),
+        // the forwarding registration must also use Task<ServiceType>.
+        // We must use "async ... => await ..." because Task<T> is invariant in C# —
+        // Task<MyService> cannot be implicitly assigned to Task<IMyService> even when
+        // MyService : IMyService. The await unwraps the result and the async lambda
+        // re-wraps it as Task<ServiceType>.
+        bool isAsyncInit = asyncInitServiceTypeNames?.Contains(implTypeName) == true;
+        if(isAsyncInit)
+        {
+            var taskServiceTypeName = $"global::System.Threading.Tasks.Task<{serviceTypeName}>";
+            var taskImplTypeName = $"global::System.Threading.Tasks.Task<{implTypeName}>";
+            if(registration.Key is not null)
+            {
+                var requiredCall = BuildServiceCall(GetRequiredKeyedService, taskImplTypeName, "key");
+                writer.WriteLine($"services.AddKeyed{lifetime}<{taskServiceTypeName}>({registration.Key}, async ({IServiceProviderGlobalTypeName} sp, object? key) => await {requiredCall});");
+            }
+            else
+            {
+                var requiredCall = BuildServiceCall(GetRequiredService, taskImplTypeName, serviceKey: null);
+                writer.WriteLine($"services.Add{lifetime}<{taskServiceTypeName}>(async ({IServiceProviderGlobalTypeName} sp) => await {requiredCall});");
+            }
+            return;
+        }
 
         if(registration.Key is not null)
         {
@@ -663,7 +715,7 @@ partial class IocSourceGenerator
     /// var s0 = p0 is not null ? new MyService(optDep: p0) : new MyService();
     /// </code>
     /// </remarks>
-    private static void WriteInjectionRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    private static void WriteInjectionRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         var serviceTypeName = registration.ServiceType.Name;
         var implTypeName = registration.ImplementationType.Name;
@@ -687,9 +739,81 @@ partial class IocSourceGenerator
             serviceTypeNames: null,
             ctorTypeNameResolver: null,
             memberTypeNameResolver: null,
-            decoratedPrevVar: null);
+            decoratedPrevVar: null,
+            asyncInitServiceTypeNames: asyncInitServiceTypeNames);
 
         writer.WriteLine("return s0;");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
+    }
+
+    /// <summary>
+    /// Writes registration code for services that have async injection methods.
+    /// Generates a <c>Task&lt;T&gt;</c> registration with an async local <c>Init()</c> function
+    /// that performs construction, sync injection, and awaited async injection in order.
+    /// </summary>
+    /// <remarks>
+    /// Generates code like:
+    /// <code>
+    /// services.AddSingleton&lt;Task&lt;MyService&gt;&gt;((IServiceProvider sp) =>
+    /// {
+    ///     async Task&lt;MyService&gt; Init()
+    ///     {
+    ///         var s0_p0 = sp.GetRequiredService&lt;ILogger&gt;();
+    ///         var s0_m0 = sp.GetRequiredService&lt;IAsyncInitializer&gt;();
+    ///         var s0 = new MyService { Logger = s0_p0 };
+    ///         await s0.InitAsync(s0_m0);
+    ///         return s0;
+    ///     }
+    ///     return Init();
+    /// });
+    /// </code>
+    /// </remarks>
+    private static void WriteAsyncInjectionRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, HashSet<string>? asyncInitServiceTypeNames = null)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        var implTypeName = registration.ImplementationType.Name;
+        var injectionMembers = registration.InjectionMembers;
+        bool isKeyedRegistration = registration.Key is not null;
+
+        // Service type is wrapped in Task<T> for async-init registrations
+        var taskServiceTypeName = $"global::System.Threading.Tasks.Task<{serviceTypeName}>";
+        var taskImplTypeName = $"global::System.Threading.Tasks.Task<{implTypeName}>";
+
+        // Open the registration lambda for Task<ServiceType>
+        WriteServiceRegistrationLambdaStart(writer, lifetime, taskServiceTypeName, registration.Key);
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // Write the async local function header
+        writer.WriteLine($"async {taskImplTypeName} Init()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        // Emit construction with sync + async injection (isAsyncMode = true)
+        WriteConstructInstanceWithInjection(
+            writer,
+            instanceVarName: "s0",
+            implTypeName: implTypeName,
+            constructorParams: registration.ImplementationType.ConstructorParameters,
+            injectionMembers: injectionMembers,
+            isKeyedRegistration: isKeyedRegistration,
+            registrationKey: registration.Key,
+            serviceTypeNames: null,
+            ctorTypeNameResolver: null,
+            memberTypeNameResolver: null,
+            decoratedPrevVar: null,
+            asyncInitServiceTypeNames: asyncInitServiceTypeNames,
+            isAsyncMode: true);
+
+        writer.WriteLine("return s0;");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        writer.WriteLine("return Init();");
 
         writer.Indentation--;
         writer.WriteLine("});");
@@ -712,7 +836,9 @@ partial class IocSourceGenerator
         HashSet<string>? serviceTypeNames,
         Func<TypeData, string>? ctorTypeNameResolver,
         Func<TypeData, string>? memberTypeNameResolver,
-        string? decoratedPrevVar)
+        string? decoratedPrevVar,
+        HashSet<string>? asyncInitServiceTypeNames = null,
+        bool isAsyncMode = false)
     {
         var ctorParams = constructorParams ?? [];
         var constructorParamEntries = new List<(string Name, string? Value, bool NeedsConditional)>(ctorParams.Length);
@@ -728,7 +854,7 @@ partial class IocSourceGenerator
             else
             {
                 var varName = decoratedPrevVar is not null ? $"{instanceVarName}_p{paramIndex}" : $"p{paramIndex}";
-                var resolvedVar = ResolveParamAndEmitVar(writer, param, varName, isKeyedRegistration, registrationKey);
+                var resolvedVar = ResolveParamAndEmitVar(writer, param, varName, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
                 constructorParamEntries.Add((param.Name, resolvedVar, false));
                 paramIndex++;
             }
@@ -781,7 +907,9 @@ partial class IocSourceGenerator
                 injectionMembers,
                 isKeyedRegistration,
                 registrationKey,
-                memberTypeNameResolver);
+                memberTypeNameResolver,
+                asyncInitServiceTypeNames,
+                isAsyncMode);
         }
 
     }
@@ -794,7 +922,9 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<InjectionMemberData> injectionMembers,
         bool isKeyedRegistration,
         string? registrationKey,
-        Func<TypeData, string>? memberTypeNameResolver)
+        Func<TypeData, string>? memberTypeNameResolver,
+        HashSet<string>? asyncInitServiceTypeNames = null,
+        bool isAsyncMode = false)
     {
         // Resolve property/field injection parameters
         int pfCount = injectionMembers.Count(m => m.MemberType is InjectionMemberType.Property or InjectionMemberType.Field);
@@ -809,17 +939,63 @@ partial class IocSourceGenerator
             var mt = m.Type;
             var mtName = mt is null ? "object" : (memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name);
             bool hasNonNullDefault = m.HasDefaultValue && !m.DefaultValueIsNull;
-            ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue);
+            ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue, asyncInitServiceTypeNames);
             preProps[idx++] = (m.Name, varN);
             pfIdxCounter++;
         }
 
-        // Resolve method parameters before instance creation (unified for both decorator and non-decorator)
-        var methodParamResolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
+        // Resolve sync method parameters before instance creation
         int memberParamIndex = pfIdxCounter;
+        var methodParamResolutions = ResolveMethodParamResolutions(
+            writer, injectionMembers, InjectionMemberType.Method, instanceVarName, ref memberParamIndex,
+            isKeyedRegistration, registrationKey, memberTypeNameResolver, asyncInitServiceTypeNames);
+
+        // Resolve async method parameters before instance creation (only when in async mode)
+        var asyncMethodParamResolutions = isAsyncMode
+            ? ResolveMethodParamResolutions(
+                writer, injectionMembers, InjectionMemberType.AsyncMethod, instanceVarName, ref memberParamIndex,
+                isKeyedRegistration, registrationKey, memberTypeNameResolver, asyncInitServiceTypeNames)
+            : [];
+
+        // Property/field values are resolved upfront; include all properties in the object initializer
+        var propertyInits = preProps.Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
+        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
+        var initializerPart = propertyInits.Length > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : "";
+        var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
+        writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
+
+        // Call sync methods
+        EmitMethodInvocations(writer, instanceVarName, methodParamResolutions, useAwait: false);
+
+        // Await async methods (only in async mode)
+        EmitMethodInvocations(writer, instanceVarName, asyncMethodParamResolutions, useAwait: true);
+    }
+
+    /// <summary>
+    /// Builds a constructor invocation expression with an optional initializer.
+    /// </summary>
+    private static string BuildConstructorInvocation(string implTypeName, string args, string initializerPart) =>
+        $"new {implTypeName}({args}){initializerPart}";
+
+    /// <summary>
+    /// Resolves method parameters of a given <paramref name="targetType"/> and emits their variable declarations.
+    /// Shared by sync (<see cref="InjectionMemberType.Method"/>) and async (<see cref="InjectionMemberType.AsyncMethod"/>) resolution loops.
+    /// </summary>
+    private static List<(string MethodName, string?[] ParamVars, string[] ParamNames)> ResolveMethodParamResolutions(
+        SourceWriter writer,
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers,
+        InjectionMemberType targetType,
+        string instanceVarName,
+        ref int memberParamIndex,
+        bool isKeyedRegistration,
+        string? registrationKey,
+        Func<TypeData, string>? memberTypeNameResolver,
+        HashSet<string>? asyncInitServiceTypeNames)
+    {
+        var resolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
         foreach(var method in injectionMembers)
         {
-            if(method.MemberType != InjectionMemberType.Method)
+            if(method.MemberType != targetType)
                 continue;
             var mParams = method.Parameters ?? [];
             var mVars = new string?[mParams.Length];
@@ -838,42 +1014,42 @@ partial class IocSourceGenerator
                         method.Key,
                         isKeyedRegistration,
                         registrationKey,
-                        memberTypeNameResolver);
+                        memberTypeNameResolver,
+                        asyncInitServiceTypeNames);
                 }
                 else
                 {
-                    var resolvedVar = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey);
-                    mVars[mi] = resolvedVar;
+                    mVars[mi] = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
                 }
                 mi++;
                 memberParamIndex++;
             }
-            methodParamResolutions.Add((method.Name, mVars, mNames));
+            resolutions.Add((method.Name, mVars, mNames));
         }
+        return resolutions;
+    }
 
-        // Property/field values are resolved upfront; include all properties in the object initializer
-        var propertyInits = preProps.Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
-        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
-        var initializerPart = propertyInits.Length > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : "";
-        var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
-        writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
-
-        // Call methods
-        foreach(var (mName, mVars, mNames) in methodParamResolutions)
+    /// <summary>
+    /// Emits method invocation statements for the given <paramref name="resolutions"/>.
+    /// When <paramref name="useAwait"/> is <see langword="true"/>, each call is prefixed with <c>await</c>.
+    /// </summary>
+    private static void EmitMethodInvocations(
+        SourceWriter writer,
+        string instanceVarName,
+        List<(string MethodName, string?[] ParamVars, string[] ParamNames)> resolutions,
+        bool useAwait)
+    {
+        foreach(var (mName, mVars, mNames) in resolutions)
         {
             var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
             for(int i = 0; i < mVars.Length; i++)
                 entries.Add((mNames[i], mVars[i], false));
             var args = BuildArgumentListFromEntries([.. entries]);
-            writer.WriteLine($"{instanceVarName}.{mName}({args});");
+            writer.WriteLine(useAwait
+                ? $"await {instanceVarName}.{mName}({args});"
+                : $"{instanceVarName}.{mName}({args});");
         }
     }
-
-    /// <summary>
-    /// Builds a constructor invocation expression with an optional initializer.
-    /// </summary>
-    private static string BuildConstructorInvocation(string implTypeName, string args, string initializerPart) =>
-        $"new {implTypeName}({args}){initializerPart}";
 
     /// <summary>
     /// Resolves a property or field injection value and emits its variable declaration.
@@ -886,7 +1062,8 @@ partial class IocSourceGenerator
         string? serviceKey,
         bool isNullable,
         bool hasNonNullDefault,
-        string? defaultValue)
+        string? defaultValue,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
         if(memberType is CollectionWrapperTypeData)
         {
@@ -894,9 +1071,9 @@ partial class IocSourceGenerator
             return;
         }
 
-        if(memberType is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData)
+        if(memberType is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData or TaskTypeData)
         {
-            WriteWrapperResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable);
+            WriteWrapperResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable, asyncInitServiceTypeNames);
             return;
         }
 
@@ -925,9 +1102,10 @@ partial class IocSourceGenerator
         string methodKey,
         bool isKeyedRegistration,
         string? registrationKey,
-        Func<TypeData, string>? typeNameResolver)
+        Func<TypeData, string>? typeNameResolver,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
-        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, methodKey, isOptional: false, typeNameResolver, out var resolvedVar))
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, methodKey, isOptional: false, typeNameResolver, asyncInitServiceTypeNames, out var resolvedVar))
         {
             return resolvedVar!;
         }
@@ -1019,7 +1197,7 @@ partial class IocSourceGenerator
     /// </code>
     /// For open generic decorators, falls back to ActivatorUtilities.CreateInstance.
     /// </remarks>
-    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         var decorators = registration.Decorators;
         // Decorators array is in order from outermost to innermost,
@@ -1078,7 +1256,8 @@ partial class IocSourceGenerator
                 serviceTypeNames: serviceTypeNames,
                 ctorTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
                 memberTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
-                decoratedPrevVar: prevVar);
+                decoratedPrevVar: prevVar,
+                asyncInitServiceTypeNames: asyncInitServiceTypeNames);
         }
 
         // Return the outermost decorator
@@ -1260,11 +1439,12 @@ partial class IocSourceGenerator
         ParameterData param,
         string paramVar,
         bool isKeyedRegistration,
-        string? registrationKey = null)
+        string? registrationKey = null,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
         var paramTypeName = param.Type.Name;
 
-        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, param.ServiceKey, param.IsOptional, typeNameResolver: null, out var resolvedVar))
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, param.ServiceKey, param.IsOptional, typeNameResolver: null, asyncInitServiceTypeNames, out var resolvedVar))
         {
             return resolvedVar!;
         }
@@ -1402,9 +1582,10 @@ partial class IocSourceGenerator
         TypeData type,
         string paramVar,
         string? serviceKey,
-        bool isOptional = false)
+        bool isOptional = false,
+        HashSet<string>? asyncInitServiceTypeNames = null)
     {
-        var expr = BuildWrapperExpression(type, serviceKey, isOptional);
+        var expr = BuildWrapperExpression(type, serviceKey, isOptional, asyncInitServiceTypeNames);
         writer.WriteLine($"var {paramVar} = {expr};");
     }
 
@@ -1415,7 +1596,7 @@ partial class IocSourceGenerator
     /// <param name="serviceKey">The service key (null for non-keyed services).</param>
     /// <param name="isOptional">Whether this resolution is optional.</param>
     /// <returns>A C# expression string that resolves the wrapper type.</returns>
-    private static string BuildWrapperExpression(TypeData type, string? serviceKey, bool isOptional)
+    private static string BuildWrapperExpression(TypeData type, string? serviceKey, bool isOptional, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         switch(type)
         {
@@ -1431,7 +1612,7 @@ partial class IocSourceGenerator
                     return BuildServiceCall(methodName, type.Name, serviceKey);
                 }
                 // Nested wrapper (e.g., Lazy<IEnumerable<T>>) — inline construction
-                var lazyInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional);
+                var lazyInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, asyncInitServiceTypeNames);
                 return $"new global::System.Lazy<{innerType.Name}>(() => {lazyInnerExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
             }
 
@@ -1455,7 +1636,7 @@ partial class IocSourceGenerator
                     return BuildServiceCall(methodName, type.Name, serviceKey);
                 }
                 // Nested wrapper (e.g., Func<IEnumerable<T>>) — inline construction
-                var funcInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional);
+                var funcInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, asyncInitServiceTypeNames);
                 return $"new global::System.Func<{innerType.Name}>(() => {funcInnerExpr})";
             }
 
@@ -1465,7 +1646,7 @@ partial class IocSourceGenerator
                 var valueType = kvp.ValueType;
                 // KeyValuePair uses the registration's service key as the key value
                 var keyExpr = serviceKey ?? "default";
-                var valueExpr = BuildInnerResolutionExpression(valueType, serviceKey, isOptional);
+                var valueExpr = BuildInnerResolutionExpression(valueType, serviceKey, isOptional, asyncInitServiceTypeNames);
                 return $"new global::System.Collections.Generic.KeyValuePair<{keyType.Name}, {valueType.Name}>({keyExpr}, {valueExpr})";
             }
 
@@ -1480,6 +1661,30 @@ partial class IocSourceGenerator
                     kvpTypeName,
                     serviceKey);
                 return $"{getServicesCall}.ToDictionary()";
+            }
+
+            case TaskTypeData task:
+            {
+                // Task<T> wrapper: if inner type is an async-init service, resolve Task<T> directly;
+                // otherwise wrap synchronous resolution in Task.FromResult(...).
+                var innerTypeName = task.InnerType.Name;
+                if(asyncInitServiceTypeNames?.Contains(innerTypeName) == true)
+                {
+                    // Async-init service: Task<T> is registered directly.
+                    var methodName = isOptional
+                        ? (serviceKey is not null ? GetKeyedService : GetService)
+                        : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+                    return BuildServiceCall(methodName, type.Name, serviceKey);
+                }
+                else
+                {
+                    // Sync-only service: wrap with Task.FromResult.
+                    var syncMethodName = isOptional
+                        ? (serviceKey is not null ? GetKeyedService : GetService)
+                        : (serviceKey is not null ? GetRequiredKeyedService : GetRequiredService);
+                    var syncCall = BuildServiceCall(syncMethodName, innerTypeName, serviceKey);
+                    return $"global::System.Threading.Tasks.Task.FromResult({syncCall})";
+                }
             }
 
             default:
@@ -1497,12 +1702,12 @@ partial class IocSourceGenerator
     /// Builds an inner resolution expression — either a nested wrapper expression, a collection
     /// expression, or a direct service call. Supports nesting such as Lazy&lt;IEnumerable&lt;T&gt;&gt;.
     /// </summary>
-    private static string BuildInnerResolutionExpression(TypeData innerType, string? serviceKey, bool isOptional)
+    private static string BuildInnerResolutionExpression(TypeData innerType, string? serviceKey, bool isOptional, HashSet<string>? asyncInitServiceTypeNames = null)
     {
         // If the inner type is itself a wrapper, recurse to handle nesting (e.g., Lazy<KeyValuePair<K,V>>)
-        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData)
+        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
         {
-            return BuildWrapperExpression(innerType, serviceKey, isOptional);
+            return BuildWrapperExpression(innerType, serviceKey, isOptional, asyncInitServiceTypeNames);
         }
 
         // Collection types inside wrappers (e.g., Lazy<IEnumerable<T>>)
@@ -1550,6 +1755,7 @@ partial class IocSourceGenerator
         string? serviceKey,
         bool isOptional,
         Func<TypeData, string>? typeNameResolver,
+        HashSet<string>? asyncInitServiceTypeNames,
         out string? resolvedVar)
     {
         if(IsServiceProviderType(param.Type.Name))
@@ -1572,9 +1778,9 @@ partial class IocSourceGenerator
             return true;
         }
 
-        if(param.Type is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData)
+        if(param.Type is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData or TaskTypeData)
         {
-            WriteWrapperResolution(writer, param.Type, paramVar, serviceKey, isOptional);
+            WriteWrapperResolution(writer, param.Type, paramVar, serviceKey, isOptional, asyncInitServiceTypeNames);
             resolvedVar = paramVar;
             return true;
         }

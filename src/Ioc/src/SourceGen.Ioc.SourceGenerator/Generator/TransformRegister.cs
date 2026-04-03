@@ -351,8 +351,13 @@ partial class IocSourceGenerator
             })
             .ToImmutableEquatableArray();
 
+        // Detect async injection methods: non-generic Task return type → AsyncMethod
+        var memberType = RoslynExtensions.IsNonGenericTaskReturnType(method)
+            ? InjectionMemberType.AsyncMethod
+            : InjectionMemberType.Method;
+
         return new InjectionMemberData(
-            InjectionMemberType.Method,
+            memberType,
             method.Name,
             null,
             parameters,
@@ -402,7 +407,38 @@ partial class IocSourceGenerator
             ? ExtractInjectMembersFromAttribute(attributeData, semanticModel)
             : [];
 
-        return MergeInjectionMembers(iocInjectMembers, attrInjectMembers);
+        var merged = MergeInjectionMembers(iocInjectMembers, attrInjectMembers);
+        return SortInjectionMembersByStage(merged);
+    }
+
+    /// <summary>
+    /// Sorts injection members by injection stage (Property → Field → Method → AsyncMethod),
+    /// preserving source declaration order within each stage.
+    /// </summary>
+    private static ImmutableEquatableArray<InjectionMemberData> SortInjectionMembersByStage(
+        ImmutableEquatableArray<InjectionMemberData> members)
+    {
+        if(members.Length <= 1)
+            return members;
+
+        // Check if already in correct order to avoid allocation
+        bool inOrder = true;
+        for(int i = 1; i < members.Length; i++)
+        {
+            if(members[i].MemberType < members[i - 1].MemberType)
+            {
+                inOrder = false;
+                break;
+            }
+        }
+
+        if(inOrder)
+            return members;
+
+        // Stable sort: OrderBy preserves relative order within each stage
+        return members
+            .OrderBy(static m => m.MemberType)
+            .ToImmutableEquatableArray();
     }
 
     /// <summary>
@@ -581,7 +617,7 @@ partial class IocSourceGenerator
             IFieldSymbol field => !field.IsReadOnly
                 && field.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
             IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
-                && method.ReturnsVoid
+                && (method.ReturnsVoid || IsNonGenericTaskReturnType(method))
                 && !method.IsGenericMethod
                 && method.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal,
             _ => false

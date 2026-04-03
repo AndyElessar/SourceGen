@@ -4,18 +4,23 @@
 /tmp/
 bin/
 obj/
+TestResults/
 cache/
 [Gg]enerated/
 *[Aa]rtifacts/
+.vitepress/
 
 # Ignore dependencies
 node_modules/
 
 # Ignore logs
 *.log
+*.txt
 
 # Git
 /.git/
+
+/.github/
 
 # IDE
 /.vscode/

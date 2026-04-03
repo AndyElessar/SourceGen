@@ -11,12 +11,13 @@ internal enum IocFeatures
     PropertyInject = 1 << 2,
     FieldInject = 1 << 3,
     MethodInject = 1 << 4,
+    AsyncMethodInject = 1 << 5,
     Default = Register | Container | PropertyInject | MethodInject
 }
 
 internal static class IocFeaturesHelper
 {
-    private const IocFeatures AllInjectionFeatures = IocFeatures.PropertyInject | IocFeatures.FieldInject | IocFeatures.MethodInject;
+    private const IocFeatures AllInjectionFeatures = IocFeatures.PropertyInject | IocFeatures.FieldInject | IocFeatures.MethodInject | IocFeatures.AsyncMethodInject;
 
     public static bool HasAllInjectionFeatures(IocFeatures features) => (features & AllInjectionFeatures) == AllInjectionFeatures;
 
@@ -26,6 +27,7 @@ internal static class IocFeaturesHelper
             InjectionMemberType.Property => (features & IocFeatures.PropertyInject) != 0,
             InjectionMemberType.Field => (features & IocFeatures.FieldInject) != 0,
             InjectionMemberType.Method => (features & IocFeatures.MethodInject) != 0,
+            InjectionMemberType.AsyncMethod => (features & IocFeatures.AsyncMethodInject) != 0,
             _ => false
         };
 
@@ -49,6 +51,8 @@ internal static class IocFeaturesHelper
                 features |= IocFeatures.FieldInject;
             else if(token.Equals("methodinject", StringComparison.OrdinalIgnoreCase))
                 features |= IocFeatures.MethodInject;
+            else if(token.Equals("asyncmethodinject", StringComparison.OrdinalIgnoreCase))
+                features |= IocFeatures.AsyncMethodInject;
         }
 
         return features;

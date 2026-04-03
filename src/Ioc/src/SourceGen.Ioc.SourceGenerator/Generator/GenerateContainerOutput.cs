@@ -129,7 +129,7 @@ partial class IocSourceGenerator
                     filteredRegistrations.Add(registrations[j]);
             }
 
-            filteredRegistrations.Add(registration with { Registration = filteredRegistration });
+            filteredRegistrations.Add(registration with { Registration = filteredRegistration, IsAsyncInit = HasAsyncInitMembers(filteredRegistration) });
         }
 
         return filteredRegistrations is null ? registrations : filteredRegistrations.ToImmutableEquatableArray();
@@ -562,12 +562,23 @@ partial class IocSourceGenerator
 
         foreach(var accessor in container.PartialAccessors)
         {
+            var isTaskReturn = accessor.Kind == PartialAccessorKind.Method
+                && TryExtractTaskInnerType(accessor.ReturnTypeName, out _);
+
             var resolveExpression = ResolvePartialAccessorExpression(accessor, container, groups);
 
             switch(accessor.Kind)
             {
                 case PartialAccessorKind.Method:
-                    writer.WriteLine($"public partial {accessor.ReturnTypeName}{(accessor.IsNullable ? "?" : "")} {accessor.Name}() => {resolveExpression};");
+                    // Async partial methods (returning Task<T>) require the 'async' modifier
+                    if(isTaskReturn)
+                    {
+                        writer.WriteLine($"public partial async {accessor.ReturnTypeName} {accessor.Name}() => {resolveExpression};");
+                    }
+                    else
+                    {
+                        writer.WriteLine($"public partial {accessor.ReturnTypeName}{(accessor.IsNullable ? "?" : "")} {accessor.Name}() => {resolveExpression};");
+                    }
                     break;
 
                 case PartialAccessorKind.Property:
@@ -585,6 +596,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Resolves the expression to use for a partial accessor implementation.
     /// Looks up the registration by return type and optional key, with fallback to IServiceProvider.
+    /// For <c>Task&lt;T&gt;</c> return types, routes through the async resolver.
     /// </summary>
     private static string ResolvePartialAccessorExpression(
         PartialAccessorData accessor,
@@ -593,6 +605,37 @@ partial class IocSourceGenerator
     {
         var serviceType = accessor.ReturnTypeName;
         var key = accessor.Key;
+
+        // Handle Task<T> return types — route through the async resolver.
+        if(TryExtractTaskInnerType(serviceType, out var innerTypeName))
+        {
+            if(groups.ByServiceTypeAndKey.TryGetValue((innerTypeName, key), out var taskRegistrations))
+            {
+                var cached = taskRegistrations[^1]; // Last registration wins
+
+                if(cached.IsAsyncInit)
+                {
+                    // Async-init: await the shared async resolver and let the async method wrap the cast.
+                    var asyncMethodName = GetAsyncResolverMethodName(cached.ResolverMethodName);
+                    return $"await {asyncMethodName}()";
+                }
+                else
+                {
+                    // Sync-only service wrapped as Task<T>: use Task.FromResult with cast.
+                    return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){cached.ResolverMethodName}())";
+                }
+            }
+
+            // Fallback: delegate to IServiceProvider if available
+            if(container.IntegrateServiceProvider)
+            {
+                if(key is not null)
+                    return $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})";
+                return $"({serviceType})GetRequiredService(typeof({serviceType}))";
+            }
+
+            return $"""throw new global::System.InvalidOperationException("Service '{innerTypeName}' is not registered.")""";
+        }
 
         // Try to find direct resolver in this container
         if(groups.ByServiceTypeAndKey.TryGetValue((serviceType, key), out var registrations))
@@ -730,6 +773,23 @@ partial class IocSourceGenerator
         // Instance registration: no resolver method needed, will be inlined in _localResolvers
         if(hasInstance)
         {
+            return;
+        }
+
+        // For async-init services: generate async resolver instead of sync resolver
+        if(cached.IsAsyncInit)
+        {
+            switch(reg.Lifetime)
+            {
+                case ServiceLifetime.Singleton:
+                case ServiceLifetime.Scoped:
+                    WriteAsyncServiceResolverMethod(writer, strategy, methodName, returnType, fieldName, reg, hasFactory, hasDecorators, groups);
+                    break;
+
+                case ServiceLifetime.Transient:
+                    WriteAsyncTransientResolverMethod(writer, methodName, returnType, reg, hasFactory, hasDecorators, groups);
+                    break;
+            }
             return;
         }
 
@@ -1068,6 +1128,325 @@ partial class IocSourceGenerator
         writer.WriteLine("return instance;");
         writer.Indentation--;
         writer.WriteLine("}");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Async-init service resolver generation
+    // Async-init services have at least one InjectionMemberType.AsyncMethod member.
+    // They use Task<T> caching and async resolver methods.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the async routing resolver method name by appending "Async" to the sync method name.
+    /// </summary>
+    private static string GetAsyncResolverMethodName(string syncMethodName)
+        => syncMethodName + "Async";
+
+    /// <summary>
+    /// Returns the async creation method name (e.g. "CreateFooBarAsync" from "GetFooBar").
+    /// </summary>
+    private static string GetAsyncCreateMethodName(string syncMethodName)
+    {
+        if(syncMethodName.Length > 3 && syncMethodName.StartsWith("Get", StringComparison.Ordinal))
+            return "Create" + syncMethodName[3..] + "Async";
+        return syncMethodName + "_CreateAsync";
+    }
+
+    /// <summary>
+    /// Returns the effective thread-safety strategy for a registration.
+    /// Async-init services auto-upgrade async-incompatible strategies to <see cref="ThreadSafeStrategy.SemaphoreSlim"/>.
+    /// </summary>
+    private static ThreadSafeStrategy GetEffectiveThreadSafeStrategy(
+        ThreadSafeStrategy strategy,
+        bool isAsyncInit)
+    {
+        if(!isAsyncInit)
+            return strategy;
+
+        return strategy is ThreadSafeStrategy.None ? ThreadSafeStrategy.None : ThreadSafeStrategy.SemaphoreSlim;
+    }
+
+    /// <summary>
+    /// Writes the field declaration for an async-init service's cached <c>Task&lt;T&gt;</c>.
+    /// The caller must pass the effective async-init strategy.
+    /// </summary>
+    private static void WriteAsyncServiceInstanceField(
+        SourceWriter writer,
+        ThreadSafeStrategy strategy,
+        string fieldName,
+        string taskFieldTypeName)
+    {
+        writer.WriteLine($"private {taskFieldTypeName}? {fieldName};");
+
+        // Only SemaphoreSlim is async-compatible; others fall back to unsynchronized access.
+        if(strategy == ThreadSafeStrategy.SemaphoreSlim)
+        {
+            writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);");
+        }
+    }
+
+    /// <summary>
+    /// Writes an async routing resolver + async creation method for a singleton/scoped async-init service.
+    /// </summary>
+    private static void WriteAsyncServiceResolverMethod(
+        SourceWriter writer,
+        ThreadSafeStrategy strategy,
+        string syncMethodName,
+        string returnType,
+        string fieldName,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        var asyncMethodName = GetAsyncResolverMethodName(syncMethodName);
+        var createMethodName = GetAsyncCreateMethodName(syncMethodName);
+        var taskReturnType = $"global::System.Threading.Tasks.Task<{returnType}>";
+        var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, true);
+
+        // Write the Task<T>? instance field (+ semaphore if SemaphoreSlim)
+        WriteAsyncServiceInstanceField(writer, effectiveStrategy, fieldName, taskReturnType);
+        writer.WriteLine();
+
+        // ── Routing resolver method ──
+        writer.WriteLine($"private async {taskReturnType} {asyncMethodName}()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine($"if({fieldName} is not null)");
+        writer.Indentation++;
+        writer.WriteLine($"return await {fieldName};");
+        writer.Indentation--;
+        writer.WriteLine();
+
+        if(effectiveStrategy == ThreadSafeStrategy.SemaphoreSlim)
+        {
+            WriteAsyncResolverBodySemaphoreSlim(writer, fieldName, createMethodName);
+        }
+        else
+        {
+            WriteAsyncResolverBodyNone(writer, fieldName, createMethodName);
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        // ── Creation method ──
+        writer.WriteLine($"private async {taskReturnType} {createMethodName}()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        WriteAsyncInstanceCreationBody(writer, reg, hasFactory, hasDecorators, groups);
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes an async creation method for a transient async-init service.
+    /// Each call produces a new Task (no caching).
+    /// </summary>
+    private static void WriteAsyncTransientResolverMethod(
+        SourceWriter writer,
+        string syncMethodName,
+        string returnType,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        var createMethodName = GetAsyncCreateMethodName(syncMethodName);
+        var taskReturnType = $"global::System.Threading.Tasks.Task<{returnType}>";
+
+        writer.WriteLine($"private async {taskReturnType} {createMethodName}()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        WriteAsyncInstanceCreationBody(writer, reg, hasFactory, hasDecorators, groups);
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes the instance creation body for an async-init service:
+    /// constructor, sync injection (properties + sync methods), await async methods, optional decorators.
+    /// </summary>
+    private static void WriteAsyncInstanceCreationBody(
+        SourceWriter writer,
+        ServiceRegistrationModel reg,
+        bool hasFactory,
+        bool hasDecorators,
+        ContainerRegistrationGroups groups)
+    {
+        var (properties, syncMethods, asyncMethods) = CategorizeInjectionMembersAsync(reg.InjectionMembers);
+        var args = BuildConstructorArgumentsString(reg, groups);
+
+        // When decorators are present AND there is method injection (sync or async), we cannot
+        // type the instance as the service interface because [IocInject] methods may be on the
+        // concrete implementation only.
+        //
+        // Two-variable pattern:
+        //   var baseInstance = new Impl(args) { Props... };
+        //   baseInstance.SyncMethod(...);
+        //   await baseInstance.AsyncMethod(...);
+        //   ServiceType instance = baseInstance;
+        //   instance = new Decorator(instance);   // decorator chain
+        //
+        // Single-variable pattern (no decorators, or decorators + pure property injection):
+        //   var instance = new Impl(args) { Props... };
+        //   await instance.AsyncInit(...);
+        bool hasMethods = syncMethods is { Count: > 0 } || asyncMethods is { Count: > 0 };
+        bool needsTwoVarPattern = hasDecorators && hasMethods;
+
+        // ── Create the instance ──
+        string injectionVar = needsTwoVarPattern ? "baseInstance" : "instance";
+        string varTypeDecl = (hasDecorators && !needsTwoVarPattern) ? reg.ServiceType.Name : "var";
+
+        if(hasFactory)
+        {
+            var factoryCall = BuildFactoryCallForContainer(reg.Factory!, reg, groups);
+            writer.WriteLine($"{varTypeDecl} {injectionVar} = ({reg.ImplementationType.Name}){factoryCall};");
+        }
+        else
+        {
+            WriteConstructorWithPropertyInitializers(writer, injectionVar, varTypeDecl, reg.ImplementationType.Name, args, properties, groups);
+        }
+
+        // ── Sync method injection ──
+        if(syncMethods is { Count: > 0 })
+        {
+            foreach(var method in syncMethods)
+            {
+                var methodArgs = method.Parameters is { Length: > 0 }
+                    ? string.Join(", ", method.Parameters.Select(p => BuildParameterForContainer(p, reg, groups)))
+                    : "";
+                writer.WriteLine($"{injectionVar}.{method.Name}({methodArgs});");
+            }
+        }
+
+        // ── Awaited async method injection ──
+        if(asyncMethods is { Count: > 0 })
+        {
+            foreach(var method in asyncMethods)
+            {
+                var methodArgs = method.Parameters is { Length: > 0 }
+                    ? string.Join(", ", method.Parameters.Select(p => BuildParameterForContainer(p, reg, groups)))
+                    : "";
+                writer.WriteLine($"await {injectionVar}.{method.Name}({methodArgs});");
+            }
+        }
+
+        // ── Apply decorators after all injection ──
+        if(hasDecorators)
+        {
+            writer.WriteLine();
+            if(needsTwoVarPattern)
+            {
+                // Convert the concrete implementation variable to the service type
+                // so the decorator chain can reassign the variable.
+                writer.WriteLine($"{reg.ServiceType.Name} instance = {injectionVar};");
+            }
+            WriteDecoratorApplication(writer, "instance", reg, groups);
+        }
+
+        writer.WriteLine("return instance;");
+    }
+
+    /// <summary>
+    /// Writes the async routing resolver body for <see cref="ThreadSafeStrategy.None"/> (no synchronization).
+    /// </summary>
+    private static void WriteAsyncResolverBodyNone(
+        SourceWriter writer,
+        string fieldName,
+        string createMethodName)
+    {
+        writer.WriteLine($"{fieldName} = {createMethodName}();");
+        writer.WriteLine($"return await {fieldName};");
+    }
+
+    /// <summary>
+    /// Writes the async routing resolver body for <see cref="ThreadSafeStrategy.SemaphoreSlim"/>.
+    /// Uses <c>WaitAsync()</c> for async-compatible locking.
+    /// </summary>
+    private static void WriteAsyncResolverBodySemaphoreSlim(
+        SourceWriter writer,
+        string fieldName,
+        string createMethodName)
+    {
+        writer.WriteLine($"await {fieldName}Semaphore.WaitAsync();");
+        writer.WriteLine("try");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine($"if({fieldName} is null)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"{fieldName} = {createMethodName}();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("finally");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"{fieldName}Semaphore.Release();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine($"return await {fieldName};");
+    }
+
+    /// <summary>
+    /// Categorizes injection members into properties/fields, sync methods, and async methods.
+    /// </summary>
+    private static (List<InjectionMemberData>? Properties, List<InjectionMemberData>? SyncMethods, List<InjectionMemberData>? AsyncMethods) CategorizeInjectionMembersAsync(
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers)
+    {
+        List<InjectionMemberData>? properties = null;
+        List<InjectionMemberData>? syncMethods = null;
+        List<InjectionMemberData>? asyncMethods = null;
+
+        foreach(var member in injectionMembers)
+        {
+            switch(member.MemberType)
+            {
+                case InjectionMemberType.Property:
+                case InjectionMemberType.Field:
+                    properties ??= [];
+                    properties.Add(member);
+                    break;
+                case InjectionMemberType.Method:
+                    syncMethods ??= [];
+                    syncMethods.Add(member);
+                    break;
+                case InjectionMemberType.AsyncMethod:
+                    asyncMethods ??= [];
+                    asyncMethods.Add(member);
+                    break;
+            }
+        }
+
+        return (properties, syncMethods, asyncMethods);
+    }
+
+    /// <summary>
+    /// Tries to extract the inner type name from a
+    /// <c>global::System.Threading.Tasks.Task&lt;T&gt;</c> type name string.
+    /// Returns <see langword="true"/> and sets <paramref name="innerTypeName"/> if matched.
+    /// </summary>
+    private static bool TryExtractTaskInnerType(string typeName, out string innerTypeName)
+    {
+        const string TaskPrefix = "global::System.Threading.Tasks.Task<";
+        if(typeName.StartsWith(TaskPrefix, StringComparison.Ordinal)
+            && typeName.EndsWith(">", StringComparison.Ordinal))
+        {
+            innerTypeName = typeName[TaskPrefix.Length..^1];
+            return true;
+        }
+        innerTypeName = string.Empty;
+        return false;
     }
 
     /// <summary>
@@ -1416,6 +1795,20 @@ partial class IocSourceGenerator
             yield return BuildParameterForContainer(param, reg, groups);
     }
 
+    private static string BuildServiceProviderFallbackExpression(
+        string typeName,
+        string? key,
+        bool isOptional)
+    {
+        if(key is not null)
+            return isOptional
+                ? $"GetKeyedService(typeof({typeName}), {key}) as {typeName}"
+                : $"({typeName})GetRequiredKeyedService(typeof({typeName}), {key})";
+        return isOptional
+            ? $"GetService(typeof({typeName})) as {typeName}"
+            : $"({typeName})GetRequiredService(typeof({typeName}))";
+    }
+
     /// <summary>
     /// Builds a service resolution call for container (direct call or GetService/GetRequiredService).
     /// When the dependency is registered in the same container, calls the resolver method directly.
@@ -1464,8 +1857,8 @@ partial class IocSourceGenerator
             return $"GetServices<{elementTypeName}>()";
         }
 
-        // Wrapper types - Lazy<T>, Func<T>, KeyValuePair<K,V>
-        if(type is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData)
+        // Wrapper types - Lazy<T>, Func<T>, KeyValuePair<K,V>, Task<T>
+        if(type is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
         {
             return BuildWrapperExpressionForContainer(type, key, isOptional, groups);
         }
@@ -1474,27 +1867,20 @@ partial class IocSourceGenerator
         if(groups.ByServiceTypeAndKey.TryGetValue((type.Name, key), out var registrations))
         {
             var cached = registrations[^1]; // Last wins
+            // Async-init services: the sync method was not generated; use the async method instead.
+            // Callers that depend on an async-init service should be taking Task<T>, not T directly.
+            // The analyzer (SGIOC027/029) normally prevents this, but fall back gracefully.
+            if(cached.IsAsyncInit)
+            {
+                if(cached.Registration.Lifetime == ServiceLifetime.Transient)
+                    return $"{GetAsyncCreateMethodName(cached.ResolverMethodName)}()";
+                return $"{GetAsyncResolverMethodName(cached.ResolverMethodName)}()";
+            }
             return $"{cached.ResolverMethodName}()";
         }
 
         // Fallback to GetService/GetRequiredService for dependencies not in this container
-
-        // Keyed services
-        if(key is not null)
-        {
-            if(isOptional)
-            {
-                return $"GetKeyedService(typeof({type.Name}), {key}) as {type.Name}";
-            }
-            return $"({type.Name})GetRequiredKeyedService(typeof({type.Name}), {key})";
-        }
-
-        // Regular services
-        if(isOptional)
-        {
-            return $"GetService(typeof({type.Name})) as {type.Name}";
-        }
-        return $"({type.Name})GetRequiredService(typeof({type.Name}))";
+        return BuildServiceProviderFallbackExpression(type.Name, key, isOptional);
     }
 
     /// <summary>
@@ -1523,8 +1909,9 @@ partial class IocSourceGenerator
                         var safeImplType = GetSafeIdentifier(lastReg.Registration.ImplementationType.Name);
                         return $"_lazy_{safeInnerType}_{safeImplType}";
                     }
-                    // Fallback: no matching inner service
-                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                    // Fallback: inner type not in this container — build inline via IServiceProvider
+                    var lazyFallbackExpr = BuildServiceProviderFallbackExpression(innerType.Name, key, isOptional);
+                    return $"new global::System.Lazy<{innerType.Name}>(() => {lazyFallbackExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
                 }
                 // Nested wrapper or inside nested context — inline construction
                 var lazyInnerExpr = BuildInnerResolutionForContainer(innerType, key, isOptional, groups);
@@ -1543,7 +1930,11 @@ partial class IocSourceGenerator
                         return BuildContainerMultiParamFuncExpression(func, targetRegistration, groups);
                     }
 
-                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                    // Fallback: inner return type not in this container — resolve the full Func<...> type
+                    // directly from IServiceProvider. Do NOT call BuildServiceResolutionCallForContainer
+                    // here as that would route FuncTypeData back to BuildWrapperExpressionForContainer,
+                    // causing infinite recursion.
+                    return BuildServiceProviderFallbackExpression(type.Name, key, isOptional);
                 }
 
                 // Direct Func<T> where T is not a wrapper — call wrapper resolver if available (only at top level)
@@ -1556,8 +1947,9 @@ partial class IocSourceGenerator
                         var safeImplType = GetSafeIdentifier(lastReg.Registration.ImplementationType.Name);
                         return $"_func_{safeInnerType}_{safeImplType}";
                     }
-                    // Fallback: no matching inner service
-                    return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
+                    // Fallback: inner type not in this container — build inline via IServiceProvider
+                    var funcFallbackExpr = BuildServiceProviderFallbackExpression(innerType.Name, key, isOptional);
+                    return $"new global::System.Func<{innerType.Name}>(() => {funcFallbackExpr})";
                 }
                 // Nested wrapper or inside nested context — inline construction
                 var funcInnerExpr = BuildInnerResolutionForContainer(innerType, key, isOptional, groups);
@@ -1591,6 +1983,33 @@ partial class IocSourceGenerator
                 return $"GetServices<{kvpTypeName}>().ToDictionary()";
             }
 
+            case TaskTypeData task:
+            {
+                // Task<T> wrapper: route based on sync vs async-init registration.
+                var innerType = task.InnerType;
+                var innerTypeName = innerType.Name;
+
+                if(groups.ByServiceTypeAndKey.TryGetValue((innerTypeName, key), out var innerRegs))
+                {
+                    var lastReg = innerRegs[^1];
+                    if(lastReg.IsAsyncInit)
+                    {
+                        // Async-init: project Task<ImplType> → Task<ServiceType> via async lambda (not ContinueWith)
+                        // so that exceptions propagate as-awaited rather than wrapped in AggregateException.
+                        var asyncMethodName = GetAsyncResolverMethodName(lastReg.ResolverMethodName);
+                        return $"((global::System.Func<global::System.Threading.Tasks.Task<{innerTypeName}>>)(async () => ({innerTypeName})(await {asyncMethodName}())))()";
+                    }
+                    else
+                    {
+                        // Sync-only: wrap in Task.FromResult with cast.
+                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){lastReg.ResolverMethodName}())";
+                    }
+                }
+
+                // Fallback to IServiceProvider
+                return BuildServiceProviderFallbackExpression(type.Name, key, isOptional);
+            }
+
             default:
                 return BuildServiceResolutionCallForContainer(type, key, isOptional, groups);
         }
@@ -1607,9 +2026,12 @@ partial class IocSourceGenerator
         bool isOptional,
         ContainerRegistrationGroups groups)
     {
-        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData)
+        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
         {
-            // Inner wrappers always use inline construction (no resolver methods)
+            // Inner wrappers always use inline construction (no resolver methods).
+            // NOTE: Nested Task<T> shapes such as Lazy<Task<T>> or IEnumerable<Task<T>> are not
+            // supported by the spec. The transform layer prevents these from reaching code generation
+            // by downgrading their WrapperKind to None, so they fall back to IServiceProvider.
             return BuildWrapperExpressionForContainer(innerType, key, isOptional, groups, useResolverMethods: false);
         }
 
@@ -2240,6 +2662,22 @@ partial class IocSourceGenerator
                 // Instance registration: directly return the instance
                 resolverExpr = $"static _ => {cached.Registration.Instance}";
             }
+            else if(cached.IsAsyncInit)
+            {
+                // Async-init services: expose Task<T> from GetService.
+                // Singleton/Scoped: call the routing async resolver method.
+                // Transient: call the async creation method directly (no caching).
+                if(cached.Registration.Lifetime == ServiceLifetime.Transient)
+                {
+                    var createMethodName = GetAsyncCreateMethodName(cached.ResolverMethodName);
+                    resolverExpr = $"static c => c.{createMethodName}()";
+                }
+                else
+                {
+                    var asyncMethodName = GetAsyncResolverMethodName(cached.ResolverMethodName);
+                    resolverExpr = $"static c => c.{asyncMethodName}()";
+                }
+            }
             else if(cached.IsEager)
             {
                 // Eager services: directly access the field
@@ -2382,7 +2820,9 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
-        WriteDisposalHelperMethods(writer);
+        var hasAsyncInitServices = groups.ReversedSingletonsForDisposal.Any(static c => c.IsAsyncInit)
+            || groups.ReversedScopedForDisposal.Any(static c => c.IsAsyncInit);
+        WriteDisposalHelperMethods(writer, hasAsyncInitServices);
 
         writer.WriteLine("#endregion");
     }
@@ -2716,10 +3156,12 @@ partial class IocSourceGenerator
             if(cached.Registration.Instance is not null)
                 continue;
 
+            var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, cached.IsAsyncInit);
+
             writer.WriteLine($"{serviceMethod}({cached.FieldName});");
 
             // Dispose SemaphoreSlim if using SemaphoreSlim strategy (only for non-eager services)
-            if(strategy == ThreadSafeStrategy.SemaphoreSlim && !cached.IsEager)
+            if(effectiveStrategy == ThreadSafeStrategy.SemaphoreSlim && !cached.IsEager)
             {
                 writer.WriteLine($"{cached.FieldName}Semaphore.Dispose();");
             }
@@ -2735,7 +3177,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes the static helper methods for disposal.
     /// </summary>
-    private static void WriteDisposalHelperMethods(SourceWriter writer)
+    private static void WriteDisposalHelperMethods(SourceWriter writer, bool hasAsyncInitServices)
     {
         // Helper method to throw ObjectDisposedException if disposed
         writer.WriteLine("private void ThrowIfDisposed()");
@@ -2764,6 +3206,58 @@ partial class IocSourceGenerator
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
+
+        if(hasAsyncInitServices)
+        {
+            // Overload for async-init services stored as Task<T>?
+            writer.WriteLine("private static async ValueTask DisposeServiceAsync<T>(Task<T>? task)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("if(task is { IsCompletedSuccessfully: true })");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("try");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("await DisposeServiceAsync(await task);");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine("catch(Exception ex)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+
+            writer.WriteLine("private static void DisposeService<T>(Task<T>? task)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("if(task is { IsCompletedSuccessfully: true })");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("try");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult());");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine("catch(Exception ex)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+        }
     }
 
     /// <summary>

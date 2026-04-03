@@ -94,9 +94,10 @@ Enable/disable generated outputs and injection member kinds:
 |`PropertyInject`|Enable `[IocInject]` support on properties.|
 |`FieldInject`|Enable `[IocInject]` support on fields.|
 |`MethodInject`|Enable `[IocInject]` support on methods.|
+|`AsyncMethodInject`|Enable `[IocInject]` support on async methods returning `Task`. Requires `MethodInject`.|
 
 > [!NOTE]
-> `FieldInject` is available but not included in the default feature set. Add it explicitly when you want field injection generation.
+> `FieldInject` and `AsyncMethodInject` are available but not included in the default feature set. Add them explicitly when needed.
 
 Parsing behavior:
 

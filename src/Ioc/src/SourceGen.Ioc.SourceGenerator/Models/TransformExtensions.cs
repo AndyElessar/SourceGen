@@ -105,6 +105,19 @@ internal static class TransformExtensions
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
             var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
 
+            // Downgrade nested Task<Wrapper> or Wrapper<Task> shapes to WrapperKind.None.
+            // These shapes are not supported by the spec and fall back to IServiceProvider resolution.
+            if(wrapperKind == WrapperKind.Task && typeParameters is { Length: > 0 } && typeParameters[0].Type is WrapperTypeData)
+            {
+                wrapperKind = WrapperKind.None;
+            }
+            else if(wrapperKind is not WrapperKind.None
+                && typeParameters is not null
+                && typeParameters.Any(p => p.Type is TaskTypeData))
+            {
+                wrapperKind = WrapperKind.None;
+            }
+
             if(wrapperKind is not WrapperKind.None)
             {
                 return TypeData.CreateWrapper(
@@ -441,7 +454,7 @@ internal static class TransformExtensions
             if(IsEnumerableType(nameWithoutGeneric))
                 return WrapperKind.Enumerable;
 
-            return GetNonCollectionWrapperKind(nameWithoutGeneric);
+            return GetNonCollectionWrapperKind(nameWithoutGeneric, typeSymbol.Arity);
         }
 
         /// <summary>
@@ -450,7 +463,9 @@ internal static class TransformExtensions
         /// Collection types (IEnumerable, IReadOnlyCollection, etc.) are detected separately
         /// in <see cref="TransformExtensions"/> via <c>GetWrapperKind</c>.
         /// </summary>
-        public static WrapperKind GetNonCollectionWrapperKind(string nameWithoutGeneric) => nameWithoutGeneric switch
+        /// <param name="nameWithoutGeneric">The type name without generic parameters.</param>
+        /// <param name="arity">The number of type parameters. Used to distinguish <c>Task&lt;T&gt;</c> (arity 1) from non-generic <c>Task</c> (arity 0).</param>
+        public static WrapperKind GetNonCollectionWrapperKind(string nameWithoutGeneric, int arity) => nameWithoutGeneric switch
         {
             "global::System.Lazy" or "System.Lazy" or "Lazy" => WrapperKind.Lazy,
             "global::System.Func" or "System.Func" or "Func" => WrapperKind.Func,
@@ -459,6 +474,7 @@ internal static class TransformExtensions
                 or "global::System.Collections.Generic.Dictionary" or "System.Collections.Generic.Dictionary" or "Dictionary"
                 => WrapperKind.Dictionary,
             "global::System.Collections.Generic.KeyValuePair" or "System.Collections.Generic.KeyValuePair" or "KeyValuePair" => WrapperKind.KeyValuePair,
+            ("global::System.Threading.Tasks.Task" or "System.Threading.Tasks.Task" or "Task") when arity == 1 => WrapperKind.Task,
             _ => WrapperKind.None
         };
 
@@ -474,7 +490,9 @@ internal static class TransformExtensions
         /// - Non-static members only
         /// - Properties with a setter
         /// - Non-readonly fields
-        /// - Ordinary methods that return void and are not generic
+        /// - Ordinary methods that return <see langword="void"/> (sync) or non-generic
+        ///   <see cref="System.Threading.Tasks.Task"/> (async, when <c>AsyncMethodInject</c>
+        ///   feature is enabled), and are not generic
         /// </remarks>
         /// <returns>
         /// An enumerable of tuples containing the member symbol and its inject attribute.
@@ -505,7 +523,7 @@ internal static class TransformExtensions
                     IPropertySymbol property => property.SetMethod is not null,
                     IFieldSymbol field => !field.IsReadOnly,
                     IMethodSymbol method => method.MethodKind == MethodKind.Ordinary
-                        && method.ReturnsVoid
+                        && (method.ReturnsVoid || RoslynExtensions.IsNonGenericTaskReturnType(method))
                         && !method.IsGenericMethod,
                     _ => false
                 };

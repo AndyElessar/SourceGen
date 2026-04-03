@@ -1,7 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using SourceGen.Ioc.TestAot.TestCase;
-using SourceGen.Ioc.TestCase;
-
 namespace SourceGen.Ioc.TestAot.Tests;
 
 /// <summary>
@@ -359,6 +355,21 @@ public sealed class ContainerTests
 
         var result = locator.Execute(new RequestB(10));
         await Assert.That(result.Result).IsEqualTo(20);
+    }
+
+    [Test]
+    public async Task Container_OpenGeneric_IocDiscoverAttribute_Resolves()
+    {
+        // Arrange
+        using var container = new ContainerModule();
+
+        // Act — IHandler<RequestC, ResponseC> is discovered via [IocDiscover] on Marker in OpenGenericDiscovery.cs
+        var handler = container.GetRequiredService<IHandler<RequestC, ResponseC>>();
+
+        // Assert
+        await Assert.That(handler).IsNotNull();
+        var result = handler.Handle(new RequestC(true));
+        await Assert.That(result.Result).IsFalse();
     }
 
     #endregion

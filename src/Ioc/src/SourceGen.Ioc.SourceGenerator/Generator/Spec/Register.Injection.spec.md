@@ -75,16 +75,136 @@ When a parameter or member type is a recognized wrapper type, the generator reso
 | `Dictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
 
 - **Nullable wrapper types**: Use `GetService<T>()` (optional) instead of `GetRequiredService<T>()`
-- **Nested wrappers**: Supported up to 2 levels. Inner wrapper types are recursively constructed **inline** (no standalone registration).
+- **Nested wrappers**: Non-collection outer wrappers (`Lazy<T>`, `Func<T>`) are recursively resolved to arbitrary depth via inline construction. Collection outer wrappers support at most **1 level of inner wrapping** (2 levels total). Inner wrapper types are constructed **inline** (no standalone registration).
   - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => sp.GetRequiredService<T>()))`
   - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => sp.GetRequiredService<T>()))`
   - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => sp.GetServices<T>())`
   - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Consumers resolve via `sp.GetServices<Lazy<T>>()` (uses standalone registrations)
+  - Collection outer wrapper with 3+ levels (e.g., `IEnumerable<Lazy<Func<T>>>`) is **not** supported. No wrapper registrations are emitted; the consumer is registered with a plain `AddXXX<Consumer, Consumer>()` call and the parameter is left to MS.DI runtime resolution.
+  - `ValueTask<T>` is **not** a recognized wrapper type in any context. Only `Task<T>` is supported for async-init wrapping. When used as a partial accessor return type: if the target service uses async-init, `SGIOC029` is reported; otherwise `SGIOC021` is reported.
 - **Multi-parameter Func matching**: For `Func<T1,...,TN-1,TReturn>`, constructor parameters and injectable members are matched by type against Func inputs using first-unused semantics. Unmatched dependencies are resolved from DI.
 - **Nested multi-parameter Func**: Not supported (e.g., `Lazy<Func<string, IService>>` with input parameters).
 - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
 - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
 - **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
+
+### Async Method Injection
+
+`AsyncMethodInject` extends post-construction member injection with awaited initialization methods. The generator MUST treat async method injection as a distinct injection stage that runs after all synchronous injection steps.
+
+#### Classification Rules
+
+|Condition|Required behavior|
+|:--------|:----------------|
+|Method has `[IocInject]`/`[Inject]`, is an ordinary instance method, returns non-generic `Task`, and `AsyncMethodInject` is enabled|MUST classify the member as `InjectionMemberType.AsyncMethod`.|
+|Method has `[IocInject]`/`[Inject]` and returns `void`|MUST continue to classify the member as `InjectionMemberType.Method`.|
+|Method returns `Task<T>`|MUST NOT classify the member as async method injection. `Task<T>` is not a supported injection-method return type.|
+|Method returns `ValueTask` or `ValueTask<T>`|MUST NOT classify the member as async method injection.|
+|Method returns `Task` but `AsyncMethodInject` is disabled|The generator MUST treat the member as feature-gated; the analyzer owns the user-facing warning via `SGIOC022`.|
+
+#### Ordering Contract
+
+The generator MUST emit member injection in the following fixed stage order. Source declaration order applies **within** each stage.
+
+|Stage|Members|Emission rule|
+|:----|:------|:------------|
+|1|Properties|MUST be assigned first, in source declaration order.|
+|2|Fields|MUST be assigned second, in source declaration order.|
+|3|Synchronous methods|MUST be invoked third, in source declaration order.|
+|4|Async methods|MUST be awaited last, in source declaration order.|
+
+```mermaid
+flowchart LR
+    A[Construct instance] --> B[Assign properties]
+    B --> C[Assign fields]
+    C --> D[Call sync inject methods]
+    D --> E[await async inject methods]
+    E --> F[Return completed Task<TService>]
+```
+
+#### Register-Path Generation
+
+When a registration contains one or more async inject methods, the registration generator MUST emit a `Task<TService>` registration. The generated factory MUST create an `async Task<TImplementation> Init(...)` local function, perform synchronous injection first, then `await` each async inject method in stage order.
+
+```csharp
+#region Define:
+using System.Threading.Tasks;
+
+public interface ILogger { }
+public interface IAsyncInitializer
+{
+    Task InitializeAsync();
+}
+
+public interface IMyService { }
+
+[IocRegister(ServiceTypes = [typeof(IMyService)], Lifetime = ServiceLifetime.Singleton)]
+public class MyService : IMyService
+{
+    [IocInject]
+    public ILogger Logger { get; set; } = default!;
+
+    [IocInject]
+    public void InitializeSync()
+    {
+    }
+
+    [IocInject]
+    public async Task InitializeAsync(IAsyncInitializer initializer)
+    {
+        await initializer.InitializeAsync();
+    }
+}
+#endregion
+
+#region Generate:
+services.AddSingleton<Task<IMyService>>(sp =>
+{
+    async Task<global::MyService> Init(global::System.IServiceProvider provider)
+    {
+        var initializer = provider.GetRequiredService<global::IAsyncInitializer>();
+        var instance = new global::MyService
+        {
+            Logger = provider.GetRequiredService<global::ILogger>(),
+        };
+
+        instance.InitializeSync();
+        await instance.InitializeAsync(initializer);
+        return instance;
+    }
+
+    return Init(sp);
+});
+#endregion
+```
+
+#### `WrapperKind.Task` Detection and Resolution
+
+`Task<T>` is the async-init wrapper for consumer dependencies and partial accessors. The generator MUST only recognize the direct, non-nested form. Resolution MUST distinguish whether `T` itself has an async-init service path or only a synchronous service path.
+
+|Requested type|Classification|Resolution behavior|
+|:-------------|:-------------|:------------------|
+|`Task<T>` where `T` is a non-wrapper service type|`WrapperKind.Task`|MUST classify as `WrapperKind.Task`. Resolution MUST follow the async-init vs. sync-only rules below.|
+|`Task<Lazy<T>>`|Unsupported|MUST NOT be classified as `WrapperKind.Task`.|
+|`Lazy<Task<T>>`|Unsupported|MUST NOT be classified as a supported nested wrapper combination.|
+|`IEnumerable<Task<T>>`|Unsupported|MUST NOT be classified as a supported collection wrapper.|
+
+|Inner service `T` shape|Register-path behavior|Container-path behavior|
+|:----------------------|:---------------------|:----------------------|
+|Async-init service (`T` resolves through generated `Task<T>` init path)|MUST resolve `Task<T>` directly via `sp.GetRequiredService<Task<T>>()` or `sp.GetService<Task<T>>()`, depending on requiredness/default handling rules.|MUST call the generated async resolver path for `Task<T>` directly.|
+|Sync-only service (`T` only has synchronous resolution)|MUST wrap the synchronous resolution as `Task.FromResult(sp.GetRequiredService<T>())` or the matching optional/default-aware `Task.FromResult(...)` form.|MUST wrap the sync resolver result as `Task.FromResult(self.GetT_Resolve())` or the equivalent generated sync resolver call.|
+
+```csharp
+// Invalid: nested async wrappers are not supported.
+[IocRegister]
+public class BadConsumer
+{
+    [IocInject]
+    public void Initialize(Task<Lazy<IMyService>> service)
+    {
+    }
+}
+```
 
 ### Examples
 

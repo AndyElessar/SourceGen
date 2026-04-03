@@ -1,5 +1,4 @@
 using System.Reflection;
-using SourceGen.Ioc.TestCase;
 
 namespace SourceGen.Ioc.TestAot.Tests;
 

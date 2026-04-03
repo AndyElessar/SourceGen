@@ -248,6 +248,43 @@ public class SGIOC024Tests
     }
 
     [Test]
+    public async Task SGIOC024_NonVoidMethod_WithAsyncMethodInjectEnabled_ReportsDiagnostic()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [nameof(MyService.GetDepAsync)])]
+            public static class MyModule { }
+
+            public class MyService
+            {
+                public Task<int> GetDepAsync(IDependency dep) => Task.FromResult(0);
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1);
+        await Assert.That(sgioc024[0].GetMessage())
+            .Contains("GetDepAsync")
+            .And.Contains("void or non-generic Task");
+    }
+
+    [Test]
     public async Task SGIOC024_GenericMethod_ReportsDiagnostic()
     {
         const string source = """

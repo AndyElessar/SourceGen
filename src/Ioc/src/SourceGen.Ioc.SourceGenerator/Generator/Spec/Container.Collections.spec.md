@@ -132,6 +132,10 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 > - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => GetMyService()))`
 > - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => GetServices<T>())`
 > - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Resolved via `GetServices<Lazy<T>>()` which uses the wrapper resolver methods
+>
+> Non-collection outer wrappers (`Lazy<T>`, `Func<T>`) are recursively resolved to arbitrary depth. Collection outer wrappers (`IEnumerable<T>`, etc.) support at most **1 level of inner wrapping** (2 levels total); deeper nesting (e.g., `IEnumerable<Lazy<Func<T>>>`) falls back to `IServiceProvider` resolution via `GetRequiredService(typeof(...))`.
+>
+> `ValueTask<T>` is **not** a recognized wrapper type in any context. Only `Task<T>` is supported for async-init wrapping. When used as a partial accessor return type: if the target service uses async-init, `SGIOC029` is reported; otherwise `SGIOC021` is reported.
 
 ```csharp
 #region Define:

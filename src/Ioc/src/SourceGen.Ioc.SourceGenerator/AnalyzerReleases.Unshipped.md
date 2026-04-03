@@ -27,4 +27,8 @@ SGIOC022 | Usage | Warning | Inject attribute ignored due to disabled feature - 
 SGIOC023 | Usage | Error | Invalid InjectMembers element format - Each element in InjectMembers must be nameof(member) or new object[] { nameof(member), key [, KeyType] }.
 SGIOC024 | Usage | Error | InjectMembers specifies non-injectable member - Members in InjectMembers must be injectable (instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods, all of which must be public, internal, or protected internal).
 SGIOC025 | Design | Error | Circular module import detected - A container has a circular [IocImportModule] dependency that would cause a static initializer deadlock.
-
+SGIOC026 | Usage | Error | Invalid feature combination - AsyncMethodInject feature requires MethodInject to be enabled.
+SGIOC027 | Design | Error | Partial accessor must return Task of T for async-init service - The matched implementation has async inject methods but the accessor returns plain TService.
+SGIOC028 | Usage | Warning | async void injection method cannot be awaited - [IocInject] method is declared as async void.
+SGIOC029 | Design | Error | Unsupported async partial accessor type - Partial accessor targets an async-init service but returns an async type other than Task of T.
+SGIOC030 | Usage | Error | Synchronous dependency requested for async-init service - Consumer requests T but the service has async inject methods and no synchronous registration exists.

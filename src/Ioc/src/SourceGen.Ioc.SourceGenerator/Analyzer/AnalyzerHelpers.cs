@@ -38,7 +38,7 @@ internal static class AnalyzerHelpers
     public static bool IsAlwaysResolvable(INamedTypeSymbol serviceType)
     {
         // Well-known service types
-        if (IsWellKnownServiceType(serviceType))
+        if(IsWellKnownServiceType(serviceType))
             return true;
 
         return false;
@@ -62,7 +62,7 @@ internal static class AnalyzerHelpers
     /// <returns>The element type T, or null if not applicable.</returns>
     public static INamedTypeSymbol? GetEnumerableElementType(INamedTypeSymbol enumerableType)
     {
-        if (!IsIEnumerableOfT(enumerableType))
+        if(!IsIEnumerableOfT(enumerableType))
             return null;
 
         return enumerableType.TypeArguments.FirstOrDefault() as INamedTypeSymbol;
@@ -77,7 +77,7 @@ internal static class AnalyzerHelpers
     /// <returns>True if the attribute class matches the target symbol.</returns>
     public static bool IsAttributeMatch(INamedTypeSymbol? attributeClass, INamedTypeSymbol? targetSymbol)
     {
-        if (attributeClass is null || targetSymbol is null)
+        if(attributeClass is null || targetSymbol is null)
             return false;
 
         // For generic types, get the original unbound definition for comparison
@@ -91,7 +91,7 @@ internal static class AnalyzerHelpers
     /// <param name="attributeClass">The attribute class to check.</param>
     /// <param name="attributeSymbols">The attribute symbols context.</param>
     /// <returns>True if the attribute is an IoC registration attribute.</returns>
-    public static bool IsIoCRegistrationAttribute(INamedTypeSymbol attributeClass, IoCAttributeSymbols attributeSymbols)
+    public static bool IsIoCRegistrationAttribute(INamedTypeSymbol attributeClass, IocAttributeSymbols attributeSymbols)
     {
         return IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterAttribute)
             || IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterAttribute_T1)
@@ -105,7 +105,7 @@ internal static class AnalyzerHelpers
     /// <param name="attributeClass">The attribute class to check.</param>
     /// <param name="attributeSymbols">The attribute symbols context.</param>
     /// <returns>True if the attribute is an IoCRegisterForAttribute.</returns>
-    public static bool IsIoCRegisterForAttribute(INamedTypeSymbol attributeClass, IoCAttributeSymbols attributeSymbols)
+    public static bool IsIoCRegisterForAttribute(INamedTypeSymbol attributeClass, IocAttributeSymbols attributeSymbols)
     {
         return IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterForAttribute)
             || IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterForAttribute_T1);
@@ -117,7 +117,7 @@ internal static class AnalyzerHelpers
     /// <param name="attributeClass">The attribute class to check.</param>
     /// <param name="attributeSymbols">The attribute symbols context.</param>
     /// <returns>True if the attribute is an IoCRegisterAttribute.</returns>
-    public static bool IsIoCRegisterAttribute(INamedTypeSymbol attributeClass, IoCAttributeSymbols attributeSymbols)
+    public static bool IsIoCRegisterAttribute(INamedTypeSymbol attributeClass, IocAttributeSymbols attributeSymbols)
     {
         return IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterAttribute)
             || IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterAttribute_T1);
@@ -129,7 +129,7 @@ internal static class AnalyzerHelpers
     /// <param name="attributeClass">The attribute class to check.</param>
     /// <param name="attributeSymbols">The attribute symbols context.</param>
     /// <returns>True if the attribute is an IoCRegisterDefaultsAttribute.</returns>
-    public static bool IsIoCRegisterDefaultsAttribute(INamedTypeSymbol attributeClass, IoCAttributeSymbols attributeSymbols)
+    public static bool IsIoCRegisterDefaultsAttribute(INamedTypeSymbol attributeClass, IocAttributeSymbols attributeSymbols)
     {
         return IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterDefaultsAttribute)
             || IsAttributeMatch(attributeClass, attributeSymbols.IocRegisterDefaultsAttribute_T1);
@@ -141,9 +141,9 @@ internal static class AnalyzerHelpers
     /// <param name="attributeClass">The attribute class to check.</param>
     /// <param name="attributeSymbols">The attribute symbols context.</param>
     /// <returns>True if the attribute is an IocImportModuleAttribute.</returns>
-    public static bool IsIocImportModuleAttribute(INamedTypeSymbol? attributeClass, IoCAttributeSymbols attributeSymbols)
+    public static bool IsIocImportModuleAttribute(INamedTypeSymbol? attributeClass, IocAttributeSymbols attributeSymbols)
     {
-        if (attributeClass is null)
+        if(attributeClass is null)
             return false;
 
         return IsAttributeMatch(attributeClass, attributeSymbols.IocImportModuleAttribute)
@@ -156,7 +156,7 @@ internal static class AnalyzerHelpers
     /// <param name="attributeClass">The attribute class to check.</param>
     /// <param name="attributeSymbols">The attribute symbols context.</param>
     /// <returns>True if the attribute is any IoC attribute.</returns>
-    public static bool IsAnyIoCAttribute(INamedTypeSymbol attributeClass, IoCAttributeSymbols attributeSymbols)
+    public static bool IsAnyIoCAttribute(INamedTypeSymbol attributeClass, IocAttributeSymbols attributeSymbols)
     {
         return IsIoCRegistrationAttribute(attributeClass, attributeSymbols)
             || IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols);
@@ -169,48 +169,332 @@ internal static class AnalyzerHelpers
     /// <returns>An enumerable of service type symbols.</returns>
     public static IEnumerable<INamedTypeSymbol> GetServiceTypesFromAttribute(AttributeData attribute)
     {
-        foreach (var namedArg in attribute.NamedArguments)
+        foreach(var namedArg in attribute.NamedArguments)
         {
-            if (namedArg.Key is not "ServiceTypes")
+            if(namedArg.Key is not "ServiceTypes")
                 continue;
 
-            if (namedArg.Value.Kind is not TypedConstantKind.Array)
+            if(namedArg.Value.Kind is not TypedConstantKind.Array)
                 continue;
 
-            foreach (var element in namedArg.Value.Values)
+            foreach(var element in namedArg.Value.Values)
             {
-                if (element.Value is INamedTypeSymbol serviceType)
+                if(element.Value is INamedTypeSymbol serviceType)
                     yield return serviceType;
             }
         }
     }
 
     /// <summary>
-    /// Gets the target implementation type from an IoCRegisterForAttribute.
-    /// Supports both generic and non-generic variants.
+    /// Returns <see langword="true"/> when the implementation contains at least one async inject method.
+    /// Mirrors the generator's async-init classification by looking for instance ordinary methods
+    /// marked with [IocInject]/[Inject] that return non-generic Task.
     /// </summary>
-    /// <param name="attribute">The attribute data.</param>
-    /// <returns>The target type symbol, or null if not found.</returns>
-    public static INamedTypeSymbol? GetTargetTypeFromRegisterFor(AttributeData attribute)
+    public static bool IsAsyncInitImplementation(INamedTypeSymbol implType, IocFeatures features)
     {
+        if((features & IocFeatures.AsyncMethodInject) == 0)
+            return false;
+
+        var typeToInspect = implType.IsUnboundGenericType ? implType.OriginalDefinition : implType;
+
+        foreach(var member in typeToInspect.GetMembers())
+        {
+            if(member is not IMethodSymbol { MethodKind: MethodKind.Ordinary, IsStatic: false, IsGenericMethod: false } method)
+                continue;
+
+            if(!IsNonGenericTaskType(method.ReturnType))
+                continue;
+
+            if(method.GetAttributes().Any(static attr => attr.AttributeClass?.IsInject == true))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Extracts the keyed service key from a member attribute.
+    /// [FromKeyedServices] takes precedence over [IocInject]/[Inject].
+    /// </summary>
+    public static string? GetServiceKeyFromMember(ISymbol member)
+    {
+        string? serviceKey = null;
+
+        foreach(var attribute in member.GetAttributes())
+        {
+            var attrClass = attribute.AttributeClass;
+            if(attrClass is null)
+                continue;
+
+            if(attrClass.Name == "FromKeyedServicesAttribute"
+                && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+            {
+                if(attribute.ConstructorArguments.Length > 0)
+                {
+                    var keyArg = attribute.ConstructorArguments[0];
+                    if(!keyArg.IsNull && keyArg.Value is not null)
+                        return keyArg.GetPrimitiveConstantString();
+                }
+
+                return null;
+            }
+
+            if(attrClass.IsInject && serviceKey is null)
+            {
+                var (key, _, _) = attribute.GetKeyInfo();
+                serviceKey = key;
+            }
+        }
+
+        return serviceKey;
+    }
+
+    /// <summary>
+    /// Comparer for (service type, key) tuples that uses symbol equality for the type component.
+    /// </summary>
+    public static IEqualityComparer<(INamedTypeSymbol ServiceType, string? Key)> ServiceTypeAndKeyComparer { get; }
+        = new ServiceTypeAndKeySymbolComparer();
+
+    private sealed class ServiceTypeAndKeySymbolComparer : IEqualityComparer<(INamedTypeSymbol ServiceType, string? Key)>
+    {
+        public bool Equals((INamedTypeSymbol ServiceType, string? Key) x, (INamedTypeSymbol ServiceType, string? Key) y)
+            => SymbolEqualityComparer.Default.Equals(x.ServiceType, y.ServiceType)
+                && StringComparer.Ordinal.Equals(x.Key, y.Key);
+
+        public int GetHashCode((INamedTypeSymbol ServiceType, string? Key) obj)
+            => unchecked((SymbolEqualityComparer.Default.GetHashCode(obj.ServiceType) * 397)
+                ^ StringComparer.Ordinal.GetHashCode(obj.Key ?? string.Empty));
+    }
+
+    /// <summary>
+    /// Enumerates the service types exposed by a registration attribute for the specified implementation type.
+    /// Includes self-registration plus any explicit aliases or register-all flags.
+    /// </summary>
+    public static IEnumerable<INamedTypeSymbol> EnumerateRegisteredServiceTypes(
+        INamedTypeSymbol implementationType,
+        AttributeData attribute,
+        IocAttributeSymbols attributeSymbols)
+    {
+        yield return implementationType;
+
         var attrClass = attribute.AttributeClass;
-        if (attrClass is null)
+        if(attrClass is null)
+            yield break;
+
+        if(IsIoCRegisterAttribute(attrClass, attributeSymbols) && attrClass.IsGenericType)
+        {
+            foreach(var typeArg in attrClass.TypeArguments)
+            {
+                if(typeArg is INamedTypeSymbol serviceType)
+                    yield return serviceType;
+            }
+        }
+
+        foreach(var serviceType in GetServiceTypesFromAttribute(attribute))
+            yield return serviceType;
+
+        var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
+        if(registerAllInterfaces)
+        {
+            foreach(var interfaceType in implementationType.AllInterfaces)
+                yield return interfaceType;
+        }
+
+        var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
+        if(!registerAllBaseClasses)
+            yield break;
+
+        var baseType = implementationType.BaseType;
+        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
+        {
+            yield return baseType;
+            baseType = baseType.BaseType;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates the implicit service aliases used by the analyzers for an implementation type.
+    /// </summary>
+    public static IEnumerable<INamedTypeSymbol> EnumerateImplicitServiceTypes(INamedTypeSymbol implementationType)
+    {
+        yield return implementationType;
+
+        foreach(var interfaceType in implementationType.AllInterfaces)
+            yield return interfaceType;
+
+        var baseType = implementationType.BaseType;
+        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
+        {
+            yield return baseType;
+            baseType = baseType.BaseType;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates all assembly-level [IocRegisterFor] / [IocRegisterFor&lt;T&gt;] attributes
+    /// and yields (attribute, targetType) tuples. Does not perform abstract/private validation.
+    /// </summary>
+    /// <param name="compilation">The compilation to query.</param>
+    /// <param name="attributeSymbols">The attribute symbols context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An enumerable of (AttributeData, INamedTypeSymbol) tuples.</returns>
+    public static IEnumerable<(AttributeData Attribute, INamedTypeSymbol TargetType)> EnumerateAssemblyLevelRegisterForAttributes(
+        Compilation compilation,
+        IocAttributeSymbols attributeSymbols,
+        CancellationToken cancellationToken)
+    {
+        if(attributeSymbols.IocRegisterForAttribute is null && attributeSymbols.IocRegisterForAttribute_T1 is null)
+            yield break;
+
+        foreach(var attribute in compilation.Assembly.GetAttributes())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var attrClass = attribute.AttributeClass;
+            if(attrClass is null)
+                continue;
+
+            if(!IsIoCRegisterForAttribute(attrClass, attributeSymbols))
+                continue;
+
+            var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
+            if(targetType is null)
+                continue;
+
+            yield return (attribute, targetType);
+        }
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="type"/> is the non-generic
+    /// <see cref="System.Threading.Tasks.Task"/> class.
+    /// </summary>
+    public static bool IsNonGenericTaskType(ITypeSymbol? type)
+        => UnwrapNullableValueType(type) is INamedTypeSymbol { Arity: 0, Name: "Task" } named
+            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+
+    /// <summary>
+    /// Unwraps Nullable&lt;T&gt; to T for value-type async wrapper analysis.
+    /// </summary>
+    public static ITypeSymbol? UnwrapNullableValueType(ITypeSymbol? type)
+        => type is INamedTypeSymbol
+        {
+            OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+            TypeArguments.Length: 1
+        } nullableType
+                ? nullableType.TypeArguments[0]
+                : type;
+
+    /// <summary>
+    /// Returns the single generic argument of <c>Task&lt;T&gt;</c> or <c>ValueTask&lt;T&gt;</c>, if present.
+    /// </summary>
+    public static INamedTypeSymbol? TryGetAsyncWrapperElementType(ITypeSymbol? type)
+    {
+        type = UnwrapNullableValueType(type);
+
+        if(type is not INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } namedType)
             return null;
 
-        // Generic variant: IocRegisterForAttribute<T>
-        if (attrClass.IsGenericType && attrClass.TypeArguments.Length >= 1)
+        if(namedType.ContainingNamespace.ToDisplayString() != "System.Threading.Tasks")
+            return null;
+
+        if(namedType.Name is not ("Task" or "ValueTask"))
+            return null;
+
+        return namedType.TypeArguments[0] as INamedTypeSymbol;
+    }
+
+    /// <summary>
+    /// Unwraps any Generator-supported wrapper type to extract the inner service type for partial accessor resolution.
+    /// Supported wrappers: Task&lt;T&gt;, Lazy&lt;T&gt;, Func&lt;T&gt;, IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, ICollection&lt;T&gt;,
+    /// IReadOnlyList&lt;T&gt;, IList&lt;T&gt;, T[], IDictionary&lt;K,V&gt;, IReadOnlyDictionary&lt;K,V&gt;, Dictionary&lt;K,V&gt;, KeyValuePair&lt;K,V&gt;.
+    /// </summary>
+    /// <returns>The inner service type, or null if the type is not a recognized wrapper.</returns>
+    public static INamedTypeSymbol? TryUnwrapWrapperElementType(ITypeSymbol type)
+    {
+        // Array: T[]
+        if(type.TypeKind == TypeKind.Array)
+            return (type as IArrayTypeSymbol)?.ElementType as INamedTypeSymbol;
+
+        if(type is not INamedTypeSymbol named)
+            return null;
+
+        // Arity-1 wrappers
+        if(named.Arity == 1)
         {
-            return attrClass.TypeArguments[0] as INamedTypeSymbol;
+            var typeArg = named.TypeArguments[0] as INamedTypeSymbol;
+
+            // IEnumerable<T>
+            if(named.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+                return typeArg;
+
+            var ns = named.ContainingNamespace.ToDisplayString();
+
+            if(ns == "System.Collections.Generic"
+                && named.Name is "IReadOnlyCollection" or "ICollection" or "IReadOnlyList" or "IList")
+                return typeArg;
+
+            if(ns == "System" && named.Name == "Lazy")
+                return typeArg;
+
+            if(ns == "System.Threading.Tasks" && named.Name is "Task" or "ValueTask")
+                return typeArg;
         }
 
-        // Non-generic variant: IocRegisterForAttribute(typeof(T))
-        if (attribute.ConstructorArguments.Length >= 1 && attribute.ConstructorArguments[0].Value is INamedTypeSymbol argType)
+        // Arity-2 wrappers — return the value type (TypeArguments[1])
+        if(named.Arity == 2)
         {
-            return argType;
+            var ns = named.ContainingNamespace.ToDisplayString();
+
+            if(ns == "System.Collections.Generic"
+                && named.Name is "IDictionary" or "IReadOnlyDictionary" or "Dictionary" or "KeyValuePair")
+                return named.TypeArguments[1] as INamedTypeSymbol;
         }
+
+        // Func<T>, Func<T1,TReturn>, Func<T1,T2,TReturn>, etc.
+        // The last type argument is always the return type (the service type to resolve).
+        if(named.Arity >= 1
+            && named.ContainingNamespace.ToDisplayString() == "System"
+            && named.Name == "Func")
+            return named.TypeArguments[named.TypeArguments.Length - 1] as INamedTypeSymbol;
 
         return null;
     }
+
+    /// <summary>
+    /// Returns true when the return type is not supported for partial accessor resolution.
+    /// Unsupported: non-generic Task, non-generic ValueTask.
+    /// Note: ValueTask&lt;T&gt; is handled separately via the async-init path (SGIOC029).
+    /// </summary>
+    public static bool IsUnsupportedPartialAccessorReturnType(ITypeSymbol type)
+    {
+        // Non-generic Task
+        if(IsNonGenericTaskType(type))
+            return true;
+
+        if(type is not INamedTypeSymbol { Name: "ValueTask", Arity: 0 } named)
+            return false;
+
+        return named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+    }
+
+    /// <summary>
+    /// Returns true when the type is <c>ValueTask&lt;T&gt;</c> (generic, arity 1).
+    /// </summary>
+    public static bool IsGenericValueTaskType(ITypeSymbol type)
+        => type is INamedTypeSymbol { Name: "ValueTask", Arity: 1 } named
+            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="type"/> is a direct <c>Task&lt;T&gt;</c>
+    /// for the specified service type.
+    /// </summary>
+    public static bool IsTaskOfServiceType(ITypeSymbol? type, INamedTypeSymbol serviceType)
+        => TryGetAsyncWrapperElementType(type) is { } wrappedType
+            && UnwrapNullableValueType(type) is INamedTypeSymbol { Name: "Task" }
+            && SymbolEqualityComparer.Default.Equals(
+                wrappedType.WithNullableAnnotation(NullableAnnotation.NotAnnotated),
+                serviceType.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
 
     /// <summary>
     /// Checks if a field type is resolvable for injection.
@@ -223,11 +507,11 @@ internal static class AnalyzerHelpers
         var fieldType = field.Type;
 
         // Skip well-known service types
-        if (IsWellKnownServiceType(fieldType))
+        if(IsWellKnownServiceType(fieldType))
             return true;
 
         // Check if always resolvable (well-known types)
-        if (fieldType is INamedTypeSymbol namedType && IsAlwaysResolvable(namedType))
+        if(fieldType is INamedTypeSymbol namedType && IsAlwaysResolvable(namedType))
             return true;
 
         // Note: IEnumerable<T> is handled separately by the caller
@@ -235,7 +519,7 @@ internal static class AnalyzerHelpers
 
         // Check if [IocInject] has a Key specified - this makes it resolvable
         var (key, _, _) = injectAttribute.GetKeyInfo();
-        if (key is not null)
+        if(key is not null)
             return true;
 
         return false;
@@ -249,14 +533,14 @@ internal static class AnalyzerHelpers
     public static (bool IsValid, string? ErrorReason) ValidateFactoryOrInstanceSymbol(ISymbol symbol)
     {
         // Check if the symbol is static
-        if (!symbol.IsStatic)
+        if(!symbol.IsStatic)
         {
             return (false, "not static");
         }
 
         // Check accessibility - must be at least internal to be accessible
         // Private members cannot be accessed from the generated code
-        switch (symbol.DeclaredAccessibility)
+        switch(symbol.DeclaredAccessibility)
         {
             case Accessibility.Private:
                 return (false, "private");
@@ -269,9 +553,9 @@ internal static class AnalyzerHelpers
 
         // Also check containing type accessibility
         var containingType = symbol.ContainingType;
-        while (containingType is not null)
+        while(containingType is not null)
         {
-            if (containingType.DeclaredAccessibility is Accessibility.Private)
+            if(containingType.DeclaredAccessibility is Accessibility.Private)
             {
                 return (false, "declared in a private type");
             }
@@ -296,39 +580,39 @@ internal static class AnalyzerHelpers
         var paramType = param.Type;
 
         // Skip if parameter has default value
-        if (param.HasExplicitDefaultValue)
+        if(param.HasExplicitDefaultValue)
             return true;
 
         // Skip well-known service types
-        if (IsWellKnownServiceType(paramType))
+        if(IsWellKnownServiceType(paramType))
             return true;
 
         // Note: IEnumerable<T> is handled separately by the caller
         // as it depends on whether T is registered when IntegrateServiceProvider = false
 
         // Check for special attributes that make the parameter resolvable
-        foreach (var attribute in param.GetAttributes())
+        foreach(var attribute in param.GetAttributes())
         {
             var attrClass = attribute.AttributeClass;
-            if (attrClass is null)
+            if(attrClass is null)
                 continue;
 
             var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
 
             // [IocInject] or [Inject] with Key - check if it has a key
-            if (attrClass.IsInject)
+            if(attrClass.IsInject)
             {
                 var (key, _, _) = attribute.GetKeyInfo();
-                if (key is not null)
+                if(key is not null)
                     return true;
             }
 
             // [ServiceKey] - injects the registration key
-            if (attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+            if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
                 return true;
 
             // [FromKeyedServices] - MS.DI handles this automatically
-            if (attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+            if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
                 return true;
         }
 
@@ -346,11 +630,11 @@ internal static class AnalyzerHelpers
         var propertyType = property.Type;
 
         // Skip well-known service types
-        if (IsWellKnownServiceType(propertyType))
+        if(IsWellKnownServiceType(propertyType))
             return true;
 
         // Check if IEnumerable<T> - always resolvable
-        if (propertyType is INamedTypeSymbol namedType
+        if(propertyType is INamedTypeSymbol namedType
             && namedType.IsGenericType
             && namedType.OriginalDefinition.SpecialType is SpecialType.System_Collections_Generic_IEnumerable_T)
         {
@@ -359,7 +643,7 @@ internal static class AnalyzerHelpers
 
         // Check if [IocInject] has a Key specified - this makes it resolvable
         var (key, _, _) = injectAttribute.GetKeyInfo();
-        if (key is not null)
+        if(key is not null)
             return true;
 
         return false;
@@ -373,24 +657,24 @@ internal static class AnalyzerHelpers
     /// <returns>True if the member has a resolvable attribute; otherwise, false.</returns>
     public static bool HasResolvableAttribute(ImmutableArray<AttributeData> attributes)
     {
-        foreach (var attribute in attributes)
+        foreach(var attribute in attributes)
         {
             var attrClass = attribute.AttributeClass;
-            if (attrClass is null)
+            if(attrClass is null)
                 continue;
 
             var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
 
             // [IocInject] or [Inject] - user explicitly handles this
-            if (attrClass.IsInject)
+            if(attrClass.IsInject)
                 return true;
 
             // [ServiceKey] - injects the registration key
-            if (attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+            if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
                 return true;
 
             // [FromKeyedServices] - MS.DI handles this automatically
-            if (attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+            if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
                 return true;
         }
 
@@ -410,30 +694,30 @@ internal static class AnalyzerHelpers
         return tagArray.IsEmpty ? [""] : tagArray;
     }
 
-/// <summary>
-/// Checks if a target type is invalid for IoC registration.
-/// A type is invalid if it is private or abstract (unless it's an interface).
-/// </summary>
-/// <param name="targetType">The type to check.</param>
-/// <returns>A tuple indicating whether the type is invalid and the reason if so.</returns>
-public static (bool IsInvalid, string? Reason) GetRegistrationInvalidReason(INamedTypeSymbol targetType)
-{
-    // Check if target type is private
-    if (targetType.DeclaredAccessibility is Accessibility.Private)
-        return (true, "private");
+    /// <summary>
+    /// Checks if a target type is invalid for IoC registration.
+    /// A type is invalid if it is private or abstract (unless it's an interface).
+    /// </summary>
+    /// <param name="targetType">The type to check.</param>
+    /// <returns>A tuple indicating whether the type is invalid and the reason if so.</returns>
+    public static (bool IsInvalid, string? Reason) GetRegistrationInvalidReason(INamedTypeSymbol targetType)
+    {
+        // Check if target type is private
+        if(targetType.DeclaredAccessibility is Accessibility.Private)
+            return (true, "private");
 
-    // Check if target type is abstract (but not interface)
-    if (targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
-        return (true, "abstract");
+        // Check if target type is abstract (but not interface)
+        if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
+            return (true, "abstract");
 
-    return (false, null);
-}
+        return (false, null);
+    }
 }
 
 /// <summary>
 /// Holds cached IoC attribute type symbols for efficient comparison in analyzers.
 /// </summary>
-internal sealed class IoCAttributeSymbols
+internal sealed class IocAttributeSymbols
 {
     public INamedTypeSymbol? IocContainerAttribute { get; }
     public INamedTypeSymbol? IocRegisterAttribute { get; }
@@ -445,7 +729,7 @@ internal sealed class IoCAttributeSymbols
     public INamedTypeSymbol? IocImportModuleAttribute { get; }
     public INamedTypeSymbol? IocImportModuleAttribute_T1 { get; }
 
-    public IoCAttributeSymbols(Compilation compilation)
+    public IocAttributeSymbols(Compilation compilation)
     {
         IocContainerAttribute = compilation.GetTypeByMetadataName(Constants.IocContainerAttributeFullName);
         IocRegisterAttribute = compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName);
