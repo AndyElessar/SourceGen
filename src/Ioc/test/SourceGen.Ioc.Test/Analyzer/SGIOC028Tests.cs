@@ -1,14 +1,14 @@
 namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
-/// Tests for SGIOC031: [IocInject] method is declared as async void, which cannot be awaited.
+/// Tests for SGIOC028: [IocInject] method is declared as async void, which cannot be awaited.
 /// </summary>
 [Category(Constants.Analyzer)]
-[Category(Constants.SGIOC031)]
-public class SGIOC031Tests
+[Category(Constants.SGIOC028)]
+public class SGIOC028Tests
 {
     [Test]
-    public async Task SGIOC031_AsyncVoidMethod_ReportsDiagnostic()
+    public async Task SGIOC028_AsyncVoidMethod_ReportsDiagnostic()
     {
         const string source = """
             using SourceGen.Ioc;
@@ -26,16 +26,16 @@ public class SGIOC031Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc031 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC031").ToList();
+        var sgioc028 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC028").ToList();
 
-        await Assert.That(sgioc031).Count().IsEqualTo(1);
-        await Assert.That(sgioc031[0].GetMessage()).Contains("InitializeAsync").And.Contains("async void");
+        await Assert.That(sgioc028).Count().IsEqualTo(1);
+        await Assert.That(sgioc028[0].GetMessage()).Contains("InitializeAsync").And.Contains("async void");
     }
 
     [Test]
-    public async Task SGIOC031_AsyncVoidMethod_NeitherSGIOC007NorSGIOC022AlsoFires()
+    public async Task SGIOC028_AsyncVoidMethod_NeitherSGIOC007NorSGIOC022AlsoFires()
     {
-        // SGIOC031 fires first and returns early — the return-type check (SGIOC007) and
+        // SGIOC028 fires first and returns early - the return-type check (SGIOC007) and
         // feature-gate check (SGIOC022) must NOT duplicate the diagnostic.
         const string source = """
             using SourceGen.Ioc;
@@ -62,9 +62,9 @@ public class SGIOC031Tests
     }
 
     [Test]
-    public async Task SGIOC031_AsyncTaskMethod_WithAsyncMethodInjectEnabled_NoDiagnostic()
+    public async Task SGIOC028_AsyncTaskMethod_WithAsyncMethodInjectEnabled_NoDiagnostic()
     {
-        // async Task is a valid signature when AsyncMethodInject is ON — SGIOC031 must not fire.
+        // async Task is a valid signature when AsyncMethodInject is ON - SGIOC028 must not fire.
         const string source = """
             using System.Threading.Tasks;
             using SourceGen.Ioc;
@@ -89,15 +89,15 @@ public class SGIOC031Tests
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
-        var sgioc031 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC031");
+        var sgioc028 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC028");
 
-        await Assert.That(sgioc031).Count().IsEqualTo(0);
+        await Assert.That(sgioc028).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC031_SyncVoidMethod_NoDiagnostic()
+    public async Task SGIOC028_SyncVoidMethod_NoDiagnostic()
     {
-        // Regular void method (non-async) must NOT trigger SGIOC031.
+        // Regular void method (non-async) must NOT trigger SGIOC028.
         const string source = """
             using SourceGen.Ioc;
 
@@ -114,15 +114,15 @@ public class SGIOC031Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc031 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC031");
+        var sgioc028 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC028");
 
-        await Assert.That(sgioc031).Count().IsEqualTo(0);
+        await Assert.That(sgioc028).Count().IsEqualTo(0);
     }
 
     [Test]
-    public async Task SGIOC031_AsyncVoidMethod_FeaturesDisabled_StillReportsDiagnostic()
+    public async Task SGIOC028_AsyncVoidMethod_FeaturesDisabled_StillReportsDiagnostic()
     {
-        // SGIOC031 fires regardless of feature flags — async void is never acceptable.
+        // SGIOC028 fires regardless of feature flags - async void is never acceptable.
         const string source = """
             using SourceGen.Ioc;
 
@@ -147,9 +147,9 @@ public class SGIOC031Tests
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
             source,
             analyzerConfigOptions: analyzerConfigOptions);
-        var sgioc031 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC031").ToList();
+        var sgioc028 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC028").ToList();
 
-        await Assert.That(sgioc031).Count().IsEqualTo(1);
-        await Assert.That(sgioc031[0].GetMessage()).Contains("InitializeAsync");
+        await Assert.That(sgioc028).Count().IsEqualTo(1);
+        await Assert.That(sgioc028[0].GetMessage()).Contains("InitializeAsync");
     }
 }

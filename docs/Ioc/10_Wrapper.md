@@ -418,6 +418,39 @@ services.AddSingleton<global::System.Lazy<global::MyNamespace.IHandler>>((global
 
 </details>
 
+### Nesting Limits
+
+Wrapper nesting behavior is **shape-dependent**:
+
+- **Non-collection outer wrappers** (`Lazy<T>`, `Func<T>`): recursively resolved to arbitrary depth via inline construction.
+- **Collection outer wrappers** (`IEnumerable<T>`, `IList<T>`, etc.): support at most **1 level of inner wrapping** (2 levels total). Deeper nesting falls back to default behavior.
+
+#### Supported
+
+| Pattern | Behavior |
+| :--- | :--- |
+| `Lazy<Func<T>>` | Inline factory: `new Lazy<Func<T>>(() => new Func<T>(...))` |
+| `Func<Lazy<T>>` | Inline factory: `new Func<Lazy<T>>(() => new Lazy<T>(...))` |
+| `Lazy<IEnumerable<T>>` | Inline: `new Lazy<IEnumerable<T>>(() => sp.GetServices<T>())` |
+| `Lazy<Func<Lazy<T>>>` | Recursively inline (non-collection outer wrapper) |
+| `IEnumerable<Lazy<T>>` | Resolved via standalone `Lazy<T>` registrations |
+| `IEnumerable<Func<T>>` | Resolved via standalone `Func<T>` registrations |
+
+#### Not supported (collection outer wrapper with 3+ levels)
+
+| Pattern | Behavior |
+| :--- | :--- |
+| `IEnumerable<Lazy<Func<T>>>` | No wrapper registrations emitted |
+| `IEnumerable<Func<Lazy<T>>>` | No wrapper registrations emitted |
+
+When a collection outer wrapper contains 3+ levels of nesting:
+
+- **Register pipeline**: The consumer is registered with a plain `AddXXX<Consumer, Consumer>()` call. No wrapper registrations are emitted, so the nested wrapper parameter depends on MS.DI runtime resolution.
+- **Container pipeline**: The parameter falls back to `IServiceProvider` resolution via `GetRequiredService(typeof(...))`.
+
+> [!NOTE]
+> `ValueTask<T>` is **not** a recognized wrapper type in any context. Only `Task<T>` is supported for async-init wrapping. When used as a partial accessor return type: if the target service uses async-init, diagnostic **`SGIOC029`** is reported; otherwise diagnostic **`SGIOC021`** (unresolvable type) is reported.
+
 ## With Open Generics
 
 Wrapper dependencies can trigger closed generic discovery for open generic registrations.

@@ -47,7 +47,8 @@ Follow the **parent agent protocol** in `.github/instructions/memory-policy.inst
 
 ## Approach
 
-1. **Explore First (Required)** — Delegate to `Explore` to gather workflow and release context.
+0. **Capture Goal (Required)** — Distill the user's request into a concise goal statement and save it to `/memories/session/goal.md` via #tool:vscode/memory before any research.
+1. **Explore First (Required)** — Delegate to `Explore` to gather workflow and release context. Provide the goal from `goal.md` alongside the research question.
 2. **Create Plan.md (Required)** — Build `plan.md` from Explore findings (goal, scope, files, validation checks).
 3. **Save & Verify Plan (Required)** — Follow the parent agent protocol in plan memory policy.
 4. **Approve** — Present the plan and wait for user approval before risky or broad changes.

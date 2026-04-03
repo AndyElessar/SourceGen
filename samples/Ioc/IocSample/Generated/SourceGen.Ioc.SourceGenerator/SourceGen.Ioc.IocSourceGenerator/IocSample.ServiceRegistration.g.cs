@@ -21,6 +21,12 @@ namespace IocSample
         {
             if (!tags.Any())
             {
+                services.AddTransient<global::IocSample.AsyncDependentClass>((global::System.IServiceProvider sp) =>
+                {
+                    var p0 = sp.GetRequiredService<global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency>>();
+                    var s0 = new global::IocSample.AsyncDependentClass(p0);
+                    return s0;
+                });
                 services.AddTransient<global::IocSample.Basic2, global::IocSample.Basic2>();
                 services.AddTransient<global::IocSample.IBasic>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());
                 services.AddTransient<global::IocSample.IBasic2>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocSample.Basic2>());

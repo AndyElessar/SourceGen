@@ -1,6 +1,6 @@
 ---
 description: "Use when: implementing approved plan from /memories/session/plan.md. Executes code changes, runs tests, and follows project conventions."
-model: Claude Sonnet 4.6 (copilot)
+model: GPT-5.3-Codex (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, execute, read, edit, search, web, 'codegraphcontext/*', 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo]
 agents: []
 user-invocable: false
@@ -23,10 +23,10 @@ Refer to the relevant domain `AGENTS.md` (e.g., `src/Ioc/AGENTS.md`) for domain-
 
 ## Approach
 
-1. **Load plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:
-   Call `memory({ command: "view", path: "/memories/session/plan.md" })` as your very first tool call.
-   - If plan is present and non-empty → proceed to step 2.
-   - If plan is missing or empty → STOP and return `BLOCKED_NEEDS_PARENT_PLAN`.
+1. **Load goal and plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:
+   Use #tool:vscode/memory to read `/memories/session/goal.md` first, then `/memories/session/plan.md`. These must be your very first tool calls.
+   - If both are present and non-empty → proceed to step 2.
+   - If either is missing or empty → STOP and return `BLOCKED_NEEDS_PARENT_PLAN`.
    - If memory tool fails → STOP and return `BLOCKED_NO_PLAN_MEMORY`.
 2. Create the full todo list from plan steps via #tool:todo
 3. For each step: mark **in-progress** → implement → mark **completed** (do not batch)

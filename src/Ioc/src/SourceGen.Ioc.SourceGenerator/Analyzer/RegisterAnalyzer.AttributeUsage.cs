@@ -73,7 +73,7 @@ public sealed partial class RegisterAnalyzer
         var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
             ?? member.Locations.FirstOrDefault();
 
-        // SGIOC031: async void methods cannot be awaited — report before any other method check
+        // SGIOC028: async void methods cannot be awaited - report before any other method check
         if (member is IMethodSymbol { IsAsync: true, ReturnsVoid: true })
         {
             context.ReportDiagnostic(Diagnostic.Create(

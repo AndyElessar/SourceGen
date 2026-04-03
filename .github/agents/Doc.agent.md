@@ -14,7 +14,8 @@ Follow the **parent agent protocol** in `.github/instructions/memory-policy.inst
 
 ## Approach
 
-1. Run `Explore` first to gather context for the requested documentation work.
+0. Capture the user's request into a concise goal statement and save it to `/memories/session/goal.md` via #tool:vscode/memory before any research.
+1. Run `Explore` first to gather context for the requested documentation work. Provide the goal from `goal.md` alongside the research question.
 2. Create `plan.md` from Explore findings (goal, scope, target files, acceptance checks).
 3. Follow the parent agent protocol in plan memory policy: save, verify, and gate on failure.
 4. Read existing docs under `docs/` to understand current structure and conventions.
@@ -93,10 +94,11 @@ Return a structured completion report:
 
 #### Preconditions
 - ExploreCompleted: true | false
+- MemoryGoalSaved: true | false
 - MemoryPlanSaved: true | false
 - MemoryPlanVerified: true | false
 - MemoryPlanLoaded: true | false
-- MemoryPath: /memories/session/plan.md
+- MemoryPath: /memories/session/goal.md, /memories/session/plan.md
 - PlanMode: draft | approved
 - Blocker: (empty or reason)
 

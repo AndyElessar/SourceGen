@@ -11,3 +11,9 @@ internal sealed class AsyncDependency : IAsyncDependency
         await Task.Delay(1000);
     }
 }
+
+[IocRegister]
+internal sealed class AsyncDependentClass(Task<IAsyncDependency> dependency)
+{
+    private readonly Task<IAsyncDependency> _dependency = dependency;
+}

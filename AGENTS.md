@@ -38,6 +38,7 @@ Orchestrator (parent)
 ├── Spec            — update specs under **/Spec/
 ├── Implement       — write code, run tests
 ├── Review          — read-only code review after every Implement
+├── PlanReview      — read-only plan review before presenting plan to user
 ├── Doc (parent)    — write/update docs under docs/
 │   ├── Explore
 │   └── DocReview   — read-only docs review
@@ -45,8 +46,8 @@ Orchestrator (parent)
     └── Explore
 ```
 
-- **Parent agents** (Orchestrator, Doc, DevOps) manage `/memories/session/plan.md`
-- **Child agents** (Implement, Review, DocReview, Spec) load plan before work; return `BLOCKED_*` if missing
+- **Parent agents** (Orchestrator, Doc, DevOps) manage `/memories/session/goal.md` and `/memories/session/plan.md`
+- **Child agents** (Implement, Review, PlanReview, DocReview, Spec) load goal and plan before work; return `BLOCKED_*` if missing
 - Protocol: [memory-policy.instructions.md](.github/instructions/memory-policy.instructions.md)
 
 ## Hierarchy

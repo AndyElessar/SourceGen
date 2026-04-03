@@ -13,10 +13,10 @@ Follow the project principles in `AGENTS.md`.
 Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
-1. **Load plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:
-   Call `memory({ command: "view", path: "/memories/session/plan.md" })` as your very first tool call.
-   - If plan is present and non-empty → proceed to step 2.
-   - If plan is missing or empty → STOP and return `BLOCKED_NEEDS_PARENT_PLAN`.
+1. **Load goal and plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:
+   Use #tool:vscode/memory to read `/memories/session/goal.md` first, then `/memories/session/plan.md`. These must be your very first tool calls.
+   - If both are present and non-empty → proceed to step 2.
+   - If either is missing or empty → STOP and return `BLOCKED_NEEDS_PARENT_PLAN`.
    - If memory tool fails → STOP and return `BLOCKED_NO_PLAN_MEMORY`.
 2. Read all changed/created files listed in the prompt
 3. For each file, compare the implementation against the spec
@@ -54,8 +54,9 @@ Return a structured report in this exact format:
 ### Review Report
 
 #### Preconditions
+- MemoryGoalLoaded: true | false
 - MemoryPlanLoaded: true | false
-- MemoryPath: /memories/session/plan.md
+- MemoryPath: /memories/session/goal.md, /memories/session/plan.md
 - Blocker: (empty or reason)
 
 #### 1. Spec Compliance Issues

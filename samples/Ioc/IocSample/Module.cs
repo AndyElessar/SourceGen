@@ -10,4 +10,6 @@ public sealed partial class Module
 
     [IocInject(Key = KeyEnum.Key0)]
     public partial IKeyed GetKeyEnum();
+
+    public partial Task<IAsyncDependency> GetAsyncDependencyTask();
 }

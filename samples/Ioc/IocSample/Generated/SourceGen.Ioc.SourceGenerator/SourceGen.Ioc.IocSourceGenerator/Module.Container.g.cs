@@ -316,6 +316,11 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         }
     }
 
+    private global::IocSample.AsyncDependentClass GetIocSample_AsyncDependentClass()
+    {
+        return new global::IocSample.AsyncDependentClass(((global::System.Func<global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency>>)(async () => (global::IocSample.IAsyncDependency)(await GetIocSample_AsyncDependencyAsync())))());
+    }
+
     private global::IocSample.Basic2 GetIocSample_Basic2()
     {
         return new global::IocSample.Basic2();
@@ -521,6 +526,8 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     public partial global::IocSample.IKeyed GetKeyEnum() => GetIocSample_KeyedEnum_IocSample_KeyEnum_Key0();
 
+    public partial async global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency> GetAsyncDependencyTask() => await GetIocSample_AsyncDependencyAsync();
+
     #endregion
 
     #region IServiceProvider
@@ -667,6 +674,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::IocSample.Module), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new(new ServiceIdentifier(typeof(global::IocSample.AsyncDependentClass), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_AsyncDependentClass()),
         new(new ServiceIdentifier(typeof(global::IocSample.Basic2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Basic2()),
         new(new ServiceIdentifier(typeof(global::IocSample.IBasic), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Basic()),
         new(new ServiceIdentifier(typeof(global::IocSample.IBasic2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Basic2()),

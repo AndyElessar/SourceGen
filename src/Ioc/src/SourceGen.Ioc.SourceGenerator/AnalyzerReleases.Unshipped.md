@@ -29,6 +29,6 @@ SGIOC024 | Usage | Error | InjectMembers specifies non-injectable member - Membe
 SGIOC025 | Design | Error | Circular module import detected - A container has a circular [IocImportModule] dependency that would cause a static initializer deadlock.
 SGIOC026 | Usage | Error | Invalid feature combination - AsyncMethodInject feature requires MethodInject to be enabled.
 SGIOC027 | Design | Error | Partial accessor must return Task of T for async-init service - The matched implementation has async inject methods but the accessor returns plain TService.
+SGIOC028 | Usage | Warning | async void injection method cannot be awaited - [IocInject] method is declared as async void.
 SGIOC029 | Design | Error | Unsupported async partial accessor type - Partial accessor targets an async-init service but returns an async type other than Task of T.
 SGIOC030 | Usage | Error | Synchronous dependency requested for async-init service - Consumer requests T but the service has async inject methods and no synchronous registration exists.
-SGIOC031 | Usage | Warning | async void injection method cannot be awaited - [IocInject] method is declared as async void.

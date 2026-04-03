@@ -10,7 +10,9 @@ All agents that participate in the plan→approve→implement→review workflow 
 
 | Path | Owner | Purpose |
 |------|-------|---------|
+| `/memories/session/goal.md` | Parent agents (Orchestrator, Doc, DevOps) | Requirement goal — created before Discovery, read by all subagents |
 | `/memories/session/plan.md` | Parent agents (Orchestrator, Doc, DevOps) | Approved plan — read by all child agents |
+| `/memories/session/plan-review.md` | PlanReview agent | Structured plan review report — read by parent agent before presenting plan |
 | `/memories/session/changes.md` | Implement agent | Changed files, decisions, issues, concerns from implementation |
 | `/memories/session/review.md` | Review agent | Structured review report |
 
@@ -39,9 +41,10 @@ memory({ command: "str_replace", path: "/memories/session/plan.md", old_str: "<e
 
 ## Parent Agent Protocol
 
-Parent agents (Orchestrator, DevOps, Doc) create, save, and maintain the plan:
+Parent agents (Orchestrator, DevOps, Doc) create, save, and maintain the goal and plan:
 
-1. **Explore First** — The first subagent call in every task MUST be `Explore` to gather context.
+0. **Capture Goal** — Before any research, distill the user's request into a concise goal statement and save it to `/memories/session/goal.md` via #tool:vscode/memory. This file is the single source of truth for *what* we are trying to achieve. Include it (or reference it) when delegating to every subagent.
+1. **Explore First** — The first subagent call in every task MUST be `Explore` to gather context. Provide the goal from `goal.md` alongside the research question.
 2. **Clarify if Needed** — After `Explore` returns, resolve any material ambiguity before finalizing the plan. Use #tool:vscode/askQuestions when requirements are incomplete, multiple valid approaches exist, public API or dependency changes are involved, or a user decision is required. Do not ask questions that can be answered from the codebase.
 3. **Create Plan** — After `Explore` and any necessary clarification, create `plan.md` using the format defined by the active parent agent. The plan MUST be structured, complete, and current, and MUST include the equivalent of: goal/outcome, implementation approach or steps, scope or relevant files, and acceptance criteria or verification.
 4. **Save Draft Plan** — After drafting the plan, and before delegating to any subagent after the initial `Explore` call, save the current plan to `/memories/session/plan.md` via #tool:vscode/memory or an update command if the file already exists.
@@ -55,10 +58,10 @@ Parent agents (Orchestrator, DevOps, Doc) create, save, and maintain the plan:
 
 **CRITICAL**: The VERY FIRST action of any child agent MUST be to load and validate the plan. Do NOT skip this step. Do NOT proceed to any other work until the plan is loaded and confirmed non-empty.
 
-Child agents (Implement, Review, DocReview, Spec) load and validate the plan:
+Child agents (Implement, Review, DocReview, Spec, PlanReview) load and validate the plan:
 
-1. **Load Plan (FIRST ACTION — mandatory, non-skippable)** — Call #tool:vscode/memory as your very first tool call. No other tool call may precede this.
-2. **Validate Content** — Confirm the plan content is present and non-empty. If valid, proceed to work.
+1. **Load Goal and Plan (FIRST ACTION — mandatory, non-skippable)** — Call #tool:vscode/memory to read `/memories/session/goal.md` first, then `/memories/session/plan.md`, as your very first tool calls. No other tool call may precede these.
+2. **Validate Content** — Confirm both goal and plan content are present and non-empty. If valid, proceed to work.
 3. **Block if Missing** — If memory read fails or plan is missing/empty, stop immediately and return `BLOCKED_NEEDS_PARENT_PLAN` with a brief reason requesting the parent agent to save a complete plan. Do NOT attempt to guess the plan or proceed without it.
 4. **Block on Tool Failure** — If memory is unavailable due to tool/runtime issues, stop and return `BLOCKED_NO_PLAN_MEMORY`.
 5. **Block on Ambiguity** — If anything in the plan is unclear or a design decision is needed, return `BLOCKED_NEEDS_PARENT_DECISION` with the exact clarification needed.
@@ -79,10 +82,11 @@ If an agent definition requires a structured completion report, include plan-mem
 
 ```
 #### Preconditions
+- MemoryGoalLoaded: true | false
 - MemoryPlanLoaded: true | false
 - MemoryPlanSaved: true | false (parent agents only)
 - MemoryPlanVerified: true | false (parent agents only)
-- MemoryPath: /memories/session/plan.md
+- MemoryPath: /memories/session/goal.md, /memories/session/plan.md
 - Blocker: (empty or BLOCKED_* code with reason)
 ```
 
