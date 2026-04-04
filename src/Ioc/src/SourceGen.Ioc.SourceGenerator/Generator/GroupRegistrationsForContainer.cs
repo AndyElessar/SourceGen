@@ -8,7 +8,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static ContainerWithGroups GroupRegistrationsForContainer(
         ContainerModel container,
-        ImmutableEquatableArray<ServiceRegistrationWithTags> allRegistrations)
+        ImmutableEquatableArray<ServiceRegistrationWithTags> allRegistrations,
+        IocFeatures features)
     {
         // Filter registrations based on ExplicitOnly mode
         var registrations = FilterRegistrationsForContainer(container, allRegistrations);
@@ -24,7 +25,7 @@ partial class IocSourceGenerator
         }
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, container.EagerResolveOptions, reservedNames);
+        var groups = BuildContainerRegistrationGroups(registrations, features, container.EagerResolveOptions, reservedNames);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -103,6 +104,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static ContainerRegistrationGroups BuildContainerRegistrationGroups(
         ImmutableEquatableArray<ServiceRegistrationModel> registrations,
+        IocFeatures features,
         EagerResolveOptions eagerResolveOptions,
         HashSet<string> reservedNames)
     {
@@ -118,12 +120,15 @@ partial class IocSourceGenerator
         var scopedMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (CachedRegistration Cached, bool HasDecorators)>();
         var transientMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (CachedRegistration Cached, bool HasDecorators)>();
 
+        var hasAllInjectionFeatures = IocFeaturesHelper.HasAllInjectionFeatures(features);
         var hasOpenGenerics = false;
         var hasKeyedServices = false;
 
         foreach(var reg in registrations)
         {
-            if(reg.IsOpenGeneric)
+            var effectiveRegistration = hasAllInjectionFeatures ? reg : FilterRegistrationForFeatures(reg, features);
+
+            if(effectiveRegistration.IsOpenGeneric)
             {
                 hasOpenGenerics = true;
                 // Skip open generics for most processing but track the flag
@@ -131,10 +136,10 @@ partial class IocSourceGenerator
             }
 
             // Pre-compute field and method names once, including IsEager flag
-            var cached = CreateCachedRegistration(reg, eagerResolveOptions, reservedNames);
+            var cached = CreateCachedRegistration(effectiveRegistration, eagerResolveOptions, reservedNames);
 
-            var key = (reg.ServiceType.Name, reg.Key);
-            if(reg.Key is not null)
+            var key = (effectiveRegistration.ServiceType.Name, effectiveRegistration.Key);
+            if(effectiveRegistration.Key is not null)
             {
                 hasKeyedServices = true;
             }
@@ -147,9 +152,9 @@ partial class IocSourceGenerator
             list.Add(cached);
 
             // Also add implementation type as a service type (for self-registration)
-            if(reg.ImplementationType.Name != reg.ServiceType.Name)
+            if(effectiveRegistration.ImplementationType.Name != effectiveRegistration.ServiceType.Name)
             {
-                var implKey = (reg.ImplementationType.Name, reg.Key);
+                var implKey = (effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key);
                 if(!byServiceTypeAndKey.TryGetValue(implKey, out var implList))
                 {
                     implList = [];
@@ -159,16 +164,16 @@ partial class IocSourceGenerator
             }
 
             // Track closed types for IsService checks
-            allServiceTypes.Add(reg.ServiceType.Name);
-            allServiceTypes.Add(reg.ImplementationType.Name);
+            allServiceTypes.Add(effectiveRegistration.ServiceType.Name);
+            allServiceTypes.Add(effectiveRegistration.ImplementationType.Name);
 
             // Group by lifetime - prefer registration with decorators for field generation
             // Include Instance or Factory in the key to distinguish multiple instance/factory registrations
-            var instanceOrFactory = reg.Instance ?? reg.Factory?.Path;
-            var lifetimeKey = (reg.ImplementationType.Name, reg.Key, instanceOrFactory);
-            var hasDecorators = reg.Decorators.Length > 0;
+            var instanceOrFactory = effectiveRegistration.Instance ?? effectiveRegistration.Factory?.Path;
+            var lifetimeKey = (effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key, instanceOrFactory);
+            var hasDecorators = effectiveRegistration.Decorators.Length > 0;
 
-            var targetMap = reg.Lifetime switch
+            var targetMap = effectiveRegistration.Lifetime switch
             {
                 ServiceLifetime.Singleton => singletonMap,
                 ServiceLifetime.Scoped => scopedMap,

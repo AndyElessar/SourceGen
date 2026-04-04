@@ -221,7 +221,7 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 // Detect if Microsoft.Extensions.DependencyInjection package is referenced
                 // by checking for ServiceCollectionContainerBuilderExtensions type
                 var hasDIPackage = compilation.GetTypeByMetadataName(
-                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is INamedTypeSymbol;
+                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is not null;
                 return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
             });
 
@@ -293,18 +293,24 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Combine(allOpenGenericEntries)
             .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left.Left, in source.Left.Right, in source.Right, ct));
 
-        // Combine service registrations with compilation info and MSBuild properties
-        var combined = serviceRegistrations
+        var registerOutputModel = serviceRegistrations
             .Combine(compilationInfoProvider)
-            .Combine(msbuildPropertiesProvider);
+            .Combine(msbuildPropertiesProvider)
+            .Select(static (source, _) =>
+            {
+                var ((registrations, compilationInfo), msbuildProps) = source;
+                var rootNamespace = msbuildProps.RootNamespace ?? compilationInfo.AssemblyName;
+                return GroupRegistrationsForRegister(
+                    registrations, rootNamespace, compilationInfo.AssemblyName,
+                    msbuildProps.CustomIocName, msbuildProps.Features);
+            });
 
-        // Generate output
-        context.RegisterSourceOutput(combined, static (ctx, source) =>
+        context.RegisterSourceOutput(registerOutputModel, static (ctx, model) =>
         {
-            var ((registrations, compilationInfo), msbuildProps) = source;
-            // Use RootNamespace from MSBuild if available, otherwise fall back to assembly name
-            var rootNamespace = msbuildProps.RootNamespace ?? compilationInfo.AssemblyName;
-            GenerateRegisterOutput(in ctx, registrations, rootNamespace, compilationInfo.AssemblyName, msbuildProps);
+            if(model is null)
+                return;
+
+            GenerateRegisterOutput(in ctx, model);
         });
 
         // ========== Container Pipeline ==========
@@ -320,7 +326,12 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         // Combine container with existing serviceRegistrations and group them
         var containerWithGroups = containerProvider
             .Combine(serviceRegistrations)
-            .Select(static (source, _) => GroupRegistrationsForContainer(source.Left, source.Right));
+            .Combine(msbuildPropertiesProvider)
+            .Select(static (source, _) =>
+            {
+                var ((container, registrations), msbuildProps) = source;
+                return GroupRegistrationsForContainer(container, registrations, msbuildProps.Features);
+            });
 
         // Combine with compilation info and MSBuild properties
         var containerWithCompilationInfo = containerWithGroups

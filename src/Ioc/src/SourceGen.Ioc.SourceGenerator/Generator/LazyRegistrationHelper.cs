@@ -127,9 +127,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteLazyRegistrations(
         SourceWriter writer,
-        List<LazyRegistrationEntry>? entries)
+        ImmutableEquatableArray<LazyRegistrationEntry> entries)
     {
-        if(entries is null or { Count: 0 })
+        if(entries.Length == 0)
             return;
 
         writer.WriteLine();

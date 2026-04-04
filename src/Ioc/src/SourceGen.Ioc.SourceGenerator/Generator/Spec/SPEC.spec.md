@@ -24,6 +24,8 @@ ForAttributeWithMetadataName
          ↓
     CombineAndResolveClosedGenerics → ServiceRegistrationWithTags
          ↓
+    GroupRegistrationsForRegister → RegisterOutputModel
+         ↓
     GenerateRegisterOutput  →  {assemblyName}.ServiceRegistration.g.cs
     GenerateContainerOutput →  {containerClassName}.Container.g.cs
 ```
@@ -82,14 +84,15 @@ File: `ProcessSingleRegistration.cs`
 2. `allOpenGenericEntries` = factory-based + imported
 3. `CombineAndResolveClosedGenerics(allBasicResults, closedGenericDeps, openGenericEntries)` → `ImmutableEquatableArray<ServiceRegistrationWithTags>`
 4. Combine with compilation info + MsBuildProperties
-5. `GenerateRegisterOutput` → `{assemblyName}.ServiceRegistration.g.cs`
+5. `GroupRegistrationsForRegister` → `RegisterOutputModel` — pre-computes tag grouping, wrapper entry collection (Lazy/Func/KVP), feature filtering, async-init scanning, and per-registration decision flags into a cacheable data model. The output callback receives the pre-computed model and performs only `SourceWriter` formatting.
+6. `GenerateRegisterOutput` → `{assemblyName}.ServiceRegistration.g.cs`
 
-Files: `CombineAndResolveClosedGenerics.cs`, `GenerateRegisterOutput.cs`
+Files: `CombineAndResolveClosedGenerics.cs`, `GroupRegistrationsForRegister.cs`, `RegisterOutputModel.cs`, `GenerateRegisterOutput.cs`
 
 ### Stage 5: Container Pipeline (parallel branch)
 
 1. `IocContainerAttribute` → `TransformContainer` → `ContainerModel?`
-2. `GroupRegistrationsForContainer` → `ContainerWithGroups`
+2. `GroupRegistrationsForContainer(container, registrations, features)` → `ContainerWithGroups` — accepts `IocFeatures` and applies feature filtering (`FilterRegistrationForFeatures`) during group construction, so the output callback no longer performs feature filtering. `FilterContainerWithGroupsForFeatures` has been removed from the output stage.
 3. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs`
 
 Files: `TransformContainer.cs`, `GroupRegistrationsForContainer.cs`, `GenerateContainerOutput.cs`
@@ -109,6 +112,9 @@ All under `Models/`.
 | `DefaultSettingsMap` | `sealed class` | Fast default lookup by exact/generic signatures |
 | `ImportModuleResult` | `sealed record class` | Imported module payload |
 | `ContainerModel` | `sealed record class` | Container generation input |
+| `RegisterOutputModel` | `sealed record class` | Top-level cacheable output model for Register pipeline — contains `MethodBaseName`, `RootNamespace`, `AssemblyName`, `TagGroups`, and optional `AsyncInitServiceTypes` |
+| `RegisterTagGroup` | `sealed record class` | Per-tag-group pre-computed output data — contains sorted `TagKey`, `Registrations` (as `RegisterOutputEntry`), and collected `LazyEntries`/`FuncEntries`/`KvpEntries` |
+| `RegisterOutputEntry` | `readonly record struct` | Pre-computed per-registration decision flags (`HasFactory`, `HasInstance`, `HasClosedDecorators`, `NeedsFactoryConstruction`, etc.) to avoid re-computation in the output callback |
 
 ## Spec Index
 

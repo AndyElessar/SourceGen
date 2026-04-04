@@ -147,9 +147,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteFuncRegistrations(
         SourceWriter writer,
-        List<FuncRegistrationEntry>? entries)
+        ImmutableEquatableArray<FuncRegistrationEntry> entries)
     {
-        if(entries is null or { Count: 0 })
+        if(entries.Length == 0)
             return;
 
         writer.WriteLine();

@@ -142,9 +142,9 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteKvpRegistrations(
         SourceWriter writer,
-        List<KvpRegistrationEntry>? entries)
+        ImmutableEquatableArray<KvpRegistrationEntry> entries)
     {
-        if(entries is null or { Count: 0 })
+        if(entries.Length == 0)
             return;
 
         writer.WriteLine();
