@@ -12,11 +12,8 @@ partial class IocSourceGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            // Get the ModuleType from the attribute
-            if(attr.ConstructorArguments.Length == 0)
-                continue;
-
-            if(attr.ConstructorArguments[0].Value is not INamedTypeSymbol moduleType)
+            var moduleType = attr.GetImportedModuleType();
+            if(moduleType is null)
                 continue;
 
             // Get the assembly containing the module type
@@ -44,11 +41,8 @@ partial class IocSourceGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            var attrClass = attr.AttributeClass;
-            if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
-                continue;
-
-            if(attrClass.TypeArguments[0] is not INamedTypeSymbol moduleType)
+            var moduleType = attr.GetImportedModuleType();
+            if(moduleType is null)
                 continue;
 
             // Get the assembly containing the module type
@@ -105,11 +99,7 @@ partial class IocSourceGenerator
 
             if(fullName == Constants.IocImportModuleAttributeFullName)
             {
-                if(attr.ConstructorArguments.Length > 0 &&
-                   attr.ConstructorArguments[0].Value is INamedTypeSymbol modType)
-                {
-                    importedModuleType = modType;
-                }
+                importedModuleType = attr.GetImportedModuleType();
             }
             else if(attrClass.IsGenericType)
             {
@@ -120,12 +110,8 @@ partial class IocSourceGenerator
                     ? metadataName
                     : $"{metadataNamespace}.{metadataName}";
 
-                if(originalFullName == Constants.IocImportModuleAttributeFullName_T1 &&
-                   attrClass.TypeArguments.Length > 0 &&
-                   attrClass.TypeArguments[0] is INamedTypeSymbol genericModType)
-                {
-                    importedModuleType = genericModType;
-                }
+                if(originalFullName == Constants.IocImportModuleAttributeFullName_T1)
+                    importedModuleType = attr.GetImportedModuleType();
             }
 
             if(importedModuleType is not null)

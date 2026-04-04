@@ -8,6 +8,9 @@ internal static class TransformExtensions
         return angleIndex > 0 ? typeName[..angleIndex] : typeName;
     }
 
+    private static WrapperKind NormalizeGeneratorWrapperKind(WrapperKind kind)
+        => kind is WrapperKind.ValueTask ? WrapperKind.None : kind;
+
     extension(ITypeSymbol typeSymbol)
     {
         public TypeData GetTypeData(
@@ -103,19 +106,34 @@ internal static class TransformExtensions
 
             // Check if this is a wrapper type (collection or non-collection) for DI
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
-            var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
+            var wrapperKind = typeSymbol.TryGetWrapperInfo(out var wrapperInfo)
+                ? NormalizeGeneratorWrapperKind(wrapperInfo.Kind)
+                : WrapperKind.None;
 
-            // Downgrade nested Task<Wrapper> or Wrapper<Task> shapes to WrapperKind.None.
-            // These shapes are not supported by the spec and fall back to IServiceProvider resolution.
-            if(wrapperKind == WrapperKind.Task && typeParameters is { Length: > 0 } && typeParameters[0].Type is WrapperTypeData)
+            if(wrapperKind is not WrapperKind.None && typeSymbol.TypeArguments.Length > 0)
             {
-                wrapperKind = WrapperKind.None;
-            }
-            else if(wrapperKind is not WrapperKind.None
-                && typeParameters is not null
-                && typeParameters.Any(p => p.Type is TaskTypeData))
-            {
-                wrapperKind = WrapperKind.None;
+                foreach(var typeArgument in typeSymbol.TypeArguments.OfType<INamedTypeSymbol>())
+                {
+                    if(!typeArgument.TryGetWrapperInfo(out var childWrapperInfo))
+                    {
+                        continue;
+                    }
+
+                    var childWrapperKind = NormalizeGeneratorWrapperKind(childWrapperInfo.Kind);
+                    if(childWrapperKind is WrapperKind.None)
+                    {
+                        continue;
+                    }
+
+                    // Keep generator behavior for collection wrappers: do not downgrade
+                    // IEnumerable<Lazy<T>> / IEnumerable<Func<T>> at this classification stage.
+                    // Collection nesting limitations are enforced by wrapper resolver generation.
+                    if(IsUnsupportedWrapperNesting(wrapperKind, childWrapperKind, isAfterCollection: false))
+                    {
+                        wrapperKind = WrapperKind.None;
+                        break;
+                    }
+                }
             }
 
             if(wrapperKind is not WrapperKind.None)
@@ -284,7 +302,9 @@ internal static class TransformExtensions
             }
 
             // Check if this is a wrapper type (collection or non-collection)
-            var wrapperKind = typeSymbol.GetWrapperKind(nameWithoutGeneric);
+            var wrapperKind = typeSymbol.TryGetWrapperInfo(out var wrapperInfo)
+                ? NormalizeGeneratorWrapperKind(wrapperInfo.Kind)
+                : WrapperKind.None;
 
             if(wrapperKind is not WrapperKind.None)
             {
@@ -427,56 +447,6 @@ internal static class TransformExtensions
 
             return (parameters.ToImmutableEquatableArray(), hasInjectConstructor);
         }
-
-        /// <summary>
-        /// Gets the <see cref="WrapperKind"/> for the given type symbol.
-        /// Checks collection types first, then non-collection wrapper types.
-        /// </summary>
-        /// <param name="nameWithoutGeneric">The type name without generic parameters.</param>
-        /// <returns>The <see cref="WrapperKind"/> for this type.</returns>
-        public WrapperKind GetWrapperKind(string nameWithoutGeneric)
-        {
-            if(typeSymbol.TypeKind == TypeKind.Array)
-                return WrapperKind.Array;
-
-            if(IsReadOnlyCollectionType(nameWithoutGeneric))
-                return WrapperKind.ReadOnlyCollection;
-
-            if(IsReadOnlyListType(nameWithoutGeneric))
-                return WrapperKind.ReadOnlyList;
-
-            if(IsCollectionType(nameWithoutGeneric))
-                return WrapperKind.Collection;
-
-            if(IsListType(nameWithoutGeneric))
-                return WrapperKind.List;
-
-            if(IsEnumerableType(nameWithoutGeneric))
-                return WrapperKind.Enumerable;
-
-            return GetNonCollectionWrapperKind(nameWithoutGeneric, typeSymbol.Arity);
-        }
-
-        /// <summary>
-        /// Determines the <see cref="WrapperKind"/> for a given type name (without generic part).
-        /// Returns <see cref="WrapperKind.None"/> if the type is not a recognized non-collection wrapper type.
-        /// Collection types (IEnumerable, IReadOnlyCollection, etc.) are detected separately
-        /// in <see cref="TransformExtensions"/> via <c>GetWrapperKind</c>.
-        /// </summary>
-        /// <param name="nameWithoutGeneric">The type name without generic parameters.</param>
-        /// <param name="arity">The number of type parameters. Used to distinguish <c>Task&lt;T&gt;</c> (arity 1) from non-generic <c>Task</c> (arity 0).</param>
-        public static WrapperKind GetNonCollectionWrapperKind(string nameWithoutGeneric, int arity) => nameWithoutGeneric switch
-        {
-            "global::System.Lazy" or "System.Lazy" or "Lazy" => WrapperKind.Lazy,
-            "global::System.Func" or "System.Func" or "Func" => WrapperKind.Func,
-            "global::System.Collections.Generic.IDictionary" or "System.Collections.Generic.IDictionary" or "IDictionary"
-                or "global::System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.IReadOnlyDictionary" or "IReadOnlyDictionary"
-                or "global::System.Collections.Generic.Dictionary" or "System.Collections.Generic.Dictionary" or "Dictionary"
-                => WrapperKind.Dictionary,
-            "global::System.Collections.Generic.KeyValuePair" or "System.Collections.Generic.KeyValuePair" or "KeyValuePair" => WrapperKind.KeyValuePair,
-            ("global::System.Threading.Tasks.Task" or "System.Threading.Tasks.Task" or "Task") when arity == 1 => WrapperKind.Task,
-            _ => WrapperKind.None
-        };
 
         public bool IsInject =>
             typeSymbol.Name is "IocInjectAttribute" or "InjectAttribute";
@@ -798,35 +768,96 @@ internal static class TransformExtensions
         /// The method first checks for a named argument "ServiceTypes" (e.g., ServiceTypes = [typeof(IService)]).
         /// If not found, it checks constructor arguments for an array of types (e.g., params Type[] serviceTypes).
         /// </remarks>
-        public ImmutableEquatableArray<TypeData> GetServiceTypes()
+        public IEnumerable<INamedTypeSymbol> GetServiceTypeSymbols()
         {
             // First, try to get from named argument
-            var namedResult = attribute.GetTypeArrayArgument("ServiceTypes");
+            var namedResult = attribute.GetTypeSymbolsFromNamedArgument("ServiceTypes");
             if(namedResult.Length > 0)
                 return namedResult;
 
             // Fall back to constructor argument (params Type[] serviceTypes)
-            return attribute.GetTypeArrayFromConstructorArgument();
+            foreach(var ctorArg in attribute.ConstructorArguments)
+            {
+                if(ctorArg.Kind == TypedConstantKind.Array && !ctorArg.IsNull)
+                {
+                    List<INamedTypeSymbol> result = [];
+                    foreach(var value in ctorArg.Values)
+                    {
+                        if(value.Value is INamedTypeSymbol namedTypeSymbol)
+                        {
+                            result.Add(namedTypeSymbol);
+                        }
+                    }
+
+                    if(result.Count > 0)
+                        return result;
+                }
+            }
+
+            return [];
+        }
+
+        public ImmutableEquatableArray<TypeData> GetServiceTypes()
+        {
+            List<TypeData> result = [];
+            foreach(var serviceTypeSymbol in attribute.GetServiceTypeSymbols())
+            {
+                result.Add(serviceTypeSymbol.GetTypeData());
+            }
+
+            return result.ToImmutableEquatableArray();
         }
 
         /// <summary>
         /// Gets the service types from generic attribute type parameters (e.g., IoCRegisterAttribute&lt;T1, T2&gt;).
         /// </summary>
-        public ImmutableEquatableArray<TypeData> GetServiceTypesFromGenericAttribute()
+        public IEnumerable<INamedTypeSymbol> GetServiceTypeSymbolsFromGenericAttribute()
         {
             var attrClass = attribute.AttributeClass;
             if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
                 return [];
 
-            List<TypeData> result = [];
+            List<INamedTypeSymbol> result = [];
             foreach(var typeArg in attrClass.TypeArguments)
             {
                 if(typeArg is INamedTypeSymbol namedType)
                 {
-                    result.Add(namedType.GetTypeData());
+                    result.Add(namedType);
                 }
             }
+
+            return result;
+        }
+
+        public ImmutableEquatableArray<TypeData> GetServiceTypesFromGenericAttribute()
+        {
+            List<TypeData> result = [];
+            foreach(var serviceTypeSymbol in attribute.GetServiceTypeSymbolsFromGenericAttribute())
+            {
+                result.Add(serviceTypeSymbol.GetTypeData());
+            }
+
             return result.ToImmutableEquatableArray();
+        }
+
+        public INamedTypeSymbol? GetImportedModuleType()
+        {
+            var attributeClass = attribute.AttributeClass;
+            if(attributeClass is null)
+                return null;
+
+            if(attributeClass.IsGenericType)
+            {
+                if(attributeClass.TypeArguments.Length == 0)
+                    return null;
+
+                return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+            }
+
+            if(attribute.ConstructorArguments.Length == 0)
+                return null;
+
+            return attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         }
 
         public ImmutableEquatableArray<TypeData> GetDecorators() =>

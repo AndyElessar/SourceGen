@@ -242,21 +242,15 @@ partial class IocSourceGenerator
 
             if(fullName == Constants.IocImportModuleAttributeFullName)
             {
-                // Non-generic: ModuleType is in constructor argument
-                if(attr.ConstructorArguments.Length > 0 &&
-                   attr.ConstructorArguments[0].Value is INamedTypeSymbol moduleType)
-                {
+                var moduleType = attr.GetImportedModuleType();
+                if(moduleType is not null)
                     modules.Add(moduleType.GetTypeData());
-                }
             }
             else if(originalFullName == Constants.IocImportModuleAttributeFullName_T1)
             {
-                // Generic: ModuleType is the type argument
-                if(attrClass.IsGenericType && attrClass.TypeArguments.Length > 0 &&
-                   attrClass.TypeArguments[0] is INamedTypeSymbol genericModuleType)
-                {
+                var genericModuleType = attr.GetImportedModuleType();
+                if(genericModuleType is not null)
                     modules.Add(genericModuleType.GetTypeData());
-                }
             }
         }
 
