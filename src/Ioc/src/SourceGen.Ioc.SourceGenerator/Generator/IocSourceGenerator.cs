@@ -168,6 +168,18 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 return new MsBuildProperties(rootNamespace, customIocName, defaultLifetime, features);
             });
 
+        // Get compilation info (assembly name and DI package reference)
+        var compilationInfoProvider = context.CompilationProvider
+            .Select(static (compilation, _) =>
+            {
+                var assemblyName = compilation.AssemblyName ?? "Generated";
+                // Detect if Microsoft.Extensions.DependencyInjection package is referenced
+                // by checking for ServiceCollectionContainerBuilderExtensions type
+                var hasDIPackage = compilation.GetTypeByMetadataName(
+                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is not null;
+                return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
+            });
+
         // Combine default settings from current assembly and imported modules
         // Current assembly settings take precedence over imported settings
         var combinedDefaultSettings = allDefaultSettings
@@ -212,18 +224,6 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Collect()
             .Combine(discoverProvider_T1.Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
-
-        // Get compilation info (assembly name and DI package reference)
-        var compilationInfoProvider = context.CompilationProvider
-            .Select(static (compilation, _) =>
-            {
-                var assemblyName = compilation.AssemblyName ?? "Generated";
-                // Detect if Microsoft.Extensions.DependencyInjection package is referenced
-                // by checking for ServiceCollectionContainerBuilderExtensions type
-                var hasDIPackage = compilation.GetTypeByMetadataName(
-                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is not null;
-                return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
-            });
 
         // ========== Pipeline 1: Process individual registrations (cacheable per registration) ==========
         // Each registration is processed independently with default settings.
