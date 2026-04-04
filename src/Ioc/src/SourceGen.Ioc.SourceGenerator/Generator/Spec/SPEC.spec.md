@@ -2,6 +2,114 @@
 
 Source generators for compile-time IoC container generation based on `Microsoft.Extensions.DependencyInjection.Abstractions`. This Overview page provides index and consolidated specification data. Feature documentation is split into focused spec files under `Register.*.md` and `Container.*.md`.
 
+## Pipeline Architecture
+
+### Entry Point
+
+`IocSourceGenerator` — `sealed partial class` implementing `IIncrementalGenerator`
+File: `Generator/IocSourceGenerator.cs`
+
+### Pipeline Overview
+
+```text
+ForAttributeWithMetadataName
+├── IocRegisterAttribute        → RegistrationData
+├── IocRegisterForAttribute     → RegistrationData
+├── IocRegisterDefaultsAttribute→ DefaultSettingsResult
+├── IocImportModuleAttribute    → ImportModuleResult
+├── IocDiscoverAttribute        → ClosedGenericDependency
+└── IocContainerAttribute       → ContainerModel
+         ↓
+    ProcessSingleRegistration → BasicRegistrationResult
+         ↓
+    CombineAndResolveClosedGenerics → ServiceRegistrationWithTags
+         ↓
+    GenerateRegisterOutput  →  {assemblyName}.ServiceRegistration.g.cs
+    GenerateContainerOutput →  {containerClassName}.Container.g.cs
+```
+
+### Stage 1: Attribute Detection and Extraction
+
+Uses `ForAttributeWithMetadataName` providers + one `CreateSyntaxProvider` for `IServiceProvider` invocations.
+
+| Attribute | Transform Method | Output Type | File |
+| :-------- | :--------------- | :---------- | :--- |
+| `IocRegisterAttribute` | `TransformRegister` | `RegistrationData?` | `TransformRegister.cs` |
+| `IocRegisterAttribute<T>` | `TransformRegisterGeneric` | `RegistrationData?` | `TransformRegister.cs` |
+| `IocRegisterForAttribute` | `TransformRegisterFor` | `IEnumerable<RegistrationData>` | `TransformRegister.cs` |
+| `IocRegisterForAttribute<T>` | `TransformRegisterForGeneric` | `IEnumerable<RegistrationData>` | `TransformRegister.cs` |
+| `IocRegisterDefaultsAttribute` | `TransformDefaultSettings` | `IEnumerable<DefaultSettingsResult>` | `TransformDefaultSettings.cs` |
+| `IocRegisterDefaultsAttribute<T>` | `TransformDefaultSettingsGeneric` | `IEnumerable<DefaultSettingsResult>` | `TransformDefaultSettings.cs` |
+| `IocImportModuleAttribute` | `TransformImportModule` | `IEnumerable<ImportModuleResult>` | `TransformImportModule.cs` |
+| `IocImportModuleAttribute<T>` | `TransformImportModuleGeneric` | `IEnumerable<ImportModuleResult>` | `TransformImportModule.cs` |
+| `IocDiscoverAttribute` | `TransformDiscover` | `IEnumerable<ClosedGenericDependency>` | `TransformDiscover.cs` |
+| `IocDiscoverAttribute<T>` | `TransformDiscoverGeneric` | `IEnumerable<ClosedGenericDependency>` | `TransformDiscover.cs` |
+| `GetService`/`GetRequiredService`/etc. | `TransformInvocations` | `IEnumerable<ClosedGenericDependency>` | `IServiceProviderInvocations.cs` |
+
+### Stage 2: Data Model Combination
+
+Combines default settings and import module pipelines into lookup-friendly inputs.
+
+| Variable | Source | Purpose |
+| :------- | :----- | :------ |
+| `allDefaultSettingsResults` | Generic + non-generic defaults | Combined defaults payload |
+| `allDefaultSettings` | Filter non-null `DefaultSettings` | Default matching models |
+| `defaultSettingsImplTypeRegistrations` | ImplementationTypes in defaults | Derived registrations |
+| `factoryBasedOpenGenericEntries` | Factory-only open generics from defaults | Open generic index entries |
+| `allImportModuleResults` | Generic + non-generic imports | Combined imports |
+| `allImportedDefaultSettings` | Module default settings | Imported defaults |
+| `allImportedOpenGenerics` | Module open generics | Imported open generics |
+| `combinedDefaultSettings` | Assembly defaults + imported defaults + MSBuild fallback | `DefaultSettingsMap` for Stage 3 |
+| `allOpenGenericEntries` | Factory-based + imported open generics | Combined open generic index |
+
+### Stage 3: Per-Registration Processing (cacheable)
+
+Processes each registration independently via `ProcessSingleRegistration(RegistrationData, DefaultSettingsMap)` → `BasicRegistrationResult`.
+
+Five streams feed `allBasicResults`:
+
+1. `IocRegisterAttribute` → `ProcessSingleRegistration`
+2. `IocRegisterAttribute<T>` → `ProcessSingleRegistration`
+3. `IocRegisterForAttribute` → `ProcessSingleRegistration`
+4. `IocRegisterForAttribute<T>` → `ProcessSingleRegistration`
+5. DefaultSettings ImplementationTypes → `ProcessSingleRegistrationFromDefaults`
+
+File: `ProcessSingleRegistration.cs`
+
+### Stage 4: Closed Generic Resolution → Register Output
+
+1. `combinedClosedGenericDependencies` = invocations + discover attributes
+2. `allOpenGenericEntries` = factory-based + imported
+3. `CombineAndResolveClosedGenerics(allBasicResults, closedGenericDeps, openGenericEntries)` → `ImmutableEquatableArray<ServiceRegistrationWithTags>`
+4. Combine with compilation info + MsBuildProperties
+5. `GenerateRegisterOutput` → `{assemblyName}.ServiceRegistration.g.cs`
+
+Files: `CombineAndResolveClosedGenerics.cs`, `GenerateRegisterOutput.cs`
+
+### Stage 5: Container Pipeline (parallel branch)
+
+1. `IocContainerAttribute` → `TransformContainer` → `ContainerModel?`
+2. `GroupRegistrationsForContainer` → `ContainerWithGroups`
+3. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs`
+
+Files: `TransformContainer.cs`, `GroupRegistrationsForContainer.cs`, `GenerateContainerOutput.cs`
+
+### Key Data Models
+
+All under `Models/`.
+
+| Model | Type | Purpose |
+| :---- | :--- | :------ |
+| `RegistrationData` | `sealed record class` | Raw per-attribute registration payload |
+| `BasicRegistrationResult` | `sealed record class` | Cacheable Stage 3 intermediate (registrations + tags + open generics + closed generic deps) |
+| `ServiceRegistrationModel` | `sealed record class` | Core registration record for code generation |
+| `ServiceRegistrationWithTags` | `sealed record class` | Registration + tags for output stage |
+| `DefaultSettingsModel` | `sealed record class` | Default matching and derived registration source |
+| `DefaultSettingsResult` | `sealed record class` | Multi-payload result from defaults transforms |
+| `DefaultSettingsMap` | `sealed class` | Fast default lookup by exact/generic signatures |
+| `ImportModuleResult` | `sealed record class` | Imported module payload |
+| `ContainerModel` | `sealed record class` | Container generation input |
+
 ## Spec Index
 
 Find detailed documentation for each feature:
