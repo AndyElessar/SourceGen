@@ -341,65 +341,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collects Func resolver entries for container code generation.
-    /// Only single-parameter Func&lt;T&gt; wrappers are tracked as field-backed wrapper resolvers.
-    /// </summary>
-    private static ImmutableEquatableArray<ContainerFuncEntry> CollectContainerFuncEntries(
-        ImmutableEquatableArray<CachedRegistration> singletons,
-        ImmutableEquatableArray<CachedRegistration> scoped,
-        ImmutableEquatableArray<CachedRegistration> transients,
-        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
-    {
-        var neededTypes = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach(var lifetime in new[] { singletons, scoped, transients })
-        {
-            foreach(var cached in lifetime)
-            {
-                var reg = cached.Registration;
-                ScanParamsForContainerFuncNeeds(reg.ImplementationType.ConstructorParameters, neededTypes);
-                ScanInjectionMembersForContainerFuncNeeds(reg.InjectionMembers, neededTypes);
-            }
-        }
-
-        if(neededTypes.Count == 0)
-            return [];
-
-        var entries = new List<ContainerFuncEntry>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach(var kvp in byServiceTypeAndKey)
-        {
-            var serviceType = kvp.Key.ServiceType;
-            if(!neededTypes.Contains(serviceType))
-                continue;
-
-            foreach(var cached in kvp.Value)
-            {
-                var reg = cached.Registration;
-                if(reg.IsOpenGeneric)
-                    continue;
-
-                // Async-init services cannot be resolved synchronously — exclude from Func<T> entries
-                if(cached.IsAsyncInit)
-                    continue;
-
-                var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";
-                if(!addedKeys.Add(entryKey))
-                    continue;
-
-                var safeInnerType = GetSafeIdentifier(serviceType);
-                var safeImplType = GetSafeIdentifier(reg.ImplementationType.Name);
-                var fieldName = $"_func_{safeInnerType}_{safeImplType}";
-
-                entries.Add(new ContainerFuncEntry(serviceType, cached.ResolverMethodName, fieldName));
-            }
-        }
-
-        return entries.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
     /// Scans constructor parameters for single-parameter Func dependencies.
     /// </summary>
     private static void ScanParamsForContainerFuncNeeds(
@@ -463,42 +404,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes _localResolvers entries for Func wrapper services.
-    /// </summary>
-    private static void WriteContainerFuncLocalResolverEntries(
-        SourceWriter writer,
-        string containerTypeName,
-        ImmutableEquatableArray<ContainerFuncEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine();
-        writer.WriteLine("// Func wrapper resolvers");
-
-        var grouped = entries
-            .GroupBy(static e => e.InnerServiceTypeName)
-            .ToList();
-
-        foreach(var group in grouped)
-        {
-            var innerServiceTypeName = group.Key;
-            var wrapperTypeName = $"global::System.Func<{innerServiceTypeName}>";
-
-            var lastEntry = group.Last();
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{lastEntry.FieldName}),");
-
-            var arrayMethodName = GetFuncArrayResolverMethodName(innerServiceTypeName);
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-        }
-    }
-
-    /// <summary>
     /// Gets the array resolver method name for a Func wrapper type.
     /// </summary>
     private static string GetFuncArrayResolverMethodName(string innerServiceTypeName)
@@ -508,10 +413,54 @@ partial class IocSourceGenerator
     }
 
     private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateFuncWrapperContainerEntries(
-        ImmutableEquatableArray<ContainerFuncEntry> entries,
-        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
+        ImmutableEquatableArray<ServiceLookupEntry> singletons,
+        ImmutableEquatableArray<ServiceLookupEntry> scoped,
+        ImmutableEquatableArray<ServiceLookupEntry> transients,
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
     {
-        if(entries.Length == 0)
+        var neededTypes = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach(var lifetime in new[] { singletons, scoped, transients })
+        {
+            foreach(var cached in lifetime)
+            {
+                var reg = cached.Registration;
+                ScanParamsForContainerFuncNeeds(reg.ImplementationType.ConstructorParameters, neededTypes);
+                ScanInjectionMembersForContainerFuncNeeds(reg.InjectionMembers, neededTypes);
+            }
+        }
+
+        if(neededTypes.Count == 0)
+            return [];
+
+        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Key)>();
+        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach(var kvp in serviceLookup)
+        {
+            var serviceType = kvp.Key.ServiceType;
+            if(!neededTypes.Contains(serviceType))
+                continue;
+
+            foreach(var cached in kvp.Value)
+            {
+                var reg = cached.Registration;
+                if(reg.IsOpenGeneric || cached.IsAsyncInit)
+                    continue;
+
+                var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";
+                if(!addedKeys.Add(entryKey))
+                    continue;
+
+                var safeInnerType = GetSafeIdentifier(serviceType);
+                var safeImplType = GetSafeIdentifier(reg.ImplementationType.Name);
+                var fieldName = $"_func_{safeInnerType}_{safeImplType}";
+
+                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
+            }
+        }
+
+        if(entries.Count == 0)
             return [];
 
         var collectionFieldsByServiceType = entries
@@ -528,31 +477,10 @@ partial class IocSourceGenerator
                 static g => g.Last().FieldName,
                 StringComparer.Ordinal);
 
-        var cachedByResolver = new Dictionary<string, CachedRegistration>(StringComparer.Ordinal);
-        foreach(var registrationGroup in byServiceTypeAndKey.Values)
-        {
-            foreach(var cached in registrationGroup)
-            {
-                if(!cachedByResolver.ContainsKey(cached.ResolverMethodName))
-                {
-                    cachedByResolver[cached.ResolverMethodName] = cached;
-                }
-            }
-        }
-
-        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Length);
+        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Count);
 
         foreach(var entry in entries)
         {
-            var innerImplTypeName = entry.InnerServiceTypeName;
-            string? key = null;
-
-            if(cachedByResolver.TryGetValue(entry.ResolverMethodName, out var cached))
-            {
-                innerImplTypeName = cached.Registration.ImplementationType.Name;
-                key = cached.Registration.Key;
-            }
-
             var emitCollectionResolver = string.Equals(
                 entry.FieldName,
                 collectionEmitterFieldByServiceType[entry.InnerServiceTypeName],
@@ -563,10 +491,10 @@ partial class IocSourceGenerator
 
             wrapperEntries.Add(new FuncWrapperContainerEntry(
                 entry.InnerServiceTypeName,
-                innerImplTypeName,
+                entry.InnerImplTypeName,
                 entry.FieldName,
                 entry.ResolverMethodName,
-                key,
+                entry.Key,
                 emitCollectionResolver,
                 collectionFieldNames));
         }

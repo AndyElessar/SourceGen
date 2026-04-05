@@ -98,7 +98,10 @@ Files: `CombineAndResolveClosedGenerics.cs`, `GroupRegistrationsForRegister.cs`,
 
 1. `IocContainerAttribute` → `TransformContainer` → `ContainerModel?`
 2. `GroupRegistrationsForContainer(container, registrations, features)` → `ContainerWithGroups` — accepts `IocFeatures` and applies feature filtering (`FilterRegistrationForFeatures`) during group construction, so the output callback no longer performs feature filtering. `FilterContainerWithGroupsForFeatures` has been removed from the output stage.
-    - The grouping phase pre-resolves all dependency lookups into `ResolvedDependency` instances and creates `ContainerEntry` discriminated-union subtypes. Each entry is self-contained: code generation is pure string formatting via polymorphic `Write*` methods, with no shared context parameter.
+    - The grouping phase uses a build-time-only `ServiceLookupEntry` (private `readonly record struct`) to hold intermediate registration data (`Registration`, `ResolverMethodName`, `FieldName`, `IsAsyncInit`, `IsEager`). `ServiceLookupEntry` is NOT part of the pipeline-cached data model — it exists only as a local during `BuildContainerRegistrationGroups` and is discarded after entry construction.
+    - From `ServiceLookupEntry` data, the grouping phase pre-resolves all dependency lookups into `ResolvedDependency` instances and creates `ContainerEntry` discriminated-union subtypes. Each entry is self-contained: code generation is pure string formatting via polymorphic `Write*` methods, with no shared context parameter.
+    - Wrapper entries (`LazyWrapperContainerEntry`, `FuncWrapperContainerEntry`, `KvpWrapperContainerEntry`) are produced directly from service lookup data — there are no intermediate `ContainerLazyEntry`/`ContainerFuncEntry`/`ContainerKvpEntry` types.
+    - `ContainerRegistrationGroups` stores `LastWinsByServiceType` — an `ImmutableEquatableDictionary<(string ServiceType, string? Key), ContainerEntry>` providing last-registration-wins lookup by service type and key. This replaces the former `ByServiceTypeAndKey` dictionary of `CachedRegistration` arrays. Consumers pattern-match on `ContainerEntry` subtypes to determine resolution expressions.
     - This follows the same discriminated union pattern established in Stage 4 for `RegisterEntry`.
 3. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs` — orchestrates code emission by iterating pre-grouped `ContainerEntry` arrays and calling polymorphic `Write*` methods. No static dispatch helpers are used.
 
@@ -133,6 +136,7 @@ ContainerEntry (abstract)
 | `WriteDisposal(SourceWriter, bool isAsync)` | Emit disposal code for the entry | No-op |
 | `WriteInit(SourceWriter)` | Emit wrapper field initialization in constructor | No-op |
 | `WriteCollectionResolver(SourceWriter)` | Emit collection array resolver method for wrapper types | No-op |
+| `WriteLocalResolverEntries(SourceWriter)` | Emit `IServiceProvider`/`IKeyedServiceProvider` interface local resolver entries for wrapper types | No-op |
 
 ##### Service Subtypes
 
@@ -140,7 +144,7 @@ ContainerEntry (abstract)
 
 | Subtype | Routing Condition | Has Field | Write\* Behavior |
 |:--------|:------------------|:----------|:-----------------|
-| `InstanceContainerEntry` | `Instance != null` (checked FIRST) | Yes (`FieldName`) | `WriteField`: field with instance assignment. `WriteResolver`: return field. |
+| `InstanceContainerEntry` | `Instance != null` (checked FIRST) | No | `WriteField`: no-op. `WriteResolver`: no-op. Instance resolution is handled inline by `ContainerInterfaceHelpers`. |
 | `EagerContainerEntry` | Singleton/Scoped + eager resolve + not async | Yes (`FieldName`) | `WriteField`: nullable field. `WriteResolver`: null-check → create → assign → return. `WriteEagerInit`: `{ResolverMethodName}()`. `WriteDisposal`: dispose call. |
 | `LazyThreadSafeContainerEntry` | Singleton/Scoped + not eager + not async | Yes (`FieldName`) | `WriteField`: nullable field + sync primitive (Lock/SemaphoreSlim/SpinLock per `ThreadSafeStrategy`). `WriteResolver`: thread-safety wrapper (Lock/SemaphoreSlim/SpinLock/CompareExchange/None) around create → assign → return. `WriteDisposal`: dispose call + semaphore dispose. |
 | `TransientContainerEntry` | Transient + not async | No | `WriteResolver`: create → return (no caching). |
@@ -153,9 +157,9 @@ Wrapper entries are synthetic (no backing `ServiceRegistrationModel`). They wrap
 
 | Subtype | Properties | Write\* Behavior |
 |:--------|:-----------|:-----------------|
-| `LazyWrapperContainerEntry` | `InnerServiceTypeName`, `InnerImplTypeName`, `FieldName`, `InnerResolverMethodName`, `Key?` | `WriteField`: `Lazy<T>` field. `WriteInit`: constructor lambda initialization. `WriteCollectionResolver`: `GetAllLazy_{SafeName}` array resolver. |
-| `FuncWrapperContainerEntry` | `InnerServiceTypeName`, `InnerImplTypeName`, `FieldName`, `InnerResolverMethodName`, `Key?` | `WriteField`: `Func<T>` field. `WriteInit`: constructor lambda initialization. `WriteCollectionResolver`: `GetAllFunc_{SafeName}` array resolver. |
-| `KvpWrapperContainerEntry` | `KeyTypeName`, `ValueTypeName`, `KeyExpr`, `ResolverMethodName`, `KvpResolverMethodName` | `WriteResolver`: `KeyValuePair<K,V>` resolver method. |
+| `LazyWrapperContainerEntry` | `InnerServiceTypeName`, `InnerImplTypeName`, `FieldName`, `InnerResolverMethodName`, `Key?` | `WriteField`: `Lazy<T>` field. `WriteInit`: constructor lambda initialization. `WriteCollectionResolver`: `GetAllLazy_{SafeName}` array resolver. `WriteLocalResolverEntries`: emits `Lazy<T>` local resolver entries grouped by `InnerServiceTypeName`. |
+| `FuncWrapperContainerEntry` | `InnerServiceTypeName`, `InnerImplTypeName`, `FieldName`, `InnerResolverMethodName`, `Key?` | `WriteField`: `Func<T>` field. `WriteInit`: constructor lambda initialization. `WriteCollectionResolver`: `GetAllFunc_{SafeName}` array resolver. `WriteLocalResolverEntries`: emits `Func<T>` local resolver entries grouped by `InnerServiceTypeName`. |
+| `KvpWrapperContainerEntry` | `KeyTypeName`, `ValueTypeName`, `KeyExpr`, `ResolverMethodName`, `KvpResolverMethodName` | `WriteResolver`: `KeyValuePair<K,V>` resolver method. `WriteLocalResolverEntries`: emits `KeyValuePair<K,V>` local resolver entries grouped by `(KeyTypeName, ValueTypeName)`. |
 
 ##### Collection Subtype
 
@@ -207,7 +211,7 @@ GroupRegistrations → create entry subtypes with pre-resolved data → polymorp
 | Aspect | Register Pipeline (Stage 4) | Container Pipeline (Stage 5) |
 |:-------|:---------------------------|:-----------------------------|
 | Entry base | `RegisterEntry` (7 subtypes) | `ContainerEntry` (10 subtypes) |
-| Write method | `WriteRegistration(SourceWriter, RegisterWriteContext)` | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver` |
+| Write method | `WriteRegistration(SourceWriter, RegisterWriteContext)` | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`, `WriteLocalResolverEntries` |
 | Dependency resolution | Inline in entry (simple expressions) | Pre-resolved `ResolvedDependency` hierarchy (18 subtypes) with `FormatExpression` |
 | Shared context | `RegisterWriteContext` (minimal) | None — all data pre-resolved into entry instances |
 | Intermediate class | _(none)_ | `ServiceContainerEntry` (shared instance creation helpers) |
@@ -228,7 +232,7 @@ All under `Models/`.
 | `ImportModuleResult` | `sealed record class` | Imported module payload |
 | `ContainerModel` | `sealed record class` | Container generation input |
 | `ContainerWithGroups` | `sealed record class` | Combined container + grouped registrations for pipeline caching |
-| `ContainerRegistrationGroups` | `sealed record class` | Pre-computed registration groups with `ContainerEntry` arrays (`SingletonEntries`, `ScopedEntries`, `TransientEntries`, `WrapperEntries`, `CollectionEntries`) |
+| `ContainerRegistrationGroups` | `sealed record class` | Pre-computed registration groups with `ContainerEntry` arrays (`SingletonEntries`, `ScopedEntries`, `TransientEntries`, `WrapperEntries`, `CollectionEntries`) and `LastWinsByServiceType` dictionary for service-type-keyed last-wins lookup |
 | `RegisterOutputModel` | `sealed record class` | Top-level cacheable output model for Register pipeline — contains `MethodBaseName`, `RootNamespace`, `AssemblyName`, `TagGroups`, and optional `AsyncInitServiceTypes` |
 | `RegisterTagGroup` | `sealed record class` | Per-tag-group pre-computed output data — contains sorted tags, `Registrations` (as `RegisterEntry`), and collected `LazyEntries`/`FuncEntries`/`KvpEntries` |
 | `RegisterWriteContext` | `readonly record struct` | Shared register output context passed to each entry `WriteRegistration` call (currently `AsyncInitServiceTypeNames`) |
@@ -243,7 +247,7 @@ All under `Models/`.
 | `LazyRegistrationEntry` | `readonly record struct` | Wrapper registration model with instance `WriteRegistration(SourceWriter)` |
 | `FuncRegistrationEntry` | `readonly record struct` | Wrapper registration model with instance `WriteRegistration(SourceWriter)` |
 | `KvpRegistrationEntry` | `readonly record struct` | Wrapper registration model with instance `WriteRegistration(SourceWriter)` |
-| `ContainerEntry` | `abstract record class` | Base container output model with polymorphic `Write*` methods (`WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`) |
+| `ContainerEntry` | `abstract record class` | Base container output model with polymorphic `Write*` methods (`WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`, `WriteLocalResolverEntries`) |
 | `ServiceContainerEntry` | `abstract record class` | Intermediate container entry with shared instance creation helpers — 6 service subtypes |
 | `InstanceContainerEntry` | `sealed record class` | Pre-provided instance container entry |
 | `EagerContainerEntry` | `sealed record class` | Singleton/scoped eager resolve container entry |

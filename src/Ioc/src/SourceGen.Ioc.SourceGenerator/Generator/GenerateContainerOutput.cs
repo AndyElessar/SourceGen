@@ -701,20 +701,18 @@ partial class IocSourceGenerator
         // Handle Task<T> return types — route through the async resolver.
         if(TryExtractTaskInnerType(serviceType, out var innerTypeName))
         {
-            if(groups.ByServiceTypeAndKey.TryGetValue((innerTypeName, key), out var taskRegistrations))
+            if(groups.LastWinsByServiceType.TryGetValue((innerTypeName, key), out var entry))
             {
-                var cached = taskRegistrations[^1]; // Last registration wins
-
-                if(cached.IsAsyncInit)
+                switch(entry)
                 {
-                    // Async-init: await the shared async resolver and let the async method wrap the cast.
-                    var asyncMethodName = GetAsyncResolverMethodName(cached.ResolverMethodName);
-                    return $"await {asyncMethodName}()";
-                }
-                else
-                {
-                    // Sync-only service wrapped as Task<T>: use Task.FromResult with cast.
-                    return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){cached.ResolverMethodName}())";
+                    case AsyncContainerEntry asyncEntry:
+                        return $"await {GetAsyncResolverMethodName(asyncEntry.ResolverMethodName)}()";
+                    case AsyncTransientContainerEntry asyncTransientEntry:
+                        return $"await {GetAsyncCreateMethodName(asyncTransientEntry.ResolverMethodName)}()";
+                    case InstanceContainerEntry instanceEntry:
+                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})";
+                    case ServiceContainerEntry serviceEntry:
+                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){serviceEntry.ResolverMethodName}())";
                 }
             }
 
@@ -730,17 +728,19 @@ partial class IocSourceGenerator
         }
 
         // Try to find direct resolver in this container
-        if(groups.ByServiceTypeAndKey.TryGetValue((serviceType, key), out var registrations))
+        if(groups.LastWinsByServiceType.TryGetValue((serviceType, key), out var directEntry))
         {
-            var cached = registrations[^1]; // Last registration wins
-
-            if(cached.Registration.Instance is not null)
+            switch(directEntry)
             {
-                // Instance registration: use the instance expression directly
-                return cached.Registration.Instance;
+                case InstanceContainerEntry instanceEntry:
+                    return instanceEntry.Registration.Instance!;
+                case AsyncContainerEntry asyncEntry:
+                    return $"{GetAsyncResolverMethodName(asyncEntry.ResolverMethodName)}().ConfigureAwait(false).GetAwaiter().GetResult()";
+                case AsyncTransientContainerEntry asyncTransientEntry:
+                    return $"{GetAsyncCreateMethodName(asyncTransientEntry.ResolverMethodName)}().ConfigureAwait(false).GetAwaiter().GetResult()";
+                case ServiceContainerEntry serviceEntry:
+                    return $"{serviceEntry.ResolverMethodName}()";
             }
-
-            return $"{cached.ResolverMethodName}()";
         }
 
         // Fallback to GetService/GetRequiredService (only when IntegrateServiceProvider is enabled)

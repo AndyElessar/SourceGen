@@ -173,122 +173,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collects KeyValuePair resolver entries for container code generation.
-    /// Scans all container registrations for KVP dependencies and finds matching keyed services.
-    /// </summary>
-    private static ImmutableEquatableArray<ContainerKvpEntry> CollectContainerKvpEntries(
-        ImmutableEquatableArray<CachedRegistration> singletons,
-        ImmutableEquatableArray<CachedRegistration> scoped,
-        ImmutableEquatableArray<CachedRegistration> transients,
-        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
-    {
-        // Step 1: Scan all registrations for KVP needs
-        var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
-
-        foreach(var lifetime in new[] { singletons, scoped, transients })
-        {
-            foreach(var cached in lifetime)
-            {
-                var reg = cached.Registration;
-                ScanParamsForKvpNeeds(reg.ImplementationType.ConstructorParameters, neededPairs);
-                ScanInjectionMembersForKvpNeeds(reg.InjectionMembers, neededPairs);
-            }
-        }
-
-        if(neededPairs.Count == 0)
-            return [];
-
-        // Step 2: Find keyed registrations matching those value types
-        var entries = new List<ContainerKvpEntry>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach(var kvp in byServiceTypeAndKey)
-        {
-            var key = kvp.Key.Key;
-            if(key is null)
-                continue;
-
-            var serviceType = kvp.Key.ServiceType;
-
-            foreach(var (keyTypeName, valueTypeName) in neededPairs)
-            {
-                if(!string.Equals(serviceType, valueTypeName, StringComparison.Ordinal))
-                    continue;
-
-                var cached = kvp.Value[^1]; // Last wins
-
-                // Filter by key value type compatibility:
-                // - "object" key type accepts all key value types
-                // - Otherwise, the registration's key value type must match exactly
-                if(!IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
-                    continue;
-
-                var entryKey = $"{keyTypeName}|{valueTypeName}|{key}";
-                if(!addedKeys.Add(entryKey))
-                    continue;
-
-                var safeKey = GetSafeIdentifier(key);
-                var safeKeyType = GetSafeIdentifier(keyTypeName);
-                var safeValueType = GetSafeIdentifier(valueTypeName);
-                var kvpResolverName = $"GetKvp_{safeKeyType}_{safeValueType}_{safeKey}";
-
-                entries.Add(new ContainerKvpEntry(
-                    keyTypeName,
-                    valueTypeName,
-                    key,
-                    cached.ResolverMethodName,
-                    kvpResolverName));
-            }
-        }
-
-        return entries.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
-    /// Writes <c>_localResolvers</c> entries for KVP services so that
-    /// <c>GetServices&lt;KeyValuePair&lt;K, V&gt;&gt;</c> can collect them.
-    /// </summary>
-    private static void WriteContainerKvpLocalResolverEntries(
-        SourceWriter writer,
-        string containerTypeName,
-        ImmutableEquatableArray<ContainerKvpEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine();
-        writer.WriteLine("// KeyValuePair resolvers");
-
-        // Write IEnumerable<KVP<K,V>> entries grouped by (KeyTypeName, ValueTypeName)
-        var grouped = entries
-            .GroupBy(static e => (e.KeyTypeName, e.ValueTypeName))
-            .ToList();
-
-        foreach(var group in grouped)
-        {
-            var (keyTypeName, valueTypeName) = group.Key;
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyTypeName}, {valueTypeName}>";
-            var arrayMethodName = GetKvpArrayResolverMethodName(keyTypeName, valueTypeName);
-            var dictionaryMethodName = GetKvpDictionaryResolverMethodName(keyTypeName, valueTypeName);
-
-            // IEnumerable, IReadOnlyCollection, ICollection → Dictionary
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-
-            // IReadOnlyList, IList, T[] → Array
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({kvpTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-
-            // IReadOnlyDictionary, IDictionary, Dictionary → Dictionary
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{keyTypeName}, {valueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<{keyTypeName}, {valueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-        }
-    }
-
-    /// <summary>
     /// Gets the array resolver method name for a KVP type pair.
     /// </summary>
     private static string GetKvpArrayResolverMethodName(string keyTypeName, string valueTypeName)
@@ -328,20 +212,62 @@ partial class IocSourceGenerator
     }
 
     private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateKvpWrapperContainerEntries(
-        ImmutableEquatableArray<ContainerKvpEntry> entries)
+        ImmutableEquatableArray<ServiceLookupEntry> singletons,
+        ImmutableEquatableArray<ServiceLookupEntry> scoped,
+        ImmutableEquatableArray<ServiceLookupEntry> transients,
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
     {
-        if(entries.Length == 0)
+        var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
+
+        foreach(var lifetime in new[] { singletons, scoped, transients })
+        {
+            foreach(var cached in lifetime)
+            {
+                var reg = cached.Registration;
+                ScanParamsForKvpNeeds(reg.ImplementationType.ConstructorParameters, neededPairs);
+                ScanInjectionMembersForKvpNeeds(reg.InjectionMembers, neededPairs);
+            }
+        }
+
+        if(neededPairs.Count == 0)
             return [];
 
-        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Length);
-        foreach(var entry in entries)
+        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>();
+        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach(var kvp in serviceLookup)
         {
-            wrapperEntries.Add(new KvpWrapperContainerEntry(
-                entry.KeyTypeName,
-                entry.ValueTypeName,
-                entry.KeyExpr,
-                entry.ResolverMethodName,
-                entry.KvpResolverMethodName));
+            var key = kvp.Key.Key;
+            if(key is null)
+                continue;
+
+            var serviceType = kvp.Key.ServiceType;
+
+            foreach(var (keyTypeName, valueTypeName) in neededPairs)
+            {
+                if(!string.Equals(serviceType, valueTypeName, StringComparison.Ordinal))
+                    continue;
+
+                var cached = kvp.Value[^1];
+                if(!IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
+                    continue;
+
+                var entryKey = $"{keyTypeName}|{valueTypeName}|{key}";
+                if(!addedKeys.Add(entryKey))
+                    continue;
+
+                var safeKey = GetSafeIdentifier(key);
+                var safeKeyType = GetSafeIdentifier(keyTypeName);
+                var safeValueType = GetSafeIdentifier(valueTypeName);
+                var kvpResolverName = $"GetKvp_{safeKeyType}_{safeValueType}_{safeKey}";
+
+                wrapperEntries.Add(new KvpWrapperContainerEntry(
+                    keyTypeName,
+                    valueTypeName,
+                    key,
+                    cached.ResolverMethodName,
+                    kvpResolverName));
+            }
         }
 
         return wrapperEntries.ToImmutableEquatableArray();
