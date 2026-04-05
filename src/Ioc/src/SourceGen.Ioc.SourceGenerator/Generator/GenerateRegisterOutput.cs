@@ -47,7 +47,7 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;
 
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = model.AsyncInitServiceTypes;
+        var context = new RegisterWriteContext(model.AsyncInitServiceTypes);
 
         bool isFirstGroup = true;
         foreach(var group in model.TagGroups)
@@ -61,12 +61,12 @@ partial class IocSourceGenerator
             if(group.Tags.Length == 0)
             {
                 // No tags - only register when no tags passed (mutually exclusive model)
-                WriteNoTagConditionalBlock(mainWriter, group.Registrations, group.LazyEntries, group.FuncEntries, group.KvpEntries, asyncInitServiceTypeNames);
+                WriteNoTagConditionalBlock(mainWriter, group.Registrations, group.LazyEntries, group.FuncEntries, group.KvpEntries, context);
             }
             else
             {
                 // Has tags - only register when tags match
-                WriteConditionalTagBlock(mainWriter, group.Tags, group.Registrations, group.LazyEntries, group.FuncEntries, group.KvpEntries, asyncInitServiceTypeNames);
+                WriteConditionalTagBlock(mainWriter, group.Tags, group.Registrations, group.LazyEntries, group.FuncEntries, group.KvpEntries, context);
             }
         }
 
@@ -92,11 +92,11 @@ partial class IocSourceGenerator
     private static void WriteConditionalTagBlock(
         SourceWriter writer,
         ImmutableEquatableArray<string> tags,
-        ImmutableEquatableArray<RegisterOutputEntry> registrations,
+        ImmutableEquatableArray<RegisterEntry> registrations,
         ImmutableEquatableArray<LazyRegistrationEntry> lazyEntries,
         ImmutableEquatableArray<FuncRegistrationEntry> funcEntries,
         ImmutableEquatableArray<KvpRegistrationEntry> kvpEntries,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+        RegisterWriteContext context)
     {
         // Build the condition - only register when tags match
         var tagConditions = tags.Select(static tag => $"tags.Contains(\"{tag}\")");
@@ -108,7 +108,7 @@ partial class IocSourceGenerator
 
         foreach(var registration in registrations)
         {
-            WriteRegistration(writer, registration, asyncInitServiceTypeNames);
+            registration.WriteRegistration(writer, context);
         }
 
         WriteLazyRegistrations(writer, lazyEntries);
@@ -125,11 +125,11 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteNoTagConditionalBlock(
         SourceWriter writer,
-        ImmutableEquatableArray<RegisterOutputEntry> registrations,
+        ImmutableEquatableArray<RegisterEntry> registrations,
         ImmutableEquatableArray<LazyRegistrationEntry> lazyEntries,
         ImmutableEquatableArray<FuncRegistrationEntry> funcEntries,
         ImmutableEquatableArray<KvpRegistrationEntry> kvpEntries,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+        RegisterWriteContext context)
     {
         writer.WriteLine("if (!tags.Any())");
         writer.WriteLine("{");
@@ -137,7 +137,7 @@ partial class IocSourceGenerator
 
         foreach(var registration in registrations)
         {
-            WriteRegistration(writer, registration, asyncInitServiceTypeNames);
+            registration.WriteRegistration(writer, context);
         }
 
         WriteLazyRegistrations(writer, lazyEntries);

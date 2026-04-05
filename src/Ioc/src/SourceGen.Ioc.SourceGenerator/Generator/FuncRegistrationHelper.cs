@@ -23,7 +23,35 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ParameterData>? ImplementationTypeConstructorParams,
         ImmutableEquatableArray<InjectionMemberData> ImplementationTypeInjectionMembers,
         ImmutableEquatableArray<TypeParameter> InputTypes,
-        ImmutableEquatableArray<string> Tags);
+        ImmutableEquatableArray<string> Tags)
+    {
+        public void WriteRegistration(SourceWriter writer)
+        {
+            var lifetime = Lifetime.Name;
+
+            if(InputTypes.Length == 0)
+            {
+                var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
+                var resolveCall = $"sp.{GetRequiredService}<{ImplementationTypeName}>()";
+                writer.WriteLine(
+                    $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
+                    $"new {wrapperTypeName}(() => {resolveCall}));");
+                return;
+            }
+
+            writer.WriteLine($"services.Add{lifetime}<{FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
+            writer.Indentation++;
+            writer.WriteLine($"new {FuncServiceTypeName}(({BuildFuncLambdaParameters(InputTypes)}) =>");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            WriteFuncFactoryBody(writer, this);
+
+            writer.Indentation--;
+            writer.WriteLine("}));");
+            writer.Indentation--;
+        }
+    }
 
     /// <summary>
     /// Collects Func standalone registration entries needed by consumer dependencies.
@@ -157,29 +185,7 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
-            var lifetime = entry.Lifetime.Name;
-
-            if(entry.InputTypes.Length == 0)
-            {
-                var wrapperTypeName = $"global::System.Func<{entry.InnerServiceTypeName}>";
-                var resolveCall = $"sp.{GetRequiredService}<{entry.ImplementationTypeName}>()";
-                writer.WriteLine(
-                    $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
-                    $"new {wrapperTypeName}(() => {resolveCall}));");
-                continue;
-            }
-
-            writer.WriteLine($"services.Add{lifetime}<{entry.FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
-            writer.Indentation++;
-            writer.WriteLine($"new {entry.FuncServiceTypeName}(({BuildFuncLambdaParameters(entry.InputTypes)}) =>");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            WriteFuncFactoryBody(writer, entry);
-
-            writer.Indentation--;
-            writer.WriteLine("}));");
-            writer.Indentation--;
+            entry.WriteRegistration(writer);
         }
     }
 
@@ -457,72 +463,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes Func field declarations and array resolvers for container generation.
-    /// </summary>
-    private static void WriteContainerFuncFields(
-        SourceWriter writer,
-        ImmutableEquatableArray<ContainerFuncEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine("// Func wrapper fields");
-        writer.WriteLine();
-
-        foreach(var entry in entries)
-        {
-            var wrapperTypeName = $"global::System.Func<{entry.InnerServiceTypeName}>";
-            writer.WriteLine($"private readonly {wrapperTypeName} {entry.FieldName};");
-        }
-        writer.WriteLine();
-
-        var grouped = entries
-            .GroupBy(static e => e.InnerServiceTypeName)
-            .ToList();
-
-        foreach(var group in grouped)
-        {
-            var innerServiceTypeName = group.Key;
-            var wrapperTypeName = $"global::System.Func<{innerServiceTypeName}>";
-            var arrayMethodName = GetFuncArrayResolverMethodName(innerServiceTypeName);
-
-            writer.WriteLine($"private {wrapperTypeName}[] {arrayMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine("[");
-            writer.Indentation++;
-
-            foreach(var entry in group)
-            {
-                writer.WriteLine($"{entry.FieldName},");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("];");
-            writer.Indentation--;
-            writer.WriteLine();
-        }
-    }
-
-    /// <summary>
-    /// Writes field initialization statements for Func wrapper fields.
-    /// </summary>
-    private static void WriteContainerFuncFieldInitializations(
-        SourceWriter writer,
-        ImmutableEquatableArray<ContainerFuncEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine();
-        writer.WriteLine("// Initialize Func wrapper fields");
-        foreach(var entry in entries)
-        {
-            var wrapperTypeName = $"global::System.Func<{entry.InnerServiceTypeName}>";
-            writer.WriteLine($"{entry.FieldName} = new {wrapperTypeName}(() => {entry.ResolverMethodName}());");
-        }
-    }
-
-    /// <summary>
     /// Writes _localResolvers entries for Func wrapper services.
     /// </summary>
     private static void WriteContainerFuncLocalResolverEntries(
@@ -565,5 +505,72 @@ partial class IocSourceGenerator
     {
         var safeInnerType = GetSafeIdentifier(innerServiceTypeName);
         return $"GetAllFunc_{safeInnerType}_Array";
+    }
+
+    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateFuncWrapperContainerEntries(
+        ImmutableEquatableArray<ContainerFuncEntry> entries,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
+    {
+        if(entries.Length == 0)
+            return [];
+
+        var collectionFieldsByServiceType = entries
+            .GroupBy(static e => e.InnerServiceTypeName)
+            .ToDictionary(
+                static g => g.Key,
+                static g => g.Select(static e => e.FieldName).ToImmutableEquatableArray(),
+                StringComparer.Ordinal);
+
+        var collectionEmitterFieldByServiceType = entries
+            .GroupBy(static e => e.InnerServiceTypeName)
+            .ToDictionary(
+                static g => g.Key,
+                static g => g.Last().FieldName,
+                StringComparer.Ordinal);
+
+        var cachedByResolver = new Dictionary<string, CachedRegistration>(StringComparer.Ordinal);
+        foreach(var registrationGroup in byServiceTypeAndKey.Values)
+        {
+            foreach(var cached in registrationGroup)
+            {
+                if(!cachedByResolver.ContainsKey(cached.ResolverMethodName))
+                {
+                    cachedByResolver[cached.ResolverMethodName] = cached;
+                }
+            }
+        }
+
+        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Length);
+
+        foreach(var entry in entries)
+        {
+            var innerImplTypeName = entry.InnerServiceTypeName;
+            string? key = null;
+
+            if(cachedByResolver.TryGetValue(entry.ResolverMethodName, out var cached))
+            {
+                innerImplTypeName = cached.Registration.ImplementationType.Name;
+                key = cached.Registration.Key;
+            }
+
+            var emitCollectionResolver = string.Equals(
+                entry.FieldName,
+                collectionEmitterFieldByServiceType[entry.InnerServiceTypeName],
+                StringComparison.Ordinal);
+            var collectionFieldNames = emitCollectionResolver
+                ? collectionFieldsByServiceType[entry.InnerServiceTypeName]
+                : [];
+
+            wrapperEntries.Add(new FuncWrapperContainerEntry(
+                entry.InnerServiceTypeName,
+                innerImplTypeName,
+                entry.FieldName,
+                entry.ResolverMethodName,
+                key,
+                emitCollectionResolver,
+                collectionFieldNames));
+        }
+
+        return wrapperEntries.ToImmutableEquatableArray();
     }
 }

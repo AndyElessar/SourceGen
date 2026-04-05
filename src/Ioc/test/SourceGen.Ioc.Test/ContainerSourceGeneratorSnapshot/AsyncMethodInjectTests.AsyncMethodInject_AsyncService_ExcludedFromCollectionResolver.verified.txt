@@ -33,6 +33,9 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public TestContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
+
+        // Initialize eager singletons
+        _ = GetTestNamespace_AsyncImplAsync();
     }
 
     private TestContainer(TestContainer parent)

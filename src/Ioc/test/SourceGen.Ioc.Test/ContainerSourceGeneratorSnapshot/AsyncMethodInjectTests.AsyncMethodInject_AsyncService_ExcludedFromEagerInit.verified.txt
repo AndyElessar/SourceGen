@@ -35,7 +35,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _testNamespace_SyncService = GetTestNamespace_SyncService();
+        _ = GetTestNamespace_AsyncServiceAsync();
+        GetTestNamespace_SyncService();
     }
 
     private TestContainer(TestContainer parent)

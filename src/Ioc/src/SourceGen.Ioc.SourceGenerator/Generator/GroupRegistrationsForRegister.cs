@@ -41,14 +41,13 @@ partial class IocSourceGenerator
         }
 
         var shouldFilterInjection = !IocFeaturesHelper.HasAllInjectionFeatures(features);
-        var groupedRegistrations = new Dictionary<string, List<RegisterOutputEntry>>(StringComparer.Ordinal);
+        var groupedRegistrations = new Dictionary<string, List<RegisterEntry>>(StringComparer.Ordinal);
 
         foreach(var regWithTags in registrations)
         {
             var registration = shouldFilterInjection
                 ? FilterRegistrationForFeatures(regWithTags.Registration, features)
                 : regWithTags.Registration;
-            var outputEntry = CreateRegisterOutputEntry(registration);
             var tagKey = tagKeyCache[regWithTags.Tags];
 
             if(!groupedRegistrations.TryGetValue(tagKey, out var group))
@@ -57,7 +56,13 @@ partial class IocSourceGenerator
                 groupedRegistrations[tagKey] = group;
             }
 
-            group.Add(outputEntry);
+            var entry = CreateRegisterEntry(registration);
+            if(entry is null)
+            {
+                continue;
+            }
+
+            group.Add(entry);
         }
 
         var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations), tagKeyCache);
@@ -67,13 +72,13 @@ partial class IocSourceGenerator
         var asyncInitServiceTypeSet = new HashSet<string>(StringComparer.Ordinal);
         foreach(var group in groupedRegistrations.Values)
         {
-            foreach(var registration in group)
+            foreach(var entry in group)
             {
-                if(!registration.HasAsyncInjectionMembers)
+                if(!entry.Registration.InjectionMembers.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod))
                     continue;
 
-                asyncInitServiceTypeSet.Add(registration.Registration.ServiceType.Name);
-                asyncInitServiceTypeSet.Add(registration.Registration.ImplementationType.Name);
+                asyncInitServiceTypeSet.Add(entry.Registration.ServiceType.Name);
+                asyncInitServiceTypeSet.Add(entry.Registration.ImplementationType.Name);
             }
         }
 
@@ -168,7 +173,7 @@ partial class IocSourceGenerator
         return grouped;
     }
 
-    private static RegisterOutputEntry CreateRegisterOutputEntry(ServiceRegistrationModel registration)
+    private static RegisterEntry? CreateRegisterEntry(ServiceRegistrationModel registration)
     {
         var serviceTypeName = registration.ServiceType.Name;
         var implTypeName = registration.ImplementationType.Name;
@@ -190,13 +195,52 @@ partial class IocSourceGenerator
         bool hasAsyncInjectionMembers = registration.InjectionMembers.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod);
         bool shouldForwardServiceType = !registration.IsOpenGeneric && isServiceTypeRegistration;
 
-        return new RegisterOutputEntry(
-            registration,
-            hasFactory,
-            hasInstance,
-            hasClosedDecorators,
-            needsFactoryConstruction,
-            hasAsyncInjectionMembers,
-            shouldForwardServiceType);
+        bool isSimplePattern = !hasFactory
+            && !hasInstance
+            && !hasClosedDecorators
+            && !shouldForwardServiceType
+            && (registration.IsOpenGeneric || !needsFactoryConstruction);
+
+        if(isSimplePattern)
+        {
+            return new SimpleRegisterEntry(registration);
+        }
+
+        if(hasFactory)
+        {
+            return new FactoryRegisterEntry(registration);
+        }
+
+        if(hasInstance)
+        {
+            if(registration.Lifetime == ServiceLifetime.Singleton)
+            {
+                return new InstanceRegisterEntry(registration);
+            }
+
+            return null;
+        }
+
+        if(hasClosedDecorators)
+        {
+            return new DecoratorRegisterEntry(registration);
+        }
+
+        if(shouldForwardServiceType && !hasFactory && !hasClosedDecorators)
+        {
+            return new ForwardingRegisterEntry(registration);
+        }
+
+        if(needsFactoryConstruction && hasAsyncInjectionMembers && !registration.IsOpenGeneric)
+        {
+            return new AsyncInjectionRegisterEntry(registration);
+        }
+
+        if(needsFactoryConstruction && !hasAsyncInjectionMembers && !registration.IsOpenGeneric)
+        {
+            return new InjectionRegisterEntry(registration);
+        }
+
+        return new SimpleRegisterEntry(registration);
     }
 }

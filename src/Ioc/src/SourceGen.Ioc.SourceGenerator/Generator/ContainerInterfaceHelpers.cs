@@ -33,14 +33,12 @@ partial class IocSourceGenerator
             writer.WriteLine();
 
             // Cascading if statements - registrations already filtered (no open generics)
-            foreach(var kvp in groups.ByServiceTypeAndKey)
+            foreach(var mapping in EnumerateInterfaceServiceResolvers(groups))
             {
-                if(kvp.Key.Key is not null)
+                if(mapping.Key is not null)
                     continue;
 
-                var cached = kvp.Value[^1]; // Last wins
-                var reg = cached.Registration;
-                writer.WriteLine($"if(serviceType == typeof({reg.ServiceType.Name})) return {cached.ResolverMethodName}();");
+                writer.WriteLine($"if(serviceType == typeof({mapping.ServiceType})) return {mapping.ResolverMethodName}();");
             }
 
             writer.WriteLine();
@@ -104,13 +102,12 @@ partial class IocSourceGenerator
                 writer.WriteLine("{");
                 writer.Indentation++;
 
-                foreach(var kvp in groups.ByServiceTypeAndKey)
+                foreach(var mapping in EnumerateLocalResolverMappings(groups))
                 {
-                    if(kvp.Key.Key is null)
+                    if(mapping.Key is null)
                         continue;
 
-                    var cached = kvp.Value[^1]; // Last wins
-                    writer.WriteLine($"(Type t, object k) when t == typeof({kvp.Key.ServiceType}) && Equals(k, {kvp.Key.Key}) => {cached.ResolverMethodName}(),");
+                    writer.WriteLine($"(Type t, object k) when t == typeof({mapping.ServiceType}) && Equals(k, {mapping.Key}) => {mapping.ResolverMethodName}(),");
                 }
 
                 // Fallback in switch default case
@@ -506,47 +503,25 @@ partial class IocSourceGenerator
         writer.WriteLine($"new(new ServiceIdentifier(typeof(IServiceScopeFactory), {KeyedServiceAnyKey}), static c => c),");
         writer.WriteLine($"new(new ServiceIdentifier(typeof({container.ContainerTypeName}), {KeyedServiceAnyKey}), static c => c),");
 
-        // Use ByServiceTypeAndKey to include all service types (already filtered for non-open-generics)
-        foreach(var kvp in groups.ByServiceTypeAndKey)
-        {
-            var cached = kvp.Value[^1]; // Last wins
-            var keyExpr = kvp.Key.Key ?? KeyedServiceAnyKey;
+        var entryByResolverMethodName = BuildEntryByResolverMethodName(groups);
 
-            // Determine resolver expression based on registration type
+        // Use service type resolver mappings (already filtered for non-open-generics)
+        foreach(var mapping in EnumerateLocalResolverMappings(groups))
+        {
+            var keyExpr = mapping.Key ?? KeyedServiceAnyKey;
+
             string resolverExpr;
-            if(cached.Registration.Instance is not null)
+            if(entryByResolverMethodName.TryGetValue(mapping.ResolverMethodName, out var entry))
             {
-                // Instance registration: directly return the instance
-                resolverExpr = $"static _ => {cached.Registration.Instance}";
-            }
-            else if(cached.IsAsyncInit)
-            {
-                // Async-init services: expose Task<T> from GetService.
-                // Singleton/Scoped: call the routing async resolver method.
-                // Transient: call the async creation method directly (no caching).
-                if(cached.Registration.Lifetime == ServiceLifetime.Transient)
-                {
-                    var createMethodName = GetAsyncCreateMethodName(cached.ResolverMethodName);
-                    resolverExpr = $"static c => c.{createMethodName}()";
-                }
-                else
-                {
-                    var asyncMethodName = GetAsyncResolverMethodName(cached.ResolverMethodName);
-                    resolverExpr = $"static c => c.{asyncMethodName}()";
-                }
-            }
-            else if(cached.IsEager)
-            {
-                // Eager services: directly access the field
-                resolverExpr = $"static c => c.{cached.FieldName}!";
+                resolverExpr = GetResolverExpression(entry);
             }
             else
             {
-                // Lazy services: call the Get method
-                resolverExpr = $"static c => c.{cached.ResolverMethodName}()";
+                // Fallback path for compatibility with any unmapped resolver entries.
+                resolverExpr = $"static c => c.{mapping.ResolverMethodName}()";
             }
 
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({kvp.Key.ServiceType}), {keyExpr}), {resolverExpr}),");
+            writer.WriteLine($"new(new ServiceIdentifier(typeof({mapping.ServiceType}), {keyExpr}), {resolverExpr}),");
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
@@ -677,8 +652,8 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
-        var hasAsyncInitServices = groups.ReversedSingletonsForDisposal.Any(static c => c.IsAsyncInit)
-            || groups.ReversedScopedForDisposal.Any(static c => c.IsAsyncInit);
+        var hasAsyncInitServices = groups.SingletonEntries.Any(static e => e is AsyncContainerEntry)
+            || groups.ScopedEntries.Any(static e => e is AsyncContainerEntry);
         WriteDisposalHelperMethods(writer, hasAsyncInitServices);
 
         writer.WriteLine("#endregion");
@@ -982,7 +957,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        WriteDisposalCalls(writer, groups.ReversedScopedForDisposal, container.ImportedModules, container.ThreadSafeStrategy, isAsync);
+        WriteDisposalCalls(writer, groups.ScopedEntries, container.ImportedModules, isAsync);
         writer.WriteLine("return;");
 
         writer.Indentation--;
@@ -990,7 +965,7 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // Root scope disposal
-        WriteDisposalCalls(writer, groups.ReversedSingletonsForDisposal, container.ImportedModules, container.ThreadSafeStrategy, isAsync);
+        WriteDisposalCalls(writer, groups.SingletonEntries, container.ImportedModules, isAsync);
     }
 
     /// <summary>
@@ -998,31 +973,18 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteDisposalCalls(
         SourceWriter writer,
-        IEnumerable<CachedRegistration> services,
+        ImmutableEquatableArray<ContainerEntry> services,
         ImmutableEquatableArray<TypeData> modules,
-        ThreadSafeStrategy strategy,
         bool isAsync)
     {
-        var (serviceMethod, moduleMethod) = isAsync
-            ? ("await DisposeServiceAsync", "await {0}.DisposeAsync()")
-            : ("DisposeService", "{0}.Dispose()");
-
-        foreach(var cached in services)
+        for(var i = services.Length - 1; i >= 0; i--)
         {
-            // Skip instance registrations - they are externally managed and should not be disposed by the container
-            if(cached.Registration.Instance is not null)
-                continue;
-
-            var effectiveStrategy = GetEffectiveThreadSafeStrategy(strategy, cached.IsAsyncInit);
-
-            writer.WriteLine($"{serviceMethod}({cached.FieldName});");
-
-            // Dispose SemaphoreSlim if using SemaphoreSlim strategy (only for non-eager services)
-            if(effectiveStrategy == ThreadSafeStrategy.SemaphoreSlim && !cached.IsEager)
-            {
-                writer.WriteLine($"{cached.FieldName}Semaphore.Dispose();");
-            }
+            services[i].WriteDisposal(writer, isAsync);
         }
+
+        var moduleMethod = isAsync
+            ? "await {0}.DisposeAsync()"
+            : "{0}.Dispose()";
 
         foreach(var module in modules)
         {
@@ -1115,5 +1077,90 @@ partial class IocSourceGenerator
             writer.WriteLine("}");
             writer.WriteLine();
         }
+    }
+
+    private static IEnumerable<(string ServiceType, string? Key, string ResolverMethodName)> EnumerateInterfaceServiceResolvers(ContainerRegistrationGroups groups)
+    {
+        foreach(var kvp in groups.ByServiceTypeAndKey)
+        {
+            var cached = kvp.Value[^1]; // Last wins
+            yield return (cached.Registration.ServiceType.Name, kvp.Key.Key, cached.ResolverMethodName);
+        }
+    }
+
+    private static IEnumerable<(string ServiceType, string? Key, string ResolverMethodName)> EnumerateLocalResolverMappings(ContainerRegistrationGroups groups)
+    {
+        foreach(var kvp in groups.ByServiceTypeAndKey)
+        {
+            var cached = kvp.Value[^1]; // Last wins
+            yield return (kvp.Key.ServiceType, kvp.Key.Key, cached.ResolverMethodName);
+        }
+    }
+
+    private static Dictionary<string, ContainerEntry> BuildEntryByResolverMethodName(ContainerRegistrationGroups groups)
+    {
+        var map = new Dictionary<string, ContainerEntry>(StringComparer.Ordinal);
+
+        foreach(var entry in groups.SingletonEntries)
+            AddEntryByResolverMethodName(map, entry);
+        foreach(var entry in groups.ScopedEntries)
+            AddEntryByResolverMethodName(map, entry);
+        foreach(var entry in groups.TransientEntries)
+            AddEntryByResolverMethodName(map, entry);
+
+        return map;
+    }
+
+    private static void AddEntryByResolverMethodName(Dictionary<string, ContainerEntry> map, ContainerEntry entry)
+    {
+        if(!TryGetResolverMethodName(entry, out var resolverMethodName))
+            return;
+
+        if(!map.ContainsKey(resolverMethodName))
+        {
+            map[resolverMethodName] = entry;
+        }
+    }
+
+    private static bool TryGetResolverMethodName(ContainerEntry entry, out string resolverMethodName)
+    {
+        switch(entry)
+        {
+            case InstanceContainerEntry instance:
+                resolverMethodName = instance.ResolverMethodName;
+                return true;
+            case EagerContainerEntry eager:
+                resolverMethodName = eager.ResolverMethodName;
+                return true;
+            case LazyThreadSafeContainerEntry lazy:
+                resolverMethodName = lazy.ResolverMethodName;
+                return true;
+            case TransientContainerEntry transient:
+                resolverMethodName = transient.ResolverMethodName;
+                return true;
+            case AsyncContainerEntry asyncSingletonOrScoped:
+                resolverMethodName = asyncSingletonOrScoped.ResolverMethodName;
+                return true;
+            case AsyncTransientContainerEntry asyncTransient:
+                resolverMethodName = asyncTransient.ResolverMethodName;
+                return true;
+            default:
+                resolverMethodName = string.Empty;
+                return false;
+        }
+    }
+
+    private static string GetResolverExpression(ContainerEntry entry)
+    {
+        return entry switch
+        {
+            InstanceContainerEntry instance => $"static _ => {instance.Registration.Instance}",
+            EagerContainerEntry eager => $"static c => c.{eager.FieldName}!",
+            LazyThreadSafeContainerEntry lazy => $"static c => c.{lazy.ResolverMethodName}()",
+            TransientContainerEntry transient => $"static c => c.{transient.ResolverMethodName}()",
+            AsyncContainerEntry asyncSingletonOrScoped => $"static c => c.{GetAsyncResolverMethodName(asyncSingletonOrScoped.ResolverMethodName)}()",
+            AsyncTransientContainerEntry asyncTransient => $"static c => c.{GetAsyncCreateMethodName(asyncTransient.ResolverMethodName)}()",
+            _ => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
+        };
     }
 }

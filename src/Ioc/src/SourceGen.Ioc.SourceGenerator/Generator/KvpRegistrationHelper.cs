@@ -19,7 +19,23 @@ partial class IocSourceGenerator
         string ValueTypeName,
         string KeyExpr,
         ServiceLifetime Lifetime,
-        ImmutableEquatableArray<string> Tags);
+        ImmutableEquatableArray<string> Tags)
+    {
+        public void WriteRegistration(SourceWriter writer)
+        {
+            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>";
+            var lifetime = Lifetime.Name;
+            var resolveCall = $"sp.{GetRequiredKeyedService}<{ValueTypeName}>({KeyExpr})";
+
+            // KeyValuePair<K,V> is a struct, so we cannot use AddSingleton<TService> (class constraint).
+            // Use ServiceDescriptor directly with a factory that boxes the struct.
+            writer.WriteLine(
+                $"services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(" +
+                $"typeof({kvpTypeName}), " +
+                $"({IServiceProviderGlobalTypeName} sp) => (object)new {kvpTypeName}({KeyExpr}, {resolveCall}), " +
+                $"global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.{lifetime}));");
+        }
+    }
 
     /// <summary>
     /// Collects KeyValuePair registration entries needed by consumer dependencies.
@@ -152,17 +168,7 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{entry.KeyTypeName}, {entry.ValueTypeName}>";
-            var lifetime = entry.Lifetime.Name;
-            var resolveCall = $"sp.{GetRequiredKeyedService}<{entry.ValueTypeName}>({entry.KeyExpr})";
-
-            // KeyValuePair<K,V> is a struct, so we cannot use AddSingleton<TService> (class constraint).
-            // Use ServiceDescriptor directly with a factory that boxes the struct.
-            writer.WriteLine(
-                $"services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(" +
-                $"typeof({kvpTypeName}), " +
-                $"({IServiceProviderGlobalTypeName} sp) => (object)new {kvpTypeName}({entry.KeyExpr}, {resolveCall}), " +
-                $"global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.{lifetime}));");
+            entry.WriteRegistration(writer);
         }
     }
 
@@ -239,81 +245,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes KVP resolver methods and the array resolver for container generation.
-    /// Individual methods return a single <c>KeyValuePair&lt;K, V&gt;</c> entry.
-    /// The array resolver collects all KVP entries for <c>GetServices&lt;KVP&lt;K, V&gt;&gt;</c>.
-    /// </summary>
-    private static void WriteContainerKvpResolverMethods(
-        SourceWriter writer,
-        ImmutableEquatableArray<ContainerKvpEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine("// KeyValuePair resolver methods");
-        writer.WriteLine();
-
-        // Write individual KVP resolver methods
-        foreach(var entry in entries)
-        {
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{entry.KeyTypeName}, {entry.ValueTypeName}>";
-            writer.WriteLine($"private {kvpTypeName} {entry.KvpResolverMethodName}() => new {kvpTypeName}({entry.KeyExpr}, {entry.ResolverMethodName}());");
-            writer.WriteLine();
-        }
-
-        // Write array resolver methods grouped by (KeyTypeName, ValueTypeName)
-        var grouped = entries
-            .GroupBy(static e => (e.KeyTypeName, e.ValueTypeName))
-            .ToList();
-
-        foreach(var group in grouped)
-        {
-            var (keyTypeName, valueTypeName) = group.Key;
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyTypeName}, {valueTypeName}>";
-            var arrayMethodName = GetKvpArrayResolverMethodName(keyTypeName, valueTypeName);
-
-            writer.WriteLine($"private {kvpTypeName}[] {arrayMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine("[");
-            writer.Indentation++;
-
-            foreach(var entry in group)
-            {
-                writer.WriteLine($"{entry.KvpResolverMethodName}(),");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("];");
-            writer.Indentation--;
-            writer.WriteLine();
-        }
-
-        // Write dictionary resolver methods grouped by (KeyTypeName, ValueTypeName)
-        foreach(var group in grouped)
-        {
-            var (keyTypeName, valueTypeName) = group.Key;
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyTypeName}, {valueTypeName}>";
-            var dictionaryMethodName = GetKvpDictionaryResolverMethodName(keyTypeName, valueTypeName);
-
-            writer.WriteLine($"private global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}> {dictionaryMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine($"new global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}>()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            foreach(var entry in group)
-            {
-                writer.WriteLine($"[{entry.KeyExpr}] = {entry.ResolverMethodName}(),");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("};");
-            writer.Indentation--;
-            writer.WriteLine();
-        }
-    }
-
-    /// <summary>
     /// Writes <c>_localResolvers</c> entries for KVP services so that
     /// <c>GetServices&lt;KeyValuePair&lt;K, V&gt;&gt;</c> can collect them.
     /// </summary>
@@ -378,28 +309,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Checks if any keyed registrations exist for the given KVP key/value type pair.
-    /// Used to determine whether a KVP resolver method will be generated.
-    /// </summary>
-    private static bool HasKvpRegistrations(string keyTypeName, string valueTypeName, ContainerRegistrationGroups groups)
-    {
-        foreach(var kvp in groups.ByServiceTypeAndKey)
-        {
-            if(kvp.Key.Key is null)
-                continue;
-
-            if(!string.Equals(kvp.Key.ServiceType, valueTypeName, StringComparison.Ordinal))
-                continue;
-
-            var cached = kvp.Value[^1];
-            if(IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Checks if a registration's key value type is compatible with the requested KVP key type.
     /// </summary>
     /// <param name="requestedKeyTypeName">The key type name requested by the consumer (e.g., "string", "object").</param>
@@ -416,5 +325,25 @@ partial class IocSourceGenerator
             return false;
 
         return string.Equals(registrationKeyValueType.Name, requestedKeyTypeName, StringComparison.Ordinal);
+    }
+
+    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateKvpWrapperContainerEntries(
+        ImmutableEquatableArray<ContainerKvpEntry> entries)
+    {
+        if(entries.Length == 0)
+            return [];
+
+        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Length);
+        foreach(var entry in entries)
+        {
+            wrapperEntries.Add(new KvpWrapperContainerEntry(
+                entry.KeyTypeName,
+                entry.ValueTypeName,
+                entry.KeyExpr,
+                entry.ResolverMethodName,
+                entry.KvpResolverMethodName));
+        }
+
+        return wrapperEntries.ToImmutableEquatableArray();
     }
 }

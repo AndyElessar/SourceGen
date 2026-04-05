@@ -1,5 +1,9 @@
 using static SourceGen.Ioc.SourceGenerator.Models.Constants;
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
@@ -110,7 +114,7 @@ partial class IocSourceGenerator
         WriteContainerConstructors(writer, container, groups, effectiveUseSwitchStatement);
 
         // Write service resolver methods
-        WriteServiceResolverMethods(writer, container.ThreadSafeStrategy, groups);
+        WriteServiceResolverSection(writer, groups);
 
         // Write partial accessor implementations (user-declared partial methods/properties)
         WritePartialAccessorImplementations(writer, container, groups);
@@ -330,14 +334,12 @@ partial class IocSourceGenerator
         writer.WriteLine("_isRootScope = false;");
 
         // Copy singleton references from parent (already filtered for non-open-generics)
-        // Skip instance registrations as they don't have fields
-        foreach(var cached in groups.Singletons)
+        foreach(var entry in groups.SingletonEntries)
         {
-            // Instance registrations don't have fields, skip them
-            if(cached.Registration.Instance is not null)
+            if(!TryGetServiceFieldName(entry, out var fieldName))
                 continue;
 
-            writer.WriteLine($"{cached.FieldName} = parent.{cached.FieldName};");
+            writer.WriteLine($"{fieldName} = parent.{fieldName};");
         }
 
         // Create scopes for imported modules (so their scoped services are properly isolated)
@@ -347,21 +349,19 @@ partial class IocSourceGenerator
             writer.WriteLine($"{fieldName} = ({module.Name})parent.{fieldName}.CreateScope().ServiceProvider;");
         }
 
-        // Initialize eager scoped services by calling their Get methods
-        var eagerScoped = groups.EagerScoped;
-        if(eagerScoped.Length > 0)
+        // Initialize eager scoped services
+        if(groups.ScopedEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager scoped services");
-            foreach(var cached in eagerScoped)
+            foreach(var entry in groups.ScopedEntries)
             {
-                writer.WriteLine($"{cached.FieldName} = {cached.ResolverMethodName}();");
+                entry.WriteEagerInit(writer);
             }
         }
 
         // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers)
-        WriteContainerLazyFieldInitializations(writer, groups.LazyEntries);
-        WriteContainerFuncFieldInitializations(writer, groups.FuncEntries);
+        WriteWrapperInitializations(writer, groups.WrapperEntries);
 
         writer.Indentation--;
         writer.WriteLine("}");
@@ -395,22 +395,247 @@ partial class IocSourceGenerator
             }
         }
 
-        // Initialize eager singletons by calling their Get methods
-        // This ensures dependencies are resolved in the correct order
-        var eagerSingletons = groups.EagerSingletons;
-        if(eagerSingletons.Length > 0)
+        // Initialize eager singleton services
+        if(groups.SingletonEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager singletons");
-            foreach(var cached in eagerSingletons)
+            foreach(var entry in groups.SingletonEntries)
             {
-                writer.WriteLine($"{cached.FieldName} = {cached.ResolverMethodName}();");
+                entry.WriteEagerInit(writer);
             }
         }
 
         // Initialize Lazy/Func wrapper fields
-        WriteContainerLazyFieldInitializations(writer, groups.LazyEntries);
-        WriteContainerFuncFieldInitializations(writer, groups.FuncEntries);
+        WriteWrapperInitializations(writer, groups.WrapperEntries);
+    }
+
+    private static void WriteWrapperInitializations(
+        SourceWriter writer,
+        ImmutableEquatableArray<ContainerEntry> wrapperEntries)
+    {
+        var lazyEntries = wrapperEntries.OfType<LazyWrapperContainerEntry>().ToList();
+        var funcEntries = wrapperEntries.OfType<FuncWrapperContainerEntry>().ToList();
+
+        if(lazyEntries.Count == 0 && funcEntries.Count == 0)
+            return;
+
+        if(lazyEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Initialize Lazy wrapper fields");
+            foreach(var entry in lazyEntries)
+            {
+                entry.WriteInit(writer);
+            }
+        }
+
+        if(funcEntries.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Initialize Func wrapper fields");
+            foreach(var entry in funcEntries)
+            {
+                entry.WriteInit(writer);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes individual service resolver methods.
+    /// </summary>
+    private static void WriteServiceResolverSection(
+        SourceWriter writer,
+        ContainerRegistrationGroups groups)
+    {
+        writer.WriteLine("#region Service Resolution");
+        writer.WriteLine();
+
+        var writtenMethods = new HashSet<string>(StringComparer.Ordinal);
+
+        WriteServiceResolverGroup(writer, groups.SingletonEntries, writtenMethods, writeField: true);
+        WriteServiceResolverGroup(writer, groups.ScopedEntries, writtenMethods, writeField: true);
+        WriteServiceResolverGroup(writer, groups.TransientEntries, writtenMethods, writeField: false);
+
+        foreach(var entry in groups.CollectionEntries)
+        {
+            entry.WriteResolver(writer);
+            writer.WriteLine();
+        }
+
+        var kvpEntries = groups.WrapperEntries
+            .OfType<KvpWrapperContainerEntry>()
+            .ToList();
+
+        if(kvpEntries.Count > 0)
+        {
+            writer.WriteLine("// KeyValuePair resolver methods");
+            writer.WriteLine();
+
+            foreach(var entry in kvpEntries)
+            {
+                entry.WriteResolver(writer);
+                writer.WriteLine();
+            }
+
+            WriteKvpCollectionResolvers(writer, kvpEntries);
+        }
+
+        var lazyEntries = groups.WrapperEntries
+            .OfType<LazyWrapperContainerEntry>()
+            .ToList();
+
+        if(lazyEntries.Count > 0)
+        {
+            writer.WriteLine("// Lazy wrapper fields");
+            writer.WriteLine();
+
+            foreach(var entry in lazyEntries)
+            {
+                entry.WriteField(writer);
+            }
+
+            writer.WriteLine();
+
+            foreach(var entry in lazyEntries)
+            {
+                if(!entry.EmitCollectionResolver)
+                    continue;
+
+                entry.WriteCollectionResolver(writer);
+                writer.WriteLine();
+            }
+        }
+
+        var funcEntries = groups.WrapperEntries
+            .OfType<FuncWrapperContainerEntry>()
+            .ToList();
+
+        if(funcEntries.Count > 0)
+        {
+            writer.WriteLine("// Func wrapper fields");
+            writer.WriteLine();
+
+            foreach(var entry in funcEntries)
+            {
+                entry.WriteField(writer);
+            }
+
+            writer.WriteLine();
+
+            foreach(var entry in funcEntries)
+            {
+                if(!entry.EmitCollectionResolver)
+                    continue;
+
+                entry.WriteCollectionResolver(writer);
+                writer.WriteLine();
+            }
+        }
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    private static void WriteServiceResolverGroup(
+        SourceWriter writer,
+        ImmutableEquatableArray<ContainerEntry> entries,
+        HashSet<string> writtenMethods,
+        bool writeField)
+    {
+        foreach(var entry in entries)
+        {
+            if(!TryGetResolverMethodName(entry, out var resolverMethodName))
+                continue;
+
+            if(!writtenMethods.Add(resolverMethodName))
+                continue;
+
+            if(writeField)
+            {
+                entry.WriteField(writer);
+
+                if(entry is AsyncContainerEntry)
+                {
+                    writer.WriteLine();
+                }
+            }
+
+            entry.WriteResolver(writer);
+            writer.WriteLine();
+        }
+    }
+
+    private static void WriteKvpCollectionResolvers(
+        SourceWriter writer,
+        List<KvpWrapperContainerEntry> kvpEntries)
+    {
+        var grouped = kvpEntries
+            .GroupBy(static e => (e.KeyTypeName, e.ValueTypeName))
+            .ToList();
+
+        foreach(var group in grouped)
+        {
+            var (keyTypeName, valueTypeName) = group.Key;
+            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyTypeName}, {valueTypeName}>";
+            var arrayMethodName = GetKvpArrayResolverMethodName(keyTypeName, valueTypeName);
+
+            writer.WriteLine($"private {kvpTypeName}[] {arrayMethodName}() =>");
+            writer.Indentation++;
+            writer.WriteLine("[");
+            writer.Indentation++;
+
+            foreach(var entry in group)
+            {
+                writer.WriteLine($"{entry.KvpResolverMethodName}(),");
+            }
+
+            writer.Indentation--;
+            writer.WriteLine("];");
+            writer.Indentation--;
+            writer.WriteLine();
+        }
+
+        foreach(var group in grouped)
+        {
+            var (keyTypeName, valueTypeName) = group.Key;
+            var dictionaryMethodName = GetKvpDictionaryResolverMethodName(keyTypeName, valueTypeName);
+
+            writer.WriteLine($"private global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}> {dictionaryMethodName}() =>");
+            writer.Indentation++;
+            writer.WriteLine($"new global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}>()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            foreach(var entry in group)
+            {
+                writer.WriteLine($"[{entry.KeyExpr}] = {entry.ResolverMethodName}(),");
+            }
+
+            writer.Indentation--;
+            writer.WriteLine("};");
+            writer.Indentation--;
+            writer.WriteLine();
+        }
+    }
+
+    private static bool TryGetServiceFieldName(ContainerEntry entry, out string fieldName)
+    {
+        switch(entry)
+        {
+            case EagerContainerEntry eager:
+                fieldName = eager.FieldName;
+                return true;
+            case LazyThreadSafeContainerEntry lazy:
+                fieldName = lazy.FieldName;
+                return true;
+            case AsyncContainerEntry asyncEntry:
+                fieldName = asyncEntry.FieldName;
+                return true;
+            default:
+                fieldName = string.Empty;
+                return false;
+        }
     }
 
     /// <summary>

@@ -1,4 +1,6 @@
-﻿namespace SourceGen.Ioc;
+﻿using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+
+namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
@@ -25,7 +27,7 @@ partial class IocSourceGenerator
         }
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, features, container.EagerResolveOptions, reservedNames);
+        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -105,6 +107,7 @@ partial class IocSourceGenerator
     private static ContainerRegistrationGroups BuildContainerRegistrationGroups(
         ImmutableEquatableArray<ServiceRegistrationModel> registrations,
         IocFeatures features,
+        ThreadSafeStrategy threadSafeStrategy,
         EagerResolveOptions eagerResolveOptions,
         HashSet<string> reservedNames)
     {
@@ -226,19 +229,6 @@ partial class IocSourceGenerator
             }
         }
 
-        // Pre-compute reversed lists for disposal (to avoid repeated .Reverse() calls)
-        var reversedSingletons = new List<CachedRegistration>(singletons.Count);
-        for(var i = singletons.Count - 1; i >= 0; i--)
-        {
-            reversedSingletons.Add(singletons[i]);
-        }
-
-        var reversedScoped = new List<CachedRegistration>(scoped.Count);
-        for(var i = scoped.Count - 1; i >= 0; i--)
-        {
-            reversedScoped.Add(scoped[i]);
-        }
-
         // Convert to immutable collections
         var immutableByServiceTypeAndKey = byServiceTypeAndKey
             .ToImmutableEquatableDictionary(
@@ -248,13 +238,6 @@ partial class IocSourceGenerator
         var immutableSingletons = singletons.ToImmutableEquatableArray();
         var immutableScoped = scoped.ToImmutableEquatableArray();
         var immutableTransients = transients.ToImmutableEquatableArray();
-
-        var eagerSingletons = immutableSingletons
-            .Where(static c => c.IsEager)
-            .ToImmutableEquatableArray();
-        var eagerScoped = immutableScoped
-            .Where(static c => c.IsEager)
-            .ToImmutableEquatableArray();
 
         var lazyEntries = CollectContainerLazyEntries(
             immutableSingletons,
@@ -272,23 +255,49 @@ partial class IocSourceGenerator
             immutableTransients,
             immutableByServiceTypeAndKey);
 
+        var immutableCollectionRegistrations = collectionRegistrations.ToImmutableEquatableDictionary();
+
+        var lazyFieldByResolver = lazyEntries.ToDictionary(static e => e.ResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
+        var funcFieldByResolver = funcEntries.ToDictionary(static e => e.ResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
+
+        var singletonEntries = CreateServiceContainerEntries(
+            immutableSingletons,
+            threadSafeStrategy,
+            immutableByServiceTypeAndKey,
+            immutableCollectionRegistrations,
+            lazyFieldByResolver,
+            funcFieldByResolver);
+        var scopedEntries = CreateServiceContainerEntries(
+            immutableScoped,
+            threadSafeStrategy,
+            immutableByServiceTypeAndKey,
+            immutableCollectionRegistrations,
+            lazyFieldByResolver,
+            funcFieldByResolver);
+        var transientEntries = CreateServiceContainerEntries(
+            immutableTransients,
+            threadSafeStrategy,
+            immutableByServiceTypeAndKey,
+            immutableCollectionRegistrations,
+            lazyFieldByResolver,
+            funcFieldByResolver);
+        var wrapperEntries = CreateWrapperContainerEntries(lazyEntries, funcEntries, kvpEntries, immutableByServiceTypeAndKey);
+        var collectionEntries = CreateCollectionContainerEntries(immutableCollectionRegistrations);
+
         return new ContainerRegistrationGroups(
             immutableByServiceTypeAndKey,
             allServiceTypes.ToImmutableEquatableSet(),
-            immutableSingletons,
-            immutableScoped,
-            immutableTransients,
-            eagerSingletons,
-            eagerScoped,
             lazyEntries,
             funcEntries,
             kvpEntries,
             hasOpenGenerics,
             hasKeyedServices,
             collectionServiceTypes.ToImmutableEquatableArray(),
-            collectionRegistrations.ToImmutableEquatableDictionary(),
-            reversedSingletons.ToImmutableEquatableArray(),
-            reversedScoped.ToImmutableEquatableArray());
+            singletonEntries,
+            scopedEntries,
+            transientEntries,
+            wrapperEntries,
+            collectionEntries);
     }
 
     /// <summary>
@@ -389,5 +398,667 @@ partial class IocSourceGenerator
             $"_{lowerFirstChar}{restOfName}",
             $"Get{baseName}"
         );
+    }
+
+    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateServiceContainerEntries(
+        ImmutableEquatableArray<CachedRegistration> registrations,
+        ThreadSafeStrategy threadSafeStrategy,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver)
+    {
+        var entries = new List<IocSourceGenerator.ContainerEntry>(registrations.Length);
+
+        foreach(var cached in registrations)
+        {
+            var reg = cached.Registration;
+            var constructorParameters = ResolveConstructorParametersForContainerEntryModel(
+                reg,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver,
+                allowServiceKeyAttribute: true);
+            var injectionMembers = ResolveInjectionMembersForContainerEntryModel(
+                reg.InjectionMembers,
+                reg,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver,
+                allowServiceKeyAttributeForMethods: true);
+            var decorators = ResolveDecoratorsForContainerEntryModel(
+                reg,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver);
+
+            entries.Add(CreateServiceContainerEntryModel(
+                cached,
+                threadSafeStrategy,
+                constructorParameters,
+                injectionMembers,
+                decorators));
+        }
+
+        return entries.ToImmutableEquatableArray();
+    }
+
+    private static IocSourceGenerator.ContainerEntry CreateServiceContainerEntryModel(
+        CachedRegistration cached,
+        ThreadSafeStrategy threadSafeStrategy,
+        ImmutableEquatableArray<ResolvedConstructorParameter> constructorParameters,
+        ImmutableEquatableArray<ResolvedInjectionMember> injectionMembers,
+        ImmutableEquatableArray<ResolvedDecorator> decorators)
+    {
+        var reg = cached.Registration;
+
+        if(reg.Instance is not null)
+        {
+            return new InstanceContainerEntry(
+                reg,
+                cached.ResolverMethodName,
+                cached.FieldName,
+                constructorParameters,
+                injectionMembers,
+                decorators);
+        }
+
+        if(cached.IsAsyncInit)
+        {
+            if(reg.Lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
+            {
+                return new AsyncContainerEntry(
+                    reg,
+                    cached.ResolverMethodName,
+                    cached.FieldName,
+                    GetEffectiveThreadSafeStrategy(threadSafeStrategy, true),
+                    constructorParameters,
+                    injectionMembers,
+                    decorators);
+            }
+
+            return new AsyncTransientContainerEntry(
+                reg,
+                cached.ResolverMethodName,
+                constructorParameters,
+                injectionMembers,
+                decorators);
+        }
+
+        if(reg.Lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
+        {
+            if(cached.IsEager)
+            {
+                return new EagerContainerEntry(
+                    reg,
+                    cached.ResolverMethodName,
+                    cached.FieldName,
+                    constructorParameters,
+                    injectionMembers,
+                    decorators);
+            }
+
+            return new LazyThreadSafeContainerEntry(
+                reg,
+                cached.ResolverMethodName,
+                cached.FieldName,
+                threadSafeStrategy,
+                constructorParameters,
+                injectionMembers,
+                decorators);
+        }
+
+        return new TransientContainerEntry(
+            reg,
+            cached.ResolverMethodName,
+            constructorParameters,
+            injectionMembers,
+            decorators);
+    }
+
+    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateWrapperContainerEntries(
+        ImmutableEquatableArray<ContainerLazyEntry> lazyEntries,
+        ImmutableEquatableArray<ContainerFuncEntry> funcEntries,
+        ImmutableEquatableArray<ContainerKvpEntry> kvpEntries,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
+    {
+        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(lazyEntries.Length + funcEntries.Length + kvpEntries.Length);
+
+        wrapperEntries.AddRange(CreateLazyWrapperContainerEntries(lazyEntries, byServiceTypeAndKey));
+        wrapperEntries.AddRange(CreateFuncWrapperContainerEntries(funcEntries, byServiceTypeAndKey));
+        wrapperEntries.AddRange(CreateKvpWrapperContainerEntries(kvpEntries));
+
+        return wrapperEntries.ToImmutableEquatableArray();
+    }
+
+    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateCollectionContainerEntries(
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations)
+    {
+        var entries = new List<IocSourceGenerator.ContainerEntry>(collectionRegistrations.Count);
+
+        foreach(var kvp in collectionRegistrations)
+        {
+            var elementResolvers = new List<ResolvedDependency>(kvp.Value.Length);
+            var uniqueKeys = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach(var cached in kvp.Value)
+            {
+                var uniqueKey = cached.Registration.Instance ?? cached.ResolverMethodName;
+                if(!uniqueKeys.Add(uniqueKey))
+                    continue;
+
+                if(cached.Registration.Instance is not null)
+                {
+                    elementResolvers.Add(new InstanceExpressionDependency(cached.Registration.Instance));
+                }
+                else
+                {
+                    elementResolvers.Add(new DirectServiceDependency(cached.ResolverMethodName));
+                }
+            }
+
+            if(elementResolvers.Count < 2)
+                continue;
+
+            entries.Add(new CollectionContainerEntry(
+                kvp.Key,
+                GetArrayResolverMethodName(kvp.Key),
+                elementResolvers.ToImmutableEquatableArray()));
+        }
+
+        return entries.ToImmutableEquatableArray();
+    }
+
+    private static ImmutableEquatableArray<ResolvedConstructorParameter> ResolveConstructorParametersForContainerEntryModel(
+        ServiceRegistrationModel registration,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        bool allowServiceKeyAttribute)
+    {
+        var constructorParameters = registration.Factory?.AdditionalParameters ?? registration.ImplementationType.ConstructorParameters;
+        if(constructorParameters is null or { Length: 0 })
+            return [];
+
+        var resolved = new List<ResolvedConstructorParameter>(constructorParameters.Length);
+
+        foreach(var parameter in constructorParameters)
+        {
+            var dependency = ResolveParameterDependencyForContainerEntryModel(
+                parameter,
+                registration,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver,
+                allowServiceKeyAttribute);
+
+            resolved.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
+        }
+
+        return resolved.ToImmutableEquatableArray();
+    }
+
+    private static ImmutableEquatableArray<ResolvedInjectionMember> ResolveInjectionMembersForContainerEntryModel(
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers,
+        ServiceRegistrationModel ownerRegistration,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        bool allowServiceKeyAttributeForMethods)
+    {
+        if(injectionMembers.Length == 0)
+            return [];
+
+        var resolvedMembers = new List<ResolvedInjectionMember>(injectionMembers.Length);
+
+        foreach(var member in injectionMembers)
+        {
+            ResolvedDependency? dependency = null;
+            ImmutableEquatableArray<ResolvedDependency> parameterDependencies = [];
+
+            switch(member.MemberType)
+            {
+                case InjectionMemberType.Property or InjectionMemberType.Field when member.Type is not null:
+                    dependency = ResolveServiceDependencyForContainerEntryModel(
+                        member.Type,
+                        member.Key,
+                        member.IsNullable,
+                        byServiceTypeAndKey,
+                        collectionRegistrations,
+                        lazyFieldByResolver,
+                        funcFieldByResolver);
+                    break;
+
+                case InjectionMemberType.Method or InjectionMemberType.AsyncMethod:
+                {
+                    var methodParameters = member.Parameters;
+                    if(methodParameters is { Length: > 0 })
+                    {
+                        var resolvedParameters = new List<ResolvedDependency>(methodParameters.Length);
+
+                        foreach(var parameter in methodParameters)
+                        {
+                            resolvedParameters.Add(ResolveParameterDependencyForContainerEntryModel(
+                                parameter,
+                                ownerRegistration,
+                                byServiceTypeAndKey,
+                                collectionRegistrations,
+                                lazyFieldByResolver,
+                                funcFieldByResolver,
+                                allowServiceKeyAttributeForMethods));
+                        }
+
+                        parameterDependencies = resolvedParameters.ToImmutableEquatableArray();
+                        if(parameterDependencies.Length == 1)
+                        {
+                            dependency = parameterDependencies[0];
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            resolvedMembers.Add(new ResolvedInjectionMember(member, dependency, parameterDependencies));
+        }
+
+        return resolvedMembers.ToImmutableEquatableArray();
+    }
+
+    private static ImmutableEquatableArray<ResolvedDecorator> ResolveDecoratorsForContainerEntryModel(
+        ServiceRegistrationModel registration,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver)
+    {
+        if(registration.Decorators.Length == 0)
+            return [];
+
+        var decorators = new List<ResolvedDecorator>(registration.Decorators.Length);
+
+        foreach(var decoratorType in registration.Decorators)
+        {
+            var constructorParameters = decoratorType.ConstructorParameters;
+            var resolvedParameters = new List<ResolvedConstructorParameter>(constructorParameters?.Length ?? 0);
+
+            if(constructorParameters is { Length: > 1 })
+            {
+                for(var i = 1; i < constructorParameters.Length; i++)
+                {
+                    var parameter = constructorParameters[i];
+                    var dependency = ResolveServiceDependencyForContainerEntryModel(
+                        parameter.Type,
+                        parameter.ServiceKey,
+                        parameter.IsOptional,
+                        byServiceTypeAndKey,
+                        collectionRegistrations,
+                        lazyFieldByResolver,
+                        funcFieldByResolver);
+
+                    resolvedParameters.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
+                }
+            }
+
+            var decoratorInjectionMembers = decoratorType.InjectionMembers ?? [];
+            var resolvedInjectionMembers = ResolveInjectionMembersForContainerEntryModel(
+                decoratorInjectionMembers,
+                registration,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver,
+                allowServiceKeyAttributeForMethods: false);
+
+            var decoratorRegistration = new ServiceRegistrationModel(
+                registration.ServiceType,
+                decoratorType,
+                registration.Lifetime,
+                registration.Key,
+                registration.KeyType,
+                registration.KeyValueType,
+                decoratorType is GenericTypeData { IsOpenGeneric: true },
+                [],
+                decoratorInjectionMembers,
+                Factory: null,
+                Instance: null);
+
+            decorators.Add(new ResolvedDecorator(
+                decoratorRegistration,
+                resolvedParameters.ToImmutableEquatableArray(),
+                resolvedInjectionMembers));
+        }
+
+        return decorators.ToImmutableEquatableArray();
+    }
+
+    private static ResolvedDependency ResolveParameterDependencyForContainerEntryModel(
+        ParameterData parameter,
+        ServiceRegistrationModel ownerRegistration,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        bool allowServiceKeyAttribute)
+    {
+        if(allowServiceKeyAttribute && parameter.HasServiceKeyAttribute)
+        {
+            return new ServiceKeyLiteralDependency(parameter.Type.Name, ownerRegistration.Key ?? "null");
+        }
+
+        if(parameter.Type.Name is IServiceProviderTypeName or IServiceProviderGlobalTypeName)
+        {
+            return new ServiceProviderSelfDependency();
+        }
+
+        return ResolveServiceDependencyForContainerEntryModel(
+            parameter.Type,
+            parameter.ServiceKey,
+            parameter.IsOptional,
+            byServiceTypeAndKey,
+            collectionRegistrations,
+            lazyFieldByResolver,
+            funcFieldByResolver);
+    }
+
+    private static ResolvedDependency ResolveServiceDependencyForContainerEntryModel(
+        TypeData type,
+        string? key,
+        bool isOptional,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver)
+    {
+        if(type is CollectionWrapperTypeData collectionType)
+        {
+            var elementTypeName = collectionType.ElementType.Name;
+
+            if(key is not null)
+            {
+                return new CollectionFallbackDependency(elementTypeName, IsKeyed: true, Key: key);
+            }
+
+            if(collectionType.ElementType is KeyValuePairTypeData kvpElement
+                && HasKvpRegistrationsForContainerEntryModel(kvpElement.KeyType.Name, kvpElement.ValueType.Name, byServiceTypeAndKey))
+            {
+                var isArrayType = collectionType.WrapperKind is WrapperKind.ReadOnlyList or WrapperKind.List or WrapperKind.Array;
+                return isArrayType
+                    ? new KvpResolverDependency(GetKvpArrayResolverMethodName(kvpElement.KeyType.Name, kvpElement.ValueType.Name))
+                    : new DictionaryResolverDependency(GetKvpDictionaryResolverMethodName(kvpElement.KeyType.Name, kvpElement.ValueType.Name));
+            }
+
+            if(collectionRegistrations.ContainsKey(elementTypeName))
+            {
+                return new CollectionDependency(GetArrayResolverMethodName(elementTypeName));
+            }
+
+            return new CollectionFallbackDependency(elementTypeName, IsKeyed: false, Key: null);
+        }
+
+        if(type is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
+        {
+            return ResolveWrapperDependencyForContainerEntryModel(
+                type,
+                key,
+                isOptional,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver,
+                useResolverMethods: true);
+        }
+
+        if(byServiceTypeAndKey.TryGetValue((type.Name, key), out var registrations))
+        {
+            var cached = registrations[^1];
+            if(cached.IsAsyncInit)
+            {
+                return cached.Registration.Lifetime == ServiceLifetime.Transient
+                    ? new DirectServiceDependency(GetAsyncCreateMethodName(cached.ResolverMethodName))
+                    : new DirectServiceDependency(GetAsyncResolverMethodName(cached.ResolverMethodName));
+            }
+
+            return new DirectServiceDependency(cached.ResolverMethodName);
+        }
+
+        return new FallbackProviderDependency(type.Name, key, isOptional);
+    }
+
+    private static ResolvedDependency ResolveWrapperDependencyForContainerEntryModel(
+        TypeData type,
+        string? key,
+        bool isOptional,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        bool useResolverMethods)
+    {
+        switch(type)
+        {
+            case LazyTypeData lazy:
+            {
+                var innerType = lazy.InstanceType;
+
+                if(innerType is not WrapperTypeData && useResolverMethods)
+                {
+                    if(byServiceTypeAndKey.TryGetValue((innerType.Name, key), out var innerRegistrations))
+                    {
+                        var resolverMethodName = innerRegistrations[^1].ResolverMethodName;
+                        if(lazyFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
+                        {
+                            return new LazyFieldReferenceDependency(fieldName);
+                        }
+                    }
+
+                    return new LazyInlineDependency(
+                        innerType.Name,
+                        new FallbackProviderDependency(innerType.Name, key, isOptional));
+                }
+
+                return new LazyInlineDependency(
+                    innerType.Name,
+                    ResolveInnerDependencyForContainerEntryModel(
+                        innerType,
+                        key,
+                        isOptional,
+                        byServiceTypeAndKey,
+                        collectionRegistrations,
+                        lazyFieldByResolver,
+                        funcFieldByResolver));
+            }
+
+            case FuncTypeData func:
+            {
+                var innerType = func.ReturnType;
+
+                if(func.HasInputParameters)
+                {
+                    if(byServiceTypeAndKey.TryGetValue((innerType.Name, key), out var innerRegistrations))
+                    {
+                        var targetRegistration = innerRegistrations[^1].Registration;
+                        return new MultiParamFuncDependency(
+                            innerType.Name,
+                            CreateFuncInputParameters(func.InputTypes),
+                            ResolveConstructorParametersForContainerEntryModel(
+                                targetRegistration,
+                                byServiceTypeAndKey,
+                                collectionRegistrations,
+                                lazyFieldByResolver,
+                                funcFieldByResolver,
+                                allowServiceKeyAttribute: true),
+                            ResolveInjectionMembersForContainerEntryModel(
+                                targetRegistration.InjectionMembers,
+                                targetRegistration,
+                                byServiceTypeAndKey,
+                                collectionRegistrations,
+                                lazyFieldByResolver,
+                                funcFieldByResolver,
+                                allowServiceKeyAttributeForMethods: true),
+                            ResolveDecoratorsForContainerEntryModel(
+                                targetRegistration,
+                                byServiceTypeAndKey,
+                                collectionRegistrations,
+                                lazyFieldByResolver,
+                                funcFieldByResolver),
+                            targetRegistration.ImplementationType.Name);
+                    }
+
+                    return new FallbackProviderDependency(type.Name, key, isOptional);
+                }
+
+                if(innerType is not WrapperTypeData && useResolverMethods)
+                {
+                    if(byServiceTypeAndKey.TryGetValue((innerType.Name, key), out var innerRegistrations))
+                    {
+                        var resolverMethodName = innerRegistrations[^1].ResolverMethodName;
+                        if(funcFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
+                        {
+                            return new FuncFieldReferenceDependency(fieldName);
+                        }
+                    }
+
+                    return new FuncInlineDependency(
+                        innerType.Name,
+                        new FallbackProviderDependency(innerType.Name, key, isOptional));
+                }
+
+                return new FuncInlineDependency(
+                    innerType.Name,
+                    ResolveInnerDependencyForContainerEntryModel(
+                        innerType,
+                        key,
+                        isOptional,
+                        byServiceTypeAndKey,
+                        collectionRegistrations,
+                        lazyFieldByResolver,
+                        funcFieldByResolver));
+            }
+
+            case KeyValuePairTypeData kvp:
+                return new KvpInlineDependency(
+                    kvp.KeyType.Name,
+                    kvp.ValueType.Name,
+                    key ?? "default",
+                    ResolveInnerDependencyForContainerEntryModel(
+                        kvp.ValueType,
+                        key,
+                        isOptional,
+                        byServiceTypeAndKey,
+                        collectionRegistrations,
+                        lazyFieldByResolver,
+                        funcFieldByResolver));
+
+            case DictionaryTypeData dictionary:
+            {
+                if(key is null && HasKvpRegistrationsForContainerEntryModel(dictionary.KeyType.Name, dictionary.ValueType.Name, byServiceTypeAndKey))
+                {
+                    return new DictionaryResolverDependency(GetKvpDictionaryResolverMethodName(dictionary.KeyType.Name, dictionary.ValueType.Name));
+                }
+
+                var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{dictionary.KeyType.Name}, {dictionary.ValueType.Name}>";
+                return new DictionaryFallbackDependency(kvpTypeName, IsKeyed: key is not null, Key: key);
+            }
+
+            case TaskTypeData task:
+            {
+                if(byServiceTypeAndKey.TryGetValue((task.InnerType.Name, key), out var innerRegistrations))
+                {
+                    var cached = innerRegistrations[^1];
+                    if(cached.IsAsyncInit)
+                    {
+                        return new TaskAsyncDependency(GetAsyncResolverMethodName(cached.ResolverMethodName), task.InnerType.Name);
+                    }
+
+                    return new TaskFromResultDependency(new DirectServiceDependency(cached.ResolverMethodName), task.InnerType.Name);
+                }
+
+                return new FallbackProviderDependency(type.Name, key, isOptional);
+            }
+
+            default:
+                return ResolveServiceDependencyForContainerEntryModel(
+                    type,
+                    key,
+                    isOptional,
+                    byServiceTypeAndKey,
+                    collectionRegistrations,
+                    lazyFieldByResolver,
+                    funcFieldByResolver);
+        }
+    }
+
+    private static ResolvedDependency ResolveInnerDependencyForContainerEntryModel(
+        TypeData innerType,
+        string? key,
+        bool isOptional,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey,
+        ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> collectionRegistrations,
+        IReadOnlyDictionary<string, string> lazyFieldByResolver,
+        IReadOnlyDictionary<string, string> funcFieldByResolver)
+    {
+        if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
+        {
+            return ResolveWrapperDependencyForContainerEntryModel(
+                innerType,
+                key,
+                isOptional,
+                byServiceTypeAndKey,
+                collectionRegistrations,
+                lazyFieldByResolver,
+                funcFieldByResolver,
+                useResolverMethods: false);
+        }
+
+        return ResolveServiceDependencyForContainerEntryModel(
+            innerType,
+            key,
+            isOptional,
+            byServiceTypeAndKey,
+            collectionRegistrations,
+            lazyFieldByResolver,
+            funcFieldByResolver);
+    }
+
+    private static ImmutableEquatableArray<ParameterData> CreateFuncInputParameters(ImmutableEquatableArray<TypeParameter> inputTypes)
+    {
+        if(inputTypes.Length == 0)
+            return [];
+
+        var parameters = new List<ParameterData>(inputTypes.Length);
+        for(var i = 0; i < inputTypes.Length; i++)
+        {
+            parameters.Add(new ParameterData($"arg{i}", inputTypes[i].Type));
+        }
+
+        return parameters.ToImmutableEquatableArray();
+    }
+
+    private static bool HasKvpRegistrationsForContainerEntryModel(
+        string keyTypeName,
+        string valueTypeName,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
+    {
+        foreach(var kvp in byServiceTypeAndKey)
+        {
+            if(kvp.Key.Key is null)
+                continue;
+
+            if(!string.Equals(kvp.Key.ServiceType, valueTypeName, StringComparison.Ordinal))
+                continue;
+
+            var cached = kvp.Value[^1];
+            if(IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
+                return true;
+        }
+
+        return false;
     }
 }

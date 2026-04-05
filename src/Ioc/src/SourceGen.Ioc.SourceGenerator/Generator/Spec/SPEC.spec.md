@@ -84,7 +84,12 @@ File: `ProcessSingleRegistration.cs`
 2. `allOpenGenericEntries` = factory-based + imported
 3. `CombineAndResolveClosedGenerics(allBasicResults, closedGenericDeps, openGenericEntries)` → `ImmutableEquatableArray<ServiceRegistrationWithTags>`
 4. Combine with compilation info + MsBuildProperties
-5. `GroupRegistrationsForRegister` → `RegisterOutputModel` — pre-computes tag grouping, wrapper entry collection (Lazy/Func/KVP), feature filtering, async-init scanning, and per-registration decision flags into a cacheable data model. The output callback receives the pre-computed model and performs only `SourceWriter` formatting.
+5. `GroupRegistrationsForRegister` → `RegisterOutputModel` — pre-computes tag grouping, wrapper entry collection (Lazy/Func/KVP), feature filtering, async-init scanning, and `RegisterEntry` discriminated-union instances for each registration.
+    - `RegisterEntry` is an abstract base with `WriteRegistration(SourceWriter, RegisterWriteContext)`.
+    - Concrete register entry subtypes: `SimpleRegisterEntry`, `InstanceRegisterEntry`, `ForwardingRegisterEntry`, `FactoryRegisterEntry`, `InjectionRegisterEntry`, `AsyncInjectionRegisterEntry`, `DecoratorRegisterEntry`.
+    - `RegisterWriteContext` carries shared output context (currently `AsyncInitServiceTypeNames`).
+    - Wrapper entries `LazyRegistrationEntry`, `FuncRegistrationEntry`, and `KvpRegistrationEntry` each expose instance `WriteRegistration(SourceWriter)` methods.
+    The output callback performs orchestration and formatting only, delegating registration writing to entry instances.
 6. `GenerateRegisterOutput` → `{assemblyName}.ServiceRegistration.g.cs`
 
 Files: `CombineAndResolveClosedGenerics.cs`, `GroupRegistrationsForRegister.cs`, `RegisterOutputModel.cs`, `GenerateRegisterOutput.cs`
@@ -93,9 +98,119 @@ Files: `CombineAndResolveClosedGenerics.cs`, `GroupRegistrationsForRegister.cs`,
 
 1. `IocContainerAttribute` → `TransformContainer` → `ContainerModel?`
 2. `GroupRegistrationsForContainer(container, registrations, features)` → `ContainerWithGroups` — accepts `IocFeatures` and applies feature filtering (`FilterRegistrationForFeatures`) during group construction, so the output callback no longer performs feature filtering. `FilterContainerWithGroupsForFeatures` has been removed from the output stage.
-3. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs`
+    - The grouping phase pre-resolves all dependency lookups into `ResolvedDependency` instances and creates `ContainerEntry` discriminated-union subtypes. Each entry is self-contained: code generation is pure string formatting via polymorphic `Write*` methods, with no shared context parameter.
+    - This follows the same discriminated union pattern established in Stage 4 for `RegisterEntry`.
+3. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs` — orchestrates code emission by iterating pre-grouped `ContainerEntry` arrays and calling polymorphic `Write*` methods. No static dispatch helpers are used.
 
-Files: `TransformContainer.cs`, `GroupRegistrationsForContainer.cs`, `GenerateContainerOutput.cs`
+Files: `TransformContainer.cs`, `GroupRegistrationsForContainer.cs`, `ContainerEntry.cs`, `ResolvedDependency.cs`, `GenerateContainerOutput.cs`
+
+#### ContainerEntry Hierarchy
+
+`ContainerEntry` is an `abstract record class` with virtual/abstract `Write*` methods. Subtypes are organized into three categories: service entries (backed by `ServiceRegistrationModel`), wrapper entries (synthetic, no `ServiceRegistrationModel`), and collection entries.
+
+```tree
+ContainerEntry (abstract)
+├── ServiceContainerEntry (abstract, intermediate)
+│   ├── InstanceContainerEntry
+│   ├── EagerContainerEntry
+│   ├── LazyThreadSafeContainerEntry
+│   ├── TransientContainerEntry
+│   ├── AsyncContainerEntry
+│   └── AsyncTransientContainerEntry
+├── LazyWrapperContainerEntry
+├── FuncWrapperContainerEntry
+├── KvpWrapperContainerEntry
+└── CollectionContainerEntry
+```
+
+##### Write\* Method Contract
+
+| Method | Purpose | Default |
+|:-------|:--------|:--------|
+| `WriteField(SourceWriter)` | Emit field declarations (backing field, sync primitives) | No-op |
+| `WriteResolver(SourceWriter)` | Emit resolver method body | Abstract |
+| `WriteEagerInit(SourceWriter)` | Emit eager initialization call in constructor | No-op |
+| `WriteDisposal(SourceWriter, bool isAsync)` | Emit disposal code for the entry | No-op |
+| `WriteInit(SourceWriter)` | Emit wrapper field initialization in constructor | No-op |
+| `WriteCollectionResolver(SourceWriter)` | Emit collection array resolver method for wrapper types | No-op |
+
+##### Service Subtypes
+
+`ServiceContainerEntry` is an intermediate abstract class providing shared instance creation helpers (`WriteInstanceCreationWithInjection`, `WriteConstructorWithInjection`, `WriteDecoratorApplication`, `WriteAsyncInstanceCreationBody`). All service subtypes carry pre-resolved `ConstructorParameters`, `InjectionMembers`, and `Decorators`.
+
+| Subtype | Routing Condition | Has Field | Write\* Behavior |
+|:--------|:------------------|:----------|:-----------------|
+| `InstanceContainerEntry` | `Instance != null` (checked FIRST) | Yes (`FieldName`) | `WriteField`: field with instance assignment. `WriteResolver`: return field. |
+| `EagerContainerEntry` | Singleton/Scoped + eager resolve + not async | Yes (`FieldName`) | `WriteField`: nullable field. `WriteResolver`: null-check → create → assign → return. `WriteEagerInit`: `{ResolverMethodName}()`. `WriteDisposal`: dispose call. |
+| `LazyThreadSafeContainerEntry` | Singleton/Scoped + not eager + not async | Yes (`FieldName`) | `WriteField`: nullable field + sync primitive (Lock/SemaphoreSlim/SpinLock per `ThreadSafeStrategy`). `WriteResolver`: thread-safety wrapper (Lock/SemaphoreSlim/SpinLock/CompareExchange/None) around create → assign → return. `WriteDisposal`: dispose call + semaphore dispose. |
+| `TransientContainerEntry` | Transient + not async | No | `WriteResolver`: create → return (no caching). |
+| `AsyncContainerEntry` | Singleton/Scoped + async init | Yes (`FieldName`) | `WriteField`: `Task<T>` field + optional `SemaphoreSlim`. `WriteResolver`: async resolver method + create method. `WriteEagerInit`: `_ = {AsyncResolverMethodName}()`. `WriteDisposal`: dispose call + semaphore dispose. |
+| `AsyncTransientContainerEntry` | Transient + async init | No | `WriteResolver`: async create method. |
+
+##### Wrapper Subtypes
+
+Wrapper entries are synthetic (no backing `ServiceRegistrationModel`). They wrap resolved inner services.
+
+| Subtype | Properties | Write\* Behavior |
+|:--------|:-----------|:-----------------|
+| `LazyWrapperContainerEntry` | `InnerServiceTypeName`, `InnerImplTypeName`, `FieldName`, `InnerResolverMethodName`, `Key?` | `WriteField`: `Lazy<T>` field. `WriteInit`: constructor lambda initialization. `WriteCollectionResolver`: `GetAllLazy_{SafeName}` array resolver. |
+| `FuncWrapperContainerEntry` | `InnerServiceTypeName`, `InnerImplTypeName`, `FieldName`, `InnerResolverMethodName`, `Key?` | `WriteField`: `Func<T>` field. `WriteInit`: constructor lambda initialization. `WriteCollectionResolver`: `GetAllFunc_{SafeName}` array resolver. |
+| `KvpWrapperContainerEntry` | `KeyTypeName`, `ValueTypeName`, `KeyExpr`, `ResolverMethodName`, `KvpResolverMethodName` | `WriteResolver`: `KeyValuePair<K,V>` resolver method. |
+
+##### Collection Subtype
+
+| Subtype | Properties | Write\* Behavior |
+|:--------|:-----------|:-----------------|
+| `CollectionContainerEntry` | `ElementServiceTypeName`, `ArrayMethodName`, `ElementResolvers` (`ImmutableEquatableArray<ResolvedDependency>`) | `WriteResolver`: array resolver using collection literal `[elem1(), elem2(), ...]`. |
+
+#### ResolvedDependency Hierarchy
+
+`ResolvedDependency` is an `abstract record class` with `abstract FormatExpression(bool isOptional): string`. All dependency lookups are pre-resolved during the grouping phase (`GroupRegistrationsForContainer`) so that code generation is pure string formatting.
+
+| Subtype | Properties | `FormatExpression` Output |
+|:--------|:-----------|:--------------------------|
+| `DirectServiceDependency` | `ResolverMethodName` | `"{MethodName}()"` |
+| `CollectionDependency` | `ArrayMethodName` | `"{MethodName}()"` |
+| `LazyFieldReferenceDependency` | `FieldName` | Field name (pre-allocated `Lazy<T>` field) |
+| `LazyInlineDependency` | `ServiceTypeName`, `Inner` | `"new Lazy<T>(() => {inner}, ...ExecutionAndPublication)"` |
+| `FuncFieldReferenceDependency` | `FieldName` | Field name (pre-allocated `Func<T>` field) |
+| `FuncInlineDependency` | `ServiceTypeName`, `Inner` | `"new Func<T>(() => {inner})"` |
+| `MultiParamFuncDependency` | `ReturnTypeName`, `InputParameters`, `ConstructorParameters`, `InjectionMembers`, `Decorators`, `ImplementationTypeName?` | Multi-statement lambda: resolves parameters, constructs instance, applies decorators |
+| `TaskFromResultDependency` | `Inner`, `TypeName` | `"Task.FromResult((T){inner})"` |
+| `TaskAsyncDependency` | `AsyncMethodName`, `TypeName` | Async lambda expression: `((Func<Task<T>>)(async () => (T)(await {method}())))()`  |
+| `KvpInlineDependency` | `KeyType`, `ValueType`, `KeyExpr`, `Inner` | `"new KeyValuePair<K,V>({key}, {inner})"` |
+| `KvpResolverDependency` | `MethodName` | `"{MethodName}()"` |
+| `DictionaryResolverDependency` | `MethodName` | `"{MethodName}()"` |
+| `DictionaryFallbackDependency` | `KvpTypeName`, `IsKeyed`, `Key?` | `"GetServices<KVP>().ToDictionary()"` or keyed variant |
+| `ServiceProviderSelfDependency` | _(none)_ | `"this"` |
+| `FallbackProviderDependency` | `TypeName`, `Key?`, `IsOptional` | `"(T?)_fallbackProvider?.GetService(typeof(T))"` or required/keyed variants |
+| `CollectionFallbackDependency` | `ElementType`, `IsKeyed`, `Key?` | `"GetServices<T>()"` or keyed variant |
+| `ServiceKeyLiteralDependency` | `KeyType`, `KeyValue` | Literal key value for `[ServiceKey]` parameters |
+| `InstanceExpressionDependency` | `Expression` | Raw expression string (instance registrations, collection elements) |
+
+#### Supporting Types
+
+| Type | Kind | Purpose |
+|:-----|:-----|:--------|
+| `ResolvedConstructorParameter` | `readonly record struct` | `(ParameterData Parameter, ResolvedDependency Dependency, bool IsOptional)` — pre-resolved constructor argument |
+| `ResolvedInjectionMember` | `readonly record struct` | `(InjectionMemberModel Member, ResolvedDependency? Dependency, ImmutableEquatableArray<ResolvedDependency> ParameterDependencies)` — pre-resolved property/field/method injection |
+| `ResolvedDecorator` | `sealed record class` | `(ServiceRegistrationModel Decorator, ImmutableEquatableArray<ResolvedConstructorParameter> Parameters, ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers)` — pre-resolved decorator with constructor and injection members |
+
+#### Container Pipeline Architecture Pattern
+
+Both Register and Container pipelines follow the same discriminated union architecture:
+
+```text
+GroupRegistrations → create entry subtypes with pre-resolved data → polymorphic Write* methods
+```
+
+| Aspect | Register Pipeline (Stage 4) | Container Pipeline (Stage 5) |
+|:-------|:---------------------------|:-----------------------------|
+| Entry base | `RegisterEntry` (7 subtypes) | `ContainerEntry` (10 subtypes) |
+| Write method | `WriteRegistration(SourceWriter, RegisterWriteContext)` | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver` |
+| Dependency resolution | Inline in entry (simple expressions) | Pre-resolved `ResolvedDependency` hierarchy (18 subtypes) with `FormatExpression` |
+| Shared context | `RegisterWriteContext` (minimal) | None — all data pre-resolved into entry instances |
+| Intermediate class | _(none)_ | `ServiceContainerEntry` (shared instance creation helpers) |
 
 ### Key Data Models
 
@@ -112,9 +227,38 @@ All under `Models/`.
 | `DefaultSettingsMap` | `sealed class` | Fast default lookup by exact/generic signatures |
 | `ImportModuleResult` | `sealed record class` | Imported module payload |
 | `ContainerModel` | `sealed record class` | Container generation input |
+| `ContainerWithGroups` | `sealed record class` | Combined container + grouped registrations for pipeline caching |
+| `ContainerRegistrationGroups` | `sealed record class` | Pre-computed registration groups with `ContainerEntry` arrays (`SingletonEntries`, `ScopedEntries`, `TransientEntries`, `WrapperEntries`, `CollectionEntries`) |
 | `RegisterOutputModel` | `sealed record class` | Top-level cacheable output model for Register pipeline — contains `MethodBaseName`, `RootNamespace`, `AssemblyName`, `TagGroups`, and optional `AsyncInitServiceTypes` |
-| `RegisterTagGroup` | `sealed record class` | Per-tag-group pre-computed output data — contains sorted `TagKey`, `Registrations` (as `RegisterOutputEntry`), and collected `LazyEntries`/`FuncEntries`/`KvpEntries` |
-| `RegisterOutputEntry` | `readonly record struct` | Pre-computed per-registration decision flags (`HasFactory`, `HasInstance`, `HasClosedDecorators`, `NeedsFactoryConstruction`, etc.) to avoid re-computation in the output callback |
+| `RegisterTagGroup` | `sealed record class` | Per-tag-group pre-computed output data — contains sorted tags, `Registrations` (as `RegisterEntry`), and collected `LazyEntries`/`FuncEntries`/`KvpEntries` |
+| `RegisterWriteContext` | `readonly record struct` | Shared register output context passed to each entry `WriteRegistration` call (currently `AsyncInitServiceTypeNames`) |
+| `RegisterEntry` | `abstract record class` | Base register output model with `WriteRegistration(SourceWriter, RegisterWriteContext)` |
+| `SimpleRegisterEntry` | `sealed record class` | Simple/open-generic registration writer |
+| `InstanceRegisterEntry` | `sealed record class` | Static instance registration writer |
+| `ForwardingRegisterEntry` | `sealed record class` | Service-type forwarding registration writer (including keyed and async-init forwarding forms) |
+| `FactoryRegisterEntry` | `sealed record class` | Factory method registration writer, including additional parameter resolution |
+| `InjectionRegisterEntry` | `record class` | Constructor/property/method injection registration writer |
+| `AsyncInjectionRegisterEntry` | `sealed record class` | Async injection registration writer (`Task<T>` registration path) |
+| `DecoratorRegisterEntry` | `sealed record class` | Decorator chain registration writer |
+| `LazyRegistrationEntry` | `readonly record struct` | Wrapper registration model with instance `WriteRegistration(SourceWriter)` |
+| `FuncRegistrationEntry` | `readonly record struct` | Wrapper registration model with instance `WriteRegistration(SourceWriter)` |
+| `KvpRegistrationEntry` | `readonly record struct` | Wrapper registration model with instance `WriteRegistration(SourceWriter)` |
+| `ContainerEntry` | `abstract record class` | Base container output model with polymorphic `Write*` methods (`WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`) |
+| `ServiceContainerEntry` | `abstract record class` | Intermediate container entry with shared instance creation helpers — 6 service subtypes |
+| `InstanceContainerEntry` | `sealed record class` | Pre-provided instance container entry |
+| `EagerContainerEntry` | `sealed record class` | Singleton/scoped eager resolve container entry |
+| `LazyThreadSafeContainerEntry` | `sealed record class` | Singleton/scoped lazy resolve with thread-safety strategy |
+| `TransientContainerEntry` | `sealed record class` | Transient container entry (no caching) |
+| `AsyncContainerEntry` | `sealed record class` | Singleton/scoped async-init container entry |
+| `AsyncTransientContainerEntry` | `sealed record class` | Transient async-init container entry |
+| `LazyWrapperContainerEntry` | `sealed record class` | `Lazy<T>` wrapper container entry |
+| `FuncWrapperContainerEntry` | `sealed record class` | `Func<T>` wrapper container entry |
+| `KvpWrapperContainerEntry` | `sealed record class` | `KeyValuePair<K,V>` wrapper container entry |
+| `CollectionContainerEntry` | `sealed record class` | Array resolver container entry for `IEnumerable<T>` |
+| `ResolvedDependency` | `abstract record class` | Base dependency model with `FormatExpression(bool isOptional): string` — 18 subtypes |
+| `ResolvedConstructorParameter` | `readonly record struct` | Pre-resolved constructor parameter with dependency |
+| `ResolvedInjectionMember` | `readonly record struct` | Pre-resolved injection member with dependency |
+| `ResolvedDecorator` | `sealed record class` | Pre-resolved decorator with constructor parameters and injection members |
 
 ## Spec Index
 
@@ -441,8 +585,11 @@ src/SourceGen.Ioc.SourceGenerator/
 │   ├── ProcessSingleRegistration.cs       # Apply defaults to individual registrations
 │   ├── CombineAndResolveClosedGenerics.cs # Combine results & resolve closed generics from open generics
 │   ├── IServiceProviderInvocations.cs     # Collect IServiceProvider invocations
-│   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation
+│   ├── GroupRegistrationsForContainer.cs  # Group registrations for container generation (creates ContainerEntry subtypes with pre-resolved dependencies)
 │   ├── Generate*Output.cs                 # Code emitters (Register, Container)
+│   ├── ContainerEntry.cs                  # ContainerEntry discriminated union (10 subtypes) with Write* methods
+│   ├── ResolvedDependency.cs              # ResolvedDependency hierarchy (18 subtypes) with FormatExpression
+│   ├── RegisterEntry.cs                   # RegisterEntry discriminated union (7 subtypes) with WriteRegistration
 │   ├── LazyRegistrationHelper.cs          # Lazy wrapper registration helper
 │   ├── FuncRegistrationHelper.cs          # Func wrapper registration helper
 │   ├── KvpRegistrationHelper.cs           # KeyValuePair registration helper

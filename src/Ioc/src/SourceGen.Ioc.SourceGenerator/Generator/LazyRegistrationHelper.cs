@@ -15,7 +15,18 @@ partial class IocSourceGenerator
         string InnerServiceTypeName,
         string ImplementationTypeName,
         ServiceLifetime Lifetime,
-        ImmutableEquatableArray<string> Tags);
+        ImmutableEquatableArray<string> Tags)
+    {
+        public void WriteRegistration(SourceWriter writer)
+        {
+            var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
+            var lifetime = Lifetime.Name;
+            var resolveCall = $"sp.{GetRequiredService}<{ImplementationTypeName}>()";
+            writer.WriteLine(
+                $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
+                $"new {wrapperTypeName}(() => {resolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));");
+        }
+    }
 
     /// <summary>
     /// Collects Lazy standalone registration entries needed by consumer dependencies.
@@ -137,12 +148,7 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
-            var wrapperTypeName = $"global::System.Lazy<{entry.InnerServiceTypeName}>";
-            var lifetime = entry.Lifetime.Name;
-            var resolveCall = $"sp.{GetRequiredService}<{entry.ImplementationTypeName}>()";
-            writer.WriteLine(
-                $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
-                $"new {wrapperTypeName}(() => {resolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));");
+            entry.WriteRegistration(writer);
         }
     }
 
@@ -205,72 +211,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes Lazy field declarations and array resolvers for container generation.
-    /// </summary>
-    private static void WriteContainerLazyFields(
-        SourceWriter writer,
-        ImmutableEquatableArray<ContainerLazyEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine("// Lazy wrapper fields");
-        writer.WriteLine();
-
-        foreach(var entry in entries)
-        {
-            var wrapperTypeName = $"global::System.Lazy<{entry.InnerServiceTypeName}>";
-            writer.WriteLine($"private readonly {wrapperTypeName} {entry.FieldName};");
-        }
-        writer.WriteLine();
-
-        var grouped = entries
-            .GroupBy(static e => e.InnerServiceTypeName)
-            .ToList();
-
-        foreach(var group in grouped)
-        {
-            var innerServiceTypeName = group.Key;
-            var wrapperTypeName = $"global::System.Lazy<{innerServiceTypeName}>";
-            var arrayMethodName = GetLazyArrayResolverMethodName(innerServiceTypeName);
-
-            writer.WriteLine($"private {wrapperTypeName}[] {arrayMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine("[");
-            writer.Indentation++;
-
-            foreach(var entry in group)
-            {
-                writer.WriteLine($"{entry.FieldName},");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("];");
-            writer.Indentation--;
-            writer.WriteLine();
-        }
-    }
-
-    /// <summary>
-    /// Writes field initialization statements for Lazy wrapper fields.
-    /// </summary>
-    private static void WriteContainerLazyFieldInitializations(
-        SourceWriter writer,
-        ImmutableEquatableArray<ContainerLazyEntry> entries)
-    {
-        if(entries.Length == 0)
-            return;
-
-        writer.WriteLine();
-        writer.WriteLine("// Initialize Lazy wrapper fields");
-        foreach(var entry in entries)
-        {
-            var wrapperTypeName = $"global::System.Lazy<{entry.InnerServiceTypeName}>";
-            writer.WriteLine($"{entry.FieldName} = new {wrapperTypeName}(() => {entry.ResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
-        }
-    }
-
-    /// <summary>
     /// Writes _localResolvers entries for Lazy wrapper services.
     /// </summary>
     private static void WriteContainerLazyLocalResolverEntries(
@@ -313,5 +253,72 @@ partial class IocSourceGenerator
     {
         var safeInnerType = GetSafeIdentifier(innerServiceTypeName);
         return $"GetAllLazy_{safeInnerType}_Array";
+    }
+
+    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateLazyWrapperContainerEntries(
+        ImmutableEquatableArray<ContainerLazyEntry> entries,
+        ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> byServiceTypeAndKey)
+    {
+        if(entries.Length == 0)
+            return [];
+
+        var collectionFieldsByServiceType = entries
+            .GroupBy(static e => e.InnerServiceTypeName)
+            .ToDictionary(
+                static g => g.Key,
+                static g => g.Select(static e => e.FieldName).ToImmutableEquatableArray(),
+                StringComparer.Ordinal);
+
+        var collectionEmitterFieldByServiceType = entries
+            .GroupBy(static e => e.InnerServiceTypeName)
+            .ToDictionary(
+                static g => g.Key,
+                static g => g.Last().FieldName,
+                StringComparer.Ordinal);
+
+        var cachedByResolver = new Dictionary<string, CachedRegistration>(StringComparer.Ordinal);
+        foreach(var registrationGroup in byServiceTypeAndKey.Values)
+        {
+            foreach(var cached in registrationGroup)
+            {
+                if(!cachedByResolver.ContainsKey(cached.ResolverMethodName))
+                {
+                    cachedByResolver[cached.ResolverMethodName] = cached;
+                }
+            }
+        }
+
+        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Length);
+
+        foreach(var entry in entries)
+        {
+            var innerImplTypeName = entry.InnerServiceTypeName;
+            string? key = null;
+
+            if(cachedByResolver.TryGetValue(entry.ResolverMethodName, out var cached))
+            {
+                innerImplTypeName = cached.Registration.ImplementationType.Name;
+                key = cached.Registration.Key;
+            }
+
+            var emitCollectionResolver = string.Equals(
+                entry.FieldName,
+                collectionEmitterFieldByServiceType[entry.InnerServiceTypeName],
+                StringComparison.Ordinal);
+            var collectionFieldNames = emitCollectionResolver
+                ? collectionFieldsByServiceType[entry.InnerServiceTypeName]
+                : [];
+
+            wrapperEntries.Add(new LazyWrapperContainerEntry(
+                entry.InnerServiceTypeName,
+                innerImplTypeName,
+                entry.FieldName,
+                entry.ResolverMethodName,
+                key,
+                emitCollectionResolver,
+                collectionFieldNames));
+        }
+
+        return wrapperEntries.ToImmutableEquatableArray();
     }
 }

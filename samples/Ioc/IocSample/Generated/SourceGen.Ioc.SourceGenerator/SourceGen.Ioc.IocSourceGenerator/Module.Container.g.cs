@@ -38,16 +38,16 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _iocSample_Shared_SharedModule = new global::IocSample.Shared.SharedModule(fallbackProvider);
 
         // Initialize eager singletons
-        _iocSample_TestQueryHandler = GetIocSample_TestQueryHandler();
-        _iocSample_Consumer = GetIocSample_Consumer();
-        _iocSample_External = GetIocSample_External();
-        _iocSample_GenericRequestHandler_IocSample_Entity_ = GetIocSample_GenericRequestHandler_IocSample_Entity_();
-        _iocSample_GenericRequestHandler_IocSample_Entity3_ = GetIocSample_GenericRequestHandler_IocSample_Entity3_();
-        _iocSample_GenericRequestHandler_IocSample_Entity2_ = GetIocSample_GenericRequestHandler_IocSample_Entity2_();
-        _iocSample_GenericRequestHandler2_IocSample_Entity3_ = GetIocSample_GenericRequestHandler2_IocSample_Entity3_();
-        _iocSample_GenericRequestHandler2_IocSample_Entity_ = GetIocSample_GenericRequestHandler2_IocSample_Entity_();
-        _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create = GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create();
-        _iocSample_GenericRequestHandler2_IocSample_Entity2_ = GetIocSample_GenericRequestHandler2_IocSample_Entity2_();
+        GetIocSample_TestQueryHandler();
+        GetIocSample_Consumer();
+        GetIocSample_External();
+        GetIocSample_GenericRequestHandler_IocSample_Entity_();
+        GetIocSample_GenericRequestHandler_IocSample_Entity3_();
+        GetIocSample_GenericRequestHandler_IocSample_Entity2_();
+        GetIocSample_GenericRequestHandler2_IocSample_Entity3_();
+        GetIocSample_GenericRequestHandler2_IocSample_Entity_();
+        GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create();
+        GetIocSample_GenericRequestHandler2_IocSample_Entity2_();
 
         // Initialize Lazy wrapper fields
         _lazy_IocSample_IWrapperService_int__IocSample_WrapperService_int_ = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetIocSample_WrapperService_int_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
@@ -72,6 +72,9 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create = parent._iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
         _iocSample_GenericRequestHandler2_IocSample_Entity2_ = parent._iocSample_GenericRequestHandler2_IocSample_Entity2_;
         _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)parent._iocSample_Shared_SharedModule.CreateScope().ServiceProvider;
+
+        // Initialize eager scoped services
+        _ = GetIocSample_AsyncDependencyAsync();
 
         // Initialize Lazy wrapper fields
         _lazy_IocSample_IWrapperService_int__IocSample_WrapperService_int_ = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetIocSample_WrapperService_int_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);

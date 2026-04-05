@@ -1,4 +1,6 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+﻿using ContainerEntryModel = SourceGen.Ioc.IocSourceGenerator.ContainerEntry;
+
+namespace SourceGen.Ioc.SourceGenerator.Models;
 
 /// <summary>
 /// Combined container and grouped registrations for pipeline caching.
@@ -15,37 +17,31 @@ internal sealed record ContainerWithGroups(
 /// </summary>
 /// <param name="ByServiceTypeAndKey">Registrations grouped by service type and key for efficient lookup.</param>
 /// <param name="AllServiceTypes">All unique service type names for IsService checks.</param>
-/// <param name="Singletons">Singleton registrations with pre-computed names.</param>
-/// <param name="Scoped">Scoped registrations with pre-computed names.</param>
-/// <param name="Transients">Transient registrations with pre-computed names.</param>
-/// <param name="EagerSingletons">Singleton registrations that should be eagerly resolved.</param>
-/// <param name="EagerScoped">Scoped registrations that should be eagerly resolved.</param>
 /// <param name="LazyEntries">Pre-computed Lazy wrapper entries for container code generation.</param>
 /// <param name="FuncEntries">Pre-computed Func wrapper entries for container code generation.</param>
 /// <param name="KvpEntries">Pre-computed KeyValuePair entries for container code generation.</param>
 /// <param name="HasOpenGenerics">Whether there are any open generic registrations.</param>
 /// <param name="HasKeyedServices">Whether there are any keyed service registrations.</param>
 /// <param name="CollectionServiceTypes">Service types with multiple implementations for IEnumerable resolution.</param>
-/// <param name="CollectionRegistrations">Pre-computed registrations for each collection service type.</param>
-/// <param name="ReversedSingletonsForDisposal">Singletons in reverse order for disposal (excluding open generics).</param>
-/// <param name="ReversedScopedForDisposal">Scoped services in reverse order for disposal (excluding open generics).</param>
+/// <param name="SingletonEntries">Parallel service entry model for singleton registrations.</param>
+/// <param name="ScopedEntries">Parallel service entry model for scoped registrations.</param>
+/// <param name="TransientEntries">Parallel service entry model for transient registrations.</param>
+/// <param name="WrapperEntries">Parallel wrapper entry model for Lazy/Func/KVP registrations.</param>
+/// <param name="CollectionEntries">Parallel collection entry model for IEnumerable and related wrappers.</param>
 internal sealed record ContainerRegistrationGroups(
     ImmutableEquatableDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<CachedRegistration>> ByServiceTypeAndKey,
     ImmutableEquatableSet<string> AllServiceTypes,
-    ImmutableEquatableArray<CachedRegistration> Singletons,
-    ImmutableEquatableArray<CachedRegistration> Scoped,
-    ImmutableEquatableArray<CachedRegistration> Transients,
-    ImmutableEquatableArray<CachedRegistration> EagerSingletons,
-    ImmutableEquatableArray<CachedRegistration> EagerScoped,
     ImmutableEquatableArray<ContainerLazyEntry> LazyEntries,
     ImmutableEquatableArray<ContainerFuncEntry> FuncEntries,
     ImmutableEquatableArray<ContainerKvpEntry> KvpEntries,
     bool HasOpenGenerics,
     bool HasKeyedServices,
     ImmutableEquatableArray<string> CollectionServiceTypes,
-    ImmutableEquatableDictionary<string, ImmutableEquatableArray<CachedRegistration>> CollectionRegistrations,
-    ImmutableEquatableArray<CachedRegistration> ReversedSingletonsForDisposal,
-    ImmutableEquatableArray<CachedRegistration> ReversedScopedForDisposal);
+    ImmutableEquatableArray<ContainerEntryModel> SingletonEntries,
+    ImmutableEquatableArray<ContainerEntryModel> ScopedEntries,
+    ImmutableEquatableArray<ContainerEntryModel> TransientEntries,
+    ImmutableEquatableArray<ContainerEntryModel> WrapperEntries,
+    ImmutableEquatableArray<ContainerEntryModel> CollectionEntries);
 
 /// <summary>
 /// A registration with pre-computed field and method names for efficient code generation.
