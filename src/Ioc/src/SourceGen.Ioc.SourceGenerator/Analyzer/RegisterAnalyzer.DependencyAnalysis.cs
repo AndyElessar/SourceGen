@@ -1,6 +1,3 @@
-using System.Collections.Concurrent;
-using Microsoft.CodeAnalysis.Diagnostics;
-
 namespace SourceGen.Ioc;
 
 /// <summary>

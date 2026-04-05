@@ -1,10 +1,4 @@
-#nullable enable
-
 using static SourceGen.Ioc.SourceGenerator.Models.Constants;
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace SourceGen.Ioc;
 
