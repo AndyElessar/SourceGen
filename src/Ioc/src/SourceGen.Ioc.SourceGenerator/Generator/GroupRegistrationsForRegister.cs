@@ -16,12 +16,11 @@ partial class IocSourceGenerator
             ? GetSafeIdentifier(customIocName!)
             : GetSafeIdentifier(assemblyName);
 
-        var tagKeyCache = new Dictionary<ImmutableEquatableArray<string>, string>();
-        var sortedTagsCache = new Dictionary<string, ImmutableEquatableArray<string>>(StringComparer.Ordinal);
+        var canonicalTagsCache = new Dictionary<ImmutableEquatableArray<string>, ImmutableEquatableArray<string>>();
         foreach(var regWithTags in registrations)
         {
             var tags = regWithTags.Tags;
-            if(tagKeyCache.ContainsKey(tags))
+            if(canonicalTagsCache.ContainsKey(tags))
             {
                 continue;
             }
@@ -29,26 +28,23 @@ partial class IocSourceGenerator
             if(tags.Length > 0)
             {
                 var sortedTags = tags.OrderBy(static t => t, StringComparer.Ordinal).ToImmutableEquatableArray();
-                var key = string.Join(",", sortedTags);
-                tagKeyCache[tags] = key;
-                sortedTagsCache[key] = sortedTags;
+                canonicalTagsCache[tags] = sortedTags;
             }
             else
             {
-                tagKeyCache[tags] = string.Empty;
-                sortedTagsCache[string.Empty] = [];
+                canonicalTagsCache[tags] = [];
             }
         }
 
         var shouldFilterInjection = !IocFeaturesHelper.HasAllInjectionFeatures(features);
-        var groupedRegistrations = new Dictionary<string, List<RegisterEntry>>(StringComparer.Ordinal);
+        var groupedRegistrations = new Dictionary<ImmutableEquatableArray<string>, List<RegisterEntry>>();
 
         foreach(var regWithTags in registrations)
         {
             var registration = shouldFilterInjection
                 ? FilterRegistrationForFeatures(regWithTags.Registration, features)
                 : regWithTags.Registration;
-            var tagKey = tagKeyCache[regWithTags.Tags];
+            var tagKey = canonicalTagsCache[regWithTags.Tags];
 
             if(!groupedRegistrations.TryGetValue(tagKey, out var group))
             {
@@ -65,9 +61,9 @@ partial class IocSourceGenerator
             group.Add(entry);
         }
 
-        var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations), tagKeyCache);
-        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations), tagKeyCache);
-        var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations), tagKeyCache);
+        var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations), canonicalTagsCache);
+        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations), canonicalTagsCache);
+        var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations), canonicalTagsCache);
 
         var asyncInitServiceTypeSet = new HashSet<string>(StringComparer.Ordinal);
         foreach(var group in groupedRegistrations.Values)
@@ -87,14 +83,14 @@ partial class IocSourceGenerator
             : null;
 
         var tagGroups = groupedRegistrations
-            .OrderBy(static kvp => kvp.Key, StringComparer.Ordinal)
+            .OrderBy(static kvp => kvp.Key, TagArrayComparer.Instance)
             .Select(kvp =>
             {
-                var tags = sortedTagsCache[kvp.Key];
+                var tags = kvp.Key;
 
-                lazyByTagKey.TryGetValue(kvp.Key, out var lazyEntries);
-                funcByTagKey.TryGetValue(kvp.Key, out var funcEntries);
-                kvpByTagKey.TryGetValue(kvp.Key, out var kvpEntries);
+                lazyByTagKey.TryGetValue(tags, out var lazyEntries);
+                funcByTagKey.TryGetValue(tags, out var funcEntries);
+                kvpByTagKey.TryGetValue(tags, out var kvpEntries);
 
                 return new RegisterTagGroup(
                     tags,
@@ -113,14 +109,14 @@ partial class IocSourceGenerator
             asyncInitServiceTypes);
     }
 
-    private static Dictionary<string, List<LazyRegistrationEntry>> GroupLazyEntriesByTagKey(
+    private static Dictionary<ImmutableEquatableArray<string>, List<LazyRegistrationEntry>> GroupLazyEntriesByTagKey(
         List<LazyRegistrationEntry> entries,
-        Dictionary<ImmutableEquatableArray<string>, string> tagKeyCache)
+        Dictionary<ImmutableEquatableArray<string>, ImmutableEquatableArray<string>> canonicalTagsCache)
     {
-        var grouped = new Dictionary<string, List<LazyRegistrationEntry>>(StringComparer.Ordinal);
+        var grouped = new Dictionary<ImmutableEquatableArray<string>, List<LazyRegistrationEntry>>();
         foreach(var entry in entries)
         {
-            var tagKey = tagKeyCache[entry.Tags];
+            var tagKey = canonicalTagsCache[entry.Tags];
             if(!grouped.TryGetValue(tagKey, out var list))
             {
                 list = [];
@@ -133,14 +129,14 @@ partial class IocSourceGenerator
         return grouped;
     }
 
-    private static Dictionary<string, List<FuncRegistrationEntry>> GroupFuncEntriesByTagKey(
+    private static Dictionary<ImmutableEquatableArray<string>, List<FuncRegistrationEntry>> GroupFuncEntriesByTagKey(
         List<FuncRegistrationEntry> entries,
-        Dictionary<ImmutableEquatableArray<string>, string> tagKeyCache)
+        Dictionary<ImmutableEquatableArray<string>, ImmutableEquatableArray<string>> canonicalTagsCache)
     {
-        var grouped = new Dictionary<string, List<FuncRegistrationEntry>>(StringComparer.Ordinal);
+        var grouped = new Dictionary<ImmutableEquatableArray<string>, List<FuncRegistrationEntry>>();
         foreach(var entry in entries)
         {
-            var tagKey = tagKeyCache[entry.Tags];
+            var tagKey = canonicalTagsCache[entry.Tags];
             if(!grouped.TryGetValue(tagKey, out var list))
             {
                 list = [];
@@ -153,14 +149,14 @@ partial class IocSourceGenerator
         return grouped;
     }
 
-    private static Dictionary<string, List<KvpRegistrationEntry>> GroupKvpEntriesByTagKey(
+    private static Dictionary<ImmutableEquatableArray<string>, List<KvpRegistrationEntry>> GroupKvpEntriesByTagKey(
         List<KvpRegistrationEntry> entries,
-        Dictionary<ImmutableEquatableArray<string>, string> tagKeyCache)
+        Dictionary<ImmutableEquatableArray<string>, ImmutableEquatableArray<string>> canonicalTagsCache)
     {
-        var grouped = new Dictionary<string, List<KvpRegistrationEntry>>(StringComparer.Ordinal);
+        var grouped = new Dictionary<ImmutableEquatableArray<string>, List<KvpRegistrationEntry>>();
         foreach(var entry in entries)
         {
-            var tagKey = tagKeyCache[entry.Tags];
+            var tagKey = canonicalTagsCache[entry.Tags];
             if(!grouped.TryGetValue(tagKey, out var list))
             {
                 list = [];
@@ -242,5 +238,23 @@ partial class IocSourceGenerator
         }
 
         return new SimpleRegisterEntry(registration);
+    }
+
+    private sealed class TagArrayComparer : IComparer<ImmutableEquatableArray<string>>
+    {
+        public static readonly TagArrayComparer Instance = new();
+
+        public int Compare(ImmutableEquatableArray<string> a, ImmutableEquatableArray<string> b)
+        {
+            var minLength = Math.Min(a.Length, b.Length);
+            for(var i = 0; i < minLength; i++)
+            {
+                var cmp = StringComparer.Ordinal.Compare(a[i], b[i]);
+                if(cmp != 0)
+                    return cmp;
+            }
+
+            return a.Length.CompareTo(b.Length);
+        }
     }
 }

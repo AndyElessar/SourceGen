@@ -98,7 +98,7 @@ partial class IocSourceGenerator
         {
             GenerateClosedGenericFactoryRegistrations(
                 openGenericIndex,
-                closedGenericDependencies ?? new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal),
+                closedGenericDependencies,
                 registrations,
                 ct);
         }
@@ -112,7 +112,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void GenerateClosedGenericFactoryRegistrations(
         Dictionary<string, List<OpenGenericRegistrationInfo>> openGenericIndex,
-        Dictionary<string, ClosedGenericDependency> closedGenericDependencies,
+        Dictionary<string, ClosedGenericDependency>? closedGenericDependencies,
         List<ServiceRegistrationWithTags> registrations,
         CancellationToken ct)
     {
@@ -135,7 +135,9 @@ partial class IocSourceGenerator
         }
 
         // Use a queue for iterative processing of dependencies
-        var pendingDependencies = new Queue<ClosedGenericDependency>(closedGenericDependencies.Values);
+        var pendingDependencies = closedGenericDependencies is not null
+            ? new Queue<ClosedGenericDependency>(closedGenericDependencies.Values)
+            : new Queue<ClosedGenericDependency>();
         var processedDependencies = new HashSet<string>(StringComparer.Ordinal);
 
         // No dependencies to process - nothing to do

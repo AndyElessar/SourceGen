@@ -119,11 +119,12 @@ partial class IocSourceGenerator
             // Always register the implementation type itself
             registration.ImplementationType
         };
+        var addedTypeNames = new HashSet<string>(StringComparer.Ordinal) { registration.ImplementationType.Name };
 
         // Add explicit service types from registration
         foreach(var st in registration.ServiceTypes)
         {
-            if(!serviceTypesToRegister.Contains(st))
+            if(addedTypeNames.Add(st.Name))
             {
                 serviceTypesToRegister.Add(st);
             }
@@ -134,7 +135,7 @@ partial class IocSourceGenerator
         {
             foreach(var st in additionalServiceTypesFromDefaults)
             {
-                if(!serviceTypesToRegister.Contains(st))
+                if(addedTypeNames.Add(st.Name))
                 {
                     serviceTypesToRegister.Add(st);
                 }
@@ -146,7 +147,7 @@ partial class IocSourceGenerator
         {
             foreach(var iface in registration.AllInterfaces)
             {
-                if(!serviceTypesToRegister.Contains(iface))
+                if(addedTypeNames.Add(iface.Name))
                 {
                     serviceTypesToRegister.Add(iface);
                 }
@@ -158,7 +159,7 @@ partial class IocSourceGenerator
         {
             foreach(var baseClass in registration.AllBaseClasses)
             {
-                if(!serviceTypesToRegister.Contains(baseClass))
+                if(addedTypeNames.Add(baseClass.Name))
                 {
                     serviceTypesToRegister.Add(baseClass);
                 }

@@ -4,14 +4,15 @@ partial class IocSourceGenerator
 {
     private static RegistrationData? TransformRegister(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         if(ctx.TargetSymbol is not INamedTypeSymbol typeSymbol)
             return null;
 
-        var attributeData = ctx.Attributes.FirstOrDefault();
-        if(attributeData == null)
+        if(ctx.Attributes.Length == 0)
             return null;
 
-        return ExtractRegistrationData(typeSymbol, attributeData, ctx.SemanticModel);
+        return ExtractRegistrationData(typeSymbol, ctx.Attributes[0], ctx.SemanticModel);
     }
 
     /// <summary>
@@ -20,20 +21,23 @@ partial class IocSourceGenerator
     /// </summary>
     private static RegistrationData? TransformRegisterGeneric(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         if(ctx.TargetSymbol is not INamedTypeSymbol typeSymbol)
             return null;
 
-        var attributeData = ctx.Attributes.FirstOrDefault();
-        if(attributeData == null)
+        if(ctx.Attributes.Length == 0)
             return null;
 
-        return ExtractRegistrationDataFromGenericAttribute(typeSymbol, attributeData, ctx.SemanticModel);
+        return ExtractRegistrationDataFromGenericAttribute(typeSymbol, ctx.Attributes[0], ctx.SemanticModel);
     }
 
     private static IEnumerable<RegistrationData> TransformRegisterFor(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
         foreach(var attr in ctx.Attributes)
         {
+            ct.ThrowIfCancellationRequested();
+
             if(attr.ConstructorArguments.Length == 0)
                 continue;
             if(attr.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
@@ -53,6 +57,8 @@ partial class IocSourceGenerator
     {
         foreach(var attr in ctx.Attributes)
         {
+            ct.ThrowIfCancellationRequested();
+
             var attrClass = attr.AttributeClass;
             if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
                 continue;
