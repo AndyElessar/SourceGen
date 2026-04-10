@@ -3,7 +3,7 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
-    /// Shared helper to construct an instance and apply property/field/method injection with conditional handling.
+    /// Shared helper to construct an instance and apply property/field/method injection.
     /// Supports decorator scenarios via service-parameter detection and generic type substitution.
     /// </summary>
     private static void WriteConstructInstanceWithInjection(
@@ -22,7 +22,7 @@ partial class IocSourceGenerator
         bool isAsyncMode = false)
     {
         var ctorParams = constructorParams ?? [];
-        var constructorParamEntries = new List<(string Name, string? Value, bool NeedsConditional)>(ctorParams.Length);
+        var constructorParamEntries = new List<(string Name, string? Value)>(ctorParams.Length);
         int paramIndex = 0;
 
         foreach(var param in ctorParams)
@@ -30,74 +30,35 @@ partial class IocSourceGenerator
             var resolvedTypeName = ctorTypeNameResolver is not null ? ctorTypeNameResolver(param.Type) : param.Type.Name;
             if(decoratedPrevVar is not null && serviceTypeNames is not null && IsServiceTypeParameter(param.Type, resolvedTypeName, serviceTypeNames))
             {
-                constructorParamEntries.Add((param.Name, decoratedPrevVar, false));
+                constructorParamEntries.Add((param.Name, decoratedPrevVar));
             }
             else
             {
                 var varName = decoratedPrevVar is not null ? $"{instanceVarName}_p{paramIndex}" : $"p{paramIndex}";
                 var resolvedVar = ResolveParamAndEmitVar(writer, param, varName, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
-                constructorParamEntries.Add((param.Name, resolvedVar, false));
+                constructorParamEntries.Add((param.Name, resolvedVar));
                 paramIndex++;
             }
         }
 
-        if(constructorParamEntries.Any(e => e.NeedsConditional))
-        {
-            var conditionalParams = constructorParamEntries.Where(e => e.NeedsConditional && e.Value is not null).ToArray();
-            var initializerPart = "";
-            if(conditionalParams.Length == 1)
-            {
-                var condParam = conditionalParams[0];
-                var withArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? e.Value : e.Value, false))]);
-                var withoutArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false))]);
-                var withInvocation = BuildConstructorInvocation(implTypeName, withArgs, initializerPart);
-                var withoutInvocation = BuildConstructorInvocation(implTypeName, withoutArgs, initializerPart);
-                writer.WriteLine($"var {instanceVarName} = {condParam.Value} is not null ? {withInvocation} : {withoutInvocation};");
-            }
-            else
-            {
-                var conditions = conditionalParams.Select(p => $"{p.Value} is not null").ToArray();
-                var allCondition = string.Join(" && ", conditions);
-                writer.WriteLine($"{implTypeName} {instanceVarName};");
-                writer.WriteLine($"if ({allCondition})");
-                writer.WriteLine("{");
-                writer.Indentation++;
-                var allArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.Value, false))]);
-                var allInvocation = BuildConstructorInvocation(implTypeName, allArgs, initializerPart);
-                writer.WriteLine($"{instanceVarName} = {allInvocation};");
-                writer.Indentation--;
-                writer.WriteLine("}");
-                writer.WriteLine("else");
-                writer.WriteLine("{");
-                writer.Indentation++;
-                var fallbackArgs = BuildArgumentListFromEntries([.. constructorParamEntries.Select(e => (e.Name, e.NeedsConditional ? (string?)null : e.Value, false))]);
-                var fallbackInvocation = BuildConstructorInvocation(implTypeName, fallbackArgs, initializerPart);
-                writer.WriteLine($"{instanceVarName} = {fallbackInvocation};");
-                writer.Indentation--;
-                writer.WriteLine("}");
-            }
-        }
-        else
-        {
-            EmitConstruction(
-                writer,
-                instanceVarName,
-                implTypeName,
-                constructorParamEntries,
-                injectionMembers,
-                isKeyedRegistration,
-                registrationKey,
-                memberTypeNameResolver,
-                asyncInitServiceTypeNames,
-                isAsyncMode);
-        }
+        EmitConstruction(
+            writer,
+            instanceVarName,
+            implTypeName,
+            constructorParamEntries,
+            injectionMembers,
+            isKeyedRegistration,
+            registrationKey,
+            memberTypeNameResolver,
+            asyncInitServiceTypeNames,
+            isAsyncMode);
     }
 
     private static void EmitConstruction(
         SourceWriter writer,
         string instanceVarName,
         string implTypeName,
-        List<(string Name, string? Value, bool NeedsConditional)> constructorParamEntries,
+        List<(string Name, string? Value)> constructorParamEntries,
         ImmutableEquatableArray<InjectionMemberData> injectionMembers,
         bool isKeyedRegistration,
         string? registrationKey,
@@ -105,9 +66,7 @@ partial class IocSourceGenerator
         ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null,
         bool isAsyncMode = false)
     {
-        int pfCount = injectionMembers.Count(m => m.MemberType is InjectionMemberType.Property or InjectionMemberType.Field);
-        var preProps = pfCount > 0 ? new (string Name, string ParamVar)[pfCount] : [];
-        int idx = 0;
+        List<string> preProps = [];
         int pfIdxCounter = 0;
         foreach(var m in injectionMembers)
         {
@@ -119,7 +78,7 @@ partial class IocSourceGenerator
             var mtName = mt is null ? "object" : (memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name);
             bool hasNonNullDefault = m.HasDefaultValue && !m.DefaultValueIsNull;
             ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue, asyncInitServiceTypeNames);
-            preProps[idx++] = (m.Name, varN);
+            preProps.Add($"{m.Name} = {varN}");
             pfIdxCounter++;
         }
 
@@ -148,9 +107,8 @@ partial class IocSourceGenerator
                 asyncInitServiceTypeNames)
             : [];
 
-        var propertyInits = preProps.Select(p => $"{p.Name} = {p.ParamVar}").ToArray();
-        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
-        var initializerPart = propertyInits.Length > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : "";
+        var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
+        var initializerPart = preProps.Count > 0 ? $" {{ {string.Join(", ", preProps)} }}" : "";
         var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
         writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
 
@@ -226,13 +184,13 @@ partial class IocSourceGenerator
     {
         foreach(var (mName, mVars, mNames) in resolutions)
         {
-            var entries = new List<(string Name, string? Value, bool NeedsConditional)>(mVars.Length);
+            var entries = new (string Name, string? Value)[mVars.Length];
             for(int i = 0; i < mVars.Length; i++)
             {
-                entries.Add((mNames[i], mVars[i], false));
+                entries[i] = (mNames[i], mVars[i]);
             }
 
-            var args = BuildArgumentListFromEntries([.. entries]);
+            var args = BuildArgumentListFromEntries(entries);
             writer.WriteLine(useAwait
                 ? $"await {instanceVarName}.{mName}({args});"
                 : $"{instanceVarName}.{mName}({args});");

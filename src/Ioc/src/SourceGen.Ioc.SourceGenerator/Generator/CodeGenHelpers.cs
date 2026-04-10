@@ -9,9 +9,10 @@ partial class IocSourceGenerator
         $"new {implTypeName}({args}){initializerPart}";
 
     /// <summary>
-    /// Builds an argument list from entries with conditional flag.
+    /// Builds an argument list from parameter entries.
+    /// Null values are omitted so the target member uses its optional parameter default.
     /// </summary>
-    private static string BuildArgumentListFromEntries((string Name, string? Value, bool NeedsConditional)[] entries)
+    private static string BuildArgumentListFromEntries(IEnumerable<(string Name, string? Value)> entries)
     {
         // Check if any parameter uses default value
         bool hasDefaultValue = entries.Any(e => e.Value is null);
@@ -58,7 +59,7 @@ partial class IocSourceGenerator
         "<,,,,,,,,>"
     ];
 
-    private static string GetGenericString(in int arity) =>
+    private static string GetGenericString(int arity) =>
         arity <= 9 ? s_genericArityStrings[arity - 1] : '<' + new string(',', arity - 1) + '>';
 
     private static string GetServiceResolutionMethod(string? serviceKey, bool isOptional) =>

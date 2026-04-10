@@ -83,7 +83,7 @@ partial class IocSourceGenerator
             var lambdaParams = string.Join(", ", InputParameters.Select(static (param, i) => $"{param.Type.Name} arg{i}"));
 
             var statements = new List<string>();
-            var ctorEntries = new List<(string Name, string? Value, bool NeedsConditional)>(ConstructorParameters.Length);
+            var ctorEntries = new List<(string Name, string? Value)>(ConstructorParameters.Length);
 
             var resolvedParamIndex = 0;
             foreach(var param in ConstructorParameters)
@@ -91,14 +91,14 @@ partial class IocSourceGenerator
                 var matchedArg = TryConsumeMatchingFuncInputArg(param.Parameter.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                 if(matchedArg is not null)
                 {
-                    ctorEntries.Add((param.Parameter.Name, matchedArg, false));
+                    ctorEntries.Add((param.Parameter.Name, matchedArg));
                     continue;
                 }
 
                 var paramVar = $"p{resolvedParamIndex}";
                 var expr = param.Dependency.FormatExpression(param.IsOptional);
                 statements.Add($"var {paramVar} = {expr};");
-                ctorEntries.Add((param.Parameter.Name, paramVar, false));
+                ctorEntries.Add((param.Parameter.Name, paramVar));
                 resolvedParamIndex++;
             }
 
@@ -134,7 +134,7 @@ partial class IocSourceGenerator
             }
 
             var implementationType = ImplementationTypeName ?? ReturnTypeName;
-            var ctorArgs = BuildArgumentListFromEntries([.. ctorEntries]);
+            var ctorArgs = BuildArgumentListFromEntries(ctorEntries);
             var initializerPart = propertyInits.Count > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : string.Empty;
             var ctorInvocation = BuildConstructorInvocation(implementationType, ctorArgs, initializerPart);
             statements.Add($"var s0 = {ctorInvocation};");
@@ -147,13 +147,13 @@ partial class IocSourceGenerator
                     continue;
 
                 var methodParams = member.Parameters ?? [];
-                var methodEntries = new List<(string Name, string? Value, bool NeedsConditional)>(methodParams.Length);
+                var methodEntries = new List<(string Name, string? Value)>(methodParams.Length);
                 foreach(var param in methodParams)
                 {
                     var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                     if(matchedArg is not null)
                     {
-                        methodEntries.Add((param.Name, matchedArg, false));
+                        methodEntries.Add((param.Name, matchedArg));
                         continue;
                     }
 
@@ -165,11 +165,11 @@ partial class IocSourceGenerator
                     var paramVar = $"s0_m{methodIndex}";
                     var expr = injectionMember.Dependency.FormatExpression(param.IsOptional);
                     statements.Add($"var {paramVar} = {expr};");
-                    methodEntries.Add((param.Name, paramVar, false));
+                    methodEntries.Add((param.Name, paramVar));
                     methodIndex++;
                 }
 
-                var methodArgs = BuildArgumentListFromEntries([.. methodEntries]);
+                var methodArgs = BuildArgumentListFromEntries(methodEntries);
                 statements.Add($"s0.{member.Name}({methodArgs});");
             }
 

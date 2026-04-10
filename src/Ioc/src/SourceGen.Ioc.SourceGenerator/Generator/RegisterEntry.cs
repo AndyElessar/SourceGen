@@ -357,7 +357,7 @@ partial class IocSourceGenerator
             RegisterWriteContext context,
             ImmutableEquatableArray<InjectionMemberData>? asyncMethodInjectionMembers)
         {
-            var constructorParamEntries = new List<(string Name, string? Value, bool NeedsConditional)>(ConstructorParameters.Length);
+            var constructorParamEntries = new List<(string Name, string? Value)>(ConstructorParameters.Length);
 
             for(int i = 0; i < ConstructorParameters.Length; i++)
             {
@@ -371,7 +371,7 @@ partial class IocSourceGenerator
                     Key,
                     context.AsyncInitServiceTypeNames);
 
-                constructorParamEntries.Add((parameter.Name, resolvedVar, false));
+                constructorParamEntries.Add((parameter.Name, resolvedVar));
             }
 
             var propertyVarNames = new string[PropertyInjectionMembers.Length];
@@ -401,7 +401,7 @@ partial class IocSourceGenerator
             var syncMethodResolutions = ResolveMethodResolutions(writer, MethodInjectionMembers, ref memberParamIndex, context);
             var asyncMethodResolutions = asyncMethodInjectionMembers is { Length: > 0 } asyncMembers
                 ? ResolveMethodResolutions(writer, asyncMembers, ref memberParamIndex, context)
-                : new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
+                : [];
 
             var propertyInitializers = new string[propertyVarNames.Length];
             for(int i = 0; i < PropertyInjectionMembers.Length; i++)
@@ -409,7 +409,7 @@ partial class IocSourceGenerator
                 propertyInitializers[i] = $"{PropertyInjectionMembers[i].Name} = {propertyVarNames[i]}";
             }
 
-            var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
+            var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
             var initializerPart = propertyInitializers.Length > 0
                 ? $" {{ {string.Join(", ", propertyInitializers)} }}"
                 : "";
@@ -474,14 +474,14 @@ partial class IocSourceGenerator
         {
             foreach(var (methodName, paramVars, paramNames) in methodResolutions)
             {
-                var entries = new List<(string Name, string? Value, bool NeedsConditional)>(paramVars.Length);
+                var entries = new (string Name, string? Value)[paramVars.Length];
 
                 for(int i = 0; i < paramVars.Length; i++)
                 {
-                    entries.Add((paramNames[i], paramVars[i], false));
+                    entries[i] = (paramNames[i], paramVars[i]);
                 }
 
-                var args = BuildArgumentListFromEntries([.. entries]);
+                string args = BuildArgumentListFromEntries(entries);
                 writer.WriteLine(useAwait
                     ? $"await s0.{methodName}({args});"
                     : $"s0.{methodName}({args});");

@@ -206,20 +206,20 @@ partial class IocSourceGenerator
             inputArgUsed[i] = false;
         }
 
-        var constructorParamEntries = new List<(string Name, string? Value, bool NeedsConditional)>(constructorParams.Length);
+        var constructorParamEntries = new List<(string Name, string? Value)>(constructorParams.Length);
         var resolvedParamIndex = 0;
         foreach(var param in constructorParams)
         {
             var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
             if(matchedArg is not null)
             {
-                constructorParamEntries.Add((param.Name, matchedArg, false));
+                constructorParamEntries.Add((param.Name, matchedArg));
                 continue;
             }
 
             var paramVar = $"p{resolvedParamIndex}";
             var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: false, registrationKey: null);
-            constructorParamEntries.Add((param.Name, resolvedVar, false));
+            constructorParamEntries.Add((param.Name, resolvedVar));
             resolvedParamIndex++;
         }
 
@@ -248,7 +248,7 @@ partial class IocSourceGenerator
             propertyFieldIndex++;
         }
 
-        var constructorArgs = BuildArgumentListFromEntries([.. constructorParamEntries]);
+        var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
         var initializerPart = propertyInits.Count > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : string.Empty;
         var constructorInvocation = BuildConstructorInvocation(entry.ImplementationTypeName, constructorArgs, initializerPart);
         writer.WriteLine($"var s0 = {constructorInvocation};");
@@ -260,13 +260,13 @@ partial class IocSourceGenerator
                 continue;
 
             var methodParams = method.Parameters ?? [];
-            var methodEntries = new List<(string Name, string? Value, bool NeedsConditional)>(methodParams.Length);
+            var methodEntries = new List<(string Name, string? Value)>(methodParams.Length);
             foreach(var param in methodParams)
             {
                 var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                 if(matchedArg is not null)
                 {
-                    methodEntries.Add((param.Name, matchedArg, false));
+                    methodEntries.Add((param.Name, matchedArg));
                     continue;
                 }
 
@@ -288,11 +288,11 @@ partial class IocSourceGenerator
                     resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: false, registrationKey: null);
                 }
 
-                methodEntries.Add((param.Name, resolvedVar, false));
+                methodEntries.Add((param.Name, resolvedVar));
                 methodParamIndex++;
             }
 
-            var methodArgs = BuildArgumentListFromEntries([.. methodEntries]);
+            var methodArgs = BuildArgumentListFromEntries(methodEntries);
             writer.WriteLine($"s0.{method.Name}({methodArgs});");
         }
 
