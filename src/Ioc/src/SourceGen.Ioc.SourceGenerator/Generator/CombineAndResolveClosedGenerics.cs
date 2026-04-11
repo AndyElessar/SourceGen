@@ -17,7 +17,7 @@ partial class IocSourceGenerator
         in ImmutableArray<OpenGenericEntry> factoryBasedOpenGenericEntries,
         CancellationToken ct)
     {
-        var registrations = new List<ServiceRegistrationWithTags>();
+        List<ServiceRegistrationWithTags> registrations = [];
 
         // Use List to allow multiple implementations per service type key
         // (e.g., GenericRequestHandler<T> and GenericRequestHandler2<T> both implement IRequestHandler<,>)
@@ -38,7 +38,7 @@ partial class IocSourceGenerator
             // Index open generic entries - store ALL implementations per service type key
             if(result.OpenGenericEntries.Length > 0)
             {
-                openGenericIndex ??= new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
+                openGenericIndex ??= new Dictionary<string, List<OpenGenericRegistrationInfo>>(result.OpenGenericEntries.Length, StringComparer.Ordinal);
                 foreach(var entry in result.OpenGenericEntries)
                 {
                     if(!openGenericIndex.TryGetValue(entry.ServiceTypeKey, out var list))
@@ -53,7 +53,7 @@ partial class IocSourceGenerator
             // Collect closed generic dependencies from constructor parameters
             if(result.ClosedGenericDependencies.Length > 0)
             {
-                closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal);
+                closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(result.ClosedGenericDependencies.Length, StringComparer.Ordinal);
                 foreach(var dep in result.ClosedGenericDependencies)
                 {
                     if(!closedGenericDependencies.ContainsKey(dep.ClosedTypeName))
@@ -67,7 +67,7 @@ partial class IocSourceGenerator
         // Index factory-based open generic entries from IocRegisterDefaults with Factory
         if(factoryBasedOpenGenericEntries.Length > 0)
         {
-            openGenericIndex ??= new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
+            openGenericIndex ??= new Dictionary<string, List<OpenGenericRegistrationInfo>>(factoryBasedOpenGenericEntries.Length, StringComparer.Ordinal);
             foreach(var entry in factoryBasedOpenGenericEntries)
             {
                 if(!openGenericIndex.TryGetValue(entry.ServiceTypeKey, out var list))
@@ -82,7 +82,7 @@ partial class IocSourceGenerator
         // Collect closed generic dependencies from GetService/GetRequiredService invocations
         if(serviceProviderInvocations.Length > 0)
         {
-            closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(StringComparer.Ordinal);
+            closedGenericDependencies ??= new Dictionary<string, ClosedGenericDependency>(serviceProviderInvocations.Length, StringComparer.Ordinal);
             foreach(var dep in serviceProviderInvocations)
             {
                 if(!closedGenericDependencies.ContainsKey(dep.ClosedTypeName))
@@ -776,7 +776,7 @@ partial class IocSourceGenerator
         TypeArgMap serviceTypeArgMap,
         TypeArgMap implTypeArgMap)
     {
-        var result = new List<TypeData>();
+        var result = new List<TypeData>(openServiceTypes.Length);
 
         foreach(var openServiceType in openServiceTypes)
         {

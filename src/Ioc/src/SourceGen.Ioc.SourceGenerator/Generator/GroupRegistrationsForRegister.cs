@@ -191,17 +191,6 @@ partial class IocSourceGenerator
         bool hasAsyncInjectionMembers = registration.InjectionMembers.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod);
         bool shouldForwardServiceType = !registration.IsOpenGeneric && isServiceTypeRegistration;
 
-        bool isSimplePattern = !hasFactory
-            && !hasInstance
-            && !hasClosedDecorators
-            && !shouldForwardServiceType
-            && (registration.IsOpenGeneric || !needsFactoryConstruction);
-
-        if(isSimplePattern)
-        {
-            return new SimpleRegisterEntry(registration);
-        }
-
         if(hasFactory)
         {
             return new FactoryRegisterEntry(registration);
@@ -222,19 +211,21 @@ partial class IocSourceGenerator
             return new DecoratorRegisterEntry(registration);
         }
 
-        if(shouldForwardServiceType && !hasFactory && !hasClosedDecorators)
+        if(shouldForwardServiceType)
         {
             return new ForwardingRegisterEntry(registration);
         }
 
-        if(needsFactoryConstruction && hasAsyncInjectionMembers && !registration.IsOpenGeneric)
+        if(needsFactoryConstruction && !registration.IsOpenGeneric)
         {
-            return new AsyncInjectionRegisterEntry(registration);
-        }
-
-        if(needsFactoryConstruction && !hasAsyncInjectionMembers && !registration.IsOpenGeneric)
-        {
-            return new InjectionRegisterEntry(registration);
+            if(hasAsyncInjectionMembers)
+            {
+                return new AsyncInjectionRegisterEntry(registration);
+            }
+            else
+            {
+                return new InjectionRegisterEntry(registration);
+            }
         }
 
         return new SimpleRegisterEntry(registration);

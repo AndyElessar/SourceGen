@@ -123,6 +123,26 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 .SelectMany(static r => r.OpenGenericEntries))
             .Collect();
 
+        var defaultLifetimeProvider = context.AnalyzerConfigOptionsProvider
+            .Select(static (configOptions, _) =>
+            {
+                ServiceLifetime? defaultLifetime = null;
+                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocDefaultLifetimeProperty, out var lifetimeStr)
+                    && lifetimeStr is { Length: > 0 } rawLifetime
+                    && !string.IsNullOrWhiteSpace(rawLifetime))
+                {
+                    var trimmed = rawLifetime.Trim();
+                    defaultLifetime = trimmed switch
+                    {
+                        _ when trimmed.Equals("singleton", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Singleton,
+                        _ when trimmed.Equals("scoped", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Scoped,
+                        _ when trimmed.Equals("transient", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Transient,
+                        _ => null
+                    };
+                }
+                return defaultLifetime;
+            });
+
         // Get MSBuild properties from analyzer config options
         var msbuildPropertiesProvider = context.AnalyzerConfigOptionsProvider
             .Select(static (configOptions, _) =>
@@ -145,27 +165,11 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                     customIocName = rawCustomIocName;
                 }
 
-                // Try to get default lifetime from MSBuild property
-                ServiceLifetime? defaultLifetime = null;
-                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocDefaultLifetimeProperty, out var lifetimeStr)
-                    && lifetimeStr is { Length: > 0 } rawLifetime
-                    && !string.IsNullOrWhiteSpace(rawLifetime))
-                {
-                    var trimmed = rawLifetime.Trim();
-                    defaultLifetime = trimmed switch
-                    {
-                        _ when trimmed.Equals("singleton", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Singleton,
-                        _ when trimmed.Equals("scoped", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Scoped,
-                        _ when trimmed.Equals("transient", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Transient,
-                        _ => null
-                    };
-                }
-
                 // Try to get enabled feature flags from MSBuild property
                 configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocFeaturesProperty, out var featuresStr);
                 var features = IocFeaturesHelper.Parse(featuresStr);
 
-                return new MsBuildProperties(rootNamespace, customIocName, defaultLifetime, features);
+                return new MsBuildProperties(rootNamespace, customIocName, features);
             });
 
         // Get compilation info (assembly name and DI package reference)
@@ -184,14 +188,14 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         // Current assembly settings take precedence over imported settings
         var combinedDefaultSettings = allDefaultSettings
             .Combine(allImportedDefaultSettings)
-            .Combine(msbuildPropertiesProvider)
+            .Combine(defaultLifetimeProvider)
             .Select(static (combined, _) =>
             {
-                var ((currentAssembly, imported), msbuildProps) = combined;
+                var ((currentAssembly, imported), defaultLifetime) = combined;
                 // Current assembly settings come first (higher priority), then imported settings (lower priority)
                 // DefaultSettingsMap uses first-match semantics, so current assembly settings should be added first
                 var allSettings = currentAssembly.AddRange(imported);
-                return new DefaultSettingsMap(allSettings, msbuildProps.DefaultLifetime ?? ServiceLifetime.Transient);
+                return new DefaultSettingsMap(allSettings, defaultLifetime ?? ServiceLifetime.Transient);
             });
 
         // Collect GetService, GetRequiredService, GetKeyedService, GetRequiredKeyedService, GetServices invocations

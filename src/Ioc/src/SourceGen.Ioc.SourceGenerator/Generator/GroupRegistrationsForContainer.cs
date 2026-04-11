@@ -199,9 +199,9 @@ partial class IocSourceGenerator
         }
 
         // Convert maps to lists (preserving insertion order via Dictionary enumeration order in .NET)
-        var singletons = singletonMap.Values.Select(static v => v.Cached).ToList();
-        var scoped = scopedMap.Values.Select(static v => v.Cached).ToList();
-        var transients = transientMap.Values.Select(static v => v.Cached).ToList();
+        var singletons = singletonMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
+        var scoped = scopedMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
+        var transients = transientMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
 
         // Collect service types with multiple registrations for IEnumerable<T> resolution
         // Async-init services are excluded from collection resolution (only Task<T> can access them).
@@ -236,14 +236,10 @@ partial class IocSourceGenerator
             static kvp => kvp.Key,
             static kvp => kvp.Value.ToImmutableEquatableArray());
 
-        var immutableSingletons = singletons.ToImmutableEquatableArray();
-        var immutableScoped = scoped.ToImmutableEquatableArray();
-        var immutableTransients = transients.ToImmutableEquatableArray();
-
         var wrapperEntries = CreateWrapperContainerEntries(
-            immutableSingletons,
-            immutableScoped,
-            immutableTransients,
+            singletons,
+            scoped,
+            transients,
             serviceLookupEntries);
 
         var lazyFieldByResolver = wrapperEntries
@@ -254,21 +250,21 @@ partial class IocSourceGenerator
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
 
         var singletonEntries = CreateServiceContainerEntries(
-            immutableSingletons,
+            singletons,
             threadSafeStrategy,
             serviceLookupEntries,
             collectionRegistrations,
             lazyFieldByResolver,
             funcFieldByResolver);
         var scopedEntries = CreateServiceContainerEntries(
-            immutableScoped,
+            scoped,
             threadSafeStrategy,
             serviceLookupEntries,
             collectionRegistrations,
             lazyFieldByResolver,
             funcFieldByResolver);
         var transientEntries = CreateServiceContainerEntries(
-            immutableTransients,
+            transients,
             threadSafeStrategy,
             serviceLookupEntries,
             collectionRegistrations,
