@@ -327,23 +327,50 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // Combine container with existing serviceRegistrations and group them
-        var containerWithGroups = containerProvider
-            .Combine(serviceRegistrations)
+        // ExplicitOnly containers: no dependency on serviceRegistrations
+        var explicitOnlyContainerWithGroups = containerProvider
+            .Where(static c => c.ExplicitOnly)
             .Combine(msbuildPropertiesProvider)
             .Select(static (source, _) =>
             {
-                var ((container, registrations), msbuildProps) = source;
-                return GroupRegistrationsForContainer(container, registrations, msbuildProps.Features);
+                var (container, msbuildProps) = source;
+                return GroupExplicitOnlyRegistrations(container, msbuildProps.Features);
             });
 
-        // Combine with compilation info and MSBuild properties
-        var containerWithCompilationInfo = containerWithGroups
+        // Non-ExplicitOnly containers: filter then group with caching barrier
+        var normalContainerWithGroups = containerProvider
+            .Where(static c => !c.ExplicitOnly)
+            .Combine(serviceRegistrations)
+            .Select(static (source, _) =>
+            {
+                var (container, registrations) = source;
+                var filtered = FilterRegistrationsForContainer(container, registrations);
+                return (container, filtered);
+            })
+            .Combine(msbuildPropertiesProvider)
+            .Select(static (source, _) =>
+            {
+                var ((container, filtered), msbuildProps) = source;
+                return GroupRegistrationsForContainer(container, filtered, msbuildProps.Features);
+            });
+
+        // ExplicitOnly pipeline output
+        var explicitOnlyWithCompilationInfo = explicitOnlyContainerWithGroups
             .Combine(compilationInfoProvider)
             .Combine(msbuildPropertiesProvider);
 
-        // Generate Container output (separate from Registration output)
-        context.RegisterSourceOutput(containerWithCompilationInfo, static (ctx, source) =>
+        context.RegisterSourceOutput(explicitOnlyWithCompilationInfo, static (ctx, source) =>
+        {
+            var ((containerWithGroups, compilationInfo), msbuildProps) = source;
+            GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
+        });
+
+        // Normal pipeline output
+        var normalWithCompilationInfo = normalContainerWithGroups
+            .Combine(compilationInfoProvider)
+            .Combine(msbuildPropertiesProvider);
+
+        context.RegisterSourceOutput(normalWithCompilationInfo, static (ctx, source) =>
         {
             var ((containerWithGroups, compilationInfo), msbuildProps) = source;
             GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);

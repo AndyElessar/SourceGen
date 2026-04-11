@@ -27,6 +27,17 @@ ForAttributeWithMetadataName
     GroupRegistrationsForRegister → RegisterOutputModel
          ↓
     GenerateRegisterOutput  →  {assemblyName}.ServiceRegistration.g.cs
+
+    ContainerModel ─┬─ Where(ExplicitOnly)
+                    │    → GroupExplicitOnlyRegistrations → ContainerWithGroups
+                    │    → GenerateContainerOutput
+                    │
+                    └─ Where(!ExplicitOnly)
+                         → Combine(serviceRegistrations)
+                         → Select(FilterRegistrationsForContainer)  ← caching barrier
+                         → GroupRegistrationsForContainer → ContainerWithGroups
+                         → GenerateContainerOutput
+
     GenerateContainerOutput →  {containerClassName}.Container.g.cs
 ```
 
@@ -97,13 +108,27 @@ Files: `CombineAndResolveClosedGenerics.cs`, `GroupRegistrationsForRegister.cs`,
 ### Stage 5: Container Pipeline (parallel branch)
 
 1. `IocContainerAttribute` → `TransformContainer` → `ContainerModel?`
-2. `GroupRegistrationsForContainer(container, registrations, features)` → `ContainerWithGroups` — accepts `IocFeatures` and applies feature filtering (`FilterRegistrationForFeatures`) during group construction, so the output callback no longer performs feature filtering. `FilterContainerWithGroupsForFeatures` has been removed from the output stage.
+2. The container pipeline splits into two branches using `Where` on `ContainerModel.ExplicitOnly`:
+
+   **ExplicitOnly branch** — `containerProvider.Where(ExplicitOnly)`:
+   - Has zero dependency on `serviceRegistrations` — only uses `container.ExplicitRegistrations`.
+   - `GroupExplicitOnlyRegistrations(container, features)` → `ContainerWithGroups` — converts explicit registrations via `ProcessExplicitRegistrationForContainer`, collects reserved names, and calls `BuildContainerRegistrationGroups`.
+   - This branch is completely isolated from service registration changes and never re-evaluates when `serviceRegistrations` change.
+
+   **Normal branch** — `containerProvider.Where(!ExplicitOnly)`:
+   - Combines with `serviceRegistrations`, then passes through a **`Select`-based caching barrier**: `Select(FilterRegistrationsForContainer)` returns `(ContainerModel, ImmutableEquatableArray<ServiceRegistrationModel>)`. Roslyn compares each output with the previous value via value-tuple component equality (`ContainerModel` is a `sealed record class`, `ImmutableEquatableArray<T>` implements `IEquatable<T>` with element-wise comparison). When the filtered set is unchanged, downstream nodes are not re-evaluated.
+   - `GroupRegistrationsForContainer(container, filteredRegistrations, features)` → `ContainerWithGroups` — receives pre-filtered `ImmutableEquatableArray<ServiceRegistrationModel>` (not `ServiceRegistrationWithTags`). Accepts `IocFeatures` and applies feature filtering (`FilterRegistrationForFeatures`) during group construction.
+
+   `FilterRegistrationsForContainer` handles IncludeTags filtering and default pass-through for non-ExplicitOnly containers. The ExplicitOnly guard has been removed since the `Where` filter guarantees it is never called with ExplicitOnly containers.
+
+3. Both branches produce `ContainerWithGroups` and feed into `GenerateContainerOutput` via separate `RegisterSourceOutput` calls.
+4. `GroupRegistrationsForContainer` grouping internals (unchanged):
     - The grouping phase uses a build-time-only `ServiceLookupEntry` (private `readonly record struct`) to hold intermediate registration data (`Registration`, `ResolverMethodName`, `FieldName`, `IsAsyncInit`, `IsEager`). `ServiceLookupEntry` is NOT part of the pipeline-cached data model — it exists only as a local during `BuildContainerRegistrationGroups` and is discarded after entry construction.
     - From `ServiceLookupEntry` data, the grouping phase pre-resolves all dependency lookups into `ResolvedDependency` instances and creates `ContainerEntry` discriminated-union subtypes. Each entry is self-contained: code generation is pure string formatting via polymorphic `Write*` methods, with no shared context parameter.
     - Wrapper entries (`LazyWrapperContainerEntry`, `FuncWrapperContainerEntry`, `KvpWrapperContainerEntry`) are produced directly from service lookup data — there are no intermediate `ContainerLazyEntry`/`ContainerFuncEntry`/`ContainerKvpEntry` types.
     - `ContainerRegistrationGroups` stores `LastWinsByServiceType` — an `ImmutableEquatableDictionary<(string ServiceType, string? Key), ContainerEntry>` providing last-registration-wins lookup by service type and key. This replaces the former `ByServiceTypeAndKey` dictionary of `CachedRegistration` arrays. Consumers pattern-match on `ContainerEntry` subtypes to determine resolution expressions.
     - This follows the same discriminated union pattern established in Stage 4 for `RegisterEntry`.
-3. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs` — orchestrates code emission by iterating pre-grouped `ContainerEntry` arrays and calling polymorphic `Write*` methods. No static dispatch helpers are used.
+5. `GenerateContainerOutput` → `{containerClassName}.Container.g.cs` — orchestrates code emission by iterating pre-grouped `ContainerEntry` arrays and calling polymorphic `Write*` methods. No static dispatch helpers are used.
 
 Files: `TransformContainer.cs`, `GroupRegistrationsForContainer.cs`, `ContainerEntry.cs`, `ResolvedDependency.cs`, `GenerateContainerOutput.cs`
 

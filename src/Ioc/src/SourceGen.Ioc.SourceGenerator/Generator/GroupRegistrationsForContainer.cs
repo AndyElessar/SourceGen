@@ -10,21 +10,10 @@ partial class IocSourceGenerator
     /// </summary>
     private static ContainerWithGroups GroupRegistrationsForContainer(
         ContainerModel container,
-        ImmutableEquatableArray<ServiceRegistrationWithTags> allRegistrations,
+        ImmutableEquatableArray<ServiceRegistrationModel> registrations,
         IocFeatures features)
     {
-        // Filter registrations based on ExplicitOnly mode
-        var registrations = FilterRegistrationsForContainer(container, allRegistrations);
-
-        // Collect partial accessor method names to avoid naming conflicts
-        var reservedNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach(var accessor in container.PartialAccessors)
-        {
-            if(accessor.Kind == PartialAccessorKind.Method)
-            {
-                reservedNames.Add(accessor.Name);
-            }
-        }
+        var reservedNames = GetReservedNames(container);
 
         // Group registrations for code generation
         var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames);
@@ -33,33 +22,12 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Filters registrations based on the container's ExplicitOnly and IncludeTags settings.
-    /// Priority: ExplicitOnly > IncludeTags > All registrations.
+    /// Filters registrations based on the container's IncludeTags settings.
     /// </summary>
     private static ImmutableEquatableArray<ServiceRegistrationModel> FilterRegistrationsForContainer(
         ContainerModel container,
         ImmutableEquatableArray<ServiceRegistrationWithTags> allRegistrations)
     {
-        // ExplicitOnly takes precedence over IncludeTags
-        if(container.ExplicitOnly)
-        {
-            // Only include explicit registrations from the container class
-            var builder = new List<ServiceRegistrationModel>();
-
-            foreach(var explicitReg in container.ExplicitRegistrations)
-            {
-                // Convert RegistrationData to ServiceRegistrationModel
-                // For explicit registrations, we process them with default settings
-                var processed = ProcessExplicitRegistrationForContainer(explicitReg);
-                if(processed is not null)
-                {
-                    builder.Add(processed);
-                }
-            }
-
-            return builder.ToImmutableEquatableArray();
-        }
-
         // Apply IncludeTags filtering if specified
         if(container.IncludeTags.Length > 0)
         {
@@ -74,6 +42,52 @@ partial class IocSourceGenerator
         return allRegistrations
             .Select(static r => r.Registration)
             .ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Groups explicit registrations for ExplicitOnly containers.
+    /// </summary>
+    private static ContainerWithGroups GroupExplicitOnlyRegistrations(
+        ContainerModel container,
+        IocFeatures features)
+    {
+        var registrations = new List<ServiceRegistrationModel>(container.ExplicitRegistrations.Length);
+
+        foreach(var explicitReg in container.ExplicitRegistrations)
+        {
+            var processed = ProcessExplicitRegistrationForContainer(explicitReg);
+            if(processed is not null)
+            {
+                registrations.Add(processed);
+            }
+        }
+
+        var reservedNames = GetReservedNames(container);
+
+        var groups = BuildContainerRegistrationGroups(
+            registrations.ToImmutableEquatableArray(),
+            features,
+            container.ThreadSafeStrategy,
+            container.EagerResolveOptions,
+            reservedNames);
+
+        return new ContainerWithGroups(container, groups);
+    }
+
+    /// <summary>
+    /// Collect partial accessor method names to avoid naming conflicts
+    /// </summary>
+    private static HashSet<string> GetReservedNames(ContainerModel container)
+    {
+        var reservedNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach(var accessor in container.PartialAccessors)
+        {
+            if(accessor.Kind == PartialAccessorKind.Method)
+            {
+                reservedNames.Add(accessor.Name);
+            }
+        }
+        return reservedNames;
     }
 
     /// <summary>
