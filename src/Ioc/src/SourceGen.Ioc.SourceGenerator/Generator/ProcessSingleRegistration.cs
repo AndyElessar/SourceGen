@@ -9,7 +9,7 @@ partial class IocSourceGenerator
     /// </summary>
     /// <param name="registration">The registration data to process.</param>
     /// <returns>The processed registration result.</returns>
-    private static BasicRegistrationResult ProcessSingleRegistrationFromDefaults(RegistrationData registration)
+    private static BasicRegistrationResult ProcessSingleRegistrationFromDefaults(RegistrationData registration, CancellationToken ct)
     {
         // Use the explicit settings from the registration (already set from defaults attribute)
         return ProcessRegistrationCore(
@@ -20,7 +20,8 @@ partial class IocSourceGenerator
             decorators: registration.Decorators,
             tags: registration.Tags,
             factory: registration.Factory,
-            additionalServiceTypesFromDefaults: null);
+            additionalServiceTypesFromDefaults: null,
+            ct);
     }
 
     /// <summary>
@@ -32,13 +33,15 @@ partial class IocSourceGenerator
     /// <returns>The processed registration result with all resolved settings.</returns>
     private static BasicRegistrationResult ProcessSingleRegistration(
         RegistrationData registration,
-        DefaultSettingsMap defaultSettings)
+        DefaultSettingsMap defaultSettings,
+        CancellationToken ct)
     {
         // Reusable buffers for default settings lookup
         var matchedDefaultIndices = new List<int>();
         var matchedServiceTypes = new List<TypeData>();
 
         // Find matching default settings from base classes and interfaces
+        ct.ThrowIfCancellationRequested();
         int bestDefaultIndex = FindMatchingDefaults(
             registration.AllBaseClasses,
             registration.AllInterfaces,
@@ -77,7 +80,8 @@ partial class IocSourceGenerator
             decorators,
             tags,
             factory,
-            additionalServiceTypes);
+            additionalServiceTypes,
+            ct);
     }
 
     /// <summary>
@@ -112,8 +116,11 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<TypeData> decorators,
         ImmutableEquatableArray<string> tags,
         FactoryMethodData? factory,
-        IEnumerable<TypeData>? additionalServiceTypesFromDefaults)
+        IEnumerable<TypeData>? additionalServiceTypesFromDefaults,
+        CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         var serviceTypesToRegister = new List<TypeData>
         {
             // Always register the implementation type itself

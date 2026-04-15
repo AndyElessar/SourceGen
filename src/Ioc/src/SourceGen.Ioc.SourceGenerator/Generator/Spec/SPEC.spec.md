@@ -77,7 +77,7 @@ Combines default settings and import module pipelines into lookup-friendly input
 
 ### Stage 3: Per-Registration Processing (cacheable)
 
-Processes each registration independently via `ProcessSingleRegistration(RegistrationData, DefaultSettingsMap)` → `BasicRegistrationResult`.
+Processes each registration independently via `ProcessSingleRegistration(RegistrationData, DefaultSettingsMap, CancellationToken)` → `BasicRegistrationResult`. The `CancellationToken` is forwarded from the pipeline `.Select()` lambda so that Roslyn can cancel stale work during rapid edits.
 
 Five streams feed `allBasicResults`:
 

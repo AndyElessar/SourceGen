@@ -234,25 +234,25 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
 
         var basicRegistrationResults1 = registerProvider
             .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
 
         var basicRegistrationResults1_T1 = registerProvider_T1
             .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
 
         var basicRegistrationResults2 = registerForProvider
             .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
 
         var basicRegistrationResults2_T1 = registerForProvider_T1
             .Combine(combinedDefaultSettings)
-            .Select(static (source, _) => ProcessSingleRegistration(source.Left, source.Right));
+            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
 
         // Process ImplementationTypes from IocRegisterDefaultsAttribute
         // These registrations already have all settings applied from the defaults attribute
         // Transform each RegistrationData to BasicRegistrationResult
         var basicRegistrationResults3 = defaultSettingsImplTypeRegistrations
-            .Select(static (registrations, _) => ProcessSingleRegistrationFromDefaults(registrations));
+            .Select(static (registrations, ct) => ProcessSingleRegistrationFromDefaults(registrations, ct));
 
         // Collect all basic registration results
         var allBasicResults = basicRegistrationResults1.Collect()
