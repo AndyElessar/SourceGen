@@ -1,6 +1,6 @@
 ---
 description: "Use when: updating or creating specification documents (file under Spec/). Writes clear specs targeting both human developers and AI agents."
-model: Claude Opus 4.6 (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, read, edit, search, web, codegraphcontext/analyze_code_relationships, codegraphcontext/find_code, codegraphcontext/get_repository_stats, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo]
 agents: []
 user-invocable: false

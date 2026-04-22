@@ -1,16 +1,32 @@
 ﻿namespace SourceGen.Ioc;
 
 /// <summary>
-/// Generates code to register types marked with SourceGen.Ioc.IocRegisterAttribute/SourceGen.Ioc.IocRegisterForAttribute
-/// in Microsoft.Extensions.DependencyInjection container.
+/// Incremental source generator that processes <c>IocRegister*</c>, <c>IocContainer</c>, <c>IocImportModule</c>,
+/// <c>IocDiscover</c>, and <c>IocRegisterDefaults</c> attributes (plus <c>IServiceProvider.GetService&lt;T&gt;</c>
+/// invocations) and emits two kinds of output:
+/// <list type="bullet">
+///   <item><b>Register*</b> partial methods — extension methods that register services into <c>IServiceCollection</c>.</item>
+///   <item><b>Container partial classes</b> — standalone DI containers that resolve services without <c>IServiceCollection</c>.</item>
+/// </list>
+/// <para>
+/// The pipeline mirrors the stages described in <c>Spec/SPEC.spec.md</c>:
+/// </para>
+/// <list type="number">
+///   <item>Stage 1 — Attribute detection (<c>Transforms/</c>): symbol → data model.</item>
+///   <item>Stage 2 — Combine MSBuild / compilation / default-settings inputs.</item>
+///   <item>Stage 3 — Per-registration processing (<c>Processing/ProcessSingleRegistration</c>, cacheable).</item>
+///   <item>Stage 4 — Closed-generic resolution + grouping (<c>Processing/</c> + <c>Grouping/</c>).</item>
+///   <item>Stage 5 — Emit Register output and Container output (<c>Emit/Register/</c>, <c>Emit/Container/</c>).</item>
+/// </list>
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed partial class IocSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // ========== IocRegisterAttribute providers ==========
-        // IocRegisterAttribute (non-generic)
+        // ===== Stage 1: Attribute providers (symbol -> data model) =====
+
+        // [IocRegister] / [IocRegister<T>]
         var registerProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterAttributeFullName,
@@ -19,7 +35,6 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // IocRegisterAttribute<T>
         var registerProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterAttributeFullName_T1,
@@ -28,8 +43,7 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .Select(static (m, _) => m!);
 
-        // ========== IocRegisterForAttribute providers ==========
-        // IocRegisterForAttribute (non-generic)
+        // [IocRegisterFor] / [IocRegisterFor<T>]
         var registerForProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterForAttributeFullName,
@@ -37,7 +51,6 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 transform: static (ctx, ct) => TransformRegisterFor(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // IocRegisterForAttribute<T>
         var registerForProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterForAttributeFullName_T1,
@@ -45,160 +58,79 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 transform: static (ctx, ct) => TransformRegisterForGeneric(ctx, ct))
             .SelectMany(static (m, _) => m);
 
-        // ========== IocRegisterDefaultsAttribute providers ==========
-        // Transform IocRegisterDefaultsAttribute to get both DefaultSettings and ImplementationType registrations
-        // IocRegisterDefaultsAttribute (non-generic)
-        var defaultSettingsResultProvider = context.SyntaxProvider
+        // [IocRegisterDefaults] / [IocRegisterDefaults<T>] -> (settings, impl-type registrations, factory open generics)
+        var allDefaultSettingsResults = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterDefaultsAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct))
-            .SelectMany(static (m, _) => m);
-
-        // IocRegisterDefaultsAttribute<T>
-        var defaultSettingsResultProvider_T1 = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocRegisterDefaultsAttributeFullName_T1,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformDefaultSettingsGeneric(ctx, ct))
-            .SelectMany(static (m, _) => m);
-
-        // Combine all default settings result providers
-        var allDefaultSettingsResults = defaultSettingsResultProvider
+            .SelectMany(static (m, _) => m)
             .Collect()
-            .Combine(defaultSettingsResultProvider_T1.Collect())
+            .Combine(context.SyntaxProvider
+                .ForAttributeWithMetadataName(
+                    Constants.IocRegisterDefaultsAttributeFullName_T1,
+                    predicate: static (_, _) => true,
+                    transform: static (ctx, ct) => TransformDefaultSettingsGeneric(ctx, ct))
+                .SelectMany(static (m, _) => m)
+                .Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // Pipeline 1: Extract DefaultSettingsModel from results (for default settings map)
         var allDefaultSettings = allDefaultSettingsResults
             .SelectMany(static (results, _) => results
                 .Where(static r => r.DefaultSettings is not null)
                 .Select(static r => r.DefaultSettings!))
             .Collect();
 
-        // Pipeline 2: Extract RegistrationData from results (for implementation type registrations)
         var defaultSettingsImplTypeRegistrations = allDefaultSettingsResults
-            .SelectMany(static (results, _) => results
-                .SelectMany(static r => r.ImplementationTypeRegistrations));
+            .SelectMany(static (results, _) => results.SelectMany(static r => r.ImplementationTypeRegistrations));
 
-        // Pipeline 3: Extract OpenGenericEntries from results (for factory-based open generic registrations)
         var factoryBasedOpenGenericEntries = allDefaultSettingsResults
-            .SelectMany(static (results, _) => results
-                .SelectMany(static r => r.OpenGenericEntries))
+            .SelectMany(static (results, _) => results.SelectMany(static r => r.OpenGenericEntries))
             .Collect();
 
-        // ========== IocImportModuleAttribute providers ==========
-        // Transform IocImportModuleAttribute to get both DefaultSettings and OpenGenericEntries in a single pass
-        // IocImportModuleAttribute (non-generic)
-        var importModuleResultProvider = context.SyntaxProvider
+        // [IocImportModule] / [IocImportModule<T>] -> (imported settings, imported open generics)
+        var allImportModuleResults = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocImportModuleAttributeFullName,
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformImportModule(ctx, ct))
-            .SelectMany(static (m, _) => m);
-
-        // IocImportModuleAttribute<T>
-        var importModuleResultProvider_T1 = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocImportModuleAttributeFullName_T1,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformImportModuleGeneric(ctx, ct))
-            .SelectMany(static (m, _) => m);
-
-        // Combine all import module result providers
-        var allImportModuleResults = importModuleResultProvider
+            .SelectMany(static (m, _) => m)
             .Collect()
-            .Combine(importModuleResultProvider_T1.Collect())
+            .Combine(context.SyntaxProvider
+                .ForAttributeWithMetadataName(
+                    Constants.IocImportModuleAttributeFullName_T1,
+                    predicate: static (_, _) => true,
+                    transform: static (ctx, ct) => TransformImportModuleGeneric(ctx, ct))
+                .SelectMany(static (m, _) => m)
+                .Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // Pipeline 1: Extract DefaultSettingsModel from ImportModuleResult (for imported default settings)
         var allImportedDefaultSettings = allImportModuleResults
-            .SelectMany(static (results, _) => results
-                .SelectMany(static r => r.DefaultSettings))
+            .SelectMany(static (results, _) => results.SelectMany(static r => r.DefaultSettings))
             .Collect();
 
-        // Pipeline 2: Extract OpenGenericEntries from ImportModuleResult (for cross-assembly open generic discovery)
         var allImportedOpenGenerics = allImportModuleResults
-            .SelectMany(static (results, _) => results
-                .SelectMany(static r => r.OpenGenericEntries))
+            .SelectMany(static (results, _) => results.SelectMany(static r => r.OpenGenericEntries))
             .Collect();
 
-        var defaultLifetimeProvider = context.AnalyzerConfigOptionsProvider
-            .Select(static (configOptions, _) =>
-            {
-                ServiceLifetime? defaultLifetime = null;
-                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocDefaultLifetimeProperty, out var lifetimeStr)
-                    && lifetimeStr is { Length: > 0 } rawLifetime
-                    && !string.IsNullOrWhiteSpace(rawLifetime))
-                {
-                    var trimmed = rawLifetime.Trim();
-                    defaultLifetime = trimmed switch
-                    {
-                        _ when trimmed.Equals("singleton", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Singleton,
-                        _ when trimmed.Equals("scoped", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Scoped,
-                        _ when trimmed.Equals("transient", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Transient,
-                        _ => null
-                    };
-                }
-                return defaultLifetime;
-            });
+        // [IocDiscover] / [IocDiscover<T>] -> closed-generic dependencies discovered at compile time
+        var allDiscoverProviders = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                Constants.IocDiscoverAttributeFullName,
+                predicate: static (_, _) => true,
+                transform: static (ctx, ct) => TransformDiscover(ctx, ct))
+            .SelectMany(static (m, _) => m)
+            .Collect()
+            .Combine(context.SyntaxProvider
+                .ForAttributeWithMetadataName(
+                    Constants.IocDiscoverAttributeFullName_T1,
+                    predicate: static (_, _) => true,
+                    transform: static (ctx, ct) => TransformDiscoverGeneric(ctx, ct))
+                .SelectMany(static (m, _) => m)
+                .Collect())
+            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // Get MSBuild properties from analyzer config options
-        var msbuildPropertiesProvider = context.AnalyzerConfigOptionsProvider
-            .Select(static (configOptions, _) =>
-            {
-                // Try to get RootNamespace from MSBuild property
-                string? rootNamespace = null;
-                if(configOptions.GlobalOptions.TryGetValue(Constants.RootNamespaceProperty, out var ns)
-                    && ns is { Length: > 0 } rawRootNamespace
-                    && !string.IsNullOrWhiteSpace(rawRootNamespace))
-                {
-                    rootNamespace = rawRootNamespace;
-                }
-
-                // Try to get custom IoC name from MSBuild property
-                string? customIocName = null;
-                if(configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocNameProperty, out var iocName)
-                    && iocName is { Length: > 0 } rawCustomIocName
-                    && !string.IsNullOrWhiteSpace(rawCustomIocName))
-                {
-                    customIocName = rawCustomIocName;
-                }
-
-                // Try to get enabled feature flags from MSBuild property
-                configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocFeaturesProperty, out var featuresStr);
-                var features = IocFeaturesHelper.Parse(featuresStr);
-
-                return new MsBuildProperties(rootNamespace, customIocName, features);
-            });
-
-        // Get compilation info (assembly name and DI package reference)
-        var compilationInfoProvider = context.CompilationProvider
-            .Select(static (compilation, _) =>
-            {
-                var assemblyName = compilation.AssemblyName ?? "Generated";
-                // Detect if Microsoft.Extensions.DependencyInjection package is referenced
-                // by checking for ServiceCollectionContainerBuilderExtensions type
-                var hasDIPackage = compilation.GetTypeByMetadataName(
-                    "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions") is not null;
-                return (AssemblyName: assemblyName, HasDIPackage: hasDIPackage);
-            });
-
-        // Combine default settings from current assembly and imported modules
-        // Current assembly settings take precedence over imported settings
-        var combinedDefaultSettings = allDefaultSettings
-            .Combine(allImportedDefaultSettings)
-            .Combine(defaultLifetimeProvider)
-            .Select(static (combined, _) =>
-            {
-                var ((currentAssembly, imported), defaultLifetime) = combined;
-                // Current assembly settings come first (higher priority), then imported settings (lower priority)
-                // DefaultSettingsMap uses first-match semantics, so current assembly settings should be added first
-                var allSettings = currentAssembly.AddRange(imported);
-                return new DefaultSettingsMap(allSettings, defaultLifetime ?? ServiceLifetime.Transient);
-            });
-
-        // Collect GetService, GetRequiredService, GetKeyedService, GetRequiredKeyedService, GetServices invocations
+        // IServiceProvider.GetService / GetRequiredService / GetKeyedService / GetServices invocations
         var invocations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => PredicateInvocations(node),
@@ -206,88 +138,67 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
-        // ========== IocDiscoverAttribute providers ==========
-        // IocDiscoverAttribute (non-generic)
-        var discoverProvider = context.SyntaxProvider
+        // [IocContainer]
+        var containerProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                Constants.IocDiscoverAttributeFullName,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformDiscover(ctx, ct))
-            .SelectMany(static (m, _) => m);
+                Constants.IocContainerAttributeFullName,
+                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                transform: static (ctx, ct) => TransformContainer(ctx, ct))
+            .Where(static m => m is not null)
+            .Select(static (m, _) => m!);
 
-        // IocDiscoverAttribute<T>
-        var discoverProvider_T1 = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocDiscoverAttributeFullName_T1,
-                predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformDiscoverGeneric(ctx, ct))
-            .SelectMany(static (m, _) => m);
+        // ===== Stage 2: Compilation / MSBuild / default-settings inputs =====
 
-        // Combine all discover providers
-        var allDiscoverProviders = discoverProvider
-            .Collect()
-            .Combine(discoverProvider_T1.Collect())
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+        var defaultLifetimeProvider = BuildDefaultLifetimeProvider(context);
+        var msbuildPropertiesProvider = BuildMsBuildPropertiesProvider(context);
+        var compilationInfoProvider = BuildCompilationInfoProvider(context);
 
-        // ========== Pipeline 1: Process individual registrations (cacheable per registration) ==========
-        // Each registration is processed independently with default settings.
+        // Current-assembly settings take precedence over imported settings (DefaultSettingsMap uses first-match semantics).
+        var combinedDefaultSettings = allDefaultSettings
+            .Combine(allImportedDefaultSettings)
+            .Combine(defaultLifetimeProvider)
+            .Select(static (combined, _) =>
+            {
+                var ((currentAssembly, imported), defaultLifetime) = combined;
+                var allSettings = currentAssembly.AddRange(imported);
+                return new DefaultSettingsMap(allSettings, defaultLifetime ?? ServiceLifetime.Transient);
+            });
+
+        // ===== Stage 3: Per-registration processing (cacheable per registration) =====
 
         var basicRegistrationResults1 = registerProvider
             .Combine(combinedDefaultSettings)
-            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
+            .Select(static (s, ct) => ProcessSingleRegistration(s.Left, s.Right, ct));
 
         var basicRegistrationResults1_T1 = registerProvider_T1
             .Combine(combinedDefaultSettings)
-            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
+            .Select(static (s, ct) => ProcessSingleRegistration(s.Left, s.Right, ct));
 
         var basicRegistrationResults2 = registerForProvider
             .Combine(combinedDefaultSettings)
-            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
+            .Select(static (s, ct) => ProcessSingleRegistration(s.Left, s.Right, ct));
 
         var basicRegistrationResults2_T1 = registerForProvider_T1
             .Combine(combinedDefaultSettings)
-            .Select(static (source, ct) => ProcessSingleRegistration(source.Left, source.Right, ct));
+            .Select(static (s, ct) => ProcessSingleRegistration(s.Left, s.Right, ct));
 
-        // Process ImplementationTypes from IocRegisterDefaultsAttribute
-        // These registrations already have all settings applied from the defaults attribute
-        // Transform each RegistrationData to BasicRegistrationResult
+        // ImplementationTypes from [IocRegisterDefaults] already have all settings applied; just convert.
         var basicRegistrationResults3 = defaultSettingsImplTypeRegistrations
             .Select(static (registrations, ct) => ProcessSingleRegistrationFromDefaults(registrations, ct));
 
-        // Collect all basic registration results
-        var allBasicResults = basicRegistrationResults1.Collect()
-            .Combine(basicRegistrationResults1_T1.Collect())
-            .Combine(basicRegistrationResults2.Collect())
-            .Combine(basicRegistrationResults2_T1.Collect())
-            .Combine(basicRegistrationResults3.Collect())
-            .Select(static (combined, _) =>
-            {
-                var part1 = combined.Left.Left.Left.Left;
-                var part2 = combined.Left.Left.Left.Right;
-                var part3 = combined.Left.Left.Right;
-                var part4 = combined.Left.Right;
-                var part5 = combined.Right;
+        var allBasicResults = CollectAndConcat(
+            basicRegistrationResults1,
+            basicRegistrationResults1_T1,
+            basicRegistrationResults2,
+            basicRegistrationResults2_T1,
+            basicRegistrationResults3);
 
-                var builder = ImmutableArray.CreateBuilder<BasicRegistrationResult>(
-                    part1.Length + part2.Length + part3.Length + part4.Length + part5.Length);
+        // ===== Stage 4: Closed-generic resolution + grouping =====
 
-                builder.AddRange(part1);
-                builder.AddRange(part2);
-                builder.AddRange(part3);
-                builder.AddRange(part4);
-                builder.AddRange(part5);
-
-                return builder.MoveToImmutable();
-            });
-
-        // ========== Pipeline 2: Combine results and resolve closed generics ==========
-
-        // Combine invocations with discover attributes
         var combinedClosedGenericDependencies = invocations
             .Combine(allDiscoverProviders)
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // Combine factory-based open generics with imported open generics from other assemblies
         var allOpenGenericEntries = factoryBasedOpenGenericEntries
             .Combine(allImportedOpenGenerics)
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
@@ -295,7 +206,9 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         var serviceRegistrations = allBasicResults
             .Combine(combinedClosedGenericDependencies)
             .Combine(allOpenGenericEntries)
-            .Select(static (source, ct) => CombineAndResolveClosedGenerics(in source.Left.Left, in source.Left.Right, in source.Right, ct));
+            .Select(static (s, ct) => CombineAndResolveClosedGenerics(in s.Left.Left, in s.Left.Right, in s.Right, ct));
+
+        // ===== Stage 5a: Emit Register output =====
 
         var registerOutputModel = serviceRegistrations
             .Combine(compilationInfoProvider)
@@ -313,21 +226,12 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         {
             if(model is null)
                 return;
-
             GenerateRegisterOutput(in ctx, model);
         });
 
-        // ========== Container Pipeline ==========
-        // IocContainerAttribute provider
-        var containerProvider = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                Constants.IocContainerAttributeFullName,
-                predicate: static (node, _) => node is ClassDeclarationSyntax,
-                transform: static (ctx, ct) => TransformContainer(ctx, ct))
-            .Where(static m => m is not null)
-            .Select(static (m, _) => m!);
+        // ===== Stage 5b: Emit Container output =====
+        // ExplicitOnly containers do not depend on serviceRegistrations (independent caching branch).
 
-        // ExplicitOnly containers: no dependency on serviceRegistrations
         var explicitOnlyContainerWithGroups = containerProvider
             .Where(static c => c.ExplicitOnly)
             .Combine(msbuildPropertiesProvider)
@@ -337,7 +241,6 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 return GroupExplicitOnlyRegistrations(container, msbuildProps.Features);
             });
 
-        // Non-ExplicitOnly containers: filter then group with caching barrier
         var normalContainerWithGroups = containerProvider
             .Where(static c => !c.ExplicitOnly)
             .Combine(serviceRegistrations)
@@ -354,27 +257,46 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 return GroupRegistrationsForContainer(container, filtered, msbuildProps.Features);
             });
 
-        // ExplicitOnly pipeline output
-        var explicitOnlyWithCompilationInfo = explicitOnlyContainerWithGroups
-            .Combine(compilationInfoProvider)
-            .Combine(msbuildPropertiesProvider);
+        EmitContainerOutput(explicitOnlyContainerWithGroups);
+        EmitContainerOutput(normalContainerWithGroups);
 
-        context.RegisterSourceOutput(explicitOnlyWithCompilationInfo, static (ctx, source) =>
+        void EmitContainerOutput(IncrementalValuesProvider<ContainerWithGroups> groups)
         {
-            var ((containerWithGroups, compilationInfo), msbuildProps) = source;
-            GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
-        });
-
-        // Normal pipeline output
-        var normalWithCompilationInfo = normalContainerWithGroups
-            .Combine(compilationInfoProvider)
-            .Combine(msbuildPropertiesProvider);
-
-        context.RegisterSourceOutput(normalWithCompilationInfo, static (ctx, source) =>
-        {
-            var ((containerWithGroups, compilationInfo), msbuildProps) = source;
-            GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
-        });
+            var withInfo = groups.Combine(compilationInfoProvider).Combine(msbuildPropertiesProvider);
+            context.RegisterSourceOutput(withInfo, static (ctx, source) =>
+            {
+                var ((containerWithGroups, compilationInfo), msbuildProps) = source;
+                GenerateContainerOutput(in ctx, containerWithGroups, compilationInfo.AssemblyName, msbuildProps, compilationInfo.HasDIPackage);
+            });
+        }
     }
 
+    /// <summary>
+    /// Concatenates five <see cref="IncrementalValuesProvider{T}"/> streams into a single
+    /// <see cref="IncrementalValueProvider{T}"/> of <see cref="ImmutableArray{T}"/> via Collect+Combine.
+    /// Used to merge the four <c>IocRegister*</c> attribute pipelines plus the <c>[IocRegisterDefaults]</c>
+    /// implementation-type pipeline into one collection before closed-generic resolution.
+    /// </summary>
+    private static IncrementalValueProvider<ImmutableArray<T>> CollectAndConcat<T>(
+        IncrementalValuesProvider<T> a,
+        IncrementalValuesProvider<T> b,
+        IncrementalValuesProvider<T> c,
+        IncrementalValuesProvider<T> d,
+        IncrementalValuesProvider<T> e)
+        => a.Collect()
+            .Combine(b.Collect())
+            .Combine(c.Collect())
+            .Combine(d.Collect())
+            .Combine(e.Collect())
+            .Select(static (combined, _) =>
+            {
+                var ((((p1, p2), p3), p4), p5) = combined;
+                var builder = ImmutableArray.CreateBuilder<T>(p1.Length + p2.Length + p3.Length + p4.Length + p5.Length);
+                builder.AddRange(p1);
+                builder.AddRange(p2);
+                builder.AddRange(p3);
+                builder.AddRange(p4);
+                builder.AddRange(p5);
+                return builder.MoveToImmutable();
+            });
 }
