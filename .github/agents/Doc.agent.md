@@ -85,6 +85,7 @@ For every source generator feature, **always** include a generated code example 
   - Edit config files (`.csproj`, `.editorconfig`, `.github/`)
   - Invent features that don't exist in the codebase
   - Include unverified code examples that may not compile
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 

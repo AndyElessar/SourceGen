@@ -84,6 +84,7 @@ RFC 8174 clarifies RFC 2119:
   - Add content beyond what the plan specifies
   - Remove existing spec content unless the plan explicitly requires it
   - Guess at behavior when the plan is ambiguous
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 

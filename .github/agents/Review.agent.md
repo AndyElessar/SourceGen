@@ -47,6 +47,7 @@ Follow the **child agent protocol** in `.github/instructions/memory-policy.instr
   - Run commands or tests
   - Suggest changes outside the scope of the spec/plan
   - Modify `/memories/session/plan.md` (owned by parent agents)
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 Return a structured report in this exact format:

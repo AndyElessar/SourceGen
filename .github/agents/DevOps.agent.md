@@ -78,6 +78,7 @@ Follow the **parent agent protocol** in `.github/instructions/memory-policy.inst
 - 🚫 **Never do:**
 	- Use long-lived API keys (use OIDC temporary credentials only)
 	- Remove tag-based publish gate, `id-token: write`, `NuGet/login@v1`, or `environment: nuget-publish` from publish jobs
+	- Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 

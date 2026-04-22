@@ -35,6 +35,7 @@ Follow the project principles in `AGENTS.md`.
   - Run terminal commands or tests
   - Make architectural recommendations (report facts, let the parent decide)
   - Modify `/memories/session/plan.md` (owned by parent agents)
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 

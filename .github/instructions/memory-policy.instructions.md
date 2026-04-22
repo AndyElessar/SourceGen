@@ -18,10 +18,23 @@ All agents that participate in the plan→approve→implement→review workflow 
 
 ## Memory Access Rules
 
-- **ONLY** use #tool:vscode/memory (the `memory` tool) to read and write `/memories/session/` paths.
-- Use #tool:vscode/resolveMemoryFileUri to resolve a `/memories/` path to a file URI when another tool requires a real file path instead of a memory abstraction. This is read-only and does not replace #tool:vscode/memory for content operations.
-- Do NOT use #tool:read for `/memories/session/` paths; these are memory-only.
-- Do NOT use #tool:edit for `/memories/session/` paths; these are memory-only.
+`/memories/session/` is a **memory-only namespace**. Treat it as an abstract store, not a filesystem.
+
+### Allowed
+
+- ✅ #tool:vscode/memory — the **only** tool permitted to read or write content under `/memories/session/`. Use the `view`, `create`, `str_replace`, and `insert` commands as documented in the tool's schema.
+- ✅ #tool:vscode/resolveMemoryFileUri — may be used to obtain a file URI for a memory path **only** when another tool's schema strictly requires a URI argument (e.g., to display the path). The returned URI is informational; it MUST NOT be passed to any read/write/execute tool to bypass the memory abstraction.
+
+### Forbidden
+
+- 🚫 Do NOT use any tool other than #tool:vscode/memory to read or write `/memories/session/` paths. This includes (non-exhaustive):
+  - #tool:read / #tool:read_file / file viewers
+  - #tool:edit / #tool:replace_string_in_file / #tool:multi_replace_string_in_file / #tool:create_file / #tool:edit_notebook_file
+  - #tool:execute / #tool:run_in_terminal / #tool:execution_subagent / #tool:create_and_run_task / any terminal command (`cat`, `less`, `sed`, `awk`, `grep`, `ls`, `head`, `tail`, `echo >`, `tee`, redirection, pipes, etc.)
+  - #tool:search / #tool:grep_search / #tool:file_search / #tool:semantic_search scoped at memory paths
+  - Any other tool that performs filesystem I/O on the resolved URI
+- 🚫 Do NOT obtain the URI via #tool:vscode/resolveMemoryFileUri and then read/edit/execute against that URI with another tool. This is the same prohibition stated above and applies regardless of how the path was obtained.
+- 🚫 Do NOT instruct a subagent (via prompt) to bypass these rules.
 
 ### Exact Tool Call Syntax
 
@@ -95,10 +108,11 @@ If the active agent definition does not require a structured preconditions block
 ## Boundaries
 
 - ✅ **Always:** Access `/memories/session/` paths exclusively via #tool:vscode/memory
-- ✅ **Always:** Use #tool:vscode/resolveMemoryFileUri when another tool needs a file URI for a memory path
+- ✅ **Always:** Treat URIs returned by #tool:vscode/resolveMemoryFileUri as informational only
 - ✅ **Always:** Verify plan content after every save operation
 - ✅ **Always:** Handle all `BLOCKED_*` responses at the appropriate level
-- 🚫 **Never:** Use #tool:read for `/memories/session/` paths
-- 🚫 **Never:** Use #tool:edit for `/memories/session/` paths
+- 🚫 **Never:** Use #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or any other non-memory tool against `/memories/session/` paths or their resolved URIs
+- 🚫 **Never:** Pipe, redirect, or shell-out to read or write `/memories/session/` files
 - 🚫 **Never:** Delegate to any subagent (after initial Explore) before saving and verifying plan
 - 🚫 **Never:** Have child agents ask users directly for plan content or approvals
+- 🚫 **Never:** Instruct subagents (via prompt) to bypass these rules
