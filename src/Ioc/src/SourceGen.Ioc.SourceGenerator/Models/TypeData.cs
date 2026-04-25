@@ -364,7 +364,7 @@ internal readonly record struct WrapperInfo(WrapperKind Kind, INamedTypeSymbol? 
 
 /// <summary>
 /// Represents the kind of wrapper for DI injection purposes.
-/// Each value has a corresponding sealed TypeData derived type.
+/// Most values have a corresponding sealed TypeData derived type; analyzer-only kinds (e.g., ValueTask) do not.
 /// </summary>
 internal enum WrapperKind
 {

@@ -85,7 +85,7 @@ internal static partial class TransformExtensions
 
                     if(methodSymbol is not null)
                     {
-                        var factoryData = CreateFactoryMethodData(methodSymbol);
+                        var factoryData = CreateFactoryMethodData(methodSymbol, semanticModel);
 
                         // Fallback: if method is generic but has no [IocGenericFactory], check attribute's GenericFactoryTypeMapping
                         if(factoryData.GenericTypeMapping is null && methodSymbol.TypeParameters.Length > 0)
@@ -126,7 +126,7 @@ internal static partial class TransformExtensions
         /// - Other parameters: Will be resolved from the service provider using the same logic as [IocInject] methods
         /// Also extracts [IocGenericFactory] attribute if present for generic factory method support.
         /// </summary>
-        public FactoryMethodData CreateFactoryMethodData()
+        public FactoryMethodData CreateFactoryMethodData(SemanticModel? semanticModel = null)
         {
             var path = methodSymbol.FullAccessPath;
             bool hasServiceProvider = false;
@@ -166,7 +166,7 @@ internal static partial class TransformExtensions
                     continue;
 
                 // Collect additional parameter info using the same logic as [IocInject] methods
-                var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo();
+                var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
                 var parameterData = new ParameterData(
                     param.Name,
                     param.Type.GetTypeData(),
