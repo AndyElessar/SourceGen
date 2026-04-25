@@ -15,15 +15,7 @@ partial class IocSourceGenerator
     /// <param name="ImplementationTypeInjectionMembers">The implementation injection members.</param>
     /// <param name="InputTypes">The Func input type parameters.</param>
     /// <param name="Tags">The tags inherited from the source registration.</param>
-    private readonly record struct FuncRegistrationEntry(
-        string FuncServiceTypeName,
-        string InnerServiceTypeName,
-        string ImplementationTypeName,
-        ServiceLifetime Lifetime,
-        ImmutableEquatableArray<ParameterData>? ImplementationTypeConstructorParams,
-        ImmutableEquatableArray<InjectionMemberData> ImplementationTypeInjectionMembers,
-        ImmutableEquatableArray<TypeParameter> InputTypes,
-        ImmutableEquatableArray<string> Tags)
+    private readonly partial record struct FuncRegistrationEntry
     {
         public void WriteRegistration(SourceWriter writer)
         {

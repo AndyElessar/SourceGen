@@ -11,11 +11,7 @@ partial class IocSourceGenerator
     /// <param name="ImplementationTypeName">The fully-qualified implementation type name.</param>
     /// <param name="Lifetime">The service lifetime matching the inner service.</param>
     /// <param name="Tags">The tags inherited from the source registration.</param>
-    private readonly record struct LazyRegistrationEntry(
-        string InnerServiceTypeName,
-        string ImplementationTypeName,
-        ServiceLifetime Lifetime,
-        ImmutableEquatableArray<string> Tags)
+    private readonly partial record struct LazyRegistrationEntry
     {
         public void WriteRegistration(SourceWriter writer)
         {

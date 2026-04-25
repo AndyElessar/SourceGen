@@ -14,12 +14,7 @@ partial class IocSourceGenerator
     /// <param name="KeyExpr">The key literal expression (e.g., <c>"Key1"</c>).</param>
     /// <param name="Lifetime">The service lifetime matching the keyed value service.</param>
     /// <param name="Tags">The tags inherited from the source registration.</param>
-    private readonly record struct KvpRegistrationEntry(
-        string KeyTypeName,
-        string ValueTypeName,
-        string KeyExpr,
-        ServiceLifetime Lifetime,
-        ImmutableEquatableArray<string> Tags)
+    private readonly partial record struct KvpRegistrationEntry
     {
         public void WriteRegistration(SourceWriter writer)
         {
