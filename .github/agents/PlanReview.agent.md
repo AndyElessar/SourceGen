@@ -2,6 +2,7 @@
 description: "Use when: verifying a drafted plan against the actual codebase before presenting to user. Checks assumptions, goal achievability, architecture descriptions, and step feasibility."
 model: GPT-5.4 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, read, search, web, github/get_file_contents, github/issue_read, codegraphcontext/analyze_code_relationships, codegraphcontext/calculate_cyclomatic_complexity, codegraphcontext/find_code, codegraphcontext/find_dead_code, codegraphcontext/find_most_complex_functions, codegraphcontext/get_repository_stats, codegraphcontext/load_bundle, codegraphcontext/search_registry_bundles, codegraphcontext/visualize_graph_query, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest]
+target: vscode
 agents: []
 user-invocable: false
 argument-hint: "Invoked by Orchestrator after drafting and saving plan to /memories/session/plan.md. No additional input required — reads plan automatically."

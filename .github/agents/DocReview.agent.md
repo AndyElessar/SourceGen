@@ -2,6 +2,7 @@
 description: "Use when: reviewing completed documentation updates under docs/ for accuracy, consistency, links, and generated code examples."
 model: GPT-5.4 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, read, search, web, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo]
+target: vscode
 agents: []
 user-invocable: false
 argument-hint: "Provide changed docs files and related source/spec paths to validate"

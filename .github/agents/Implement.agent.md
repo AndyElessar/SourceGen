@@ -2,6 +2,7 @@
 description: "Use when: implementing approved plan from /memories/session/plan.md. Executes code changes, runs tests, and follows project conventions."
 model: GPT-5.4 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, execute, read, edit, search, web, 'codegraphcontext/*', 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo]
+target: vscode
 agents: []
 user-invocable: false
 argument-hint: "Implement the approved plan stored in /memories/session/plan.md"

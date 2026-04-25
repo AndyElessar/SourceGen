@@ -28,10 +28,10 @@ All agents that participate in the plan→approve→implement→review workflow 
 ### Forbidden
 
 - 🚫 Do NOT use any tool other than #tool:vscode/memory to read or write `/memories/session/` paths. This includes (non-exhaustive):
-  - #tool:read / #tool:read_file / file viewers
-  - #tool:edit / #tool:replace_string_in_file / #tool:multi_replace_string_in_file / #tool:create_file / #tool:edit_notebook_file
-  - #tool:execute / #tool:run_in_terminal / #tool:execution_subagent / #tool:create_and_run_task / any terminal command (`cat`, `less`, `sed`, `awk`, `grep`, `ls`, `head`, `tail`, `echo >`, `tee`, redirection, pipes, etc.)
-  - #tool:search / #tool:grep_search / #tool:file_search / #tool:semantic_search scoped at memory paths
+  - #tool:read / file viewers
+  - #tool:edit
+  - #tool:execute / any terminal command (`cat`, `less`, `sed`, `awk`, `grep`, `ls`, `head`, `tail`, `echo >`, `tee`, redirection, pipes, etc.)
+  - #tool:search scoped at memory paths
   - Any other tool that performs filesystem I/O on the resolved URI
 - 🚫 Do NOT obtain the URI via #tool:vscode/resolveMemoryFileUri and then read/edit/execute against that URI with another tool. This is the same prohibition stated above and applies regardless of how the path was obtained.
 - 🚫 Do NOT instruct a subagent (via prompt) to bypass these rules.
@@ -76,9 +76,49 @@ Child agents (Implement, Review, DocReview, Spec, PlanReview) load and validate 
 1. **Load Goal and Plan (FIRST ACTION — mandatory, non-skippable)** — Call #tool:vscode/memory to read `/memories/session/goal.md` first, then `/memories/session/plan.md`, as your very first tool calls. No other tool call may precede these.
 2. **Validate Content** — Confirm both goal and plan content are present and non-empty. If valid, proceed to work.
 3. **Block if Missing** — If memory read fails or plan is missing/empty, stop immediately and return `BLOCKED_NEEDS_PARENT_PLAN` with a brief reason requesting the parent agent to save a complete plan. Do NOT attempt to guess the plan or proceed without it.
-4. **Block on Tool Failure** — If memory is unavailable due to tool/runtime issues, stop and return `BLOCKED_NO_PLAN_MEMORY`.
+4. **Block on Tool Failure** — If memory is unavailable due to tool/runtime issues, stop and return `BLOCKED_NO_PLAN_MEMORY`. **You MUST attempt the tool call at least once before claiming unavailability** — see "Tool Availability Self-Check" below.
 5. **Block on Ambiguity** — If anything in the plan is unclear or a design decision is needed, return `BLOCKED_NEEDS_PARENT_DECISION` with the exact clarification needed.
 6. **Never Ask User** — Never request plan content or approvals directly from the user; all requests go through the parent agent.
+
+### Tool Availability Self-Check
+
+`vscode/memory` is granted in the `tools:` frontmatter of every child agent definition under `.github/agents/`. **You MUST NOT pre-emptively declare it unavailable**. Empirically observed failure mode: agents sometimes claim "memory tool not available" without ever invoking it, then fall back to `read_file`/`grep` (which violates the memory policy) or refuse to proceed.
+
+Required behavior:
+
+1. **Always attempt the call first.** Issue the exact tool call:
+   `memory({ command: "view", path: "/memories/session/goal.md" })`
+2. **Only after the tool call returns an actual error** may you return `BLOCKED_NO_PLAN_MEMORY`. Include the verbatim error message in your report.
+3. **Never substitute** `read_file`, `grep_search`, `run_in_terminal`, or any other tool to access `/memories/session/*` paths — even if you believe `memory` is unavailable. If `memory` truly fails, the correct response is to STOP and return the BLOCKED code, not to bypass the policy.
+
+## Delegation Prompt Pattern (Parent → Child)
+
+When a parent agent delegates to a child agent and expects it to use #tool:vscode/memory, the prompt MUST be explicit. Empirical testing shows that vague prompts like "please use the memory tool to read plan.md" fail roughly half the time with GPT-5.x child agents — the model claims the tool is unavailable and either gives up or substitutes `read_file`. Explicit prompts with command + parameters + an anti-decline directive succeed reliably.
+
+### Required prompt elements
+
+1. **Name the tool explicitly** — write `#tool:vscode/memory` or "memory tool", not just "memory".
+2. **Specify the command and parameters** — e.g., `command="view"`, `path="/memories/session/plan.md"`.
+3. **Confirm authorization** — note that the tool is granted in the agent's frontmatter (`tools:` field of `.github/agents/<Agent>.agent.md`).
+4. **Block the decline path** — explicitly forbid "tool unavailable" responses without an actual call attempt; explicitly forbid substituting `read_file`/`grep_search`/`run_in_terminal`.
+5. **Specify the report shape** — what the child should return after a successful read.
+
+### Recommended template
+
+```
+Your frontmatter (tools:) grants #tool:vscode/memory. Follow these steps:
+
+1. As your first action, call memory with parameters:
+   { "command": "view", "path": "/memories/session/goal.md" }
+2. As your second action, call memory with parameters:
+   { "command": "view", "path": "/memories/session/plan.md" }
+3. After both calls succeed, perform: <the agent's primary task>
+4. When complete, report using the agent's defined Output Format.
+
+Prohibited:
+- Do NOT use read_file, grep_search, run_in_terminal, or any other tool to access /memories/session/* paths
+- Do NOT claim "the memory tool is unavailable" without first attempting the call. If the call genuinely fails, return BLOCKED_NO_PLAN_MEMORY with the verbatim error message.
+```
 
 ## BLOCKED Response Codes
 
@@ -111,8 +151,11 @@ If the active agent definition does not require a structured preconditions block
 - ✅ **Always:** Treat URIs returned by #tool:vscode/resolveMemoryFileUri as informational only
 - ✅ **Always:** Verify plan content after every save operation
 - ✅ **Always:** Handle all `BLOCKED_*` responses at the appropriate level
-- 🚫 **Never:** Use #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or any other non-memory tool against `/memories/session/` paths or their resolved URIs
+- ✅ **Always:** Attempt the `memory` tool call at least once before returning `BLOCKED_NO_PLAN_MEMORY`; never pre-emptively declare the tool unavailable
+- ✅ **Always (parents):** When delegating to a child agent, write explicit prompts naming `#tool:vscode/memory`, the command (`view`), the exact path, and forbidding substitutes — see "Delegation Prompt Pattern (Parent → Child)"
+- 🚫 **Never:** Use #tool:read, #tool:edit, #tool:execute, search/grep tools, or any other non-memory tool against `/memories/session/` paths or their resolved URIs
 - 🚫 **Never:** Pipe, redirect, or shell-out to read or write `/memories/session/` files
 - 🚫 **Never:** Delegate to any subagent (after initial Explore) before saving and verifying plan
 - 🚫 **Never:** Have child agents ask users directly for plan content or approvals
 - 🚫 **Never:** Instruct subagents (via prompt) to bypass these rules
+- 🚫 **Never:** Substitute `read_file`/`grep_search`/`run_in_terminal` for `memory` because you suspect `memory` is unavailable — STOP and return `BLOCKED_NO_PLAN_MEMORY` instead

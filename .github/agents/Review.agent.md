@@ -2,6 +2,7 @@
 description: "Use when: reviewing completed implementation against spec. Performs read-only code review for spec compliance, refactoring opportunities, and performance optimization."
 model: GPT-5.4 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, read, search, web, github/get_file_contents, github/issue_read, codegraphcontext/analyze_code_relationships, codegraphcontext/calculate_cyclomatic_complexity, codegraphcontext/find_code, codegraphcontext/find_dead_code, codegraphcontext/find_most_complex_functions, codegraphcontext/get_repository_stats, codegraphcontext/load_bundle, codegraphcontext/search_registry_bundles, codegraphcontext/visualize_graph_query, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest]
+target: vscode
 agents: []
 user-invocable: false
 argument-hint: "Provide the spec/plan and list of changed files to review"
