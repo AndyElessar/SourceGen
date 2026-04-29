@@ -84,7 +84,10 @@ When a registration contains one or more async inject methods, the container MUS
 |`ThreadSafeStrategy.None`|Allowed. The container MAY assign the task field directly without synchronization.|
 |`ThreadSafeStrategy.SemaphoreSlim`|Allowed. Singleton/scoped async-init services MUST use `WaitAsync()` / `Release()` around first initialization.|
 |`ThreadSafeStrategy.Lock`, `ThreadSafeStrategy.SpinLock`, or `ThreadSafeStrategy.CompareExchange`|Async-incompatible for async-init services and MUST NOT be used for that resolver path.|
-|`EagerResolveOptions` includes singleton and/or scoped services|Async-init services MUST be excluded from eager resolution. The container constructor/scope constructor MUST NOT pre-start those tasks.|
+|`EagerResolveOptions` and synchronous services|`EagerResolveOptions` controls eager resolution of **synchronous** singleton/scoped services only. It has **no effect** on async-init services.|
+|Singleton async-init registration — eager init|The container constructor MUST unconditionally emit `_ = GetXxxAsync();` (fire-and-forget) to pre-start the task. This is **always generated, regardless of `EagerResolveOptions`**.|
+|Scoped async-init registration — eager init|The scope constructor MUST unconditionally emit `_ = GetXxxAsync();` (fire-and-forget) to pre-start the task. This is **always generated, regardless of `EagerResolveOptions`**.|
+|Transient async-init registration — eager init|Transient async-init services are **never** eagerly started. No fire-and-forget call is emitted.|
 |Collection wrappers (`IEnumerable<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `IList<T>`, `T[]`)|Async-init registrations MUST be excluded from collection resolvers. `IEnumerable<Task<T>>` is not supported.|
 
 ```mermaid
@@ -151,8 +154,8 @@ partial class AppContainer
     {
         _fallbackProvider = fallbackProvider;
 
-        // Async-init singleton is excluded from eager resolution.
-        // _fooBar = GetFooBarAsync(); // MUST NOT be emitted
+        // Async-init singletons are always pre-started (fire-and-forget), regardless of EagerResolveOptions.
+        _ = GetFooBarAsync();
     }
 
     private async global::System.Threading.Tasks.Task<global::FooBar> GetFooBarAsync()

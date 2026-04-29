@@ -401,10 +401,11 @@ partial class IocSourceGenerator
             methodName = $"{methodName}_Resolve";
         }
 
-        // Determine if this registration should be eagerly resolved
-        // Instance registrations are inherently eager (no field caching needed)
-        // Transient services are not supported for eager resolution
-        // Async-init services must always be lazy (cannot be started in constructor)
+        // Determine if this registration should be eagerly resolved via EagerResolveOptions.
+        // Instance registrations are inherently eager (no field caching needed).
+        // Transient services are not supported for eager resolution.
+        // Async-init singleton/scoped services are pre-started separately by AsyncContainerEntry.WriteEagerInit,
+        // regardless of EagerResolveOptions, so this flag only governs synchronous singleton/scoped services.
         var isAsyncInit = HasAsyncInitMembers(reg);
         var isEager = reg.Instance is null && !isAsyncInit && reg.Lifetime switch
         {
@@ -551,6 +552,8 @@ partial class IocSourceGenerator
 
         if(cached.IsAsyncInit)
         {
+            // Async-init singleton/scoped services always use AsyncContainerEntry so the emitted
+            // constructor/scope-constructor fire-and-forget path stays independent from IsEager.
             if(reg.Lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
             {
                 return new AsyncContainerEntry(

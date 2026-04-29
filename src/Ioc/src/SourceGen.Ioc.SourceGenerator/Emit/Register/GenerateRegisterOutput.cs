@@ -99,7 +99,7 @@ partial class IocSourceGenerator
         RegisterWriteContext context)
     {
         // Build the condition - only register when tags match
-        var tagConditions = tags.Select(static tag => $"tags.Contains(\"{tag}\")");
+        var tagConditions = tags.Select(static tag => $"tags.Contains({SymbolDisplay.FormatLiteral(tag, quote: true)})");
         var condition = string.Join(" || ", tagConditions);
 
         writer.WriteLine($"if ({condition})");

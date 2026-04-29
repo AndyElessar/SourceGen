@@ -252,14 +252,14 @@ public class AsyncMethodInjectTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Eager resolve exclusion — async-init services must NOT be in constructor init
+    // Async-init eager init — async services are always fire-and-forget pre-started
     // ─────────────────────────────────────────────────────────────────────────
 
     [Test]
-    public async Task AsyncMethodInject_AsyncService_ExcludedFromEagerInit()
+    public async Task AsyncMethodInject_AsyncService_AlwaysEagerInitInConstructor_RegardlessOfEagerResolveOptions()
     {
-        // EagerResolveOptions.Singleton is set, but the async-init service must NOT be eager.
-        // The sync-only SyncService IS eager. Verify that only SyncService appears in the ctor.
+        // EagerResolveOptions.Singleton still only controls the synchronous SyncService.
+        // The async-init AsyncService is always fire-and-forget pre-started in the root ctor.
         const string source = """
             using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
@@ -281,6 +281,48 @@ public class AsyncMethodInjectTests
             public class SyncService : ISyncService { }
 
             [IocContainer(EagerResolveOptions = EagerResolveOptions.Singleton, ThreadSafeStrategy = ThreadSafeStrategy.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_ScopedAsyncService_FireAndForgetInScopeConstructor_RegardlessOfEagerResolveOptions()
+    {
+        // EagerResolveOptions.None keeps synchronous scoped services lazy, but scoped async-init
+        // services are still fire-and-forget pre-started when a child scope is created.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IAsyncScopedService { }
+            public interface ISyncScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncScopedService)])]
+            public class AsyncScopedService : IAsyncScopedService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ISyncScopedService)])]
+            public class SyncScopedService : ISyncScopedService { }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 

@@ -101,4 +101,29 @@ public class TagsTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Tags_SpecialCharacters_GeneratesEscapedTagLiterals()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyTaggedService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyTaggedService)],
+                Tags = ["a\"b", "c\\d", "line\nbreak"])]
+            public class MyTaggedService : IMyTaggedService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }
