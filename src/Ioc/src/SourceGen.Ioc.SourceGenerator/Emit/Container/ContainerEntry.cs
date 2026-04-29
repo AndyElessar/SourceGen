@@ -657,6 +657,7 @@ partial class IocSourceGenerator
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
         string FieldName,
+        bool IsEager,
         ThreadSafeStrategy ThreadSafeStrategy,
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
@@ -717,7 +718,10 @@ partial class IocSourceGenerator
 
         public override void WriteEagerInit(SourceWriter writer)
         {
-            writer.WriteLine($"_ = {GetAsyncResolverMethodName(ResolverMethodName)}();");
+            if(IsEager)
+            {
+                writer.WriteLine($"_ = {GetAsyncResolverMethodName(ResolverMethodName)}();");
+            }
         }
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)

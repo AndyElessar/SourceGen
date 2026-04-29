@@ -73,9 +73,6 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _iocSample_GenericRequestHandler2_IocSample_Entity2_ = parent._iocSample_GenericRequestHandler2_IocSample_Entity2_;
         _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)parent._iocSample_Shared_SharedModule.CreateScope().ServiceProvider;
 
-        // Initialize eager scoped services
-        _ = GetIocSample_AsyncDependencyAsync();
-
         // Initialize Lazy wrapper fields
         _lazy_IocSample_IWrapperService_int__IocSample_WrapperService_int_ = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetIocSample_WrapperService_int_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
         _lazy_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);

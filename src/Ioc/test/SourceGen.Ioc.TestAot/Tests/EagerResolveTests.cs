@@ -5,8 +5,39 @@ namespace SourceGen.Ioc.TestAot.Tests;
 /// EagerResolveOptions.SingletonAndScoped resolve singletons during construction
 /// rather than on first use.
 /// </summary>
+[NotInParallel]
 public sealed class EagerResolveTests
 {
+    [Test]
+    public async Task AsyncEagerResolveContainer_SingletonAsyncInit_StartsDuringContainerConstruction()
+    {
+        AsyncEagerSingletonProbe.Reset();
+
+        await using var container = new AsyncEagerResolveContainer();
+
+        await Assert.That(AsyncEagerSingletonProbe.ConstructedCount).IsEqualTo(1);
+        await Assert.That(AsyncEagerSingletonProbe.InitializeStartedCount).IsEqualTo(1);
+        await Assert.That(AsyncEagerSingletonProbe.ConstructedCount).IsEqualTo(1);
+        await Assert.That(AsyncEagerSingletonProbe.InitializeStartedCount).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task AsyncInjectionContainer_EagerNone_DoesNotStartAsyncInitDuringContainerConstruction()
+    {
+        AsyncInitServiceProbe.Reset();
+
+        using var container = new AsyncInjectionContainer();
+
+        await Assert.That(AsyncInitServiceProbe.ConstructedCount).IsEqualTo(0);
+        await Assert.That(AsyncInitServiceProbe.InitializeStartedCount).IsEqualTo(0);
+
+        var dependency = container.GetRequiredService<IInjectionDependency>();
+
+        await Assert.That(dependency).IsNotNull();
+        await Assert.That(AsyncInitServiceProbe.ConstructedCount).IsEqualTo(0);
+        await Assert.That(AsyncInitServiceProbe.InitializeStartedCount).IsEqualTo(0);
+    }
+
     [Test]
     public async Task EagerResolveContainer_Singleton_IsNotNullAfterConstruction()
     {

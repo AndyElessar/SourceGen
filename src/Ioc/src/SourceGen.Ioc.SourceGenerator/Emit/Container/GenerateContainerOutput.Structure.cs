@@ -277,7 +277,7 @@ partial class IocSourceGenerator
         }
 
         // Initialize eager scoped services
-        if(groups.ScopedEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry))
+        if(groups.ScopedEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry { IsEager: true }))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager scoped services");
@@ -323,7 +323,7 @@ partial class IocSourceGenerator
         }
 
         // Initialize eager singleton services
-        if(groups.SingletonEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry))
+        if(groups.SingletonEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry { IsEager: true }))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager singletons");

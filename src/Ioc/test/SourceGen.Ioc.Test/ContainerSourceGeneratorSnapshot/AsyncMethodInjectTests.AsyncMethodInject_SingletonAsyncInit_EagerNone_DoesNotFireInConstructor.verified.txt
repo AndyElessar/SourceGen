@@ -39,41 +39,40 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-
-        // Initialize eager scoped services
-        _ = GetTestNamespace_AsyncScopedServiceAsync();
+        _testNamespace_AsyncService = parent._testNamespace_AsyncService;
+        _testNamespace_SyncService = parent._testNamespace_SyncService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>? _testNamespace_AsyncScopedService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService>? _testNamespace_AsyncService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> GetTestNamespace_AsyncScopedServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService> GetTestNamespace_AsyncServiceAsync()
     {
-        if(_testNamespace_AsyncScopedService is not null)
-            return await _testNamespace_AsyncScopedService;
+        if(_testNamespace_AsyncService is not null)
+            return await _testNamespace_AsyncService;
 
-        _testNamespace_AsyncScopedService = CreateTestNamespace_AsyncScopedServiceAsync();
-        return await _testNamespace_AsyncScopedService;
+        _testNamespace_AsyncService = CreateTestNamespace_AsyncServiceAsync();
+        return await _testNamespace_AsyncService;
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> CreateTestNamespace_AsyncScopedServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService> CreateTestNamespace_AsyncServiceAsync()
     {
-        var instance = new global::TestNamespace.AsyncScopedService();
+        var instance = new global::TestNamespace.AsyncService();
         await instance.InitAsync();
         return instance;
     }
 
-    private global::TestNamespace.SyncScopedService? _testNamespace_SyncScopedService;
-    private global::TestNamespace.SyncScopedService GetTestNamespace_SyncScopedService()
+    private global::TestNamespace.SyncService? _testNamespace_SyncService;
+    private global::TestNamespace.SyncService GetTestNamespace_SyncService()
     {
-        if(_testNamespace_SyncScopedService is not null) return _testNamespace_SyncScopedService;
+        if(_testNamespace_SyncService is not null) return _testNamespace_SyncService;
 
-        var instance = new global::TestNamespace.SyncScopedService();
+        var instance = new global::TestNamespace.SyncService();
 
-        _testNamespace_SyncScopedService = instance;
+        _testNamespace_SyncService = instance;
         return instance;
     }
 
@@ -223,10 +222,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.AsyncScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_AsyncScopedServiceAsync()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IAsyncScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_AsyncScopedServiceAsync()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.SyncScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SyncScopedService()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.ISyncScopedService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SyncScopedService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.AsyncService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_AsyncServiceAsync()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.IAsyncService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_AsyncServiceAsync()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.SyncService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SyncService()),
+        new(new ServiceIdentifier(typeof(global::TestNamespace.ISyncService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_SyncService()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
@@ -259,11 +258,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            DisposeService(_testNamespace_SyncScopedService);
-            DisposeService(_testNamespace_AsyncScopedService);
             return;
         }
 
+        DisposeService(_testNamespace_SyncService);
+        DisposeService(_testNamespace_AsyncService);
     }
 
     public async ValueTask DisposeAsync()
@@ -272,11 +271,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_testNamespace_SyncScopedService);
-            await DisposeServiceAsync(_testNamespace_AsyncScopedService);
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_SyncService);
+        await DisposeServiceAsync(_testNamespace_AsyncService);
     }
 
     private void ThrowIfDisposed()
