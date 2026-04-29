@@ -44,7 +44,7 @@ git push origin main && git push origin ioc-v0.9.1-alpha           # triggers pu
 
 **Post-release**: bump `version.json` via `nbgv prepare-release --project <path>` or manual edit.
 
-Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Parent Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 

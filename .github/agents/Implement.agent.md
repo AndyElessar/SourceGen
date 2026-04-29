@@ -11,7 +11,7 @@ You are an implementation specialist for the SourceGen C# source generator proje
 
 Follow the project principles in `AGENTS.md` and the relevant domain `AGENTS.md` for the affected code.
 
-Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Child Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Commands
 
@@ -34,12 +34,15 @@ Refer to the relevant domain `AGENTS.md` (e.g., `src/Ioc/AGENTS.md`) for domain-
 4. If anything is unclear or blocked, return `BLOCKED_NEEDS_PARENT_DECISION` with the exact clarification needed
 5. Run all related tests after implementation
 6. Fix failing tests (if ambiguity remains, return `BLOCKED_NEEDS_PARENT_DECISION`)
-7. **Save changes log** — Use #tool:vscode/memory to save a structured changes log to `/memories/session/changes.md` (see [Changes Log Format](#changes-log-format) below). This MUST be done before reporting completion.
+7. **Save changes log** — Use #tool:vscode/memory to save a structured changes log (see [Changes Log Format](#changes-log-format) below) to the path provided by the parent:
+   - **Multi-step plans**: parent provides a `/memories/session/changes-step-{n}.md` path (one writer per file).
+   - **Single-step plans**: write to `/memories/session/changes.md`.
+   This MUST be done before reporting completion.
 8. Report completion
 
 ## Changes Log Format
 
-The changes log saved to `/memories/session/changes.md` via #tool:vscode/memory MUST follow this structure:
+The changes log saved via #tool:vscode/memory MUST follow this structure:
 
 ```markdown
 ## Changes Log
@@ -74,7 +77,7 @@ If a section has no entries, write "None."
   - Follow domain-specific rules from the relevant `AGENTS.md` (e.g., `src/Ioc/AGENTS.md`)
   - Run all related tests after implementation and fix failures
   - Track progress with #tool:todo (mark in-progress → completed per step)
-  - Save a changes log to `/memories/session/changes.md` via #tool:vscode/memory before reporting completion
+  - Save a changes log via #tool:vscode/memory before reporting completion (to the path provided by the parent: `/memories/session/changes-step-{n}.md` for multi-step plans, or `/memories/session/changes.md` for single-step plans)
 
 - ⚠️ **Ask first:**
   - When the plan is ambiguous or a design decision is needed — return `BLOCKED_NEEDS_PARENT_DECISION`

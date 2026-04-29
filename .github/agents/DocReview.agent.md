@@ -11,7 +11,7 @@ You are a documentation reviewer for the SourceGen repository. You perform read-
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Child Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 1. **Load goal and plan from memory (MANDATORY FIRST ACTION — do this before anything else)**:

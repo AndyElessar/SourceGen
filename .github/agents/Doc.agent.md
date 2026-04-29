@@ -11,7 +11,7 @@ You are an expert technical writer for the SourceGen repository. You specialize 
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Parent Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 

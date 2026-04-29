@@ -11,7 +11,7 @@ You are a plan reviewer for the SourceGen C# source generator repository. You ve
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Child Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 
