@@ -2,6 +2,7 @@
 description: "Use when: verifying a drafted plan against the actual codebase before presenting to user. Checks assumptions, goal achievability, architecture descriptions, and step feasibility."
 model: GPT-5.4 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, read, search, web, github/get_file_contents, github/issue_read, codegraphcontext/analyze_code_relationships, codegraphcontext/calculate_cyclomatic_complexity, codegraphcontext/find_code, codegraphcontext/find_dead_code, codegraphcontext/find_most_complex_functions, codegraphcontext/get_repository_stats, codegraphcontext/load_bundle, codegraphcontext/search_registry_bundles, codegraphcontext/visualize_graph_query, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest]
+target: vscode
 agents: []
 user-invocable: false
 argument-hint: "Invoked by Orchestrator after drafting and saving plan to /memories/session/plan.md. No additional input required — reads plan automatically."
@@ -10,7 +11,7 @@ You are a plan reviewer for the SourceGen C# source generator repository. You ve
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Child Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 
@@ -49,6 +50,7 @@ Follow the **child agent protocol** in `.github/instructions/memory-policy.instr
   - Run commands or tests
   - Modify `/memories/session/plan.md` (owned by parent agents)
   - Suggest scope expansions or architectural improvements — only report accuracy/feasibility issues
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Memory Protocol
 

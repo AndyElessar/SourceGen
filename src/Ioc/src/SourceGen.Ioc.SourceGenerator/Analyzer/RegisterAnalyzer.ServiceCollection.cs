@@ -43,7 +43,7 @@ public sealed partial class RegisterAnalyzer
             var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
             var assemblyServiceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(
-                targetType, attribute, analyzerContext.AttributeSymbols).ToList();
+                targetType, attribute).ToList();
             RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, key is not null, hasFactory, hasInstance, assemblyServiceTypes);
         }
 
@@ -149,7 +149,7 @@ public sealed partial class RegisterAnalyzer
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
             var serviceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(
-                targetType, attribute, analyzerContext.AttributeSymbols).ToList();
+                targetType, attribute).ToList();
             RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, key, keyTypeSymbol, key is not null, hasFactory, hasInstance, serviceTypes);
         }
     }

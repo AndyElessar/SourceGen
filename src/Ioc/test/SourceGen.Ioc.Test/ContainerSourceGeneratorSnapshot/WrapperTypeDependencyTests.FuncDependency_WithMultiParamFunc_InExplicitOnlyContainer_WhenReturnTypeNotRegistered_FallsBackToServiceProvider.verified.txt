@@ -35,7 +35,7 @@ partial class ExplicitContainer : IIocContainer<global::TestNamespace.ExplicitCo
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _testNamespace_Consumer = GetTestNamespace_Consumer();
+        GetTestNamespace_Consumer();
     }
 
     private ExplicitContainer(ExplicitContainer parent)

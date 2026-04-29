@@ -519,6 +519,8 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                 continue;
 
             var serviceType = GetAccessorServiceType(normalizedReturnType);
+            var isGenericValueTaskReturnType = normalizedReturnType.TryGetWrapperInfo(out var returnWrapperInfo)
+                && returnWrapperInfo.Kind is WrapperKind.ValueTask;
 
             // Guard: if the innermost type (ignoring downgrade rules) is an async-init service,
             // all diagnostic reporting is owned by AnalyzeAsyncPartialAccessors (SGIOC027/029).
@@ -550,7 +552,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                 var location = member.Locations.FirstOrDefault();
                 // For ValueTask<T> (not a generator-supported recursive wrapper), report the full return type
                 // because the shape is considered downgraded/unsupported per spec.
-                var diagnosticType = AnalyzerHelpers.IsGenericValueTaskType(normalizedReturnType)
+                var diagnosticType = isGenericValueTaskReturnType
                     ? normalizedReturnType
                     : serviceType;
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -566,7 +568,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             if(serviceType is not null
                 && !isNullable
                 && IsPartialAccessorServiceRegistered(serviceType, serviceKey, analyzerContext)
-                && AnalyzerHelpers.IsGenericValueTaskType(normalizedReturnType))
+                && isGenericValueTaskReturnType)
             {
                 var location = member.Locations.FirstOrDefault();
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -589,8 +591,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
         foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(
                      implementationType,
-                     attribute,
-                     analyzerContext.AttributeSymbols))
+                     attribute))
         {
             analyzerContext.RegisteredServiceTypes.TryAdd(serviceType, true);
             analyzerContext.Registrations.Add(new ServiceRegistration(serviceType, serviceKey, implementationType));
@@ -612,57 +613,33 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
         // ValueTask<T> is not a generator-supported recursive wrapper; return T directly so callers
         // can check registration and async-init. SGIOC029 / SGIOC021 are reported separately.
-        if(AnalyzerHelpers.IsGenericValueTaskType(normalizedReturnType))
-            return AnalyzerHelpers.TryUnwrapWrapperElementType(normalizedReturnType);
+        if(normalizedReturnType.TryGetWrapperInfo(out var rootWrapperInfo)
+            && rootWrapperInfo.Kind is WrapperKind.ValueTask)
+            return rootWrapperInfo.ElementType;
 
         // Recursively unwrap generator-supported wrappers with downgrade detection.
         // Mirrors TransformExtensions.cs downgrade rules (nested Task shapes, collection-at-top).
         ITypeSymbol current = normalizedReturnType;
-        var isFirst = true;
+        var isAfterCollection = false;
 
-        while(AnalyzerHelpers.TryUnwrapWrapperElementType(current) is { } element)
+        while(current.TryGetWrapperInfo(out var wrapperInfo)
+            && wrapperInfo.ElementType is { } element)
         {
-            // Downgrade rule 1: Task<Wrapper> — outer is Task AND inner type is itself a wrapper
-            if(IsGenericTask(current) && AnalyzerHelpers.TryUnwrapWrapperElementType(element) is not null)
+            var elementKind = element.TryGetWrapperInfo(out var elementWrapperInfo)
+                ? elementWrapperInfo.Kind
+                : WrapperKind.None;
+
+            if(elementKind is not WrapperKind.None
+                && IsUnsupportedWrapperNesting(wrapperInfo.Kind, elementKind, isAfterCollection))
                 return null;
 
-            // Downgrade rule 2: Wrapper<Task> — outer is non-Task wrapper AND inner type is Task
-            if(!IsGenericTask(current) && IsGenericTask(element))
-                return null;
-
-            // Downgrade rule 3: ValueTask encountered during recursion (at top level it is handled above)
-            if(!isFirst && AnalyzerHelpers.IsGenericValueTaskType(current))
-                return null;
-
-            // Downgrade rule 4: Collection-at-top — outermost is a collection AND inner is a non-collection wrapper
-            if(isFirst && IsCollectionWrapper(current) && AnalyzerHelpers.TryUnwrapWrapperElementType(element) is not null && !IsCollectionWrapper(element))
-                return null;
+            if(wrapperInfo.Kind.IsCollectionWrapperKind())
+                isAfterCollection = true;
 
             current = element;
-            isFirst = false;
         }
 
         return current as INamedTypeSymbol;
-
-        static bool IsGenericTask(ITypeSymbol type)
-            => type is INamedTypeSymbol { Name: "Task", Arity: 1 } named
-                && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
-
-        static bool IsCollectionWrapper(ITypeSymbol type)
-        {
-            if(type.TypeKind == TypeKind.Array)
-                return true;
-
-            if(type is not INamedTypeSymbol named || named.Arity != 1)
-                return false;
-
-            if(named.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
-                return true;
-
-            var ns = named.ContainingNamespace.ToDisplayString();
-            return ns == "System.Collections.Generic"
-                && named.Name is "IReadOnlyCollection" or "ICollection" or "IReadOnlyList" or "IList";
-        }
     }
 
     /// <summary>
@@ -674,7 +651,8 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     {
         ITypeSymbol current = input;
 
-        while(AnalyzerHelpers.TryUnwrapWrapperElementType(current) is { } element)
+        while(current.TryGetWrapperInfo(out var wrapperInfo)
+            && wrapperInfo.ElementType is { } element)
         {
             current = element;
         }
@@ -853,23 +831,10 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         if(attrClass is null)
             return null;
 
-        // Non-generic form: [IocImportModule(typeof(T))]
-        if(AnalyzerHelpers.IsAttributeMatch(attrClass, attributeSymbols.IocImportModuleAttribute))
-        {
-            return attr.ConstructorArguments.Length > 0
-                ? attr.ConstructorArguments[0].Value as INamedTypeSymbol
-                : null;
-        }
+        if(!AnalyzerHelpers.IsIocImportModuleAttribute(attrClass, attributeSymbols))
+            return null;
 
-        // Generic form: [IocImportModule<T>] — OriginalDefinition comparison is handled inside IsAttributeMatch
-        if(AnalyzerHelpers.IsAttributeMatch(attrClass, attributeSymbols.IocImportModuleAttribute_T1))
-        {
-            return attrClass.IsGenericType && attrClass.TypeArguments.Length > 0
-                ? attrClass.TypeArguments[0] as INamedTypeSymbol
-                : null;
-        }
-
-        return null;
+        return attr.GetImportedModuleType();
     }
 
     /// <summary>

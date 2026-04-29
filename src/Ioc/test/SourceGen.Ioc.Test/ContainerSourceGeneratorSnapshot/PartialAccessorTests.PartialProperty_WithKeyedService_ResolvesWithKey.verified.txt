@@ -35,7 +35,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _testNamespace_MemoryCache__memory_ = GetTestNamespace_MemoryCache__memory_();
+        GetTestNamespace_MemoryCache__memory_();
     }
 
     private TestContainer(TestContainer parent)

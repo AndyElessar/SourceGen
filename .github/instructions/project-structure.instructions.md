@@ -12,7 +12,6 @@ See also: [AGENTS.md](../../AGENTS.md) for project principles and agent topology
 | Directory | Purpose | Default Access |
 |-----------|---------|----------------|
 | `.github/agents/` | Agent definition files | ⚠️ Ask first |
-| `.github/context/` | Context helpers for agent loading | ⚠️ Ask first |
 | `.github/instructions/` | Shared instruction files for agents and Copilot | ⚠️ Ask first |
 | `.github/prompts/` | Reusable agentic workflows | ⚠️ Ask first |
 | `.github/skills/` | Copilot custom skills with scripts | ⚠️ Ask first |

@@ -1,7 +1,8 @@
 ---
 description: "Use when: writing or updating user-facing documentation files (docs/ folder). Creates progressive, beginner-friendly guides with generated code examples for the SourceGen repository."
-model: Claude Opus 4.6 (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode/askQuestions, vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, execute/runInTerminal, read, agent, edit, search, web, codegraphcontext/analyze_code_relationships, codegraphcontext/find_code, codegraphcontext/get_repository_stats, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo]
+target: vscode
 agents: ["Explore", "DocReview"]
 user-invocable: true
 argument-hint: "Provide the documentation topic or feature to document, and which doc files to create or update"
@@ -10,7 +11,7 @@ You are an expert technical writer for the SourceGen repository. You specialize 
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Parent Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 
@@ -85,6 +86,7 @@ For every source generator feature, **always** include a generated code example 
   - Edit config files (`.csproj`, `.editorconfig`, `.github/`)
   - Invent features that don't exist in the codebase
   - Include unverified code examples that may not compile
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 

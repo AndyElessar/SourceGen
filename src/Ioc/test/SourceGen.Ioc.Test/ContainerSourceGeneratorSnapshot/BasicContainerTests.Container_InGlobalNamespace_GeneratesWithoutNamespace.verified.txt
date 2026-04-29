@@ -33,7 +33,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _myService = GetMyService();
+        GetMyService();
     }
 
     private GlobalContainer(GlobalContainer parent)

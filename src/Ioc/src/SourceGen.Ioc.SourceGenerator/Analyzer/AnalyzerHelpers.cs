@@ -163,29 +163,6 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
-    /// Extracts registered service types from an IoC registration attribute's ServiceTypes property.
-    /// </summary>
-    /// <param name="attribute">The attribute to extract service types from.</param>
-    /// <returns>An enumerable of service type symbols.</returns>
-    public static IEnumerable<INamedTypeSymbol> GetServiceTypesFromAttribute(AttributeData attribute)
-    {
-        foreach(var namedArg in attribute.NamedArguments)
-        {
-            if(namedArg.Key is not "ServiceTypes")
-                continue;
-
-            if(namedArg.Value.Kind is not TypedConstantKind.Array)
-                continue;
-
-            foreach(var element in namedArg.Value.Values)
-            {
-                if(element.Value is INamedTypeSymbol serviceType)
-                    yield return serviceType;
-            }
-        }
-    }
-
-    /// <summary>
     /// Returns <see langword="true"/> when the implementation contains at least one async inject method.
     /// Mirrors the generator's async-init classification by looking for instance ordinary methods
     /// marked with [IocInject]/[Inject] that return non-generic Task.
@@ -272,8 +249,7 @@ internal static class AnalyzerHelpers
     /// </summary>
     public static IEnumerable<INamedTypeSymbol> EnumerateRegisteredServiceTypes(
         INamedTypeSymbol implementationType,
-        AttributeData attribute,
-        IocAttributeSymbols attributeSymbols)
+        AttributeData attribute)
     {
         yield return implementationType;
 
@@ -281,16 +257,10 @@ internal static class AnalyzerHelpers
         if(attrClass is null)
             yield break;
 
-        if(IsIoCRegisterAttribute(attrClass, attributeSymbols) && attrClass.IsGenericType)
-        {
-            foreach(var typeArg in attrClass.TypeArguments)
-            {
-                if(typeArg is INamedTypeSymbol serviceType)
-                    yield return serviceType;
-            }
-        }
+        foreach(var serviceType in attribute.GetServiceTypeSymbolsFromGenericAttribute())
+            yield return serviceType;
 
-        foreach(var serviceType in GetServiceTypesFromAttribute(attribute))
+        foreach(var serviceType in attribute.GetServiceTypeSymbols())
             yield return serviceType;
 
         var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
@@ -392,73 +362,14 @@ internal static class AnalyzerHelpers
     {
         type = UnwrapNullableValueType(type);
 
-        if(type is not INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } namedType)
+        if(type is null
+            || !type.TryGetWrapperInfo(out var wrapperInfo))
             return null;
 
-        if(namedType.ContainingNamespace.ToDisplayString() != "System.Threading.Tasks")
+        if(wrapperInfo.Kind is not WrapperKind.Task and not WrapperKind.ValueTask)
             return null;
 
-        if(namedType.Name is not ("Task" or "ValueTask"))
-            return null;
-
-        return namedType.TypeArguments[0] as INamedTypeSymbol;
-    }
-
-    /// <summary>
-    /// Unwraps any Generator-supported wrapper type to extract the inner service type for partial accessor resolution.
-    /// Supported wrappers: Task&lt;T&gt;, Lazy&lt;T&gt;, Func&lt;T&gt;, IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, ICollection&lt;T&gt;,
-    /// IReadOnlyList&lt;T&gt;, IList&lt;T&gt;, T[], IDictionary&lt;K,V&gt;, IReadOnlyDictionary&lt;K,V&gt;, Dictionary&lt;K,V&gt;, KeyValuePair&lt;K,V&gt;.
-    /// </summary>
-    /// <returns>The inner service type, or null if the type is not a recognized wrapper.</returns>
-    public static INamedTypeSymbol? TryUnwrapWrapperElementType(ITypeSymbol type)
-    {
-        // Array: T[]
-        if(type.TypeKind == TypeKind.Array)
-            return (type as IArrayTypeSymbol)?.ElementType as INamedTypeSymbol;
-
-        if(type is not INamedTypeSymbol named)
-            return null;
-
-        // Arity-1 wrappers
-        if(named.Arity == 1)
-        {
-            var typeArg = named.TypeArguments[0] as INamedTypeSymbol;
-
-            // IEnumerable<T>
-            if(named.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
-                return typeArg;
-
-            var ns = named.ContainingNamespace.ToDisplayString();
-
-            if(ns == "System.Collections.Generic"
-                && named.Name is "IReadOnlyCollection" or "ICollection" or "IReadOnlyList" or "IList")
-                return typeArg;
-
-            if(ns == "System" && named.Name == "Lazy")
-                return typeArg;
-
-            if(ns == "System.Threading.Tasks" && named.Name is "Task" or "ValueTask")
-                return typeArg;
-        }
-
-        // Arity-2 wrappers — return the value type (TypeArguments[1])
-        if(named.Arity == 2)
-        {
-            var ns = named.ContainingNamespace.ToDisplayString();
-
-            if(ns == "System.Collections.Generic"
-                && named.Name is "IDictionary" or "IReadOnlyDictionary" or "Dictionary" or "KeyValuePair")
-                return named.TypeArguments[1] as INamedTypeSymbol;
-        }
-
-        // Func<T>, Func<T1,TReturn>, Func<T1,T2,TReturn>, etc.
-        // The last type argument is always the return type (the service type to resolve).
-        if(named.Arity >= 1
-            && named.ContainingNamespace.ToDisplayString() == "System"
-            && named.Name == "Func")
-            return named.TypeArguments[named.TypeArguments.Length - 1] as INamedTypeSymbol;
-
-        return null;
+        return wrapperInfo.ElementType;
     }
 
     /// <summary>
@@ -477,13 +388,6 @@ internal static class AnalyzerHelpers
 
         return named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
     }
-
-    /// <summary>
-    /// Returns true when the type is <c>ValueTask&lt;T&gt;</c> (generic, arity 1).
-    /// </summary>
-    public static bool IsGenericValueTaskType(ITypeSymbol type)
-        => type is INamedTypeSymbol { Name: "ValueTask", Arity: 1 } named
-            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
 
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="type"/> is a direct <c>Task&lt;T&gt;</c>
@@ -714,45 +618,3 @@ internal static class AnalyzerHelpers
     }
 }
 
-/// <summary>
-/// Holds cached IoC attribute type symbols for efficient comparison in analyzers.
-/// </summary>
-internal sealed class IocAttributeSymbols
-{
-    public INamedTypeSymbol? IocContainerAttribute { get; }
-    public INamedTypeSymbol? IocRegisterAttribute { get; }
-    public INamedTypeSymbol? IocRegisterAttribute_T1 { get; }
-    public INamedTypeSymbol? IocRegisterForAttribute { get; }
-    public INamedTypeSymbol? IocRegisterForAttribute_T1 { get; }
-    public INamedTypeSymbol? IocRegisterDefaultsAttribute { get; }
-    public INamedTypeSymbol? IocRegisterDefaultsAttribute_T1 { get; }
-    public INamedTypeSymbol? IocImportModuleAttribute { get; }
-    public INamedTypeSymbol? IocImportModuleAttribute_T1 { get; }
-
-    public IocAttributeSymbols(Compilation compilation)
-    {
-        IocContainerAttribute = compilation.GetTypeByMetadataName(Constants.IocContainerAttributeFullName);
-        IocRegisterAttribute = compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName);
-        IocRegisterAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocRegisterAttributeFullName_T1);
-        IocRegisterForAttribute = compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName);
-        IocRegisterForAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocRegisterForAttributeFullName_T1);
-        IocRegisterDefaultsAttribute = compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName);
-        IocRegisterDefaultsAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocRegisterDefaultsAttributeFullName_T1);
-        IocImportModuleAttribute = compilation.GetTypeByMetadataName(Constants.IocImportModuleAttributeFullName);
-        IocImportModuleAttribute_T1 = compilation.GetTypeByMetadataName(Constants.IocImportModuleAttributeFullName_T1);
-    }
-
-    /// <summary>
-    /// Checks if any IoC registration attribute is available in the compilation.
-    /// </summary>
-    public bool HasAnyRegistrationAttribute =>
-        IocRegisterAttribute is not null
-        || IocRegisterAttribute_T1 is not null
-        || IocRegisterForAttribute is not null
-        || IocRegisterForAttribute_T1 is not null;
-
-    /// <summary>
-    /// Checks if the IocContainerAttribute is available.
-    /// </summary>
-    public bool HasContainerAttribute => IocContainerAttribute is not null;
-}

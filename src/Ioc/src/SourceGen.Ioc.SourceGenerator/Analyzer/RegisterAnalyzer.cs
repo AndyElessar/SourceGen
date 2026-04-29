@@ -506,7 +506,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
             hasRegistrationAttribute = true;
             var (serviceKey, _, _) = attribute.GetKeyInfo();
-            foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(implementationType, attribute, attributeSymbols))
+            foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(implementationType, attribute))
             {
                 serviceTypes.Add((serviceType, serviceKey));
             }

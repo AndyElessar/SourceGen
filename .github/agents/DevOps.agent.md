@@ -2,6 +2,7 @@
 description: "Use when: managing CI/CD pipelines, GitHub Actions workflows, build/test/pack/publish automation, NuGet Trusted Publishing, or release processes. Handles .github/workflows/ files and DevOps configuration."
 model: GPT-5.4 (copilot)
 tools: [vscode/askQuestions, vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, execute/runInTerminal, read, agent, edit, search, web, github/get_copilot_job_status, github/get_file_contents, github/get_latest_release, github/get_release_by_tag, github/get_tag, github/issue_read, github/list_branches, github/list_releases, github/list_tags, github/pull_request_read, github/search_code, github/search_issues, github/search_pull_requests, github/search_repositories, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo, github.vscode-pull-request-github/notification_fetch]
+target: vscode
 agents: ["Explore"]
 user-invocable: true
 argument-hint: "Describe the CI/CD change: add workflow, fix pipeline, update publish config, etc."
@@ -43,7 +44,7 @@ git push origin main && git push origin ioc-v0.9.1-alpha           # triggers pu
 
 **Post-release**: bump `version.json` via `nbgv prepare-release --project <path>` or manual edit.
 
-Follow the **parent agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Parent Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Approach
 
@@ -78,6 +79,7 @@ Follow the **parent agent protocol** in `.github/instructions/memory-policy.inst
 - 🚫 **Never do:**
 	- Use long-lived API keys (use OIDC temporary credentials only)
 	- Remove tag-based publish gate, `id-token: write`, `NuGet/login@v1`, or `environment: nuget-publish` from publish jobs
+	- Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 

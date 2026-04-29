@@ -1,104 +1,106 @@
 ---
-description: "Use when executing agent workflows that coordinate through /memories/session/. Defines the memory protocol for parent and child agents."
+description: "Memory protocol for agent workflows that store goal and plan state in /memories/session/."
+applyTo: "**"
 ---
 
 # Memory Policy
 
-All agents that participate in the plan→approve→implement→review workflow MUST follow this protocol for `/memories/session/` paths.
+## Tool Usage
 
-## Session Memory Paths
+For `/memories/session/*`:
 
-| Path | Owner | Purpose |
-|------|-------|---------|
-| `/memories/session/goal.md` | Parent agents (Orchestrator, Doc, DevOps) | Requirement goal — created before Discovery, read by all subagents |
-| `/memories/session/plan.md` | Parent agents (Orchestrator, Doc, DevOps) | Approved plan — read by all child agents |
-| `/memories/session/plan-review.md` | PlanReview agent | Structured plan review report — read by parent agent before presenting plan |
-| `/memories/session/changes.md` | Implement agent | Changed files, decisions, issues, concerns from implementation |
-| `/memories/session/review.md` | Review agent | Structured review report |
+- **Read / verify**: `memory` with `view`.
+- **Write**: `memory` with `create` / `str_replace` / `insert`.
+- **Forbidden**: `read_file`, `grep_search`, `run_in_terminal`, `cat`, shell redirection, pipes. Same rule applies to subagents.
+- `resolveMemoryFileUri` is informational only — never pass its URI to another tool.
 
-## Memory Access Rules
+## Memory Rules
 
-- **ONLY** use #tool:vscode/memory (the `memory` tool) to read and write `/memories/session/` paths.
-- Use #tool:vscode/resolveMemoryFileUri to resolve a `/memories/` path to a file URI when another tool requires a real file path instead of a memory abstraction. This is read-only and does not replace #tool:vscode/memory for content operations.
-- Do NOT use #tool:read for `/memories/session/` paths; these are memory-only.
-- Do NOT use #tool:edit for `/memories/session/` paths; these are memory-only.
+Three core principles:
 
-### Exact Tool Call Syntax
+1. **Single writer** — each file has exactly one owner (see table). Non-owners may only read.
+2. **Single command per operation** — one `memory` call per intent. Do not combine `create` with `str_replace` / `insert` on the same file in a single turn. A write followed by a verifying `view` is allowed.
+3. **Memory tool only** — see the rule above. Each `memory.view` call returns the latest committed content, so concurrent readers always see the most recent verified write.
 
-**Reading the plan** — use the `view` command:
+Allowed commands: `view`, `create`, `str_replace`, `insert`. Parents MUST NOT dispatch two writers for the same file in parallel.
+
+### Session Files And Ownership
+
+| Path | Writer | Readers | Purpose |
+|------|--------|---------|---------|
+| `goal.md` | Parent (Orchestrator / Doc / DevOps) | All | Requirement goal |
+| `plan.md` | Parent | All | Approved plan |
+| `plan-review.md` | PlanReview | Parent | Plan review report |
+| `changes.md` | Implement / Doc / DevOps (single-step plans only) | Parent, Review | Implementation summary |
+| `changes-step-{n}.md` | Implement / Doc / DevOps (multi-step plans, one writer per step) | Parent, Review | Per-step implementation summary |
+| `review.md` | Review | Parent | Code review report |
+
+## Parent Workflow
+
+Parents are Orchestrator, DevOps, and Doc.
+
+### Happy Path
+
+1. `create` `goal.md` with a concise distilled goal — before any research.
+2. Dispatch `Explore` as the first subagent call, UNLESS the task is trivially scoped (single-file edit, typo fix, or user-supplied exact instructions). When in doubt, dispatch `Explore`.
+3. Call `askQuestions` if **any one** of the following is true (OR, not AND):
+   - `goal.md` lacks explicit acceptance criteria.
+   - Two or more mutually exclusive implementation approaches exist and existing rules do not specify priority.
+   - The change touches a public API, a package dependency, or `.github/workflows/*`.
+4. Draft `plan.md` (goal, approach/steps, scope/files, acceptance criteria) → save with `create` (new) or `str_replace` (update) → `view` to verify → present the plan inline → wait for explicit user approval.
+5. Dispatch non-Explore subagents only after `plan.md` is verified AND approved.
+
+### Error Handling
+
+- Save or verify of `plan.md` fails → return `BLOCKED_NO_PLAN_MEMORY_WRITE`.
+- Child returns any `BLOCKED_*` → resolve at parent level → update `plan.md` if scope changed → re-dispatch.
+- Scope changes mid-task → overwrite and re-verify `plan.md` before the next dispatch.
+
+## Child Workflow
+
+Children are Implement, Review, DocReview, Spec, PlanReview.
+
+### Happy Path
+
+1. Sequentially call:
+   ```
+   memory({ command: "view", path: "/memories/session/goal.md" })
+   memory({ command: "view", path: "/memories/session/plan.md" })
+   ```
+2. If both files are present and non-empty → perform the assigned task → report using the agent's defined Output Format.
+
+### Error Handling
+
+| Condition | Action |
+|---|---|
+| Either file missing or empty | Return `BLOCKED_NEEDS_PARENT_PLAN` |
+| Plan ambiguous or design decision needed | Return `BLOCKED_NEEDS_PARENT_DECISION` with the exact clarification needed |
+| `memory` call returned an actual error | Return `BLOCKED_NO_PLAN_MEMORY` with the verbatim error |
+
+Children MUST NOT request plan content or approval from the user — route through the parent. `vscode/memory` is granted in every child's frontmatter `tools:`; you MUST attempt the call before claiming it is unavailable, and MUST NOT substitute another tool.
+
+## Parent → Child Delegation Template
+
 ```
-memory({ command: "view", path: "/memories/session/plan.md" })
+Your frontmatter (tools:) grants #tool:vscode/memory. Follow these steps:
+
+1. First action — call:
+   memory({ command: "view", path: "/memories/session/goal.md" })
+2. Second action — call:
+   memory({ command: "view", path: "/memories/session/plan.md" })
+3. Then perform: <task>
+4. Report using: <agent's defined Output Format>
+
+Follow the Memory Rules above. If the memory tool genuinely fails, return BLOCKED_NO_PLAN_MEMORY with the verbatim error message.
 ```
-
-**Saving the plan** — use the `create` command (for new) or `str_replace` command (for updates):
-```
-memory({ command: "create", path: "/memories/session/plan.md", file_text: "<plan content>" })
-```
-
-```
-memory({ command: "str_replace", path: "/memories/session/plan.md", old_str: "<existing text>", new_str: "<replacement text>" })
-```
-
-## Parent Agent Protocol
-
-Parent agents (Orchestrator, DevOps, Doc) create, save, and maintain the goal and plan:
-
-0. **Capture Goal** — Before any research, distill the user's request into a concise goal statement and save it to `/memories/session/goal.md` via #tool:vscode/memory. This file is the single source of truth for *what* we are trying to achieve. Include it (or reference it) when delegating to every subagent.
-1. **Explore First** — The first subagent call in every task MUST be `Explore` to gather context. Provide the goal from `goal.md` alongside the research question.
-2. **Clarify if Needed** — After `Explore` returns, resolve any material ambiguity before finalizing the plan. Use #tool:vscode/askQuestions when requirements are incomplete, multiple valid approaches exist, public API or dependency changes are involved, or a user decision is required. Do not ask questions that can be answered from the codebase.
-3. **Create Plan** — After `Explore` and any necessary clarification, create `plan.md` using the format defined by the active parent agent. The plan MUST be structured, complete, and current, and MUST include the equivalent of: goal/outcome, implementation approach or steps, scope or relevant files, and acceptance criteria or verification.
-4. **Save Draft Plan** — After drafting the plan, and before delegating to any subagent after the initial `Explore` call, save the current plan to `/memories/session/plan.md` via #tool:vscode/memory or an update command if the file already exists.
-5. **Present & Approve** — Present the plan inline to the user. The memory file is for persistence, not a substitute for showing the plan in conversation. Do not delegate execution subagents until the user explicitly approves.
-6. **Verify Plan** — After every save, read back via #tool:vscode/memory and confirm the content is complete and current.
-7. **Gate on Failure** — If memory write or verification fails, stop and return `BLOCKED_NO_PLAN_MEMORY_WRITE`. If user/system action may resolve the problem, use #tool:vscode/askQuestions to request correction before stopping.
-8. **Handle Blocked Subagents** — If a subagent returns `BLOCKED_NEEDS_PARENT_PLAN` or `BLOCKED_NEEDS_PARENT_DECISION`, resolve at parent level, re-save/verify plan if needed, then re-dispatch the same subagent.
-9. **Re-save on Scope Change** — If plan scope changes during refinement or execution, overwrite `/memories/session/plan.md` and verify again before any subsequent subagent delegation.
-
-## Child Agent Protocol
-
-**CRITICAL**: The VERY FIRST action of any child agent MUST be to load and validate the plan. Do NOT skip this step. Do NOT proceed to any other work until the plan is loaded and confirmed non-empty.
-
-Child agents (Implement, Review, DocReview, Spec, PlanReview) load and validate the plan:
-
-1. **Load Goal and Plan (FIRST ACTION — mandatory, non-skippable)** — Call #tool:vscode/memory to read `/memories/session/goal.md` first, then `/memories/session/plan.md`, as your very first tool calls. No other tool call may precede these.
-2. **Validate Content** — Confirm both goal and plan content are present and non-empty. If valid, proceed to work.
-3. **Block if Missing** — If memory read fails or plan is missing/empty, stop immediately and return `BLOCKED_NEEDS_PARENT_PLAN` with a brief reason requesting the parent agent to save a complete plan. Do NOT attempt to guess the plan or proceed without it.
-4. **Block on Tool Failure** — If memory is unavailable due to tool/runtime issues, stop and return `BLOCKED_NO_PLAN_MEMORY`.
-5. **Block on Ambiguity** — If anything in the plan is unclear or a design decision is needed, return `BLOCKED_NEEDS_PARENT_DECISION` with the exact clarification needed.
-6. **Never Ask User** — Never request plan content or approvals directly from the user; all requests go through the parent agent.
 
 ## BLOCKED Response Codes
 
-| Code | Meaning | Who Returns | Who Resolves |
-|------|---------|-------------|--------------|
-| `BLOCKED_NEEDS_PARENT_PLAN` | Plan missing or empty in memory | Child agent | Parent agent saves plan, re-dispatches |
-| `BLOCKED_NEEDS_PARENT_DECISION` | Plan ambiguity or design decision needed | Child agent | Parent agent clarifies, re-dispatches |
-| `BLOCKED_NO_PLAN_MEMORY` | Memory tool unavailable | Any agent | User/system resolves tool issue |
-| `BLOCKED_NO_PLAN_MEMORY_WRITE` | Memory write or verification failed | Parent agent | User resolves, parent retries |
+| Code | Returned by | Resolved by |
+|------|-------------|-------------|
+| `BLOCKED_NEEDS_PARENT_PLAN` | Child | Parent |
+| `BLOCKED_NEEDS_PARENT_DECISION` | Child | Parent |
+| `BLOCKED_NO_PLAN_MEMORY` | Any | User / system |
+| `BLOCKED_NO_PLAN_MEMORY_WRITE` | Parent | User |
 
-## Reporting Guidance
-
-If an agent definition requires a structured completion report, include plan-memory status in that report. A recommended template is:
-
-```
-#### Preconditions
-- MemoryGoalLoaded: true | false
-- MemoryPlanLoaded: true | false
-- MemoryPlanSaved: true | false (parent agents only)
-- MemoryPlanVerified: true | false (parent agents only)
-- MemoryPath: /memories/session/goal.md, /memories/session/plan.md
-- Blocker: (empty or BLOCKED_* code with reason)
-```
-
-If the active agent definition does not require a structured preconditions block, at minimum report any `BLOCKED_*` state clearly.
-
-## Boundaries
-
-- ✅ **Always:** Access `/memories/session/` paths exclusively via #tool:vscode/memory
-- ✅ **Always:** Use #tool:vscode/resolveMemoryFileUri when another tool needs a file URI for a memory path
-- ✅ **Always:** Verify plan content after every save operation
-- ✅ **Always:** Handle all `BLOCKED_*` responses at the appropriate level
-- 🚫 **Never:** Use #tool:read for `/memories/session/` paths
-- 🚫 **Never:** Use #tool:edit for `/memories/session/` paths
-- 🚫 **Never:** Delegate to any subagent (after initial Explore) before saving and verifying plan
-- 🚫 **Never:** Have child agents ask users directly for plan content or approvals
+Surface any `BLOCKED_*` state clearly in the agent's report.

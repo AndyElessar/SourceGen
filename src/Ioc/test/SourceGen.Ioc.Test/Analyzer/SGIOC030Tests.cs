@@ -86,6 +86,134 @@ public class SGIOC030Tests
     }
 
     [Test]
+    public async Task SGIOC030_ConstructorServiceTypes_FallbackRecognized_NoDiagnosticWhenSyncRegistrationExists()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IConsumer { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)])]
+            public class AsyncService : IMyService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, typeof(IMyService))]
+            public class SyncService : IMyService { }
+
+            [IocRegister(ServiceTypes = [typeof(IConsumer)])]
+            public class Consumer : IConsumer
+            {
+                public Consumer(IMyService service) { }
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC030_ServiceTypesNamedArgument_PrecedesConstructorParams()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IConstructorService { }
+            public interface INamedService { }
+            public interface IConsumer { }
+
+            [IocRegister(ServiceTypes = [typeof(IConstructorService)])]
+            public class AsyncService : IConstructorService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, typeof(IConstructorService), ServiceTypes = [typeof(INamedService)])]
+            public class SyncService : IConstructorService, INamedService { }
+
+            [IocRegister(ServiceTypes = [typeof(IConsumer)])]
+            public class Consumer : IConsumer
+            {
+                public Consumer(IConstructorService service) { }
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("service").And.Contains("IConstructorService");
+    }
+
+    [Test]
+    public async Task SGIOC030_GenericServiceType_IsRecognized()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IConsumer { }
+
+            [IocRegister<IMyService>(ServiceLifetime.Singleton)]
+            public class AsyncService : IMyService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IConsumer)])]
+            public class Consumer : IConsumer
+            {
+                public Consumer(IMyService service) { }
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("service").And.Contains("IMyService");
+    }
+
+    [Test]
     public async Task SGIOC030_PropertyInjectionRequestsSyncTypeForAsyncInitService_ReportsDiagnostic()
     {
         const string source = """

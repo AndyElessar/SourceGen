@@ -1,7 +1,8 @@
 ---
 description: "Use when: updating or creating specification documents (file under Spec/). Writes clear specs targeting both human developers and AI agents."
-model: Claude Opus 4.6 (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode/memory, vscode/resolveMemoryFileUri, read, edit, search, web, codegraphcontext/analyze_code_relationships, codegraphcontext/find_code, codegraphcontext/get_repository_stats, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', todo]
+target: vscode
 agents: []
 user-invocable: false
 argument-hint: "Implement spec updates from the approved plan stored in /memories/session/plan.md"
@@ -10,7 +11,7 @@ You are a specification writer for the SourceGen C# source generator project. Yo
 
 Follow the project principles in `AGENTS.md`.
 
-Follow the **child agent protocol** in `.github/instructions/memory-policy.instructions.md`.
+Follow the **Child Workflow** in `.github/instructions/memory-policy.instructions.md`.
 
 ## Writing Guidelines
 
@@ -84,6 +85,7 @@ RFC 8174 clarifies RFC 2119:
   - Add content beyond what the plan specifies
   - Remove existing spec content unless the plan explicitly requires it
   - Guess at behavior when the plan is ambiguous
+  - Read or write any `/memories/session/*` path with a tool other than #tool:vscode/memory (no #tool:read, #tool:edit, #tool:execute/#tool:run_in_terminal, search/grep tools, or shell commands — even via a URI returned by #tool:vscode/resolveMemoryFileUri). See `.github/instructions/memory-policy.instructions.md`.
 
 ## Output Format
 
