@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <RoslynVersion>5.3.0</RoslynVersion>
+    <RoslynVersion>5.9.0</RoslynVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- Source Generator dependencies -->
@@ -11,24 +11,24 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(RoslynVersion)" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="$(RoslynVersion)" />
     <!-- Build Infra & Packaging -->
-    <PackageVersion Include="PolySharp" Version="1.15.0" />
-    <PackageVersion Include="PolyType.Roslyn" Version="1.0.0-unstable" />
-    <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.8-alpha" />
-    <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
+    <PackageVersion Include="PolySharp" Version="1.16.0" />
+    <PackageVersion Include="PolyType.Roslyn" Version="1.4.1-unstable" />
+    <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
+    <PackageVersion Include="StyleCop.Analyzers" Version="1.1.118" />
     <!-- Testing dependencies -->
-    <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.1.1" />
-    <PackageVersion Include="TUnit" Version="1.39.0" />
-    <PackageVersion Include="Verify.TUnit" Version="31.16.2" />
+    <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.3.0" />
+    <PackageVersion Include="TUnit" Version="1.72.10" />
+    <PackageVersion Include="Verify.TUnit" Version="33.2.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <!-- Tool -->
-    <PackageVersion Include="System.IO.Abstractions" Version="22.1.1" />
+    <PackageVersion Include="System.IO.Abstractions" Version="22.3.0" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
     <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.7.13" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
     <!-- Samples -->
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
   </ItemGroup>
 </Project>
