@@ -2,7 +2,7 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 
 /// <summary>
 /// Represents type information including its name and hierarchical injection metadata.
-/// Generic and wrapper-specific data are provided by derived union types.
+/// Generic and wrapper-specific data are represented by a closed record hierarchy.
 /// </summary>
 /// <param name="Name">The fully qualified name of the type.</param>
 /// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
@@ -10,7 +10,7 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection. Only populated for decorators when extractInjectionMembers is true.</param>
 /// <param name="AllInterfaces">All interfaces implemented by the type. Only populated when extractHierarchy is true.</param>
 /// <param name="AllBaseClasses">All base classes of the type (excluding System.Object). Only populated when extractHierarchy is true.</param>
-internal record class TypeData(
+internal closed record class TypeData(
     string Name,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
@@ -19,9 +19,27 @@ internal record class TypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null);
 
 /// <summary>
+/// Represents a non-generic type without wrapper-specific data.
+/// </summary>
+internal sealed record class SimpleTypeData(
+    string Name,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : TypeData(
+        Name,
+        ConstructorParameters,
+        HasInjectConstructor,
+        InjectionMembers,
+        AllInterfaces,
+        AllBaseClasses);
+
+/// <summary>
 /// Represents generic type information.
 /// </summary>
-internal record class GenericTypeData(
+internal closed record class GenericTypeData(
     string Name,
     string NameWithoutGeneric,
     bool IsOpenGeneric,
@@ -35,6 +53,34 @@ internal record class GenericTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : TypeData(
         Name,
+        ConstructorParameters,
+        HasInjectConstructor,
+        InjectionMembers,
+        AllInterfaces,
+        AllBaseClasses);
+
+/// <summary>
+/// Represents a generic type that is not a type parameter or a recognized wrapper.
+/// </summary>
+internal sealed record class NamedGenericTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    bool IsNestedOpenGeneric = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : GenericTypeData(
+        Name,
+        NameWithoutGeneric,
+        IsOpenGeneric,
+        GenericArity,
+        IsNestedOpenGeneric,
+        TypeParameters,
         ConstructorParameters,
         HasInjectConstructor,
         InjectionMembers,
@@ -58,7 +104,7 @@ internal sealed record class TypeParameterTypeData(
 /// Represents wrapper type information. Base type for all wrapper kinds (collections, Lazy, Func, etc.).
 /// </summary>
 /// <param name="WrapperKind">The kind of wrapper this type represents.</param>
-internal record class WrapperTypeData(
+internal closed record class WrapperTypeData(
     string Name,
     string NameWithoutGeneric,
     bool IsOpenGeneric,
@@ -85,11 +131,41 @@ internal record class WrapperTypeData(
         AllBaseClasses);
 
 /// <summary>
+/// Represents a wrapper kind without a specialized type data subtype.
+/// </summary>
+internal sealed record class OtherWrapperTypeData(
+    string Name,
+    string NameWithoutGeneric,
+    bool IsOpenGeneric,
+    int GenericArity,
+    WrapperKind WrapperKind,
+    bool IsNestedOpenGeneric = false,
+    ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
+    ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
+    bool HasInjectConstructor = false,
+    ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
+    ImmutableEquatableArray<TypeData>? AllInterfaces = null,
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    : WrapperTypeData(
+        Name,
+        NameWithoutGeneric,
+        IsOpenGeneric,
+        GenericArity,
+        WrapperKind,
+        IsNestedOpenGeneric,
+        TypeParameters,
+        ConstructorParameters,
+        HasInjectConstructor,
+        InjectionMembers,
+        AllInterfaces,
+        AllBaseClasses);
+
+/// <summary>
 /// Base record for collection wrapper types (IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, ICollection&lt;T&gt;,
 /// IReadOnlyList&lt;T&gt;, IList&lt;T&gt;, T[]).
 /// All collection wrappers share an <c>ElementType</c> property derived from <c>TypeParameters[0]</c>.
 /// </summary>
-internal record class CollectionWrapperTypeData(
+internal closed record class CollectionWrapperTypeData(
     string Name,
     string NameWithoutGeneric,
     bool IsOpenGeneric,
@@ -459,7 +535,7 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
-            new(
+            new SimpleTypeData(
                 Name,
                 ConstructorParameters,
                 HasInjectConstructor,
@@ -482,7 +558,7 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
-            new(
+            new NamedGenericTypeData(
                 Name,
                 NameWithoutGeneric,
                 IsOpenGeneric,
@@ -574,7 +650,7 @@ internal static class TypeDataExtensions
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
                     AllInterfaces, AllBaseClasses),
-                _ => new WrapperTypeData(
+                _ => new OtherWrapperTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     WrapperKind,
                     IsNestedOpenGeneric, TypeParameters,
@@ -636,10 +712,11 @@ internal static class TypeDataExtensions
         public bool NeedsWrapperResolution =>
             typeData switch
             {
-                LazyTypeData lazy when lazy.InstanceType is not WrapperTypeData => false,
-                FuncTypeData func when func.ReturnType is not WrapperTypeData => false,
-                WrapperTypeData and not EnumerableTypeData => true,
-                _ => false
+                LazyTypeData lazy => lazy.InstanceType is WrapperTypeData,
+                FuncTypeData func => func.ReturnType is WrapperTypeData,
+                EnumerableTypeData => false,
+                WrapperTypeData => true,
+                SimpleTypeData or NamedGenericTypeData or TypeParameterTypeData => false
             };
     }
 

@@ -4,7 +4,7 @@ namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
-    internal abstract record class ContainerEntry
+    internal closed record class ContainerEntry
     {
         public virtual void WriteField(SourceWriter writer)
         {
@@ -33,7 +33,7 @@ partial class IocSourceGenerator
         }
     }
 
-    private abstract record class ServiceContainerEntry(
+    private closed record class ServiceContainerEntry(
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
@@ -656,7 +656,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Base for async-init service entries whose entry method returns <c>Task&lt;T&gt;</c>.
     /// </summary>
-    private abstract record class AsyncServiceContainerEntry(
+    private closed record class AsyncServiceContainerEntry(
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,

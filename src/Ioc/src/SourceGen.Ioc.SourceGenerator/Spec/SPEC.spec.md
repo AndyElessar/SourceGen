@@ -70,9 +70,9 @@ All files outside `Analyzer/` are `partial class IocSourceGenerator` in namespac
 
 ---
 
-## Architecture pattern: discriminated unions for emission
+## Architecture pattern: entry hierarchies for emission
 
-Both Register and Container pipelines pre-compute a discriminated union of "entry" instances during Stage 4. Stage 5 then walks them with polymorphic `Write*` methods — emission is pure string formatting, no shared mutable context.
+Both Register and Container pipelines pre-compute a set of "entry" instances during Stage 4. The Container entry hierarchy uses C# 15 closed records so type-based switches can be compiler-checked for exhaustiveness; Stage 5 walks entries with polymorphic `Write*` methods — emission is pure string formatting, no shared mutable context. The `TypeData` model also uses closed records for its simple, generic, and wrapper variants.
 
 | Pipeline | Entry base | Subtypes | Write methods |
 |---|---|---|---|
@@ -100,7 +100,7 @@ All under `Models/` unless noted; all immutable with value equality.
 | `RegisterOutputModel` (`Emit/Register/`) | Top-level Register output model with per-tag `RegisterTagGroup` |
 | `MsBuildProperties` | `RootNamespace`, `CustomIocName`, `Features` |
 | `IocFeatures` | Feature-flag enum (`Register`, `Container`, `PropertyInject`, `FieldInject`, `MethodInject`, `AsyncMethodInject`) |
-| `TypeData` and subtypes (`GenericTypeData`, `WrapperTypeData` family) | Type representation including wrapper-kind hierarchy (see [Wrapper kinds](#wrapper-kinds)) |
+| `TypeData` and subtypes (`SimpleTypeData`, `GenericTypeData`, `WrapperTypeData` family) | Closed type representation including wrapper-kind hierarchy (see [Wrapper kinds](#wrapper-kinds)) |
 
 ---
 

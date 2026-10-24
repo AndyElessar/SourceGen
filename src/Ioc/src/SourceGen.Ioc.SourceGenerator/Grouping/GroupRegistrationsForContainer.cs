@@ -336,7 +336,7 @@ partial class IocSourceGenerator
                 && (!string.Equals(serviceEntry.Registration.ServiceType.Name, cached.Registration.ServiceType.Name, StringComparison.Ordinal)
                     || !string.Equals(serviceEntry.Registration.Key, cached.Registration.Key, StringComparison.Ordinal)))
             {
-                entry = CloneServiceEntryWithRegistration(entry, cached.Registration);
+                entry = CloneServiceEntryWithRegistration(serviceEntry, cached.Registration);
             }
 
             lastWinsByServiceType[kvp.Key] = entry;
@@ -368,16 +368,11 @@ partial class IocSourceGenerator
         }
     }
 
-    private static IocSourceGenerator.ContainerEntry CloneServiceEntryWithRegistration(
-        IocSourceGenerator.ContainerEntry entry,
+    private static ServiceContainerEntry CloneServiceEntryWithRegistration(
+        ServiceContainerEntry entry,
         ServiceRegistrationModel registration)
     {
-        return entry switch
-        {
-            // `with` on the abstract base dispatches to the derived record's virtual clone.
-            ServiceContainerEntry serviceEntry => serviceEntry with { Registration = registration },
-            _ => entry
-        };
+        return entry with { Registration = registration };
     }
 
     /// <summary>

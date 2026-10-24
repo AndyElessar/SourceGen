@@ -203,6 +203,7 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
         new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::IocRazorSample.ComponentContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new(new ServiceIdentifier(typeof(global::IocRazorSample.LoadData), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
+        new(new ServiceIdentifier(typeof(global::Microsoft.AspNetCore.Components.IComponent), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

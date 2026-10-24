@@ -19,7 +19,7 @@ namespace IocRazorSample
         /// <param name="tags">Optional tags to filter which services to register.</param>
         public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddIocRazorSample(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.Collections.Generic.IEnumerable<string> tags)
         {
-            if (!tags.Any())
+            if (tags.Contains("Component"))
             {
                 services.AddTransient<global::IocRazorSample.LoadData>((global::System.IServiceProvider sp) =>
                 {
@@ -27,6 +27,7 @@ namespace IocRazorSample
                     var s0 = new global::IocRazorSample.LoadData() { Logger = s0_p0 };
                     return s0;
                 });
+                services.AddTransient<global::Microsoft.AspNetCore.Components.IComponent>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::IocRazorSample.LoadData>());
             }
 
             return services;

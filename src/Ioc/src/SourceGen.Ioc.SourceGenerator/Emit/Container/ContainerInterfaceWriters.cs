@@ -1226,7 +1226,8 @@ partial class IocSourceGenerator
             LazyThreadSafeContainerEntry lazy => $"static c => c.{lazy.ResolverMethodName}()",
             TransientContainerEntry transient => $"static c => c.{transient.ResolverMethodName}()",
             AsyncServiceContainerEntry asyncEntry => $"static c => c.{asyncEntry.AsyncEntryMethodName}()",
-            _ => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
+            LazyWrapperContainerEntry or FuncWrapperContainerEntry or KvpWrapperContainerEntry or CollectionContainerEntry
+                => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
         };
     }
 
@@ -1237,7 +1238,8 @@ partial class IocSourceGenerator
             InstanceContainerEntry instance => instance.Registration.Instance!,
             AsyncServiceContainerEntry asyncEntry => $"{asyncEntry.AsyncEntryMethodName}()",
             ServiceContainerEntry serviceEntry => $"{serviceEntry.ResolverMethodName}()",
-            _ => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
+            LazyWrapperContainerEntry or FuncWrapperContainerEntry or KvpWrapperContainerEntry or CollectionContainerEntry
+                => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
         };
     }
 }
