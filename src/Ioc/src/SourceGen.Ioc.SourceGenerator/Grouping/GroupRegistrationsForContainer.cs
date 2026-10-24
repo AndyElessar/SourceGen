@@ -374,12 +374,8 @@ partial class IocSourceGenerator
     {
         return entry switch
         {
-            InstanceContainerEntry instance => instance with { Registration = registration },
-            EagerContainerEntry eager => eager with { Registration = registration },
-            LazyThreadSafeContainerEntry lazy => lazy with { Registration = registration },
-            TransientContainerEntry transient => transient with { Registration = registration },
-            AsyncContainerEntry asyncEntry => asyncEntry with { Registration = registration },
-            AsyncTransientContainerEntry asyncTransient => asyncTransient with { Registration = registration },
+            // `with` on the abstract base dispatches to the derived record's virtual clone.
+            ServiceContainerEntry serviceEntry => serviceEntry with { Registration = registration },
             _ => entry
         };
     }

@@ -252,10 +252,8 @@ partial class IocSourceGenerator
             {
                 switch(entry)
                 {
-                    case AsyncContainerEntry asyncEntry:
-                        return $"await {GetAsyncResolverMethodName(asyncEntry.ResolverMethodName)}()";
-                    case AsyncTransientContainerEntry asyncTransientEntry:
-                        return $"await {GetAsyncCreateMethodName(asyncTransientEntry.ResolverMethodName)}()";
+                    case AsyncServiceContainerEntry asyncEntry:
+                        return $"await {asyncEntry.AsyncEntryMethodName}()";
                     case InstanceContainerEntry instanceEntry:
                         return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})";
                     case ServiceContainerEntry serviceEntry:
@@ -281,10 +279,8 @@ partial class IocSourceGenerator
             {
                 case InstanceContainerEntry instanceEntry:
                     return instanceEntry.Registration.Instance!;
-                case AsyncContainerEntry asyncEntry:
-                    return $"{GetAsyncResolverMethodName(asyncEntry.ResolverMethodName)}().ConfigureAwait(false).GetAwaiter().GetResult()";
-                case AsyncTransientContainerEntry asyncTransientEntry:
-                    return $"{GetAsyncCreateMethodName(asyncTransientEntry.ResolverMethodName)}().ConfigureAwait(false).GetAwaiter().GetResult()";
+                case AsyncServiceContainerEntry asyncEntry:
+                    return $"{asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false).GetAwaiter().GetResult()";
                 case ServiceContainerEntry serviceEntry:
                     return $"{serviceEntry.ResolverMethodName}()";
             }

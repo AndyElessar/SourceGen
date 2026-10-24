@@ -653,6 +653,43 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <summary>
+    /// Base for async-init service entries whose entry method returns <c>Task&lt;T&gt;</c>.
+    /// </summary>
+    private abstract record class AsyncServiceContainerEntry(
+        ServiceRegistrationModel Registration,
+        string ResolverMethodName,
+        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
+        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
+        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
+    {
+        /// <summary>
+        /// Gets the name of the method that callers invoke to obtain the <c>Task&lt;T&gt;</c>.
+        /// </summary>
+        public abstract string AsyncEntryMethodName { get; }
+
+        protected string TaskReturnTypeName
+        {
+            get
+            {
+                var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
+                return $"global::System.Threading.Tasks.Task<{returnType}>";
+            }
+        }
+
+        protected void WriteCreateMethod(SourceWriter writer)
+        {
+            writer.WriteLine($"private async {TaskReturnTypeName} {GetAsyncCreateMethodName(ResolverMethodName)}()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            WriteAsyncInstanceCreationBody(writer);
+
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
+    }
+
     private sealed record class AsyncContainerEntry(
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
@@ -661,14 +698,13 @@ partial class IocSourceGenerator
         ThreadSafeStrategy ThreadSafeStrategy,
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
+        ImmutableEquatableArray<ResolvedDecorator> Decorators) : AsyncServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
     {
+        public override string AsyncEntryMethodName => GetAsyncResolverMethodName(ResolverMethodName);
+
         public override void WriteField(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-            var taskReturnType = $"global::System.Threading.Tasks.Task<{returnType}>";
-
-            writer.WriteLine($"private {taskReturnType}? {FieldName};");
+            writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
@@ -678,12 +714,9 @@ partial class IocSourceGenerator
 
         public override void WriteResolver(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-            var asyncMethodName = GetAsyncResolverMethodName(ResolverMethodName);
             var createMethodName = GetAsyncCreateMethodName(ResolverMethodName);
-            var taskReturnType = $"global::System.Threading.Tasks.Task<{returnType}>";
 
-            writer.WriteLine($"private async {taskReturnType} {asyncMethodName}()");
+            writer.WriteLine($"private async {TaskReturnTypeName} {AsyncEntryMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
 
@@ -706,21 +739,14 @@ partial class IocSourceGenerator
             writer.WriteLine("}");
             writer.WriteLine();
 
-            writer.WriteLine($"private async {taskReturnType} {createMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            WriteAsyncInstanceCreationBody(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
+            WriteCreateMethod(writer);
         }
 
         public override void WriteEagerInit(SourceWriter writer)
         {
             if(IsEager)
             {
-                writer.WriteLine($"_ = {GetAsyncResolverMethodName(ResolverMethodName)}();");
+                writer.WriteLine($"_ = {AsyncEntryMethodName}();");
             }
         }
 
@@ -772,23 +798,11 @@ partial class IocSourceGenerator
         string ResolverMethodName,
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
+        ImmutableEquatableArray<ResolvedDecorator> Decorators) : AsyncServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
     {
-        public override void WriteResolver(SourceWriter writer)
-        {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-            var createMethodName = GetAsyncCreateMethodName(ResolverMethodName);
-            var taskReturnType = $"global::System.Threading.Tasks.Task<{returnType}>";
+        public override string AsyncEntryMethodName => GetAsyncCreateMethodName(ResolverMethodName);
 
-            writer.WriteLine($"private async {taskReturnType} {createMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            WriteAsyncInstanceCreationBody(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
+        public override void WriteResolver(SourceWriter writer) => WriteCreateMethod(writer);
     }
 
     private sealed record class LazyWrapperContainerEntry(

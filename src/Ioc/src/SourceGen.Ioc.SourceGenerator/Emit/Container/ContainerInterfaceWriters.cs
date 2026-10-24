@@ -1225,8 +1225,7 @@ partial class IocSourceGenerator
             EagerContainerEntry eager => $"static c => c.{eager.FieldName}!",
             LazyThreadSafeContainerEntry lazy => $"static c => c.{lazy.ResolverMethodName}()",
             TransientContainerEntry transient => $"static c => c.{transient.ResolverMethodName}()",
-            AsyncContainerEntry asyncSingletonOrScoped => $"static c => c.{GetAsyncResolverMethodName(asyncSingletonOrScoped.ResolverMethodName)}()",
-            AsyncTransientContainerEntry asyncTransient => $"static c => c.{GetAsyncCreateMethodName(asyncTransient.ResolverMethodName)}()",
+            AsyncServiceContainerEntry asyncEntry => $"static c => c.{asyncEntry.AsyncEntryMethodName}()",
             _ => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
         };
     }
@@ -1236,8 +1235,7 @@ partial class IocSourceGenerator
         return entry switch
         {
             InstanceContainerEntry instance => instance.Registration.Instance!,
-            AsyncContainerEntry asyncSingletonOrScoped => $"{GetAsyncResolverMethodName(asyncSingletonOrScoped.ResolverMethodName)}()",
-            AsyncTransientContainerEntry asyncTransient => $"{GetAsyncCreateMethodName(asyncTransient.ResolverMethodName)}()",
+            AsyncServiceContainerEntry asyncEntry => $"{asyncEntry.AsyncEntryMethodName}()",
             ServiceContainerEntry serviceEntry => $"{serviceEntry.ResolverMethodName}()",
             _ => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
         };
