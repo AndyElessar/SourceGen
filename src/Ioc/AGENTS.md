@@ -21,15 +21,16 @@ IoC (Inversion of Control) source generator domain — compile-time dependency i
 # Build
 dotnet build SourceGen.slnx
 
-# Run tests (TUnit — MUST use dotnet run, NOT dotnet test)
+# Run filtered tests
 dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -- --treenode-filter "/*/*/TestClass/*"
 
 # Run all tests
 dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj
+dotnet run --project src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj
 
-# AOT tests (publish first, then run)
+# AOT tests (publish first, then run the native executable for the current RID)
 dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
-.\src\Ioc\test\SourceGen.Ioc.TestAot\bin\Release\net10.0\win-x64\publish\SourceGen.Ioc.TestAot.exe
+./src/Ioc/test/SourceGen.Ioc.TestAot/bin/Release/net10.0/<rid>/publish/SourceGen.Ioc.TestAot   # e.g. linux-x64; add .exe on win-x64
 ```
 
 ## Specifications
@@ -47,5 +48,4 @@ These rules extend the root [AGENTS.md](../../AGENTS.md) for this domain:
 
 ## Versioning
 
-- Uses [nbgv](https://github.com/dotnet/Nerdbank.GitVersioning) with tag prefix `ioc-v` (e.g., `ioc-v0.9.1-alpha`)
-- CLI uses tag prefix `ioc-cli-v` (e.g., `ioc-cli-v1.0.0`)
+Released with nbgv and tag prefixes `ioc-v` / `ioc-cli-v` — see the `sourcegen-release-commands` skill.

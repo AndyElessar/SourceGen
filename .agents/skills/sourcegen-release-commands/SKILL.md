@@ -37,41 +37,42 @@ Version examples:
 ### Pre-release
 
 ```powershell
-./.github/skills/sourcegen-release-commands/scripts/release.ps1 -ProjectKey ioc -ReleaseType prerelease -Version 0.9.2-alpha
+./.agents/skills/sourcegen-release-commands/scripts/release.ps1 -ProjectKey ioc -ReleaseType prerelease -Version 0.9.2-alpha
 ```
 
 ### Stable Release
 
 ```powershell
-./.github/skills/sourcegen-release-commands/scripts/release.ps1 -ProjectKey ioc -ReleaseType release -Version 0.9.2
+./.agents/skills/sourcegen-release-commands/scripts/release.ps1 -ProjectKey ioc -ReleaseType release -Version 0.9.2
 ```
 
 ### SourceGen.Ioc.Cli Pre-release
 
 ```powershell
-./.github/skills/sourcegen-release-commands/scripts/release.ps1 -ProjectKey ioc-cli -ReleaseType prerelease -Version 1.0.1-alpha
+./.agents/skills/sourcegen-release-commands/scripts/release.ps1 -ProjectKey ioc-cli -ReleaseType prerelease -Version 1.0.1-alpha
 ```
 
 ### Monitor Publish Workflow
 
 ```powershell
-./.github/skills/sourcegen-release-commands/scripts/monitor-release.ps1 -ProjectKey ioc
+./.agents/skills/sourcegen-release-commands/scripts/monitor-release.ps1 -ProjectKey ioc
 ```
 
 ### Publish Draft GitHub Release
 
 ```powershell
-./.github/skills/sourcegen-release-commands/scripts/monitor-release.ps1 -ProjectKey ioc -Tag ioc-v0.9.2-alpha -PublishDraft
+./.agents/skills/sourcegen-release-commands/scripts/monitor-release.ps1 -ProjectKey ioc -Tag ioc-v0.9.2-alpha -PublishDraft
 ```
 
 ### Post-release (Next Iteration)
 
 ```powershell
-./.github/skills/sourcegen-release-commands/scripts/post-release.ps1 -ProjectKey ioc
+./.agents/skills/sourcegen-release-commands/scripts/post-release.ps1 -ProjectKey ioc
 ```
 
-## Notes
+## Versioning Rules (nbgv)
 
-- Release tags use full `NuGetPackageVersion` (`ioc-v<version>` or `ioc-cli-v<version>`).
-- Publish workflows are tag-triggered (`ioc.publish.yml`, `ioc.cli.publish.yml`).
-- Test execution uses TUnit command format (`dotnet run ... -- --treenode-filter ...`).
+- Each package has its own `version.json` next to its `.csproj`, versioned with [nbgv](https://github.com/dotnet/Nerdbank.GitVersioning).
+- Tags use the project prefix plus the full `NuGetPackageVersion`, including prerelease labels (`ioc-v0.9.2-alpha`, `ioc-cli-v1.0.1-alpha`). Tags trigger the publish workflows.
+- `nbgv tag` only creates `v{version}` tags, so create project-prefixed tags with `git tag -a` (the release script does this).
+- `publicReleaseRefSpec` in `version.json` MUST match the project tag prefix and the intended SemVer shape (stable + prerelease); otherwise nbgv appends unexpected suffixes to `NuGetPackageVersion`.

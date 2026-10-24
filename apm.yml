@@ -1,0 +1,13 @@
+name: SourceGen
+version: 1.0.0
+description: Agents dependency management for SourceGen
+author: Andy Elesser
+targets:
+- copilot
+dependencies:
+  apm:
+    - git: https://github.com/thomhurst/TUnit
+      path: skills/tunit
+  mcp: []
+includes: auto
+scripts: {}

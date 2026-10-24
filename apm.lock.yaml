@@ -1,0 +1,37 @@
+lockfile_version: '1'
+apm_version: 0.35.0
+dependencies:
+- repo_url: thomhurst/tunit
+  materialization_repo_url: thomhurst/TUnit
+  name: tunit
+  host: github.com
+  resolved_commit: bb49ad3d54626a4291713306141705cf567690b4
+  version: unknown
+  virtual_path: skills/tunit
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/tunit
+  - .agents/skills/tunit/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/tunit/SKILL.md: sha256:ef9bda6f2e4bf459e9f40fa7b7bb0e233e59308cae064f3d181a8c9c6d0b615d
+  content_hash: sha256:5d88893bd56fe73a6e20f12c1e2946c4b50e097474ed4414b4724add8f83b5e2
+deployments:
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/tunit
+  runtime: null
+  scope: project
+  owners:
+  - thomhurst/tunit/skills/tunit
+  active_owner: thomhurst/tunit/skills/tunit
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/tunit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - thomhurst/tunit/skills/tunit
+  active_owner: thomhurst/tunit/skills/tunit
+  content_hash: sha256:ef9bda6f2e4bf459e9f40fa7b7bb0e233e59308cae064f3d181a8c9c6d0b615d
