@@ -25,7 +25,7 @@ Read the existing workflow (and a sibling of the same type) before editing; mirr
 | Setting | Value |
 |---|---|
 | Runner | `ubuntu-latest` |
-| .NET SDK | `actions/setup-dotnet` with `dotnet-version: '10.0.x'` |
+| .NET SDK | Build jobs: `actions/setup-dotnet` with `global-json-file: global.json` (.NET 11 RC2) and `dotnet-version: '10.0.x'` for the .NET 10 test runtime; publish-only jobs use .NET 10 |
 | Workflow env | `DOTNET_NOLOGO`, `DOTNET_SKIP_FIRST_TIME_EXPERIENCE`, `DOTNET_CLI_TELEMETRY_OPTOUT` = `true` |
 | Artifact retention | `retention-days: 7` |
 | Tests | `dotnet run --project <test.csproj> -c Release --no-build` (TUnit) |
