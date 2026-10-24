@@ -6,7 +6,8 @@ Thank you for your interest in contributing to SourceGen! 🎉
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [.NET 11 RC2 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (version specified in `global.json`)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) for the .NET 10 runtime used by tests and samples
 - A code editor (VS Code, Visual Studio, or Rider recommended)
 
 ### Building the Project

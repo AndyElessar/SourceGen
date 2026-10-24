@@ -35,7 +35,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _company_Product_Module_MyService = GetCompany_Product_Module_MyService();
+        GetCompany_Product_Module_MyService();
     }
 
     private DeepNamespaceContainer(DeepNamespaceContainer parent)

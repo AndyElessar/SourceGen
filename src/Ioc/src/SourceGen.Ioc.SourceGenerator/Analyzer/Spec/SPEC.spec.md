@@ -1,5 +1,89 @@
 # Ioc Register Analyzer
 
+## Pipeline Architecture
+
+### Entry Points
+
+| Analyzer | Role | File |
+| :------- | :--- | :--- |
+| `RegisterAnalyzer` | Registration validation, dependency/lifetime checks, key diagnostics | `Analyzer/RegisterAnalyzer.cs` |
+| `ContainerAnalyzer` | Container class validation, resolvability, module cycle detection | `Analyzer/ContainerAnalyzer.cs` |
+
+Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initialize` → `CompilationStart` → actions → `CompilationEnd`.
+
+### RegisterAnalyzer
+
+#### CompilationStart Setup
+
+1. Parse `SourceGenIocFeatures` via `ParseIocFeatures`
+2. Queue SGIOC026 if `AsyncMethodInject` enabled without `MethodInject`
+3. Build `IocAttributeSymbols` cache
+4. Early exit if no registration attributes present
+5. Build concurrent state: `RegisteredServices`, `ServiceTypeIndex`, `DuplicatedDefaults`, `SeenDefaultTargetTypes`, `DefaultSettingsMap`
+6. Construct `AnalyzerContext`
+7. Pre-collect assembly-level `IocRegisterFor` attributes
+
+#### Registered Actions
+
+| Action Type | Handler | Purpose | Diagnostics |
+| :---------- | :------ | :------ | :---------- |
+| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect registrations, validate target type/instance lifetime, track duplicates | SGIOC001, 009, 011 |
+| Symbol (NamedType) | `AnalyzeTypeLevelDefaultsAttribute` | Validate duplicate type-level defaults | SGIOC012 |
+| Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
+| Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
+| SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
+| SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
+| Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders in generic factory mapping | SGIOC017 |
+| SemanticModel | `AnalyzeAssemblyLevelRegistrations` | Assembly-level register-for IDE squiggles | SGIOC001, 009, 011 |
+| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030 |
+
+#### CompilationEnd: AnalyzeAllDependencies
+
+1. Report buffered duplicated defaults (SGIOC012)
+2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), dependency DFS (SGIOC002-005)
+3. Build async-init-only pairs → sync dependency analysis (SGIOC030)
+
+#### Partial Files
+
+| File | Responsibility |
+| :--- | :------------- |
+| `RegisterAnalyzer.ServiceCollection.cs` | `AnalyzerContext`, `ServiceInfo`, service collection/indexing, defaults, assembly-level scan |
+| `RegisterAnalyzer.DependencyAnalysis.cs` | Circular dependency DFS, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
+| `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration/defaults detection (SGIOC011, 012) |
+| `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
+| `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis |
+
+### ContainerAnalyzer
+
+#### CompilationStart Setup
+
+1. Parse `SourceGenIocFeatures`
+2. Build `IocAttributeSymbols`
+3. Early exit if `IocContainerAttribute` unavailable
+4. Build `ContainerAnalyzerContext`: `RegisteredServiceTypes`, `ServiceImplementationTypes`, `Registrations`, `ContainersWithNoFallback`, `AllContainers`, `ImportEdges`
+5. Collect assembly-level register-for registrations
+
+#### Registered Actions
+
+| Action Type | Handler | Purpose | Diagnostics |
+| :---------- | :------ | :------ | :---------- |
+| Symbol (NamedType) | `AnalyzeContainerClass` | Container partial/static validation, import edges, UseSwitchStatement | SGIOC019, 020 |
+| Symbol (NamedType) | `CollectRegisteredServices` | Collect registrations from IocRegister/IocRegisterFor | Feeds 018, 021, 027, 029 |
+| CompilationEnd | `AnalyzeContainerDependencies` | Async accessor contracts, container dependency resolvability | SGIOC018, 021, 027, 029 |
+| CompilationEnd | `AnalyzeCircularImports` | Module import cycle detection via DFS | SGIOC025 |
+
+#### CompilationEnd: AnalyzeContainerDependencies
+
+Pass 1 (all containers): `AnalyzeAsyncPartialAccessors` → SGIOC027 (sync accessor on async-init), SGIOC029 (unsupported async return)
+Pass 2 (IntegrateServiceProvider=false only): `AnalyzeContainerServiceDependencies` (SGIOC018), `AnalyzePartialAccessorDependencies` (SGIOC021)
+
+### Diagnostic Coverage
+
+| Analyzer | Diagnostics |
+| :------- | :---------- |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030 |
+| ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029 |
+
 ## Diagnostics
 
 Format: ID - Level - Category - Description

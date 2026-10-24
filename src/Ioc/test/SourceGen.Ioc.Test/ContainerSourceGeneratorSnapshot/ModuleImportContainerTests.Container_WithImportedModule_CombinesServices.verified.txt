@@ -38,7 +38,7 @@ partial class AppContainer : IIocContainer<global::MainApp.AppContainer>, IServi
         _sharedLib_SharedModule = new global::SharedLib.SharedModule(fallbackProvider);
 
         // Initialize eager singletons
-        _mainApp_LocalService = GetMainApp_LocalService();
+        GetMainApp_LocalService();
     }
 
     private AppContainer(AppContainer parent)

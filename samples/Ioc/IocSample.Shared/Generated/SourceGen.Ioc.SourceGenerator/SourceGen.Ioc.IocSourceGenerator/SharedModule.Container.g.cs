@@ -35,14 +35,14 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _iocSample_Shared_TestHandler = GetIocSample_Shared_TestHandler();
-        _iocSample_Shared_TestRequest2Handler = GetIocSample_Shared_TestRequest2Handler();
-        _iocSample_Shared_TestRequest3Handler = GetIocSample_Shared_TestRequest3Handler();
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ = GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___();
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ = GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_();
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___();
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__();
+        GetIocSample_Shared_TestHandler();
+        GetIocSample_Shared_TestRequest2Handler();
+        GetIocSample_Shared_TestRequest3Handler();
+        GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___();
+        GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_();
+        GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___();
+        GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
+        GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__();
     }
 
     private SharedModule(SharedModule parent)

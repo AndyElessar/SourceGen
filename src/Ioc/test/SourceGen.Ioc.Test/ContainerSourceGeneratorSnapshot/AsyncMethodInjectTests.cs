@@ -252,14 +252,13 @@ public class AsyncMethodInjectTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Eager resolve exclusion — async-init services must NOT be in constructor init
+    // Async-init eager init — fire-and-forget startup follows EagerResolveOptions
     // ─────────────────────────────────────────────────────────────────────────
 
     [Test]
-    public async Task AsyncMethodInject_AsyncService_ExcludedFromEagerInit()
+    public async Task AsyncMethodInject_SingletonAsyncInit_EagerSingleton_FiresInConstructor()
     {
-        // EagerResolveOptions.Singleton is set, but the async-init service must NOT be eager.
-        // The sync-only SyncService IS eager. Verify that only SyncService appears in the ctor.
+        // EagerResolveOptions.Singleton eagerly starts async-init singletons in the root ctor.
         const string source = """
             using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
@@ -281,6 +280,129 @@ public class AsyncMethodInjectTests
             public class SyncService : ISyncService { }
 
             [IocContainer(EagerResolveOptions = EagerResolveOptions.Singleton, ThreadSafeStrategy = ThreadSafeStrategy.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_SingletonAsyncInit_EagerNone_DoesNotFireInConstructor()
+    {
+        // EagerResolveOptions.None keeps async-init singletons lazy too.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IAsyncService { }
+            public interface ISyncService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncService)])]
+            public class AsyncService : IAsyncService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ISyncService)])]
+            public class SyncService : ISyncService { }
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None, ThreadSafeStrategy = ThreadSafeStrategy.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_ScopedAsyncInit_EagerScoped_FiresInScopeConstructor()
+    {
+        // EagerResolveOptions.Scoped eagerly starts async-init scoped services in child scopes.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IAsyncScopedService { }
+            public interface ISyncScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncScopedService)])]
+            public class AsyncScopedService : IAsyncScopedService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ISyncScopedService)])]
+            public class SyncScopedService : ISyncScopedService { }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.Scoped)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_ScopedAsyncInit_EagerNone_DoesNotFireInScopeConstructor()
+    {
+        // EagerResolveOptions.None keeps async-init scoped services lazy.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IAsyncScopedService { }
+            public interface ISyncScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncScopedService)])]
+            public class AsyncScopedService : IAsyncScopedService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ISyncScopedService)])]
+            public class SyncScopedService : ISyncScopedService { }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 

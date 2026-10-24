@@ -358,8 +358,13 @@ internal sealed record class TaskTypeData(
         AllInterfaces, AllBaseClasses);
 
 /// <summary>
+/// Wrapper classification result containing wrapper kind and extracted element type.
+/// </summary>
+internal readonly record struct WrapperInfo(WrapperKind Kind, INamedTypeSymbol? ElementType);
+
+/// <summary>
 /// Represents the kind of wrapper for DI injection purposes.
-/// Each value has a corresponding sealed TypeData derived type.
+/// Most values have a corresponding sealed TypeData derived type; analyzer-only kinds (e.g., ValueTask) do not.
 /// </summary>
 internal enum WrapperKind
 {
@@ -427,7 +432,13 @@ internal enum WrapperKind
     /// Task&lt;T&gt; - async-initialized service wrapper.
     /// Resolved via an async resolver method that awaits async inject methods.
     /// </summary>
-    Task
+    Task,
+
+    /// <summary>
+    /// ValueTask&lt;T&gt; - async-initialized service wrapper.
+    /// Analyzer recognizes this wrapper kind for validation paths.
+    /// </summary>
+    ValueTask
 }
 
 internal static class TypeDataExtensions

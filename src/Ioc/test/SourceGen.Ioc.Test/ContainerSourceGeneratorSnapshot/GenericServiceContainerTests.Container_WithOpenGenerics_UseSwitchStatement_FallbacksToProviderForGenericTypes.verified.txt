@@ -27,7 +27,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
 
         // Initialize eager singletons
-        _testNamespace_UserService = GetTestNamespace_UserService();
+        GetTestNamespace_UserService();
     }
 
     private TestContainer(TestContainer parent)

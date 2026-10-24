@@ -35,11 +35,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _testNamespace_Keyed__Key_ = GetTestNamespace_Keyed__Key_();
-        _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 = GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0();
-        _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key = GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key();
-        _testNamespace_StringConsumer = GetTestNamespace_StringConsumer();
-        _testNamespace_EnumConsumer = GetTestNamespace_EnumConsumer();
+        GetTestNamespace_Keyed__Key_();
+        GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0();
+        GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key();
+        GetTestNamespace_StringConsumer();
+        GetTestNamespace_EnumConsumer();
     }
 
     private TestContainer(TestContainer parent)

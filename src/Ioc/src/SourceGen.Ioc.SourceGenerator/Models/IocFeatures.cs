@@ -1,4 +1,3 @@
-#nullable enable
 
 namespace SourceGen.Ioc.SourceGenerator.Models;
 

@@ -5,6 +5,7 @@ namespace SourceGen.Ioc.TestAot.Tests;
 /// Verifies that services with [IocInject] async Task methods are properly
 /// initialized before first use in both standalone and MS.Extensions.DI scenarios.
 /// </summary>
+[NotInParallel]
 public sealed class AsyncInjectionTests
 {
     #region Standalone Container Tests (via partial Task<T> accessor on AsyncInjectionModule)

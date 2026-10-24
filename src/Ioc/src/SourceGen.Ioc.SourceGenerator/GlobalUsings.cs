@@ -11,3 +11,4 @@ global using PolyType.Roslyn;
 global using SourceGen.Ioc.SourceGenerator;
 global using SourceGen.Ioc.SourceGenerator.Models;
 global using static SourceGen.Ioc.SourceGenerator.RoslynExtensions;
+global using static SourceGen.Ioc.SourceGenerator.Roslyn.TypeParameterSubstitution;

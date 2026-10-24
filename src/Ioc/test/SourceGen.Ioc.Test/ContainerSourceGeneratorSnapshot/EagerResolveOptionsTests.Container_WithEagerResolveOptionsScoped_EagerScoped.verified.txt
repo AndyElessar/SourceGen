@@ -42,7 +42,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         _testNamespace_SingletonService = parent._testNamespace_SingletonService;
 
         // Initialize eager scoped services
-        _testNamespace_ScopedService = GetTestNamespace_ScopedService();
+        GetTestNamespace_ScopedService();
     }
 
     #endregion

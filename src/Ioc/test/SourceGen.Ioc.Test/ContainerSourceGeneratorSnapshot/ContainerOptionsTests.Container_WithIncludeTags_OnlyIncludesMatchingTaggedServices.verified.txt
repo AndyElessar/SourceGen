@@ -35,8 +35,8 @@ partial class FeatureContainer : IIocContainer<global::TestNamespace.FeatureCont
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        _testNamespace_Feature1Service = GetTestNamespace_Feature1Service();
-        _testNamespace_Feature2Service = GetTestNamespace_Feature2Service();
+        GetTestNamespace_Feature1Service();
+        GetTestNamespace_Feature2Service();
     }
 
     private FeatureContainer(FeatureContainer parent)

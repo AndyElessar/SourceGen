@@ -519,6 +519,74 @@ public class SGIOC021Tests
     }
 
     [Test]
+    public async Task SGIOC021_PartialAccessor_EnumerableLazy_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(ServiceTypes = [typeof(IService)])]
+            public class TestService : IService { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial IEnumerable<Lazy<IService>> GetServices();
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021")).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC021_PartialAccessor_EnumerableFunc_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(ServiceTypes = [typeof(IService)])]
+            public class TestService : IService { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial IEnumerable<Func<IService>> GetServices();
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021")).Count().IsEqualTo(0);
+    }
+
+    [Test]
     public async Task SGIOC021_AlwaysResolvableType_NoDiagnostic()
     {
         const string source = """
