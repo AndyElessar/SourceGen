@@ -12,8 +12,7 @@ internal static partial class RoslynExtensions
     /// <returns>The full access path if successfully resolved; otherwise, null.</returns>
     public static string? ResolveNameofExpression(ExpressionSyntax expression, SemanticModel semanticModel)
     {
-        var symbolInfo = semanticModel.ForTreeOf(expression).GetSymbolInfo(expression);
-        var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+        var symbol = ResolveExpressionSymbol(expression, semanticModel);
 
         if(symbol is null)
             return null;
@@ -30,11 +29,26 @@ internal static partial class RoslynExtensions
     /// <param name="semanticModel">The semantic model to use for symbol resolution.</param>
     /// <returns>The method symbol if found; otherwise, null.</returns>
     public static IMethodSymbol? ResolveMethodSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
-    {
-        var symbolInfo = semanticModel.ForTreeOf(expression).GetSymbolInfo(expression);
-        var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+        => ResolveExpressionSymbol(expression, semanticModel) as IMethodSymbol;
 
-        return symbol as IMethodSymbol;
+    /// <summary>
+    /// Resolves the symbol an expression refers to, or its first candidate.
+    /// </summary>
+    /// <remarks>
+    /// Speculative binding binds only the expression at its own position, so names are looked up in the same scope.
+    /// <see cref="ModelExtensions.GetSymbolInfo(SemanticModel, SyntaxNode, CancellationToken)"/> binds the whole
+    /// enclosing attribute instead, and transforms receive a new semantic model on every run, so that work repeats
+    /// on every edit. It remains the fallback when speculative binding finds nothing.
+    /// </remarks>
+    private static ISymbol? ResolveExpressionSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
+    {
+        var model = semanticModel.ForTreeOf(expression);
+        var speculative = model.GetSpeculativeSymbolInfo(expression.SpanStart, expression, SpeculativeBindingOption.BindAsExpression);
+        if((speculative.Symbol ?? speculative.CandidateSymbols.FirstOrDefault()) is { } speculativeSymbol)
+            return speculativeSymbol;
+
+        var symbolInfo = model.GetSymbolInfo(expression);
+        return symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
     }
 
     extension(SemanticModel semanticModel)
