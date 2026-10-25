@@ -202,6 +202,28 @@ public static class SourceGeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs the source generator on several source files, one syntax tree per file.
+    /// Use this to test declarations split across files, such as partial types.
+    /// </summary>
+    /// <param name="sources">The source code of each file.</param>
+    public static GeneratorTestResult RunGeneratorOnFiles<TGenerator>(params string[] sources)
+        where TGenerator : IIncrementalGenerator, new()
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            sources.Select(static (source, i) => CSharpSyntaxTree.ParseText(source, ParseOptions, $"File{i}.cs")),
+            BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        ThrowIfCompilationHasErrors(compilation);
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new TGenerator()).WithUpdatedParseOptions(ParseOptions);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+
+        return new GeneratorTestResult(driver.GetRunResult().Results.Single(), outputCompilation);
+    }
+
+    /// <summary>
     /// Runs the source generator with custom base references.
     /// Use this to test scenarios with different reference configurations.
     /// </summary>

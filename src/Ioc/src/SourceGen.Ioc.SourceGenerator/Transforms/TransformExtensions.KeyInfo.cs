@@ -136,7 +136,7 @@ internal static partial class TransformExtensions
             }
 
             var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
-            var symbolInfo = semanticModel.GetSymbolInfo(nameofArgument);
+            var symbolInfo = semanticModel.ForTreeOf(nameofArgument).GetSymbolInfo(nameofArgument);
             var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
 
             return symbol switch

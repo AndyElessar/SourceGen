@@ -1347,4 +1347,95 @@ public class InjectAttributeTests
         await Verify(generatedSource);
     }
 
+    [Test]
+    public async Task InjectAttribute_CsharpKeyInOtherPartialFile_GeneratesSameRegistrationAsSingleFile()
+    {
+        const string usings = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            """;
+        const string registration = """
+            [IocRegister]
+            public partial class MyService;
+            """;
+        const string members = """
+            public partial class MyService
+            {
+                [IocInject(nameof(Keys.Main), KeyType = KeyType.Csharp)]
+                public IDependency Dependency { get; set; } = default!;
+            }
+
+            public interface IDependency;
+
+            [IocRegister(Key = nameof(Keys.Main), KeyType = KeyType.Csharp)]
+            public class Dependency : IDependency;
+
+            public static class Keys
+            {
+                public const string Main = "main";
+            }
+            """;
+
+        await AssertSplitFilesMatchSingleFile(usings + registration + "\n" + members, usings + registration, usings + members);
+    }
+
+    [Test]
+    public async Task InjectAttribute_DecoratorCsharpKeyInOtherFile_GeneratesSameRegistrationAsSingleFile()
+    {
+        const string usings = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            """;
+        const string registration = """
+            public interface IMyService;
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService : IMyService;
+
+            [IocContainer]
+            public partial class AppContainer;
+            """;
+        const string decorator = """
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                [IocInject(nameof(Keys.Main), KeyType = KeyType.Csharp)]
+                public IDependency Dependency { get; set; } = default!;
+            }
+
+            public interface IDependency;
+
+            [IocRegister(Key = nameof(Keys.Main), KeyType = KeyType.Csharp)]
+            public class Dependency : IDependency;
+
+            public static class Keys
+            {
+                public const string Main = "main";
+            }
+            """;
+
+        await AssertSplitFilesMatchSingleFile(usings + registration + "\n" + decorator, usings + registration, usings + decorator);
+    }
+
+    /// <summary>
+    /// Nameof keys on members declared in another file must be bound with that file's semantic model.
+    /// </summary>
+    private static async Task AssertSplitFilesMatchSingleFile(string singleFile, params string[] files)
+    {
+        var single = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(singleFile);
+        var split = SourceGeneratorTestHelper.RunGeneratorOnFiles<IocSourceGenerator>(files);
+
+        await Assert.That(split.Result.Exception).IsNull();
+        await split.VerifyCompilableAsync();
+        await Assert.That(AllSources(split)).IsEqualTo(AllSources(single));
+
+        static string AllSources(GeneratorTestResult result) => string.Join("\n", result.Result.GeneratedSources
+            .OrderBy(static source => source.HintName, StringComparer.Ordinal)
+            .Select(static source => $"{source.HintName}\n{source.SourceText}"));
+    }
 }
