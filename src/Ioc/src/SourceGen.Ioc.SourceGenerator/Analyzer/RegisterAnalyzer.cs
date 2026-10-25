@@ -377,12 +377,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC006: Analyze duplicated keyed service attributes on parameters
         context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
 
-        // SGIOC008: Analyze Factory and Instance members specified via nameof()
+        // SGIOC008/010/023/024 + nameof() key type resolution for KeyType.Csharp registrations.
         // Using RegisterSyntaxNodeAction to avoid RS1030 warning (do not use Compilation.GetSemanticModel)
-        context.RegisterSyntaxNodeAction(ctx => AnalyzeFactoryAndInstanceOnAttribute(ctx, analyzerContext), SyntaxKind.Attribute);
-
-        // Resolve nameof() key types for KeyType.Csharp registrations (avoids RS1030)
-        context.RegisterSyntaxNodeAction(ctx => ResolveCsharpKeyTypes(ctx, analyzerContext), SyntaxKind.Attribute);
+        context.RegisterSyntaxNodeAction(ctx => AnalyzeIocAttributeSyntax(ctx, analyzerContext), SyntaxKind.Attribute);
 
         // SGIOC017: Analyze [IocGenericFactory] attribute for duplicated placeholder types
         context.RegisterSymbolAction(AnalyzeIocGenericFactoryAttribute, SymbolKind.Method);
@@ -392,6 +389,27 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003-005)
         context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
+    }
+
+    /// <summary>
+    /// Binds each attribute once and dispatches to the IoC attribute syntax analyses.
+    /// </summary>
+    private static void AnalyzeIocAttributeSyntax(
+        SyntaxNodeAnalysisContext context,
+        AnalyzerContext analyzerContext)
+    {
+        if(context.Node is not AttributeSyntax attributeSyntax)
+            return;
+
+        var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
+        if(attributeSymbol is not IMethodSymbol { ContainingType: { } attributeClass })
+            return;
+
+        if(!AnalyzerHelpers.IsAnyIoCAttribute(attributeClass, analyzerContext.AttributeSymbols))
+            return;
+
+        AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, analyzerContext);
+        ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, analyzerContext);
     }
 
     /// <summary>
@@ -414,6 +432,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // Reuse these collections across all services to reduce allocations
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var pathStack = new Stack<INamedTypeSymbol>();
+        var graph = new DependencyGraph(analyzerContext);
 
         foreach(var kvp in analyzerContext.RegisteredServices)
         {
@@ -429,7 +448,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,
-                analyzerContext,
+                graph,
                 serviceInfo,
                 visited,
                 pathStack,

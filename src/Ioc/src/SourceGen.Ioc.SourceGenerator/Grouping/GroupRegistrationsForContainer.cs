@@ -32,10 +32,21 @@ partial class IocSourceGenerator
         if(container.IncludeTags.Length > 0)
         {
             // Only include services that have at least one matching tag
-            return allRegistrations
-                .Where(r => r.Tags.Length > 0 && r.Tags.Any(tag => container.IncludeTags.Contains(tag, StringComparer.Ordinal)))
-                .Select(static r => r.Registration)
-                .ToImmutableEquatableArray();
+            var includeTags = new HashSet<string>(container.IncludeTags, StringComparer.Ordinal);
+            var filtered = new List<ServiceRegistrationModel>();
+            foreach(var r in allRegistrations)
+            {
+                foreach(var tag in r.Tags)
+                {
+                    if(includeTags.Contains(tag))
+                    {
+                        filtered.Add(r.Registration);
+                        break;
+                    }
+                }
+            }
+
+            return filtered.ToImmutableEquatableArray();
         }
 
         // Include all registrations from the assembly

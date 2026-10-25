@@ -160,19 +160,10 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static void ResolveCsharpKeyTypes(
         SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass,
         AnalyzerContext analyzerContext)
     {
-        if(context.Node is not AttributeSyntax attributeSyntax)
-            return;
-
-        var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
-        if(attributeSymbol is not IMethodSymbol attributeConstructor)
-            return;
-
-        var attributeClass = attributeConstructor.ContainingType;
-        if(attributeClass is null)
-            return;
-
         if(!AnalyzerHelpers.IsIoCRegistrationAttribute(attributeClass, analyzerContext.AttributeSymbols))
             return;
 
@@ -213,7 +204,7 @@ public sealed partial class RegisterAnalyzer
                 .FirstOrDefault(attr =>
                     SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attributeClass)
                     && attr.ApplicationSyntaxReference?.SyntaxTree == syntaxTree
-                    && attr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).Span == attributeSyntax.Span);
+                    && attr.ApplicationSyntaxReference?.Span == attributeSyntax.Span);
         }
 
         var targetType = GetTypeLevelTargetType(context, attributeSyntax);
@@ -224,7 +215,7 @@ public sealed partial class RegisterAnalyzer
             .FirstOrDefault(attr =>
                 SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attributeClass)
                 && attr.ApplicationSyntaxReference?.SyntaxTree == syntaxTree
-                && attr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).Span == attributeSyntax.Span);
+                && attr.ApplicationSyntaxReference?.Span == attributeSyntax.Span);
     }
 
     private static INamedTypeSymbol? GetTypeLevelTargetType(

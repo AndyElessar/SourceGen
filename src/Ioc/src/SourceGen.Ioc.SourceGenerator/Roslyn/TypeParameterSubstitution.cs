@@ -26,7 +26,7 @@ internal static class TypeParameterSubstitution
             return typeName;
         }
 
-        return SubstituteTypeArgumentsCore(typeNameSpan, typeArgMap.AsSpan());
+        return SubstituteTypeArgumentsCore(typeName, typeArgMap.AsSpan());
     }
 
     public static string ReplaceTypeParameter(string typeName, string typeParam, string actualArg)
@@ -41,14 +41,16 @@ internal static class TypeParameterSubstitution
 
         // Delegate to core implementation with single-element span
         Span<TypeArgEntry> singleEntry = [new(typeParam, actualArg)];
-        return SubstituteTypeArgumentsCore(typeNameSpan, singleEntry);
+        return SubstituteTypeArgumentsCore(typeName, singleEntry);
     }
 
     private static string SubstituteTypeArgumentsCore(
-        ReadOnlySpan<char> typeNameSpan,
+        string typeName,
         ReadOnlySpan<TypeArgEntry> sortedEntries)
     {
+        var typeNameSpan = typeName.AsSpan();
         var result = new StringBuilder(typeNameSpan.Length + 32);
+        int segmentStart = 0;
         int i = 0;
 
         while(i < typeNameSpan.Length)
@@ -58,16 +60,19 @@ internal static class TypeParameterSubstitution
 
             if(isValidStart && TryMatchTypeParameter(typeNameSpan, i, sortedEntries, out var match, out int matchLength))
             {
+                // Flush the unchanged segment before the match in one append
+                result.Append(typeName, segmentStart, i - segmentStart);
                 result.Append(match);
                 i += matchLength;
+                segmentStart = i;
             }
             else
             {
-                result.Append(typeNameSpan[i]);
                 i++;
             }
         }
 
+        result.Append(typeName, segmentStart, typeNameSpan.Length - segmentStart);
         return result.ToString();
     }
 

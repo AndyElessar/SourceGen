@@ -130,24 +130,10 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static void AnalyzeFactoryAndInstanceOnAttribute(
         SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass,
         AnalyzerContext analyzerContext)
     {
-        if (context.Node is not AttributeSyntax attributeSyntax)
-            return;
-
-        // Get the attribute symbol to check if it's an IoC registration attribute
-        var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
-        if (attributeSymbol is not IMethodSymbol attributeConstructor)
-            return;
-
-        var attributeClass = attributeConstructor.ContainingType;
-        if (attributeClass is null)
-            return;
-
-        // Check if this is an IoC registration attribute (including generic variants)
-        if (!AnalyzerHelpers.IsAnyIoCAttribute(attributeClass, analyzerContext.AttributeSymbols))
-            return;
-
         var argumentList = attributeSyntax.ArgumentList;
         if (argumentList is null)
             return;
