@@ -358,6 +358,28 @@ internal static partial class TransformExtensions
                 return (typeData, allInterfaces);
             }
 
+            // Arrays keep their element type, created like any type argument, so T[] and T[][] can be matched against
+            // closed arrays such as Req[] and Req[][], and the element keeps its interfaces for constraint checks
+            if(typeArg is IArrayTypeSymbol arrayArg)
+            {
+                var (elementType, elementInterfaces) = typeParam.CreateTypeDataForTypeArg(arrayArg.ElementType, depth + 1);
+                if(elementInterfaces is { Length: > 0 })
+                {
+                    elementType = elementType with { AllInterfaces = elementInterfaces };
+                }
+
+                var arrayName = arrayArg.FullyQualifiedName;
+                var arrayType = TypeData.CreateWrapper(
+                    arrayName,
+                    arrayName,
+                    arrayArg.ContainsGenericParameters,
+                    GenericArity: 1,
+                    WrapperKind.Array,
+                    IsNestedOpenGeneric: false,
+                    TypeParameters: [new TypeParameter("T", elementType)]);
+                return (arrayType with { Traits = GetTypeTraits(arrayArg) }, null);
+            }
+
             if(typeArg is not null)
             {
                 var argName = typeArg.FullyQualifiedName;

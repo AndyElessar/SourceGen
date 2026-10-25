@@ -244,11 +244,15 @@ public class ClosedGenericDependencyTests
     [Arguments("PartiallyClosed", "TextHandler<TRequest> : IHandler<TRequest, string>", "IHandler<Req, string> text, IHandler<Req, int> number")]
     [Arguments("NestedTypeArguments", "ListHandler<TItem, TKey> : IHandler<List<TItem>, Dictionary<TKey, TItem>> where TKey : notnull", "IHandler<List<Req>, Dictionary<string, Req>> handler")]
     [Arguments("RepeatedTypeParameter", "ListHandler<T> : IHandler<T, List<T>>", "IHandler<Req, List<Req>> matching, IHandler<Req, List<Res>> mismatched")]
+    [Arguments("ArrayTypeArgument", "ArrayHandler<T> : IHandler<T[], T>", "IHandler<Req[], Req> matching, IHandler<Req[], Res> mismatched")]
+    [Arguments("ArrayRank", "GridHandler<T> : IHandler<T[,], T>", "IHandler<Req[,], Req> matching, IHandler<Req[], Req> otherRank")]
+    [Arguments("JaggedArray", "JaggedHandler<T> : IHandler<T[][], T>", "IHandler<Req[][], Req> matching")]
     public async Task ClosedGenericDependency_ImplementationTypeArgumentsDifferFromServiceType_ClosesImplementationFromImplementedServiceType(
         string name, string declaration, string parameters)
     {
         // Only closed service types the implementation can produce get registrations: not IHandler<Req, int> for
-        // TextHandler<TRequest>, and not IHandler<Req, List<Res>> for ListHandler<T>.
+        // TextHandler<TRequest>, not IHandler<Req, List<Res>> for ListHandler<T>, not IHandler<Req[], Res> for
+        // ArrayHandler<T>, and not IHandler<Req[], Req> for GridHandler<T>.
         var source = $$"""
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -281,11 +285,12 @@ public class ClosedGenericDependencyTests
     [Arguments("PartiallyClosed", "Decorator<TRequest>(IHandler<TRequest, string> inner) : IHandler<TRequest, string>", "Decorator<>", "IHandler<Req, string> text, IHandler<Req, int> number")]
     [Arguments("ConstraintOnOtherTypeParameter", "Decorator<TRequest, TResponse>(IHandler<TRequest, TResponse> inner) : IHandler<TRequest, TResponse> where TRequest : IRequest<TResponse>", "Decorator<,>", "IHandler<Req, Res> matching, IHandler<Req, Other> mismatched")]
     [Arguments("TypeParameterConstraint", "Decorator<TRequest, TResponse>(IHandler<TRequest, TResponse> inner) : IHandler<TRequest, TResponse> where TRequest : TResponse", "Decorator<,>", "IHandler<Req, IRequest> matching, IHandler<Other, IRequest> mismatched")]
+    [Arguments("ArrayTypeArgument", "Decorator<T>(IHandler<T[], T> inner) : IHandler<T[], T>", "Decorator<>", "IHandler<Req[], Req> matching, IHandler<Req[], Res> mismatched")]
     public async Task ClosedGenericDependency_DecoratorTypeArgumentsDifferFromServiceType_ClosesDecoratorFromImplementedServiceType(
         string name, string decorator, string decoratorType, string parameters)
     {
         // Only the first dependency of each case is decorated: Decorator<Res, Req>, Decorator<Req> for IHandler<Req, string>,
-        // IRequest<Res> for Req, and Req : IRequest.
+        // IRequest<Res> for Req, Req : IRequest, and Decorator<Req> for IHandler<Req[], Req>.
         var source = $$"""
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
