@@ -55,7 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 45
+    # Base and head each run 54 Count = 500 cases (7 generator benchmarks × 6 scenarios, 3 analyzer benchmarks × 4 scenarios).
+    timeout-minutes: 90
     # Job-level so that a skipped run for an unrelated label never cancels a running benchmark.
     # Newer commits replace older runs of the same pull request; every other run is kept.
     concurrency:
