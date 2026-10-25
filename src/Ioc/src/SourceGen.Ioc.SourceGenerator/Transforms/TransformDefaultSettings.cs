@@ -126,9 +126,7 @@ partial class IocSourceGenerator
         var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
-        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
-            implementationType.AllInterfaces ?? [],
-            implementationType.AllBaseClasses ?? []);
+        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(implementationType);
 
         // Determine service types based on whether implementation is open or closed generic
         ImmutableEquatableArray<TypeData> serviceTypes;

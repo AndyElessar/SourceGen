@@ -8,6 +8,7 @@ Basic registration covers fundamental service registration scenarios including s
 
 - Always register Implementation type itself.
 - When Service type is open generic type and Implementation type is closed type, make sure to register with closed generic type.
+- When both are open generic, register `typeof(Service<>)` with `typeof(Implementation<>)` only when the service type's type arguments, as implemented, are the implementation's type parameters in declaration order. Open generic registrations close the implementation with the service type's type arguments by position, so `TextHandler<T> : IHandler<T, string>` and `SwappedHandler<TResponse, TRequest> : IHandler<TRequest, TResponse>` are not registered as `IHandler<,>`; their closed service types are registered when discovered (see [Generic Registration](Register.Generics.spec.md)).
 
 ### Keyed Service Registration
 

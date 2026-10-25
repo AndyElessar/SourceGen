@@ -237,6 +237,36 @@ public class BasicRegistrationTests
     }
 
     [Test]
+    [Arguments("PartiallyClosed", "TextHandler<TRequest> : IHandler<TRequest, string>", false)]
+    [Arguments("PartiallyClosed", "TextHandler<TRequest> : IHandler<TRequest, string>", true)]
+    [Arguments("Swapped", "SwappedHandler<TResponse, TRequest> : IHandler<TRequest, TResponse>", false)]
+    [Arguments("Swapped", "SwappedHandler<TResponse, TRequest> : IHandler<TRequest, TResponse>", true)]
+    [Arguments("RenamedInOrder", "RenamedHandler<TA, TB> : IHandler<TA, TB>", false)]
+    public async Task OpenGenericService_TypeArgumentsNotImplementationTypeParametersInOrder_DoesNotGenerateOpenGenericServiceRegistration(
+        string name, string declaration, bool registerAllInterfaces)
+    {
+        // Open generic registrations close the implementation by position, so only RenamedInOrder can be registered as IHandler<,>.
+        var registration = registerAllInterfaces ? "RegisterAllInterfaces = true" : "ServiceTypes = [typeof(IHandler<,>)]";
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<TRequest, TResponse>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, {{registration}})]
+            public class {{declaration}};
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseTextForParameters($"{name}_RegisterAllInterfaces={registerAllInterfaces}");
+    }
+
+    [Test]
     public async Task IocRegisterForAttribute_OnAssembly_GeneratesRegistration()
     {
         const string source = """
