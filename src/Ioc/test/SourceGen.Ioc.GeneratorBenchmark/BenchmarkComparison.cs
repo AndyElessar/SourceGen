@@ -15,7 +15,7 @@ internal static class BenchmarkComparison
     /// Writes a Markdown comparison to <paramref name="outputPath"/>.
     /// </summary>
     /// <param name="acceptedPath">An updated baseline whose allocations are accepted even when they regress from <paramref name="baselinePath"/>.</param>
-    /// <returns>1 when allocations regress beyond <paramref name="thresholdPercent"/> or a head result is missing, unless the updated baseline accepts it; otherwise 0.</returns>
+    /// <returns>1 when allocations regress beyond <paramref name="thresholdPercent"/>, or a head result is missing, failed or lacks allocation data, unless the updated baseline accepts it; otherwise 0.</returns>
     public static int Run(string baselinePath, string headPath, string outputPath, double thresholdPercent, string? acceptedPath = null)
     {
         var baseline = Load(baselinePath);
@@ -43,18 +43,30 @@ internal static class BenchmarkComparison
             WriteAnnotations(rows);
         }
 
-        return rows.Any(static row => row.Status is Status.AllocationRegression or Status.MissingHead) ? 1 : 0;
+        return rows.Any(static row => row.Status is Status.AllocationRegression or Status.MissingHead or Status.MissingAllocation) ? 1 : 0;
     }
 
     /// <summary>
     /// Writes the results in <paramref name="resultsPath"/> to <paramref name="outputPath"/> as a baseline file.
     /// </summary>
+    /// <exception cref="InvalidOperationException">A benchmark failed or has no allocation data, so the baseline would be incomplete.</exception>
     public static int Export(string resultsPath, string outputPath, string source)
     {
         var report = Load(resultsPath);
         if(report.Measurements.Count == 0)
         {
             throw new InvalidOperationException($"No benchmark results were found in '{resultsPath}'.");
+        }
+
+        var incomplete = report.Measurements
+            .Where(static pair => pair.Value.Failed || pair.Value.Allocated is null)
+            .Select(static pair => $"{pair.Key.Method} [{DisplayParameters(pair.Key.Parameters)}]: {(pair.Value.Failed ? "failed" : "no allocation data")}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if(incomplete.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Refusing to export an incomplete baseline from '{resultsPath}':{Environment.NewLine}{string.Join(Environment.NewLine, incomplete)}");
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
@@ -84,15 +96,7 @@ internal static class BenchmarkComparison
                 WriteNumber(writer, "meanNs", measurement.Mean);
                 WriteNumber(writer, "lowerNs", measurement.Lower);
                 WriteNumber(writer, "upperNs", measurement.Upper);
-                if(measurement.Allocated is { } allocated)
-                {
-                    writer.WriteNumber("allocatedBytes", allocated);
-                }
-                else
-                {
-                    writer.WriteNull("allocatedBytes");
-                }
-
+                writer.WriteNumber("allocatedBytes", measurement.Allocated!.Value);
                 writer.WriteEndObject();
             }
 
@@ -128,16 +132,19 @@ internal static class BenchmarkComparison
 
                 foreach(var benchmark in benchmarks.EnumerateArray())
                 {
-                    // Failed benchmarks have no statistics; treating them as absent reports them as missing.
+                    var key = (Text(benchmark, "Parameters") ?? "", Text(benchmark, "Method") ?? "unknown");
+
+                    // Failed benchmarks have no statistics; keeping them as failed measurements fails the gate instead of dropping them.
                     if(!benchmark.TryGetProperty("Statistics", out var statistics) || Number(statistics, "Mean") is double.NaN)
                     {
+                        measurements.TryAdd(key, Measurement.FailedRun);
                         continue;
                     }
 
                     var interval = statistics.TryGetProperty("ConfidenceInterval", out var value) ? value : default;
                     var memory = benchmark.TryGetProperty("Memory", out value) ? value : default;
                     measurements.TryAdd(
-                        (Text(benchmark, "Parameters") ?? "", Text(benchmark, "Method") ?? "unknown"),
+                        key,
                         new(Number(statistics, "Mean"), Number(interval, "Lower"), Number(interval, "Upper"), Integer(memory, "BytesAllocatedPerOperation")));
                 }
             }
@@ -169,30 +176,41 @@ internal static class BenchmarkComparison
 
     private static Row Classify((string Parameters, string Method) key, Measurement? baseline, Measurement? head, Report? accepted, double threshold)
     {
-        if(head is null)
+        if(head is null || head.Failed)
         {
-            // An updated baseline that drops the benchmark accepts its removal.
-            var removal = accepted is not null && !accepted.Measurements.ContainsKey(key) ? Status.Accepted : Status.MissingHead;
+            // An updated baseline that drops the benchmark accepts its removal; a failed run is never accepted.
+            var removal = head is null && accepted is not null && !accepted.Measurements.ContainsKey(key) ? Status.Accepted : Status.MissingHead;
             return new(key.Parameters, key.Method, baseline, head, double.NaN, double.NaN, removal);
         }
 
-        if(baseline is null)
+        // Without allocation data the gate cannot detect regressions, so a disabled MemoryDiagnoser fails the check.
+        if(head.Allocated is not { } headBytes)
+        {
+            return new(key.Parameters, key.Method, baseline, head, double.NaN, double.NaN, Status.MissingAllocation);
+        }
+
+        if(baseline is null || baseline.Failed)
         {
             return new(key.Parameters, key.Method, baseline, head, double.NaN, double.NaN, Status.NoBaseline);
         }
 
         var time = Change(baseline.Mean, head.Mean);
-        var allocation = baseline.Allocated is { } baselineBytes && head.Allocated is { } headBytes
-            ? Change(baselineBytes, headBytes)
+        var acceptedAllocation = accepted?.Measurements.GetValueOrDefault(key) is { Allocated: { } acceptedBytes }
+            ? Change(acceptedBytes, headBytes)
             : double.NaN;
-        var acceptedAllocation = accepted?.Measurements.GetValueOrDefault(key) is { Allocated: { } acceptedBytes } && head.Allocated is { } measuredBytes
-            ? Change(acceptedBytes, measuredBytes)
-            : double.NaN;
+        if(baseline.Allocated is not { } baselineBytes)
+        {
+            // A baseline without allocation data cannot gate the head unless an updated baseline supplies it.
+            var status = acceptedAllocation <= threshold ? Status.Accepted : Status.MissingAllocation;
+            return new(key.Parameters, key.Method, baseline, head, time, double.NaN, status);
+        }
+
+        var allocation = Change(baselineBytes, headBytes);
 
         // Comparisons with NaN are false, so a missing confidence interval never flags a time change.
         var slower = time > threshold && head.Lower > baseline.Upper;
         var faster = time < -threshold && head.Upper < baseline.Lower;
-        var status = (allocation > threshold, slower, faster || allocation < -threshold) switch
+        var result = (allocation > threshold, slower, faster || allocation < -threshold) switch
         {
             (true, _, _) when acceptedAllocation <= threshold => Status.Accepted,
             (true, _, _) => Status.AllocationRegression,
@@ -200,7 +218,7 @@ internal static class BenchmarkComparison
             (_, _, true) => Status.Improved,
             _ => Status.Unchanged,
         };
-        return new(key.Parameters, key.Method, baseline, head, time, allocation, status);
+        return new(key.Parameters, key.Method, baseline, head, time, allocation, result);
     }
 
     private static double Change(double baseline, double head) => baseline switch
@@ -266,7 +284,11 @@ internal static class BenchmarkComparison
             {
                 Status.AllocationRegression => ("error", "Allocation regression",
                     $"allocated {FormatBytes(row.Baseline?.Allocated)} → {FormatBytes(row.Head?.Allocated)} ({FormatChange(row.AllocationChange)})"),
-                Status.MissingHead => ("error", "Missing head result", "the head run produced no result"),
+                Status.MissingHead => ("error", row.Head is null ? "Missing head result" : "Failed benchmark",
+                    row.Head is null ? "the head run produced no result" : "the head run reported no statistics"),
+                Status.MissingAllocation => ("error", "Missing allocation data", row.Head?.Allocated is null
+                    ? "the head run reported no allocation data; MemoryDiagnoser must stay enabled"
+                    : "the baseline has no allocation data; commit an updated baseline"),
                 Status.Slower => ("warning", "Slower benchmark",
                     $"mean time {FormatTime(row.Baseline?.Mean)} → {FormatTime(row.Head?.Mean)} ({FormatChange(row.TimeChange)})"),
                 Status.Accepted => ("notice", "Accepted benchmark change", row.Head is null
@@ -287,7 +309,8 @@ internal static class BenchmarkComparison
     private static string Label(Status status) => status switch
     {
         Status.AllocationRegression => "🔴 Allocation regression",
-        Status.MissingHead => "🔴 Missing head result",
+        Status.MissingHead => "🔴 Missing or failed head result",
+        Status.MissingAllocation => "🔴 Missing allocation data",
         Status.Slower => "🟠 Slower",
         Status.Accepted => "🟡 Accepted by updated baseline",
         Status.Improved => "🟢 Improved",
@@ -356,6 +379,7 @@ internal static class BenchmarkComparison
     {
         AllocationRegression,
         MissingHead,
+        MissingAllocation,
         Slower,
         Accepted,
         Improved,
@@ -363,7 +387,13 @@ internal static class BenchmarkComparison
         NoBaseline,
     }
 
-    private sealed record Measurement(double Mean, double Lower, double Upper, long? Allocated);
+    private sealed record Measurement(double Mean, double Lower, double Upper, long? Allocated)
+    {
+        /// <summary>A benchmark that was reported without statistics because its run failed.</summary>
+        public static Measurement FailedRun { get; } = new(double.NaN, double.NaN, double.NaN, null);
+
+        public bool Failed => double.IsNaN(Mean);
+    }
 
     private sealed record Host(string Processor, string Os, string Runtime, string BenchmarkDotNet);
 

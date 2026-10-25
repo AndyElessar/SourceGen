@@ -17,7 +17,7 @@ To run an actual release (set version, tag, push, monitor), use the `sourcegen-r
 | `ioc.publish.yml`, `ioc.cli.publish.yml` | Publish | tags `ioc-v*`, `ioc-cli-v*` |
 | `docs.yml` | Docs site (GitHub Pages) | push to `main` + `paths: docs/**`, `workflow_dispatch` |
 | `ioc.benchmark.nativeaot.yml` | Native AOT benchmark | tags `ioc-v*`, `workflow_dispatch` |
-| `ioc.benchmark.generator.yml` | Generator benchmark: compares head with the committed `benchmarks/baseline.json` from `main`; fails on >5% allocation regression unless the PR updates the baseline | `pull_request` + push to `main` with `paths` filters, `workflow_dispatch` |
+| `ioc.benchmark.generator.yml` | Generator benchmark: compares head with the committed `benchmarks/baseline.json` from `main`; fails on >5% allocation regression unless the PR updates the baseline, or on a missing, failed or allocation-less result | `pull_request` + push to `main` with `paths` filters, `workflow_dispatch` |
 | `ioc.benchmark.generator.comment.yml` | Posts the generator benchmark report as a pull request comment | `workflow_run` of the generator benchmark |
 
 Read the existing workflow (and a sibling of the same type) before editing; mirror its structure.

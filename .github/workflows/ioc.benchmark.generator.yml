@@ -151,8 +151,9 @@ jobs:
           retention-days: 7
           overwrite: true
 
+      # Runs even when the export rejects incomplete results, so the report shows which benchmarks failed.
       - name: Compare with baseline
-        if: ${{ !cancelled() && steps.upload-baseline.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         shell: bash
         env:
           BASELINE: ${{ steps.baseline.outputs.baseline }}
@@ -192,7 +193,11 @@ jobs:
               echo "The comparison failed. See the workflow log for details."
             fi
             echo
-            echo "To accept these results as the new baseline, commit [\`baseline.json\`]($BASELINE_URL) from this run as \`$BASELINE_PATH\` in a pull request."
+            if [[ -n "$BASELINE_URL" ]]; then
+              echo "To accept these results as the new baseline, commit [\`baseline.json\`]($BASELINE_URL) from this run as \`$BASELINE_PATH\` in a pull request."
+            else
+              echo "This run did not export \`baseline.json\` because some results failed or lack allocation data."
+            fi
           } > "$results/comparison.md"
 
           cat "$results/comparison.md" >> "$GITHUB_STEP_SUMMARY"
