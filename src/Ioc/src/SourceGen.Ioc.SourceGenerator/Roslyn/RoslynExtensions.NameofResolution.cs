@@ -12,7 +12,7 @@ internal static partial class RoslynExtensions
     /// <returns>The full access path if successfully resolved; otherwise, null.</returns>
     public static string? ResolveNameofExpression(ExpressionSyntax expression, SemanticModel semanticModel)
     {
-        var symbolInfo = semanticModel.GetSymbolInfo(expression);
+        var symbolInfo = semanticModel.ForTreeOf(expression).GetSymbolInfo(expression);
         var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
 
         if(symbol is null)
@@ -31,9 +31,24 @@ internal static partial class RoslynExtensions
     /// <returns>The method symbol if found; otherwise, null.</returns>
     public static IMethodSymbol? ResolveMethodSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
     {
-        var symbolInfo = semanticModel.GetSymbolInfo(expression);
+        var symbolInfo = semanticModel.ForTreeOf(expression).GetSymbolInfo(expression);
         var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
 
         return symbol as IMethodSymbol;
+    }
+
+    extension(SemanticModel semanticModel)
+    {
+        /// <summary>
+        /// Returns a semantic model that can bind <paramref name="node"/>.
+        /// </summary>
+        /// <remarks>
+        /// A transform's semantic model belongs to the file of its target node, but symbols reached through it, such as
+        /// members of a partial type declared in another file, carry attribute syntax from other trees. Binding such a
+        /// node with the transform's model throws <see cref="ArgumentException"/>.
+        /// </remarks>
+        public SemanticModel ForTreeOf(SyntaxNode node) => node.SyntaxTree == semanticModel.SyntaxTree
+            ? semanticModel
+            : semanticModel.Compilation.GetSemanticModel(node.SyntaxTree);
     }
 }
