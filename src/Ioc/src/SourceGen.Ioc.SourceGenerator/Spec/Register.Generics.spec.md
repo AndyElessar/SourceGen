@@ -122,6 +122,10 @@ The implementation's type arguments are found by matching the service type as th
 | `TextHandler<TRequest> : IHandler<TRequest, string>` | `IHandler<Req, int>` | none |
 | `ListHandler<TItem, TKey> : IHandler<List<TItem>, Dictionary<TKey, TItem>>` | `IHandler<List<Req>, Dictionary<string, Req>>` | `ListHandler<Req, string>` |
 | `ListHandler<T> : IHandler<T, List<T>>` | `IHandler<Req, List<Res>>` | none |
+| `ArrayHandler<T> : IHandler<T[], T>` | `IHandler<Req[], Req>` | `ArrayHandler<Req>` |
+| `GridHandler<T> : IHandler<T[,], T>` | `IHandler<Req[], Req>` | none (array rank differs) |
+
+Array type arguments are matched by element type and rank, including jagged arrays such as `T[][]`.
 
 ## Feature 2: Explicit Closed Generic Discovery
 
