@@ -21,7 +21,7 @@ This separate project keeps Roslyn dependencies out of the Native AOT runtime be
 
 ## Analyzer benchmarks
 
-`AnalyzerBenchmarks` runs `RegisterAnalyzer` and `ContainerAnalyzer` separately on the generator output of the `DependencyChain`, `Wrappers` and `RegisterFor` scenarios, using the same `Count` values.
+`AnalyzerBenchmarks` runs `RegisterAnalyzer` and `ContainerAnalyzer` separately on the source of the `DependencyChain`, `Wrappers` and `RegisterFor` scenarios, using the same `Count` values.
 
 | Benchmark | Analyzer |
 | --- | --- |
@@ -31,7 +31,8 @@ This separate project keeps Roslyn dependencies out of the Native AOT runtime be
 
 - Each operation calls `CompilationWithAnalyzers.GetAnalyzerDiagnosticsAsync` on the same compilation. Roslyn analyzes a copy of it, so every result includes the binding that the analyzer actions trigger. Subtract `AnalyzerOverhead` to estimate the analyzer's own cost.
 - Analysis is sequential (`concurrentAnalysis: false`) so results do not depend on the runner's core count.
-- Generator output is created and validated once in setup. Setup also fails if an analyzer throws or reports an error.
+- The analyzed compilation does not include generator output. Analysis binds every syntax tree, and binding the generated container of the `Wrappers` scenario at `Count = 500` takes over a minute per operation, which would hide the analyzer's own cost and exceed the CI timeout.
+- Setup fails if an analyzer throws or reports an error.
 
 ## Reproduce a comparison
 
@@ -64,7 +65,7 @@ The file keeps the host, the mean with its 99.9% confidence interval, and the al
 
 ## Verify output equivalence
 
-The verification mode compiles all scenarios at both sizes, checks for errors, and records each generated file's SHA-256 hash, keyed by scenario, size, edit state and hint name. It also records a hash of each analyzer's sorted diagnostics on the initial generator output, keyed by scenario, size and analyzer.
+The verification mode compiles all scenarios at both sizes, checks for errors, and records each generated file's SHA-256 hash, keyed by scenario, size, edit state and hint name. It also records a hash of each analyzer's sorted diagnostics on the initial source, keyed by scenario, size and analyzer.
 
 ```powershell
 dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --verify "$env:TEMP\generator-before.json"

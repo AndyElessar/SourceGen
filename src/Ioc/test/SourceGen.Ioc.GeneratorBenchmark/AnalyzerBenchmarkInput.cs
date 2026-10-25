@@ -15,13 +15,13 @@ public sealed class AnalyzerBenchmarkInput
     private readonly AnalyzerOptions options;
 
     /// <summary>
-    /// Analyzes the generator output for the scenario, as a build does; generated files themselves are not analyzed.
+    /// Analyzes the scenario's source without generator output. Analyzing a compilation binds every tree,
+    /// and binding large generated containers would dominate the measurement (minutes per operation).
     /// </summary>
     public AnalyzerBenchmarkInput(GeneratorScenario scenario, int count)
     {
         var generatorInput = new GeneratorBenchmarkInput(scenario, count);
-        var driver = generatorInput.CreateDriver().RunGeneratorsAndUpdateCompilation(generatorInput.Initial, out compilation, out _);
-        GeneratorBenchmarkInput.Validate(driver, compilation);
+        compilation = generatorInput.Initial;
         options = new AnalyzerOptions([], generatorInput.ConfigOptions);
     }
 
