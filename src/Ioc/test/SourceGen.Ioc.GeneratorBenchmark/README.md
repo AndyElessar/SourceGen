@@ -5,23 +5,43 @@ This separate project keeps Roslyn dependencies out of the Native AOT runtime be
 
 ## Scenarios
 
-| Scenario | Input for `Count = N` | Edit |
-| --- | --- | --- |
-| DependencyChain | N registered services forming a constructor dependency chain | Unrelated method body |
-| Wrappers | N service/keyed-service/consumer triples using Func and Dictionary, plus one container | Unrelated method body |
-| DuplicateInvocation | N services and one open generic registration | Add a duplicate closed-generic service lookup |
-| DisabledContainer | Same triples and container as Wrappers, with only Register output enabled | Unrelated method body |
-| RegisterFor | N assembly-level registration attributes | Unrelated method body |
+Each scenario is built as one syntax tree per service unit (`Service{i}.cs`), plus `Defaults.cs` (an assembly-level `[IocRegisterDefaults]` for `IDefaultsTarget`), `Usage.cs` and the scenario's shared files, so Roslyn's per-tree caching behaves as in a real project.
 
-- `Cold` creates a fresh compilation and driver for every operation. Parsing source text and loading metadata references are excluded.
-- `Edit` always starts from the same previously run driver and applies the edited compilation. The returned driver is not reused, so this does not accidentally measure a no-op cached run.
-- Setup validates the compilation and generated output that each benchmark measures (initial for `Cold`, edited for `Edit`) outside the timed operation. The edited compilation's semantic caches are warmed during `Edit` setup.
+| Scenario | Input for `Count = N` |
+| --- | --- |
+| DependencyChain | N registered services forming a constructor dependency chain, plus one container |
+| Wrappers | N service/keyed-service/consumer triples using Func and Dictionary, plus one container |
+| DuplicateInvocation | N services and one open generic registration closed by a service lookup |
+| DisabledContainer | Same triples and container as Wrappers, with only Register output enabled |
+| RegisterFor | N assembly-level registration attributes |
+| Realistic | N units of a mixed project, plus one container (see below) |
+
+Each `Realistic` unit declares a two-level interface hierarchy and a request type, and every tenth unit an open generic handler. Its service cycles through five kinds: a plain service whose constructor takes a keyed service, a closed handler and `Lazy`/`Func`/`IEnumerable` wrappers; a factory method that looks up a closed handler through `IServiceProvider`; a decorated service with `[IocDiscover]`; a keyed service with `RegisterAllInterfaces`; and a tagged service with property and method injection whose lifetime comes from `[IocRegisterDefaults]`. Services depend only on earlier units. `[IocImportModule]` is not covered because it needs a second assembly.
+
+## Generator benchmarks
+
+| Benchmark | Operation |
+| --- | --- |
+| Cold | A fresh compilation and driver for every operation. Parsing source text and loading metadata references are excluded. |
+| ColdOverhead | `Cold` with a generator that subscribes to the same attribute, invocation and compilation inputs with empty transforms. Subtract it from `Cold` to estimate the generator's own cost. |
+| Rerun | The warm driver runs again on the same compilation, the lower bound of an incremental run. |
+| Edit | Unrelated method body in `Usage.cs`; DuplicateInvocation adds a duplicate closed-generic lookup instead. |
+| EditConstructor | Adds a constructor dependency to the middle service unit. |
+| EditAddRegistration | Adds a file with one new registration. |
+| EditDefaults | Changes the lifetime of the `[IocRegisterDefaults]` attribute (Singleton → Scoped). Only `Realistic` has services it applies to; the others still re-run every step that depends on default settings. |
+
+- Edit benchmarks always start from the same previously run driver and apply the edited compilation. The returned driver is not reused, so they do not accidentally measure a no-op cached run.
+- Setup validates the compilation and generated output that each benchmark measures (initial for `Cold`, `ColdOverhead` and `Rerun`, the edited compilation for the edit benchmarks) outside the timed operation. The edited compilation's semantic caches are warmed during setup.
 - MemoryDiagnoser reports managed allocations per operation, not retained heap size.
 - These synthetic workloads isolate generator costs; they do not measure total build or IDE latency.
 
+## Generated code benchmarks
+
+`GeneratedCodeBenchmarks` emits each scenario's compilation at `Count = 100` without (`Compile`) and with (`CompileGenerated`) the generated sources. The difference estimates how much the generated code adds to the user's build. Every operation compiles a fresh compilation. Larger workloads take minutes per operation, so the class only has `Count = 100` and CI, which runs `Count = 500`, skips it.
+
 ## Analyzer benchmarks
 
-`AnalyzerBenchmarks` runs `RegisterAnalyzer` and `ContainerAnalyzer` separately on the source of the `DependencyChain`, `Wrappers` and `RegisterFor` scenarios, using the same `Count` values.
+`AnalyzerBenchmarks` runs `RegisterAnalyzer` and `ContainerAnalyzer` separately on the source of the `DependencyChain`, `Wrappers`, `RegisterFor` and `Realistic` scenarios, using the same `Count` values.
 
 | Benchmark | Analyzer |
 | --- | --- |
@@ -43,7 +63,7 @@ Use the same machine, SDK, runtime, environment and benchmark arguments for both
 dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --filter '*Count: 500*' --job short --warmupCount 3 --iterationCount 8 --iterationTime 300 --envVars DOTNET_TieredCompilation:0 --exporters json --artifacts "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before"
 ```
 
-Repeat after changing the generator, replacing `before` with `after`. `--envVars` disables tiered compilation only in the measured benchmark processes, which avoids JIT tier transitions during short measurements; it is an experimental control, not a recommended production setting. Use `--filter '*'` to include the smaller 100-unit workloads.
+Repeat after changing the generator, replacing `before` with `after`. `--envVars` disables tiered compilation only in the measured benchmark processes, which avoids JIT tier transitions during short measurements; it is an experimental control, not a recommended production setting. Use `--filter '*'` to include the smaller 100-unit workloads and the generated code benchmarks, or `--filter '*GeneratedCodeBenchmarks*'` for the latter only.
 
 Compare the two runs:
 
@@ -60,7 +80,7 @@ Options after the threshold:
 
 ## Verify output equivalence
 
-The verification mode compiles all scenarios at both sizes, checks for errors, and records each generated file's SHA-256 hash, keyed by scenario, size, edit state and hint name. It also records a hash of each analyzer's sorted diagnostics on the initial source, keyed by scenario, size and analyzer.
+The verification mode compiles all scenarios at both sizes, checks for errors, and records each generated file's SHA-256 hash, keyed by scenario, size, edit state (initial or each edit) and hint name, and the total generated characters per state (`.../size`), which shows output growth. It also records a hash of each analyzer's sorted diagnostics on the initial source, keyed by scenario, size and analyzer.
 
 ```powershell
 dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --verify "$env:TEMP\generator-before.json"

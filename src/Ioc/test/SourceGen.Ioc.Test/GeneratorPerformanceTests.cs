@@ -12,6 +12,7 @@ public class GeneratorPerformanceTests
     [Arguments(GeneratorScenario.DuplicateInvocation)]
     [Arguments(GeneratorScenario.DisabledContainer)]
     [Arguments(GeneratorScenario.RegisterFor)]
+    [Arguments(GeneratorScenario.Realistic)]
     public async Task Generator_UnrelatedOrDuplicateEdit_CachesRegistrations(GeneratorScenario scenario)
     {
         var input = new GeneratorBenchmarkInput(scenario, 20);
@@ -20,12 +21,54 @@ public class GeneratorPerformanceTests
         GeneratorBenchmarkInput.Validate(driver, initialOutput);
         var initialSources = GetSources(driver);
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.Edited, out var editedOutput, out _);
+        driver = driver.RunGeneratorsAndUpdateCompilation(input.CreateEdited(GeneratorEdit.Unrelated), out var editedOutput, out _);
         GeneratorBenchmarkInput.Validate(driver, editedOutput);
 
         await Assert.That(GetSources(driver)).IsEqualTo(initialSources);
         await Assert.That(driver.GetRunResult().Results.Single().TrackedSteps["ServiceRegistrations"]
             .SelectMany(static step => step.Outputs).All(static output => output.Reason == IncrementalStepRunReason.Cached)).IsTrue();
+    }
+
+    [Test]
+    [MatrixDataSource]
+    public async Task Generator_RelevantEdit_ChangesOutput(
+        [Matrix(GeneratorScenario.DependencyChain, GeneratorScenario.Wrappers, GeneratorScenario.Realistic)] GeneratorScenario scenario,
+        [Matrix(GeneratorEdit.Constructor, GeneratorEdit.AddRegistration)] GeneratorEdit edit)
+    {
+        var input = new GeneratorBenchmarkInput(scenario, 20);
+        var driver = input.CreateDriver().RunGeneratorsAndUpdateCompilation(input.Initial, out var initialOutput, out _);
+        GeneratorBenchmarkInput.Validate(driver, initialOutput);
+        var initialSources = GetSources(driver);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(input.CreateEdited(edit), out var editedOutput, out _);
+        GeneratorBenchmarkInput.Validate(driver, editedOutput);
+
+        await Assert.That(GetSources(driver)).IsNotEqualTo(initialSources);
+    }
+
+    [Test]
+    public async Task Generator_DefaultsEdit_ChangesRealisticLifetimes()
+    {
+        var input = new GeneratorBenchmarkInput(GeneratorScenario.Realistic, 20);
+        var driver = input.CreateDriver().RunGeneratorsAndUpdateCompilation(input.Initial, out var initialOutput, out _);
+        GeneratorBenchmarkInput.Validate(driver, initialOutput);
+        var initialSources = GetSources(driver);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(input.CreateEdited(GeneratorEdit.Defaults), out var editedOutput, out _);
+        GeneratorBenchmarkInput.Validate(driver, editedOutput);
+
+        await Assert.That(GetSources(driver)).IsNotEqualTo(initialSources);
+    }
+
+    [Test]
+    public async Task OverheadGenerator_Run_ProducesNoOutput()
+    {
+        var input = new GeneratorBenchmarkInput(GeneratorScenario.Realistic, 20);
+
+        var result = input.CreateOverheadDriver().RunGenerators(input.Initial).GetRunResult();
+
+        await Assert.That(result.Results.Single().Exception).IsNull();
+        await Assert.That(result.GeneratedTrees).IsEmpty();
     }
 
     [Test]
@@ -87,6 +130,7 @@ public class GeneratorPerformanceTests
     [Arguments(GeneratorScenario.DependencyChain)]
     [Arguments(GeneratorScenario.Wrappers)]
     [Arguments(GeneratorScenario.RegisterFor)]
+    [Arguments(GeneratorScenario.Realistic)]
     public async Task Analyzer_BenchmarkScenario_RunsWithoutErrors(GeneratorScenario scenario)
     {
         var input = new AnalyzerBenchmarkInput(scenario, 20);
