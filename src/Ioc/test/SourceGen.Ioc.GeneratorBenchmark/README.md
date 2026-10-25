@@ -72,7 +72,9 @@ The baseline is [`benchmarks/baseline.json`](../../../../benchmarks/baseline.jso
 | Push to `main`, manual run | The file in the measured commit |
 
 - The baseline was measured by an earlier run, possibly on a different runner machine. The comparison warns when the hosts differ. Time changes only produce warnings because shared runners are noisy.
-- The job fails when allocated bytes increase by more than 5%, or a head result is missing, failed or has no allocation data. In that case no `baseline.json` artifact is uploaded, but the comparison still lists every benchmark.
+- The job fails when allocated bytes increase by more than 5%, or a head result is missing, failed or has no allocation data.
+  - An allocation regression or a missing head result still uploads the `baseline.json` artifact, so an intentional change can be accepted by committing it as described in [Update the baseline](#update-the-baseline).
+  - A failed benchmark or missing allocation data makes the export refuse to write `baseline.json`, so no artifact is uploaded. The comparison still lists every benchmark.
 - When the baseline file does not exist, the head results are reported without a baseline.
 - The comparison is written to the job summary. The run's results are uploaded as an unzipped `baseline.json` artifact and all BenchmarkDotNet output as the `ioc-generator-benchmark-<run id>` artifact, both for 7 days.
 - For pull requests, [ioc.benchmark.generator.comment.yml](../../../../.github/workflows/ioc.benchmark.generator.comment.yml) creates or updates a single comment with the comparison. It runs from the default branch through `workflow_run`, so pull request code never receives a write token.
