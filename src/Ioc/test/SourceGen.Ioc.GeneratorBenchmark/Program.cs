@@ -30,16 +30,25 @@ if(args is ["--verify", var path])
                 GeneratorBenchmarkInput.Validate(driver, output);
                 foreach(var source in driver.GetRunResult().Results.Single().GeneratedSources)
                 {
-                    fingerprints.Add($"{scenario}/{count}/{name}/{source.HintName}",
-                        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source.SourceText.ToString()))));
+                    fingerprints.Add($"{scenario}/{count}/{name}/{source.HintName}", Hash(source.SourceText.ToString()));
                 }
+            }
+
+            var analyzerInput = new AnalyzerBenchmarkInput(scenario, count);
+            analyzerInput.Validate();
+            foreach(var (name, analyzers) in new[] { ("RegisterAnalyzer", AnalyzerBenchmarkInput.Register), ("ContainerAnalyzer", AnalyzerBenchmarkInput.Container) })
+            {
+                var diagnostics = analyzerInput.Run(analyzers).Select(static d => d.ToString()).Order(StringComparer.Ordinal);
+                fingerprints.Add($"{scenario}/{count}/analyzer/{name}", Hash(string.Join("\n", diagnostics)));
             }
         }
     }
     File.WriteAllText(path, JsonSerializer.Serialize(fingerprints, new JsonSerializerOptions { WriteIndented = true }));
-    Console.WriteLine($"Verified {fingerprints.Count} generated source fingerprints.");
+    Console.WriteLine($"Verified {fingerprints.Count} generated source and analyzer diagnostic fingerprints.");
     return 0;
+
+    static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }
 
-BenchmarkSwitcher.FromTypes([typeof(GeneratorBenchmarks)]).Run(args);
+BenchmarkSwitcher.FromTypes([typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks)]).Run(args);
 return 0;

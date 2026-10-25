@@ -83,6 +83,19 @@ public class GeneratorPerformanceTests
             .All(static output => output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged)).IsTrue();
     }
 
+    [Test]
+    [Arguments(GeneratorScenario.DependencyChain)]
+    [Arguments(GeneratorScenario.Wrappers)]
+    [Arguments(GeneratorScenario.RegisterFor)]
+    public async Task Analyzer_BenchmarkScenario_RunsWithoutErrors(GeneratorScenario scenario)
+    {
+        var input = new AnalyzerBenchmarkInput(scenario, 20);
+
+        input.Validate();
+
+        await Assert.That(input.Run(AnalyzerBenchmarkInput.NoOp)).IsEmpty();
+    }
+
     private static string GetSources(GeneratorDriver driver) => string.Join("\n",
         driver.GetRunResult().Results.Single().GeneratedSources
             .OrderBy(static source => source.HintName, StringComparer.Ordinal)
