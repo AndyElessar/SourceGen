@@ -7,7 +7,8 @@ Decorator pattern support allows you to compose multiple decorators around a cor
 ## Feature: Decorator Pattern
 
 When `Decorators` is not empty, generate register code to handle decorator pattern:\
-Only generate decorator when all type arguments constraints are satisfied.
+Only generate decorator when all type arguments constraints are satisfied.\
+A type constraint is satisfied when the type argument is the constraint type, or implements or derives from it. This also applies to closed generic registrations generated from open generic registrations, so a decorator is skipped for each closed service type whose type arguments do not satisfy its constraints.
 
 ```csharp
 #region Define:

@@ -114,6 +114,44 @@ public class DecoratorContainerTests
     /// Tests that decorator injection members (properties and methods with [IocInject]) are properly generated in Container mode.
     /// </summary>
     [Test]
+    public async Task Container_WithConstrainedDecorator_HavingClosedGenericDependencies_DecoratesOnlySatisfyingTypeArguments()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.ConvertibleDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            internal sealed class ConvertibleDecorator<T>(IHandler<T> inner) : IHandler<T> where T : IConvertible;
+
+            public class PlainEntity { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(IHandler<string> text, IHandler<PlainEntity> plain);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithDecoratorInjectionMembers_GeneratesPropertyAndMethodInjection()
     {
         const string source = """

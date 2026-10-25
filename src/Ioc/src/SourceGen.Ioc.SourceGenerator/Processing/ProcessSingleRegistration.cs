@@ -352,7 +352,7 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Builds a HashSet of interface names from all service type parameters for fast lookup.
+    /// Builds a HashSet of interface and base class names from all service type parameters for fast lookup.
     /// </summary>
     private static HashSet<string>? BuildInterfaceNameSet(ImmutableEquatableArray<TypeParameter> serviceTypeParams)
     {
@@ -360,24 +360,29 @@ partial class IocSourceGenerator
 
         foreach(var param in serviceTypeParams)
         {
-            var interfaces = param.Type.AllInterfaces;
-            if(interfaces is null || interfaces.Length == 0)
-            {
-                continue;
-            }
-
-            result ??= new HashSet<string>(StringComparer.Ordinal);
-            foreach(var iface in interfaces)
-            {
-                result.Add(iface.Name);
-                if(iface is GenericTypeData genericInterface && iface.Name != genericInterface.NameWithoutGeneric)
-                {
-                    result.Add(genericInterface.NameWithoutGeneric);
-                }
-            }
+            AddNames(param.Type.AllInterfaces, ref result);
+            AddNames(param.Type.AllBaseClasses, ref result);
         }
 
         return result;
+
+        static void AddNames(ImmutableEquatableArray<TypeData>? types, ref HashSet<string>? result)
+        {
+            if(types is null || types.Length == 0)
+            {
+                return;
+            }
+
+            result ??= new HashSet<string>(StringComparer.Ordinal);
+            foreach(var type in types)
+            {
+                result.Add(type.Name);
+                if(type is GenericTypeData genericType && type.Name != genericType.NameWithoutGeneric)
+                {
+                    result.Add(genericType.NameWithoutGeneric);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -475,12 +480,10 @@ partial class IocSourceGenerator
             return true;
         }
 
-        // No interface set means no interfaces to check
+        // No name set means the type arguments have no interfaces or base classes, so no type constraint is satisfied
         if(interfaceNameSet is null)
         {
-            // No interface information available, assume constraint is not satisfied
-            // for open generic constraints
-            return constraintType is not GenericTypeData { IsOpenGeneric: true };
+            return false;
         }
 
         if(constraintType is GenericTypeData { IsOpenGeneric: true } genericConstraintType)
