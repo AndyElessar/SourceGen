@@ -447,4 +447,31 @@ public class DecoratorTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Decorator_NonGenericServiceTypes_AppliesOnlyToImplementedServiceTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            public interface IBar;
+
+            internal sealed class FooDecorator(IFoo inner) : IFoo;
+
+            // FooDecorator only decorates the IFoo registration, not IBar.
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, RegisterAllInterfaces = true, Decorators = [typeof(FooDecorator)])]
+            internal sealed class Service : IFoo, IBar;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

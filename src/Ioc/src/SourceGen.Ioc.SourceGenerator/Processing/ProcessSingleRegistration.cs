@@ -297,15 +297,6 @@ partial class IocSourceGenerator
             return decorators;
         }
 
-        // If service type has no generic arguments, all decorators pass through
-        var serviceTypeParams = serviceType is GenericTypeData genericServiceType
-            ? genericServiceType.TypeParameters
-            : null;
-        if(serviceTypeParams is null || serviceTypeParams.Length == 0)
-        {
-            return decorators;
-        }
-
         // Use full service type name as cache key (includes specific type arguments)
         var cacheKey = serviceType.Name;
 
@@ -315,7 +306,7 @@ partial class IocSourceGenerator
             return cached;
         }
 
-        var result = CloseDecoratorsForServiceType(decorators, (GenericTypeData)serviceType);
+        var result = CloseDecoratorsForServiceType(decorators, serviceType);
 
         // Store in cache
         cache?.Add(cacheKey, result);
@@ -324,11 +315,11 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Closes the decorators that can decorate a generic service type and skips the others.
+    /// Closes the decorators that can decorate a service type and skips the others.
     /// </summary>
     private static ImmutableEquatableArray<TypeData> CloseDecoratorsForServiceType(
         ImmutableEquatableArray<TypeData> decorators,
-        GenericTypeData serviceType)
+        TypeData serviceType)
     {
         var result = new List<TypeData>(decorators.Length);
         foreach(var decorator in decorators)
@@ -345,7 +336,7 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Closes a decorator for a generic service type.
+    /// Closes a decorator for a service type.
     /// </summary>
     /// <remarks>
     /// An open generic decorator's type arguments are found by matching the service type as the decorator implements it
@@ -354,16 +345,18 @@ partial class IocSourceGenerator
     /// <c>TextDecorator&lt;T&gt; : IHandler&lt;T, string&gt;</c> cannot decorate <c>IHandler&lt;Req, int&gt;</c>.
     /// </remarks>
     /// <returns>The closed decorator, or null when it cannot decorate the service type or its constraints are not satisfied.</returns>
-    private static TypeData? TryCloseDecorator(TypeData decorator, GenericTypeData serviceType)
+    private static TypeData? TryCloseDecorator(TypeData decorator, TypeData serviceType)
     {
         var declaredForms = (decorator.AllInterfaces ?? []).Concat(decorator.AllBaseClasses ?? []);
         if(decorator is not GenericTypeData { IsOpenGeneric: true, TypeParameters: { Length: > 0 } decoratorTypeParams } genericDecorator)
         {
-            // A closed decorator must implement the service type itself
+            // A closed decorator must implement the service type itself; without a hierarchy it cannot be checked
             return decorator.AllInterfaces is null || declaredForms.Any(form => form.Name == serviceType.Name) ? decorator : null;
         }
 
-        if(FindDeclaredForm(declaredForms, serviceType) is not { } declaredForm
+        // An open generic decorator can only be closed from a generic service type it implements
+        if(serviceType is not GenericTypeData genericServiceType
+            || FindDeclaredForm(declaredForms, genericServiceType) is not { } declaredForm
             || MatchAllTypeArguments(genericDecorator, declaredForm, serviceType) is not { } typeArguments)
         {
             return null;
@@ -373,6 +366,11 @@ partial class IocSourceGenerator
         foreach(var decoratorParam in decoratorTypeParams)
         {
             var typeArgument = typeArguments[decoratorParam.ParameterName];
+            if(!SatisfiesSpecialConstraints(decoratorParam, typeArgument))
+            {
+                return null;
+            }
+
             foreach(var constraintType in decoratorParam.ConstraintTypes ?? [])
             {
                 if(!SatisfiesTypeConstraint(typeArgument, constraintType, typeArguments, typeArgMap))
@@ -383,6 +381,27 @@ partial class IocSourceGenerator
         }
 
         return SubstituteDecoratorTypeParams(genericDecorator, typeArgMap);
+    }
+
+    /// <summary>
+    /// Checks the <c>class</c>, <c>struct</c>, <c>unmanaged</c>, and <c>new()</c> constraints of a decorator type parameter.
+    /// </summary>
+    /// <remarks>
+    /// Type arguments whose traits were not recorded, such as ones rebuilt by substitution, are accepted as before.
+    /// <c>notnull</c> only produces nullable warnings, so it is not checked.
+    /// </remarks>
+    private static bool SatisfiesSpecialConstraints(TypeParameter decoratorParam, TypeData typeArgument)
+    {
+        var traits = typeArgument.Traits;
+        if((traits & TypeTraits.Known) == 0)
+        {
+            return true;
+        }
+
+        return (!decoratorParam.HasReferenceTypeConstraint || (traits & TypeTraits.ReferenceType) != 0)
+            && (!decoratorParam.HasValueTypeConstraint || (traits & TypeTraits.NonNullableValueType) != 0)
+            && (!decoratorParam.HasUnmanagedTypeConstraint || (traits & (TypeTraits.NonNullableValueType | TypeTraits.Unmanaged)) == (TypeTraits.NonNullableValueType | TypeTraits.Unmanaged))
+            && (!decoratorParam.HasConstructorConstraint || (traits & TypeTraits.DefaultConstructor) != 0);
     }
 
     /// <summary>

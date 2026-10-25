@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
+﻿namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for closed generic dependency resolution (Feature #11).
@@ -364,6 +364,55 @@ public class ClosedGenericDependencyTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource).UseTextForParameters(constraint.Replace('<', '(').Replace('>', ')'));
+    }
+
+    [Test]
+    [Arguments("class")]
+    [Arguments("struct")]
+    [Arguments("unmanaged")]
+    [Arguments("new()")]
+    public async Task ClosedGenericDependency_DecoratorWithSpecialConstraint_AppliesOnlyToSatisfyingTypeArguments(string constraint)
+    {
+        // class: string, Constructible, NoDefaultConstructor; struct: int, KeyValuePair; unmanaged: int;
+        // new(): int, int?, KeyValuePair, Constructible. KeyValuePair<string, int> holds a reference, so it is not unmanaged.
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.ConstrainedDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            internal sealed class ConstrainedDecorator<T>(IHandler<T> inner) : IHandler<T> where T : {{constraint}};
+
+            public class Constructible { }
+
+            public class NoDefaultConstructor(int value) { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(
+                IHandler<string> text,
+                IHandler<int> number,
+                IHandler<int?> optionalNumber,
+                IHandler<KeyValuePair<string, int>> pair,
+                IHandler<Constructible> constructible,
+                IHandler<NoDefaultConstructor> noDefaultConstructor);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseTextForParameters(constraint.Replace("()", string.Empty));
     }
 
     [Test]
