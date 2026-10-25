@@ -341,7 +341,7 @@ internal static partial class TransformExtensions
             if(typeArg is INamedTypeSymbol namedArg && typeArg.TypeKind != TypeKind.TypeParameter)
             {
                 // For concrete types, recursively extract type parameters and interfaces
-                var typeData = namedArg.CreateBasicTypeData(depth + 1);
+                var typeData = namedArg.CreateBasicTypeData(depth + 1) with { Traits = GetTypeTraits(namedArg) };
                 var allInterfaces = CreateConvertibleInterfaceTypeData(namedArg);
 
                 // Base classes are needed to check base class constraints; names are enough, and avoid recursing
@@ -367,14 +367,39 @@ internal static partial class TransformExtensions
                         argName,
                         GetNameWithoutGeneric(argName),
                         typeArg.ContainsGenericParameters,
-                        0);
+                        0) with { Traits = GetTypeTraits(typeArg) };
                 return (typeData, null);
             }
 
             // No type argument available, this is a type parameter placeholder
             return (TypeData.CreateTypeParameter(typeParam.Name), null);
 
-            // Creates a simple TypeData for an interface or base class type.
+            // Records the traits that special constraints check, such as where T : struct
+            static TypeTraits GetTypeTraits(ITypeSymbol type)
+            {
+                var traits = TypeTraits.Known;
+                if(type.IsReferenceType)
+                {
+                    traits |= TypeTraits.ReferenceType;
+                }
+                if(type.IsValueType && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+                {
+                    traits |= TypeTraits.NonNullableValueType;
+                }
+                if(type.IsUnmanagedType)
+                {
+                    traits |= TypeTraits.Unmanaged;
+                }
+                if(type.IsValueType
+                    || type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } namedType
+                        && namedType.InstanceConstructors.Any(static c => c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public))
+                {
+                    traits |= TypeTraits.DefaultConstructor;
+                }
+
+                return traits;
+            }
+
             // Creates the interfaces a type argument converts to: its interfaces and, through covariance, the variant
             // interfaces they become with a supertype argument, such as IEnumerable<object> for List<string>.
             // Decorator constraints compare these names, so where T : IEnumerable<object> accepts List<string>.
@@ -476,6 +501,7 @@ internal static partial class TransformExtensions
                 }
             }
 
+            // Creates a simple TypeData for an interface or base class type.
             static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface)
             {
                 var name = iface.FullyQualifiedName;

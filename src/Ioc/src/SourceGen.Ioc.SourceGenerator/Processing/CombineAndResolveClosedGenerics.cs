@@ -1195,7 +1195,7 @@ partial class IocSourceGenerator
             return decorators;
         }
 
-        return CloseDecoratorsForServiceType(decorators, (GenericTypeData)serviceType);
+        return CloseDecoratorsForServiceType(decorators, serviceType);
     }
 
     /// <summary>

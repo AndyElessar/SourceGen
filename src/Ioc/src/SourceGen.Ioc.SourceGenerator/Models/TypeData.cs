@@ -16,7 +16,13 @@ internal closed record class TypeData(
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-    ImmutableEquatableArray<TypeData>? AllBaseClasses = null);
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+{
+    /// <summary>
+    /// Traits used to check special type parameter constraints. Only recorded for type arguments.
+    /// </summary>
+    public TypeTraits Traits { get; init; }
+}
 
 /// <summary>
 /// Represents a non-generic type without wrapper-specific data.
