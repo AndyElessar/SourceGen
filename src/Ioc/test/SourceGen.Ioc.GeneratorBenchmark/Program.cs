@@ -5,15 +5,29 @@ using System.Text.Json;
 using BenchmarkDotNet.Running;
 using SourceGen.Ioc.GeneratorBenchmark;
 
-if(args is ["--compare", var baselinePath, var headPath, var outputPath, var threshold, .. var accepted] && accepted.Length <= 1)
+if(args is ["--compare", var baselinePath, var headPath, var outputPath, var threshold, .. var options])
 {
-    return BenchmarkComparison.Run(baselinePath, headPath, outputPath, double.Parse(threshold, CultureInfo.InvariantCulture),
-        accepted is [var acceptedPath] ? acceptedPath : null);
-}
+    var acceptRegressions = false;
+    var allocationThresholds = new Dictionary<string, double>(StringComparer.Ordinal);
+    for(var i = 0; i < options.Length; i++)
+    {
+        switch(options[i])
+        {
+            case "--accept-regressions":
+                acceptRegressions = true;
+                break;
+            // --allocation-threshold <benchmark class>=<percent>, e.g. AnalyzerBenchmarks=10
+            case "--allocation-threshold" when i + 1 < options.Length && options[i + 1].Split('=') is [var type, var percent]:
+                allocationThresholds[type] = double.Parse(percent, CultureInfo.InvariantCulture);
+                i++;
+                break;
+            default:
+                throw new ArgumentException($"Unknown or incomplete --compare option '{options[i]}'.");
+        }
+    }
 
-if(args is ["--export-baseline", var resultsPath, var baselineOutputPath, var resultsSource])
-{
-    return BenchmarkComparison.Export(resultsPath, baselineOutputPath, resultsSource);
+    return BenchmarkComparison.Run(baselinePath, headPath, outputPath, double.Parse(threshold, CultureInfo.InvariantCulture),
+        allocationThresholds, acceptRegressions);
 }
 
 if(args is ["--verify", var path])
