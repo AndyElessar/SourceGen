@@ -42,6 +42,8 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   BENCHMARK_PROJECT: src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/SourceGen.Ioc.GeneratorBenchmark.csproj
   REGRESSION_THRESHOLD_PERCENT: '5'
+  # Roslyn's analysis driver varies allocations by up to about 4% between identical runs.
+  ANALYZER_ALLOCATION_THRESHOLD_PERCENT: '10'
   ACCEPT_LABEL: benchmark-accept-allocation
 
 jobs:
@@ -162,7 +164,8 @@ jobs:
 
           results="$RUNNER_TEMP/generator-benchmark"
           # A path that does not exist compares the head without a baseline.
-          args=(--compare "$results/base/results" "$results/head/results" "$results/table.md" "$REGRESSION_THRESHOLD_PERCENT")
+          args=(--compare "$results/base/results" "$results/head/results" "$results/table.md" "$REGRESSION_THRESHOLD_PERCENT"
+            --allocation-threshold "AnalyzerBenchmarks=$ANALYZER_ALLOCATION_THRESHOLD_PERCENT")
           if [[ "$ACCEPTED" == true ]]; then
             args+=(--accept-regressions)
           fi

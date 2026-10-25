@@ -584,7 +584,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:0bab6b80987a893c69b308146b8dae2a69b70742ecb86505a2a0752780086c7b
+  content_hash: sha256:abc49dc0cd46741be81931c4604dd2693b3d32ccd295142b020a498f34315d4c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/sourcegen-docs-writing
@@ -1214,7 +1214,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:0bab6b80987a893c69b308146b8dae2a69b70742ecb86505a2a0752780086c7b
+  content_hash: sha256:abc49dc0cd46741be81931c4604dd2693b3d32ccd295142b020a498f34315d4c
 - kind: project-relative
   target: claude
   value: .claude/skills/sourcegen-docs-writing
@@ -1529,7 +1529,7 @@ local_deployed_files:
 - .github/instructions/csharp-tunit.instructions.md
 - .github/instructions/csharp.instructions.md
 local_deployed_file_hashes:
-  .agents/skills/sourcegen-ci-workflows/SKILL.md: sha256:0bab6b80987a893c69b308146b8dae2a69b70742ecb86505a2a0752780086c7b
+  .agents/skills/sourcegen-ci-workflows/SKILL.md: sha256:abc49dc0cd46741be81931c4604dd2693b3d32ccd295142b020a498f34315d4c
   .agents/skills/sourcegen-docs-writing/SKILL.md: sha256:9ef5559e74e709ce44bc3703f565feb458fb6feacb84254d9b08c88d876f5b24
   .agents/skills/sourcegen-generator-development/SKILL.md: sha256:6c9a59a762af05dc97d61348e65b78b5c6a7fc068e955312aaba75e6602f0178
   .agents/skills/sourcegen-git-workflow/SKILL.md: sha256:e9f4e1d2d7e900be9018c6c8bfcab44936c49bf2838e05f419ff3e458ea44250
@@ -1542,7 +1542,7 @@ local_deployed_file_hashes:
   .claude/rules/csharp-source-generator.md: sha256:2f706c8d9f7116e864c1fb5e59fae051f23b7250250dc4c5f3e5743196d3c4e0
   .claude/rules/csharp-tunit.md: sha256:856cc30fe3516fbd453867d4bf50003212bb63437bc67d9433f1849da79cee26
   .claude/rules/csharp.md: sha256:f07c8f93ed44565f2969a18692647cf25e0f9c890c2c1d4e2bc50bac993daf43
-  .claude/skills/sourcegen-ci-workflows/SKILL.md: sha256:0bab6b80987a893c69b308146b8dae2a69b70742ecb86505a2a0752780086c7b
+  .claude/skills/sourcegen-ci-workflows/SKILL.md: sha256:abc49dc0cd46741be81931c4604dd2693b3d32ccd295142b020a498f34315d4c
   .claude/skills/sourcegen-docs-writing/SKILL.md: sha256:9ef5559e74e709ce44bc3703f565feb458fb6feacb84254d9b08c88d876f5b24
   .claude/skills/sourcegen-generator-development/SKILL.md: sha256:6c9a59a762af05dc97d61348e65b78b5c6a7fc068e955312aaba75e6602f0178
   .claude/skills/sourcegen-git-workflow/SKILL.md: sha256:e9f4e1d2d7e900be9018c6c8bfcab44936c49bf2838e05f419ff3e458ea44250

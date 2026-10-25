@@ -13,9 +13,11 @@ internal static class BenchmarkComparison
     /// <summary>
     /// Writes a Markdown comparison to <paramref name="outputPath"/>.
     /// </summary>
+    /// <param name="allocationThresholds">Allocation thresholds by benchmark class name, overriding <paramref name="thresholdPercent"/> for noisier benchmarks.</param>
     /// <param name="acceptRegressions">Reports allocation regressions and removed benchmarks as accepted instead of failing.</param>
-    /// <returns>1 when allocations regress beyond <paramref name="thresholdPercent"/>, a base benchmark is missing from the head, or a head result failed or lacks allocation data, unless <paramref name="acceptRegressions"/> accepts it; otherwise 0.</returns>
-    public static int Run(string baselinePath, string headPath, string outputPath, double thresholdPercent, bool acceptRegressions = false)
+    /// <returns>1 when allocations regress beyond the benchmark's threshold, a base benchmark is missing from the head, or a head result failed or lacks allocation data, unless <paramref name="acceptRegressions"/> accepts it; otherwise 0.</returns>
+    public static int Run(string baselinePath, string headPath, string outputPath, double thresholdPercent,
+        IReadOnlyDictionary<string, double> allocationThresholds, bool acceptRegressions = false)
     {
         var baseline = Load(baselinePath);
         var head = Load(headPath);
@@ -27,10 +29,10 @@ internal static class BenchmarkComparison
         Row[] rows = [.. baseline.Measurements.Keys.Union(head.Measurements.Keys)
             .OrderBy(static key => key.Parameters, StringComparer.Ordinal)
             .ThenBy(static key => key.Method, StringComparer.Ordinal)
-            .Select(key => Classify(key, baseline.Measurements.GetValueOrDefault(key), head.Measurements.GetValueOrDefault(key), acceptRegressions, thresholdPercent))];
+            .Select(key => Classify(key, baseline.Measurements.GetValueOrDefault(key), head.Measurements.GetValueOrDefault(key), acceptRegressions, thresholdPercent, allocationThresholds))];
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-        File.WriteAllText(outputPath, Format(rows, thresholdPercent, baseline.Host, head.Host));
+        File.WriteAllText(outputPath, Format(rows, thresholdPercent, allocationThresholds, baseline.Host, head.Host));
         if(Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
         {
             WriteAnnotations(rows);
@@ -65,11 +67,12 @@ internal static class BenchmarkComparison
             foreach(var benchmark in benchmarks.EnumerateArray())
             {
                 var key = (Text(benchmark, "Parameters") ?? "", Text(benchmark, "Method") ?? "unknown");
+                var type = Text(benchmark, "Type") ?? "";
 
                 // Failed benchmarks have no statistics; keeping them as failed measurements fails the gate instead of dropping them.
                 if(!benchmark.TryGetProperty("Statistics", out var statistics) || Number(statistics, "Mean") is double.NaN)
                 {
-                    measurements.TryAdd(key, Measurement.FailedRun);
+                    measurements.TryAdd(key, Measurement.FailedRun with { Type = type });
                     continue;
                 }
 
@@ -77,14 +80,15 @@ internal static class BenchmarkComparison
                 var memory = benchmark.TryGetProperty("Memory", out value) ? value : default;
                 measurements.TryAdd(
                     key,
-                    new(Number(statistics, "Mean"), Number(interval, "Lower"), Number(interval, "Upper"), Integer(memory, "BytesAllocatedPerOperation")));
+                    new(Number(statistics, "Mean"), Number(interval, "Lower"), Number(interval, "Upper"), Integer(memory, "BytesAllocatedPerOperation"), type));
             }
         }
 
         return new(measurements, host);
     }
 
-    private static Row Classify((string Parameters, string Method) key, Measurement? baseline, Measurement? head, bool acceptRegressions, double threshold)
+    private static Row Classify((string Parameters, string Method) key, Measurement? baseline, Measurement? head, bool acceptRegressions,
+        double threshold, IReadOnlyDictionary<string, double> allocationThresholds)
     {
         if(head is null || head.Failed)
         {
@@ -112,11 +116,12 @@ internal static class BenchmarkComparison
         }
 
         var allocation = Change(baselineBytes, headBytes);
+        var allocationThreshold = allocationThresholds.GetValueOrDefault(head.Type, threshold);
 
         // Comparisons with NaN are false, so a missing confidence interval never flags a time change.
         var slower = time > threshold && head.Lower > baseline.Upper;
         var faster = time < -threshold && head.Upper < baseline.Lower;
-        var result = (allocation > threshold, slower, faster || allocation < -threshold) switch
+        var result = (allocation > allocationThreshold, slower, faster || allocation < -allocationThreshold) switch
         {
             (true, _, _) when acceptRegressions => Status.Accepted,
             (true, _, _) => Status.AllocationRegression,
@@ -134,7 +139,8 @@ internal static class BenchmarkComparison
         _ => 0,
     };
 
-    private static string Format(IReadOnlyList<Row> rows, double threshold, Host? baselineHost, Host? headHost)
+    private static string Format(IReadOnlyList<Row> rows, double threshold, IReadOnlyDictionary<string, double> allocationThresholds,
+        Host? baselineHost, Host? headHost)
     {
         var builder = new StringBuilder();
         builder.AppendLine(string.Join(" · ", rows
@@ -150,7 +156,10 @@ internal static class BenchmarkComparison
         }
 
         builder.AppendLine();
-        builder.Append(Invariant($"Allocated is managed memory per operation. An allocation increase above {threshold}% fails the check unless it is accepted. A time change above {threshold}% is reported only when the 99.9% confidence intervals do not overlap, and never fails the check because shared runners are noisy."));
+        var overrides = string.Concat(allocationThresholds
+            .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+            .Select(static pair => Invariant($" ({pair.Value}% for `{pair.Key}`)")));
+        builder.Append(Invariant($"Allocated is managed memory per operation. An allocation increase above {threshold}%{overrides} fails the check unless it is accepted. A time change above {threshold}% is reported only when the 99.9% confidence intervals do not overlap, and never fails the check because shared runners are noisy."));
         if(rows.Any(static row => row.Status is Status.Accepted))
         {
             builder.Append(" Accepted results are allocation regressions or removed benchmarks that the change explicitly accepts.");
@@ -274,7 +283,7 @@ internal static class BenchmarkComparison
         NoBaseline,
     }
 
-    private sealed record Measurement(double Mean, double Lower, double Upper, long? Allocated)
+    private sealed record Measurement(double Mean, double Lower, double Upper, long? Allocated, string Type = "")
     {
         /// <summary>A benchmark that was reported without statistics because its run failed.</summary>
         public static Measurement FailedRun { get; } = new(double.NaN, double.NaN, double.NaN, null);
