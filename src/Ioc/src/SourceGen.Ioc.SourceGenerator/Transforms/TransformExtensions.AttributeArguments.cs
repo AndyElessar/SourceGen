@@ -14,7 +14,8 @@ internal static partial class TransformExtensions
             string name,
             bool extractConstructorParams = false,
             bool extractInjectionMembers = false,
-            SemanticModel? semanticModel = null)
+            SemanticModel? semanticModel = null,
+            bool extractHierarchy = false)
         {
             foreach(var namedArg in attribute.NamedArguments)
             {
@@ -27,7 +28,7 @@ internal static partial class TransformExtensions
                         {
                             result.Add(namedTypeSymbol.GetTypeData(
                                 extractConstructorParams,
-                                extractHierarchy: false,
+                                extractHierarchy,
                                 semanticModel,
                                 extractInjectionMembers));
                         }
@@ -201,11 +202,11 @@ internal static partial class TransformExtensions
         }
 
         /// <summary>
-        /// Gets the Decorators array from the attribute, with constructor parameters and injection members.
+        /// Gets the Decorators array from the attribute, with constructor parameters, injection members, and the interfaces and base classes used to match them to service types.
         /// </summary>
         /// <param name="semanticModel">Optional semantic model to resolve nameof() keys on decorator members and constructor parameters.</param>
         public ImmutableEquatableArray<TypeData> GetDecorators(SemanticModel? semanticModel = null) =>
-            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel);
+            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel, extractHierarchy: true);
 
         /// <summary>
         /// Gets the ImplementationTypes array from the attribute.

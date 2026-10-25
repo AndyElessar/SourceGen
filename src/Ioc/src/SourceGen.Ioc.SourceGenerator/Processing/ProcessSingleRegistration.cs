@@ -315,10 +315,7 @@ partial class IocSourceGenerator
             return cached;
         }
 
-        var filtered = FilterDecoratorsCore(decorators, serviceTypeParams);
-
-        // Substitute type parameters in decorators to close open generic decorators
-        var result = SubstituteDecoratorsTypeParams(filtered, serviceTypeParams);
+        var result = CloseDecoratorsForServiceType(decorators, (GenericTypeData)serviceType);
 
         // Store in cache
         cache?.Add(cacheKey, result);
@@ -327,132 +324,88 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Substitutes type parameters in decorators using the service type's type parameters.
-    /// This closes open generic decorators to match the specific service type.
+    /// Closes the decorators that can decorate a generic service type and skips the others.
     /// </summary>
-    private static ImmutableEquatableArray<TypeData> SubstituteDecoratorsTypeParams(
+    private static ImmutableEquatableArray<TypeData> CloseDecoratorsForServiceType(
         ImmutableEquatableArray<TypeData> decorators,
-        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
+        GenericTypeData serviceType)
     {
-        if(decorators.Length == 0)
-        {
-            return decorators;
-        }
-
         var result = new List<TypeData>(decorators.Length);
         foreach(var decorator in decorators)
         {
-            var closed = SubstituteDecoratorTypeParams(decorator, serviceTypeParams);
-            result.Add(closed);
-        }
-
-        return result.ToImmutableEquatableArray();
-    }
-
-    /// <summary>
-    /// Core decorator filtering logic.
-    /// </summary>
-    private static ImmutableEquatableArray<TypeData> FilterDecoratorsCore(
-        ImmutableEquatableArray<TypeData> decorators,
-        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
-    {
-        var filteredList = new List<TypeData>(decorators.Length);
-        foreach(var decorator in decorators)
-        {
-            if(SatisfiesConstraints(decorator, serviceTypeParams))
+            if(TryCloseDecorator(decorator, serviceType) is { } closed)
             {
-                filteredList.Add(decorator);
+                result.Add(closed);
             }
         }
 
-        // Return original if no filtering occurred
-        return filteredList.Count == decorators.Length
+        return result.Count == decorators.Length && result.SequenceEqual(decorators)
             ? decorators
-            : filteredList.ToImmutableEquatableArray();
+            : result.ToImmutableEquatableArray();
     }
 
     /// <summary>
-    /// Checks if a decorator satisfies its type parameter constraints with the given service type parameters.
+    /// Closes a decorator for a generic service type.
     /// </summary>
-    private static bool SatisfiesConstraints(
-        TypeData decorator,
-        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
+    /// <remarks>
+    /// An open generic decorator's type arguments are found by matching the service type as the decorator implements it
+    /// against the service type, so <c>Decorator&lt;TResponse, TRequest&gt; : IHandler&lt;TRequest, TResponse&gt;</c>
+    /// closes as <c>Decorator&lt;Res, Req&gt;</c> for <c>IHandler&lt;Req, Res&gt;</c>, and
+    /// <c>TextDecorator&lt;T&gt; : IHandler&lt;T, string&gt;</c> cannot decorate <c>IHandler&lt;Req, int&gt;</c>.
+    /// </remarks>
+    /// <returns>The closed decorator, or null when it cannot decorate the service type or its constraints are not satisfied.</returns>
+    private static TypeData? TryCloseDecorator(TypeData decorator, GenericTypeData serviceType)
     {
-        var decoratorTypeParams = decorator is GenericTypeData genericDecorator
-            ? genericDecorator.TypeParameters
-            : null;
-        if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
+        var declaredForms = (decorator.AllInterfaces ?? []).Concat(decorator.AllBaseClasses ?? []);
+        if(decorator is not GenericTypeData { IsOpenGeneric: true, TypeParameters: { Length: > 0 } decoratorTypeParams } genericDecorator)
         {
-            return true;
+            // A closed decorator must implement the service type itself
+            return decorator.AllInterfaces is null || declaredForms.Any(form => form.Name == serviceType.Name) ? decorator : null;
         }
 
-        // Arity mismatch - cannot apply decorator
-        if(decoratorTypeParams.Length != serviceTypeParams.Length)
+        if(FindDeclaredForm(declaredForms, serviceType) is not { } declaredForm
+            || MatchAllTypeArguments(genericDecorator, declaredForm, serviceType) is not { } typeArguments)
         {
-            return true; // Let it pass, runtime will handle this
+            return null;
         }
 
-        // Check each decorator type parameter's constraints against the type argument at the same position
-        for(int i = 0; i < decoratorTypeParams.Length; i++)
+        var typeArgMap = ToTypeArgMap(typeArguments);
+        foreach(var decoratorParam in decoratorTypeParams)
         {
-            var constraintTypes = decoratorTypeParams[i].ConstraintTypes;
-            if(constraintTypes is null || constraintTypes.Length == 0)
+            var typeArgument = typeArguments[decoratorParam.ParameterName];
+            foreach(var constraintType in decoratorParam.ConstraintTypes ?? [])
             {
-                continue;
-            }
-
-            foreach(var constraintType in constraintTypes)
-            {
-                if(!SatisfiesTypeConstraintCore(serviceTypeParams[i].Type, constraintType))
+                if(!SatisfiesTypeConstraint(typeArgument, constraintType, typeArguments, typeArgMap))
                 {
-                    return false;
+                    return null;
                 }
             }
         }
 
-        return true;
+        return SubstituteDecoratorTypeParams(genericDecorator, typeArgMap);
     }
 
     /// <summary>
     /// Checks whether a type argument is, implements, or derives from a constraint type.
     /// </summary>
     /// <remarks>
-    /// For a constraint like <c>where TRequest : IQuery&lt;TRequest, TResponse&gt;</c>, which is open generic,
-    /// the type argument must implement some <c>IQuery&lt;,&gt;</c>, so names are compared without type arguments.
-    /// Closed generic and non-generic constraints compare full names.
+    /// The constraint is closed with the decorator's type arguments first, so <c>where TRequest : IRequest&lt;TResponse&gt;</c>
+    /// requires <c>IRequest&lt;Res&gt;</c> for <c>TResponse = Res</c>, and <c>where TRequest : TResponse</c> requires
+    /// the type argument of <c>TResponse</c>.
     /// </remarks>
-    private static bool SatisfiesTypeConstraintCore(TypeData typeArgument, TypeData constraintType)
+    private static bool SatisfiesTypeConstraint(
+        TypeData typeArgument,
+        TypeData constraintType,
+        Dictionary<string, TypeData> typeArguments,
+        TypeArgMap typeArgMap)
     {
-        // Direct match (for non-generic constraints)
-        if(typeArgument.Name == constraintType.Name)
-        {
-            return true;
-        }
+        var constraintName = constraintType is TypeParameterTypeData && typeArguments.TryGetValue(constraintType.Name, out var constraintArgument)
+            ? constraintArgument.Name
+            : SubstituteTypeArguments(constraintType.Name, typeArgMap);
 
-        var constraintName = constraintType is GenericTypeData { IsOpenGeneric: true } genericConstraintType
-            ? genericConstraintType.NameWithoutGeneric
-            : constraintType.Name;
-
-        return ContainsName(typeArgument.AllInterfaces, constraintName)
-            || ContainsName(typeArgument.AllBaseClasses, constraintName);
-
-        static bool ContainsName(ImmutableEquatableArray<TypeData>? types, string name)
-        {
-            if(types is null)
-            {
-                return false;
-            }
-
-            foreach(var type in types)
-            {
-                if(type.Name == name || type is GenericTypeData genericType && genericType.NameWithoutGeneric == name)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
+        return typeArgument.Name == constraintName
+            || (typeArgument.AllInterfaces ?? []).Any(type => type.Name == constraintName)
+            || (typeArgument.AllBaseClasses ?? []).Any(type => type.Name == constraintName);
     }
 
     /// <summary>

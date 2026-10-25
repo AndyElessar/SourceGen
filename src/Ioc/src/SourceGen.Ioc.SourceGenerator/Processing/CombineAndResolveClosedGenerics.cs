@@ -377,12 +377,11 @@ partial class IocSourceGenerator
         TypeArgMap serviceTypeArgMap;
         if(implementedForm is not null && !isFactoryOnlyRegistration)
         {
-            serviceTypeArgMap = new TypeArgMap(openImplType.GenericArity);
-            if(!TryMatchTypeArguments(implementedForm, closedServiceGenericType, ref serviceTypeArgMap)
-                || !MapsAllTypeParameters(openImplType, serviceTypeArgMap))
+            if(MatchAllTypeArguments(openImplType, implementedForm, closedServiceGenericType) is not { } typeArguments)
             {
                 return false; // The implementation cannot produce this closed service type
             }
+            serviceTypeArgMap = ToTypeArgMap(typeArguments);
         }
         else
         {
@@ -759,8 +758,14 @@ partial class IocSourceGenerator
         GenericTypeData openImplType,
         ImmutableEquatableArray<TypeData> implInterfaces,
         GenericTypeData type)
+        => FindDeclaredForm(implInterfaces.Concat(openImplType.AllBaseClasses ?? []).Append(openImplType), type);
+
+    /// <summary>
+    /// Finds the candidate with the same generic type definition as <paramref name="type"/>.
+    /// </summary>
+    private static GenericTypeData? FindDeclaredForm(IEnumerable<TypeData> candidates, GenericTypeData type)
     {
-        foreach(var candidate in implInterfaces.Concat(openImplType.AllBaseClasses ?? []).Append(openImplType))
+        foreach(var candidate in candidates)
         {
             if(candidate is GenericTypeData genericCandidate
                 && genericCandidate.NameWithoutGeneric == type.NameWithoutGeneric
@@ -780,16 +785,16 @@ partial class IocSourceGenerator
     /// False when the closed type does not have the pattern's shape, for example <c>IHandler&lt;Req, int&gt;</c> against
     /// <c>IHandler&lt;TRequest, string&gt;</c>, or when a type parameter would stand for two different types.
     /// </returns>
-    private static bool TryMatchTypeArguments(TypeData pattern, TypeData closed, ref TypeArgMap typeArgMap)
+    private static bool TryMatchTypeArguments(TypeData pattern, TypeData closed, Dictionary<string, TypeData> typeArguments)
     {
         if(pattern is TypeParameterTypeData)
         {
-            if(typeArgMap.TryGetValue(pattern.Name, out var mapped))
+            if(typeArguments.TryGetValue(pattern.Name, out var mapped))
             {
-                return mapped == closed.Name;
+                return mapped.Name == closed.Name;
             }
 
-            typeArgMap[pattern.Name] = closed.Name;
+            typeArguments[pattern.Name] = closed;
             return true;
         }
 
@@ -804,7 +809,7 @@ partial class IocSourceGenerator
 
             for(var i = 0; i < patternArgs.Length; i++)
             {
-                if(!TryMatchTypeArguments(patternArgs[i].Type, closedArgs[i].Type, ref typeArgMap))
+                if(!TryMatchTypeArguments(patternArgs[i].Type, closedArgs[i].Type, typeArguments))
                 {
                     return false;
                 }
@@ -817,19 +822,41 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Checks that a type argument map has an entry for every type parameter of an open generic type.
+    /// Matches the form an open generic type declares against a closed type and returns the type argument of each of the
+    /// open generic type's type parameters.
     /// </summary>
-    private static bool MapsAllTypeParameters(GenericTypeData openType, TypeArgMap typeArgMap)
+    /// <returns>Null when the forms do not match or a type parameter of <paramref name="openType"/> is not determined.</returns>
+    private static Dictionary<string, TypeData>? MatchAllTypeArguments(GenericTypeData openType, TypeData declaredForm, TypeData closed)
     {
+        var typeArguments = new Dictionary<string, TypeData>(StringComparer.Ordinal);
+        if(!TryMatchTypeArguments(declaredForm, closed, typeArguments))
+        {
+            return null;
+        }
+
         foreach(var typeParam in openType.TypeParameters ?? [])
         {
-            if(!typeArgMap.TryGetValue(typeParam.ParameterName, out _))
+            if(!typeArguments.ContainsKey(typeParam.ParameterName))
             {
-                return false;
+                return null;
             }
         }
 
-        return true;
+        return typeArguments;
+    }
+
+    /// <summary>
+    /// Creates a substitution map from type arguments matched by <see cref="TryMatchTypeArguments"/>.
+    /// </summary>
+    private static TypeArgMap ToTypeArgMap(Dictionary<string, TypeData> typeArguments)
+    {
+        var typeArgMap = new TypeArgMap(typeArguments.Count);
+        foreach(var entry in typeArguments)
+        {
+            typeArgMap[entry.Key] = entry.Value.Name;
+        }
+
+        return typeArgMap;
     }
 
     /// <summary>
@@ -1031,7 +1058,32 @@ partial class IocSourceGenerator
             typeData is GenericTypeData genericTypeData ? genericTypeData.TypeParameters : null,
             typeArgMap);
 
-        return RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
+        var substituted = RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
+
+        // Interfaces and base classes are compared with closed decorator constraints, so they are closed too
+        return typeData.AllInterfaces is null && typeData.AllBaseClasses is null
+            ? substituted
+            : substituted with
+            {
+                AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap),
+                AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
+            };
+
+        static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(ImmutableEquatableArray<TypeData>? types, TypeArgMap typeArgMap)
+        {
+            if(types is null)
+            {
+                return null;
+            }
+
+            var result = new List<TypeData>(types.Length);
+            foreach(var type in types)
+            {
+                result.Add(RehydrateTypeData(type, Name: SubstituteTypeArguments(type.Name, typeArgMap), IsOpenGeneric: false));
+            }
+
+            return result.ToImmutableEquatableArray();
+        }
     }
 
     /// <summary>
@@ -1143,51 +1195,18 @@ partial class IocSourceGenerator
             return decorators;
         }
 
-        // Filter decorators based on type constraints
-        var filteredDecorators = FilterDecoratorsCore(decorators, serviceTypeParams);
-        if(filteredDecorators.Length == 0)
-        {
-            return [];
-        }
-
-        // Process and substitute type parameters in decorators using service type's type parameters
-        var processedDecorators = new List<TypeData>(filteredDecorators.Length);
-        foreach(var decorator in filteredDecorators)
-        {
-            var processedDecorator = SubstituteDecoratorTypeParams(decorator, serviceTypeParams);
-            processedDecorators.Add(processedDecorator);
-        }
-
-        return processedDecorators.ToImmutableEquatableArray();
+        return CloseDecoratorsForServiceType(decorators, (GenericTypeData)serviceType);
     }
 
     /// <summary>
     /// Substitutes type parameters in a decorator and processes its constructor parameters and injection members.
     /// </summary>
     private static TypeData SubstituteDecoratorTypeParams(
-        TypeData decorator,
-        ImmutableEquatableArray<TypeParameter> closedTypeParams)
+        GenericTypeData genericDecorator,
+        TypeArgMap typeArgMap)
     {
-        if(decorator is not GenericTypeData { IsOpenGeneric: true } genericDecorator)
-        {
-            // No longer need to process decorator parameters for IsServiceParameter
-            return decorator;
-        }
-
-        // Build type argument map from decorator type params to closed type args
+        var decorator = genericDecorator;
         var decoratorTypeParams = genericDecorator.TypeParameters;
-        if(decoratorTypeParams is null || decoratorTypeParams.Length == 0)
-        {
-            return decorator;
-        }
-
-        // Build substitution map: decorator param name -> closed type arg name
-        int mapSize = Math.Min(decoratorTypeParams.Length, closedTypeParams.Length);
-        var typeArgMap = new TypeArgMap(mapSize);
-        for(int i = 0; i < mapSize; i++)
-        {
-            typeArgMap[decoratorTypeParams[i].ParameterName] = closedTypeParams[i].Type.Name;
-        }
 
         // Substitute in decorator type name
         var closedDecoratorName = SubstituteTypeArguments(decorator.Name, typeArgMap);
