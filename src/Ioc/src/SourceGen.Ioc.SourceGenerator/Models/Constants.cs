@@ -66,6 +66,12 @@ internal static class Constants
     public const string IServiceProviderGlobalTypeName = "global::System.IServiceProvider";
     public const string KeyedServiceAnyKey = "global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey";
 
+    /// <summary>
+    /// File-level alias for a container resolver entry, <c>KeyValuePair&lt;ServiceIdentifier, Func&lt;TContainer, object&gt;&gt;</c>.
+    /// Explicitly typed entries bind much faster than target-typed <c>new(...)</c> in large nullable-enabled array initializers.
+    /// </summary>
+    public const string ResolverEntryAlias = "__IocResolver";
+
     // Service provider method names
     public const string GetRequiredService = "GetRequiredService";
     public const string GetService = "GetService";

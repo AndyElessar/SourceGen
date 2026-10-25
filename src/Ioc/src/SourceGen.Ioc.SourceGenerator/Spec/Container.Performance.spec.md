@@ -225,6 +225,21 @@ partial class AppContainer
 3. **Lazy initialization**: Services are created only when first accessed (unless eager resolution is enabled).
 4. **No array allocations in GetService**: Direct dictionary lookup or switch statement dispatch.
 
+### Compile-Time Cost of Generated Code
+
+The generated container MUST stay cheap for the C# compiler to bind, because it is compiled in every build and analyzed in the IDE.
+
+- `_localResolvers` entries MUST be explicitly typed through the file-level `__IocResolver` alias (`KeyValuePair<ServiceIdentifier, Func<TContainer, object>>`) instead of target-typed `new(...)`. With nullable analysis enabled, target-typed entries that take a lambda bind superlinearly in a large array initializer: for 3,803 entries, binding took 12.9 s with target-typed `new(...)` and 1.45 s with the alias.
+
+```csharp
+using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::AppContainer, object>>;
+
+private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
+[
+    new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
+];
+```
+
 ## Diagnostics Summary
 
 | ID | Category | Severity | Condition |

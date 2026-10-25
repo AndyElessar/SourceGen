@@ -77,6 +77,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
+using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::AppContainer, object>>;
 
 partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvider, IKeyedServiceProvider,
     IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService,
@@ -253,14 +254,14 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         // Built-in services
-        new(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
         // Eager singletons - direct field access (not method calls)
-        new(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c._myDependency),
-        new(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c._myDependency),
-        new(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
-        new(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
+        new __IocResolver(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c._myDependency),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c._myDependency),
+        new __IocResolver(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
     ];
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

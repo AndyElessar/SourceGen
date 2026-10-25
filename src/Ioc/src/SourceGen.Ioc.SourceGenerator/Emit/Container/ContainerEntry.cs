@@ -863,13 +863,13 @@ partial class IocSourceGenerator
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
             var arrayMethodName = GetLazyArrayResolverMethodName(InnerServiceTypeName);
 
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
         }
     }
 
@@ -931,13 +931,13 @@ partial class IocSourceGenerator
             var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
             var arrayMethodName = GetFuncArrayResolverMethodName(InnerServiceTypeName);
 
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
         }
     }
 
@@ -960,15 +960,15 @@ partial class IocSourceGenerator
             var arrayMethodName = GetKvpArrayResolverMethodName(KeyTypeName, ValueTypeName);
             var dictionaryMethodName = GetKvpDictionaryResolverMethodName(KeyTypeName, ValueTypeName);
 
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({kvpTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({kvpTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
         }
     }
 

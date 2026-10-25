@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
+using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::GlobalContainer, object>>;
 
 partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
@@ -201,11 +202,11 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::GlobalContainer, object>>[] _localResolvers =
     [
-        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::GlobalContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
-        new(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::GlobalContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::GlobalContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
