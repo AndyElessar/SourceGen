@@ -326,6 +326,47 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("IEnumerable<object>")]
+    [Arguments("IReadOnlyList<IComparable>")]
+    public async Task ClosedGenericDependency_DecoratorWithCovariantConstraint_AcceptsReferenceTypeConversions(string constraint)
+    {
+        // List<string> and IEnumerable<string> convert to the constraints through covariance; List<int> does not,
+        // because variance does not apply to value types.
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+            using System.Collections.Generic;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.CovariantDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            internal sealed class CovariantDecorator<T>(IHandler<T> inner) : IHandler<T> where T : {{constraint}};
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(
+                IHandler<List<string>> texts,
+                IHandler<List<int>> numbers,
+                IHandler<IReadOnlyList<string>> readOnlyTexts);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseTextForParameters(constraint.Replace('<', '(').Replace('>', ')'));
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_GenericBaseClassServiceType_ClosesImplementationFromBaseClass()
     {
         const string source = """

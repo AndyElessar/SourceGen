@@ -342,9 +342,7 @@ internal static partial class TransformExtensions
             {
                 // For concrete types, recursively extract type parameters and interfaces
                 var typeData = namedArg.CreateBasicTypeData(depth + 1);
-                var allInterfaces = namedArg.AllInterfaces.Length > 0
-                    ? namedArg.AllInterfaces.Select(CreateInterfaceTypeData).ToImmutableEquatableArray()
-                    : null;
+                var allInterfaces = CreateConvertibleInterfaceTypeData(namedArg);
 
                 // Base classes are needed to check base class constraints; names are enough, and avoid recursing
                 // through self-referencing bases such as Foo : Base<Foo>.
@@ -377,6 +375,107 @@ internal static partial class TransformExtensions
             return (TypeData.CreateTypeParameter(typeParam.Name), null);
 
             // Creates a simple TypeData for an interface or base class type.
+            // Creates the interfaces a type argument converts to: its interfaces and, through covariance, the variant
+            // interfaces they become with a supertype argument, such as IEnumerable<object> for List<string>.
+            // Decorator constraints compare these names, so where T : IEnumerable<object> accepts List<string>.
+            static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(INamedTypeSymbol type)
+            {
+                if(type.AllInterfaces.Length == 0 && !IsVariant(type))
+                {
+                    return null;
+                }
+
+                List<TypeData> result = [];
+                HashSet<string> names = new(StringComparer.Ordinal);
+                foreach(var iface in type.AllInterfaces)
+                {
+                    Add(CreateInterfaceTypeData(iface));
+                }
+
+                // The type itself may be a variant interface, such as IEnumerable<string>; its own name is matched directly
+                names.Add(type.FullyQualifiedName);
+                foreach(var variant in type.AllInterfaces.Prepend(type))
+                {
+                    foreach(var conversion in GetCovariantConversions(variant))
+                    {
+                        Add(CreateInterfaceTypeData(conversion));
+                    }
+                }
+
+                return result.Count > 0 ? result.ToImmutableEquatableArray() : null;
+
+                void Add(TypeData typeData)
+                {
+                    if(names.Add(typeData.Name))
+                    {
+                        result.Add(typeData);
+                    }
+                }
+            }
+
+            static bool IsVariant(INamedTypeSymbol type)
+                => type.IsGenericType && type.OriginalDefinition.TypeParameters.Any(static p => p.Variance == VarianceKind.Out);
+
+            // Constructs the variant type with each covariant reference type argument replaced by one of its supertypes.
+            // Value type arguments do not vary, nested variance is not followed, and the count is capped to bound the cost.
+            static IEnumerable<INamedTypeSymbol> GetCovariantConversions(INamedTypeSymbol type)
+            {
+                const int MaxConversions = 64;
+                if(!IsVariant(type))
+                {
+                    yield break;
+                }
+
+                var definition = type.OriginalDefinition;
+                var candidates = new List<ITypeSymbol>[type.TypeArguments.Length];
+                for(var i = 0; i < candidates.Length; i++)
+                {
+                    var argument = type.TypeArguments[i];
+                    candidates[i] = [argument];
+                    if(definition.TypeParameters[i].Variance == VarianceKind.Out && argument.IsReferenceType)
+                    {
+                        candidates[i].AddRange(argument.AllInterfaces);
+                        for(var baseType = argument.BaseType; baseType is not null; baseType = baseType.BaseType)
+                        {
+                            candidates[i].Add(baseType);
+                        }
+                    }
+                }
+
+                var count = 0;
+                var arguments = new ITypeSymbol[candidates.Length];
+                foreach(var combination in Combine(0))
+                {
+                    if(++count > MaxConversions)
+                    {
+                        yield break;
+                    }
+                    yield return definition.Construct(combination);
+                }
+
+                // Yields every combination except the type's own arguments
+                IEnumerable<ITypeSymbol[]> Combine(int index)
+                {
+                    if(index == candidates.Length)
+                    {
+                        if(!arguments.SequenceEqual(type.TypeArguments, SymbolEqualityComparer.Default))
+                        {
+                            yield return [.. arguments];
+                        }
+                        yield break;
+                    }
+
+                    foreach(var candidate in candidates[index])
+                    {
+                        arguments[index] = candidate;
+                        foreach(var combination in Combine(index + 1))
+                        {
+                            yield return combination;
+                        }
+                    }
+                }
+            }
+
             static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface)
             {
                 var name = iface.FullyQualifiedName;
