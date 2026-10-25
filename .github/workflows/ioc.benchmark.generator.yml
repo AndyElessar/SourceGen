@@ -3,11 +3,10 @@ name: SourceGen.Ioc Generator Benchmark
 on:
   push:
     branches: [main]
+    # Markdown never affects the benchmarks; the exclusion is last so no later pattern re-includes it.
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/Spec/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/*.spec.md'
       - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/**'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
@@ -18,13 +17,12 @@ on:
       - '.github/workflows/ioc.benchmark.generator.yml'
       - '.github/workflows/ioc.benchmark.generator.comment.yml'
       - '.github/scripts/**'
+      - '!**/*.md'
   pull_request:
     branches: [main]
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/Spec/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/*.spec.md'
       - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/**'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
@@ -35,6 +33,7 @@ on:
       - '.github/workflows/ioc.benchmark.generator.yml'
       - '.github/workflows/ioc.benchmark.generator.comment.yml'
       - '.github/scripts/**'
+      - '!**/*.md'
   workflow_dispatch:
 
 # Newer commits replace older runs of the same pull request; every other run is kept.

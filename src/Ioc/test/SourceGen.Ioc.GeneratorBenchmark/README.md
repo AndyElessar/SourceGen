@@ -62,7 +62,7 @@ No differences are expected for behavior-preserving optimizations. GeneratorPerf
 
 ## Continuous integration
 
-[ioc.benchmark.generator.yml](../../../../.github/workflows/ioc.benchmark.generator.yml) runs the `Count = 500` workloads with the arguments above for pull requests to `main` and pushes to `main` that change the generator, its runtime library, this harness, shared build files, the baseline or benchmark workflow/comment code. It can also be started manually.
+[ioc.benchmark.generator.yml](../../../../.github/workflows/ioc.benchmark.generator.yml) runs the `Count = 500` workloads with the arguments above for pull requests to `main` and pushes to `main` that change the generator, its runtime library, this harness, shared build files, the baseline or benchmark workflow/comment code. Changes to Markdown files (`*.md`), such as specs and this README, do not trigger it. It can also be started manually.
 
 The baseline is [`benchmarks/baseline.json`](../../../../benchmarks/baseline.json) on `main`.
 
