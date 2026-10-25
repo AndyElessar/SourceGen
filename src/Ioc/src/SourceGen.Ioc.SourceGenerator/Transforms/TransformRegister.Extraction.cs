@@ -27,9 +27,7 @@ partial class IocSourceGenerator
         var injectionMembers = ExtractAndMergeInjectionMembers(typeSymbol, attributeData, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
-        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
-            implementationType.AllInterfaces ?? [],
-            implementationType.AllBaseClasses ?? []);
+        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(implementationType);
 
         return new RegistrationData(
             implementationType,
@@ -86,9 +84,7 @@ partial class IocSourceGenerator
         var injectionMembers = ExtractAndMergeInjectionMembers(typeSymbol, attributeData, semanticModel);
 
         // Build set of valid open generic service types (non-nested) for quick lookup
-        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(
-            implementationType.AllInterfaces ?? [],
-            implementationType.AllBaseClasses ?? []);
+        var validOpenGenericServiceTypes = BuildValidOpenGenericServiceTypes(implementationType);
 
         return new RegistrationData(
             implementationType,
@@ -300,32 +296,57 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Builds a set of valid open generic service type names (NameWithoutGeneric + Arity) that can be properly registered.
-    /// This includes only interfaces/base classes that are open generic but not nested open generic.
+    /// This includes only interfaces/base classes whose type arguments are the implementation's type parameters in order.
     /// </summary>
-    private static ImmutableEquatableSet<string> BuildValidOpenGenericServiceTypes(
-        ImmutableEquatableArray<TypeData> allInterfaces,
-        ImmutableEquatableArray<TypeData> allBaseClasses)
+    /// <remarks>
+    /// An open generic registration closes the implementation with the service type's type arguments by position, so
+    /// <c>Handler&lt;TResponse, TRequest&gt; : IHandler&lt;TRequest, TResponse&gt;</c> or
+    /// <c>TextHandler&lt;T&gt; : IHandler&lt;T, string&gt;</c> cannot be registered as <c>IHandler&lt;,&gt;</c>;
+    /// Microsoft.Extensions.DependencyInjection rejects them. They are only registered as closed types.
+    /// </remarks>
+    private static ImmutableEquatableSet<string> BuildValidOpenGenericServiceTypes(TypeData implementationType)
     {
         var result = new HashSet<string>();
-
-        foreach(var iface in allInterfaces)
+        if(implementationType is not GenericTypeData { TypeParameters: { Length: > 0 } implTypeParams })
         {
-            if(iface is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } genericInterface)
-            {
-                // Use NameWithoutGeneric + Arity as key to handle different arities
-                result.Add($"{genericInterface.NameWithoutGeneric}`{genericInterface.GenericArity}");
-            }
+            return result.ToImmutableEquatableSet();
         }
 
-        foreach(var baseClass in allBaseClasses)
-        {
-            if(baseClass is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } genericBaseClass)
-            {
-                result.Add($"{genericBaseClass.NameWithoutGeneric}`{genericBaseClass.GenericArity}");
-            }
-        }
+        AddValid(implementationType.AllInterfaces);
+        AddValid(implementationType.AllBaseClasses);
 
         return result.ToImmutableEquatableSet();
+
+        void AddValid(ImmutableEquatableArray<TypeData>? types)
+        {
+            foreach(var type in types ?? [])
+            {
+                if(type is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } genericType
+                    && HasImplementationTypeParametersInOrder(genericType))
+                {
+                    // Use NameWithoutGeneric + Arity as key to handle different arities
+                    result.Add($"{genericType.NameWithoutGeneric}`{genericType.GenericArity}");
+                }
+            }
+        }
+
+        bool HasImplementationTypeParametersInOrder(GenericTypeData type)
+        {
+            if(type.TypeParameters is not { } typeArgs || typeArgs.Length != implTypeParams.Length)
+            {
+                return false;
+            }
+
+            for(var i = 0; i < typeArgs.Length; i++)
+            {
+                if(typeArgs[i].Type is not TypeParameterTypeData typeArg || typeArg.Name != implTypeParams[i].ParameterName)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
     }
 
     /// <summary>
