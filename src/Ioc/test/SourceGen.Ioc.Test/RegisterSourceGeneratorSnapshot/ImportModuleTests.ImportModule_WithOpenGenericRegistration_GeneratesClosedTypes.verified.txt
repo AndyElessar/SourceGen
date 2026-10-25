@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
+using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::MainApp.MainContainer, object>>;
 
 namespace MainApp;
 
@@ -202,12 +203,12 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>[] _localResolvers =
     [
-        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::MainApp.MainContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::MainApp.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMainApp_Consumer()),
-        new(new ServiceIdentifier(typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
-        new(new ServiceIdentifier(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::MainApp.MainContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::MainApp.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMainApp_Consumer()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::MainApp.MainContainer, object>> _serviceResolvers =

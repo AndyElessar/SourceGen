@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
+using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocRazorSample.ComponentContainer, object>>;
 
 [assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof(global::IocRazorSample.ComponentContainer.__HotReloadHandler))]
 
@@ -199,11 +200,11 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>>[] _localResolvers =
     [
-        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::IocRazorSample.ComponentContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::IocRazorSample.LoadData), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
-        new(new ServiceIdentifier(typeof(global::Microsoft.AspNetCore.Components.IComponent), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocRazorSample.ComponentContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocRazorSample.LoadData), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::Microsoft.AspNetCore.Components.IComponent), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::IocRazorSample.ComponentContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

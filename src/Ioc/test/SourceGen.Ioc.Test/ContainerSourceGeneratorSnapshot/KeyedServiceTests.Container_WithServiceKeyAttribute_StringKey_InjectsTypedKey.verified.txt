@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
+using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>>;
 
 namespace TestNamespace;
 
@@ -222,13 +223,13 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
-        new(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler1), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IHandler), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.Handler2), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
-        new(new ServiceIdentifier(typeof(global::TestNamespace.IHandler), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Handler1), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IHandler), "handler-1"), static c => c.GetTestNamespace_Handler1__handler_1_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Handler2), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IHandler), "handler-2"), static c => c.GetTestNamespace_Handler2__handler_2_()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

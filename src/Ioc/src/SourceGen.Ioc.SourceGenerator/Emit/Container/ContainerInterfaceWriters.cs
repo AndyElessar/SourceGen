@@ -499,9 +499,9 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Built-in services: IServiceProvider, IServiceScopeFactory, and the container itself
-        writer.WriteLine($"new(new ServiceIdentifier(typeof(IServiceProvider), {KeyedServiceAnyKey}), static c => c),");
-        writer.WriteLine($"new(new ServiceIdentifier(typeof(IServiceScopeFactory), {KeyedServiceAnyKey}), static c => c),");
-        writer.WriteLine($"new(new ServiceIdentifier(typeof({container.ContainerTypeName}), {KeyedServiceAnyKey}), static c => c),");
+        writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(IServiceProvider), {KeyedServiceAnyKey}), static c => c),");
+        writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(IServiceScopeFactory), {KeyedServiceAnyKey}), static c => c),");
+        writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({container.ContainerTypeName}), {KeyedServiceAnyKey}), static c => c),");
 
         var entryByResolverMethodName = BuildEntryByResolverMethodName(groups);
 
@@ -521,19 +521,19 @@ partial class IocSourceGenerator
                 resolverExpr = $"static c => c.{mapping.ResolverMethodName}()";
             }
 
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({mapping.ServiceType}), {keyExpr}), {resolverExpr}),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({mapping.ServiceType}), {keyExpr}), {resolverExpr}),");
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
             var methodName = GetArrayResolverMethodName(serviceType);
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new(new ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
         }
 
         // Add local resolvers for wrapper entries (KVP first, then Lazy, then Func)
