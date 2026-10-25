@@ -72,4 +72,41 @@ public class FactoryAndInstanceContainerTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithFactoryServiceProviderAndKeyAfterDependencies_PassesArgumentsInDeclarationOrder()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+
+            [IocRegister<ILogger>(ServiceLifetime.Singleton)]
+            public class Logger : ILogger { }
+
+            public interface IConnection { }
+
+            public class Connection : IConnection { }
+
+            public static class ConnectionFactory
+            {
+                public static IConnection Create(ILogger logger, IServiceProvider sp, [ServiceKey] string key)
+                    => new Connection();
+            }
+
+            [IocRegisterFor(typeof(Connection), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IConnection)], Key = "main", Factory = nameof(ConnectionFactory.Create))]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }

@@ -179,10 +179,6 @@ partial class IocSourceGenerator
 
         public bool IsKeyedRegistration { get; }
 
-        public bool HasServiceProvider { get; }
-
-        public bool HasKey { get; }
-
         public bool NeedsCast { get; }
 
         public string FactoryCallPath { get; }
@@ -200,8 +196,6 @@ partial class IocSourceGenerator
             IsKeyedRegistration = registration.Key is not null;
 
             FactoryMethodData = registration.Factory!;
-            HasServiceProvider = FactoryMethodData.HasServiceProvider;
-            HasKey = FactoryMethodData.HasKey;
             NeedsCast = FactoryMethodData.ReturnTypeName is not null && FactoryMethodData.ReturnTypeName != ServiceTypeName;
 
             var genericTypeArgs = BuildGenericFactoryTypeArgs(FactoryMethodData, registration.ServiceType);
@@ -275,22 +269,7 @@ partial class IocSourceGenerator
 
         private string BuildFactoryInvocationExpression(List<string> additionalArguments)
         {
-            var args = new List<string>(additionalArguments.Count + 2);
-            if(HasServiceProvider)
-            {
-                args.Add("sp");
-            }
-
-            if(HasKey && Key is not null)
-            {
-                args.Add(Key);
-            }
-
-            if(additionalArguments.Count > 0)
-            {
-                args.AddRange(additionalArguments);
-            }
-
+            var args = FactoryMethodData.OrderArguments("sp", Key, additionalArguments);
             var invocation = $"{FactoryCallPath}({string.Join(", ", args)})";
             if(NeedsCast)
             {

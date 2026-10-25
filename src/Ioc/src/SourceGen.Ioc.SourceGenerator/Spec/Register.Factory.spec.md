@@ -12,7 +12,8 @@ When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`
 
 - If parameter type is `IServiceProvider`: Pass the service provider directly
 - If parameter has `[ServiceKey]` attribute and registration has a Key: Pass the Key value
-- Other parameters are not supported and should be ignored or report diagnostic
+- Other parameters: Resolve from the service provider, using the same rules as `[IocInject]` method parameters
+- Arguments MUST be passed in the factory method's parameter declaration order, wherever the `IServiceProvider` and `[ServiceKey]` parameters appear (e.g., `Create(ILogger logger, IServiceProvider sp)` is called as `Create(logger, sp)`)
 
 ### Basic Factory Example
 

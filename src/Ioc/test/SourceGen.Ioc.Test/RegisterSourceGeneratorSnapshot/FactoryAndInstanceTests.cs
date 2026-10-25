@@ -727,6 +727,46 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    public async Task Factory_WithServiceProviderAndKeyAfterDependencies_PassesArgumentsInDeclarationOrder()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+            public interface IConfiguration { }
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Scoped,
+                ServiceTypes = [typeof(IMyService)],
+                Key = "myKey",
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(
+                    ILogger logger,
+                    IServiceProvider sp,
+                    IConfiguration config,
+                    [ServiceKey] string key)
+                    => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Factory_WithDefaultValueParameter_GeneratesConditionalResolution()
     {
         const string source = """
