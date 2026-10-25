@@ -24,6 +24,7 @@
   <ItemGroup>
     <Compile Include="..\SourceGen.Ioc.GeneratorBenchmark\GeneratorBenchmarkInput.cs" Link="Helpers\GeneratorBenchmarkInput.cs" />
     <Compile Include="..\SourceGen.Ioc.GeneratorBenchmark\AnalyzerBenchmarkInput.cs" Link="Helpers\AnalyzerBenchmarkInput.cs" />
+    <Compile Include="..\SourceGen.Ioc.GeneratorBenchmark\OverheadGenerator.cs" Link="Helpers\OverheadGenerator.cs" />
   </ItemGroup>
 
 </Project>

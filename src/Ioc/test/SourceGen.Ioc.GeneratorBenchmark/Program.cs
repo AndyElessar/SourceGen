@@ -38,14 +38,18 @@ if(args is ["--verify", var path])
         foreach(var count in new[] { 100, 500 })
         {
             var input = new GeneratorBenchmarkInput(scenario, count);
-            foreach(var (name, compilation) in new[] { ("initial", input.Initial), ("edited", input.Edited) })
+            var states = Enum.GetValues<GeneratorEdit>().Select(edit => ($"edited-{edit}", input.CreateEdited(edit))).Prepend(("initial", input.Initial));
+            foreach(var (name, compilation) in states)
             {
                 var driver = input.CreateDriver().RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
                 GeneratorBenchmarkInput.Validate(driver, output);
-                foreach(var source in driver.GetRunResult().Results.Single().GeneratedSources)
+                var sources = driver.GetRunResult().Results.Single().GeneratedSources;
+                foreach(var source in sources)
                 {
                     fingerprints.Add($"{scenario}/{count}/{name}/{source.HintName}", Hash(source.SourceText.ToString()));
                 }
+                // The generated size shows output growth that hashes alone do not quantify.
+                fingerprints.Add($"{scenario}/{count}/{name}/size", sources.Sum(static source => source.SourceText.Length).ToString(CultureInfo.InvariantCulture));
             }
 
             var analyzerInput = new AnalyzerBenchmarkInput(scenario, count);
@@ -64,5 +68,5 @@ if(args is ["--verify", var path])
     static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }
 
-BenchmarkSwitcher.FromTypes([typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks)]).Run(args);
+BenchmarkSwitcher.FromTypes([typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks), typeof(GeneratedCodeBenchmarks)]).Run(args);
 return 0;
