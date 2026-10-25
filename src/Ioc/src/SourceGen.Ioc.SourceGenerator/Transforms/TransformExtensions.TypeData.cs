@@ -342,6 +342,18 @@ internal static partial class TransformExtensions
                 var allInterfaces = namedArg.AllInterfaces.Length > 0
                     ? namedArg.AllInterfaces.Select(CreateInterfaceTypeData).ToImmutableEquatableArray()
                     : null;
+
+                // Base classes are needed to check base class constraints; names are enough, and avoid recursing
+                // through self-referencing bases such as Foo : Base<Foo>.
+                if(namedArg.TypeKind == TypeKind.Class && namedArg.BaseType is { SpecialType: not SpecialType.System_Object })
+                {
+                    List<TypeData> baseClasses = [];
+                    for(var baseType = namedArg.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)
+                    {
+                        baseClasses.Add(CreateInterfaceTypeData(baseType));
+                    }
+                    typeData = typeData with { AllBaseClasses = baseClasses.ToImmutableEquatableArray() };
+                }
                 return (typeData, allInterfaces);
             }
 
@@ -361,7 +373,7 @@ internal static partial class TransformExtensions
             // No type argument available, this is a type parameter placeholder
             return (TypeData.CreateTypeParameter(typeParam.Name), null);
 
-            // Creates a simple TypeData for an interface type.
+            // Creates a simple TypeData for an interface or base class type.
             static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface)
             {
                 var name = iface.FullyQualifiedName;

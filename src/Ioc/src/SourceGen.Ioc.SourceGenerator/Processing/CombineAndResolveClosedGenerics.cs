@@ -473,7 +473,7 @@ partial class IocSourceGenerator
             // Use service type's type parameters for decorator substitution
             var serviceTypeDecorators = ProcessDecoratorsForServiceType(
                 openGenericInfo.Decorators,
-                closedSvcType);
+                WithTypeArgumentsOf(closedSvcType, closedServiceGenericType));
 
             var serviceModel = new ServiceRegistrationModel(
                 closedSvcType,
@@ -983,6 +983,32 @@ partial class IocSourceGenerator
             source.InjectionMembers,
             source.AllInterfaces,
             source.AllBaseClasses);
+    }
+
+    /// <summary>
+    /// Replaces the type arguments of a closed service type with the matching type arguments of the dependency it was
+    /// built for.
+    /// </summary>
+    /// <remarks>
+    /// Closed service types are built by substituting type argument names, so their type arguments lack the interfaces
+    /// that decorator constraint checks need. The dependency's type arguments carry them.
+    /// </remarks>
+    private static TypeData WithTypeArgumentsOf(TypeData closedServiceType, GenericTypeData dependencyType)
+    {
+        if(closedServiceType is not GenericTypeData { TypeParameters: { Length: > 0 } typeParams } genericServiceType
+            || dependencyType.TypeParameters is not { Length: > 0 } dependencyTypeParams)
+        {
+            return closedServiceType;
+        }
+
+        var result = new List<TypeParameter>(typeParams.Length);
+        foreach(var param in typeParams)
+        {
+            var dependencyArg = dependencyTypeParams.FirstOrDefault(p => p.Type.Name == param.Type.Name);
+            result.Add(dependencyArg is null ? param : param with { Type = dependencyArg.Type });
+        }
+
+        return genericServiceType with { TypeParameters = result.ToImmutableEquatableArray() };
     }
 
     /// <summary>

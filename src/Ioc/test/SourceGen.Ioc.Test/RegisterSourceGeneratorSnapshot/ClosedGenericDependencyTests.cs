@@ -140,6 +140,63 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("IConvertible")]
+    [Arguments("IComparable<T>")]
+    [Arguments("EntityBase")]
+    [Arguments("GenericBase<T>")]
+    public async Task ClosedGenericDependency_DecoratorWithTypeConstraint_AppliesOnlyToSatisfyingTypeArguments(string constraint)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.ConstrainedDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            internal sealed class ConstrainedDecorator<T>(IHandler<T> inner) : IHandler<T> where T : {{constraint}};
+
+            public interface IEntity;
+
+            public class Entity : IEntity { }
+
+            public class PlainEntity { }
+
+            public class EntityBase { }
+
+            public class DerivedEntity : EntityBase { }
+
+            public class GenericBase<T> { }
+
+            public class SelfEntity : GenericBase<SelfEntity> { }
+
+            // Each type argument satisfies at most one of the constraints; Entity has an unrelated interface and PlainEntity has nothing.
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(
+                IHandler<string> text,
+                IHandler<Entity> entity,
+                IHandler<PlainEntity> plain,
+                IHandler<DerivedEntity> derived,
+                IHandler<SelfEntity> self);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseParameters(constraint.Replace("<T>", "OfT"));
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_AlreadyRegistered_DoesNotDuplicate()
     {
         const string source = """
