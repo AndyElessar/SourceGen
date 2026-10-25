@@ -277,6 +277,55 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("SwappedTypeParameters", "Decorator<TResponse, TRequest>(IHandler<TRequest, TResponse> inner) : IHandler<TRequest, TResponse>", "Decorator<,>", "IHandler<Req, Res> handler")]
+    [Arguments("PartiallyClosed", "Decorator<TRequest>(IHandler<TRequest, string> inner) : IHandler<TRequest, string>", "Decorator<>", "IHandler<Req, string> text, IHandler<Req, int> number")]
+    [Arguments("ConstraintOnOtherTypeParameter", "Decorator<TRequest, TResponse>(IHandler<TRequest, TResponse> inner) : IHandler<TRequest, TResponse> where TRequest : IRequest<TResponse>", "Decorator<,>", "IHandler<Req, Res> matching, IHandler<Req, Other> mismatched")]
+    [Arguments("TypeParameterConstraint", "Decorator<TRequest, TResponse>(IHandler<TRequest, TResponse> inner) : IHandler<TRequest, TResponse> where TRequest : TResponse", "Decorator<,>", "IHandler<Req, IRequest> matching, IHandler<Other, IRequest> mismatched")]
+    public async Task ClosedGenericDependency_DecoratorTypeArgumentsDifferFromServiceType_ClosesDecoratorFromImplementedServiceType(
+        string name, string decorator, string decoratorType, string parameters)
+    {
+        // Only the first dependency of each case is decorated: Decorator<Res, Req>, Decorator<Req> for IHandler<Req, string>,
+        // IRequest<Res> for Req, and Req : IRequest.
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.{{decoratorType}})])]
+
+            namespace TestNamespace;
+
+            public interface IRequest;
+
+            public interface IRequest<TResponse>;
+
+            public interface IHandler<TRequest, TResponse>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class Handler<TRequest, TResponse> : IHandler<TRequest, TResponse>;
+
+            internal sealed class {{decorator}};
+
+            public class Req : IRequest, IRequest<Res> { }
+
+            public class Res { }
+
+            public class Other { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer({{parameters}});
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseTextForParameters(name);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_GenericBaseClassServiceType_ClosesImplementationFromBaseClass()
     {
         const string source = """

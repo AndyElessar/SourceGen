@@ -413,4 +413,38 @@ public class DecoratorTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Decorator_TypeParametersNotInServiceOrder_ClosesFromImplementedServiceType()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<TRequest, TResponse>;
+
+            public class Req { }
+
+            public class Res { }
+
+            internal sealed class SwappedDecorator<TResponse, TRequest>(IHandler<TRequest, TResponse> inner) : IHandler<TRequest, TResponse>;
+
+            internal sealed class TextDecorator<TRequest>(IHandler<TRequest, string> inner) : IHandler<TRequest, string>;
+
+            // SwappedDecorator closes as SwappedDecorator<Res, Req>; TextDecorator only decorates IHandler<Req, string>.
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<Req, Res>)], Decorators = [typeof(SwappedDecorator<,>), typeof(TextDecorator<>)])]
+            internal sealed class ResponseHandler : IHandler<Req, Res>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<Req, string>)], Decorators = [typeof(SwappedDecorator<,>), typeof(TextDecorator<>)])]
+            internal sealed class TextHandler : IHandler<Req, string>;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

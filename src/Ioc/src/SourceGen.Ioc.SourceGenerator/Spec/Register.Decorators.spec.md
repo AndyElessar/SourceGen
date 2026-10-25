@@ -10,6 +10,15 @@ When `Decorators` is not empty, generate register code to handle decorator patte
 Only generate decorator when all type arguments constraints are satisfied.\
 A type constraint is satisfied when the type argument is the constraint type, or implements or derives from it. This also applies to closed generic registrations generated from open generic registrations, so a decorator is skipped for each closed service type whose type arguments do not satisfy its constraints.
 
+An open generic decorator's type arguments are found by matching the service type as the decorator implements it against the decorated service type, so type parameter names and order MAY differ from the service type's. Constraints are closed with these type arguments before they are checked, including constraints that refer to other type parameters. A decorator is skipped for a service type it cannot implement.
+
+| Decorator | Service type | Closed decorator |
+| :--- | :--- | :--- |
+| `Decorator<TResponse, TRequest> : IHandler<TRequest, TResponse>` | `IHandler<Req, Res>` | `Decorator<Res, Req>` |
+| `TextDecorator<TRequest> : IHandler<TRequest, string>` | `IHandler<Req, int>` | none |
+| `Decorator<TRequest, TResponse> : IHandler<TRequest, TResponse> where TRequest : IRequest<TResponse>` | `IHandler<Req, Other>`, `Req : IRequest<Res>` | none |
+| `Decorator<TRequest, TResponse> : IHandler<TRequest, TResponse> where TRequest : TResponse` | `IHandler<Req, IRequest>`, `Req : IRequest` | `Decorator<Req, IRequest>` |
+
 ```csharp
 #region Define:
 public interface IMyService;

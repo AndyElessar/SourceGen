@@ -77,8 +77,11 @@ internal static partial class TransformExtensions
             ImmutableEquatableArray<TypeData>? allBaseClasses = null;
             if(extractHierarchy)
             {
-                allInterfaces = typeSymbol.GetAllInterfaces();
-                allBaseClasses = typeSymbol.GetAllBaseClasses();
+                // The hierarchy of an unbound generic type such as typeof(Decorator<,>) has no type arguments to match,
+                // while its definition's hierarchy is written with its type parameters
+                var hierarchySource = typeSymbol.IsUnboundGenericType ? typeSymbol.OriginalDefinition : typeSymbol;
+                allInterfaces = hierarchySource.GetAllInterfaces();
+                allBaseClasses = hierarchySource.GetAllBaseClasses();
             }
 
             // Error types (e.g., types from other source generators not yet resolved)
