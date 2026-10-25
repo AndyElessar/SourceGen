@@ -17,6 +17,8 @@ To run an actual release (set version, tag, push, monitor), use the `sourcegen-r
 | `ioc.publish.yml`, `ioc.cli.publish.yml` | Publish | tags `ioc-v*`, `ioc-cli-v*` |
 | `docs.yml` | Docs site (GitHub Pages) | push to `main` + `paths: docs/**`, `workflow_dispatch` |
 | `ioc.benchmark.nativeaot.yml` | Native AOT benchmark | tags `ioc-v*`, `workflow_dispatch` |
+| `ioc.benchmark.generator.yml` | Generator benchmark: compares head with the committed `benchmarks/baseline.json` from `main`; fails on >5% allocation regression unless the PR updates the baseline | `pull_request` + push to `main` with `paths` filters, `workflow_dispatch` |
+| `ioc.benchmark.generator.comment.yml` | Posts the generator benchmark report as a pull request comment | `workflow_run` of the generator benchmark |
 
 Read the existing workflow (and a sibling of the same type) before editing; mirror its structure.
 
@@ -44,6 +46,7 @@ Read the existing workflow (and a sibling of the same type) before editing; mirr
 
 - Use NuGet [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) (OIDC) only — never long-lived API keys. `NUGET_USER` is the nuget.org profile name, not a key.
 - Never remove the tag-based publish gate, `id-token: write`, `NuGet/login@v1`, or `environment: nuget-publish` from publish jobs.
+- Never use `pull_request_target`. Pull request feedback that needs a write token goes through a separate `workflow_run` workflow that only reads artifacts from the pull request run as data, validates them, and requires the pull request head SHA and repository to match the triggering run.
 
 ## Changes That Need User Confirmation
 
