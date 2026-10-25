@@ -27,6 +27,7 @@ public sealed class GeneratorBenchmarkInput
 
     public CSharpCompilation Initial { get; }
     public CSharpCompilation Edited { get; }
+    public AnalyzerConfigOptionsProvider ConfigOptions => options;
 
     public GeneratorBenchmarkInput(GeneratorScenario scenario, int count)
     {

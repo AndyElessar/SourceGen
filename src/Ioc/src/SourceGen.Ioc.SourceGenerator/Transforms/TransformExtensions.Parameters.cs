@@ -27,7 +27,7 @@ internal static partial class TransformExtensions
 
                 // Check for Microsoft.Extensions.DependencyInjection.ServiceKeyAttribute
                 if(attrClass.Name == "ServiceKeyAttribute"
-                    && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                    && RoslynExtensions.IsInMicrosoftExtensionsDependencyInjection(attrClass))
                 {
                     hasServiceKeyAttribute = true;
                     continue;
@@ -36,7 +36,7 @@ internal static partial class TransformExtensions
                 // Check for Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute (higher priority for key)
                 // Note: [FromKeyedServices] is handled by MS.DI automatically, so we don't set hasInjectAttribute
                 if(attrClass.Name == "FromKeyedServicesAttribute"
-                    && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                    && RoslynExtensions.IsInMicrosoftExtensionsDependencyInjection(attrClass))
                 {
                     hasFromKeyedServicesAttribute = true;
                     // The key is the first constructor argument

@@ -10,6 +10,21 @@ internal static partial class RoslynExtensions
         => method.ReturnType is INamedTypeSymbol { Arity: 0, Name: "Task" } named
             && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
 
+    /// <summary>
+    /// Returns <see langword="true"/> when the symbol is declared directly in
+    /// <c>Microsoft.Extensions.DependencyInjection</c>, without allocating a display string.
+    /// </summary>
+    internal static bool IsInMicrosoftExtensionsDependencyInjection(ISymbol symbol)
+        => symbol.ContainingNamespace is
+        {
+            Name: "DependencyInjection",
+            ContainingNamespace:
+            {
+                Name: "Extensions",
+                ContainingNamespace: { Name: "Microsoft", ContainingNamespace.IsGlobalNamespace: true }
+            }
+        };
+
     extension<T>(IEnumerable<T> source)
     {
         public IEnumerable<(int Index, T Item)> Index()

@@ -7,48 +7,35 @@ public sealed partial class RegisterAnalyzer
 {
     private static void AnalyzeDependencies(
         Action<Diagnostic> reportDiagnostic,
-        AnalyzerContext analyzerContext,
+        DependencyGraph graph,
         ServiceInfo serviceInfo,
         HashSet<INamedTypeSymbol> visited,
         Stack<INamedTypeSymbol> pathStack,
         CancellationToken cancellationToken)
     {
-        // Use cached constructor from ServiceInfo
-        var constructor = serviceInfo.Constructor;
-        if (constructor is null)
-            return;
-
         var targetType = serviceInfo.Type;
         var currentLifetime = serviceInfo.Lifetime;
         var location = serviceInfo.Location;
 
-        foreach (var parameter in constructor.Parameters)
+        foreach (var dependencyInfo in graph.GetDependencies(targetType))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (parameter.Type is not INamedTypeSymbol parameterType)
-                continue;
-
-            // Find the dependency's implementation type and lifetime using index.
-            // If direct lookup fails, try unwrapping Func<...>/Lazy<T> wrapper types.
-            var dependencyInfo = FindRegisteredDependency(analyzerContext, parameterType)
-                ?? (TryUnwrapServiceType(parameterType, out var unwrappedType)
-                    ? FindRegisteredDependency(analyzerContext, unwrappedType)
-                    : null);
-            if (dependencyInfo is null)
-                continue;
-
-            // SGIOC002: Check for circular dependency (reuse visited set and path stack)
-            visited.Clear();
-            pathStack.Clear();
-            if (DetectCircularDependency(analyzerContext, targetType, dependencyInfo.Type, visited, pathStack))
+            // SGIOC002: A cycle through this edge exists only when both ends share a strongly connected component.
+            // The DFS still runs for those edges so the reported cycle path is unchanged.
+            if (graph.IsInSameComponent(targetType, dependencyInfo.Type, cancellationToken))
             {
-                // Build cycle string from stack (already in correct order: current -> ... -> start)
-                var cycleString = BuildCycleString(pathStack);
-                reportDiagnostic(Diagnostic.Create(
-                    CircularDependency,
-                    location,
-                    cycleString));
+                visited.Clear();
+                pathStack.Clear();
+                if (DetectCircularDependency(graph, targetType, dependencyInfo.Type, visited, pathStack))
+                {
+                    // Build cycle string from stack (already in correct order: current -> ... -> start)
+                    var cycleString = BuildCycleString(pathStack);
+                    reportDiagnostic(Diagnostic.Create(
+                        CircularDependency,
+                        location,
+                        cycleString));
+                }
             }
 
             // SGIOC003-005: Check for lifetime conflict
@@ -60,6 +47,118 @@ public sealed partial class RegisterAnalyzer
                     location,
                     targetType.Name,
                     dependencyInfo.Type.Name));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registered service dependency graph with cached constructor dependencies and lazily computed
+    /// strongly connected components (Tarjan), so edges that cannot form a cycle skip the cycle DFS.
+    /// </summary>
+    private sealed class DependencyGraph(AnalyzerContext analyzerContext)
+    {
+        private readonly Dictionary<INamedTypeSymbol, ImmutableArray<ServiceInfo>> _dependencies = new(SymbolEqualityComparer.Default);
+        private Dictionary<INamedTypeSymbol, int>? _componentIds;
+
+        /// <summary>
+        /// Gets the registered dependencies of a registered service's constructor, in parameter order.
+        /// Func&lt;...&gt;/Lazy&lt;T&gt; parameters are unwrapped when the direct lookup fails.
+        /// </summary>
+        public ImmutableArray<ServiceInfo> GetDependencies(INamedTypeSymbol type)
+        {
+            if (_dependencies.TryGetValue(type, out var cached))
+                return cached;
+
+            var constructor = analyzerContext.RegisteredServices.TryGetValue(type, out var info) ? info.Constructor : null;
+            if (constructor is null)
+            {
+                _dependencies[type] = [];
+                return [];
+            }
+
+            var builder = ImmutableArray.CreateBuilder<ServiceInfo>(constructor.Parameters.Length);
+            foreach (var parameter in constructor.Parameters)
+            {
+                if (parameter.Type is not INamedTypeSymbol parameterType)
+                    continue;
+
+                var dependency = FindRegisteredDependency(analyzerContext, parameterType)
+                    ?? (TryUnwrapServiceType(parameterType, out var unwrappedType)
+                        ? FindRegisteredDependency(analyzerContext, unwrappedType)
+                        : null);
+                if (dependency is not null)
+                    builder.Add(dependency);
+            }
+
+            var result = builder.ToImmutable();
+            _dependencies[type] = result;
+            return result;
+        }
+
+        public bool IsInSameComponent(INamedTypeSymbol from, INamedTypeSymbol to, CancellationToken cancellationToken)
+        {
+            var componentIds = _componentIds ??= ComputeComponentIds(cancellationToken);
+            return componentIds.TryGetValue(from, out var fromId)
+                && componentIds.TryGetValue(to, out var toId)
+                && fromId == toId;
+        }
+
+        private Dictionary<INamedTypeSymbol, int> ComputeComponentIds(CancellationToken cancellationToken)
+        {
+            var comparer = SymbolEqualityComparer.Default;
+            var indices = new Dictionary<INamedTypeSymbol, int>(comparer);
+            var lowLinks = new Dictionary<INamedTypeSymbol, int>(comparer);
+            var onStack = new HashSet<INamedTypeSymbol>(comparer);
+            var stack = new Stack<INamedTypeSymbol>();
+            var componentIds = new Dictionary<INamedTypeSymbol, int>(comparer);
+            var nextIndex = 0;
+            var nextComponentId = 0;
+
+            foreach (var type in analyzerContext.RegisteredServices.Keys)
+            {
+                if (!indices.ContainsKey(type))
+                    StrongConnect(type);
+            }
+
+            return componentIds;
+
+            void StrongConnect(INamedTypeSymbol node)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                indices[node] = nextIndex;
+                lowLinks[node] = nextIndex;
+                nextIndex++;
+                stack.Push(node);
+                onStack.Add(node);
+
+                foreach (var dependency in GetDependencies(node))
+                {
+                    var next = dependency.Type;
+                    if (!indices.TryGetValue(next, out var nextNodeIndex))
+                    {
+                        StrongConnect(next);
+                        lowLinks[node] = Math.Min(lowLinks[node], lowLinks[next]);
+                    }
+                    else if (onStack.Contains(next))
+                    {
+                        lowLinks[node] = Math.Min(lowLinks[node], nextNodeIndex);
+                    }
+                }
+
+                if (lowLinks[node] != indices[node])
+                    return;
+
+                INamedTypeSymbol member;
+                do
+                {
+                    member = stack.Pop();
+                    onStack.Remove(member);
+                    componentIds[member] = nextComponentId;
+                }
+                while (!comparer.Equals(member, node));
+
+                nextComponentId++;
             }
         }
     }
@@ -122,7 +221,7 @@ public sealed partial class RegisterAnalyzer
     /// Returns true if a cycle is detected, with the path stored in pathStack.
     /// </summary>
     private static bool DetectCircularDependency(
-        AnalyzerContext analyzerContext,
+        DependencyGraph graph,
         INamedTypeSymbol startType,
         INamedTypeSymbol currentType,
         HashSet<INamedTypeSymbol> visited,
@@ -137,28 +236,9 @@ public sealed partial class RegisterAnalyzer
         if (!visited.Add(currentType))
             return false;
 
-        // Check if current type is registered
-        if (!analyzerContext.RegisteredServices.ContainsKey(currentType))
-            return false;
-
-        var constructor = currentType.SpecifiedOrPrimaryOrMostParametersConstructor;
-        if (constructor is null)
-            return false;
-
-        foreach (var parameter in constructor.Parameters)
+        foreach (var dependency in graph.GetDependencies(currentType))
         {
-            if (parameter.Type is not INamedTypeSymbol parameterType)
-                continue;
-
-            // Unwrap Func<...>/Lazy<T> wrapper types for circular dependency detection
-            var dependency = FindRegisteredDependency(analyzerContext, parameterType)
-                ?? (TryUnwrapServiceType(parameterType, out var unwrappedType)
-                    ? FindRegisteredDependency(analyzerContext, unwrappedType)
-                    : null);
-            if (dependency is null)
-                continue;
-
-            if (DetectCircularDependency(analyzerContext, startType, dependency.Type, visited, pathStack))
+            if (DetectCircularDependency(graph, startType, dependency.Type, visited, pathStack))
             {
                 pathStack.Push(currentType);
                 return true;

@@ -153,7 +153,7 @@ internal static partial class TransformExtensions
                         continue;
 
                     if(attrClass.Name == "ServiceKeyAttribute"
-                        && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                        && RoslynExtensions.IsInMicrosoftExtensionsDependencyInjection(attrClass))
                     {
                         hasServiceKeyAttribute = true;
                         hasKey = true;
