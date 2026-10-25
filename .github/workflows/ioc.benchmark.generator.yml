@@ -116,7 +116,9 @@ jobs:
 
       # The base may pin a different SDK; the base worktree's global.json selects it.
       - name: Setup .NET for base
+        id: setup-base
         if: steps.base.outputs.dir != ''
+        continue-on-error: true
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: ${{ steps.base.outputs.dir }}/global.json
@@ -124,15 +126,18 @@ jobs:
       - name: Build head
         run: dotnet build "$BENCHMARK_PROJECT" -c Release
 
+      # A base that cannot build, for example when this change fixes its build, leaves the head without a baseline.
       - name: Build base
-        if: steps.base.outputs.dir != ''
+        id: build-base
+        if: steps.base.outputs.dir != '' && steps.setup-base.outcome == 'success'
+        continue-on-error: true
         working-directory: ${{ steps.base.outputs.dir }}
         run: dotnet build "$BENCHMARK_PROJECT" -c Release
 
       - name: Run benchmarks
         shell: bash
         env:
-          BASE_DIR: ${{ steps.base.outputs.dir }}
+          BASE_DIR: ${{ steps.build-base.outcome == 'success' && steps.base.outputs.dir || '' }}
         run: |
           set -euo pipefail
 
@@ -147,8 +152,12 @@ jobs:
           }
 
           # A failed base run leaves the head without a baseline instead of failing the job.
-          if [[ -n "$BASE_DIR" ]]; then
-            run "$BASE_DIR" "$results/base" || echo "::warning title=Base benchmark failed::The base run failed, so head results are reported without a baseline."
+          # Its partial reports move out of the compared directory but stay in the uploaded artifact.
+          if [[ -n "$BASE_DIR" ]] && ! run "$BASE_DIR" "$results/base"; then
+            echo "::warning title=Base benchmark failed::The base run failed, so head results are reported without a baseline."
+            if [[ -d "$results/base/results" ]]; then
+              mv "$results/base/results" "$results/base/failed-results"
+            fi
           fi
           run "$GITHUB_WORKSPACE" "$results/head"
 
