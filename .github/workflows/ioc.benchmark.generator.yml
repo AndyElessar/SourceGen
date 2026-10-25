@@ -1,0 +1,258 @@
+name: SourceGen.Ioc Generator Benchmark
+
+on:
+  push:
+    branches: [main]
+    # Markdown never affects the benchmarks; the exclusion is last so no later pattern re-includes it.
+    paths:
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/**'
+      - 'src/Ioc/test/Directory.Build.props'
+      - 'src/Directory.Build.props'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - 'benchmarks/baseline.json'
+      - '.github/workflows/ioc.benchmark.generator.yml'
+      - '.github/workflows/ioc.benchmark.generator.comment.yml'
+      - '.github/scripts/**'
+      - '!**/*.md'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/**'
+      - 'src/Ioc/test/Directory.Build.props'
+      - 'src/Directory.Build.props'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - 'benchmarks/baseline.json'
+      - '.github/workflows/ioc.benchmark.generator.yml'
+      - '.github/workflows/ioc.benchmark.generator.comment.yml'
+      - '.github/scripts/**'
+      - '!**/*.md'
+  workflow_dispatch:
+
+# Newer commits replace older runs of the same pull request; every other run is kept.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  BENCHMARK_PROJECT: src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/SourceGen.Ioc.GeneratorBenchmark.csproj
+  BASELINE_PATH: benchmarks/baseline.json
+  REGRESSION_THRESHOLD_PERCENT: '5'
+
+jobs:
+  generator-benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve baseline
+        id: baseline
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          short() { git rev-parse --short "$1"; }
+
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            # The merge commit's first parent is the target branch, so the pull request cannot change its baseline.
+            source=HEAD^1
+            head_label="$(short HEAD^2) merged into $BASE_REF"
+            baseline_label="$BASE_REF@$(short HEAD^1)"
+          else
+            source=HEAD
+            head_label="$REF_NAME@$(short HEAD)"
+            baseline_label="$head_label"
+          fi
+
+          dir="$RUNNER_TEMP/generator-benchmark-baseline"
+          mkdir -p "$dir"
+          baseline=""
+          if git cat-file -e "$source:$BASELINE_PATH" 2>/dev/null; then
+            baseline="$dir/baseline.json"
+            git show "$source:$BASELINE_PATH" > "$baseline"
+          fi
+
+          # A pull request accepts allocation changes by committing the baseline that it measured.
+          accepted=""
+          if [[ "$EVENT_NAME" == pull_request ]] && ! git diff --quiet HEAD^1 HEAD -- "$BASELINE_PATH" \
+            && git cat-file -e "HEAD:$BASELINE_PATH" 2>/dev/null; then
+            accepted="$dir/accepted.json"
+            git show "HEAD:$BASELINE_PATH" > "$accepted"
+          fi
+
+          if [[ -n "$baseline" ]]; then
+            echo "Head $head_label is compared with $BASELINE_PATH from $baseline_label${accepted:+, updated by this pull request}."
+          else
+            echo "Head $head_label has no baseline because $baseline_label has no $BASELINE_PATH${accepted:+; this pull request adds it}."
+          fi
+          {
+            echo "baseline=$baseline"
+            echo "accepted=$accepted"
+            echo "baseline-label=$baseline_label"
+            echo "head-label=$head_label"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release
+
+      - name: Run benchmarks
+        run: >-
+          dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build --
+          --filter '*Count: 500*'
+          --job short --warmupCount 3 --iterationCount 8 --iterationTime 300
+          --envVars DOTNET_TieredCompilation:0
+          --exporters json
+          --artifacts "$RUNNER_TEMP/generator-benchmark"
+
+      - name: Export baseline
+        env:
+          HEAD_LABEL: ${{ steps.baseline.outputs.head-label }}
+        run: >-
+          dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build --
+          --export-baseline "$RUNNER_TEMP/generator-benchmark/results" "$RUNNER_TEMP/generator-benchmark-export/baseline.json" "$HEAD_LABEL"
+
+      # Uploaded unzipped so it can be committed as benchmarks/baseline.json directly.
+      - name: Upload baseline
+        id: upload-baseline
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/generator-benchmark-export/baseline.json
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+      # Runs even when the export rejects incomplete results, so the report shows which benchmarks failed.
+      - name: Compare with baseline
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          BASELINE: ${{ steps.baseline.outputs.baseline }}
+          ACCEPTED: ${{ steps.baseline.outputs.accepted }}
+          BASELINE_LABEL: ${{ steps.baseline.outputs.baseline-label }}
+          HEAD_LABEL: ${{ steps.baseline.outputs.head-label }}
+          BASELINE_URL: ${{ steps.upload-baseline.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+
+          results="$RUNNER_TEMP/generator-benchmark"
+          # A path that does not exist compares the head without a baseline.
+          args=(--compare "${BASELINE:-$results/no-baseline}" "$results/results" "$results/table.md" "$REGRESSION_THRESHOLD_PERCENT")
+          if [[ -n "$ACCEPTED" ]]; then
+            args+=("$ACCEPTED")
+          fi
+
+          status=0
+          dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build -- "${args[@]}" || status=$?
+
+          {
+            echo "## SourceGen.Ioc generator benchmark"
+            echo
+            if [[ -n "$BASELINE" ]]; then
+              echo "Head \`$HEAD_LABEL\` is compared with \`$BASELINE_PATH\` from \`$BASELINE_LABEL\`. The baseline was measured by an earlier run, possibly on a different machine, so time changes are indicative only."
+            else
+              echo "Head \`$HEAD_LABEL\` is reported without a baseline because \`$BASELINE_LABEL\` has no \`$BASELINE_PATH\`."
+            fi
+            if [[ -n "$ACCEPTED" ]]; then
+              echo
+              echo "This pull request updates \`$BASELINE_PATH\`; review its diff together with this report."
+            fi
+            echo
+            if [[ -f "$results/table.md" ]]; then
+              cat "$results/table.md"
+            else
+              echo "The comparison failed. See the workflow log for details."
+            fi
+            echo
+            if [[ -n "$BASELINE_URL" ]]; then
+              echo "To accept these results as the new baseline, commit [\`baseline.json\`]($BASELINE_URL) from this run as \`$BASELINE_PATH\` in a pull request."
+            else
+              echo "This run did not export \`baseline.json\` because some results failed or lack allocation data."
+            fi
+          } > "$results/comparison.md"
+
+          cat "$results/comparison.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Publish BenchmarkDotNet report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          for report in "$RUNNER_TEMP/generator-benchmark/results"/*-report-github.md; do
+            {
+              echo
+              echo "<details><summary>BenchmarkDotNet report</summary>"
+              echo
+              cat "$report"
+              echo
+              echo "</details>"
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload benchmark results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ioc-generator-benchmark-${{ github.run_id }}
+          path: ${{ runner.temp }}/generator-benchmark
+          if-no-files-found: warn
+          retention-days: 7
+          overwrite: true
+
+      # Pull request runs only have a read-only token; ioc.benchmark.generator.comment.yml posts this report.
+      - name: Prepare pull request comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          comment="$RUNNER_TEMP/pr-comment"
+          mkdir -p "$comment"
+          echo "$PR_NUMBER" > "$comment/pr-number.txt"
+          if [[ -f "$RUNNER_TEMP/generator-benchmark/comparison.md" ]]; then
+            cp "$RUNNER_TEMP/generator-benchmark/comparison.md" "$comment/comparison.md"
+          else
+            printf '## SourceGen.Ioc generator benchmark\n\nThe benchmark did not produce a comparison. See the workflow run for details.\n' > "$comment/comparison.md"
+          fi
+
+      - name: Upload pull request comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ioc-generator-benchmark-comment
+          path: ${{ runner.temp }}/pr-comment
+          retention-days: 7
+          overwrite: true

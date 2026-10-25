@@ -42,6 +42,14 @@ The container branch splits on `ContainerModel.ExplicitOnly`:
 - **ExplicitOnly** uses `GroupExplicitOnlyRegistrations` and is independent of `serviceRegistrations` (its own caching branch).
 - **Normal** combines with `serviceRegistrations`, then `Select(FilterRegistrationsForContainer)` acts as a caching barrier so unrelated `serviceRegistrations` changes do not invalidate downstream nodes.
 
+### Incremental performance invariants
+
+- Attribute and invocation transforms materialize their results before returning, so cached iterator state does not retain Roslyn contexts.
+- Constructor metadata is extracted for implementations and decorators, not recursively for their parameter types. Parameter models retain generic arguments and the hierarchy needed for collection discovery; resolution uses the target service's own registration.
+- Invocation and explicit discovery dependencies are deduplicated by closed type name before global generic resolution. First occurrence wins, preserving discovery order and metadata.
+- Disabling the Container feature bypasses container grouping for both normal and ExplicitOnly containers.
+- Wrapper matching indexes requests by return/value type while preserving registration order, key compatibility and duplicate handling.
+
 ---
 
 ## Source layout

@@ -1,0 +1,91 @@
+{
+  "source": "088a46f merged into main",
+  "host": {
+    "processor": "AMD EPYC 9V45",
+    "os": "Linux Ubuntu 24.04.5 LTS (Noble Numbat)",
+    "runtime": ".NET 10.0.13 (10.0.13, 10.0.1326.50504)",
+    "benchmarkDotNet": "0.15.8"
+  },
+  "benchmarks": [
+    {
+      "method": "Cold",
+      "parameters": "Count=500&Scenario=DependencyChain",
+      "meanNs": 12032428.54,
+      "lowerNs": 11850218.55,
+      "upperNs": 12214638.52,
+      "allocatedBytes": 5407523
+    },
+    {
+      "method": "Edit",
+      "parameters": "Count=500&Scenario=DependencyChain",
+      "meanNs": 1638228.96,
+      "lowerNs": 1616620.7,
+      "upperNs": 1659837.21,
+      "allocatedBytes": 841702
+    },
+    {
+      "method": "Cold",
+      "parameters": "Count=500&Scenario=DisabledContainer",
+      "meanNs": 119253117.69,
+      "lowerNs": 110016909.84,
+      "upperNs": 128489325.53,
+      "allocatedBytes": 40092642
+    },
+    {
+      "method": "Edit",
+      "parameters": "Count=500&Scenario=DisabledContainer",
+      "meanNs": 47381543.4,
+      "lowerNs": 46017545.03,
+      "upperNs": 48745541.76,
+      "allocatedBytes": 15634165
+    },
+    {
+      "method": "Cold",
+      "parameters": "Count=500&Scenario=DuplicateInvocation",
+      "meanNs": 8342025.18,
+      "lowerNs": 8084483.09,
+      "upperNs": 8599567.26,
+      "allocatedBytes": 4388336
+    },
+    {
+      "method": "Edit",
+      "parameters": "Count=500&Scenario=DuplicateInvocation",
+      "meanNs": 1565694.36,
+      "lowerNs": 1547926.13,
+      "upperNs": 1583462.59,
+      "allocatedBytes": 734719
+    },
+    {
+      "method": "Cold",
+      "parameters": "Count=500&Scenario=RegisterFor",
+      "meanNs": 9101720.78,
+      "lowerNs": 8932730.85,
+      "upperNs": 9270710.71,
+      "allocatedBytes": 3906635
+    },
+    {
+      "method": "Edit",
+      "parameters": "Count=500&Scenario=RegisterFor",
+      "meanNs": 938871.59,
+      "lowerNs": 930556.72,
+      "upperNs": 947186.47,
+      "allocatedBytes": 539268
+    },
+    {
+      "method": "Cold",
+      "parameters": "Count=500&Scenario=Wrappers",
+      "meanNs": 120945849.14,
+      "lowerNs": 117139345.57,
+      "upperNs": 124752352.72,
+      "allocatedBytes": 59974504
+    },
+    {
+      "method": "Edit",
+      "parameters": "Count=500&Scenario=Wrappers",
+      "meanNs": 48114143.81,
+      "lowerNs": 45710010.74,
+      "upperNs": 50518276.88,
+      "allocatedBytes": 15634581
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <ProjectReference Include="..\..\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
+    <ProjectReference Include="..\..\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" />
+  </ItemGroup>
+</Project>

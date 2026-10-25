@@ -5,36 +5,38 @@ on:
 
   push:
     branches: [main]
+    # Markdown never changes build or test results (AnalyzerReleases.*.md only affects warnings, PACKAGE.md is pack-only);
+    # the exclusion is last so no later pattern re-includes it.
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/Spec/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/*.spec.md'
       - 'src/Ioc/test/SourceGen.Ioc.Test/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/GeneratorBenchmarkInput.cs'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
       - '.github/workflows/ioc.ci.yml'
+      - '!**/*.md'
   pull_request:
     branches: [main]
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
       - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/Spec/**'
-      - '!src/Ioc/src/SourceGen.Ioc.SourceGenerator/**/*.spec.md'
       - 'src/Ioc/test/SourceGen.Ioc.Test/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestAot/**'
       - 'src/Ioc/test/SourceGen.Ioc.TestCase/**'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/GeneratorBenchmarkInput.cs'
       - 'src/Ioc/test/Directory.Build.props'
       - 'src/Directory.Build.props'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
       - '.github/workflows/ioc.ci.yml'
+      - '!**/*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

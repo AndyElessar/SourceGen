@@ -5,7 +5,7 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// Generic and wrapper-specific data are represented by a closed record hierarchy.
 /// </summary>
 /// <param name="Name">The fully qualified name of the type.</param>
-/// <param name="ConstructorParameters">Constructor parameters for decorator types. Only populated for decorators.</param>
+/// <param name="ConstructorParameters">Constructor parameters for implementations and decorators, not recursively for their dependencies.</param>
 /// <param name="HasInjectConstructor">Whether the type's constructor was selected by [Inject] attribute (requires factory method for proper instantiation).</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection. Only populated for decorators when extractInjectionMembers is true.</param>
 /// <param name="AllInterfaces">All interfaces implemented by the type. Only populated when extractHierarchy is true.</param>

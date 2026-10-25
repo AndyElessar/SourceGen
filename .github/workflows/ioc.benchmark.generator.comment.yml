@@ -1,0 +1,60 @@
+name: SourceGen.Ioc Generator Benchmark Comment
+
+on:
+  workflow_run:
+    workflows: [SourceGen.Ioc Generator Benchmark]
+    types: [completed]
+
+# Serializes reports for the same pull request branch so the sticky comment is updated instead of duplicated.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    timeout-minutes: 10
+
+    steps:
+      # The artifact is produced by pull request code, so it is only read as data and never executed.
+      - name: Download benchmark report
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: ioc-generator-benchmark-comment
+          path: ${{ runner.temp }}/pr-comment
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Checkout trusted script
+        if: steps.download.outcome == 'success'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        if: steps.download.outcome == 'success'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          global-json-file: global.json
+
+      - name: Post benchmark report
+        if: steps.download.outcome == 'success'
+        run: dotnet run --file .github/scripts/post-generator-benchmark-comment.cs
+        env:
+          COMMENT_DIR: ${{ runner.temp }}/pr-comment
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
