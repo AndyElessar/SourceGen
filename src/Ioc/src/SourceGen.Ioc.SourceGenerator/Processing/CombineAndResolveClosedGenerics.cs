@@ -1035,8 +1035,7 @@ partial class IocSourceGenerator
         }
 
         // Filter decorators based on type constraints
-        var interfaceNameSet = BuildInterfaceNameSet(serviceTypeParams);
-        var filteredDecorators = FilterDecoratorsCore(decorators, serviceTypeParams, interfaceNameSet);
+        var filteredDecorators = FilterDecoratorsCore(decorators, serviceTypeParams);
         if(filteredDecorators.Length == 0)
         {
             return [];
