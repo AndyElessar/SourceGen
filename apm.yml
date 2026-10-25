@@ -3,11 +3,14 @@ version: 1.0.0
 description: Agents dependency management for SourceGen
 author: Andy Elesser
 targets:
-- copilot
+  - agent-skills
+  - copilot
+  - claude
 dependencies:
   apm:
     - git: https://github.com/thomhurst/TUnit
       path: skills/tunit
+    - dotnet/skills/plugins/dotnet-msbuild
   mcp: []
 includes: auto
 scripts: {}

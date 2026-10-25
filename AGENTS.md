@@ -28,8 +28,10 @@ Every task that modifies code **MUST** complete these steps before finishing:
 
 ## Agent Customization
 
-- Instructions in `.github/instructions/` apply automatically by file path.
-- Skills in `.agents/skills/` load on demand.
+- Sources live in `.apm/` (`instructions/`, `skills/`); external dependencies are declared in `apm.yml`. Edit sources there, never the deployed copies, then run `apm install` to redeploy.
+- Instructions apply automatically by file path: `.github/instructions/` (Copilot) and `.claude/rules/` (Claude).
+- Skills load on demand: `.agents/skills/` and `.claude/skills/`.
+- Agents: `.github/agents/` (Copilot) and `.claude/agents/` (Claude).
 
 ## Hierarchy
 
