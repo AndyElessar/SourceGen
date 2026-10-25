@@ -111,6 +111,18 @@ services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>
 #endregion
 ```
 
+### Type Argument Mapping
+
+The implementation's type arguments are found by matching the service type as the implementation declares it (one of its interfaces, one of its base classes, or itself) against the closed service type, at every nesting level. Type parameter names and order MAY differ from the service type's definition. A closed generic registration MUST NOT be generated when the closed service type does not have the declared shape, when one type parameter would stand for two different types, or when a type parameter of the implementation is not determined.
+
+| Implementation | Closed service type | Closed implementation |
+| :--- | :--- | :--- |
+| `Handler<TB, TA> : IHandler<TA, TB>` | `IHandler<Req, Res>` | `Handler<Res, Req>` |
+| `TextHandler<TRequest> : IHandler<TRequest, string>` | `IHandler<Req, string>` | `TextHandler<Req>` |
+| `TextHandler<TRequest> : IHandler<TRequest, string>` | `IHandler<Req, int>` | none |
+| `ListHandler<TItem, TKey> : IHandler<List<TItem>, Dictionary<TKey, TItem>>` | `IHandler<List<Req>, Dictionary<string, Req>>` | `ListHandler<Req, string>` |
+| `ListHandler<T> : IHandler<T, List<T>>` | `IHandler<Req, List<Res>>` | none |
+
 ## Feature 2: Explicit Closed Generic Discovery
 
 When `IocDiscoverAttribute` (or `IocDiscoverAttribute<T>`) is exists, collect `IocDiscoverAttribute.ClosedGenericType` (or `T`) for generate factory code for open generic registrations.

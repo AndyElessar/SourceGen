@@ -239,6 +239,73 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("Renamed", "Handler<TA, TB> : IHandler<TA, TB>", "IHandler<Req, Res> handler")]
+    [Arguments("SwappedRenamed", "Handler<TB, TA> : IHandler<TA, TB>", "IHandler<Req, Res> handler")]
+    [Arguments("PartiallyClosed", "TextHandler<TRequest> : IHandler<TRequest, string>", "IHandler<Req, string> text, IHandler<Req, int> number")]
+    [Arguments("NestedTypeArguments", "ListHandler<TItem, TKey> : IHandler<List<TItem>, Dictionary<TKey, TItem>> where TKey : notnull", "IHandler<List<Req>, Dictionary<string, Req>> handler")]
+    [Arguments("RepeatedTypeParameter", "ListHandler<T> : IHandler<T, List<T>>", "IHandler<Req, List<Req>> matching, IHandler<Req, List<Res>> mismatched")]
+    public async Task ClosedGenericDependency_ImplementationTypeArgumentsDifferFromServiceType_ClosesImplementationFromImplementedServiceType(
+        string name, string declaration, string parameters)
+    {
+        // Only closed service types the implementation can produce get registrations: not IHandler<Req, int> for
+        // TextHandler<TRequest>, and not IHandler<Req, List<Res>> for ListHandler<T>.
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            namespace TestNamespace;
+
+            public interface IHandler<TRequest, TResponse>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class {{declaration}};
+
+            public class Req { }
+
+            public class Res { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer({{parameters}});
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseTextForParameters(name);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_GenericBaseClassServiceType_ClosesImplementationFromBaseClass()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public abstract class HandlerBase<TRequest, TResponse>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(HandlerBase<,>)])]
+            internal sealed class Handler<TB, TA> : HandlerBase<TA, TB>;
+
+            public class Req { }
+
+            public class Res { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(HandlerBase<Req, Res> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_AlreadyRegistered_DoesNotDuplicate()
     {
         const string source = """
