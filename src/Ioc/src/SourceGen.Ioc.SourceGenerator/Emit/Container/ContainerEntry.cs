@@ -189,22 +189,8 @@ partial class IocSourceGenerator
         private string BuildFactoryCallExpression()
         {
             var factory = Registration.Factory!;
-
-            var args = new List<string>();
-            if(factory.HasServiceProvider)
-            {
-                args.Add("this");
-            }
-
-            if(factory.HasKey && Registration.Key is not null)
-            {
-                args.Add(Registration.Key);
-            }
-
-            foreach(var parameter in ConstructorParameters)
-            {
-                args.Add(parameter.Dependency.FormatExpression(parameter.IsOptional));
-            }
+            var args = factory.OrderArguments("this", Registration.Key,
+                [.. ConstructorParameters.Select(static parameter => parameter.Dependency.FormatExpression(parameter.IsOptional))]);
 
             var genericTypeArgs = BuildGenericFactoryTypeArgs(factory, Registration.ServiceType);
             var factoryCallPath = genericTypeArgs is not null ? $"{factory.Path}<{genericTypeArgs}>" : factory.Path;
@@ -604,22 +590,8 @@ partial class IocSourceGenerator
                 if(Registration.Factory is not null)
                 {
                     var factory = Registration.Factory;
-                    var args = new List<string>();
-
-                    if(factory.HasServiceProvider)
-                    {
-                        args.Add("this");
-                    }
-
-                    if(factory.HasKey && Registration.Key is not null)
-                    {
-                        args.Add(Registration.Key);
-                    }
-
-                    foreach(var parameter in ConstructorParameters)
-                    {
-                        args.Add(parameter.Dependency.FormatExpression(parameter.IsOptional));
-                    }
+                    var args = factory.OrderArguments("this", Registration.Key,
+                        [.. ConstructorParameters.Select(static parameter => parameter.Dependency.FormatExpression(parameter.IsOptional))]);
 
                     var genericTypeArgs = BuildGenericFactoryTypeArgs(factory, Registration.ServiceType);
                     var factoryCallPath = genericTypeArgs is not null ? $"{factory.Path}<{genericTypeArgs}>" : factory.Path;

@@ -101,14 +101,14 @@ internal static partial class TransformExtensions
                     // Fallback: get path from nameof expression
                     var nameofPath = ResolveNameofExpression(nameofArgument, semanticModel)
                                      ?? nameofArgument.ToFullString().Trim();
-                    return new FactoryMethodData(nameofPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null, AdditionalParameters: []);
+                    return new FactoryMethodData(nameofPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
                 }
 
                 // String literal - cannot determine parameters, assume full signature
                 if(argument.Expression is LiteralExpressionSyntax literal &&
                    literal.Token.Value is string literalPath)
                 {
-                    return new FactoryMethodData(literalPath, HasServiceProvider: true, HasKey: false, ReturnTypeName: null, AdditionalParameters: []);
+                    return new FactoryMethodData(literalPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
                 }
             }
 
@@ -129,8 +129,8 @@ internal static partial class TransformExtensions
         public FactoryMethodData CreateFactoryMethodData(SemanticModel? semanticModel = null)
         {
             var path = methodSymbol.FullAccessPath;
-            bool hasServiceProvider = false;
-            bool hasKey = false;
+            int serviceProviderPosition = -1;
+            int keyPosition = -1;
             List<ParameterData>? additionalParameters = null;
 
             foreach(var param in methodSymbol.Parameters)
@@ -140,7 +140,7 @@ internal static partial class TransformExtensions
                 // Check for IServiceProvider
                 if(paramTypeName is "global::System.IServiceProvider" or "System.IServiceProvider")
                 {
-                    hasServiceProvider = true;
+                    serviceProviderPosition = param.Ordinal;
                     continue;
                 }
 
@@ -156,7 +156,7 @@ internal static partial class TransformExtensions
                         && RoslynExtensions.IsInMicrosoftExtensionsDependencyInjection(attrClass))
                     {
                         hasServiceKeyAttribute = true;
-                        hasKey = true;
+                        keyPosition = param.Ordinal;
                         break;
                     }
                 }
@@ -191,8 +191,8 @@ internal static partial class TransformExtensions
 
             return new FactoryMethodData(
                 path,
-                hasServiceProvider,
-                hasKey,
+                serviceProviderPosition,
+                keyPosition,
                 returnTypeName,
                 additionalParameters?.ToImmutableEquatableArray() ?? [],
                 genericTypeMapping,
