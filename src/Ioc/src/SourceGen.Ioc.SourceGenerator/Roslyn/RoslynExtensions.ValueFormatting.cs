@@ -59,7 +59,7 @@ internal static partial class RoslynExtensions
 
             bool isFlagsEnum = enumType.GetAttributes().Any(attr =>
                 attr.AttributeClass?.Name == "FlagsAttribute" &&
-                attr.AttributeClass.ContainingNamespace.ToDisplayString() == "System");
+                IsSystemNamespace(attr.AttributeClass.ContainingNamespace));
 
             if(isFlagsEnum)
             {

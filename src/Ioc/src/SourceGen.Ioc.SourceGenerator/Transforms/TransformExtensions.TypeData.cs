@@ -227,14 +227,7 @@ internal static partial class TransformExtensions
                     constraintTypes = typeParam.ConstraintTypes
                         .Select(ct => ct is INamedTypeSymbol namedCt
                             ? namedCt.CreateBasicTypeData(depth + 1)
-                            : ct.TypeKind == TypeKind.TypeParameter
-                                ? TypeData.CreateTypeParameter(ct.FullyQualifiedName)
-                                : TypeData.CreateGeneric(
-                                    ct.FullyQualifiedName,
-                                    GetNameWithoutGeneric(ct.FullyQualifiedName),
-                                    ct.ContainsGenericParameters,
-                                    0,
-                                    false))
+                            : CreateConstraintTypeData(ct))
                         .ToImmutableEquatableArray();
                 }
 
@@ -250,6 +243,15 @@ internal static partial class TransformExtensions
             }
 
             return parameters.ToImmutableEquatableArray();
+
+            // Creates TypeData for a constraint that is not a named type (a type parameter or an array, for example).
+            static TypeData CreateConstraintTypeData(ITypeSymbol constraint)
+            {
+                var name = constraint.FullyQualifiedName;
+                return constraint.TypeKind == TypeKind.TypeParameter
+                    ? TypeData.CreateTypeParameter(name)
+                    : TypeData.CreateGeneric(name, GetNameWithoutGeneric(name), constraint.ContainsGenericParameters, 0, false);
+            }
         }
 
         /// <summary>
@@ -360,15 +362,18 @@ internal static partial class TransformExtensions
             return (TypeData.CreateTypeParameter(typeParam.Name), null);
 
             // Creates a simple TypeData for an interface type.
-            static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface) =>
-                iface.IsGenericType || iface.Arity > 0
+            static TypeData CreateInterfaceTypeData(INamedTypeSymbol iface)
+            {
+                var name = iface.FullyQualifiedName;
+                return iface.IsGenericType || iface.Arity > 0
                     ? TypeData.CreateGeneric(
-                        iface.FullyQualifiedName,
-                        GetNameWithoutGeneric(iface.FullyQualifiedName),
+                        name,
+                        GetNameWithoutGeneric(name),
                         iface.ContainsGenericParameters,
                         iface.Arity,
                         false)
-                    : TypeData.CreateSimple(iface.FullyQualifiedName);
+                    : TypeData.CreateSimple(name);
+            }
         }
     }
 

@@ -39,7 +39,7 @@ internal static partial class RoslynExtensions
                 }
 
                 // Check for common System types by name
-                if(typeSymbol.ContainingNamespace?.ToDisplayString() is "System")
+                if(IsSystemNamespace(typeSymbol.ContainingNamespace))
                 {
                     return typeSymbol.Name is
                         "Guid" or
@@ -110,7 +110,8 @@ internal static partial class RoslynExtensions
 
             // Func<T>, Func<T1, TResult>, ... (last type argument is return type)
             if(namedType.Arity >= 1
-                && IsType(namedType, "System", "Func"))
+                && namedType.Name == "Func"
+                && IsSystemNamespace(namedType.ContainingNamespace))
             {
                 wrapperInfo = new(WrapperKind.Func, namedType.TypeArguments[^1] as INamedTypeSymbol);
                 return true;
@@ -118,7 +119,7 @@ internal static partial class RoslynExtensions
 
             // Arity-2 wrappers where TValue is the element type.
             if(namedType.Arity == 2
-                && IsTypeInNamespace(namedType, "System.Collections.Generic"))
+                && IsSystemCollectionsGenericNamespace(namedType.ContainingNamespace))
             {
                 var kind = namedType.Name switch
                 {
@@ -145,7 +146,7 @@ internal static partial class RoslynExtensions
                     return true;
                 }
 
-                if(IsTypeInNamespace(namedType, "System.Collections.Generic"))
+                if(IsSystemCollectionsGenericNamespace(namedType.ContainingNamespace))
                 {
                     var kind = namedType.Name switch
                     {
@@ -163,13 +164,13 @@ internal static partial class RoslynExtensions
                     }
                 }
 
-                if(IsType(namedType, "System", "Lazy"))
+                if(namedType.Name == "Lazy" && IsSystemNamespace(namedType.ContainingNamespace))
                 {
                     wrapperInfo = new(WrapperKind.Lazy, elementType);
                     return true;
                 }
 
-                if(IsTypeInNamespace(namedType, "System.Threading.Tasks"))
+                if(IsSystemThreadingTasksNamespace(namedType.ContainingNamespace))
                 {
                     var kind = namedType.Name switch
                     {
@@ -188,12 +189,6 @@ internal static partial class RoslynExtensions
 
             wrapperInfo = default;
             return false;
-
-            static bool IsType(INamedTypeSymbol symbol, string @namespace, string name)
-                => symbol.Name == name && IsTypeInNamespace(symbol, @namespace);
-
-            static bool IsTypeInNamespace(INamedTypeSymbol symbol, string @namespace)
-                => symbol.ContainingNamespace.ToDisplayString() == @namespace;
         }
     }
 

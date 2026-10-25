@@ -8,7 +8,24 @@ internal static partial class RoslynExtensions
     /// </summary>
     internal static bool IsNonGenericTaskReturnType(IMethodSymbol method)
         => method.ReturnType is INamedTypeSymbol { Arity: 0, Name: "Task" } named
-            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+            && IsSystemThreadingTasksNamespace(named.ContainingNamespace);
+
+    // The namespace checks below compare symbol names instead of allocating a display string;
+    // they run for every type the transforms classify.
+
+    /// <summary>Returns <see langword="true"/> when the namespace is <c>System</c>.</summary>
+    internal static bool IsSystemNamespace(INamespaceSymbol? ns)
+        => ns is { Name: "System", ContainingNamespace.IsGlobalNamespace: true };
+
+    /// <summary>Returns <see langword="true"/> when the namespace is <c>System.Collections.Generic</c>.</summary>
+    internal static bool IsSystemCollectionsGenericNamespace(INamespaceSymbol? ns)
+        => ns is { Name: "Generic", ContainingNamespace: { Name: "Collections", ContainingNamespace: var parent } }
+            && IsSystemNamespace(parent);
+
+    /// <summary>Returns <see langword="true"/> when the namespace is <c>System.Threading.Tasks</c>.</summary>
+    internal static bool IsSystemThreadingTasksNamespace(INamespaceSymbol? ns)
+        => ns is { Name: "Tasks", ContainingNamespace: { Name: "Threading", ContainingNamespace: var parent } }
+            && IsSystemNamespace(parent);
 
     /// <summary>
     /// Returns <see langword="true"/> when the symbol is declared directly in
