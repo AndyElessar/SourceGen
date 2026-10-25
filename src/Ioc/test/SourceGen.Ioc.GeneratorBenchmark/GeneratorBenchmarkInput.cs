@@ -34,6 +34,7 @@ public enum GeneratorEdit
 
 /// <summary>
 /// Builds a scenario as one syntax tree per service unit plus shared files, so per-tree caching behaves as in a real project.
+/// Assembly-level registrations stay in one file, as projects usually keep them.
 /// </summary>
 public sealed class GeneratorBenchmarkInput
 {
@@ -54,6 +55,7 @@ public sealed class GeneratorBenchmarkInput
     private readonly SyntaxTree[] units;
     private readonly SyntaxTree defaults;
     private readonly SyntaxTree usage;
+    private readonly SyntaxTree? registrations;
     private readonly SyntaxTree[] trees;
     private readonly AnalyzerConfigOptionsProvider options;
 
@@ -71,6 +73,11 @@ public sealed class GeneratorBenchmarkInput
         usage = Parse(Usage(call, 0), "Usage.cs");
 
         List<SyntaxTree> all = [.. units, defaults, usage];
+        if(scenario == GeneratorScenario.RegisterFor)
+        {
+            registrations = Parse(Registrations(added: false), "Registrations.cs");
+            all.Add(registrations);
+        }
         if(scenario == GeneratorScenario.DuplicateInvocation)
         {
             all.Add(Parse("[IocRegister] public class Generic<T>;", "Generic.cs"));
@@ -95,9 +102,10 @@ public sealed class GeneratorBenchmarkInput
     {
         GeneratorEdit.Unrelated => Initial.ReplaceSyntaxTree(usage, Parse(Usage(call + call, 1), "Usage.cs")),
         GeneratorEdit.Constructor => Initial.ReplaceSyntaxTree(units[EditedUnit], Parse(Unit(EditedUnit, extraDependency: true), $"Service{EditedUnit}.cs")),
-        GeneratorEdit.AddRegistration => Initial.AddSyntaxTrees(Parse(scenario == GeneratorScenario.RegisterFor
-            ? "[assembly: IocRegisterFor(typeof(AddedService))]\npublic class AddedService;"
-            : "[IocRegister] public class AddedService;", "Added.cs")),
+        GeneratorEdit.AddRegistration when registrations is not null => Initial
+            .ReplaceSyntaxTree(registrations, Parse(Registrations(added: true), "Registrations.cs"))
+            .AddSyntaxTrees(Parse("public class AddedService;", "Added.cs")),
+        GeneratorEdit.AddRegistration => Initial.AddSyntaxTrees(Parse("[IocRegister] public class AddedService;", "Added.cs")),
         GeneratorEdit.Defaults => Initial.ReplaceSyntaxTree(defaults, Parse(Defaults(ServiceLifetime.Scoped), "Defaults.cs")),
         _ => throw new ArgumentOutOfRangeException(nameof(edit), edit, null),
     };
@@ -138,7 +146,10 @@ public sealed class GeneratorBenchmarkInput
             return source.ToString();
         }
 
-        source.AppendLine(scenario == GeneratorScenario.RegisterFor ? $"[assembly: IocRegisterFor(typeof(Service{i}))]" : "[IocRegister]");
+        if(scenario != GeneratorScenario.RegisterFor)
+        {
+            source.AppendLine("[IocRegister]");
+        }
         List<string> parameters = [];
         if(scenario == GeneratorScenario.DependencyChain && i + 1 < count)
         {
@@ -247,6 +258,20 @@ public sealed class GeneratorBenchmarkInput
                     """);
                 break;
         }
+    }
+
+    private string Registrations(bool added)
+    {
+        var source = new StringBuilder(Usings);
+        for(var i = 0; i < count; i++)
+        {
+            source.AppendLine($"[assembly: IocRegisterFor(typeof(Service{i}))]");
+        }
+        if(added)
+        {
+            source.AppendLine("[assembly: IocRegisterFor(typeof(AddedService))]");
+        }
+        return source.ToString();
     }
 
     private static string Defaults(ServiceLifetime lifetime) => $"""

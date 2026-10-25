@@ -13,7 +13,7 @@ Each scenario is built as one syntax tree per service unit (`Service{i}.cs`), pl
 | Wrappers | N service/keyed-service/consumer triples using Func and Dictionary, plus one container |
 | DuplicateInvocation | N services and one open generic registration closed by a service lookup |
 | DisabledContainer | Same triples and container as Wrappers, with only Register output enabled |
-| RegisterFor | N assembly-level registration attributes |
+| RegisterFor | N assembly-level registration attributes in one `Registrations.cs`, as projects usually keep them, for N service files |
 | Realistic | N units of a mixed project, plus one container (see below) |
 
 Each `Realistic` unit declares a two-level interface hierarchy and a request type, and every tenth unit an open generic handler. Its service cycles through five kinds: a plain service whose constructor takes a keyed service, a closed handler and `Lazy`/`Func`/`IEnumerable` wrappers; a factory method that looks up a closed handler through `IServiceProvider`; a decorated service with `[IocDiscover]`; a keyed service with `RegisterAllInterfaces`; and a tagged service with property and method injection whose lifetime comes from `[IocRegisterDefaults]`. Services depend only on earlier units. `[IocImportModule]` is not covered because it needs a second assembly.
@@ -27,7 +27,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 | Rerun | The warm driver runs again on the same compilation, the lower bound of an incremental run. |
 | Edit | Unrelated method body in `Usage.cs`; DuplicateInvocation adds a duplicate closed-generic lookup instead. |
 | EditConstructor | Adds a constructor dependency to the middle service unit. |
-| EditAddRegistration | Adds a file with one new registration. |
+| EditAddRegistration | Adds a file with one new registration; RegisterFor adds the class file and its attribute to `Registrations.cs`. |
 | EditDefaults | Changes the lifetime of the `[IocRegisterDefaults]` attribute (Singleton → Scoped). Only `Realistic` has services it applies to; the others still re-run every step that depends on default settings. |
 
 - Edit benchmarks always start from the same previously run driver and apply the edited compilation. The returned driver is not reused, so they do not accidentally measure a no-op cached run.
