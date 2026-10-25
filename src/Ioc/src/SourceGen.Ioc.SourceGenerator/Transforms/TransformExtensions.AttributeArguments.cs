@@ -13,7 +13,8 @@ internal static partial class TransformExtensions
         public ImmutableEquatableArray<TypeData> GetTypeArrayArgument(
             string name,
             bool extractConstructorParams = false,
-            bool extractInjectionMembers = false)
+            bool extractInjectionMembers = false,
+            SemanticModel? semanticModel = null)
         {
             foreach(var namedArg in attribute.NamedArguments)
             {
@@ -27,7 +28,7 @@ internal static partial class TransformExtensions
                             result.Add(namedTypeSymbol.GetTypeData(
                                 extractConstructorParams,
                                 extractHierarchy: false,
-                                semanticModel: null,
+                                semanticModel,
                                 extractInjectionMembers));
                         }
                         else if(value.Value is ITypeSymbol typeSymbol)
@@ -199,8 +200,12 @@ internal static partial class TransformExtensions
             return attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         }
 
-        public ImmutableEquatableArray<TypeData> GetDecorators() =>
-            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true);
+        /// <summary>
+        /// Gets the Decorators array from the attribute, with constructor parameters and injection members.
+        /// </summary>
+        /// <param name="semanticModel">Optional semantic model to resolve nameof() keys on decorator members and constructor parameters.</param>
+        public ImmutableEquatableArray<TypeData> GetDecorators(SemanticModel? semanticModel = null) =>
+            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel);
 
         /// <summary>
         /// Gets the ImplementationTypes array from the attribute.

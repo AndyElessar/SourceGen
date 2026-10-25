@@ -11,7 +11,7 @@ partial class IocSourceGenerator
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
         var serviceTypes = attributeData.GetServiceTypes();
-        var decorators = attributeData.GetDecorators();
+        var decorators = attributeData.GetDecorators(semanticModel);
         var tags = attributeData.GetTags();
         var (key, keyType, keyValueTypeSymbol) = attributeData.GetKeyInfo(semanticModel);
         var keyValueType = keyValueTypeSymbol?.GetTypeData();
@@ -70,7 +70,7 @@ partial class IocSourceGenerator
         // Extract service types from generic type arguments instead of named argument
         var serviceTypes = attributeData.GetServiceTypesFromGenericAttribute();
 
-        var decorators = attributeData.GetDecorators();
+        var decorators = attributeData.GetDecorators(semanticModel);
         var tags = attributeData.GetTags();
         var (key, keyType, keyValueTypeSymbol) = attributeData.GetKeyInfo(semanticModel);
         var keyValueType = keyValueTypeSymbol?.GetTypeData();

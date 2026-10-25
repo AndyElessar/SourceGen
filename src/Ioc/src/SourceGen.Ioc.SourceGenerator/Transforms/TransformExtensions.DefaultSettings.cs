@@ -22,7 +22,7 @@ internal static partial class TransformExtensions
             var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
             var serviceTypes = attribute.GetServiceTypes();
             var typeData = targetServiceType.GetTypeData();
-            var decorators = attribute.GetDecorators();
+            var decorators = attribute.GetDecorators(semanticModel);
             var tags = attribute.GetTags();
 
             // Get factory method data if semantic model is provided
@@ -72,7 +72,7 @@ internal static partial class TransformExtensions
             var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
             var serviceTypes = attribute.GetServiceTypes();
             var typeData = targetServiceType.GetTypeData();
-            var decorators = attribute.GetDecorators();
+            var decorators = attribute.GetDecorators(semanticModel);
             var tags = attribute.GetTags();
 
             // Get factory method data if semantic model is provided
