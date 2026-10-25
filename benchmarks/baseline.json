@@ -1,8 +1,8 @@
 {
-  "source": "local run on 0b12793 with uncommitted changes (replace with the CI artifact)",
+  "source": "088a46f merged into main",
   "host": {
-    "processor": "Intel Core i7-9700K CPU 3.60GHz (Coffee Lake)",
-    "os": "Windows 11 (10.0.26300.9711)",
+    "processor": "AMD EPYC 9V45",
+    "os": "Linux Ubuntu 24.04.5 LTS (Noble Numbat)",
     "runtime": ".NET 10.0.13 (10.0.13, 10.0.1326.50504)",
     "benchmarkDotNet": "0.15.8"
   },
@@ -10,82 +10,82 @@
     {
       "method": "Cold",
       "parameters": "Count=500&Scenario=DependencyChain",
-      "meanNs": 42479608.16,
-      "lowerNs": 39344488.49,
-      "upperNs": 45614727.84,
-      "allocatedBytes": 5407955
+      "meanNs": 12032428.54,
+      "lowerNs": 11850218.55,
+      "upperNs": 12214638.52,
+      "allocatedBytes": 5407523
     },
     {
       "method": "Edit",
       "parameters": "Count=500&Scenario=DependencyChain",
-      "meanNs": 3052158.72,
-      "lowerNs": 2746829.59,
-      "upperNs": 3357487.86,
-      "allocatedBytes": 841698
+      "meanNs": 1638228.96,
+      "lowerNs": 1616620.7,
+      "upperNs": 1659837.21,
+      "allocatedBytes": 841702
     },
     {
       "method": "Cold",
       "parameters": "Count=500&Scenario=DisabledContainer",
-      "meanNs": 236764257.14,
-      "lowerNs": 234307453.97,
-      "upperNs": 239221060.32,
-      "allocatedBytes": 40102808
+      "meanNs": 119253117.69,
+      "lowerNs": 110016909.84,
+      "upperNs": 128489325.53,
+      "allocatedBytes": 40092642
     },
     {
       "method": "Edit",
       "parameters": "Count=500&Scenario=DisabledContainer",
-      "meanNs": 91235282.14,
-      "lowerNs": 90622501.25,
-      "upperNs": 91848063.04,
-      "allocatedBytes": 15634216
+      "meanNs": 47381543.4,
+      "lowerNs": 46017545.03,
+      "upperNs": 48745541.76,
+      "allocatedBytes": 15634165
     },
     {
       "method": "Cold",
       "parameters": "Count=500&Scenario=DuplicateInvocation",
-      "meanNs": 27379443.75,
-      "lowerNs": 27060283.96,
-      "upperNs": 27698603.54,
-      "allocatedBytes": 4390790
+      "meanNs": 8342025.18,
+      "lowerNs": 8084483.09,
+      "upperNs": 8599567.26,
+      "allocatedBytes": 4388336
     },
     {
       "method": "Edit",
       "parameters": "Count=500&Scenario=DuplicateInvocation",
-      "meanNs": 2685253.57,
-      "lowerNs": 2663848.2,
-      "upperNs": 2706658.94,
-      "allocatedBytes": 734896
+      "meanNs": 1565694.36,
+      "lowerNs": 1547926.13,
+      "upperNs": 1583462.59,
+      "allocatedBytes": 734719
     },
     {
       "method": "Cold",
       "parameters": "Count=500&Scenario=RegisterFor",
-      "meanNs": 20035765.18,
-      "lowerNs": 19611215.8,
-      "upperNs": 20460314.55,
-      "allocatedBytes": 3908093
+      "meanNs": 9101720.78,
+      "lowerNs": 8932730.85,
+      "upperNs": 9270710.71,
+      "allocatedBytes": 3906635
     },
     {
       "method": "Edit",
       "parameters": "Count=500&Scenario=RegisterFor",
-      "meanNs": 1597667.13,
-      "lowerNs": 1521010.43,
-      "upperNs": 1674323.82,
-      "allocatedBytes": 539247
+      "meanNs": 938871.59,
+      "lowerNs": 930556.72,
+      "upperNs": 947186.47,
+      "allocatedBytes": 539268
     },
     {
       "method": "Cold",
       "parameters": "Count=500&Scenario=Wrappers",
-      "meanNs": 258582237.5,
-      "lowerNs": 255354505.41,
-      "upperNs": 261809969.59,
-      "allocatedBytes": 60040944
+      "meanNs": 120945849.14,
+      "lowerNs": 117139345.57,
+      "upperNs": 124752352.72,
+      "allocatedBytes": 59974504
     },
     {
       "method": "Edit",
       "parameters": "Count=500&Scenario=Wrappers",
-      "meanNs": 89773396.43,
-      "lowerNs": 89121032.56,
-      "upperNs": 90425760.29,
-      "allocatedBytes": 15634632
+      "meanNs": 48114143.81,
+      "lowerNs": 45710010.74,
+      "upperNs": 50518276.88,
+      "allocatedBytes": 15634581
     }
   ]
 }
