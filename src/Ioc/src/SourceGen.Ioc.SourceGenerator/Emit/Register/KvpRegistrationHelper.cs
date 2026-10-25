@@ -55,6 +55,7 @@ partial class IocSourceGenerator
         // Step 2: Find keyed registrations matching those value types
         var entries = new List<KvpRegistrationEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
 
         foreach(var regWithTags in registrations)
         {
@@ -62,11 +63,8 @@ partial class IocSourceGenerator
             if(reg.Key is null)
                 continue;
 
-            foreach(var (keyTypeName, valueTypeName) in neededPairs)
+            foreach(var (keyTypeName, valueTypeName) in neededByValueType[reg.ServiceType.Name])
             {
-                if(!string.Equals(reg.ServiceType.Name, valueTypeName, StringComparison.Ordinal))
-                    continue;
-
                 // Filter by key value type compatibility:
                 // - "object" key type accepts all key value types
                 // - Otherwise, the registration's key value type must match exactly
@@ -229,6 +227,7 @@ partial class IocSourceGenerator
 
         var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
 
         foreach(var kvp in serviceLookup)
         {
@@ -238,11 +237,8 @@ partial class IocSourceGenerator
 
             var serviceType = kvp.Key.ServiceType;
 
-            foreach(var (keyTypeName, valueTypeName) in neededPairs)
+            foreach(var (keyTypeName, valueTypeName) in neededByValueType[serviceType])
             {
-                if(!string.Equals(serviceType, valueTypeName, StringComparison.Ordinal))
-                    continue;
-
                 var cached = kvp.Value[^1];
                 if(!IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
                     continue;

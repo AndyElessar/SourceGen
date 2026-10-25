@@ -54,19 +54,11 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Extracts constructor parameters from a type and indicates whether the constructor was selected by [Inject] attribute.
         /// </summary>
-        /// <param name="visited">Set of visited types to prevent infinite recursion.</param>
-        /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions in service keys. Only used for top-level extraction, not passed to recursive calls.</param>
+        /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions in service keys.</param>
         /// <returns>A tuple containing the constructor parameters and whether the constructor has [Inject] attribute.</returns>
         public (ImmutableEquatableArray<ParameterData> Parameters, bool HasInjectConstructor) ExtractConstructorParametersWithInfo(
-            HashSet<INamedTypeSymbol>? visited = null,
             SemanticModel? semanticModel = null)
         {
-            // Check if we've already visited this type to prevent infinite recursion
-            if(visited is not null && !visited.Add(typeSymbol))
-            {
-                return ([], false);
-            }
-
             // Get the original definition for open generic types to access constructors
             var typeToInspect = typeSymbol.IsGenericType && typeSymbol.IsDefinition
                 ? typeSymbol
@@ -83,16 +75,14 @@ internal static partial class TransformExtensions
             bool hasInjectConstructor = constructor.GetAttributes()
                 .Any(static attr => attr.AttributeClass?.IsInject == true);
 
-            visited ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             List<ParameterData> parameters = [];
             foreach(var param in constructor.Parameters)
             {
                 var paramType = param.Type;
 
-                // Get TypeData using the unified method with recursive constructor extraction
-                // Also extract hierarchy (interfaces) for generic types to enable IEnumerable<T> detection
+                // Dependencies resolve through their own registrations; only generic/collection metadata is needed here.
                 var paramTypeData = paramType is INamedTypeSymbol namedParamType
-                    ? namedParamType.GetTypeData(extractConstructorParams: true, extractHierarchy: namedParamType.IsGenericType, visited: visited)
+                    ? namedParamType.GetTypeData(extractHierarchy: namedParamType.IsGenericType)
                     : paramType.GetTypeData();
 
                 // Check if parameter type is nullable (e.g., IDependency?)

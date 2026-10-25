@@ -21,4 +21,8 @@
     <ProjectReference Include="..\..\src\SourceGen.Ioc\SourceGen.Ioc.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\SourceGen.Ioc.GeneratorBenchmark\GeneratorBenchmarkInput.cs" Link="Helpers\GeneratorBenchmarkInput.cs" />
+  </ItemGroup>
+
 </Project>

@@ -15,15 +15,14 @@ internal static partial class TransformExtensions
     {
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
-            bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null)
+            bool extractHierarchy = false)
         {
             if(typeSymbol is INamedTypeSymbol namedTypeSymbol)
-                return namedTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
+                return namedTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy);
 
             // Handle array types specially - extract element type information
             if(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
-                return arrayTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy, visited);
+                return arrayTypeSymbol.GetTypeData(extractConstructorParams, extractHierarchy);
 
             var name = typeSymbol.FullyQualifiedName;
             return TypeData.CreateSimple(name);
@@ -35,22 +34,16 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Gets the type data for this type symbol.
         /// </summary>
-        /// <param name="extractConstructorParams">Whether to extract constructor parameters recursively.</param>
+        /// <param name="extractConstructorParams">Whether to extract this type's constructor parameters.</param>
         /// <param name="extractHierarchy">Whether to extract all interfaces and base classes.</param>
-        /// <param name="visited">Set of visited types to prevent infinite recursion during constructor parameter extraction.</param>
-        /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions. Only used for top-level extraction, not passed to recursive calls.</param>
+        /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions.</param>
         /// <param name="extractInjectionMembers">Whether to extract injection members (properties, fields, methods with [IocInject] attributes). Used for decorators.</param>
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
             bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null,
             SemanticModel? semanticModel = null,
             bool extractInjectionMembers = false)
         {
-            visited = extractConstructorParams
-                ? (visited ?? new(SymbolEqualityComparer.Default))
-                : null;
-
             // Build type name - for unbound generics, use actual type parameter names
             var typeName = typeSymbol.BuildTypeName();
 
@@ -63,12 +56,9 @@ internal static partial class TransformExtensions
 
             ImmutableEquatableArray<ParameterData>? constructorParams = null;
             bool hasInjectConstructor = false;
-            if(extractConstructorParams && visited is not null)
+            if(extractConstructorParams)
             {
-                // Pass semanticModel only for top-level extraction
-                // Recursive calls from within ExtractConstructorParametersWithInfo do not receive semanticModel
-                // to avoid cross-compilation-unit issues and stack overflow
-                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(visited, semanticModel);
+                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel);
             }
 
             // Extract injection members if requested (for decorators)
@@ -386,8 +376,7 @@ internal static partial class TransformExtensions
     {
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
-            bool extractHierarchy = false,
-            HashSet<INamedTypeSymbol>? visited = null)
+            bool extractHierarchy = false)
         {
             var elementType = arrayTypeSymbol.ElementType;
             var typeName = arrayTypeSymbol.FullyQualifiedName;
@@ -397,7 +386,7 @@ internal static partial class TransformExtensions
             ImmutableEquatableArray<TypeParameter> typeParameters;
             if(elementType is INamedTypeSymbol namedElementType)
             {
-                var elementTypeData = namedElementType.GetTypeData(extractConstructorParams, extractHierarchy, visited);
+                var elementTypeData = namedElementType.GetTypeData(extractConstructorParams, extractHierarchy);
                 typeParameters = [new TypeParameter("T", elementTypeData)];
             }
             else

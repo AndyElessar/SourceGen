@@ -27,7 +27,6 @@ internal static partial class TransformExtensions
                             result.Add(namedTypeSymbol.GetTypeData(
                                 extractConstructorParams,
                                 extractHierarchy: false,
-                                visited: null,
                                 semanticModel: null,
                                 extractInjectionMembers));
                         }

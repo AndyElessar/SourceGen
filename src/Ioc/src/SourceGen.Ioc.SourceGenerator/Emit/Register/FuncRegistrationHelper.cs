@@ -64,6 +64,7 @@ partial class IocSourceGenerator
 
         var entries = new List<FuncRegistrationEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var neededByReturnType = neededFuncTypes.Values.ToLookup(static needed => needed.ReturnType.Name, StringComparer.Ordinal);
 
         foreach(var regWithTags in registrations)
         {
@@ -71,11 +72,8 @@ partial class IocSourceGenerator
             if(reg.IsOpenGeneric)
                 continue;
 
-            foreach(var needed in neededFuncTypes.Values)
+            foreach(var needed in neededByReturnType[reg.ServiceType.Name])
             {
-                if(!string.Equals(reg.ServiceType.Name, needed.ReturnType.Name, StringComparison.Ordinal))
-                    continue;
-
                 var entryKey = $"{needed.Name}|{reg.ImplementationType.Name}|{reg.Key}";
                 if(!addedKeys.Add(entryKey))
                     continue;

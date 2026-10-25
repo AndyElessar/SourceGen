@@ -2,6 +2,28 @@
 
 partial class IocSourceGenerator
 {
+    private static ImmutableEquatableArray<ClosedGenericDependency> CollectUniqueClosedGenericDependencies(
+        ImmutableArray<ClosedGenericDependency> invocations,
+        ImmutableArray<ClosedGenericDependency> discoveries,
+        CancellationToken ct)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var dependencies = new List<ClosedGenericDependency>();
+        Add(invocations);
+        Add(discoveries);
+        return dependencies.ToImmutableEquatableArray();
+
+        void Add(ImmutableArray<ClosedGenericDependency> candidates)
+        {
+            foreach(var candidate in candidates)
+            {
+                ct.ThrowIfCancellationRequested();
+                if(seen.Add(candidate.ClosedTypeName))
+                    dependencies.Add(candidate);
+            }
+        }
+    }
+
     /// <summary>
     /// Pipeline 2: Combines all basic registration results and resolves closed generic dependencies.
     /// This method re-runs when any BasicRegistrationResult changes or when invocations change.
@@ -13,7 +35,7 @@ partial class IocSourceGenerator
     /// <returns>Service registrations with tags for deferred method grouping.</returns>
     private static ImmutableEquatableArray<ServiceRegistrationWithTags> CombineAndResolveClosedGenerics(
         in ImmutableArray<BasicRegistrationResult> basicResults,
-        in ImmutableArray<ClosedGenericDependency> serviceProviderInvocations,
+        in ImmutableEquatableArray<ClosedGenericDependency> serviceProviderInvocations,
         in ImmutableArray<OpenGenericEntry> factoryBasedOpenGenericEntries,
         CancellationToken ct)
     {

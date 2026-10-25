@@ -33,7 +33,8 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 predicate: static (_, _) => true,
                 transform: static (ctx, ct) => TransformRegister(ctx, ct))
             .Where(static m => m is not null)
-            .Select(static (m, _) => m!);
+            .Select(static (m, _) => m!)
+            .WithTrackingName("RegistrationData");
 
         var registerProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -48,14 +49,14 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterForAttributeFullName,
                 predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformRegisterFor(ctx, ct))
+                transform: static (ctx, ct) => TransformRegisterFor(ctx, ct).ToImmutableEquatableArray())
             .SelectMany(static (m, _) => m);
 
         var registerForProvider_T1 = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterForAttributeFullName_T1,
                 predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformRegisterForGeneric(ctx, ct))
+                transform: static (ctx, ct) => TransformRegisterForGeneric(ctx, ct).ToImmutableEquatableArray())
             .SelectMany(static (m, _) => m);
 
         // [IocRegisterDefaults] / [IocRegisterDefaults<T>] -> (settings, impl-type registrations, factory open generics)
@@ -63,14 +64,14 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 Constants.IocRegisterDefaultsAttributeFullName,
                 predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct))
+                transform: static (ctx, ct) => TransformDefaultSettings(ctx, ct).ToImmutableEquatableArray())
             .SelectMany(static (m, _) => m)
             .Collect()
             .Combine(context.SyntaxProvider
                 .ForAttributeWithMetadataName(
                     Constants.IocRegisterDefaultsAttributeFullName_T1,
                     predicate: static (_, _) => true,
-                    transform: static (ctx, ct) => TransformDefaultSettingsGeneric(ctx, ct))
+                    transform: static (ctx, ct) => TransformDefaultSettingsGeneric(ctx, ct).ToImmutableEquatableArray())
                 .SelectMany(static (m, _) => m)
                 .Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
@@ -93,14 +94,14 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 Constants.IocImportModuleAttributeFullName,
                 predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformImportModule(ctx, ct))
+                transform: static (ctx, ct) => TransformImportModule(ctx, ct).ToImmutableEquatableArray())
             .SelectMany(static (m, _) => m)
             .Collect()
             .Combine(context.SyntaxProvider
                 .ForAttributeWithMetadataName(
                     Constants.IocImportModuleAttributeFullName_T1,
                     predicate: static (_, _) => true,
-                    transform: static (ctx, ct) => TransformImportModuleGeneric(ctx, ct))
+                    transform: static (ctx, ct) => TransformImportModuleGeneric(ctx, ct).ToImmutableEquatableArray())
                 .SelectMany(static (m, _) => m)
                 .Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
@@ -118,14 +119,14 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 Constants.IocDiscoverAttributeFullName,
                 predicate: static (_, _) => true,
-                transform: static (ctx, ct) => TransformDiscover(ctx, ct))
+                transform: static (ctx, ct) => TransformDiscover(ctx, ct).ToImmutableEquatableArray())
             .SelectMany(static (m, _) => m)
             .Collect()
             .Combine(context.SyntaxProvider
                 .ForAttributeWithMetadataName(
                     Constants.IocDiscoverAttributeFullName_T1,
                     predicate: static (_, _) => true,
-                    transform: static (ctx, ct) => TransformDiscoverGeneric(ctx, ct))
+                    transform: static (ctx, ct) => TransformDiscoverGeneric(ctx, ct).ToImmutableEquatableArray())
                 .SelectMany(static (m, _) => m)
                 .Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
@@ -134,7 +135,7 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         var invocations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => PredicateInvocations(node),
-                transform: static (ctx, ct) => TransformInvocations(ctx, ct))
+                transform: static (ctx, ct) => TransformInvocations(ctx, ct).ToImmutableEquatableArray())
             .SelectMany(static (candidates, _) => candidates)
             .Collect();
 
@@ -197,7 +198,8 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
 
         var combinedClosedGenericDependencies = invocations
             .Combine(allDiscoverProviders)
-            .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
+            .Select(static (combined, ct) => CollectUniqueClosedGenericDependencies(combined.Left, combined.Right, ct))
+            .WithTrackingName("ClosedGenericDependencies");
 
         var allOpenGenericEntries = factoryBasedOpenGenericEntries
             .Combine(allImportedOpenGenerics)
@@ -206,7 +208,8 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         var serviceRegistrations = allBasicResults
             .Combine(combinedClosedGenericDependencies)
             .Combine(allOpenGenericEntries)
-            .Select(static (s, ct) => CombineAndResolveClosedGenerics(in s.Left.Left, in s.Left.Right, in s.Right, ct));
+            .Select(static (s, ct) => CombineAndResolveClosedGenerics(in s.Left.Left, in s.Left.Right, in s.Right, ct))
+            .WithTrackingName("ServiceRegistrations");
 
         // ===== Stage 5a: Emit Register output =====
 
@@ -232,16 +235,22 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         // ===== Stage 5b: Emit Container output =====
         // ExplicitOnly containers do not depend on serviceRegistrations (independent caching branch).
 
-        var explicitOnlyContainerWithGroups = containerProvider
+        var enabledContainers = containerProvider
+            .Combine(msbuildPropertiesProvider.Select(static (props, _) => props.Features))
+            .Where(static source => (source.Right & IocFeatures.Container) != 0)
+            .Select(static (source, _) => source.Left);
+
+        var explicitOnlyContainerWithGroups = enabledContainers
             .Where(static c => c.ExplicitOnly)
             .Combine(msbuildPropertiesProvider)
             .Select(static (source, _) =>
             {
                 var (container, msbuildProps) = source;
                 return GroupExplicitOnlyRegistrations(container, msbuildProps.Features);
-            });
+            })
+            .WithTrackingName("ExplicitContainerGroups");
 
-        var normalContainerWithGroups = containerProvider
+        var normalContainerWithGroups = enabledContainers
             .Where(static c => !c.ExplicitOnly)
             .Combine(serviceRegistrations)
             .Select(static (source, _) =>
@@ -255,7 +264,8 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             {
                 var ((container, filtered), msbuildProps) = source;
                 return GroupRegistrationsForContainer(container, filtered, msbuildProps.Features);
-            });
+            })
+            .WithTrackingName("ContainerGroups");
 
         EmitContainerOutput(explicitOnlyContainerWithGroups);
         EmitContainerOutput(normalContainerWithGroups);
