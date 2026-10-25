@@ -315,9 +315,7 @@ partial class IocSourceGenerator
             return cached;
         }
 
-        var interfaceNameSet = BuildInterfaceNameSet(serviceTypeParams);
-
-        var filtered = FilterDecoratorsCore(decorators, serviceTypeParams, interfaceNameSet);
+        var filtered = FilterDecoratorsCore(decorators, serviceTypeParams);
 
         // Substitute type parameters in decorators to close open generic decorators
         var result = SubstituteDecoratorsTypeParams(filtered, serviceTypeParams);
@@ -352,51 +350,16 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Builds a HashSet of interface and base class names from all service type parameters for fast lookup.
-    /// </summary>
-    private static HashSet<string>? BuildInterfaceNameSet(ImmutableEquatableArray<TypeParameter> serviceTypeParams)
-    {
-        HashSet<string>? result = null;
-
-        foreach(var param in serviceTypeParams)
-        {
-            AddNames(param.Type.AllInterfaces, ref result);
-            AddNames(param.Type.AllBaseClasses, ref result);
-        }
-
-        return result;
-
-        static void AddNames(ImmutableEquatableArray<TypeData>? types, ref HashSet<string>? result)
-        {
-            if(types is null || types.Length == 0)
-            {
-                return;
-            }
-
-            result ??= new HashSet<string>(StringComparer.Ordinal);
-            foreach(var type in types)
-            {
-                result.Add(type.Name);
-                if(type is GenericTypeData genericType && type.Name != genericType.NameWithoutGeneric)
-                {
-                    result.Add(genericType.NameWithoutGeneric);
-                }
-            }
-        }
-    }
-
-    /// <summary>
     /// Core decorator filtering logic.
     /// </summary>
     private static ImmutableEquatableArray<TypeData> FilterDecoratorsCore(
         ImmutableEquatableArray<TypeData> decorators,
-        ImmutableEquatableArray<TypeParameter> serviceTypeParams,
-        HashSet<string>? interfaceNameSet)
+        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
     {
         var filteredList = new List<TypeData>(decorators.Length);
         foreach(var decorator in decorators)
         {
-            if(SatisfiesConstraints(decorator, serviceTypeParams, interfaceNameSet))
+            if(SatisfiesConstraints(decorator, serviceTypeParams))
             {
                 filteredList.Add(decorator);
             }
@@ -413,8 +376,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static bool SatisfiesConstraints(
         TypeData decorator,
-        ImmutableEquatableArray<TypeParameter> serviceTypeParams,
-        HashSet<string>? interfaceNameSet)
+        ImmutableEquatableArray<TypeParameter> serviceTypeParams)
     {
         var decoratorTypeParams = decorator is GenericTypeData genericDecorator
             ? genericDecorator.TypeParameters
@@ -430,14 +392,10 @@ partial class IocSourceGenerator
             return true; // Let it pass, runtime will handle this
         }
 
-        // Check each decorator type parameter's constraints
+        // Check each decorator type parameter's constraints against the type argument at the same position
         for(int i = 0; i < decoratorTypeParams.Length; i++)
         {
-            var decoratorParam = decoratorTypeParams[i];
-            var serviceParam = serviceTypeParams[i];
-
-            // Check type constraints
-            var constraintTypes = decoratorParam.ConstraintTypes;
+            var constraintTypes = decoratorTypeParams[i].ConstraintTypes;
             if(constraintTypes is null || constraintTypes.Length == 0)
             {
                 continue;
@@ -445,7 +403,7 @@ partial class IocSourceGenerator
 
             foreach(var constraintType in constraintTypes)
             {
-                if(!SatisfiesTypeConstraintCore(serviceParam, constraintType, interfaceNameSet))
+                if(!SatisfiesTypeConstraintCore(serviceTypeParams[i].Type, constraintType))
                 {
                     return false;
                 }
@@ -456,45 +414,44 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Type constraint check.
+    /// Checks whether a type argument is, implements, or derives from a constraint type.
     /// </summary>
     /// <remarks>
-    /// For a constraint like <c>where TRequest : IQuery&lt;TRequest, TResponse&gt;</c>:
-    /// - constraintType.Name = "global::Ns.IQuery&lt;TRequest, TResponse&gt;"
-    /// - constraintType.TypeParameters = [(TRequest, TRequest), (TResponse, TResponse)]
-    /// - serviceParam is the actual type assigned to TRequest (e.g., TestCommand or TestQuery)
-    /// 
-    /// We need to check if the actual type's interfaces include IQuery with matching type parameters.
-    /// Uses HashSet for O(1) lookup instead of O(n) iteration.
+    /// For a constraint like <c>where TRequest : IQuery&lt;TRequest, TResponse&gt;</c>, which is open generic,
+    /// the type argument must implement some <c>IQuery&lt;,&gt;</c>, so names are compared without type arguments.
+    /// Closed generic and non-generic constraints compare full names.
     /// </remarks>
-    private static bool SatisfiesTypeConstraintCore(
-        TypeParameter serviceParam,
-        TypeData constraintType,
-        HashSet<string>? interfaceNameSet)
+    private static bool SatisfiesTypeConstraintCore(TypeData typeArgument, TypeData constraintType)
     {
-        var actualType = serviceParam.Type;
-
         // Direct match (for non-generic constraints)
-        if(actualType.Name == constraintType.Name)
+        if(typeArgument.Name == constraintType.Name)
         {
             return true;
         }
 
-        // No name set means the type arguments have no interfaces or base classes, so no type constraint is satisfied
-        if(interfaceNameSet is null)
-        {
-            return false;
-        }
+        var constraintName = constraintType is GenericTypeData { IsOpenGeneric: true } genericConstraintType
+            ? genericConstraintType.NameWithoutGeneric
+            : constraintType.Name;
 
-        if(constraintType is GenericTypeData { IsOpenGeneric: true } genericConstraintType)
+        return ContainsName(typeArgument.AllInterfaces, constraintName)
+            || ContainsName(typeArgument.AllBaseClasses, constraintName);
+
+        static bool ContainsName(ImmutableEquatableArray<TypeData>? types, string name)
         {
-            // For open generic constraints, check NameWithoutGeneric
-            return interfaceNameSet.Contains(genericConstraintType.NameWithoutGeneric);
-        }
-        else
-        {
-            // For closed generic or non-generic constraints, check exact name
-            return interfaceNameSet.Contains(constraintType.Name);
+            if(types is null)
+            {
+                return false;
+            }
+
+            foreach(var type in types)
+            {
+                if(type.Name == name || type is GenericTypeData genericType && genericType.NameWithoutGeneric == name)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 

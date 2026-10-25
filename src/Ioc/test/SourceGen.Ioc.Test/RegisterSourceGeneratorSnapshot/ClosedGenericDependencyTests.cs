@@ -197,6 +197,48 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_DecoratorWithSeveralTypeParameters_ChecksEachConstraintAgainstItsOwnTypeArgument()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<,>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.RequestDecorator<,>)])]
+
+            namespace TestNamespace;
+
+            public interface IRequest;
+
+            public interface IHandler<TRequest, TResponse>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class Handler<TRequest, TResponse> : IHandler<TRequest, TResponse>;
+
+            internal sealed class RequestDecorator<TRequest, TResponse>(IHandler<TRequest, TResponse> inner)
+                : IHandler<TRequest, TResponse> where TRequest : IRequest;
+
+            public class Request : IRequest { }
+
+            public class Response : IRequest { }
+
+            public class Other { }
+
+            // Only the first handler's TRequest is an IRequest; in the second, only TResponse is.
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(IHandler<Request, Other> matching, IHandler<Other, Response> swapped);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_AlreadyRegistered_DoesNotDuplicate()
     {
         const string source = """
