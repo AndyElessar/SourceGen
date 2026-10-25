@@ -5,15 +5,11 @@ using System.Text.Json;
 using BenchmarkDotNet.Running;
 using SourceGen.Ioc.GeneratorBenchmark;
 
-if(args is ["--compare", var baselinePath, var headPath, var outputPath, var threshold, .. var accepted] && accepted.Length <= 1)
+if(args is ["--compare", var baselinePath, var headPath, var outputPath, var threshold, .. var options]
+    && options is [] or ["--accept-regressions"])
 {
     return BenchmarkComparison.Run(baselinePath, headPath, outputPath, double.Parse(threshold, CultureInfo.InvariantCulture),
-        accepted is [var acceptedPath] ? acceptedPath : null);
-}
-
-if(args is ["--export-baseline", var resultsPath, var baselineOutputPath, var resultsSource])
-{
-    return BenchmarkComparison.Export(resultsPath, baselineOutputPath, resultsSource);
+        acceptRegressions: options.Length > 0);
 }
 
 if(args is ["--verify", var path])
