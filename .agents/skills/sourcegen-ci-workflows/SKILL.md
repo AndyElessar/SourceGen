@@ -13,7 +13,7 @@ To run an actual release (set version, tag, push, monitor), use the `sourcegen-r
 
 | Workflow | Type | Trigger |
 |---|---|---|
-| `ioc.ci.yml`, `ioc.cli.ci.yml` | CI | push to `main` + `paths` filters (specs excluded), `workflow_dispatch` |
+| `ioc.ci.yml`, `ioc.cli.ci.yml` | CI | push to `main` + `paths` filters (`*.md` excluded), `workflow_dispatch` |
 | `ioc.publish.yml`, `ioc.cli.publish.yml` | Publish | tags `ioc-v*`, `ioc-cli-v*` |
 | `docs.yml` | Docs site (GitHub Pages) | push to `main` + `paths: docs/**`, `workflow_dispatch` |
 | `ioc.benchmark.nativeaot.yml` | Native AOT benchmark | tags `ioc-v*`, `workflow_dispatch` |
