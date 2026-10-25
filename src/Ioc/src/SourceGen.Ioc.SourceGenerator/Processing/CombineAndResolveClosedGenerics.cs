@@ -346,22 +346,13 @@ partial class IocSourceGenerator
             openGenericInfo.AllInterfaces.Length == 0;
 
         // Find the matching open service type to build the type argument map
-        // Prefer AllInterfaces over ServiceTypes because AllInterfaces contains
-        // the actual interface as implemented (e.g., IRequestHandler<Task<T1>, List<T2>>)
+        // Prefer the forms the implementation declares (its interfaces, base classes, or itself), because they contain
+        // the service type as implemented (e.g., IRequestHandler<Task<T1>, List<T2>> or IHandler<TRequest, string>)
         // while ServiceTypes may contain the open generic definition (e.g., IRequestHandler<TRequest, TResponse>)
-        GenericTypeData? matchingOpenServiceType = null;
+        var implementedForm = FindImplementedForm(openImplType, openGenericInfo.AllInterfaces, closedServiceGenericType);
+        var matchingOpenServiceType = implementedForm;
 
-        // First, check in AllInterfaces (for nested open generics - this is the preferred match)
-        foreach(var iface in openGenericInfo.AllInterfaces)
-        {
-            if(iface is GenericTypeData genericInterface && genericInterface.NameWithoutGeneric == closedServiceGenericType.NameWithoutGeneric)
-            {
-                matchingOpenServiceType = genericInterface;
-                break;
-            }
-        }
-
-        // If not found in AllInterfaces, check in ServiceTypes
+        // If the implementation does not declare it, check in ServiceTypes
         if(matchingOpenServiceType is null)
         {
             foreach(var serviceType in openGenericInfo.ServiceTypes)
@@ -381,9 +372,24 @@ partial class IocSourceGenerator
 
         // Build type argument substitution map from service type parameters
         // Map: open service type param name -> closed service type arg name
-        var serviceTypeArgMap = BuildTypeArgumentMapFromServiceType(
-            matchingOpenServiceType,
-            closedServiceGenericType);
+        // A form the implementation declares is written with the implementation's type parameters, so matching it
+        // against the closed service type maps them directly and rejects closed types it cannot produce.
+        TypeArgMap serviceTypeArgMap;
+        if(implementedForm is not null && !isFactoryOnlyRegistration)
+        {
+            serviceTypeArgMap = new TypeArgMap(openImplType.GenericArity);
+            if(!TryMatchTypeArguments(implementedForm, closedServiceGenericType, ref serviceTypeArgMap)
+                || !MapsAllTypeParameters(openImplType, serviceTypeArgMap))
+            {
+                return false; // The implementation cannot produce this closed service type
+            }
+        }
+        else
+        {
+            serviceTypeArgMap = BuildTypeArgumentMapFromServiceType(
+                matchingOpenServiceType,
+                closedServiceGenericType);
+        }
         if(serviceTypeArgMap.IsDefaultOrEmpty)
         {
             return false; // Cannot build substitution map - type structure incompatible
@@ -423,6 +429,8 @@ partial class IocSourceGenerator
         // Build all closed service types from the open generic's service types
         var closedServiceTypes = BuildClosedServiceTypesFromServiceTypeMap(
             openGenericInfo.ServiceTypes,
+            openImplType,
+            openGenericInfo.AllInterfaces,
             serviceTypeArgMap,
             implTypeArgMap);
 
@@ -740,6 +748,91 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Finds the form of a generic type that an open generic implementation declares: one of its interfaces, one of its
+    /// base classes, or the implementation itself.
+    /// </summary>
+    /// <remarks>
+    /// The form's type arguments are written with the implementation's type parameters, for example
+    /// <c>IHandler&lt;TRequest, string&gt;</c> for <c>TextHandler&lt;TRequest&gt; : IHandler&lt;TRequest, string&gt;</c>.
+    /// </remarks>
+    private static GenericTypeData? FindImplementedForm(
+        GenericTypeData openImplType,
+        ImmutableEquatableArray<TypeData> implInterfaces,
+        GenericTypeData type)
+    {
+        foreach(var candidate in implInterfaces.Concat(openImplType.AllBaseClasses ?? []).Append(openImplType))
+        {
+            if(candidate is GenericTypeData genericCandidate
+                && genericCandidate.NameWithoutGeneric == type.NameWithoutGeneric
+                && genericCandidate.GenericArity == type.GenericArity)
+            {
+                return genericCandidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Matches a type written with type parameters against a closed type, recording what each type parameter stands for.
+    /// </summary>
+    /// <returns>
+    /// False when the closed type does not have the pattern's shape, for example <c>IHandler&lt;Req, int&gt;</c> against
+    /// <c>IHandler&lt;TRequest, string&gt;</c>, or when a type parameter would stand for two different types.
+    /// </returns>
+    private static bool TryMatchTypeArguments(TypeData pattern, TypeData closed, ref TypeArgMap typeArgMap)
+    {
+        if(pattern is TypeParameterTypeData)
+        {
+            if(typeArgMap.TryGetValue(pattern.Name, out var mapped))
+            {
+                return mapped == closed.Name;
+            }
+
+            typeArgMap[pattern.Name] = closed.Name;
+            return true;
+        }
+
+        if(pattern is GenericTypeData { TypeParameters: { Length: > 0 } patternArgs } genericPattern)
+        {
+            if(closed is not GenericTypeData { TypeParameters: { } closedArgs } genericClosed
+                || closedArgs.Length != patternArgs.Length
+                || genericClosed.NameWithoutGeneric != genericPattern.NameWithoutGeneric)
+            {
+                return false;
+            }
+
+            for(var i = 0; i < patternArgs.Length; i++)
+            {
+                if(!TryMatchTypeArguments(patternArgs[i].Type, closedArgs[i].Type, ref typeArgMap))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return pattern.Name == closed.Name;
+    }
+
+    /// <summary>
+    /// Checks that a type argument map has an entry for every type parameter of an open generic type.
+    /// </summary>
+    private static bool MapsAllTypeParameters(GenericTypeData openType, TypeArgMap typeArgMap)
+    {
+        foreach(var typeParam in openType.TypeParameters ?? [])
+        {
+            if(!typeArgMap.TryGetValue(typeParam.ParameterName, out _))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Builds closed implementation TypeData with substituted constructor parameters.
     /// </summary>
     private static GenericTypeData BuildClosedImplTypeData(
@@ -795,6 +888,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static List<TypeData> BuildClosedServiceTypesFromServiceTypeMap(
         ImmutableEquatableArray<TypeData> openServiceTypes,
+        GenericTypeData openImplType,
+        ImmutableEquatableArray<TypeData> implInterfaces,
         TypeArgMap serviceTypeArgMap,
         TypeArgMap implTypeArgMap)
     {
@@ -812,6 +907,20 @@ partial class IocSourceGenerator
             if(openGenericServiceType.GenericArity == 0)
             {
                 result.Add(openServiceType);
+                continue;
+            }
+
+            // A form the implementation declares is written with its own type parameters, which the impl type arg map
+            // closes even when the service type is a definition with other parameter names, such as typeof(IHandler<,>)
+            if(FindImplementedForm(openImplType, implInterfaces, openGenericServiceType) is { } implementedForm)
+            {
+                result.Add(TypeData.CreateGeneric(
+                    SubstituteTypeArguments(implementedForm.Name, implTypeArgMap),
+                    implementedForm.NameWithoutGeneric,
+                    IsOpenGeneric: false,
+                    implementedForm.GenericArity,
+                    IsNestedOpenGeneric: false,
+                    TypeParameters: SubstituteTypeParameters(implementedForm.TypeParameters, implTypeArgMap)));
                 continue;
             }
 
