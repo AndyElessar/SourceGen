@@ -81,9 +81,17 @@ internal static partial class TransformExtensions
                 var paramType = param.Type;
 
                 // Dependencies resolve through their own registrations; only generic/collection metadata is needed here.
-                var paramTypeData = paramType is INamedTypeSymbol namedParamType
-                    ? namedParamType.GetTypeData(extractHierarchy: namedParamType.IsGenericType)
-                    : paramType.GetTypeData();
+                // Wrappers (Lazy, Func, collections, Dictionary, ...) expose their element through wrapper metadata,
+                // so their interface hierarchy (e.g. ~10 interfaces for Dictionary<,>) is only built for other generic types.
+                var paramTypeData = paramType.GetTypeData();
+                if(paramType is INamedTypeSymbol { IsGenericType: true } namedParamType && paramTypeData is not WrapperTypeData)
+                {
+                    paramTypeData = paramTypeData with
+                    {
+                        AllInterfaces = namedParamType.GetAllInterfaces(),
+                        AllBaseClasses = namedParamType.GetAllBaseClasses(),
+                    };
+                }
 
                 // Check if parameter type is nullable (e.g., IDependency?)
                 var isNullable = param.NullableAnnotation == NullableAnnotation.Annotated;
