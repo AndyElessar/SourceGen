@@ -1697,4 +1697,85 @@ public class ClosedGenericDependencyTests
 
         await Verify(generatedSource);
     }
+
+
+    [Test]
+    public async Task Decorator_ConstrainedOnMetadataTypeInterface_AppliesOnlyToMatchingTypeArguments()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IHandler<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.ConvertibleDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            internal sealed class ConvertibleDecorator<T>(IHandler<T> inner) : IHandler<T> where T : IConvertible;
+
+            public interface IEntity;
+
+            public class TestEntity : IEntity { }
+
+            // string's interfaces come from metadata, so both string handlers read the same interface data.
+            [IocRegister(ServiceTypes = [typeof(IHandler<string>)])]
+            internal sealed class StringHandler : IHandler<string>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<string>)], Key = "other")]
+            internal sealed class OtherStringHandler : IHandler<string>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<TestEntity>)])]
+            internal sealed class EntityHandler : IHandler<TestEntity>;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ServiceProviderInvocation_TypeNamesResolvedInScope_GeneratesAllFactories()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System;
+            using AliasedRepository = TestNamespace.IRepository<TestNamespace.Entity1>;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T>;
+
+            public class Entity1 { }
+            public class Entity2 { }
+
+            // Type arguments use an alias, typeof, and a nested type only visible inside the containing class.
+            public class UnitOfWork(IServiceProvider sp)
+            {
+                public class Nested { }
+
+                private readonly IServiceProvider sp = sp;
+
+                public AliasedRepository Entity1Repo => sp.GetRequiredService<AliasedRepository>();
+                public object? Entity2Repo => sp.GetService(typeof(IRepository<Entity2>));
+                public IRepository<Nested> NestedRepo => sp.GetRequiredService<IRepository<Nested>>();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

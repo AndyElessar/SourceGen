@@ -11,6 +11,20 @@ internal static partial class TransformExtensions
     private static WrapperKind NormalizeGeneratorWrapperKind(WrapperKind kind)
         => kind is WrapperKind.ValueTask ? WrapperKind.None : kind;
 
+    /// <summary>
+    /// Hierarchy data of type arguments declared in metadata, such as <c>string</c> in <c>Dictionary&lt;string, T&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// Transforms rerun on every edit, but compilations with the same references share their metadata symbols, so this
+    /// data is the same each time. Weak keys let the symbols and their compilations be collected.
+    /// </remarks>
+    private static readonly ConditionalWeakTable<INamedTypeSymbol, TypeArgHierarchy> MetadataTypeArgHierarchy = new();
+
+    private sealed record TypeArgHierarchy(
+        TypeTraits Traits,
+        ImmutableEquatableArray<TypeData>? AllInterfaces,
+        ImmutableEquatableArray<TypeData>? AllBaseClasses);
+
     extension(ITypeSymbol typeSymbol)
     {
         public TypeData GetTypeData(
@@ -341,21 +355,17 @@ internal static partial class TransformExtensions
             if(typeArg is INamedTypeSymbol namedArg && typeArg.TypeKind != TypeKind.TypeParameter)
             {
                 // For concrete types, recursively extract type parameters and interfaces
-                var typeData = namedArg.CreateBasicTypeData(depth + 1) with { Traits = GetTypeTraits(namedArg) };
-                var allInterfaces = CreateConvertibleInterfaceTypeData(namedArg);
+                // Annotated type arguments are new symbol objects on every access, so key the cache by the unannotated symbol.
+                var hierarchy = namedArg.DeclaringSyntaxReferences.IsEmpty && namedArg.TypeKind != TypeKind.Error
+                    ? MetadataTypeArgHierarchy.GetValue((INamedTypeSymbol)namedArg.WithNullableAnnotation(NullableAnnotation.None), CreateHierarchy)
+                    : CreateHierarchy(namedArg);
 
-                // Base classes are needed to check base class constraints; names are enough, and avoid recursing
-                // through self-referencing bases such as Foo : Base<Foo>.
-                if(namedArg.TypeKind == TypeKind.Class && namedArg.BaseType is { SpecialType: not SpecialType.System_Object })
+                var typeData = namedArg.CreateBasicTypeData(depth + 1) with { Traits = hierarchy.Traits };
+                if(hierarchy.AllBaseClasses is not null)
                 {
-                    List<TypeData> baseClasses = [];
-                    for(var baseType = namedArg.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)
-                    {
-                        baseClasses.Add(CreateInterfaceTypeData(baseType));
-                    }
-                    typeData = typeData with { AllBaseClasses = baseClasses.ToImmutableEquatableArray() };
+                    typeData = typeData with { AllBaseClasses = hierarchy.AllBaseClasses };
                 }
-                return (typeData, allInterfaces);
+                return (typeData, hierarchy.AllInterfaces);
             }
 
             // Arrays keep their element type, created like any type argument, so T[] and T[][] can be matched against
@@ -395,6 +405,24 @@ internal static partial class TransformExtensions
 
             // No type argument available, this is a type parameter placeholder
             return (TypeData.CreateTypeParameter(typeParam.Name), null);
+
+            static TypeArgHierarchy CreateHierarchy(INamedTypeSymbol type)
+            {
+                // Base classes are needed to check base class constraints; names are enough, and avoid recursing
+                // through self-referencing bases such as Foo : Base<Foo>.
+                ImmutableEquatableArray<TypeData>? baseClasses = null;
+                if(type.TypeKind == TypeKind.Class && type.BaseType is { SpecialType: not SpecialType.System_Object })
+                {
+                    List<TypeData> bases = [];
+                    for(var baseType = type.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)
+                    {
+                        bases.Add(CreateInterfaceTypeData(baseType));
+                    }
+                    baseClasses = bases.ToImmutableEquatableArray();
+                }
+
+                return new(GetTypeTraits(type), CreateConvertibleInterfaceTypeData(type), baseClasses);
+            }
 
             // Records the traits that special constraints check, such as where T : struct
             static TypeTraits GetTypeTraits(ITypeSymbol type)

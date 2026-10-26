@@ -46,9 +46,7 @@ partial class IocSourceGenerator
         // Check for generic method invocation: GetService<T>(), GetRequiredService<T>(), GetServices<T>(), etc.
         if(memberAccess.Name is GenericNameSyntax genericName && genericName.TypeArgumentList.Arguments.Count == 1)
         {
-            var typeArgSyntax = genericName.TypeArgumentList.Arguments[0];
-            var typeInfo = semanticModel.GetTypeInfo(typeArgSyntax, ct);
-            typeSymbol = typeInfo.Type;
+            typeSymbol = ResolveTypeSyntax(genericName.TypeArgumentList.Arguments[0], semanticModel, ct);
         }
         // Check for typeof() argument: GetService(typeof(T)), GetRequiredService(typeof(T)), etc.
         else if(invocation.ArgumentList.Arguments.Count > 0)
@@ -56,8 +54,7 @@ partial class IocSourceGenerator
             var firstArg = invocation.ArgumentList.Arguments[0].Expression;
             if(firstArg is TypeOfExpressionSyntax typeOfExpr)
             {
-                var typeInfo = semanticModel.GetTypeInfo(typeOfExpr.Type, ct);
-                typeSymbol = typeInfo.Type;
+                typeSymbol = ResolveTypeSyntax(typeOfExpr.Type, semanticModel, ct);
             }
         }
 
@@ -147,5 +144,23 @@ partial class IocSourceGenerator
             typeData.Name,
             typeData,
             genericTypeData.NameWithoutGeneric);
+    }
+
+    /// <summary>
+    /// Resolves the type a type syntax refers to.
+    /// </summary>
+    /// <remarks>
+    /// Speculative binding binds only the type at its own position, so names are looked up in the same scope.
+    /// <see cref="ModelExtensions.GetTypeInfo(SemanticModel, SyntaxNode, CancellationToken)"/> binds the whole
+    /// enclosing statement instead, and this transform reruns with a new semantic model for every invocation on every
+    /// edit. It remains the fallback when speculative binding finds nothing.
+    /// </remarks>
+    private static ITypeSymbol? ResolveTypeSyntax(TypeSyntax type, SemanticModel semanticModel, CancellationToken ct)
+    {
+        var speculative = semanticModel.GetSpeculativeTypeInfo(type.SpanStart, type, SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
+        if(speculative is not null and not IErrorTypeSymbol)
+            return speculative;
+
+        return semanticModel.GetTypeInfo(type, ct).Type;
     }
 }
