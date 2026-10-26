@@ -1164,7 +1164,9 @@ partial class IocSourceGenerator
                 continue;
             }
 
-            var serviceType = serviceEntry.Registration.ServiceType.Name;
+            // The lookup key, not the (possibly shared) registration's service type: an entry is
+            // registered under every service type alias, including its implementation type
+            var serviceType = kvp.Key.ServiceType;
             yield return (kvp.Value.GetExposedServiceType(serviceType), kvp.Key.Key, GetInterfaceResolverExpression(kvp.Value, serviceType));
         }
     }

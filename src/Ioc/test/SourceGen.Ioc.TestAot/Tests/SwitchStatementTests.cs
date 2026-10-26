@@ -37,6 +37,18 @@ public sealed class SwitchStatementTests
     }
 
     [Test]
+    public async Task SwitchStatement_ImplementationType_ResolvesSameSingletonAsServiceType()
+    {
+        using var container = new SwitchStatementContainer();
+
+        var byServiceType = container.GetRequiredService<ISingletonService>();
+        var byImplementationType = container.GetService(typeof(SingletonService));
+
+        await Assert.That(container.IsService(typeof(SingletonService))).IsTrue();
+        await Assert.That(byImplementationType).IsSameReferenceAs(byServiceType);
+    }
+
+    [Test]
     public async Task SwitchStatement_Transient_ReturnsDifferentInstances()
     {
         // Arrange

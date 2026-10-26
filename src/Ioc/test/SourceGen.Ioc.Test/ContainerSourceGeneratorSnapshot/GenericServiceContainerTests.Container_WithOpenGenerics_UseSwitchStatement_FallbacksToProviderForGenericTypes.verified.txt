@@ -83,9 +83,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         if(serviceType == typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) return this;
         if(serviceType == typeof(TestContainer)) return this;
 
+        if(serviceType == typeof(global::TestNamespace.UserService)) return GetTestNamespace_UserService();
         if(serviceType == typeof(global::TestNamespace.IUserService)) return GetTestNamespace_UserService();
-        if(serviceType == typeof(global::TestNamespace.IUserService)) return GetTestNamespace_UserService();
-        if(serviceType == typeof(global::TestNamespace.IRepository<global::TestNamespace.User>)) return GetTestNamespace_Repository_TestNamespace_User_();
+        if(serviceType == typeof(global::TestNamespace.Repository<global::TestNamespace.User>)) return GetTestNamespace_Repository_TestNamespace_User_();
         if(serviceType == typeof(global::TestNamespace.IRepository<global::TestNamespace.User>)) return GetTestNamespace_Repository_TestNamespace_User_();
 
         return null;
