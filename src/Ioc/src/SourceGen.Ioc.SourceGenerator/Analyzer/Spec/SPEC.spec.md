@@ -27,14 +27,14 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
-| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect registrations, validate target type/instance lifetime, track duplicates | SGIOC001, 009, 011 |
+| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect registrations, validate target type/instance lifetime/explicit service types, track duplicates | SGIOC001, 009, 011, 032 |
 | Symbol (NamedType) | `AnalyzeTypeLevelDefaultsAttribute` | Validate duplicate type-level defaults | SGIOC012 |
 | Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders in generic factory mapping | SGIOC017 |
-| SemanticModel | `AnalyzeAssemblyLevelRegistrations` | Assembly-level register-for IDE squiggles | SGIOC001, 009, 011 |
+| Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
+| SemanticModel | `AnalyzeAssemblyLevelRegistrations` | Assembly-level register-for IDE squiggles | SGIOC001, 009, 011, 032 |
 | CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030 |
 
 #### CompilationEnd: AnalyzeAllDependencies
@@ -67,7 +67,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
-| Symbol (NamedType) | `AnalyzeContainerClass` | Container partial/static validation, import edges, UseSwitchStatement | SGIOC019, 020 |
+| Symbol (NamedType) | `AnalyzeContainerClass` | Container feature gate, partial/static/record validation, import edges, UseSwitchStatement | SGIOC019, 020, 031 |
 | Symbol (NamedType) | `CollectRegisteredServices` | Collect registrations from IocRegister/IocRegisterFor | Feeds 018, 021, 027, 029 |
 | CompilationEnd | `AnalyzeContainerDependencies` | Async accessor contracts, container dependency resolvability | SGIOC018, 021, 027, 029 |
 | CompilationEnd | `AnalyzeCircularImports` | Module import cycle detection via DFS | SGIOC025 |
@@ -81,8 +81,8 @@ Pass 2 (IntegrateServiceProvider=false only): `AnalyzeContainerServiceDependenci
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030 |
-| ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032 |
+| ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ## Diagnostics
 
@@ -321,6 +321,7 @@ Report when a `KeyValuePair<K, V>` is injected but the registered key type of `V
 Report when:
 
 - `[IocRegister]`/`[IoCRegisterFor]`/`[IoCRegisterDefaults]` has specificed `Factory` but the factory method is generic and does not mark with `[IocGenericFactory]`.
+- `[IocGenericFactory]` or `GenericFactoryTypeMapping` cannot fill every factory method type parameter. The generator skips such registrations.
 
 **Analysis:**
 
@@ -329,6 +330,14 @@ Report when:
 - If the method is generic, checks if it has `[IocGenericFactory]` attribute.
 - The diagnostic does NOT fire if `GenericFactoryTypeMapping` is provided on the registration attribute (`IocRegisterForAttribute` or `IocRegisterDefaultsAttribute`) AND the number of placeholder types (mapping array length minus 1) equals the factory method's type parameter count.
 - Reports when the factory method is generic but neither `[IocGenericFactory]` attribute on the method NOR a valid `GenericFactoryTypeMapping` on the registration attribute provides the type mapping.
+- Checks every method marked with `[IocGenericFactory]`, whether or not it is referenced as a factory. Reports when:
+  - The mapping has no service type template or no placeholder type.
+  - The placeholder count differs from the method's type parameter count.
+  - A placeholder type does not appear in the service type template (at any nesting level, including array element types).
+- Applies the same count and template checks to `GenericFactoryTypeMapping` on the registration attribute.
+- Duplicate placeholders are reported by `SGIOC017` instead.
+
+**Message format:** `Generic factory method '{MethodName}' has no valid type parameter mapping: {Reason}`
 
 ---
 
@@ -372,16 +381,17 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 
 ### SGIOC019 - Error - Usage - Container class must be partial and can not be static
 
-Report when a class marked with `[IocContainer]` is not declared as `partial` or is declared as `static`.
+Report when a class marked with `[IocContainer]` is not declared as `partial`, is declared as `static`, or is a `record`. The generator only handles `partial` class declarations.
 
 **Analysis:**
 
 - Checks the syntax declaration of classes marked with `[IocContainer]` attribute.
 - Verifies that the class has the `partial` modifier.
 - Verifies that the class does not have the `static` modifier.
-- Reports when the `partial` modifier is missing or the `static` modifier is present.
+- Verifies that the declaration is not a `record`.
+- Reports when the `partial` modifier is missing, the `static` modifier is present, or the declaration is a `record`.
 
-**Message format:** `Container class '{ClassName}' must be declared as partial.`
+**Message format:** `Container class '{ClassName}' must be declared as partial and cannot be static or a record`
 
 ---
 
@@ -479,6 +489,7 @@ Report when an element in the `InjectMembers` array is not in a recognized forma
       - Optional third element is a `KeyType` enum constant (`KeyType.Value` or `KeyType.Csharp`)
   - Arrays with more than 3 elements are rejected.
   - If 3 elements, the third must be a valid `KeyType` enum constant.
+  - With `KeyType.Value` (the default), the key must be a non-null constant. The generator skips the element otherwise.
 - Reports when an element does not match one of the recognized formats.
 
 ---
@@ -602,6 +613,37 @@ Report when a consumer requests `TService` but the matched registration can only
 - Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
 
 **Message format:** `'{MemberName}' requires '{ServiceType}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
+
+---
+
+### SGIOC031 - Warning - Usage - Container ignored due to disabled feature
+
+Report when a class is marked with `[IocContainer]` but `SourceGenIocFeatures` does not include `Container`.
+
+**Analysis:**
+
+- Reads `SourceGenIocFeatures` during `CompilationStart` (missing/empty value enables `Container`).
+- Checks classes marked with `[IocContainer]`.
+- Reports on the `[IocContainer]` attribute when the `Container` feature is disabled, because the generator skips every container.
+
+**Message format:** `Container '{ContainerType}' will not be generated because the Container feature is not enabled. Add 'Container' to <SourceGenIocFeatures> in your project file.`
+
+---
+
+### SGIOC032 - Warning - Design - Service type is not compatible with implementation
+
+Report when an explicit service type of `[IocRegister]`/`[IocRegister<T>]`/`[IocRegisterFor]`/`[IocRegisterFor<T>]` is skipped by the generator because its generic shape does not match the implementation type.
+
+**Analysis:**
+
+- Checks service types from `ServiceTypes` and from generic attribute type arguments (type-level and assembly-level registrations).
+- Reports when:
+  - The implementation is an open generic type but the service type is not.
+  - The implementation is not an open generic type but the service type is.
+  - Both are open generic, the service type is not the implementation itself, and the implementation does not implement or inherit the service type with its own type parameters in the same order.
+- Service types implicitly added by `RegisterAllInterfaces`/`RegisterAllBaseClasses` are not reported.
+
+**Message format:** `Service type '{ServiceType}' cannot be registered for implementation '{ImplementationType}' and will be skipped: {Reason}`
 
 ---
 

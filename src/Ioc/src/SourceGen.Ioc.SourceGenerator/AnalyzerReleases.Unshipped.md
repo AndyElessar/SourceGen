@@ -17,10 +17,10 @@ SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same tar
 SGIOC013 | Usage | Error | Key type is unmatched - ServiceKeyAttribute parameter type does not match the registered key type.
 SGIOC014 | Usage | Warning | Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.
 SGIOC015 | Usage | Warning | KeyValuePair's Key type is unmatched - Injected KeyValuePair/Dictionary key type does not match any registered keyed service's key type.
-SGIOC016 | Design | Error | Factory Method is unmatched - Generic factory method does not have IocGenericFactoryAttribute.
+SGIOC016 | Design | Error | Factory Method is unmatched - Generic factory method has no valid type parameter mapping (missing IocGenericFactoryAttribute, placeholder count mismatch, or placeholder absent from the template).
 SGIOC017 | Design | Error | Generic Factory Method's type parameters are duplicated - Placeholder types in IocGenericFactoryAttribute must be unique.
 SGIOC018 | Design | Error | Unable to resolve service - A dependency cannot be resolved when IntegrateServiceProvider is false.
-SGIOC019 | Usage | Error | Container class must be partial - The class marked with IocContainerAttribute must be declared as partial.
+SGIOC019 | Usage | Error | Container class must be partial - The class marked with IocContainerAttribute must be declared as partial and cannot be static or a record.
 SGIOC020 | Usage | Warning | UseSwitchStatement ignored with imported modules - UseSwitchStatement = true is ignored when container has IocImportModule attributes.
 SGIOC021 | Design | Error | Unable to resolve partial accessor service - A partial method/property return type cannot be resolved when IntegrateServiceProvider is false.
 SGIOC022 | Usage | Warning | Inject attribute ignored due to disabled feature - [IocInject]/[Inject] on property/field/method is ignored when its SourceGenIocFeatures flag is not enabled.
@@ -32,3 +32,5 @@ SGIOC027 | Design | Error | Partial accessor must return Task of T for async-ini
 SGIOC028 | Usage | Warning | async void injection method cannot be awaited - [IocInject] method is declared as async void.
 SGIOC029 | Design | Error | Unsupported async partial accessor type - Partial accessor targets an async-init service but returns an async type other than Task of T.
 SGIOC030 | Usage | Error | Synchronous dependency requested for async-init service - Consumer requests T but the service has async inject methods and no synchronous registration exists.
+SGIOC031 | Usage | Warning | Container ignored due to disabled feature - [IocContainer] is ignored when SourceGenIocFeatures does not include Container.
+SGIOC032 | Design | Warning | Service type is not compatible with implementation - An explicit service type has an incompatible generic shape and is skipped.

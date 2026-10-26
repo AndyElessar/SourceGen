@@ -259,8 +259,9 @@ public sealed partial class RegisterAnalyzer
                     }
                 }
 
-                // Suppress SGIOC016 if the registration attribute provides GenericFactoryTypeMapping
+                // Suppress SGIOC016 if the registration attribute provides a valid GenericFactoryTypeMapping
                 var hasGenericFactoryTypeMappingOnAttr = false;
+                string? mappingIssue = null;
                 // Always check GenericFactoryTypeMapping for duplicate placeholders (SGIOC017), regardless of [IocGenericFactory]
                 foreach (var arg in argumentList.Arguments)
                 {
@@ -303,11 +304,14 @@ public sealed partial class RegisterAnalyzer
                                     arg.Expression.GetLocation(),
                                     duplicateType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
                             }
-                            else if (!hasIocGenericFactory && mappingElements.Length - 1 == methodSymbol.TypeParameters.Length)
+                            else if (!hasIocGenericFactory)
                             {
                                 // Only suppress SGIOC016 when [IocGenericFactory] is NOT present
                                 // AND the mapping provides exactly one placeholder per factory type parameter
-                                hasGenericFactoryTypeMappingOnAttr = true;
+                                var template = GetTypeOfType(context, mappingElements[0]);
+                                var placeholders = mappingElements.Skip(1).Select(e => GetTypeOfType(context, e)).ToArray();
+                                mappingIssue = AnalyzerHelpers.GetGenericFactoryMappingIssue(template, placeholders, methodSymbol.TypeParameters.Length);
+                                hasGenericFactoryTypeMappingOnAttr = mappingIssue is null;
                             }
                         }
                         break;
@@ -319,7 +323,8 @@ public sealed partial class RegisterAnalyzer
                     context.ReportDiagnostic(Diagnostic.Create(
                         GenericFactoryMissingAttribute,
                         location,
-                        methodSymbol.Name));
+                        methodSymbol.Name,
+                        mappingIssue ?? "mark it with [IocGenericFactory] or specify GenericFactoryTypeMapping"));
                 }
             }
 
@@ -356,12 +361,11 @@ public sealed partial class RegisterAnalyzer
             return;
 
         var firstArg = genericFactoryAttr.ConstructorArguments[0];
-        if (firstArg.Kind != TypedConstantKind.Array || firstArg.Values.IsDefaultOrEmpty)
+        if (firstArg.Kind != TypedConstantKind.Array)
             return;
 
-        var typeArray = firstArg.Values;
-        if (typeArray.Length < 2)
-            return; // Need at least service type template and one placeholder
+        var location = genericFactoryAttr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
+        var typeArray = firstArg.IsNull ? [] : firstArg.Values;
 
         // Check for duplicates in placeholder types (from index 1 to end)
         var seenTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
@@ -372,7 +376,6 @@ public sealed partial class RegisterAnalyzer
                 if (!seenTypes.Add(placeholderType))
                 {
                     // Duplicate found
-                    var location = genericFactoryAttr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
                     context.ReportDiagnostic(Diagnostic.Create(
                         DuplicatedGenericFactoryPlaceholders,
                         location,
@@ -381,7 +384,25 @@ public sealed partial class RegisterAnalyzer
                 }
             }
         }
+
+        // SGIOC016: The generator skips generic factory registrations whose mapping cannot fill every type parameter
+        var template = typeArray.Length > 0 ? typeArray[0].Value as ITypeSymbol : null;
+        var placeholders = typeArray.Skip(1).Select(static t => t.Value as ITypeSymbol).ToArray();
+        var mappingIssue = AnalyzerHelpers.GetGenericFactoryMappingIssue(template, placeholders, methodSymbol.TypeParameters.Length);
+        if (mappingIssue is not null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                GenericFactoryMissingAttribute,
+                location,
+                methodSymbol.Name,
+                mappingIssue));
+        }
     }
+
+    private static ITypeSymbol? GetTypeOfType(SyntaxNodeAnalysisContext context, ExpressionSyntax expression)
+        => expression is TypeOfExpressionSyntax typeOfExpression
+            ? context.SemanticModel.GetTypeInfo(typeOfExpression.Type, context.CancellationToken).Type
+            : null;
 
     /// <summary>
     /// SGIOC009: Analyzes Instance registration to ensure Lifetime is Singleton.
@@ -422,6 +443,30 @@ public sealed partial class RegisterAnalyzer
             location,
             instance,
             lifetime.Name));
+    }
+
+    /// <summary>
+    /// SGIOC032: Analyzes explicit service types that the generator skips for the implementation type.
+    /// </summary>
+    private static void AnalyzeIncompatibleServiceTypes(
+        Action<Diagnostic> reportDiagnostic,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        Location? location)
+    {
+        foreach (var serviceType in attribute.GetServiceTypeSymbolsFromGenericAttribute().Concat(attribute.GetServiceTypeSymbols()))
+        {
+            var reason = AnalyzerHelpers.GetServiceTypeIncompatibilityReason(targetType, serviceType);
+            if (reason is null)
+                continue;
+
+            reportDiagnostic(Diagnostic.Create(
+                IncompatibleServiceType,
+                location,
+                serviceType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                reason));
+        }
     }
 
     private static void AnalyzeInvalidAttributeUsage(SymbolAnalysisContext context, INamedTypeSymbol targetType, Location? location)
@@ -523,10 +568,27 @@ public sealed partial class RegisterAnalyzer
                 }
 
                 // If 3 elements, validate 3rd is a valid KeyType constant (Value=0 or Csharp=1)
+                var keyType = 0;
                 if (nested.Length == 3)
                 {
                     var ktConst = context.SemanticModel.GetConstantValue(nested[2], context.CancellationToken);
                     if (!ktConst.HasValue || ktConst.Value is not int ktVal || ktVal is not (0 or 1))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InjectMembersInvalidFormat,
+                            element.GetLocation(),
+                            i));
+                        continue;
+                    }
+
+                    keyType = ktVal;
+                }
+
+                // KeyType.Value keys must be non-null constants; the generator skips the element otherwise
+                if (keyType == 0)
+                {
+                    var keyConst = context.SemanticModel.GetConstantValue(nested[1], context.CancellationToken);
+                    if (!keyConst.HasValue || keyConst.Value is null)
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             InjectMembersInvalidFormat,

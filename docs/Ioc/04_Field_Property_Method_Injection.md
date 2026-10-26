@@ -226,7 +226,7 @@ services.AddSingleton<global::System.Threading.Tasks.Task<global::MyNamespace.IM
 |SGIOC007|Error|Invalid `[IocInject]` usage. The attribute cannot be applied to static members, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), properties without a setter or with an inaccessible setter, `readonly` fields, generic methods, non-ordinary methods (e.g., constructors, operators), or methods with unsupported return types (only `void` and non-generic `Task` when `AsyncMethodInject` is enabled are accepted).|
 |SGIOC022|Warning|`[IocInject]` is ignored when the corresponding feature (`PropertyInject`, `FieldInject`, `MethodInject`, or `AsyncMethodInject`) is disabled in `SourceGenIocFeatures`.|
 |SGIOC026|Error|`AsyncMethodInject` feature requires `MethodInject` to be enabled.|
-|SGIOC023|Error|An element in the `InjectMembers` array is not in a recognized format. Each element must be `nameof(member)` or `new object[] { nameof(member), key [, KeyType] }`.|
+|SGIOC023|Error|An element in the `InjectMembers` array is not in a recognized format. Each element must be `nameof(member)` or `new object[] { nameof(member), key [, KeyType] }`. With `KeyType.Value` (the default), the key must be a non-null constant.|
 |SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method with unsupported return type).|
 
 ## InjectMembers: Attribute-Level Injection Without `[IocInject]`

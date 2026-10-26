@@ -125,6 +125,7 @@ services.AddSingleton<global::MyNamespace.MyService>((global::System.IServicePro
 
 > [!WARNING]
 > If a member uses `[IocInject]` but its feature flag is disabled, analyzer `SGIOC022` is reported.
+> If `Container` is disabled, classes marked with `[IocContainer]` are not generated and analyzer `SGIOC031` is reported.
 
 ## `RootNamespace`
 

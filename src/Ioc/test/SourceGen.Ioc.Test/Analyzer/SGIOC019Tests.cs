@@ -189,5 +189,24 @@ public class SGIOC019Tests
         await Assert.That(sgioc019).Count().IsEqualTo(1);
         await Assert.That(sgioc019[0].GetMessage()).Contains("StaticNonPartialContainer");
     }
-}
 
+    [Test]
+    public async Task SGIOC019_PartialRecordContainer_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocContainer]
+            public partial record RecordContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc019 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC019").ToList();
+
+        await Assert.That(sgioc019).Count().IsEqualTo(1);
+        await Assert.That(sgioc019[0].GetMessage()).Contains("RecordContainer").And.Contains("record");
+    }
+}

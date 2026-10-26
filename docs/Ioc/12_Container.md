@@ -687,10 +687,11 @@ partial class TestContainer
 |ID|Severity|Description|
 |:---|:---|:---|
 |SGIOC018|Error|Container cannot resolve a dependency when `IntegrateServiceProvider = false`.|
-|SGIOC019|Error|Container class must be `partial` and cannot be `static`.|
+|SGIOC019|Error|Container class must be `partial` and cannot be `static` or a `record`.|
 |SGIOC020|Warning|`UseSwitchStatement = true` is ignored when importing modules.|
 |SGIOC021|Error|Non-nullable partial accessor return type is not a registered service when `IntegrateServiceProvider = false`.|
 |SGIOC025|Error|Container has a circular module import dependency (direct or transitive).|
+|SGIOC031|Warning|Container is not generated because `Container` is not enabled in `SourceGenIocFeatures`.|
 
 ---
 
