@@ -31,7 +31,7 @@ partial class IocSourceGenerator
         MsBuildProperties msbuildProps,
         bool hasDIPackage)
     {
-        var writer = new SourceWriter();
+        using var writer = new SourceWriter();
         var container = containerWithGroups.Container;
         var groups = containerWithGroups.Groups;
 
