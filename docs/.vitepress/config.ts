@@ -41,6 +41,13 @@ export default defineConfig({
     search: {
       provider: 'local'
     },
+    outline: {
+      level: [2, 3]
+    },
+    editLink: {
+      pattern: 'https://github.com/AndyElessar/SourceGen/edit/main/docs/:path',
+      text: 'Edit this page on GitHub'
+    },
     footer: {
       message: 'Released under the MIT License.',
       copyright: 'Copyright © 2026 AndyElessar'

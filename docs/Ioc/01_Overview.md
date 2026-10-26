@@ -1,10 +1,16 @@
 # SourceGen.Ioc Overview
 
-`SourceGen.Ioc` is a C# source generator that extends `Microsoft.Extensions.DependencyInjection.Abstractions` (`MS.E.DI.A`) — it is **not** a replacement for `Microsoft.Extensions.DependencyInjection` (`MS.E.DI`) .
+`SourceGen.Ioc` is a C# source generator that extends `Microsoft.Extensions.DependencyInjection.Abstractions` (`MS.E.DI.A`) — it is **not** a replacement for `Microsoft.Extensions.DependencyInjection` (`MS.E.DI`).
 
 Its primary goal is to **generate `IServiceCollection` registration code at compile time**, eliminating repetitive manual registration while keeping your business code free of DI framework concerns. An optional compile-time container (`[IocContainer]`) is available for high-performance or specialized scenarios (such as building a tag-filtered container for a specific subsystem).
 
 ## Quick Start
+
+Install the package:
+
+```bash
+dotnet add package SourceGen.Ioc
+```
 
 The simplest way to get started is to **register services without modifying their source code**:
 
@@ -105,12 +111,13 @@ public static IServiceCollection AddMyProject(this IServiceCollection services, 
 
 ## Diagnostics
 
-`SourceGen.Ioc` analyzers currently define `SGIOC001` through `SGIOC024`.
+`SourceGen.Ioc` analyzers report `SGIOC`-prefixed diagnostics in the IDE and at build time. See the [Diagnostics Quick Fix Map](14_Best_Practices.md#diagnostics-quick-fix-map) for the full list.
 
 - **Usage validation** — attribute misuse, incompatible settings, invalid injection members.
 - **Design validation** — cycles, lifetime issues, duplicate registrations/defaults.
 - **Keyed/factory validation** — key type mismatches, generic factory mapping issues.
 - **Container validation** — unresolved dependencies and container option conflicts.
+- **Async initialization validation** — async inject methods and the `Task<T>` accessors and dependencies they require.
 
 ## Table of Contents
 

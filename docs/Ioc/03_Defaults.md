@@ -14,8 +14,8 @@
 
 public interface IHandler;
 
-// Need mark with [IocRegister]
-// Uses default lifetime (Transient) from IHandler
+// Defaults do not register a type by themselves: it still needs [IocRegister]
+// (or ImplementationTypes, see below). Uses the default lifetime (Transient) from IHandler
 [IocRegister]
 internal class MyHandler : IHandler;
 
@@ -38,7 +38,7 @@ services.AddSingleton<IHandler>((global::System.IServiceProvider sp) => sp.GetRe
 
 ## Multiple Service Types
 
-Use `ServiceTypes` register multiple service types:
+Use `ServiceTypes` to register additional service types:
 
 ```csharp
 [assembly: IocRegisterDefaults<IMyService1>(

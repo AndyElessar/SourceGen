@@ -213,7 +213,7 @@ services.AddScoped(typeof(global::TestNamespace.Repository<>), typeof(global::Te
 services.AddScoped(typeof(global::TestNamespace.IRepository<>), typeof(global::TestNamespace.Repository<>));
 
 // CustomerService registration
-services.AddSingleton<global::TestNamespace.CustomerService, global::TestNamespace.CustomerService>();
+services.AddTransient<global::TestNamespace.CustomerService, global::TestNamespace.CustomerService>();
 
 // Closed generic uses Factory from DefaultSettings
 services.AddScoped<global::TestNamespace.Repository<global::TestNamespace.Customer>>((global::System.IServiceProvider sp) => (global::TestNamespace.Repository<global::TestNamespace.Customer>)global::TestNamespace.RepositoryFactory.Create(sp));

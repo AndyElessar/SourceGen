@@ -5,9 +5,9 @@ Use it as a companion to the feature documents in this folder.
 
 ## Relationship to MS.E.DI
 
-Although `SourceGen.Ioc` is built on top of `MS.E.DI.A`, it does not resolve `IServiceCollection`, think of it as an **extension** to `MS.E.DI`, not a replacement.
+Although `SourceGen.Ioc` is built on top of `MS.E.DI.A`, it does not resolve `IServiceCollection`. Think of it as an **extension** to `MS.E.DI`, not a replacement.
 
-It generates `IServiceCollection` registration code at compile time, use these generated methods alongside your existing `MS.E.DI` setup to improve compile-time safety and reduce boilerplate.
+It generates `IServiceCollection` registration code at compile time. Use these generated methods alongside your existing `MS.E.DI` setup to improve compile-time safety and reduce boilerplate.
 
 The optional `[IocContainer]` is a **specialized** compile-time container for high-performance or tag-filtered scenarios.
 For general-purpose app composition, keep `MS.E.DI` as the primary container and use `SourceGen.Ioc`'s generated registration methods as an extension layer.
@@ -95,7 +95,7 @@ Treat lifetime diagnostics as architecture feedback:
 |Scoped should not depend on transient|`SGIOC005`|Promote transient dependency or split responsibilities.|
 
 > [!NOTE]
-> Better fix lifetime diagnostics in design, not by suppressing analyzers.
+> Fix lifetime diagnostics in the design rather than suppressing them.
 
 ## Keys vs Tags
 
@@ -161,8 +161,8 @@ services.AddScoped<global::MyNamespace.MyHandler, global::MyNamespace.MyHandler>
 services.AddScoped<global::MyNamespace.IHandler>((global::System.IServiceProvider sp) =>
 {
     var s0 = sp.GetRequiredService<global::MyNamespace.MyHandler>();
-    var s1 = new global::MyNamespace.MetricsDecorator<global::MyNamespace.MyHandler>(s0);
-    var s2 = new global::MyNamespace.LoggingDecorator<global::MyNamespace.MetricsDecorator<global::MyNamespace.MyHandler>>(s1);
+    var s1 = new global::MyNamespace.MetricsDecorator(s0);
+    var s2 = new global::MyNamespace.LoggingDecorator(s1);
     return s2;
 });
 ```

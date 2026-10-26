@@ -138,14 +138,14 @@ internal class DerivedService : BaseService;
 
 ```csharp
 // RegisterAllInterfaces
-services.AddSingleton<MyService, MyService>();
-services.AddSingleton<IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
-services.AddSingleton<IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
-services.AddSingleton<IDisposable>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddTransient<MyService, MyService>();
+services.AddTransient<IService1>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddTransient<IService2>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
+services.AddTransient<IDisposable>((global::System.IServiceProvider sp) => sp.GetRequiredService<MyService>());
 
 // RegisterAllBaseClasses
-services.AddSingleton<DerivedService, DerivedService>();
-services.AddSingleton<BaseService>((global::System.IServiceProvider sp) => sp.GetRequiredService<DerivedService>());
+services.AddTransient<DerivedService, DerivedService>();
+services.AddTransient<BaseService>((global::System.IServiceProvider sp) => sp.GetRequiredService<DerivedService>());
 ```
 
 </details>
@@ -182,9 +182,11 @@ This generates:
 // Generated extension method with custom name
 services.AddMyApp();
 
-// Tag methods also use the custom name
-services.AddMyApp_Tag1();
+// Pass tags to the same method to register tagged services
+services.AddMyApp("Tag1");
 ```
+
+See [Tags](07_Tags.md) for how tagged and untagged registrations are selected.
 
 If not specified, the assembly name is used as the default method name.
 

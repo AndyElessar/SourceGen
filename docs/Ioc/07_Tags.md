@@ -116,6 +116,14 @@ string[] myTags = ["Mediator", "Feature1"];
 services.AddMyProject(myTags);
 ```
 
+> [!TIP]
+> To register both the untagged services and a tagged group, call the method once without tags and once with the tags:
+>
+> ```csharp
+> services.AddMyProject();
+> services.AddMyProject("Mediator");
+> ```
+
 ## Tags with Defaults
 
 Apply tags to all implementations via `IocRegisterDefaults`:
