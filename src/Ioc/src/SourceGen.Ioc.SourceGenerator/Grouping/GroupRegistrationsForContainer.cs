@@ -257,9 +257,7 @@ partial class IocSourceGenerator
             }
         }
 
-        var serviceLookupEntries = serviceLookup.ToDictionary(
-            static kvp => kvp.Key,
-            static kvp => kvp.Value.ToImmutableEquatableArray());
+        var serviceLookupEntries = new ServiceLookup(serviceLookup);
 
         var wrapperEntries = CreateWrapperContainerEntries(
             singletons,
@@ -488,7 +486,7 @@ partial class IocSourceGenerator
     private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateServiceContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> registrations,
         ThreadSafeStrategy threadSafeStrategy,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver)
@@ -608,7 +606,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        ServiceLookup serviceLookup)
     {
         var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>();
 
@@ -659,7 +657,7 @@ partial class IocSourceGenerator
 
     private static ImmutableEquatableArray<ResolvedConstructorParameter> ResolveConstructorParametersForContainerEntryModel(
         ServiceRegistrationModel registration,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver,
@@ -691,7 +689,7 @@ partial class IocSourceGenerator
     private static ImmutableEquatableArray<ResolvedInjectionMember> ResolveInjectionMembersForContainerEntryModel(
         ImmutableEquatableArray<InjectionMemberData> injectionMembers,
         ServiceRegistrationModel ownerRegistration,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver,
@@ -758,7 +756,7 @@ partial class IocSourceGenerator
 
     private static ImmutableEquatableArray<ResolvedDecorator> ResolveDecoratorsForContainerEntryModel(
         ServiceRegistrationModel registration,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver)
@@ -826,7 +824,7 @@ partial class IocSourceGenerator
     private static ResolvedDependency ResolveParameterDependencyForContainerEntryModel(
         ParameterData parameter,
         ServiceRegistrationModel ownerRegistration,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver,
@@ -856,7 +854,7 @@ partial class IocSourceGenerator
         TypeData type,
         string? key,
         bool isOptional,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver)
@@ -920,7 +918,7 @@ partial class IocSourceGenerator
         TypeData type,
         string? key,
         bool isOptional,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver,
@@ -1084,7 +1082,7 @@ partial class IocSourceGenerator
         TypeData innerType,
         string? key,
         bool isOptional,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         IReadOnlyDictionary<string, string> lazyFieldByResolver,
         IReadOnlyDictionary<string, string> funcFieldByResolver)
@@ -1129,17 +1127,13 @@ partial class IocSourceGenerator
     private static bool HasKvpRegistrationsForContainerEntryModel(
         string keyTypeName,
         string valueTypeName,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        ServiceLookup serviceLookup)
     {
-        foreach(var kvp in serviceLookup)
+        if(!serviceLookup.LastKeyedEntriesByServiceType.TryGetValue(valueTypeName, out var keyedEntries))
+            return false;
+
+        foreach(var cached in keyedEntries)
         {
-            if(kvp.Key.Key is null)
-                continue;
-
-            if(!string.Equals(kvp.Key.ServiceType, valueTypeName, StringComparison.Ordinal))
-                continue;
-
-            var cached = kvp.Value[^1];
             if(IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
                 return true;
         }
@@ -1153,4 +1147,33 @@ partial class IocSourceGenerator
         string? FieldName,
         bool IsAsyncInit,
         bool IsEager);
+
+    /// <summary>
+    /// Registrations by (service type, key), with the last registration of each keyed service indexed by service type,
+    /// so KeyValuePair and Dictionary dependencies find their keyed registrations without scanning every service.
+    /// </summary>
+    private sealed class ServiceLookup : Dictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>>
+    {
+        public ServiceLookup(Dictionary<(string ServiceType, string? Key), List<ServiceLookupEntry>> registrations)
+            : base(registrations.Count)
+        {
+            foreach(var kvp in registrations)
+            {
+                var entries = kvp.Value.ToImmutableEquatableArray();
+                Add(kvp.Key, entries);
+
+                if(kvp.Key.Key is null)
+                    continue;
+
+                if(!LastKeyedEntriesByServiceType.TryGetValue(kvp.Key.ServiceType, out var keyedEntries))
+                {
+                    keyedEntries = [];
+                    LastKeyedEntriesByServiceType[kvp.Key.ServiceType] = keyedEntries;
+                }
+                keyedEntries.Add(entries[^1]);
+            }
+        }
+
+        public Dictionary<string, List<ServiceLookupEntry>> LastKeyedEntriesByServiceType { get; } = new(StringComparer.Ordinal);
+    }
 }
