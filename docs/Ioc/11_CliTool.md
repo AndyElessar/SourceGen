@@ -251,7 +251,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 ### CLI Schema Command
 
-Output CLI schema in JSON format for LLM AI.
+Output the CLI schema as JSON, for example to let an AI agent discover the available commands and options.
 
 ```bash
 sourcegen-ioc cli-schema [options]
