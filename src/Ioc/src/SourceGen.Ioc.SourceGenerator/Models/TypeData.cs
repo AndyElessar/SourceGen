@@ -540,14 +540,16 @@ internal static class TypeDataExtensions
             bool HasInjectConstructor = false,
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
+            TypeTraits Traits = default) =>
             new SimpleTypeData(
                 Name,
                 ConstructorParameters,
                 HasInjectConstructor,
                 InjectionMembers,
                 AllInterfaces,
-                AllBaseClasses);
+                AllBaseClasses)
+            { Traits = Traits };
 
         /// <summary>
         /// Creates a generic type data.
@@ -563,7 +565,8 @@ internal static class TypeDataExtensions
             bool HasInjectConstructor = false,
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) =>
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
+            TypeTraits Traits = default) =>
             new NamedGenericTypeData(
                 Name,
                 NameWithoutGeneric,
@@ -575,7 +578,8 @@ internal static class TypeDataExtensions
                 HasInjectConstructor,
                 InjectionMembers,
                 AllInterfaces,
-                AllBaseClasses);
+                AllBaseClasses)
+            { Traits = Traits };
 
         /// <summary>
         /// Creates a type parameter placeholder (e.g., T, TRequest).
@@ -599,69 +603,70 @@ internal static class TypeDataExtensions
             bool HasInjectConstructor = false,
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-            ImmutableEquatableArray<TypeData>? AllBaseClasses = null) => WrapperKind switch
+            ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
+            TypeTraits Traits = default) => WrapperKind switch
             {
                 WrapperKind.Enumerable => new EnumerableTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.ReadOnlyCollection => new ReadOnlyCollectionTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.Collection => new CollectionTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.ReadOnlyList => new ReadOnlyListTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.List => new ListTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.Array => new ArrayTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.Lazy => new LazyTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.Func => new FuncTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.Dictionary => new DictionaryTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.KeyValuePair => new KeyValuePairTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 WrapperKind.Task => new TaskTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Traits = Traits },
                 _ => new OtherWrapperTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     WrapperKind,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses)
+                    AllInterfaces, AllBaseClasses) { Traits = Traits }
             };
 
         /// <summary>

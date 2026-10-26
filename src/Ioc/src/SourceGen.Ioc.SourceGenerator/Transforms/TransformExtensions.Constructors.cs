@@ -75,7 +75,7 @@ internal static partial class TransformExtensions
             bool hasInjectConstructor = constructor.GetAttributes()
                 .Any(static attr => attr.AttributeClass?.IsInject == true);
 
-            List<ParameterData> parameters = [];
+            using var parameters = new ValueListBuilder<ParameterData>(constructor.Parameters.Length);
             foreach(var param in constructor.Parameters)
             {
                 var paramType = param.Type;

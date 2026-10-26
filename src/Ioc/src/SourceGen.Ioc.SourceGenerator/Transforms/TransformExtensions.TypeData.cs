@@ -221,7 +221,7 @@ internal static partial class TransformExtensions
             }
 
             var typeArgs = typeSymbol.TypeArguments;
-            List<TypeParameter> parameters = new(typeParams.Length);
+            using var parameters = new ValueListBuilder<TypeParameter>(typeParams.Length);
 
             for(int i = 0; i < typeParams.Length; i++)
             {
@@ -229,23 +229,13 @@ internal static partial class TransformExtensions
                 var typeArg = i < typeArgs.Length ? typeArgs[i] : null;
 
                 // Create TypeData for the type argument
-                var (typeData, allInterfaces) = typeParam.CreateTypeDataForTypeArg(typeArg, depth);
-
-                // Add interfaces if extracted
-                if(allInterfaces is { Length: > 0 })
-                {
-                    typeData = typeData with { AllInterfaces = allInterfaces };
-                }
+                var typeData = typeParam.CreateTypeDataForTypeArg(typeArg, depth);
 
                 // Extract constraints only when requested (to avoid recursion in basic scenarios)
                 ImmutableEquatableArray<TypeData>? constraintTypes = null;
                 if(extractConstraints)
                 {
-                    constraintTypes = typeParam.ConstraintTypes
-                        .Select(ct => ct is INamedTypeSymbol namedCt
-                            ? namedCt.CreateBasicTypeData(depth + 1)
-                            : CreateConstraintTypeData(ct))
-                        .ToImmutableEquatableArray();
+                    constraintTypes = CreateConstraintTypes(typeParam.ConstraintTypes, depth);
                 }
 
                 parameters.Add(new TypeParameter(
@@ -261,6 +251,24 @@ internal static partial class TransformExtensions
 
             return parameters.ToImmutableEquatableArray();
 
+            static ImmutableEquatableArray<TypeData> CreateConstraintTypes(ImmutableArray<ITypeSymbol> constraints, int depth)
+            {
+                // Most type parameters have no constraint types
+                if(constraints.IsEmpty)
+                {
+                    return [];
+                }
+
+                using var result = new ValueListBuilder<TypeData>(constraints.Length);
+                foreach(var constraint in constraints)
+                {
+                    result.Add(constraint is INamedTypeSymbol namedConstraint
+                        ? namedConstraint.CreateBasicTypeData(depth + 1)
+                        : CreateConstraintTypeData(constraint));
+                }
+                return result.ToImmutableEquatableArray();
+            }
+
             // Creates TypeData for a constraint that is not a named type (a type parameter or an array, for example).
             static TypeData CreateConstraintTypeData(ITypeSymbol constraint)
             {
@@ -275,8 +283,17 @@ internal static partial class TransformExtensions
         /// Gets all interfaces implemented by a type.
         /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
         /// </summary>
-        public ImmutableEquatableArray<TypeData> GetAllInterfaces() =>
-            typeSymbol.AllInterfaces.Select(static i => i.CreateBasicTypeData()).ToImmutableEquatableArray();
+        public ImmutableEquatableArray<TypeData> GetAllInterfaces()
+        {
+            var interfaces = typeSymbol.AllInterfaces;
+            using var result = new ValueListBuilder<TypeData>(interfaces.Length);
+            foreach(var iface in interfaces)
+            {
+                result.Add(iface.CreateBasicTypeData());
+            }
+
+            return result.ToImmutableEquatableArray();
+        }
 
         /// <summary>
         /// Gets all base classes of a type, excluding System.Object.
@@ -284,7 +301,7 @@ internal static partial class TransformExtensions
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetAllBaseClasses()
         {
-            List<TypeData> result = [];
+            using var result = new ValueListBuilder<TypeData>(4);
             var baseType = typeSymbol.BaseType;
             while(baseType != null && baseType.SpecialType != SpecialType.System_Object)
             {
@@ -299,7 +316,15 @@ internal static partial class TransformExtensions
         /// Creates a basic TypeData with type parameters extracted recursively.
         /// Does not extract constraint types to avoid circular dependencies.
         /// </summary>
-        public TypeData CreateBasicTypeData(int depth = 0)
+        /// <param name="depth">Current recursion depth to prevent infinite recursion.</param>
+        /// <param name="traits">Traits of a type argument, used to check special constraints.</param>
+        /// <param name="allInterfaces">Interfaces of a type argument, used to check type constraints.</param>
+        /// <param name="allBaseClasses">Base classes of a type argument, used to check type constraints.</param>
+        public TypeData CreateBasicTypeData(
+            int depth = 0,
+            TypeTraits traits = default,
+            ImmutableEquatableArray<TypeData>? allInterfaces = null,
+            ImmutableEquatableArray<TypeData>? allBaseClasses = null)
         {
             var typeName = typeSymbol.FullyQualifiedName;
             var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
@@ -325,7 +350,10 @@ internal static partial class TransformExtensions
                     typeSymbol.Arity,
                     wrapperKind,
                     typeSymbol.IsNestedOpenGeneric,
-                    typeParameters);
+                    typeParameters,
+                    AllInterfaces: allInterfaces,
+                    AllBaseClasses: allBaseClasses,
+                    Traits: traits);
             }
 
             if(typeSymbol.ContainsGenericParameters || typeSymbol.Arity > 0 || typeParameters is { Length: > 0 })
@@ -336,19 +364,22 @@ internal static partial class TransformExtensions
                     typeSymbol.ContainsGenericParameters,
                     typeSymbol.Arity,
                     typeSymbol.IsNestedOpenGeneric,
-                    typeParameters);
+                    typeParameters,
+                    AllInterfaces: allInterfaces,
+                    AllBaseClasses: allBaseClasses,
+                    Traits: traits);
             }
 
-            return TypeData.CreateSimple(typeName);
+            return TypeData.CreateSimple(typeName, AllInterfaces: allInterfaces, AllBaseClasses: allBaseClasses, Traits: traits);
         }
     }
 
     extension(ITypeParameterSymbol typeParam)
     {
         /// <summary>
-        /// Creates TypeData for a type argument, with optional interface extraction.
+        /// Creates TypeData for a type argument, with the traits, interfaces and base classes that constraint checks use.
         /// </summary>
-        public (TypeData TypeData, ImmutableEquatableArray<TypeData>? AllInterfaces) CreateTypeDataForTypeArg(
+        public TypeData CreateTypeDataForTypeArg(
             ITypeSymbol? typeArg,
             int depth)
         {
@@ -360,51 +391,41 @@ internal static partial class TransformExtensions
                     ? MetadataTypeArgHierarchy.GetValue((INamedTypeSymbol)namedArg.WithNullableAnnotation(NullableAnnotation.None), CreateHierarchy)
                     : CreateHierarchy(namedArg);
 
-                var typeData = namedArg.CreateBasicTypeData(depth + 1) with { Traits = hierarchy.Traits };
-                if(hierarchy.AllBaseClasses is not null)
-                {
-                    typeData = typeData with { AllBaseClasses = hierarchy.AllBaseClasses };
-                }
-                return (typeData, hierarchy.AllInterfaces);
+                return namedArg.CreateBasicTypeData(depth + 1, hierarchy.Traits, hierarchy.AllInterfaces, hierarchy.AllBaseClasses);
             }
 
             // Arrays keep their element type, created like any type argument, so T[] and T[][] can be matched against
             // closed arrays such as Req[] and Req[][], and the element keeps its interfaces for constraint checks
             if(typeArg is IArrayTypeSymbol arrayArg)
             {
-                var (elementType, elementInterfaces) = typeParam.CreateTypeDataForTypeArg(arrayArg.ElementType, depth + 1);
-                if(elementInterfaces is { Length: > 0 })
-                {
-                    elementType = elementType with { AllInterfaces = elementInterfaces };
-                }
-
+                var elementType = typeParam.CreateTypeDataForTypeArg(arrayArg.ElementType, depth + 1);
                 var arrayName = arrayArg.FullyQualifiedName;
-                var arrayType = TypeData.CreateWrapper(
+                return TypeData.CreateWrapper(
                     arrayName,
                     arrayName,
                     arrayArg.ContainsGenericParameters,
                     GenericArity: 1,
                     WrapperKind.Array,
                     IsNestedOpenGeneric: false,
-                    TypeParameters: [new TypeParameter("T", elementType)]);
-                return (arrayType with { Traits = GetTypeTraits(arrayArg) }, null);
+                    TypeParameters: [new TypeParameter("T", elementType)],
+                    Traits: GetTypeTraits(arrayArg));
             }
 
             if(typeArg is not null)
             {
                 var argName = typeArg.FullyQualifiedName;
-                TypeData typeData = typeArg.TypeKind == TypeKind.TypeParameter
+                return typeArg.TypeKind == TypeKind.TypeParameter
                     ? TypeData.CreateTypeParameter(argName)
                     : TypeData.CreateGeneric(
                         argName,
                         GetNameWithoutGeneric(argName),
                         typeArg.ContainsGenericParameters,
-                        0) with { Traits = GetTypeTraits(typeArg) };
-                return (typeData, null);
+                        0,
+                        Traits: GetTypeTraits(typeArg));
             }
 
             // No type argument available, this is a type parameter placeholder
-            return (TypeData.CreateTypeParameter(typeParam.Name), null);
+            return TypeData.CreateTypeParameter(typeParam.Name);
 
             static TypeArgHierarchy CreateHierarchy(INamedTypeSymbol type)
             {
@@ -413,7 +434,7 @@ internal static partial class TransformExtensions
                 ImmutableEquatableArray<TypeData>? baseClasses = null;
                 if(type.TypeKind == TypeKind.Class && type.BaseType is { SpecialType: not SpecialType.System_Object })
                 {
-                    List<TypeData> bases = [];
+                    using var bases = new ValueListBuilder<TypeData>(4);
                     for(var baseType = type.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)
                     {
                         bases.Add(CreateInterfaceTypeData(baseType));
@@ -455,37 +476,51 @@ internal static partial class TransformExtensions
             // Decorator constraints compare these names, so where T : IEnumerable<object> accepts List<string>.
             static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(INamedTypeSymbol type)
             {
-                if(type.AllInterfaces.Length == 0 && !IsVariant(type))
+                var interfaces = type.AllInterfaces;
+                var isVariant = IsVariant(type);
+                if(interfaces.Length == 0 && !isVariant)
                 {
                     return null;
                 }
 
-                List<TypeData> result = [];
-                HashSet<string> names = new(StringComparer.Ordinal);
-                foreach(var iface in type.AllInterfaces)
+                // AllInterfaces has no duplicates, so names are only tracked once covariant conversions are added
+                using var result = new ValueListBuilder<TypeData>(interfaces.Length);
+                foreach(var iface in interfaces)
                 {
-                    Add(CreateInterfaceTypeData(iface));
+                    result.Add(CreateInterfaceTypeData(iface));
                 }
 
-                // The type itself may be a variant interface, such as IEnumerable<string>; its own name is matched directly
-                names.Add(type.FullyQualifiedName);
-                foreach(var variant in type.AllInterfaces.Prepend(type))
+                // Index -1 is the type itself, which may be a variant interface such as IEnumerable<string>; its own name
+                // is matched directly, so it is excluded from its conversions
+                HashSet<string>? names = null;
+                for(var i = -1; i < interfaces.Length; i++)
                 {
+                    var variant = i < 0 ? type : interfaces[i];
+                    if(i < 0 ? !isVariant : !IsVariant(variant))
+                    {
+                        continue;
+                    }
+
+                    if(names is null)
+                    {
+                        names = new HashSet<string>(StringComparer.Ordinal) { type.FullyQualifiedName };
+                        foreach(var existing in result.AsSpan())
+                        {
+                            names.Add(existing.Name);
+                        }
+                    }
+
                     foreach(var conversion in GetCovariantConversions(variant))
                     {
-                        Add(CreateInterfaceTypeData(conversion));
+                        var typeData = CreateInterfaceTypeData(conversion);
+                        if(names.Add(typeData.Name))
+                        {
+                            result.Add(typeData);
+                        }
                     }
                 }
 
                 return result.Count > 0 ? result.ToImmutableEquatableArray() : null;
-
-                void Add(TypeData typeData)
-                {
-                    if(names.Add(typeData.Name))
-                    {
-                        result.Add(typeData);
-                    }
-                }
             }
 
             static bool IsVariant(INamedTypeSymbol type)
