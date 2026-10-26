@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 
 namespace SourceGen.Ioc.Test.Helpers;
 
@@ -54,6 +55,36 @@ public readonly record struct GeneratorTestResult(GeneratorRunResult Result, Com
 
             await Assert.That(errors).IsEmpty().Because(message);
         }
+
+        await VerifyNoWarningsWithNullableEnabledAsync();
+    }
+
+    /// <summary>
+    /// Verifies that the generated code has no warnings when compiled with nullable warnings enabled.
+    /// </summary>
+    /// <remarks>
+    /// Generated files disable nullable warnings, because nullable flow analysis dominates the compiler's binding time of
+    /// large generated files. Compiling them with <c>#nullable enable</c> keeps checking that the generated code is
+    /// nullable-correct.
+    /// </remarks>
+    private async Task VerifyNoWarningsWithNullableEnabledAsync()
+    {
+        var compilation = OutputCompilation;
+        var checkedTrees = new HashSet<SyntaxTree>();
+        foreach(var source in Result.GeneratedSources)
+        {
+            var text = source.SourceText.ToString().Replace("#nullable disable warnings", "#nullable enable warnings");
+            var tree = source.SyntaxTree.WithChangedText(SourceText.From(text));
+            compilation = compilation.ReplaceSyntaxTree(source.SyntaxTree, tree);
+            checkedTrees.Add(tree);
+        }
+
+        var warnings = compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Warning && checkedTrees.Contains(d.Location.SourceTree!))
+            .ToArray();
+
+        await Assert.That(warnings).IsEmpty()
+            .Because($"Generated code has warnings with nullable warnings enabled:{Environment.NewLine}{string.Join(Environment.NewLine, warnings.Select(w => w.ToString()))}");
     }
 
     /// <summary>

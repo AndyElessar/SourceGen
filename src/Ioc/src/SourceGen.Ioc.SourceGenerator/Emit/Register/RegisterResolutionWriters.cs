@@ -255,7 +255,8 @@ partial class IocSourceGenerator
 
             case KeyValuePairTypeData kvp:
             {
-                var keyExpr = serviceKey ?? "default";
+                // A non-keyed registration has the default key, null for reference type keys
+                var keyExpr = serviceKey ?? "default!";
                 var valueExpr = BuildInnerResolutionExpression(kvp.ValueType, serviceKey, isOptional, asyncInitServiceTypeNames);
                 return $"new global::System.Collections.Generic.KeyValuePair<{kvp.KeyType.Name}, {kvp.ValueType.Name}>({keyExpr}, {valueExpr})";
             }

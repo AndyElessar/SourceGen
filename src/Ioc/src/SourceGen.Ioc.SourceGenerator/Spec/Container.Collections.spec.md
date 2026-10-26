@@ -97,10 +97,7 @@ partial class AppContainer
     #endregion
 
     // Registered in _localResolvers
-    #nullable disable
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers = __CreateLocalResolvers();
-
-    private static KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] __CreateLocalResolvers() =>
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         new __IocResolver(new ServiceIdentifier(typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
@@ -110,7 +107,6 @@ partial class AppContainer
         new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IPlugin[]), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
     ];
-    #nullable enable
 }
 #endregion
 ```

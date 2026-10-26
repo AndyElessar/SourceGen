@@ -1029,7 +1029,7 @@ partial class IocSourceGenerator
                 return new KvpInlineDependency(
                     kvp.KeyType.Name,
                     kvp.ValueType.Name,
-                    key ?? "default",
+                    key ?? "default!", // A non-keyed registration has the default key, null for reference type keys
                     ResolveInnerDependencyForContainerEntryModel(
                         kvp.ValueType,
                         key,

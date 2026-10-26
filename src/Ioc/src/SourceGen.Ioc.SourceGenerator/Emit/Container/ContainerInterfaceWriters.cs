@@ -493,14 +493,8 @@ partial class IocSourceGenerator
         }
         writer.WriteLine();
 
-        // Write _localResolvers as static field, built by a method in a nullable-disabled region. Nullable analysis of the
-        // entries' lambdas dominates the compiler's binding time of the whole file and checks nothing. A field initializer
-        // is not enough: the type's static initializers are analyzed together whenever any of them is nullable-enabled.
-        var localResolversType = $"KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>[]";
-        writer.WriteLine("#nullable disable");
-        writer.WriteLine($"private static readonly {localResolversType} _localResolvers = __CreateLocalResolvers();");
-        writer.WriteLine();
-        writer.WriteLine($"private static {localResolversType} __CreateLocalResolvers() =>");
+        // Write _localResolvers as static field
+        writer.WriteLine($"private static readonly KeyValuePair<ServiceIdentifier, Func<{container.ContainerTypeName}, object>>[] _localResolvers =");
         writer.WriteLine("[");
         writer.Indentation++;
 
@@ -547,7 +541,6 @@ partial class IocSourceGenerator
 
         writer.Indentation--;
         writer.WriteLine("];");
-        writer.WriteLine("#nullable enable");
 
         // Write _serviceResolvers as static field (only when not using switch statement)
         if(!effectiveUseSwitchStatement)
