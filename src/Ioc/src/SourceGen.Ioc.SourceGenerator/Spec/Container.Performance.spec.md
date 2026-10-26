@@ -230,14 +230,19 @@ partial class AppContainer
 The generated container MUST stay cheap for the C# compiler to bind, because it is compiled in every build and analyzed in the IDE.
 
 - `_localResolvers` entries MUST be explicitly typed through the file-level `__IocResolver` alias (`KeyValuePair<ServiceIdentifier, Func<TContainer, object>>`) instead of target-typed `new(...)`. With nullable analysis enabled, target-typed entries that take a lambda bind superlinearly in a large array initializer: for 3,803 entries, binding took 12.9 s with target-typed `new(...)` and 1.45 s with the alias.
+- The `_localResolvers` entries MUST be built by the `__CreateLocalResolvers()` method, and the field and method MUST be preceded by `#nullable disable` and followed by `#nullable enable` (not `#nullable restore`, which would fall back to the project setting instead of the file's `#nullable enable`). Even with the alias, nullable analysis of the entries' lambdas dominates the binding time of the whole file and checks nothing. A disabled field initializer is not enough, because the compiler analyzes all static field initializers of a type together whenever any of them is nullable-enabled. For 9,507 entries, binding the file took 9.7 s with the entries in the field initializer and 1.9 s with them in the disabled method.
 
 ```csharp
 using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::AppContainer, object>>;
 
-private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
+#nullable disable
+private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers = __CreateLocalResolvers();
+
+private static KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] __CreateLocalResolvers() =>
 [
     new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
 ];
+#nullable enable
 ```
 
 ## Diagnostics Summary

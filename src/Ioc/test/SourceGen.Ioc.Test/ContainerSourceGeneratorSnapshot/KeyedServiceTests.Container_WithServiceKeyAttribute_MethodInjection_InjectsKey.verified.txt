@@ -217,7 +217,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
+    #nullable disable
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers = __CreateLocalResolvers();
+
+    private static KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] __CreateLocalResolvers() =>
     [
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
@@ -227,6 +230,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.SecondaryService), global::TestNamespace.ServiceKey.Secondary), static c => c._testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary!),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IService), global::TestNamespace.ServiceKey.Secondary), static c => c._testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary!),
     ];
+    #nullable enable
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

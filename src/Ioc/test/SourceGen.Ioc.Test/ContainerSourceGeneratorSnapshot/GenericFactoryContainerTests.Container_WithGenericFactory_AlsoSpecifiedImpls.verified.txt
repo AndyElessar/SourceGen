@@ -215,7 +215,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
+    #nullable disable
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers = __CreateLocalResolvers();
+
+    private static KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] __CreateLocalResolvers() =>
     [
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
@@ -224,6 +227,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Handler_TestNamespace_Entity_!),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity2___TestNamespace_FactoryContainer_Create!),
     ];
+    #nullable enable
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

@@ -187,12 +187,16 @@ partial class EmptyContainer : IIocContainer<global::TestNamespace.EmptyContaine
 
     public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.EmptyContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.EmptyContainer, object>>[] _localResolvers =
+    #nullable disable
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.EmptyContainer, object>>[] _localResolvers = __CreateLocalResolvers();
+
+    private static KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.EmptyContainer, object>>[] __CreateLocalResolvers() =>
     [
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.EmptyContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
     ];
+    #nullable enable
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.EmptyContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

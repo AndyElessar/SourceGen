@@ -201,7 +201,10 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
 
     public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>[] _localResolvers =
+    #nullable disable
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>[] _localResolvers = __CreateLocalResolvers();
+
+    private static KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>[] __CreateLocalResolvers() =>
     [
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
@@ -210,6 +213,7 @@ partial class MainContainer : IIocContainer<global::MainApp.MainContainer>, ISer
         new __IocResolver(new ServiceIdentifier(typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
     ];
+    #nullable enable
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::MainApp.MainContainer, object>> _serviceResolvers =
         global::SharedModule.SharedOpenGenericModule.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::MainApp.MainContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule_SharedOpenGenericModule)))

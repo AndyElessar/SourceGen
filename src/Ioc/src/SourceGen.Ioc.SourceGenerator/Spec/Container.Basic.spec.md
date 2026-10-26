@@ -251,7 +251,10 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
+    #nullable disable
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers = __CreateLocalResolvers();
+
+    private static KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] __CreateLocalResolvers() =>
     [
         // Built-in services
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
@@ -263,6 +266,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         new __IocResolver(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
         new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
     ];
+    #nullable enable
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
     // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. If reversed, _localResolvers would be null when _serviceResolvers initializes.
