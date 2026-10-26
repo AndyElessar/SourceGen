@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
@@ -57,6 +58,24 @@ public readonly record struct GeneratorTestResult(GeneratorRunResult Result, Com
         }
 
         await VerifyNoWarningsWithNullableEnabledAsync();
+        await VerifyGeneratedCodeAttributesAsync();
+    }
+
+    /// <summary>
+    /// Verifies that every top-level generated type has <c>[GeneratedCode]</c>.
+    /// </summary>
+    private async Task VerifyGeneratedCodeAttributesAsync()
+    {
+        var missing = Result.GeneratedSources
+            .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes()
+                .OfType<BaseTypeDeclarationSyntax>()
+                .Where(type => !type.Ancestors().OfType<BaseTypeDeclarationSyntax>().Any())
+                .Where(type => !type.AttributeLists.Any(l => l.Attributes.Any(a => a.Name.ToString().EndsWith("GeneratedCode", StringComparison.Ordinal))))
+                .Select(type => $"{source.HintName}: {type.Identifier}"))
+            .ToArray();
+
+        await Assert.That(missing).IsEmpty()
+            .Because($"Generated types without [GeneratedCode]:{Environment.NewLine}{string.Join(Environment.NewLine, missing)}");
     }
 
     /// <summary>

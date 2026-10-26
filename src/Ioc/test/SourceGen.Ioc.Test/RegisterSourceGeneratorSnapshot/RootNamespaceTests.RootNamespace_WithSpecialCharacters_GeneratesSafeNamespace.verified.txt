@@ -11,6 +11,7 @@ namespace My_Project.Root_Namespace
     /// <summary>
     /// Extension methods for registering services from TestAssembly.
     /// </summary>
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public static class TestAssemblyServiceCollectionExtensions
     {
         /// <summary>

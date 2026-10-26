@@ -11,6 +11,7 @@ namespace MyAssembly.Name
     /// <summary>
     /// Extension methods for registering services from MyAssembly.Name.
     /// </summary>
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public static class MyAssembly_NameServiceCollectionExtensions
     {
         /// <summary>

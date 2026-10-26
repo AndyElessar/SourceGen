@@ -5,6 +5,8 @@
     <IsPackable>false</IsPackable>
     <IsAnalyzerProject>true</IsAnalyzerProject>
     <IsRoslynComponent>true</IsRoslynComponent>
+    <!-- Shipped in the SourceGen.Ioc package, so it shares that package's version -->
+    <GitVersionBaseDirectory>$(MSBuildThisFileDirectory)..\SourceGen.Ioc\</GitVersionBaseDirectory>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <GetTargetPathDependsOn>
       $(GetTargetPathDependsOn);GetDependencyTargetPaths

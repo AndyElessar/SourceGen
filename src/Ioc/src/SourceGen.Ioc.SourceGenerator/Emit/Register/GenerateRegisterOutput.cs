@@ -34,6 +34,7 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("/// <summary>");
         mainWriter.WriteLine($"/// Extension methods for registering services from {model.AssemblyName}.");
         mainWriter.WriteLine("/// </summary>");
+        mainWriter.WriteLine(GeneratedCodeAttribute);
         mainWriter.WriteLine($"public static class {model.MethodBaseName}ServiceCollectionExtensions");
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;

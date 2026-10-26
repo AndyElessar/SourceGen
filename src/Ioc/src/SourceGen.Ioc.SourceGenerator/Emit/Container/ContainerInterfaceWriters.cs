@@ -919,6 +919,7 @@ partial class IocSourceGenerator
     private static void WriteHotReloadHandler(SourceWriter writer, ContainerModel container)
     {
         writer.WriteLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+        writer.WriteLine(GeneratedCodeAttribute);
         writer.WriteLine("internal static class __HotReloadHandler");
         writer.WriteLine("{");
         writer.Indentation++;
