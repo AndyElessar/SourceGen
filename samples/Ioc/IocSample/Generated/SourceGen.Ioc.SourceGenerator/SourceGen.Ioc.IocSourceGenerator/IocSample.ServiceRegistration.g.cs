@@ -11,7 +11,7 @@ namespace IocSample
     /// <summary>
     /// Extension methods for registering services from IocSample.
     /// </summary>
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.174")]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.176")]
     public static class IocSampleServiceCollectionExtensions
     {
         /// <summary>

@@ -251,7 +251,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            WriteServiceProviderExtensionsDictionaryMode(writer);
+            WriteServiceProviderExtensionsDictionaryMode(writer, container.IntegrateServiceProvider);
         }
 
         writer.WriteLine("#endregion");
@@ -310,91 +310,88 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes generic extension methods for dictionary mode.
     /// These directly query _serviceResolvers FrozenDictionary for optimal performance.
+    /// On a miss they fall back exactly like their non-generic counterparts.
     /// </summary>
-    private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer)
+    private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer, bool integrateServiceProvider)
     {
+        // Fallback lookups used on a dictionary miss (null when the container is standalone)
+        string? fallback = integrateServiceProvider ? "GetFallbackServiceProvider()" : null;
+        string? keyedFallback = integrateServiceProvider ? "(GetFallbackServiceProvider() as IKeyedServiceProvider)" : null;
+
         // GetService<T>
-        writer.WriteLine("public T? GetService<T>() where T : class");
-        writer.WriteLine("{");
-        writer.Indentation++;
-        writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), {KeyedServiceAnyKey}), out var resolver)");
-        writer.Indentation++;
-        writer.WriteLine("? resolver(this) as T");
-        writer.WriteLine(": null;");
-        writer.Indentation--;
-        writer.Indentation--;
-        writer.WriteLine("}");
-        writer.WriteLine();
+        WriteGenericResolveMethod(writer,
+            "public T? GetService<T>() where T : class",
+            keyed: false,
+            "typeof(T)",
+            "? resolver(this) as T",
+            fallback is null ? ": null;" : $": {fallback}?.GetService(typeof(T)) as T;");
 
         // GetRequiredService<T>
-        writer.WriteLine("public T GetRequiredService<T>() where T : notnull");
-        writer.WriteLine("{");
-        writer.Indentation++;
-        writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), {KeyedServiceAnyKey}), out var resolver)");
-        writer.Indentation++;
-        writer.WriteLine("? (T)resolver(this)");
-        writer.WriteLine(": throw new InvalidOperationException($\"No service for type '{typeof(T)}' has been registered.\");");
-        writer.Indentation--;
-        writer.Indentation--;
-        writer.WriteLine("}");
-        writer.WriteLine();
+        const string notFound = "throw new InvalidOperationException($\"No service for type '{typeof(T)}' has been registered.\")";
+        WriteGenericResolveMethod(writer,
+            "public T GetRequiredService<T>() where T : notnull",
+            keyed: false,
+            "typeof(T)",
+            "? (T)resolver(this)",
+            fallback is null ? $": {notFound};" : $": (T)({fallback}?.GetService(typeof(T)) ?? {notFound});");
 
         // GetServices<T>
-        writer.WriteLine("public System.Collections.Generic.IEnumerable<T> GetServices<T>()");
-        writer.WriteLine("{");
-        writer.Indentation++;
-        writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), {KeyedServiceAnyKey}), out var resolver)");
-        writer.Indentation++;
-        writer.WriteLine("? (System.Collections.Generic.IEnumerable<T>)resolver(this)");
-        writer.WriteLine(": [];");
-        writer.Indentation--;
-        writer.Indentation--;
-        writer.WriteLine("}");
-        writer.WriteLine();
+        WriteGenericResolveMethod(writer,
+            "public System.Collections.Generic.IEnumerable<T> GetServices<T>()",
+            keyed: false,
+            "typeof(System.Collections.Generic.IEnumerable<T>)",
+            "? (System.Collections.Generic.IEnumerable<T>)resolver(this)",
+            fallback is null ? ": [];" : $": {fallback}?.GetService(typeof(System.Collections.Generic.IEnumerable<T>)) as System.Collections.Generic.IEnumerable<T> ?? [];");
 
         // GetKeyedService<T>
-        writer.WriteLine("public T? GetKeyedService<T>(object? serviceKey) where T : class");
-        writer.WriteLine("{");
-        writer.Indentation++;
-        writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
-        writer.WriteLine("return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)");
-        writer.Indentation++;
-        writer.WriteLine("? resolver(this) as T");
-        writer.WriteLine(": null;");
-        writer.Indentation--;
-        writer.Indentation--;
-        writer.WriteLine("}");
-        writer.WriteLine();
+        WriteGenericResolveMethod(writer,
+            "public T? GetKeyedService<T>(object? serviceKey) where T : class",
+            keyed: true,
+            "typeof(T)",
+            "? resolver(this) as T",
+            keyedFallback is null ? ": null;" : $": {keyedFallback}?.GetKeyedService(typeof(T), serviceKey) as T;");
 
         // GetRequiredKeyedService<T>
-        writer.WriteLine("public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull");
-        writer.WriteLine("{");
-        writer.Indentation++;
-        writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
-        writer.WriteLine("return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)");
-        writer.Indentation++;
-        writer.WriteLine("? (T)resolver(this)");
-        writer.WriteLine(": throw new InvalidOperationException($\"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.\");");
-        writer.Indentation--;
-        writer.Indentation--;
-        writer.WriteLine("}");
-        writer.WriteLine();
+        const string keyedNotFound = "throw new InvalidOperationException($\"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.\")";
+        WriteGenericResolveMethod(writer,
+            "public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull",
+            keyed: true,
+            "typeof(T)",
+            "? (T)resolver(this)",
+            keyedFallback is null ? $": {keyedNotFound};" : $": (T)({keyedFallback}?.GetKeyedService(typeof(T), serviceKey) ?? {keyedNotFound});");
 
         // GetKeyedServices<T>
-        writer.WriteLine("public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)");
+        WriteGenericResolveMethod(writer,
+            "public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)",
+            keyed: true,
+            "typeof(System.Collections.Generic.IEnumerable<T>)",
+            "? (System.Collections.Generic.IEnumerable<T>)resolver(this)",
+            keyedFallback is null ? ": [];" : $": {keyedFallback}?.GetKeyedService(typeof(System.Collections.Generic.IEnumerable<T>), serviceKey) as System.Collections.Generic.IEnumerable<T> ?? [];");
+    }
+
+    private static void WriteGenericResolveMethod(
+        SourceWriter writer,
+        string signature,
+        bool keyed,
+        string serviceTypeExpr,
+        string hitExpr,
+        string missExpr)
+    {
+        writer.WriteLine(signature);
         writer.WriteLine("{");
         writer.Indentation++;
         writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
-        writer.WriteLine("return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), key), out var resolver)");
+
+        if(keyed)
+        {
+            writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+        }
+
+        var keyExpr = keyed ? "key" : KeyedServiceAnyKey;
+        writer.WriteLine($"return _serviceResolvers.TryGetValue(new ServiceIdentifier({serviceTypeExpr}, {keyExpr}), out var resolver)");
         writer.Indentation++;
-        writer.WriteLine("? (System.Collections.Generic.IEnumerable<T>)resolver(this)");
-        writer.WriteLine(": [];");
+        writer.WriteLine(hitExpr);
+        writer.WriteLine(missExpr);
         writer.Indentation--;
         writer.Indentation--;
         writer.WriteLine("}");

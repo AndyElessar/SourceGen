@@ -38,7 +38,7 @@ The container generates generic instance methods matching the signatures from `S
 
 ### Resolution strategy by mode
 
-- **FrozenDictionary mode** (default): Methods directly query `_serviceResolvers` FrozenDictionary for O(1) lookup, bypassing the non-generic `GetService(Type)` overhead.
+- **FrozenDictionary mode** (default): Methods directly query `_serviceResolvers` FrozenDictionary for O(1) lookup, bypassing the non-generic `GetService(Type)` overhead. On a miss they MUST fall back exactly like their non-generic counterparts (`GetFallbackServiceProvider()`, or its `IKeyedServiceProvider` for keyed methods, passing the original `serviceKey`), so `container.GetRequiredService<T>()` and `((IServiceProvider)container).GetRequiredService<T>()` behave the same. `Required` methods MUST throw `InvalidOperationException` only when neither the container nor the fallback provider resolves the service; `GetServices<T>` / `GetKeyedServices<T>` MUST return an empty sequence in that case. Without `IntegrateServiceProvider`, a miss returns `null` / empty or throws directly.
 - **Switch mode** (`UseSwitchStatement = true`): Methods delegate to their non-generic counterparts (e.g., `GetService<T>()` calls `GetService(typeof(T)) as T`).
 
 ## Construction, Scopes, and Fallback Provider
@@ -229,7 +229,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
             ? resolver(this) as T
-            : null;
+            : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
     }
 
     public T GetRequiredService<T>() where T : notnull
@@ -237,7 +237,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
             ? (T)resolver(this)
-            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+            : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
 
     public IEnumerable<T> GetServices<T>() { /* ... */ }

@@ -15,7 +15,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocSample.Shared;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.174")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.176")]
 partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable
 {
     private readonly IServiceProvider? _fallbackProvider;
@@ -239,7 +239,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? resolver(this) as T
-            : null;
+            : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
     }
 
     public T GetRequiredService<T>() where T : notnull
@@ -247,7 +247,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (T)resolver(this)
-            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+            : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
 
     public System.Collections.Generic.IEnumerable<T> GetServices<T>()
@@ -255,7 +255,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : [];
+            : GetFallbackServiceProvider()?.GetService(typeof(System.Collections.Generic.IEnumerable<T>)) as System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     public T? GetKeyedService<T>(object? serviceKey) where T : class
@@ -264,7 +264,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
             ? resolver(this) as T
-            : null;
+            : (GetFallbackServiceProvider() as IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) as T;
     }
 
     public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
@@ -273,7 +273,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
             ? (T)resolver(this)
-            : throw new InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.");
+            : (T)((GetFallbackServiceProvider() as IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
     }
 
     public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
@@ -282,7 +282,7 @@ partial class SharedModule : IIocContainer<global::IocSample.Shared.SharedModule
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), key), out var resolver)
             ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : [];
+            : (GetFallbackServiceProvider() as IKeyedServiceProvider)?.GetKeyedService(typeof(System.Collections.Generic.IEnumerable<T>), serviceKey) as System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     #endregion

@@ -146,6 +146,37 @@ public sealed class ContainerLifecycleTests
         await Assert.That(external.IsDisposed).IsFalse();
     }
 
+    [Test]
+    public async Task GenericResolution_ServiceOnlyInFallback_MatchesNonGenericResolution()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<LifecycleExternalService>();
+        services.AddKeyedSingleton<LifecycleExternalService>("keyed");
+        using var container = (FallbackScopeContainer)new FallbackScopeContainer().CreateServiceProvider(services);
+
+        var service = container.GetRequiredService(typeof(LifecycleExternalService));
+        var keyedService = container.GetRequiredKeyedService(typeof(LifecycleExternalService), "keyed");
+
+        await Assert.That(container.GetService<LifecycleExternalService>()).IsSameReferenceAs(service);
+        await Assert.That(container.GetRequiredService<LifecycleExternalService>()).IsSameReferenceAs(service);
+        await Assert.That(container.GetServices<LifecycleExternalService>().Single()).IsSameReferenceAs(service);
+        await Assert.That(container.GetKeyedService<LifecycleExternalService>("keyed")).IsSameReferenceAs(keyedService);
+        await Assert.That(container.GetRequiredKeyedService<LifecycleExternalService>("keyed")).IsSameReferenceAs(keyedService);
+        await Assert.That(container.GetKeyedServices<LifecycleExternalService>("keyed").Single()).IsSameReferenceAs(keyedService);
+    }
+
+    [Test]
+    public async Task GenericResolution_ServiceMissingEverywhere_RequiredThrowsAndOptionalReturnsEmpty()
+    {
+        using var container = (FallbackScopeContainer)new FallbackScopeContainer().CreateServiceProvider(new ServiceCollection());
+
+        await Assert.That(container.GetService<LifecycleExternalService>()).IsNull();
+        await Assert.That(container.GetKeyedService<LifecycleExternalService>("missing")).IsNull();
+        await Assert.That(container.GetServices<LifecycleExternalService>()).IsEmpty();
+        await Assert.That(() => container.GetRequiredService<LifecycleExternalService>()).Throws<InvalidOperationException>();
+        await Assert.That(() => container.GetRequiredKeyedService<LifecycleExternalService>("missing")).Throws<InvalidOperationException>();
+    }
+
     /// <summary>Fallback provider that counts scopes created through its <see cref="IServiceScopeFactory"/>.</summary>
     private sealed class CountingScopeFactoryProvider(IServiceProvider inner) : IServiceProvider, IServiceScopeFactory
     {
