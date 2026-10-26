@@ -97,6 +97,29 @@ public class BasicRegistrationTests
     }
 
     [Test]
+    public async Task RegisterAllInterfaces_OpenGenericWithMoreThanTenInterfaces_RegistersEveryInterface()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface I0<T> { } public interface I1<T> { } public interface I2<T> { } public interface I3<T> { }
+            public interface I4<T> { } public interface I5<T> { } public interface I6<T> { } public interface I7<T> { }
+            public interface I8<T> { } public interface I9<T> { } public interface I10<T> { } public interface I11<T> { }
+
+            [IocRegister(RegisterAllInterfaces = true)]
+            public class Handler<T> : I0<T>, I1<T>, I2<T>, I3<T>, I4<T>, I5<T>, I6<T>, I7<T>, I8<T>, I9<T>, I10<T>, I11<T> { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task KeyedService_WithStringKey_GeneratesKeyedRegistration()
     {
         const string source = """

@@ -276,7 +276,7 @@ internal static partial class TransformExtensions
         /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetAllInterfaces() =>
-            typeSymbol.AllInterfaces.Select(CreateBasicTypeData).ToImmutableEquatableArray();
+            typeSymbol.AllInterfaces.Select(static i => i.CreateBasicTypeData()).ToImmutableEquatableArray();
 
         /// <summary>
         /// Gets all base classes of a type, excluding System.Object.
