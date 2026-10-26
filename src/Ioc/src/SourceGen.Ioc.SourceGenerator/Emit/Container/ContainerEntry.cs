@@ -33,9 +33,26 @@ partial class IocSourceGenerator
         }
 
         /// <summary>
+        /// Writes the scope constructor statement copying this entry's cached singleton instance from the parent.
+        /// </summary>
+        public virtual void WriteCopyFromParent(SourceWriter writer)
+        {
+        }
+
+        /// <summary>
         /// Gets the type a resolver entry for <paramref name="serviceType"/> is registered under.
         /// </summary>
         public virtual string GetExposedServiceType(string serviceType) => serviceType;
+
+        /// <summary>
+        /// Gets whether the entry is resolved in the container (or scope) constructor.
+        /// </summary>
+        public virtual bool IsEagerlyInitialized => false;
+
+        /// <summary>
+        /// Gets whether a scope delegates creation of this entry to the root container (lazily created singletons).
+        /// </summary>
+        public virtual bool DelegatesToRoot => false;
     }
 
     private closed record class ServiceContainerEntry(
@@ -45,6 +62,23 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
         ImmutableEquatableArray<ResolvedDecorator> Decorators) : ContainerEntry
     {
+        /// <summary>
+        /// Gets the type returned by the resolver method. Captured at construction so that alias copies
+        /// (<c>with { Registration = ... }</c>) keep the resolver's actual return type.
+        /// </summary>
+        public string ResolvedTypeName { get; } = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
+
+        /// <summary>
+        /// Formats the expression resolving <paramref name="serviceType"/> through this entry,
+        /// with <paramref name="receiver"/> (e.g. <c>"c."</c> or <c>""</c>) prefixing member access.
+        /// </summary>
+        public virtual string FormatResolveExpression(string serviceType, string receiver) => $"{receiver}{ResolverMethodName}()";
+
+        /// <summary>
+        /// Formats the static resolver lambda used in the resolver dictionary.
+        /// </summary>
+        public virtual string FormatResolverLambda(string serviceType) => $"static c => {FormatResolveExpression(serviceType, "c.")}";
+
         protected void WriteInstanceCreationWithInjection(SourceWriter writer)
         {
             var typeDeclaration = Decorators.Length > 0 ? Registration.ServiceType.Name : "var";
@@ -353,6 +387,10 @@ partial class IocSourceGenerator
         public override void WriteResolver(SourceWriter writer)
         {
         }
+
+        public override string FormatResolveExpression(string serviceType, string receiver) => Registration.Instance!;
+
+        public override string FormatResolverLambda(string serviceType) => $"static _ => {Registration.Instance}";
     }
 
     private sealed record class EagerContainerEntry(
@@ -365,20 +403,18 @@ partial class IocSourceGenerator
     {
         public override void WriteField(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-            writer.WriteLine($"private {returnType} {FieldName} = null!;");
+            writer.WriteLine($"private {ResolvedTypeName} {FieldName} = null!;");
         }
 
         public override void WriteResolver(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
             var createMethodName = GetCreateMethodName(ResolverMethodName);
 
             // Tiny fast path (inlinable); creation lives in a separate slow-path method
-            writer.WriteLine($"private {returnType} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
+            writer.WriteLine($"private {ResolvedTypeName} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
             writer.WriteLine();
 
-            writer.WriteLine($"private {returnType} {createMethodName}()");
+            writer.WriteLine($"private {ResolvedTypeName} {createMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
 
@@ -397,9 +433,16 @@ partial class IocSourceGenerator
             writer.WriteLine("}");
         }
 
+        public override bool IsEagerlyInitialized => true;
+
         public override void WriteEagerInit(SourceWriter writer)
         {
             writer.WriteLine($"{ResolverMethodName}();");
+        }
+
+        public override void WriteCopyFromParent(SourceWriter writer)
+        {
+            writer.WriteLine($"{FieldName} = parent.{FieldName};");
         }
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
@@ -417,10 +460,17 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
         ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
     {
+        // Scopes never create singletons themselves; the root owns and disposes them
+        public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
+
+        public override void WriteCopyFromParent(SourceWriter writer)
+        {
+            writer.WriteLine($"{FieldName} = parent.{FieldName};");
+        }
+
         public override void WriteField(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-            writer.WriteLine($"private {returnType}? {FieldName};");
+            writer.WriteLine($"private {ResolvedTypeName}? {FieldName};");
 
             var syncFieldDeclaration = ThreadSafeStrategy switch
             {
@@ -438,19 +488,17 @@ partial class IocSourceGenerator
 
         public override void WriteResolver(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
             var createMethodName = GetCreateMethodName(ResolverMethodName);
 
             // Tiny fast path (inlinable); creation and synchronization live in a separate slow-path method
-            writer.WriteLine($"private {returnType} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
+            writer.WriteLine($"private {ResolvedTypeName} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
             writer.WriteLine();
 
-            writer.WriteLine($"private {returnType} {createMethodName}()");
+            writer.WriteLine($"private {ResolvedTypeName} {createMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
 
-            // Scopes never create singletons themselves; the root owns and disposes them
-            if(Registration.Lifetime == ServiceLifetime.Singleton)
+            if(DelegatesToRoot)
             {
                 writer.WriteLine($"if(_root is not null) return _root.{ResolverMethodName}();");
                 writer.WriteLine();
@@ -594,9 +642,7 @@ partial class IocSourceGenerator
     {
         public override void WriteResolver(SourceWriter writer)
         {
-            var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-
-            writer.WriteLine($"private {returnType} {ResolverMethodName}()");
+            writer.WriteLine($"private {ResolvedTypeName} {ResolverMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
 
@@ -655,12 +701,7 @@ partial class IocSourceGenerator
         /// </summary>
         public abstract string AsyncEntryMethodName { get; }
 
-        /// <summary>
-        /// Gets the <c>T</c> of the <c>Task&lt;T&gt;</c> returned by the async resolver.
-        /// </summary>
-        public string TaskResultTypeName => Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-
-        protected string TaskReturnTypeName => $"global::System.Threading.Tasks.Task<{TaskResultTypeName}>";
+        protected string TaskReturnTypeName => $"global::System.Threading.Tasks.Task<{ResolvedTypeName}>";
 
         /// <summary>
         /// Async-init services are exposed as <c>Task&lt;ServiceType&gt;</c> instead of <c>ServiceType</c>,
@@ -669,15 +710,20 @@ partial class IocSourceGenerator
         public override string GetExposedServiceType(string serviceType) => $"global::System.Threading.Tasks.Task<{serviceType}>";
 
         /// <summary>
-        /// Formats the call returning <c>Task&lt;serviceType&gt;</c>.
-        /// <c>Task&lt;T&gt;</c> is invariant, so the resolver task is projected when its result type differs.
+        /// Gets whether exposing this entry as <c>Task&lt;serviceType&gt;</c> requires projecting the resolver task,
+        /// because <c>Task&lt;T&gt;</c> is invariant.
         /// </summary>
-        public string FormatResolverCall(string serviceType, string receiver)
+        public bool NeedsTaskProjection(string serviceType) => serviceType != ResolvedTypeName;
+
+        /// <summary>
+        /// Formats the call returning <c>Task&lt;serviceType&gt;</c>.
+        /// </summary>
+        public override string FormatResolveExpression(string serviceType, string receiver)
         {
             var call = $"{receiver}{AsyncEntryMethodName}()";
-            return serviceType == TaskResultTypeName
-                ? call
-                : $"{ProjectTaskMethodName}<{serviceType}, {TaskResultTypeName}>({call})";
+            return NeedsTaskProjection(serviceType)
+                ? $"{ProjectTaskMethodName}<{serviceType}, {ResolvedTypeName}>({call})"
+                : call;
         }
 
         protected void WriteCreateMethod(SourceWriter writer)
@@ -705,6 +751,16 @@ partial class IocSourceGenerator
     {
         public override string AsyncEntryMethodName => GetAsyncResolverMethodName(ResolverMethodName);
 
+        public override bool IsEagerlyInitialized => IsEager;
+
+        // Scopes never create singletons themselves; the root owns and disposes them
+        public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
+
+        public override void WriteCopyFromParent(SourceWriter writer)
+        {
+            writer.WriteLine($"{FieldName} = parent.{FieldName};");
+        }
+
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
@@ -728,8 +784,7 @@ partial class IocSourceGenerator
             writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
             writer.Indentation--;
 
-            // Scopes never create singletons themselves; the root owns and disposes them
-            if(Registration.Lifetime == ServiceLifetime.Singleton)
+            if(DelegatesToRoot)
             {
                 writer.WriteLine("if(_root is not null)");
                 writer.Indentation++;
@@ -817,7 +872,7 @@ partial class IocSourceGenerator
         public override void WriteResolver(SourceWriter writer) => WriteCreateMethod(writer);
     }
 
-    private sealed record class LazyWrapperContainerEntry(
+    internal sealed record class LazyWrapperContainerEntry(
         string InnerServiceTypeName,
         string InnerImplTypeName,
         string FieldName,
@@ -885,7 +940,7 @@ partial class IocSourceGenerator
         }
     }
 
-    private sealed record class FuncWrapperContainerEntry(
+    internal sealed record class FuncWrapperContainerEntry(
         string InnerServiceTypeName,
         string InnerImplTypeName,
         string FieldName,
@@ -953,7 +1008,7 @@ partial class IocSourceGenerator
         }
     }
 
-    private sealed record class KvpWrapperContainerEntry(
+    internal sealed record class KvpWrapperContainerEntry(
         string KeyTypeName,
         string ValueTypeName,
         string KeyExpr,

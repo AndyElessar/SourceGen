@@ -279,10 +279,7 @@ partial class IocSourceGenerator
         // Copy singleton references from parent (already filtered for non-open-generics)
         foreach(var entry in groups.SingletonEntries)
         {
-            if(!TryGetServiceFieldName(entry, out var fieldName))
-                continue;
-
-            writer.WriteLine($"{fieldName} = parent.{fieldName};");
+            entry.WriteCopyFromParent(writer);
         }
 
         // Create scopes for imported modules (so their scoped services are properly isolated)
@@ -294,10 +291,10 @@ partial class IocSourceGenerator
 
         // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers).
         // Must precede eager initialization because eager services may inject these fields.
-        WriteWrapperInitializations(writer, groups.WrapperEntries);
+        WriteWrapperInitializations(writer, groups);
 
         // Initialize eager scoped services
-        if(groups.ScopedEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry { IsEager: true }))
+        if(groups.ScopedEntries.Any(static entry => entry.IsEagerlyInitialized))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager scoped services");
@@ -341,10 +338,10 @@ partial class IocSourceGenerator
 
         // Initialize Lazy/Func wrapper fields.
         // Must precede eager initialization because eager services may inject these fields.
-        WriteWrapperInitializations(writer, groups.WrapperEntries);
+        WriteWrapperInitializations(writer, groups);
 
         // Initialize eager singleton services
-        if(groups.SingletonEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry { IsEager: true }))
+        if(groups.SingletonEntries.Any(static entry => entry.IsEagerlyInitialized))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager singletons");
@@ -357,15 +354,12 @@ partial class IocSourceGenerator
 
     private static void WriteWrapperInitializations(
         SourceWriter writer,
-        ImmutableEquatableArray<ContainerEntry> wrapperEntries)
+        ContainerRegistrationGroups groups)
     {
-        var lazyEntries = wrapperEntries.OfType<LazyWrapperContainerEntry>().ToList();
-        var funcEntries = wrapperEntries.OfType<FuncWrapperContainerEntry>().ToList();
+        var lazyEntries = groups.LazyWrapperEntries;
+        var funcEntries = groups.FuncWrapperEntries;
 
-        if(lazyEntries.Count == 0 && funcEntries.Count == 0)
-            return;
-
-        if(lazyEntries.Count > 0)
+        if(lazyEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize Lazy wrapper fields");
@@ -375,7 +369,7 @@ partial class IocSourceGenerator
             }
         }
 
-        if(funcEntries.Count > 0)
+        if(funcEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize Func wrapper fields");
@@ -390,26 +384,8 @@ partial class IocSourceGenerator
     /// Whether any singleton is created on demand, in which case scopes must resolve it through the root container.
     /// </summary>
     private static bool HasRootResolvedSingletons(ContainerRegistrationGroups groups) =>
-        groups.SingletonEntries.Any(static entry => entry is LazyThreadSafeContainerEntry or AsyncContainerEntry);
+        groups.SingletonEntries.Any(static entry => entry.DelegatesToRoot);
 
-    private static bool TryGetServiceFieldName(ContainerEntry entry, out string fieldName)
-    {
-        switch(entry)
-        {
-            case EagerContainerEntry eager:
-                fieldName = eager.FieldName;
-                return true;
-            case LazyThreadSafeContainerEntry lazy:
-                fieldName = lazy.FieldName;
-                return true;
-            case AsyncContainerEntry asyncEntry:
-                fieldName = asyncEntry.FieldName;
-                return true;
-            default:
-                fieldName = string.Empty;
-                return false;
-        }
-    }
 
     /// <summary>
     /// Gets the field name for an imported module.

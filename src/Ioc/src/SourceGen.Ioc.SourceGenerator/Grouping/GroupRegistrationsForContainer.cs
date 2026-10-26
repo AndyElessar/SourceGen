@@ -259,17 +259,13 @@ partial class IocSourceGenerator
 
         var serviceLookupEntries = new ServiceLookup(serviceLookup);
 
-        var wrapperEntries = CreateWrapperContainerEntries(
-            singletons,
-            scoped,
-            transients,
-            serviceLookupEntries);
+        var lazyWrapperEntries = CreateLazyWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries);
+        var funcWrapperEntries = CreateFuncWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries);
+        var kvpWrapperEntries = CreateKvpWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries);
 
-        var lazyFieldByResolver = wrapperEntries
-            .OfType<LazyWrapperContainerEntry>()
+        var lazyFieldByResolver = lazyWrapperEntries
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
-        var funcFieldByResolver = wrapperEntries
-            .OfType<FuncWrapperContainerEntry>()
+        var funcFieldByResolver = funcWrapperEntries
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
 
         var singletonEntries = CreateServiceContainerEntries(
@@ -309,7 +305,9 @@ partial class IocSourceGenerator
             singletonEntries,
             scopedEntries,
             transientEntries,
-            wrapperEntries,
+            lazyWrapperEntries,
+            funcWrapperEntries,
+            kvpWrapperEntries,
             collectionEntries);
     }
 
@@ -359,11 +357,14 @@ partial class IocSourceGenerator
         Dictionary<(string ResolverMethodName, string ServiceType, string? Key), IocSourceGenerator.ContainerEntry> entryByResolverAndServiceType,
         IocSourceGenerator.ContainerEntry entry)
     {
-        AddEntryByResolverMethodName(entryByResolverMethodName, entry);
-
         if(entry is not ServiceContainerEntry serviceEntry)
         {
             return;
+        }
+
+        if(!entryByResolverMethodName.ContainsKey(serviceEntry.ResolverMethodName))
+        {
+            entryByResolverMethodName[serviceEntry.ResolverMethodName] = entry;
         }
 
         var resolverKey = (
@@ -600,21 +601,6 @@ partial class IocSourceGenerator
             constructorParameters,
             injectionMembers,
             decorators);
-    }
-
-    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateWrapperContainerEntries(
-        ImmutableEquatableArray<ServiceLookupEntry> singletons,
-        ImmutableEquatableArray<ServiceLookupEntry> scoped,
-        ImmutableEquatableArray<ServiceLookupEntry> transients,
-        ServiceLookup serviceLookup)
-    {
-        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>();
-
-        wrapperEntries.AddRange(CreateLazyWrapperContainerEntries(singletons, scoped, transients, serviceLookup));
-        wrapperEntries.AddRange(CreateFuncWrapperContainerEntries(singletons, scoped, transients, serviceLookup));
-        wrapperEntries.AddRange(CreateKvpWrapperContainerEntries(singletons, scoped, transients, serviceLookup));
-
-        return wrapperEntries.ToImmutableEquatableArray();
     }
 
     private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateCollectionContainerEntries(

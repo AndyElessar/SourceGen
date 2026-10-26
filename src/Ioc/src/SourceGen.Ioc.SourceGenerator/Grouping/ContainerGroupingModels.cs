@@ -1,4 +1,7 @@
 using ContainerEntryModel = SourceGen.Ioc.IocSourceGenerator.ContainerEntry;
+using FuncWrapperEntryModel = SourceGen.Ioc.IocSourceGenerator.FuncWrapperContainerEntry;
+using KvpWrapperEntryModel = SourceGen.Ioc.IocSourceGenerator.KvpWrapperContainerEntry;
+using LazyWrapperEntryModel = SourceGen.Ioc.IocSourceGenerator.LazyWrapperContainerEntry;
 
 namespace SourceGen.Ioc.SourceGenerator.Models;
 
@@ -14,7 +17,9 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// <param name="SingletonEntries">Parallel service entry model for singleton registrations.</param>
 /// <param name="ScopedEntries">Parallel service entry model for scoped registrations.</param>
 /// <param name="TransientEntries">Parallel service entry model for transient registrations.</param>
-/// <param name="WrapperEntries">Parallel wrapper entry model for Lazy/Func/KVP registrations.</param>
+/// <param name="LazyWrapperEntries">Wrapper entry model for <c>Lazy&lt;T&gt;</c> registrations.</param>
+/// <param name="FuncWrapperEntries">Wrapper entry model for <c>Func&lt;T&gt;</c> registrations.</param>
+/// <param name="KvpWrapperEntries">Wrapper entry model for <c>KeyValuePair&lt;TKey, TValue&gt;</c> registrations.</param>
 /// <param name="CollectionEntries">Parallel collection entry model for IEnumerable and related wrappers.</param>
 internal sealed record ContainerRegistrationGroups(
     ImmutableEquatableDictionary<(string ServiceType, string? Key), ContainerEntryModel> LastWinsByServiceType,
@@ -25,5 +30,7 @@ internal sealed record ContainerRegistrationGroups(
     ImmutableEquatableArray<ContainerEntryModel> SingletonEntries,
     ImmutableEquatableArray<ContainerEntryModel> ScopedEntries,
     ImmutableEquatableArray<ContainerEntryModel> TransientEntries,
-    ImmutableEquatableArray<ContainerEntryModel> WrapperEntries,
+    ImmutableEquatableArray<LazyWrapperEntryModel> LazyWrapperEntries,
+    ImmutableEquatableArray<FuncWrapperEntryModel> FuncWrapperEntries,
+    ImmutableEquatableArray<KvpWrapperEntryModel> KvpWrapperEntries,
     ImmutableEquatableArray<ContainerEntryModel> CollectionEntries);

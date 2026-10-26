@@ -31,11 +31,9 @@ partial class IocSourceGenerator
             writer.WriteLine();
         }
 
-        var kvpEntries = groups.WrapperEntries
-            .OfType<KvpWrapperContainerEntry>()
-            .ToList();
+        var kvpEntries = groups.KvpWrapperEntries;
 
-        if(kvpEntries.Count > 0)
+        if(kvpEntries.Length > 0)
         {
             writer.WriteLine("// KeyValuePair resolver methods");
             writer.WriteLine();
@@ -49,11 +47,9 @@ partial class IocSourceGenerator
             WriteKvpCollectionResolvers(writer, kvpEntries);
         }
 
-        var lazyEntries = groups.WrapperEntries
-            .OfType<LazyWrapperContainerEntry>()
-            .ToList();
+        var lazyEntries = groups.LazyWrapperEntries;
 
-        if(lazyEntries.Count > 0)
+        if(lazyEntries.Length > 0)
         {
             writer.WriteLine("// Lazy wrapper fields");
             writer.WriteLine();
@@ -75,11 +71,9 @@ partial class IocSourceGenerator
             }
         }
 
-        var funcEntries = groups.WrapperEntries
-            .OfType<FuncWrapperContainerEntry>()
-            .ToList();
+        var funcEntries = groups.FuncWrapperEntries;
 
-        if(funcEntries.Count > 0)
+        if(funcEntries.Length > 0)
         {
             writer.WriteLine("// Func wrapper fields");
             writer.WriteLine();
@@ -113,7 +107,7 @@ partial class IocSourceGenerator
     {
         foreach(var entry in entries)
         {
-            if(!TryGetResolverMethodName(entry, out var resolverMethodName))
+            if(entry is not ServiceContainerEntry { ResolverMethodName: var resolverMethodName })
                 continue;
 
             if(!writtenMethods.Add(resolverMethodName))
@@ -136,7 +130,7 @@ partial class IocSourceGenerator
 
     private static void WriteKvpCollectionResolvers(
         SourceWriter writer,
-        List<KvpWrapperContainerEntry> kvpEntries)
+        ImmutableEquatableArray<KvpWrapperContainerEntry> kvpEntries)
     {
         var grouped = kvpEntries
             .GroupBy(static e => (e.KeyTypeName, e.ValueTypeName))
@@ -279,12 +273,10 @@ partial class IocSourceGenerator
         {
             switch(directEntry)
             {
-                case InstanceContainerEntry instanceEntry:
-                    return instanceEntry.Registration.Instance!;
                 case AsyncServiceContainerEntry asyncEntry:
                     return $"{asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false).GetAwaiter().GetResult()";
                 case ServiceContainerEntry serviceEntry:
-                    return $"{serviceEntry.ResolverMethodName}()";
+                    return serviceEntry.FormatResolveExpression(serviceType, "");
             }
         }
 

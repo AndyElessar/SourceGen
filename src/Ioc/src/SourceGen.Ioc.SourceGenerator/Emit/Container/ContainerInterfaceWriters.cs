@@ -541,29 +541,15 @@ partial class IocSourceGenerator
         writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), {KeyedServiceAnyKey}), static c => c),");
         writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({container.ContainerTypeName}), {KeyedServiceAnyKey}), static c => c),");
 
-        var entryByResolverMethodName = BuildEntryByResolverMethodName(groups);
-
         // Use service type resolver mappings (already filtered for non-open-generics)
-        foreach(var mapping in EnumerateLocalResolverMappings(groups))
+        foreach(var kvp in groups.LastWinsByServiceType)
         {
-            var keyExpr = mapping.Key ?? KeyedServiceAnyKey;
-            var serviceType = mapping.ServiceType;
+            if(kvp.Value is not ServiceContainerEntry entry)
+                continue;
 
-            string resolverExpr;
-            if(entryByResolverMethodName.TryGetValue(mapping.ResolverMethodName, out var entry))
-            {
-                serviceType = entry.GetExposedServiceType(mapping.ServiceType);
-                resolverExpr = entry is AsyncServiceContainerEntry asyncEntry
-                    ? $"static c => {asyncEntry.FormatResolverCall(mapping.ServiceType, "c.")}"
-                    : GetResolverExpression(entry);
-            }
-            else
-            {
-                // Fallback path for compatibility with any unmapped resolver entries.
-                resolverExpr = $"static c => c.{mapping.ResolverMethodName}()";
-            }
-
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({serviceType}), {keyExpr}), {resolverExpr}),");
+            var serviceType = kvp.Key.ServiceType;
+            var keyExpr = kvp.Key.Key ?? KeyedServiceAnyKey;
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({entry.GetExposedServiceType(serviceType)}), {keyExpr}), {entry.FormatResolverLambda(serviceType)}),");
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
@@ -579,7 +565,7 @@ partial class IocSourceGenerator
         }
 
         // Add local resolvers for wrapper entries (KVP first, then Lazy, then Func)
-        WriteWrapperLocalResolverEntries(writer, groups.WrapperEntries);
+        WriteWrapperLocalResolverEntries(writer, groups);
 
         writer.Indentation--;
         writer.WriteLine("];");
@@ -1167,20 +1153,7 @@ partial class IocSourceGenerator
             // The lookup key, not the (possibly shared) registration's service type: an entry is
             // registered under every service type alias, including its implementation type
             var serviceType = kvp.Key.ServiceType;
-            yield return (kvp.Value.GetExposedServiceType(serviceType), kvp.Key.Key, GetInterfaceResolverExpression(kvp.Value, serviceType));
-        }
-    }
-
-    private static IEnumerable<(string ServiceType, string? Key, string ResolverMethodName)> EnumerateLocalResolverMappings(ContainerRegistrationGroups groups)
-    {
-        foreach(var kvp in groups.LastWinsByServiceType)
-        {
-            if(!TryGetResolverMethodName(kvp.Value, out var resolverMethodName))
-            {
-                continue;
-            }
-
-            yield return (kvp.Key.ServiceType, kvp.Key.Key, resolverMethodName);
+            yield return (serviceEntry.GetExposedServiceType(serviceType), kvp.Key.Key, serviceEntry.FormatResolveExpression(serviceType, ""));
         }
     }
 
@@ -1188,12 +1161,12 @@ partial class IocSourceGenerator
     {
         foreach(var kvp in groups.LastWinsByServiceType)
         {
-            if(kvp.Key.Key is null)
+            if(kvp.Key.Key is null || kvp.Value is not ServiceContainerEntry serviceEntry)
             {
                 continue;
             }
 
-            yield return (kvp.Value.GetExposedServiceType(kvp.Key.ServiceType), kvp.Key.Key, GetInterfaceResolverExpression(kvp.Value, kvp.Key.ServiceType));
+            yield return (serviceEntry.GetExposedServiceType(kvp.Key.ServiceType), kvp.Key.Key, serviceEntry.FormatResolveExpression(kvp.Key.ServiceType, ""));
         }
     }
 
@@ -1204,7 +1177,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteProjectTaskHelper(SourceWriter writer, ContainerRegistrationGroups groups)
     {
-        if(!groups.LastWinsByServiceType.Any(static kvp => kvp.Value is AsyncServiceContainerEntry asyncEntry && kvp.Key.ServiceType != asyncEntry.TaskResultTypeName))
+        if(!groups.LastWinsByServiceType.Any(static kvp => kvp.Value is AsyncServiceContainerEntry asyncEntry && asyncEntry.NeedsTaskProjection(kvp.Key.ServiceType)))
             return;
 
         writer.WriteLine($"private static async global::System.Threading.Tasks.Task<TService> {ProjectTaskMethodName}<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)");
@@ -1216,13 +1189,11 @@ partial class IocSourceGenerator
 
     private static void WriteWrapperLocalResolverEntries(
         SourceWriter writer,
-        ImmutableEquatableArray<ContainerEntry> wrapperEntries)
+        ContainerRegistrationGroups groups)
     {
-        var kvpEntries = wrapperEntries
-            .OfType<KvpWrapperContainerEntry>()
-            .ToList();
+        var kvpEntries = groups.KvpWrapperEntries;
 
-        if(kvpEntries.Count > 0)
+        if(kvpEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// KeyValuePair resolvers");
@@ -1233,11 +1204,9 @@ partial class IocSourceGenerator
             }
         }
 
-        var lazyEntries = wrapperEntries
-            .OfType<LazyWrapperContainerEntry>()
-            .ToList();
+        var lazyEntries = groups.LazyWrapperEntries;
 
-        if(lazyEntries.Count > 0)
+        if(lazyEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Lazy wrapper resolvers");
@@ -1248,11 +1217,9 @@ partial class IocSourceGenerator
             }
         }
 
-        var funcEntries = wrapperEntries
-            .OfType<FuncWrapperContainerEntry>()
-            .ToList();
+        var funcEntries = groups.FuncWrapperEntries;
 
-        if(funcEntries.Count > 0)
+        if(funcEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Func wrapper resolvers");
@@ -1262,85 +1229,5 @@ partial class IocSourceGenerator
                 group.Last().WriteLocalResolverEntries(writer);
             }
         }
-    }
-
-    private static Dictionary<string, ContainerEntry> BuildEntryByResolverMethodName(ContainerRegistrationGroups groups)
-    {
-        var map = new Dictionary<string, ContainerEntry>(StringComparer.Ordinal);
-
-        foreach(var entry in groups.SingletonEntries)
-            AddEntryByResolverMethodName(map, entry);
-        foreach(var entry in groups.ScopedEntries)
-            AddEntryByResolverMethodName(map, entry);
-        foreach(var entry in groups.TransientEntries)
-            AddEntryByResolverMethodName(map, entry);
-
-        return map;
-    }
-
-    private static void AddEntryByResolverMethodName(Dictionary<string, ContainerEntry> map, ContainerEntry entry)
-    {
-        if(!TryGetResolverMethodName(entry, out var resolverMethodName))
-            return;
-
-        if(!map.ContainsKey(resolverMethodName))
-        {
-            map[resolverMethodName] = entry;
-        }
-    }
-
-    private static bool TryGetResolverMethodName(ContainerEntry entry, out string resolverMethodName)
-    {
-        switch(entry)
-        {
-            case InstanceContainerEntry instance:
-                resolverMethodName = instance.ResolverMethodName;
-                return true;
-            case EagerContainerEntry eager:
-                resolverMethodName = eager.ResolverMethodName;
-                return true;
-            case LazyThreadSafeContainerEntry lazy:
-                resolverMethodName = lazy.ResolverMethodName;
-                return true;
-            case TransientContainerEntry transient:
-                resolverMethodName = transient.ResolverMethodName;
-                return true;
-            case AsyncContainerEntry asyncSingletonOrScoped:
-                resolverMethodName = asyncSingletonOrScoped.ResolverMethodName;
-                return true;
-            case AsyncTransientContainerEntry asyncTransient:
-                resolverMethodName = asyncTransient.ResolverMethodName;
-                return true;
-            default:
-                resolverMethodName = string.Empty;
-                return false;
-        }
-    }
-
-    private static string GetResolverExpression(ContainerEntry entry)
-    {
-        return entry switch
-        {
-            InstanceContainerEntry instance => $"static _ => {instance.Registration.Instance}",
-            // Eager services also go through their resolver method: during construction the field may still be unset
-            EagerContainerEntry eager => $"static c => c.{eager.ResolverMethodName}()",
-            LazyThreadSafeContainerEntry lazy => $"static c => c.{lazy.ResolverMethodName}()",
-            TransientContainerEntry transient => $"static c => c.{transient.ResolverMethodName}()",
-            AsyncServiceContainerEntry asyncEntry => $"static c => c.{asyncEntry.AsyncEntryMethodName}()",
-            LazyWrapperContainerEntry or FuncWrapperContainerEntry or KvpWrapperContainerEntry or CollectionContainerEntry
-                => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
-        };
-    }
-
-    private static string GetInterfaceResolverExpression(ContainerEntry entry, string serviceType)
-    {
-        return entry switch
-        {
-            InstanceContainerEntry instance => instance.Registration.Instance!,
-            AsyncServiceContainerEntry asyncEntry => asyncEntry.FormatResolverCall(serviceType, ""),
-            ServiceContainerEntry serviceEntry => $"{serviceEntry.ResolverMethodName}()",
-            LazyWrapperContainerEntry or FuncWrapperContainerEntry or KvpWrapperContainerEntry or CollectionContainerEntry
-                => throw new InvalidOperationException($"Unsupported container entry type: {entry.GetType().Name}")
-        };
     }
 }
