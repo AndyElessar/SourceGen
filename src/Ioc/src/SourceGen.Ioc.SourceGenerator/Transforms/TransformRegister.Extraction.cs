@@ -306,11 +306,12 @@ partial class IocSourceGenerator
     /// </remarks>
     private static ImmutableEquatableSet<string> BuildValidOpenGenericServiceTypes(TypeData implementationType)
     {
-        var result = new HashSet<string>();
         if(implementationType is not GenericTypeData { TypeParameters: { Length: > 0 } implTypeParams })
         {
-            return result.ToImmutableEquatableSet();
+            return ImmutableEquatableSet<string>.Empty;
         }
+
+        var result = new HashSet<string>();
 
         AddValid(implementationType.AllInterfaces);
         AddValid(implementationType.AllBaseClasses);

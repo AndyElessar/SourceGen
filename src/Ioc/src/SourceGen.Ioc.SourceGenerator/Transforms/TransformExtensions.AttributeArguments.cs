@@ -140,7 +140,7 @@ internal static partial class TransformExtensions
 
         public ImmutableEquatableArray<TypeData> GetServiceTypes()
         {
-            List<TypeData> result = [];
+            using var result = new ValueListBuilder<TypeData>(4);
             foreach(var serviceTypeSymbol in attribute.GetServiceTypeSymbols())
             {
                 result.Add(serviceTypeSymbol.GetTypeData());
@@ -233,7 +233,7 @@ internal static partial class TransformExtensions
             {
                 if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
                 {
-                    List<INamedTypeSymbol> result = [];
+                    using var result = new ValueListBuilder<INamedTypeSymbol>(namedArg.Value.Values.Length);
                     foreach(var value in namedArg.Value.Values)
                     {
                         if(value.Value is INamedTypeSymbol namedTypeSymbol)
