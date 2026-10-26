@@ -15,6 +15,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace TestNamespace;
 
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
 partial class FeatureContainer : IIocContainer<global::TestNamespace.FeatureContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;

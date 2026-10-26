@@ -17,6 +17,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace TestNamespace;
 
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
 partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
@@ -404,6 +405,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #endregion
 
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(global::System.Type[]? _)

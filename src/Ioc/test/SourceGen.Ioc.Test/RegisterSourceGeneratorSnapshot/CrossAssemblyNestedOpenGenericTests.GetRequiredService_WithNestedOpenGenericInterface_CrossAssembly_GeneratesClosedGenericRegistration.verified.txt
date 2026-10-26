@@ -11,6 +11,7 @@ namespace MainApp
     /// <summary>
     /// Extension methods for registering services from MainApp.
     /// </summary>
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public static class MainAppServiceCollectionExtensions
     {
         /// <summary>

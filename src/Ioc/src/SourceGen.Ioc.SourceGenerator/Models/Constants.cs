@@ -1,4 +1,6 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+﻿using System.Reflection;
+
+namespace SourceGen.Ioc.SourceGenerator.Models;
 
 internal static class Constants
 {
@@ -69,6 +71,12 @@ internal static class Constants
     /// </summary>
     public const string NullableAnnotations = "#nullable enable annotations";
     public const string NullableWarningsDisabled = "#nullable disable warnings";
+
+    /// <summary>
+    /// <c>[GeneratedCode]</c> with this generator's version, for generated types.
+    /// </summary>
+    public static readonly string GeneratedCodeAttribute =
+        $"[global::System.CodeDom.Compiler.GeneratedCode(\"SourceGen.Ioc\", \"{typeof(Constants).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version}\")]";
 
     public const string IServiceProviderTypeName = "System.IServiceProvider";
     public const string IServiceProviderGlobalTypeName = "global::System.IServiceProvider";

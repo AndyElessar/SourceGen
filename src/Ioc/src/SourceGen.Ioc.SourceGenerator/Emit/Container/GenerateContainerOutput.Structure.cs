@@ -29,6 +29,7 @@ partial class IocSourceGenerator
         var interfaces = GetContainerInterfaces(container, canGenerateServiceProviderFactory);
 
         // Write class declaration
+        writer.WriteLine(GeneratedCodeAttribute);
         writer.WriteLine($"partial class {container.ClassName} : {string.Join(", ", interfaces)}");
         writer.WriteLine("{");
         writer.Indentation++;

@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SourceGen.Ioc;
 using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::GlobalContainer, object>>;
 
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
 partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;

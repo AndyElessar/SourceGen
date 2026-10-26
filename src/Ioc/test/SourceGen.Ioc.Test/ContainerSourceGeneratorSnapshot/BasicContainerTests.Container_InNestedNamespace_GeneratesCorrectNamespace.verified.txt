@@ -15,6 +15,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace Company.Product.Module;
 
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
 partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Module.DeepNamespaceContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;

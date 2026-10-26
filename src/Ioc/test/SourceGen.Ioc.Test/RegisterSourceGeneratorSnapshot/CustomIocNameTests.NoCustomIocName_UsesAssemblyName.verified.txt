@@ -11,6 +11,7 @@ namespace MyProject.Services
     /// <summary>
     /// Extension methods for registering services from MyProject.Services.
     /// </summary>
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public static class MyProject_ServicesServiceCollectionExtensions
     {
         /// <summary>
