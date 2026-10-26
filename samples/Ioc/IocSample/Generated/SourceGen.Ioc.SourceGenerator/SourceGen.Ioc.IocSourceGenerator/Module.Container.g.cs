@@ -15,10 +15,11 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocSample;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.172")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.174")]
 partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -40,6 +41,13 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _fallbackProvider = fallbackProvider;
         _iocSample_Shared_SharedModule = new global::IocSample.Shared.SharedModule(fallbackProvider);
 
+        // Initialize Lazy wrapper fields
+        _lazy_IocSample_IWrapperService_int__IocSample_WrapperService_int_ = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetIocSample_WrapperService_int_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+
+        // Initialize Func wrapper fields
+        _func_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_());
+
         // Initialize eager singletons
         GetIocSample_TestQueryHandler();
         GetIocSample_Consumer();
@@ -51,13 +59,6 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         GetIocSample_GenericRequestHandler2_IocSample_Entity_();
         GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create();
         GetIocSample_GenericRequestHandler2_IocSample_Entity2_();
-
-        // Initialize Lazy wrapper fields
-        _lazy_IocSample_IWrapperService_int__IocSample_WrapperService_int_ = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetIocSample_WrapperService_int_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-
-        // Initialize Func wrapper fields
-        _func_IocSample_IWrapperService_string__IocSample_WrapperService_string_ = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetIocSample_WrapperService_string_());
     }
 
     private Module(Module parent)
@@ -90,10 +91,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> _iocSample_TestQueryHandler = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> GetIocSample_TestQueryHandler()
-    {
-        if(_iocSample_TestQueryHandler is not null) return _iocSample_TestQueryHandler;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> GetIocSample_TestQueryHandler() => _iocSample_TestQueryHandler ?? CreateIocSample_TestQueryHandler();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> CreateIocSample_TestQueryHandler()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string> instance = new global::IocSample.TestQueryHandler();
 
         instance = new global::IocSample.Shared.HandlerDecorator3<global::IocSample.TestQuery, string>(instance);
@@ -105,10 +106,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Consumer _iocSample_Consumer = null!;
-    private global::IocSample.Consumer GetIocSample_Consumer()
-    {
-        if(_iocSample_Consumer is not null) return _iocSample_Consumer;
+    private global::IocSample.Consumer GetIocSample_Consumer() => _iocSample_Consumer ?? CreateIocSample_Consumer();
 
+    private global::IocSample.Consumer CreateIocSample_Consumer()
+    {
         var instance = new global::IocSample.Consumer(_lazy_IocSample_IWrapperService_int__IocSample_WrapperService_int_, _func_IocSample_IWrapperService_string__IocSample_WrapperService_string_, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetIocSample_Keyed__Key_()), GetAllKvp_object_IocSample_IKeyed_Dictionary(), GetAllKvp_object_IocSample_IKeyed_Dictionary(), GetServices<global::System.Lazy<global::IocSample.IWrapperService<string>>>());
 
         _iocSample_Consumer = instance;
@@ -116,10 +117,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.External _iocSample_External = null!;
-    private global::IocSample.External GetIocSample_External()
-    {
-        if(_iocSample_External is not null) return _iocSample_External;
+    private global::IocSample.External GetIocSample_External() => _iocSample_External ?? CreateIocSample_External();
 
+    private global::IocSample.External CreateIocSample_External()
+    {
         var instance = new global::IocSample.External();
 
         _iocSample_External = instance;
@@ -127,10 +128,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> _iocSample_GenericRequestHandler_IocSample_Entity_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> GetIocSample_GenericRequestHandler_IocSample_Entity_()
-    {
-        if(_iocSample_GenericRequestHandler_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity_;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> GetIocSample_GenericRequestHandler_IocSample_Entity_() => _iocSample_GenericRequestHandler_IocSample_Entity_ ?? CreateIocSample_GenericRequestHandler_IocSample_Entity_();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> CreateIocSample_GenericRequestHandler_IocSample_Entity_()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> instance = new global::IocSample.GenericRequestHandler<global::IocSample.Entity>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity>>)));
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(instance);
@@ -141,10 +142,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> _iocSample_GenericRequestHandler_IocSample_Entity3_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> GetIocSample_GenericRequestHandler_IocSample_Entity3_()
-    {
-        if(_iocSample_GenericRequestHandler_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity3_;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> GetIocSample_GenericRequestHandler_IocSample_Entity3_() => _iocSample_GenericRequestHandler_IocSample_Entity3_ ?? CreateIocSample_GenericRequestHandler_IocSample_Entity3_();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> CreateIocSample_GenericRequestHandler_IocSample_Entity3_()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> instance = new global::IocSample.GenericRequestHandler<global::IocSample.Entity3>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity3>>)));
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(instance);
@@ -155,10 +156,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> _iocSample_GenericRequestHandler_IocSample_Entity2_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> GetIocSample_GenericRequestHandler_IocSample_Entity2_()
-    {
-        if(_iocSample_GenericRequestHandler_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler_IocSample_Entity2_;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> GetIocSample_GenericRequestHandler_IocSample_Entity2_() => _iocSample_GenericRequestHandler_IocSample_Entity2_ ?? CreateIocSample_GenericRequestHandler_IocSample_Entity2_();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> CreateIocSample_GenericRequestHandler_IocSample_Entity2_()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> instance = new global::IocSample.GenericRequestHandler<global::IocSample.Entity2>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler<global::IocSample.Entity2>>)));
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(instance);
@@ -169,10 +170,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> _iocSample_GenericRequestHandler2_IocSample_Entity3_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> GetIocSample_GenericRequestHandler2_IocSample_Entity3_()
-    {
-        if(_iocSample_GenericRequestHandler2_IocSample_Entity3_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity3_;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> GetIocSample_GenericRequestHandler2_IocSample_Entity3_() => _iocSample_GenericRequestHandler2_IocSample_Entity3_ ?? CreateIocSample_GenericRequestHandler2_IocSample_Entity3_();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> CreateIocSample_GenericRequestHandler2_IocSample_Entity3_()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>> instance = new global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>>)));
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>(instance);
@@ -183,10 +184,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> _iocSample_GenericRequestHandler2_IocSample_Entity_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> GetIocSample_GenericRequestHandler2_IocSample_Entity_()
-    {
-        if(_iocSample_GenericRequestHandler2_IocSample_Entity_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity_;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> GetIocSample_GenericRequestHandler2_IocSample_Entity_() => _iocSample_GenericRequestHandler2_IocSample_Entity_ ?? CreateIocSample_GenericRequestHandler2_IocSample_Entity_();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> CreateIocSample_GenericRequestHandler2_IocSample_Entity_()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>> instance = new global::IocSample.GenericRequestHandler2<global::IocSample.Entity>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity>>)));
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>(instance);
@@ -197,10 +198,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>> _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create = null!;
-    private global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>> GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create()
-    {
-        if(_iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create is not null) return _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create;
+    private global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>> GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create() => _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create ?? CreateIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create();
 
+    private global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>> CreateIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create()
+    {
         var instance = (global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>)global::IocSample.GenericFactory.Create<decimal>();
 
         _iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create = instance;
@@ -208,10 +209,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     }
 
     private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> _iocSample_GenericRequestHandler2_IocSample_Entity2_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> GetIocSample_GenericRequestHandler2_IocSample_Entity2_()
-    {
-        if(_iocSample_GenericRequestHandler2_IocSample_Entity2_ is not null) return _iocSample_GenericRequestHandler2_IocSample_Entity2_;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> GetIocSample_GenericRequestHandler2_IocSample_Entity2_() => _iocSample_GenericRequestHandler2_IocSample_Entity2_ ?? CreateIocSample_GenericRequestHandler2_IocSample_Entity2_();
 
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> CreateIocSample_GenericRequestHandler2_IocSample_Entity2_()
+    {
         global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>> instance = new global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>((global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>)GetRequiredService(typeof(global::IocSample.Shared.ILogger<global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>>)));
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>(instance);
@@ -223,10 +224,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     private global::IocSample.Default2? _iocSample_Default2;
     private readonly Lock _iocSample_Default2Lock = new();
-    private global::IocSample.Default2 GetIocSample_Default2()
-    {
-        if(_iocSample_Default2 is not null) return _iocSample_Default2;
+    private global::IocSample.Default2 GetIocSample_Default2() => _iocSample_Default2 ?? CreateIocSample_Default2();
 
+    private global::IocSample.Default2 CreateIocSample_Default2()
+    {
         lock(_iocSample_Default2Lock)
         {
             if(_iocSample_Default2 is not null) return _iocSample_Default2;
@@ -270,10 +271,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     private global::IocSample.Basic? _iocSample_Basic;
     private readonly Lock _iocSample_BasicLock = new();
-    private global::IocSample.Basic GetIocSample_Basic()
-    {
-        if(_iocSample_Basic is not null) return _iocSample_Basic;
+    private global::IocSample.Basic GetIocSample_Basic() => _iocSample_Basic ?? CreateIocSample_Basic();
 
+    private global::IocSample.Basic CreateIocSample_Basic()
+    {
         lock(_iocSample_BasicLock)
         {
             if(_iocSample_Basic is not null) return _iocSample_Basic;
@@ -287,10 +288,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     private global::IocSample.FactoryService? _iocSample_FactoryService_IocSample_Factory_Create;
     private readonly Lock _iocSample_FactoryService_IocSample_Factory_CreateLock = new();
-    private global::IocSample.FactoryService GetIocSample_FactoryService_IocSample_Factory_Create()
-    {
-        if(_iocSample_FactoryService_IocSample_Factory_Create is not null) return _iocSample_FactoryService_IocSample_Factory_Create;
+    private global::IocSample.FactoryService GetIocSample_FactoryService_IocSample_Factory_Create() => _iocSample_FactoryService_IocSample_Factory_Create ?? CreateIocSample_FactoryService_IocSample_Factory_Create();
 
+    private global::IocSample.FactoryService CreateIocSample_FactoryService_IocSample_Factory_Create()
+    {
         lock(_iocSample_FactoryService_IocSample_Factory_CreateLock)
         {
             if(_iocSample_FactoryService_IocSample_Factory_Create is not null) return _iocSample_FactoryService_IocSample_Factory_Create;
@@ -304,10 +305,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     private global::IocSample.FactoryService2? _iocSample_FactoryService2_IocSample_FactoryService2_Create;
     private readonly Lock _iocSample_FactoryService2_IocSample_FactoryService2_CreateLock = new();
-    private global::IocSample.FactoryService2 GetIocSample_FactoryService2_IocSample_FactoryService2_Create()
-    {
-        if(_iocSample_FactoryService2_IocSample_FactoryService2_Create is not null) return _iocSample_FactoryService2_IocSample_FactoryService2_Create;
+    private global::IocSample.FactoryService2 GetIocSample_FactoryService2_IocSample_FactoryService2_Create() => _iocSample_FactoryService2_IocSample_FactoryService2_Create ?? CreateIocSample_FactoryService2_IocSample_FactoryService2_Create();
 
+    private global::IocSample.FactoryService2 CreateIocSample_FactoryService2_IocSample_FactoryService2_Create()
+    {
         lock(_iocSample_FactoryService2_IocSample_FactoryService2_CreateLock)
         {
             if(_iocSample_FactoryService2_IocSample_FactoryService2_Create is not null) return _iocSample_FactoryService2_IocSample_FactoryService2_Create;
@@ -542,7 +543,26 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -558,7 +578,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -685,14 +705,14 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IDenpendency2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default2()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Default2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default2()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.InstanceService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static _ => global::IocSample.InstanceService.Instance),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.TestQueryHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_TestQueryHandler!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_TestQueryHandler!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.TestQueryHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_TestQueryHandler()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.TestQuery, string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_TestQueryHandler()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.ViewModel), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_ViewModel()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.CustomMessenger), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_CustomMessenger()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.ViewModel2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_ViewModel2()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.DependentClass), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_DependentClass()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.DependentClass2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_DependentClass2()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_Consumer!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Consumer()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.AsyncDependency), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_AsyncDependencyAsync()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IAsyncDependency), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_AsyncDependencyAsync()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Basic), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Basic()),
@@ -713,30 +733,30 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IKeyed), global::IocSample.KeyedExtensions.Key), static c => c.GetIocSample_KeyedCsharp_IocSample_KeyedExtensions_Key()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.TestNest.TestNestClass.NestClassImpl), global::IocSample.TestNest.TestNestClass.NestClassImpl.Key), static c => c.GetIocSample_TestNest_TestNestClass_NestClassImpl_IocSample_TestNest_TestNestClass_NestClassImpl_Key()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.TestNest.TestNestClass.INestInterface), global::IocSample.TestNest.TestNestClass.NestClassImpl.Key), static c => c.GetIocSample_TestNest_TestNestClass_NestClassImpl_IocSample_TestNest_TestNestClass_NestClassImpl_Key()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.External), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_External!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.External), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_External()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.External2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_External2()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IExternal), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_External2()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Conflict), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Conflict()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Default3), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default3()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IDenpendency3), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default4()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Default4), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_Default4()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler<global::IocSample.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler_IocSample_Entity_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler_IocSample_Entity_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler<global::IocSample.Entity3>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler_IocSample_Entity3_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler_IocSample_Entity3_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler<global::IocSample.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler_IocSample_Entity2_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler_IocSample_Entity2_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler2_IocSample_Entity3_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler2_IocSample_Entity3_!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler<global::IocSample.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler_IocSample_Entity_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler_IocSample_Entity_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler<global::IocSample.Entity3>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler_IocSample_Entity3_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler_IocSample_Entity3_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler<global::IocSample.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler_IocSample_Entity2_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler_IocSample_Entity2_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler2<global::IocSample.Entity3>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler2_IocSample_Entity3_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity3>, global::System.Collections.Generic.List<global::IocSample.Entity3>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler2_IocSample_Entity3_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.WrapperService<int>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_WrapperService_int_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IWrapperService<int>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_WrapperService_int_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.WrapperService<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_WrapperService_string_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IWrapperService<string>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_WrapperService_string_()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler2<global::IocSample.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler2_IocSample_Entity_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler2_IocSample_Entity_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler2_IocSample_Entity2_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._iocSample_GenericRequestHandler2_IocSample_Entity2_!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler2<global::IocSample.Entity>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler2_IocSample_Entity_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity>, global::System.Collections.Generic.List<global::IocSample.Entity>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler2_IocSample_Entity_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.IGenericFactoryService<global::IocSample.IWrapper<decimal>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_IGenericFactoryService_IocSample_IWrapper_decimal___IocSample_GenericFactory_Create()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.GenericRequestHandler2<global::IocSample.Entity2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler2_IocSample_Entity2_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.GenericRequest2<global::IocSample.Entity2>, global::System.Collections.Generic.List<global::IocSample.Entity2>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocSample_GenericRequestHandler2_IocSample_Entity2_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.IBasic>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllIocSample_IBasicArray()),
         new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::IocSample.IBasic>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllIocSample_IBasicArray()),
         new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::IocSample.IBasic>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllIocSample_IBasicArray()),
@@ -822,13 +842,15 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new Module(fallbackProvider);
+        return new Module(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -848,6 +870,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_AsyncDependencySemaphore.Dispose();
             DisposeService(_iocSample_Default2);
             _iocSample_Shared_SharedModule.Dispose();
+            DisposeService(_fallbackScope);
             return;
         }
 
@@ -862,6 +885,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         DisposeService(_iocSample_Consumer);
         DisposeService(_iocSample_TestQueryHandler);
         _iocSample_Shared_SharedModule.Dispose();
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -877,6 +901,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
             _iocSample_AsyncDependencySemaphore.Dispose();
             await DisposeServiceAsync(_iocSample_Default2);
             await _iocSample_Shared_SharedModule.DisposeAsync();
+            await DisposeServiceAsync(_fallbackScope);
             return;
         }
 
@@ -891,6 +916,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         await DisposeServiceAsync(_iocSample_Consumer);
         await DisposeServiceAsync(_iocSample_TestQueryHandler);
         await _iocSample_Shared_SharedModule.DisposeAsync();
+        await DisposeServiceAsync(_ownedFallbackProvider);
     }
 
     private void ThrowIfDisposed()
