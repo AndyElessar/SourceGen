@@ -17,6 +17,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocRazorSample;
 
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.172")]
 partial class ComponentContainer : IIocContainer<global::IocRazorSample.ComponentContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
@@ -301,6 +302,7 @@ partial class ComponentContainer : IIocContainer<global::IocRazorSample.Componen
     #endregion
 
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.172")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(global::System.Type[]? _)

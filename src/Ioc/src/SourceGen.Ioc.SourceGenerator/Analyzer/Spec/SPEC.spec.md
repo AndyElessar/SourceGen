@@ -640,7 +640,8 @@ Report when an explicit service type of `[IocRegister]`/`[IocRegister<T>]`/`[Ioc
 - Reports when:
   - The implementation is an open generic type but the service type is not.
   - The implementation is not an open generic type but the service type is.
-  - Both are open generic, the service type is not the implementation itself, and the implementation does not implement or inherit the service type with its own type parameters in the same order.
+  - Both are open generic, the service type is not the implementation itself, and the implementation does not implement or inherit any form of the service type.
+- Does not report when the implementation implements the open service type with reordered or partly closed type arguments (for example `Handler<TResponse, TRequest> : IHandler<TRequest, TResponse>` or `TextHandler<T> : IHandler<T, string>`). Only the open generic registration is skipped in that case; discovered closed service types are still registered through type argument mapping (see [Generic Registration](../../Spec/Register.Generics.spec.md#type-argument-mapping)).
 - Service types implicitly added by `RegisterAllInterfaces`/`RegisterAllBaseClasses` are not reported.
 
 **Message format:** `Service type '{ServiceType}' cannot be registered for implementation '{ImplementationType}' and will be skipped: {Reason}`

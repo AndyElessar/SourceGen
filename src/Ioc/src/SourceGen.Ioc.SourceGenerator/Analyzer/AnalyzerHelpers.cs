@@ -348,16 +348,15 @@ internal static class AnalyzerHelpers
         if(SymbolEqualityComparer.Default.Equals(implementationDefinition, serviceDefinition))
             return null;
 
+        // Any implemented form is enough: when type parameters are reordered or partly closed, only the open
+        // generic registration is skipped, and discovered closed service types are still mapped and registered.
         foreach(var candidate in EnumerateImplicitServiceTypes(implementationDefinition))
         {
-            if(SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, serviceDefinition)
-                && candidate.TypeArguments.SequenceEqual<ITypeSymbol>(implementationDefinition.TypeParameters, SymbolEqualityComparer.Default))
-            {
+            if(SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, serviceDefinition))
                 return null;
-            }
         }
 
-        return "the implementation does not implement it with its own type parameters in the same order";
+        return "the implementation does not implement or inherit it";
 
         static bool IsOpenGeneric(INamedTypeSymbol type)
             => type.IsUnboundGenericType

@@ -52,8 +52,9 @@ public class SGIOC032Tests
     }
 
     [Test]
-    public async Task SGIOC032_ReorderedTypeParameters_ReportsDiagnostic()
+    public async Task SGIOC032_ReorderedOrPartlyClosedTypeParameters_NoDiagnostic()
     {
+        // Only the open generic registration is skipped; discovered closed service types are still registered
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -64,13 +65,38 @@ public class SGIOC032Tests
 
             [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
             public class Handler<TResponse, TRequest> : IHandler<TRequest, TResponse> { }
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            public class TextHandler<TRequest> : IHandler<TRequest, string> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc032 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC032);
+
+        await Assert.That(sgioc032).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC032_OpenServiceTypeNotImplemented_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<TRequest, TResponse> { }
+            public interface IValidator<T> { }
+
+            [IocRegister(ServiceTypes = [typeof(IValidator<>)])]
+            public class Handler<T> : IHandler<T, string> { }
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc032 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC032).ToList();
 
         await Assert.That(sgioc032).Count().IsEqualTo(1);
-        await Assert.That(sgioc032[0].GetMessage()).Contains("same order");
+        await Assert.That(sgioc032[0].GetMessage()).Contains("IValidator<>").And.Contains("does not implement");
     }
 
     [Test]

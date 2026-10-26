@@ -164,7 +164,7 @@ services.AddMyProject(); // Generated extension method
 |:---|:---|:---|
 |SGIOC001|Error|`[IocRegister]` or `[IocRegisterFor]` cannot be applied to `private` or `abstract` classes.|
 |SGIOC011|Warning|Duplicated registration detected for the same implementation type, same key, and at least one matching tag.|
-|SGIOC032|Warning|An explicit service type is skipped because its generic shape does not match the implementation (an open generic implementation with a closed service type, a closed implementation with an open generic service type, or an open generic service type not implemented with the implementation's type parameters in the same order).|
+|SGIOC032|Warning|An explicit service type is skipped because its generic shape does not match the implementation (an open generic implementation with a closed service type, a closed implementation with an open generic service type, or an open generic service type the implementation does not implement).|
 
 ## Custom Method Name
 
