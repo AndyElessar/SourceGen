@@ -5,6 +5,7 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// Generic and wrapper-specific data are represented by a closed record hierarchy.
 /// </summary>
 /// <param name="Name">The fully qualified name of the type.</param>
+/// <param name="Traits">Traits used to check special type parameter constraints. Only recorded for type arguments; <see langword="default"/> otherwise.</param>
 /// <param name="ConstructorParameters">Constructor parameters for implementations and decorators, not recursively for their dependencies.</param>
 /// <param name="HasInjectConstructor">Whether the type's constructor was selected by [Inject] attribute (requires factory method for proper instantiation).</param>
 /// <param name="InjectionMembers">The members (properties, fields, methods) that should be populated by dependency injection. Only populated for decorators when extractInjectionMembers is true.</param>
@@ -12,23 +13,19 @@ namespace SourceGen.Ioc.SourceGenerator.Models;
 /// <param name="AllBaseClasses">All base classes of the type (excluding System.Object). Only populated when extractHierarchy is true.</param>
 internal closed record class TypeData(
     string Name,
+    TypeTraits Traits,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
-{
-    /// <summary>
-    /// Traits used to check special type parameter constraints. Only recorded for type arguments.
-    /// </summary>
-    public TypeTraits Traits { get; init; }
-}
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null);
 
 /// <summary>
 /// Represents a non-generic type without wrapper-specific data.
 /// </summary>
 internal sealed record class SimpleTypeData(
     string Name,
+    TypeTraits Traits,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
@@ -36,6 +33,7 @@ internal sealed record class SimpleTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : TypeData(
         Name,
+        Traits,
         ConstructorParameters,
         HasInjectConstructor,
         InjectionMembers,
@@ -50,6 +48,7 @@ internal closed record class GenericTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -59,6 +58,7 @@ internal closed record class GenericTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : TypeData(
         Name,
+        Traits,
         ConstructorParameters,
         HasInjectConstructor,
         InjectionMembers,
@@ -73,6 +73,7 @@ internal sealed record class NamedGenericTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -85,6 +86,7 @@ internal sealed record class NamedGenericTypeData(
         NameWithoutGeneric,
         IsOpenGeneric,
         GenericArity,
+        Traits,
         IsNestedOpenGeneric,
         TypeParameters,
         ConstructorParameters,
@@ -104,7 +106,8 @@ internal sealed record class TypeParameterTypeData(
         Name,
         NameWithoutGeneric,
         IsOpenGeneric: true,
-        GenericArity: 0);
+        GenericArity: 0,
+        Traits: default);
 
 /// <summary>
 /// Represents wrapper type information. Base type for all wrapper kinds (collections, Lazy, Func, etc.).
@@ -116,6 +119,7 @@ internal closed record class WrapperTypeData(
     bool IsOpenGeneric,
     int GenericArity,
     WrapperKind WrapperKind,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -128,6 +132,7 @@ internal closed record class WrapperTypeData(
         NameWithoutGeneric,
         IsOpenGeneric,
         GenericArity,
+        Traits,
         IsNestedOpenGeneric,
         TypeParameters,
         ConstructorParameters,
@@ -145,6 +150,7 @@ internal sealed record class OtherWrapperTypeData(
     bool IsOpenGeneric,
     int GenericArity,
     WrapperKind WrapperKind,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -158,6 +164,7 @@ internal sealed record class OtherWrapperTypeData(
         IsOpenGeneric,
         GenericArity,
         WrapperKind,
+        Traits,
         IsNestedOpenGeneric,
         TypeParameters,
         ConstructorParameters,
@@ -177,6 +184,7 @@ internal closed record class CollectionWrapperTypeData(
     bool IsOpenGeneric,
     int GenericArity,
     WrapperKind WrapperKind,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -187,6 +195,7 @@ internal closed record class CollectionWrapperTypeData(
     : WrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
         WrapperKind,
+        Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -199,6 +208,7 @@ internal sealed record class EnumerableTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -208,7 +218,7 @@ internal sealed record class EnumerableTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Enumerable,
+        WrapperKind.Enumerable, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -222,6 +232,7 @@ internal sealed record class ReadOnlyCollectionTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -231,7 +242,7 @@ internal sealed record class ReadOnlyCollectionTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.ReadOnlyCollection,
+        WrapperKind.ReadOnlyCollection, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -245,6 +256,7 @@ internal sealed record class CollectionTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -254,7 +266,7 @@ internal sealed record class CollectionTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Collection,
+        WrapperKind.Collection, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -268,6 +280,7 @@ internal sealed record class ReadOnlyListTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -277,7 +290,7 @@ internal sealed record class ReadOnlyListTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.ReadOnlyList,
+        WrapperKind.ReadOnlyList, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -291,6 +304,7 @@ internal sealed record class ListTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -300,7 +314,7 @@ internal sealed record class ListTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.List,
+        WrapperKind.List, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -314,6 +328,7 @@ internal sealed record class ArrayTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -323,7 +338,7 @@ internal sealed record class ArrayTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Array,
+        WrapperKind.Array, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -336,6 +351,7 @@ internal sealed record class LazyTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -345,7 +361,7 @@ internal sealed record class LazyTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : WrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Lazy,
+        WrapperKind.Lazy, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -358,6 +374,7 @@ internal sealed record class FuncTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -367,7 +384,7 @@ internal sealed record class FuncTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : WrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Func,
+        WrapperKind.Func, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -380,6 +397,7 @@ internal sealed record class DictionaryTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -389,7 +407,7 @@ internal sealed record class DictionaryTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : WrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Dictionary,
+        WrapperKind.Dictionary, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -402,6 +420,7 @@ internal sealed record class KeyValuePairTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -411,7 +430,7 @@ internal sealed record class KeyValuePairTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : WrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.KeyValuePair,
+        WrapperKind.KeyValuePair, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -425,6 +444,7 @@ internal sealed record class TaskTypeData(
     string NameWithoutGeneric,
     bool IsOpenGeneric,
     int GenericArity,
+    TypeTraits Traits,
     bool IsNestedOpenGeneric = false,
     ImmutableEquatableArray<TypeParameter>? TypeParameters = null,
     ImmutableEquatableArray<ParameterData>? ConstructorParameters = null,
@@ -434,7 +454,7 @@ internal sealed record class TaskTypeData(
     ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
     : WrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-        WrapperKind.Task,
+        WrapperKind.Task, Traits,
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
@@ -544,12 +564,12 @@ internal static class TypeDataExtensions
             TypeTraits Traits = default) =>
             new SimpleTypeData(
                 Name,
+                Traits,
                 ConstructorParameters,
                 HasInjectConstructor,
                 InjectionMembers,
                 AllInterfaces,
-                AllBaseClasses)
-            { Traits = Traits };
+                AllBaseClasses);
 
         /// <summary>
         /// Creates a generic type data.
@@ -572,14 +592,14 @@ internal static class TypeDataExtensions
                 NameWithoutGeneric,
                 IsOpenGeneric,
                 GenericArity,
+                Traits,
                 IsNestedOpenGeneric,
                 TypeParameters,
                 ConstructorParameters,
                 HasInjectConstructor,
                 InjectionMembers,
                 AllInterfaces,
-                AllBaseClasses)
-            { Traits = Traits };
+                AllBaseClasses);
 
         /// <summary>
         /// Creates a type parameter placeholder (e.g., T, TRequest).
@@ -607,66 +627,66 @@ internal static class TypeDataExtensions
             TypeTraits Traits = default) => WrapperKind switch
             {
                 WrapperKind.Enumerable => new EnumerableTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.ReadOnlyCollection => new ReadOnlyCollectionTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.Collection => new CollectionTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.ReadOnlyList => new ReadOnlyListTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.List => new ListTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.Array => new ArrayTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.Lazy => new LazyTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.Func => new FuncTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.Dictionary => new DictionaryTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.KeyValuePair => new KeyValuePairTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 WrapperKind.Task => new TaskTypeData(
-                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
+                    Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits },
+                    AllInterfaces, AllBaseClasses),
                 _ => new OtherWrapperTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
-                    WrapperKind,
+                    WrapperKind, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses) { Traits = Traits }
+                    AllInterfaces, AllBaseClasses)
             };
 
         /// <summary>
