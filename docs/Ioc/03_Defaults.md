@@ -242,6 +242,9 @@ public sealed class SharedMarker;
 public sealed class Module;
 ```
 
+> [!TIP]
+> When both the module and the importing class are `[IocContainer]` classes, the importing container also includes the module's services. See [Importing Modules Across Assemblies](12_Container.md#importing-modules-across-assemblies).
+
 ## Registration Priority
 
 `SourceGen.Ioc` uses two related precedence rules:

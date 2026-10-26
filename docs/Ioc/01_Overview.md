@@ -78,7 +78,7 @@ services.AddMyProject(); // Generated extension method
 |:---|:---|
 |`[IocRegisterFor]` / `[IocRegisterFor<T>]`|Register types you do not own, or any type — without modifying its source code.|
 |`[IocRegisterDefaults]` / `[IocRegisterDefaults<T>]`|Define shared policy (lifetime, decorators, tags) for all implementations of a service type.|
-|`[IocImportModule]` / `[IocImportModule<T>]`|Import defaults from another module type or assembly.|
+|`[IocImportModule]` / `[IocImportModule<T>]`|Import defaults from another module type or assembly, and the services of another container (module).|
 |`[IocRegister]` / `[IocRegister<T>]`|Register a class directly on its declaration (best for infrastructure code you own).|
 |`[IocInject]`|Mark constructor/property/field/method/parameter for generator-aware injection behavior.|
 |`[IocDiscover]` / `[IocDiscover<T>]`|Manually discover closed generic types for open-generic registration.|
