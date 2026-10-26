@@ -1091,4 +1091,70 @@ public class FactoryAndInstanceTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Factory_InheritedThroughDerivedType_ResolvesBaseMethodParameters()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+            public interface IMyService { }
+
+            [IocRegister<IDependency>]
+            public class Dependency : IDependency { }
+
+            [IocRegister(
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(DerivedFactory.Create))]
+            public class MyService : IMyService { }
+
+            public class BaseFactory
+            {
+                public static IMyService Create(IDependency dependency) => new MyService();
+            }
+
+            public class DerivedFactory : BaseFactory { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithOverloads_UsesCompilerLookup()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(
+                ServiceTypes = [typeof(IMyService)],
+                Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider provider) => new MyService();
+                public static IMyService Create() => new MyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }
