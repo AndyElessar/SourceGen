@@ -307,8 +307,9 @@ public class SGIOC023Tests
     }
 
     [Test]
-    public async Task SGIOC023_CsharpKeyTypeWithNonConstantKey_NoDiagnostic()
+    public async Task SGIOC023_CsharpKeyType_NonConstantKey_NoDiagnostic()
     {
+        // typeof(...) is not a constant, but KeyType.Csharp uses the key as a C# expression
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -317,12 +318,9 @@ public class SGIOC023Tests
 
             public interface IDependency { }
 
-            public static class Keys
-            {
-                public static readonly object Primary = new();
-            }
+            public static class Keys { }
 
-            [IocRegisterFor(typeof(MyService), InjectMembers = [new object[] { nameof(MyService.Dep), nameof(Keys.Primary), KeyType.Csharp }])]
+            [IocRegisterFor(typeof(MyService), InjectMembers = [new object[] { nameof(MyService.Dep), typeof(Keys), KeyType.Csharp }])]
             public static class MyModule { }
 
             public class MyService
