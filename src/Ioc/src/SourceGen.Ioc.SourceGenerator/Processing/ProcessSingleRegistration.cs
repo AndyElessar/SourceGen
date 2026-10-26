@@ -416,7 +416,7 @@ partial class IocSourceGenerator
         TypeData typeArgument,
         TypeData constraintType,
         Dictionary<string, TypeData> typeArguments,
-        TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         var constraintName = constraintType is TypeParameterTypeData && typeArguments.TryGetValue(constraintType.Name, out var constraintArgument)
             ? constraintArgument.Name

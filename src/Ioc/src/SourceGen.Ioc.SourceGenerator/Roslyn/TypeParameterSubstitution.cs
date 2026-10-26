@@ -2,138 +2,102 @@ namespace SourceGen.Ioc.SourceGenerator.Roslyn;
 
 internal static class TypeParameterSubstitution
 {
-    public static string SubstituteTypeArguments(string typeName, TypeArgMap typeArgMap)
+    /// <summary>
+    /// Replaces the type parameters in a fully qualified type name with their type arguments.
+    /// </summary>
+    /// <remarks>
+    /// All type parameters are replaced in one pass, so a type argument that contains another type parameter's name is not
+    /// replaced again. Only identifiers that can be type parameters are replaced: identifiers in a qualified name, such as
+    /// <c>T</c> in <c>global::Ns.Keys.T</c>, and tuple element names, such as <c>T</c> in <c>(int T, string Name)</c>,
+    /// are kept.
+    /// </remarks>
+    /// <param name="typeName">The type name, as written by <see cref="SymbolDisplayFormat.FullyQualifiedFormat"/>.</param>
+    /// <param name="typeArguments">The type argument of each type parameter, by type parameter name.</param>
+    public static string SubstituteTypeArguments(string typeName, Dictionary<string, string>? typeArguments)
     {
-        if(typeArgMap.IsEmpty)
+        if(typeArguments is null || typeArguments.Count == 0)
         {
             return typeName;
         }
 
-        // Fast path: check if any substitution is needed
-        var typeNameSpan = typeName.AsSpan();
-        bool needsSubstitution = false;
-        foreach(var (key, _) in typeArgMap)
-        {
-            if(ContainsTypeParameter(typeNameSpan, key.AsSpan()))
-            {
-                needsSubstitution = true;
-                break;
-            }
-        }
-
-        if(!needsSubstitution)
-        {
-            return typeName;
-        }
-
-        return SubstituteTypeArgumentsCore(typeName, typeArgMap.AsSpan());
-    }
-
-    public static string ReplaceTypeParameter(string typeName, string typeParam, string actualArg)
-    {
-        var typeNameSpan = typeName.AsSpan();
-
-        // Fast path: check if substitution is needed
-        if(!ContainsTypeParameter(typeNameSpan, typeParam.AsSpan()))
-        {
-            return typeName;
-        }
-
-        // Delegate to core implementation with single-element span
-        Span<TypeArgEntry> singleEntry = [new(typeParam, actualArg)];
-        return SubstituteTypeArgumentsCore(typeName, singleEntry);
-    }
-
-    private static string SubstituteTypeArgumentsCore(
-        string typeName,
-        ReadOnlySpan<TypeArgEntry> sortedEntries)
-    {
-        var typeNameSpan = typeName.AsSpan();
-        var result = new StringBuilder(typeNameSpan.Length + 32);
+        StringBuilder? result = null;
         int segmentStart = 0;
         int i = 0;
 
-        while(i < typeNameSpan.Length)
+        while(i < typeName.Length)
         {
-            // Check if current position is a valid identifier start
-            bool isValidStart = i == 0 || !IsIdentifierChar(typeNameSpan[i - 1]);
-
-            if(isValidStart && TryMatchTypeParameter(typeNameSpan, i, sortedEntries, out var match, out int matchLength))
+            if(!IsIdentifierChar(typeName[i]))
             {
-                // Flush the unchanged segment before the match in one append
-                result.Append(typeName, segmentStart, i - segmentStart);
-                result.Append(match);
-                i += matchLength;
-                segmentStart = i;
+                i++;
+                continue;
             }
-            else
+
+            int start = i;
+            while(i < typeName.Length && IsIdentifierChar(typeName[i]))
             {
                 i++;
             }
+
+            if(!CanBeTypeParameter(typeName, start, i) || FindTypeArgument(typeName, start, i - start, typeArguments) is not { } typeArgument)
+            {
+                continue;
+            }
+
+            // Flush the unchanged segment before the type parameter in one append
+            result ??= new StringBuilder(typeName.Length + 32);
+            result.Append(typeName, segmentStart, start - segmentStart);
+            result.Append(typeArgument);
+            segmentStart = i;
         }
 
-        result.Append(typeName, segmentStart, typeNameSpan.Length - segmentStart);
+        if(result is null)
+        {
+            return typeName;
+        }
+
+        result.Append(typeName, segmentStart, typeName.Length - segmentStart);
         return result.ToString();
     }
 
-    private static bool TryMatchTypeParameter(
-        ReadOnlySpan<char> typeNameSpan,
-        int position,
-        ReadOnlySpan<TypeArgEntry> sortedEntries,
-        [NotNullWhen(true)] out string? replacement,
-        out int matchLength)
+    /// <summary>
+    /// Determines whether the identifier at <paramref name="start"/>..<paramref name="end"/> is in a position where a type
+    /// parameter can be written.
+    /// </summary>
+    private static bool CanBeTypeParameter(string typeName, int start, int end)
     {
-        foreach(var (key, value) in sortedEntries)
+        // Namespaces, containing types and nested types of a qualified name
+        if(end < typeName.Length && typeName[end] == '.')
         {
-            var typeParamSpan = key.AsSpan();
-            int paramLength = typeParamSpan.Length;
-
-            if(position + paramLength <= typeNameSpan.Length &&
-               typeNameSpan.Slice(position, paramLength).SequenceEqual(typeParamSpan))
-            {
-                // Check if it's a whole word (ends at identifier boundary)
-                bool isEnd = position + paramLength == typeNameSpan.Length
-                                || !IsIdentifierChar(typeNameSpan[position + paramLength]);
-
-                if(isEnd)
-                {
-                    replacement = value;
-                    matchLength = paramLength;
-                    return true;
-                }
-            }
+            return false;
         }
 
-        replacement = null;
-        matchLength = 0;
-        return false;
+        if(start == 0)
+        {
+            return true;
+        }
+
+        return typeName[start - 1] switch
+        {
+            '.' or ':' => false,
+            // A space follows a separator ("<T, U>", "(T a, U b)") or a tuple element type ("(T a, U b)"); only the former
+            // starts a type
+            ' ' => start >= 2 && typeName[start - 2] == ',',
+            _ => true,
+        };
     }
 
-    private static bool ContainsTypeParameter(ReadOnlySpan<char> typeName, ReadOnlySpan<char> typeParam)
+    private static string? FindTypeArgument(string typeName, int start, int length, Dictionary<string, string> typeArguments)
     {
-        int index = 0;
-        while(index <= typeName.Length - typeParam.Length)
+        // Type parameter maps have a few entries, so comparing in place avoids allocating a key for every identifier
+        foreach(var entry in typeArguments)
         {
-            int pos = typeName[index..].IndexOf(typeParam, StringComparison.Ordinal);
-            if(pos < 0)
+            if(entry.Key.Length == length && string.CompareOrdinal(typeName, start, entry.Key, 0, length) == 0)
             {
-                return false;
+                return entry.Value;
             }
-
-            int absolutePos = index + pos;
-            bool isStart = absolutePos == 0
-                            || !IsIdentifierChar(typeName[absolutePos - 1]);
-            bool isEnd = absolutePos + typeParam.Length == typeName.Length
-                            || !IsIdentifierChar(typeName[absolutePos + typeParam.Length]);
-
-            if(isStart && isEnd)
-            {
-                return true;
-            }
-
-            index = absolutePos + 1;
         }
-        return false;
+
+        return null;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

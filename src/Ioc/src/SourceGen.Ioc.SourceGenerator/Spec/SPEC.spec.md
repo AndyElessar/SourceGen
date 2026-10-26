@@ -59,7 +59,7 @@ src/SourceGen.Ioc.SourceGenerator/
 ├── IocSourceGenerator.cs                     # Initialize() — pipeline wiring
 ├── IocSourceGenerator.ConfigProviders.cs     # MSBuild / Compilation / default-lifetime helpers
 ├── Constants.cs (in Models/)
-├── RoslynExtensions.cs · TypeArgMap.cs · GlobalUsings.cs
+├── RoslynExtensions.cs · GlobalUsings.cs
 ├── Transforms/   — Stage 1: attribute symbol → data model (+ TransformExtensions.cs helpers)
 ├── Processing/   — Stage 3 + part of Stage 4 (ProcessSingleRegistration, CombineAndResolveClosedGenerics)
 ├── Grouping/     — Stage 4 grouping (GroupRegistrationsForRegister, GroupRegistrationsForContainer)

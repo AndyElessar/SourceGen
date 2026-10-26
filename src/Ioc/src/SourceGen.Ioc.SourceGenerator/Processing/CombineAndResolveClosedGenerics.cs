@@ -374,7 +374,7 @@ partial class IocSourceGenerator
         // Map: open service type param name -> closed service type arg name
         // A form the implementation declares is written with the implementation's type parameters, so matching it
         // against the closed service type maps them directly and rejects closed types it cannot produce.
-        TypeArgMap serviceTypeArgMap;
+        Dictionary<string, string>? serviceTypeArgMap;
         if(implementedForm is not null && !isFactoryOnlyRegistration)
         {
             if(MatchAllTypeArguments(openImplType, implementedForm, closedServiceGenericType) is not { } typeArguments)
@@ -389,7 +389,7 @@ partial class IocSourceGenerator
                 matchingOpenServiceType,
                 closedServiceGenericType);
         }
-        if(serviceTypeArgMap.IsDefaultOrEmpty)
+        if(serviceTypeArgMap is not { Count: > 0 })
         {
             return false; // Cannot build substitution map - type structure incompatible
         }
@@ -411,7 +411,7 @@ partial class IocSourceGenerator
             openImplType,
             matchingOpenServiceType,
             serviceTypeArgMap);
-        if(implTypeArgMap.IsDefaultOrEmpty)
+        if(implTypeArgMap is not { Count: > 0 })
         {
             return false;
         }
@@ -556,13 +556,13 @@ partial class IocSourceGenerator
     /// this extracts the actual type parameters (T -> Entity) by comparing
     /// the nested type arguments.
     /// </summary>
-    private static TypeArgMap BuildTypeArgumentMapFromServiceType(
+    private static Dictionary<string, string>? BuildTypeArgumentMapFromServiceType(
         GenericTypeData? openServiceType,
         GenericTypeData? closedServiceType)
     {
         if(openServiceType is null || closedServiceType is null)
         {
-            return default;
+            return null;
         }
 
         var openTypeParams = openServiceType.TypeParameters;
@@ -570,15 +570,15 @@ partial class IocSourceGenerator
 
         if(openTypeParams is null || closedTypeParams is null)
         {
-            return default;
+            return null;
         }
 
         if(openTypeParams.Length != closedTypeParams.Length)
         {
-            return default;
+            return null;
         }
 
-        var typeArgMap = new TypeArgMap(openTypeParams.Length);
+        var typeArgMap = new Dictionary<string, string>(openTypeParams.Length, StringComparer.Ordinal);
 
         // For non-nested open generics (like ILogger<T>), use direct mapping
         if(!openServiceType.IsNestedOpenGeneric)
@@ -593,9 +593,9 @@ partial class IocSourceGenerator
         // For nested open generics, we need to extract the actual type parameter mappings
         // by comparing nested type arguments
         // If extraction fails (incompatible structures), return empty map
-        if(!ExtractTypeArgumentMappings(openTypeParams, closedTypeParams, ref typeArgMap))
+        if(!ExtractTypeArgumentMappings(openTypeParams, closedTypeParams, typeArgMap))
         {
-            return default;
+            return null;
         }
 
         return typeArgMap;
@@ -611,7 +611,7 @@ partial class IocSourceGenerator
     private static bool ExtractTypeArgumentMappings(
         ImmutableEquatableArray<TypeParameter> openParams,
         ImmutableEquatableArray<TypeParameter> closedParams,
-        ref TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         for(int i = 0; i < openParams.Length; i++)
         {
@@ -625,14 +625,17 @@ partial class IocSourceGenerator
             if(openParamType.Name == openParam.ParameterName)
             {
                 // Direct type parameter, map it to the closed type
-                typeArgMap[openParam.ParameterName] = closedParamType.Name;
+                if(!TryAddTypeArgument(typeArgMap, openParam.ParameterName, closedParamType.Name))
+                {
+                    return false;
+                }
                 continue;
             }
 
             // The open param type is a constructed type with nested type parameters
             // e.g., GenericRequest<T> or List<T>
             // Use the recursively extracted TypeParameters from TypeData
-            if(!ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, ref typeArgMap))
+            if(!ExtractTypeArgumentMappingsFromTypeData(openParamType, closedParamType, typeArgMap))
             {
                 return false; // Incompatible structure
             }
@@ -650,7 +653,7 @@ partial class IocSourceGenerator
     private static bool ExtractTypeArgumentMappingsFromTypeData(
         TypeData openType,
         TypeData closedType,
-        ref TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         if(openType is not GenericTypeData openGenericType || closedType is not GenericTypeData closedGenericType)
         {
@@ -690,12 +693,15 @@ partial class IocSourceGenerator
             if(openNestedType is TypeParameterTypeData)
             {
                 // Direct mapping: T -> Entity (use the full closed type name)
-                typeArgMap[openNestedType.Name] = closedNestedType.Name;
+                if(!TryAddTypeArgument(typeArgMap, openNestedType.Name, closedNestedType.Name))
+                {
+                    return false;
+                }
             }
             else if(openNestedType is GenericTypeData { TypeParameters: { Length: > 0 } })
             {
                 // Nested generic type, recurse using TypeParameters
-                if(!ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, ref typeArgMap))
+                if(!ExtractTypeArgumentMappingsFromTypeData(openNestedType, closedNestedType, typeArgMap))
                 {
                     return false;
                 }
@@ -714,26 +720,42 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Records the type argument of a type parameter, or checks it against the one already recorded.
+    /// </summary>
+    /// <returns>False when the type parameter already stands for a different type, such as <c>T</c> in
+    /// <c>IHandler&lt;Request&lt;T&gt;, List&lt;T&gt;&gt;</c> closed as <c>IHandler&lt;Request&lt;A&gt;, List&lt;B&gt;&gt;</c>.</returns>
+    private static bool TryAddTypeArgument(Dictionary<string, string> typeArgMap, string typeParameter, string typeArgument)
+    {
+        if(typeArgMap.TryGetValue(typeParameter, out var existing))
+        {
+            return existing == typeArgument;
+        }
+
+        typeArgMap.Add(typeParameter, typeArgument);
+        return true;
+    }
+
+    /// <summary>
     /// Builds implementation type argument map by mapping service type params to implementation type params.
     /// For nested open generics, this uses the serviceTypeArgMap which already contains
     /// the extracted type parameter mappings (e.g., T -> Entity).
     /// </summary>
-    private static TypeArgMap BuildImplTypeArgMapFromServiceTypeMap(
+    private static Dictionary<string, string>? BuildImplTypeArgMapFromServiceTypeMap(
         GenericTypeData openImplType,
         GenericTypeData? openServiceType,
-        TypeArgMap serviceTypeArgMap)
+        Dictionary<string, string> serviceTypeArgMap)
     {
         var implTypeParams = openImplType.TypeParameters;
 
         if(implTypeParams is null)
         {
-            return default;
+            return null;
         }
 
         // For nested open generics, the serviceTypeArgMap already contains
         // the direct type parameter mappings (e.g., T -> Entity)
         // These should match the implementation type parameters directly
-        var implTypeArgMap = new TypeArgMap(implTypeParams.Length);
+        var implTypeArgMap = new Dictionary<string, string>(implTypeParams.Length, StringComparer.Ordinal);
         foreach(var implParam in implTypeParams)
         {
             // Check if the serviceTypeArgMap contains a mapping for this impl type param
@@ -859,9 +881,9 @@ partial class IocSourceGenerator
     /// <summary>
     /// Creates a substitution map from type arguments matched by <see cref="TryMatchTypeArguments"/>.
     /// </summary>
-    private static TypeArgMap ToTypeArgMap(Dictionary<string, TypeData> typeArguments)
+    private static Dictionary<string, string> ToTypeArgMap(Dictionary<string, TypeData> typeArguments)
     {
-        var typeArgMap = new TypeArgMap(typeArguments.Count);
+        var typeArgMap = new Dictionary<string, string>(typeArguments.Count, StringComparer.Ordinal);
         foreach(var entry in typeArguments)
         {
             typeArgMap[entry.Key] = entry.Value.Name;
@@ -876,7 +898,7 @@ partial class IocSourceGenerator
     private static GenericTypeData BuildClosedImplTypeData(
         string closedImplTypeName,
         GenericTypeData openImplType,
-        TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         // Build closed type parameters
         var openTypeParams = openImplType.TypeParameters;
@@ -928,8 +950,8 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<TypeData> openServiceTypes,
         GenericTypeData openImplType,
         ImmutableEquatableArray<TypeData> implInterfaces,
-        TypeArgMap serviceTypeArgMap,
-        TypeArgMap implTypeArgMap)
+        Dictionary<string, string> serviceTypeArgMap,
+        Dictionary<string, string> implTypeArgMap)
     {
         var result = new List<TypeData>(openServiceTypes.Length);
 
@@ -1041,7 +1063,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<TypeParameter>? SubstituteTypeParameters(
         ImmutableEquatableArray<TypeParameter>? typeParams,
-        TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         if(typeParams is null || typeParams.Length == 0)
         {
@@ -1062,7 +1084,7 @@ partial class IocSourceGenerator
     /// Recursively substitutes type arguments in a TypeData, including nested type parameters.
     /// For example, Task&lt;T&gt; with T -> Entity becomes Task&lt;Entity&gt; with proper TypeParameters.
     /// </summary>
-    private static TypeData SubstituteTypeData(TypeData typeData, TypeArgMap typeArgMap)
+    private static TypeData SubstituteTypeData(TypeData typeData, Dictionary<string, string> typeArgMap)
     {
         var newTypeName = SubstituteTypeArguments(typeData.Name, typeArgMap);
         var newTypeParams = SubstituteTypeParameters(
@@ -1080,7 +1102,7 @@ partial class IocSourceGenerator
                 AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
             };
 
-        static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(ImmutableEquatableArray<TypeData>? types, TypeArgMap typeArgMap)
+        static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(ImmutableEquatableArray<TypeData>? types, Dictionary<string, string> typeArgMap)
         {
             if(types is null)
             {
@@ -1214,7 +1236,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static TypeData SubstituteDecoratorTypeParams(
         GenericTypeData genericDecorator,
-        TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         var decorator = genericDecorator;
         var decoratorTypeParams = genericDecorator.TypeParameters;
@@ -1275,7 +1297,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static InjectionMemberData SubstituteInjectionMember(
         InjectionMemberData member,
-        TypeArgMap typeArgMap)
+        Dictionary<string, string> typeArgMap)
     {
         // For properties and fields, substitute the member type
         TypeData? newType = null;
