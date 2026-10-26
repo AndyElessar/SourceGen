@@ -105,15 +105,15 @@ partial class IocSourceGenerator
     }
 
     private static readonly string[] _FixedContainerInterfaces = [
-        "IServiceProvider",
-        "IKeyedServiceProvider",
-        "IServiceProviderIsService",
-        "IServiceProviderIsKeyedService",
-        "ISupportRequiredService",
-        "IServiceScopeFactory",
-        "IServiceScope",
-        "IDisposable",
-        "IAsyncDisposable"
+        "global::System.IServiceProvider",
+        "global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService",
+        "global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceScope",
+        "global::System.IDisposable",
+        "global::System.IAsyncDisposable"
     ];
 
     /// <summary>
@@ -121,13 +121,13 @@ partial class IocSourceGenerator
     /// </summary>
     private static IEnumerable<string> GetContainerInterfaces(ContainerModel container, bool canGenerateServiceProviderFactory)
     {
-        yield return $"IIocContainer<{container.ContainerTypeName}>";
+        yield return $"global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>";
 
         foreach(var i in _FixedContainerInterfaces)
             yield return i;
 
         if(canGenerateServiceProviderFactory)
-            yield return "IServiceProviderFactory<IServiceCollection>";
+            yield return "global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>";
     }
 
     /// <summary>
@@ -141,9 +141,9 @@ partial class IocSourceGenerator
         // Fallback provider field (only if IntegrateServiceProvider is enabled)
         if(container.IntegrateServiceProvider)
         {
-            writer.WriteLine("private readonly IServiceProvider? _fallbackProvider;");
+            writer.WriteLine("private readonly global::System.IServiceProvider? _fallbackProvider;");
             // Scope on the fallback provider, created on first fallback resolution in a container scope (null in the root)
-            writer.WriteLine("private IServiceScope? _fallbackScope;");
+            writer.WriteLine("private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;");
         }
 
         // Root container reference used by scopes to resolve lazily created singletons (null in the root)
@@ -195,9 +195,9 @@ partial class IocSourceGenerator
         // SpinLock must NOT be readonly because Enter/Exit mutate it
         var syncFieldDeclaration = strategy switch
         {
-            ThreadSafeStrategy.Lock => $"private readonly Lock {fieldName}Lock = new();",
-            ThreadSafeStrategy.SemaphoreSlim => $"private readonly SemaphoreSlim {fieldName}Semaphore = new(1, 1);",
-            ThreadSafeStrategy.SpinLock => $"private SpinLock {fieldName}SpinLock = new(false);",
+            ThreadSafeStrategy.Lock => $"private readonly global::System.Threading.Lock {fieldName}Lock = new();",
+            ThreadSafeStrategy.SemaphoreSlim => $"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);",
+            ThreadSafeStrategy.SpinLock => $"private global::System.Threading.SpinLock {fieldName}SpinLock = new(false);",
             _ => null
         };
 
@@ -229,7 +229,7 @@ partial class IocSourceGenerator
 
         if(needsFallbackProvider)
         {
-            writer.WriteLine($"public {container.ClassName}() : this((IServiceProvider?)null) {{ }}");
+            writer.WriteLine($"public {container.ClassName}() : this((global::System.IServiceProvider?)null) {{ }}");
         }
         else
         {
@@ -250,7 +250,7 @@ partial class IocSourceGenerator
             writer.WriteLine("/// Creates a new container with optional fallback to external service provider.");
             writer.WriteLine("/// </summary>");
             writer.WriteLine("/// <param name=\"fallbackProvider\">Optional external service provider for unknown dependencies.</param>");
-            writer.WriteLine($"public {container.ClassName}(IServiceProvider? fallbackProvider)");
+            writer.WriteLine($"public {container.ClassName}(global::System.IServiceProvider? fallbackProvider)");
             writer.WriteLine("{");
             writer.Indentation++;
             writer.WriteLine("_fallbackProvider = fallbackProvider;");

@@ -10,7 +10,9 @@ The container supports all three service lifetimes: Singleton (shared across all
 |:---|:---|:---|
 |Singleton|Root container field|Shared across all scopes. Scopes copy eager instances and MUST delegate lazily created singletons to the root via `_root`.|
 |Scoped|Scope-local field|New instance per scope|
-|Transient|None|New instance per resolution|
+|Transient|None|New instance per resolution. Not tracked: the container never disposes transient services (the caller owns them).|
+
+> **Scoped services resolved from the root**: The root container caches them in its own scoped fields and disposes them when the root is disposed, before singletons.
 
 ### Special Cases for Factory and Instance Registrations
 

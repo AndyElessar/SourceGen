@@ -14,7 +14,7 @@ The `ThreadSafeStrategy` enum controls how the container ensures thread-safe ini
 |`Lock`|Uses `lock` statement with double-checked locking pattern. **(Default)**|General-purpose thread safety with balanced performance.|
 |`SemaphoreSlim`|Uses `SemaphoreSlim` with double-checked locking pattern.|Only option for scenarios with async initialization.|
 |`SpinLock`|Uses `SpinLock` with double-checked locking pattern.|High-performance scenarios with very short initialization times. Not recommended for I/O-bound initialization.|
-|`CompareExchange`|Uses `Interlocked.CompareExchange` (CAS) for lock-free thread safety.|Best performance for lightweight constructors. No synchronization overhead. May create duplicate instances under contention; duplicates are disposed via `DisposeService`.|
+|`CompareExchange`|Uses `Interlocked.CompareExchange` (CAS) for lock-free thread safety.|Best performance for lightweight constructors. No synchronization overhead. May create duplicate instances under contention; disposable duplicates are disposed synchronously (never throwing for `IAsyncDisposable`-only instances).|
 
 ## Async-init Strategy Override
 
@@ -75,9 +75,9 @@ partial class AppContainer
     private async global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync()
     {
         if(_myService is not null)
-            return await _myService;
+            return await _myService.ConfigureAwait(false);
 
-        await _myServiceSemaphore.WaitAsync();
+        await _myServiceSemaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             if(_myService is null)
@@ -90,7 +90,7 @@ partial class AppContainer
             _myServiceSemaphore.Release();
         }
 
-        return await _myService;
+        return await _myService.ConfigureAwait(false);
     }
 }
 #endregion
@@ -209,7 +209,7 @@ private global::MyService CreateMyService()
 
 ### ThreadSafeStrategy.CompareExchange
 
-Uses `Interlocked.CompareExchange` for lock-free CAS (Compare-And-Swap) pattern. No synchronization field needed. Under contention, multiple instances may be created but only one is retained; losing instances are disposed via `DisposeService`:
+Uses `Interlocked.CompareExchange` for lock-free CAS (Compare-And-Swap) pattern. No synchronization field needed. Under contention, multiple instances may be created but only one is retained; losing instances that implement `IDisposable` are disposed (resolution never throws for `IAsyncDisposable`-only instances):
 
 ```csharp
 private global::MyService? _myService;
@@ -222,7 +222,7 @@ private global::MyService CreateMyService()
     var existing = Interlocked.CompareExchange(ref _myService, instance, null);
     if(existing is not null)
     {
-        DisposeService(instance);
+        ((object)instance as global::System.IDisposable)?.Dispose();
         return existing;
     }
     return instance;

@@ -23,6 +23,8 @@ partial class IocSourceGenerator
         WriteServiceResolverGroup(writer, groups.ScopedEntries, writtenMethods, writeField: true);
         WriteServiceResolverGroup(writer, groups.TransientEntries, writtenMethods, writeField: false);
 
+        WriteProjectTaskHelper(writer, groups);
+
         foreach(var entry in groups.CollectionEntries)
         {
             entry.WriteResolver(writer);
@@ -253,7 +255,7 @@ partial class IocSourceGenerator
                 switch(entry)
                 {
                     case AsyncServiceContainerEntry asyncEntry:
-                        return $"await {asyncEntry.AsyncEntryMethodName}()";
+                        return $"await {asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false)";
                     case InstanceContainerEntry instanceEntry:
                         return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})";
                     case ServiceContainerEntry serviceEntry:

@@ -177,6 +177,41 @@ public sealed class ContainerLifecycleTests
         await Assert.That(() => container.GetRequiredKeyedService<LifecycleExternalService>("missing")).Throws<InvalidOperationException>();
     }
 
+    [Test]
+    public async Task ScopedService_ResolvedFromRoot_IsDisposedWithRoot()
+    {
+        var container = new RootScopedContainer();
+        var scoped = container.GetRequiredService<ILifecycleScopedDisposable>();
+
+        await Assert.That(scoped.IsDisposed).IsFalse();
+
+        container.Dispose();
+
+        await Assert.That(scoped.IsDisposed).IsTrue();
+    }
+
+    [Test]
+    public async Task AsyncOnlyDisposableService_SyncDispose_Throws()
+    {
+        await using var container = new AsyncOnlyDisposableContainer();
+        var scope = container.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ILifecycleAsyncOnlyDisposable>();
+
+        await Assert.That(() => scope.Dispose()).Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task AsyncOnlyDisposableService_DisposeAsync_DisposesService()
+    {
+        await using var container = new AsyncOnlyDisposableContainer();
+        var scope = container.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<ILifecycleAsyncOnlyDisposable>();
+
+        await scope.DisposeAsync();
+
+        await Assert.That(service.IsDisposed).IsTrue();
+    }
+
     /// <summary>Fallback provider that counts scopes created through its <see cref="IServiceScopeFactory"/>.</summary>
     private sealed class CountingScopeFactoryProvider(IServiceProvider inner) : IServiceProvider, IServiceScopeFactory
     {

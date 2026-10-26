@@ -31,6 +31,11 @@ partial class IocSourceGenerator
         public virtual void WriteLocalResolverEntries(SourceWriter writer)
         {
         }
+
+        /// <summary>
+        /// Gets the type a resolver entry for <paramref name="serviceType"/> is registered under.
+        /// </summary>
+        public virtual string GetExposedServiceType(string serviceType) => serviceType;
     }
 
     private closed record class ServiceContainerEntry(
@@ -169,7 +174,7 @@ partial class IocSourceGenerator
             foreach(var method in asyncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"await {injectionVar}.{method.Member.Name}({methodArgs});");
+                writer.WriteLine($"await {injectionVar}.{method.Member.Name}({methodArgs}).ConfigureAwait(false);");
             }
 
             if(hasDecorators)
@@ -399,8 +404,7 @@ partial class IocSourceGenerator
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            var disposeMethod = isAsync ? "await DisposeServiceAsync" : "DisposeService";
-            writer.WriteLine($"{disposeMethod}({FieldName});");
+            writer.WriteLine(FormatDisposeCall(FieldName, isAsync));
         }
     }
 
@@ -420,9 +424,9 @@ partial class IocSourceGenerator
 
             var syncFieldDeclaration = ThreadSafeStrategy switch
             {
-                ThreadSafeStrategy.Lock => $"private readonly Lock {FieldName}Lock = new();",
-                ThreadSafeStrategy.SemaphoreSlim => $"private readonly SemaphoreSlim {FieldName}Semaphore = new(1, 1);",
-                ThreadSafeStrategy.SpinLock => $"private SpinLock {FieldName}SpinLock = new(false);",
+                ThreadSafeStrategy.Lock => $"private readonly global::System.Threading.Lock {FieldName}Lock = new();",
+                ThreadSafeStrategy.SemaphoreSlim => $"private readonly global::System.Threading.SemaphoreSlim {FieldName}Semaphore = new(1, 1);",
+                ThreadSafeStrategy.SpinLock => $"private global::System.Threading.SpinLock {FieldName}SpinLock = new(false);",
                 _ => null
             };
 
@@ -470,8 +474,7 @@ partial class IocSourceGenerator
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            var disposeMethod = isAsync ? "await DisposeServiceAsync" : "DisposeService";
-            writer.WriteLine($"{disposeMethod}({FieldName});");
+            writer.WriteLine(FormatDisposeCall(FieldName, isAsync));
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
@@ -555,11 +558,12 @@ partial class IocSourceGenerator
             }
 
             writer.WriteLine();
-            writer.WriteLine($"var existing = Interlocked.CompareExchange(ref {FieldName}, instance, null);");
+            writer.WriteLine($"var existing = global::System.Threading.Interlocked.CompareExchange(ref {FieldName}, instance, null);");
             writer.WriteLine("if(existing is not null)");
             writer.WriteLine("{");
             writer.Indentation++;
-            writer.WriteLine("DisposeService(instance);");
+            // Not DisposeService: resolution must not throw for an IAsyncDisposable-only losing instance
+            writer.WriteLine("((object)instance as global::System.IDisposable)?.Dispose();");
             writer.WriteLine("return existing;");
             writer.Indentation--;
             writer.WriteLine("}");
@@ -651,13 +655,29 @@ partial class IocSourceGenerator
         /// </summary>
         public abstract string AsyncEntryMethodName { get; }
 
-        protected string TaskReturnTypeName
+        /// <summary>
+        /// Gets the <c>T</c> of the <c>Task&lt;T&gt;</c> returned by the async resolver.
+        /// </summary>
+        public string TaskResultTypeName => Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
+
+        protected string TaskReturnTypeName => $"global::System.Threading.Tasks.Task<{TaskResultTypeName}>";
+
+        /// <summary>
+        /// Async-init services are exposed as <c>Task&lt;ServiceType&gt;</c> instead of <c>ServiceType</c>,
+        /// because their resolver returns a task.
+        /// </summary>
+        public override string GetExposedServiceType(string serviceType) => $"global::System.Threading.Tasks.Task<{serviceType}>";
+
+        /// <summary>
+        /// Formats the call returning <c>Task&lt;serviceType&gt;</c>.
+        /// <c>Task&lt;T&gt;</c> is invariant, so the resolver task is projected when its result type differs.
+        /// </summary>
+        public string FormatResolverCall(string serviceType, string receiver)
         {
-            get
-            {
-                var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
-                return $"global::System.Threading.Tasks.Task<{returnType}>";
-            }
+            var call = $"{receiver}{AsyncEntryMethodName}()";
+            return serviceType == TaskResultTypeName
+                ? call
+                : $"{ProjectTaskMethodName}<{serviceType}, {TaskResultTypeName}>({call})";
         }
 
         protected void WriteCreateMethod(SourceWriter writer)
@@ -705,7 +725,7 @@ partial class IocSourceGenerator
 
             writer.WriteLine($"if({FieldName} is not null)");
             writer.Indentation++;
-            writer.WriteLine($"return await {FieldName};");
+            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
             writer.Indentation--;
 
             // Scopes never create singletons themselves; the root owns and disposes them
@@ -713,7 +733,7 @@ partial class IocSourceGenerator
             {
                 writer.WriteLine("if(_root is not null)");
                 writer.Indentation++;
-                writer.WriteLine($"return await _root.{AsyncEntryMethodName}();");
+                writer.WriteLine($"return await _root.{AsyncEntryMethodName}().ConfigureAwait(false);");
                 writer.Indentation--;
             }
 
@@ -745,8 +765,7 @@ partial class IocSourceGenerator
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            var disposeMethod = isAsync ? "await DisposeServiceAsync" : "DisposeService";
-            writer.WriteLine($"{disposeMethod}({FieldName});");
+            writer.WriteLine(FormatDisposeCall(FieldName, isAsync));
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
@@ -757,12 +776,12 @@ partial class IocSourceGenerator
         private void WriteAsyncResolverBodyNone(SourceWriter writer, string createMethodName)
         {
             writer.WriteLine($"{FieldName} = {createMethodName}();");
-            writer.WriteLine($"return await {FieldName};");
+            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
         }
 
         private void WriteAsyncResolverBodySemaphoreSlim(SourceWriter writer, string createMethodName)
         {
-            writer.WriteLine($"await {FieldName}Semaphore.WaitAsync();");
+            writer.WriteLine($"await {FieldName}Semaphore.WaitAsync().ConfigureAwait(false);");
             writer.WriteLine("try");
             writer.WriteLine("{");
             writer.Indentation++;
@@ -782,7 +801,7 @@ partial class IocSourceGenerator
             writer.Indentation--;
             writer.WriteLine("}");
 
-            writer.WriteLine($"return await {FieldName};");
+            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
         }
     }
 
@@ -856,13 +875,13 @@ partial class IocSourceGenerator
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
             var arrayMethodName = GetLazyArrayResolverMethodName(InnerServiceTypeName);
 
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
         }
     }
 
@@ -924,13 +943,13 @@ partial class IocSourceGenerator
             var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
             var arrayMethodName = GetFuncArrayResolverMethodName(InnerServiceTypeName);
 
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({wrapperTypeName}), {KeyedServiceAnyKey}), static c => c.{FieldName}),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{wrapperTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({wrapperTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
         }
     }
 
@@ -953,15 +972,15 @@ partial class IocSourceGenerator
             var arrayMethodName = GetKvpArrayResolverMethodName(KeyTypeName, ValueTypeName);
             var dictionaryMethodName = GetKvpDictionaryResolverMethodName(KeyTypeName, ValueTypeName);
 
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof({kvpTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({kvpTypeName}[]), {KeyedServiceAnyKey}), static c => c.{arrayMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), {KeyedServiceAnyKey}), static c => c.{dictionaryMethodName}()),");
         }
     }
 

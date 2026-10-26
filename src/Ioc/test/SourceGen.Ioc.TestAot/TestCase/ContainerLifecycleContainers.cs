@@ -51,6 +51,47 @@ internal sealed class LifecycleLazySingleton : ILifecycleLazySingleton, IDisposa
 [IocContainer(ExplicitOnly = true, EagerResolveOptions = EagerResolveOptions.None)]
 public sealed partial class LazySingletonScopeContainer;
 
+public interface ILifecycleScopedDisposable
+{
+    bool IsDisposed { get; }
+}
+
+internal sealed class LifecycleScopedDisposable : ILifecycleScopedDisposable, IDisposable
+{
+    public bool IsDisposed { get; private set; }
+
+    public void Dispose() => IsDisposed = true;
+}
+
+public interface ILifecycleAsyncOnlyDisposable
+{
+    bool IsDisposed { get; }
+}
+
+internal sealed class LifecycleAsyncOnlyDisposable : ILifecycleAsyncOnlyDisposable, IAsyncDisposable
+{
+    public bool IsDisposed { get; private set; }
+
+    public ValueTask DisposeAsync()
+    {
+        IsDisposed = true;
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>Scoped service that may be resolved directly from the root container.</summary>
+[IocRegisterFor<LifecycleScopedDisposable>(ServiceLifetime.Scoped, ServiceTypes = [typeof(ILifecycleScopedDisposable)])]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class RootScopedContainer;
+
+/// <summary>
+/// Scoped service that only implements <see cref="IAsyncDisposable"/>. Scoped (not singleton) because
+/// [IocRegisterFor] registrations are also visible to other containers in this assembly.
+/// </summary>
+[IocRegisterFor<LifecycleAsyncOnlyDisposable>(ServiceLifetime.Scoped, ServiceTypes = [typeof(ILifecycleAsyncOnlyDisposable)])]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class AsyncOnlyDisposableContainer;
+
 /// <summary>Service registered only in the fallback <see cref="IServiceCollection"/>.</summary>
 public sealed class LifecycleExternalService : IDisposable
 {

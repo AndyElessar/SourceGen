@@ -221,7 +221,7 @@ partial class IocSourceGenerator
     {
         public override string FormatExpression(bool isOptional)
         {
-            return $"((global::System.Func<global::System.Threading.Tasks.Task<{TypeName}>>)(async () => ({TypeName})(await {AsyncMethodName}())))()";
+            return $"((global::System.Func<global::System.Threading.Tasks.Task<{TypeName}>>)(async () => ({TypeName})(await {AsyncMethodName}().ConfigureAwait(false))))()";
         }
     }
 
