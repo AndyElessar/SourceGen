@@ -44,10 +44,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.MyService _testNamespace_MyService = null!;
-    private global::TestNamespace.MyService GetTestNamespace_MyService()
-    {
-        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
 
+    private global::TestNamespace.MyService CreateTestNamespace_MyService()
+    {
         var instance = new global::TestNamespace.MyService();
 
         _testNamespace_MyService = instance;
@@ -200,8 +200,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

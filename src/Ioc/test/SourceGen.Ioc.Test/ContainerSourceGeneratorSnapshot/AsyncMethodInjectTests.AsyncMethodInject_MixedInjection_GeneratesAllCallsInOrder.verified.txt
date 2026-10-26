@@ -19,6 +19,8 @@ namespace TestNamespace;
 partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope;
+    private readonly TestContainer? _root;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -42,6 +44,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
+        _root = parent._root ?? parent;
         _testNamespace_Dep1 = parent._testNamespace_Dep1;
         _testNamespace_Dep2 = parent._testNamespace_Dep2;
         _testNamespace_Dep3 = parent._testNamespace_Dep3;
@@ -53,9 +56,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Dep1? _testNamespace_Dep1;
-    private global::TestNamespace.Dep1 GetTestNamespace_Dep1()
+    private global::TestNamespace.Dep1 GetTestNamespace_Dep1() => _testNamespace_Dep1 ?? CreateTestNamespace_Dep1();
+
+    private global::TestNamespace.Dep1 CreateTestNamespace_Dep1()
     {
-        if(_testNamespace_Dep1 is not null) return _testNamespace_Dep1;
+        if(_root is not null) return _root.GetTestNamespace_Dep1();
 
         var instance = new global::TestNamespace.Dep1();
 
@@ -64,9 +69,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.Dep2? _testNamespace_Dep2;
-    private global::TestNamespace.Dep2 GetTestNamespace_Dep2()
+    private global::TestNamespace.Dep2 GetTestNamespace_Dep2() => _testNamespace_Dep2 ?? CreateTestNamespace_Dep2();
+
+    private global::TestNamespace.Dep2 CreateTestNamespace_Dep2()
     {
-        if(_testNamespace_Dep2 is not null) return _testNamespace_Dep2;
+        if(_root is not null) return _root.GetTestNamespace_Dep2();
 
         var instance = new global::TestNamespace.Dep2();
 
@@ -75,9 +82,11 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.Dep3? _testNamespace_Dep3;
-    private global::TestNamespace.Dep3 GetTestNamespace_Dep3()
+    private global::TestNamespace.Dep3 GetTestNamespace_Dep3() => _testNamespace_Dep3 ?? CreateTestNamespace_Dep3();
+
+    private global::TestNamespace.Dep3 CreateTestNamespace_Dep3()
     {
-        if(_testNamespace_Dep3 is not null) return _testNamespace_Dep3;
+        if(_root is not null) return _root.GetTestNamespace_Dep3();
 
         var instance = new global::TestNamespace.Dep3();
 
@@ -91,6 +100,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     {
         if(_testNamespace_MyService is not null)
             return await _testNamespace_MyService;
+        if(_root is not null)
+            return await _root.GetTestNamespace_MyServiceAsync();
 
         _testNamespace_MyService = CreateTestNamespace_MyServiceAsync();
         return await _testNamespace_MyService;
@@ -118,7 +129,26 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -134,7 +164,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -271,13 +301,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new TestContainer(fallbackProvider);
+        return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -290,6 +322,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
@@ -297,6 +330,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         DisposeService(_testNamespace_Dep3);
         DisposeService(_testNamespace_Dep2);
         DisposeService(_testNamespace_Dep1);
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -305,6 +339,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope);
             return;
         }
 
@@ -312,6 +347,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         await DisposeServiceAsync(_testNamespace_Dep3);
         await DisposeServiceAsync(_testNamespace_Dep2);
         await DisposeServiceAsync(_testNamespace_Dep1);
+        await DisposeServiceAsync(_ownedFallbackProvider);
     }
 
     private void ThrowIfDisposed()

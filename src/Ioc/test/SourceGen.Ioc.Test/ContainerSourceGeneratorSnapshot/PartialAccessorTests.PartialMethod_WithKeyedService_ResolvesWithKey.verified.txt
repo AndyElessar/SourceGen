@@ -19,6 +19,7 @@ namespace TestNamespace;
 partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -53,10 +54,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.RedisCache _testNamespace_RedisCache__redis_ = null!;
-    private global::TestNamespace.RedisCache GetTestNamespace_RedisCache__redis_()
-    {
-        if(_testNamespace_RedisCache__redis_ is not null) return _testNamespace_RedisCache__redis_;
+    private global::TestNamespace.RedisCache GetTestNamespace_RedisCache__redis_() => _testNamespace_RedisCache__redis_ ?? CreateTestNamespace_RedisCache__redis_();
 
+    private global::TestNamespace.RedisCache CreateTestNamespace_RedisCache__redis_()
+    {
         var instance = new global::TestNamespace.RedisCache();
 
         _testNamespace_RedisCache__redis_ = instance;
@@ -80,7 +81,26 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -96,7 +116,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -215,8 +235,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.RedisCache), "redis"), static c => c._testNamespace_RedisCache__redis_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.ICache), "redis"), static c => c._testNamespace_RedisCache__redis_!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.RedisCache), "redis"), static c => c.GetTestNamespace_RedisCache__redis_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.ICache), "redis"), static c => c.GetTestNamespace_RedisCache__redis_()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
@@ -230,13 +250,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new TestContainer(fallbackProvider);
+        return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -249,10 +271,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
         DisposeService(_testNamespace_RedisCache__redis_);
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -261,10 +285,12 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope);
             return;
         }
 
         await DisposeServiceAsync(_testNamespace_RedisCache__redis_);
+        await DisposeServiceAsync(_ownedFallbackProvider);
     }
 
     private void ThrowIfDisposed()

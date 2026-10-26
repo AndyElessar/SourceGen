@@ -19,6 +19,7 @@ namespace Company.Product.Module;
 partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Module.DeepNamespaceContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -53,10 +54,10 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     #region Service Resolution
 
     private global::Company.Product.Module.MyService _company_Product_Module_MyService = null!;
-    private global::Company.Product.Module.MyService GetCompany_Product_Module_MyService()
-    {
-        if(_company_Product_Module_MyService is not null) return _company_Product_Module_MyService;
+    private global::Company.Product.Module.MyService GetCompany_Product_Module_MyService() => _company_Product_Module_MyService ?? CreateCompany_Product_Module_MyService();
 
+    private global::Company.Product.Module.MyService CreateCompany_Product_Module_MyService()
+    {
         var instance = new global::Company.Product.Module.MyService();
 
         _company_Product_Module_MyService = instance;
@@ -74,7 +75,26 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -90,7 +110,7 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -209,8 +229,8 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::Company.Product.Module.DeepNamespaceContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::Company.Product.Module.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._company_Product_Module_MyService!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::Company.Product.Module.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._company_Product_Module_MyService!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::Company.Product.Module.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::Company.Product.Module.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetCompany_Product_Module_MyService()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::Company.Product.Module.DeepNamespaceContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
@@ -224,13 +244,15 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new DeepNamespaceContainer(fallbackProvider);
+        return new DeepNamespaceContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -243,10 +265,12 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
         DisposeService(_company_Product_Module_MyService);
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -255,10 +279,12 @@ partial class DeepNamespaceContainer : IIocContainer<global::Company.Product.Mod
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope);
             return;
         }
 
         await DisposeServiceAsync(_company_Product_Module_MyService);
+        await DisposeServiceAsync(_ownedFallbackProvider);
     }
 
     private void ThrowIfDisposed()

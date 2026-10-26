@@ -17,6 +17,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -51,10 +52,10 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     #region Service Resolution
 
     private global::MyService _myService = null!;
-    private global::MyService GetMyService()
-    {
-        if(_myService is not null) return _myService;
+    private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+    private global::MyService CreateMyService()
+    {
         var instance = new global::MyService();
 
         _myService = instance;
@@ -72,7 +73,26 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -88,7 +108,7 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -207,8 +227,8 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::GlobalContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._myService!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::GlobalContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
@@ -222,13 +242,15 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new GlobalContainer(fallbackProvider);
+        return new GlobalContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -241,10 +263,12 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
         DisposeService(_myService);
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -253,10 +277,12 @@ partial class GlobalContainer : IIocContainer<global::GlobalContainer>, IService
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope);
             return;
         }
 
         await DisposeServiceAsync(_myService);
+        await DisposeServiceAsync(_ownedFallbackProvider);
     }
 
     private void ThrowIfDisposed()

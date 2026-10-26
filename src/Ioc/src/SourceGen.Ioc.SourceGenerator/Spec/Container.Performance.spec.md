@@ -212,7 +212,7 @@ partial class AppContainer
         if(serviceType == typeof(Service3)) return GetService3();
         if(serviceType == typeof(IService3)) return GetService3();
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
     }
 }
 #endregion

@@ -367,13 +367,15 @@ partial class IocSourceGenerator
         public override void WriteResolver(SourceWriter writer)
         {
             var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
+            var createMethodName = GetCreateMethodName(ResolverMethodName);
 
-            writer.WriteLine($"private {returnType} {ResolverMethodName}()");
+            // Tiny fast path (inlinable); creation lives in a separate slow-path method
+            writer.WriteLine($"private {returnType} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
+            writer.WriteLine();
+
+            writer.WriteLine($"private {returnType} {createMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
-
-            writer.WriteEarlyReturnIfNotNull(FieldName);
-            writer.WriteLine();
 
             WriteInstanceCreationWithInjection(writer);
 
@@ -433,13 +435,22 @@ partial class IocSourceGenerator
         public override void WriteResolver(SourceWriter writer)
         {
             var returnType = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
+            var createMethodName = GetCreateMethodName(ResolverMethodName);
 
-            writer.WriteLine($"private {returnType} {ResolverMethodName}()");
+            // Tiny fast path (inlinable); creation and synchronization live in a separate slow-path method
+            writer.WriteLine($"private {returnType} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
+            writer.WriteLine();
+
+            writer.WriteLine($"private {returnType} {createMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
 
-            writer.WriteEarlyReturnIfNotNull(FieldName);
-            writer.WriteLine();
+            // Scopes never create singletons themselves; the root owns and disposes them
+            if(Registration.Lifetime == ServiceLifetime.Singleton)
+            {
+                writer.WriteLine($"if(_root is not null) return _root.{ResolverMethodName}();");
+                writer.WriteLine();
+            }
 
             Action<SourceWriter> writeResolverBody = ThreadSafeStrategy switch
             {
@@ -696,6 +707,16 @@ partial class IocSourceGenerator
             writer.Indentation++;
             writer.WriteLine($"return await {FieldName};");
             writer.Indentation--;
+
+            // Scopes never create singletons themselves; the root owns and disposes them
+            if(Registration.Lifetime == ServiceLifetime.Singleton)
+            {
+                writer.WriteLine("if(_root is not null)");
+                writer.Indentation++;
+                writer.WriteLine($"return await _root.{AsyncEntryMethodName}();");
+                writer.Indentation--;
+            }
+
             writer.WriteLine();
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)

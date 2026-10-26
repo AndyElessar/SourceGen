@@ -83,7 +83,7 @@ partial class AppContainer :
     public object? GetService(Type serviceType)
     {
         // local resolver lookup generated here
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
     }
 }
 ```
@@ -131,6 +131,8 @@ Configure generation with `IocContainerAttribute` properties:
 
 > [!TIP]
 > For most .NET applications, the simplest way to integrate the generated container is to use it with `MS.E.DI`. Since the container implements `IServiceProviderFactory<IServiceCollection>`, you can call `new AppContainer().CreateServiceProvider(services)` to build a container that uses `MS.E.DI` as the fallback `IServiceProvider`.
+> The returned container owns that `MS.E.DI` provider and disposes it with the container. A provider you pass to the constructor yourself is not disposed by the container.
+> Each scope created from the container opens a matching scope on the fallback provider the first time it resolves a service from it, so scoped `MS.E.DI` services (for example, a `DbContext`) are scoped per container scope. Scopes that never use the fallback provider do not create one.
 
 ## Filtering by Tags
 
@@ -333,6 +335,10 @@ private AppContainer(AppContainer parent)
     _testNamespace_ScopedService = GetTestNamespace_ScopedService();
 }
 ```
+
+> [!NOTE]
+> Lazy/Func wrapper fields are initialized before eager services, so eager services can safely inject `Lazy<T>` / `Func<T>`.
+> A singleton that is not eagerly created is always created by the root container, even when it is first requested from a scope.
 
 > [!NOTE]
 > `_serviceResolvers` is declared as a `private static readonly` field with a static initializer (`_localResolvers.ToFrozenDictionary()`), so it is **not** assigned in constructors or copied between scopes.

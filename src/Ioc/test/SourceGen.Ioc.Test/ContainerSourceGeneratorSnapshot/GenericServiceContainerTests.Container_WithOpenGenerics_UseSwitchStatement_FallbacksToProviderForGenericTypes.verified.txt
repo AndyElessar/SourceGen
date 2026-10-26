@@ -44,10 +44,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.UserService _testNamespace_UserService = null!;
-    private global::TestNamespace.UserService GetTestNamespace_UserService()
-    {
-        if(_testNamespace_UserService is not null) return _testNamespace_UserService;
+    private global::TestNamespace.UserService GetTestNamespace_UserService() => _testNamespace_UserService ?? CreateTestNamespace_UserService();
 
+    private global::TestNamespace.UserService CreateTestNamespace_UserService()
+    {
         var instance = new global::TestNamespace.UserService(GetTestNamespace_Repository_TestNamespace_User_());
 
         _testNamespace_UserService = instance;
@@ -56,10 +56,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     private global::TestNamespace.Repository<global::TestNamespace.User>? _testNamespace_Repository_TestNamespace_User_;
     private readonly Lock _testNamespace_Repository_TestNamespace_User_Lock = new();
-    private global::TestNamespace.Repository<global::TestNamespace.User> GetTestNamespace_Repository_TestNamespace_User_()
-    {
-        if(_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
+    private global::TestNamespace.Repository<global::TestNamespace.User> GetTestNamespace_Repository_TestNamespace_User_() => _testNamespace_Repository_TestNamespace_User_ ?? CreateTestNamespace_Repository_TestNamespace_User_();
 
+    private global::TestNamespace.Repository<global::TestNamespace.User> CreateTestNamespace_Repository_TestNamespace_User_()
+    {
         lock(_testNamespace_Repository_TestNamespace_User_Lock)
         {
             if(_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
@@ -192,8 +192,8 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.UserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_UserService!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IUserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_UserService!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.UserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_UserService()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IUserService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_UserService()),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Repository<global::TestNamespace.User>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IRepository<global::TestNamespace.User>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
     ];

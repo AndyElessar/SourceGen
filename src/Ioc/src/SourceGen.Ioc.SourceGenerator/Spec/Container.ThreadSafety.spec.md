@@ -112,16 +112,18 @@ private async global::System.Threading.Tasks.Task<global::MyService> GetMyServic
 
 ## Generated Code Examples
 
+Every synchronous singleton/scoped resolver is split into an expression-bodied fast path (`GetX() => _x ?? CreateX();`) and a slow-path `CreateX()`. Strategies differ only in the body of `CreateX()`; for singletons it starts with `if(_root is not null) return _root.GetX();` (see [Lifetime](Container.Lifetime.spec.md)).
+
 ### ThreadSafeStrategy.None
 
 No synchronization primitives. Simple but not thread-safe:
 
 ```csharp
 private global::MyService? _myService;
-private global::MyService GetMyService()
-{
-    if (_myService is not null) return _myService;
+private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+private global::MyService CreateMyService()
+{
     var instance = new global::MyService();
     _myService = instance;
     return instance;
@@ -135,10 +137,10 @@ Uses `Lock` class with double-checked locking:
 ```csharp
 private global::MyService? _myService;
 private readonly Lock _myServiceLock = new();
-private global::MyService GetMyService()
-{
-    if (_myService is not null) return _myService;
+private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+private global::MyService CreateMyService()
+{
     lock (_myServiceLock)
     {
         if (_myService is not null) return _myService;
@@ -157,10 +159,10 @@ Uses `SemaphoreSlim` with double-checked locking:
 ```csharp
 private global::MyService? _myService;
 private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
-private global::MyService GetMyService()
-{
-    if (_myService is not null) return _myService;
+private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+private global::MyService CreateMyService()
+{
     _myServiceSemaphore.Wait();
     try
     {
@@ -184,10 +186,10 @@ Uses `SpinLock` with double-checked locking. Note that `SpinLock` is a struct an
 ```csharp
 private global::MyService? _myService;
 private SpinLock _myServiceSpinLock = new(false);
-private global::MyService GetMyService()
-{
-    if (_myService is not null) return _myService;
+private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+private global::MyService CreateMyService()
+{
     bool lockTaken = false;
     try
     {
@@ -211,10 +213,10 @@ Uses `Interlocked.CompareExchange` for lock-free CAS (Compare-And-Swap) pattern.
 
 ```csharp
 private global::MyService? _myService;
-private global::MyService GetMyService()
-{
-    if (_myService is not null) return _myService;
+private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+private global::MyService CreateMyService()
+{
     var instance = new global::MyService();
 
     var existing = Interlocked.CompareExchange(ref _myService, instance, null);
@@ -250,16 +252,19 @@ private AppContainer(AppContainer parent)
 {
     _fallbackProvider = parent._fallbackProvider;
     _isRootScope = false;
+    _root = parent._root ?? parent;
 
-    // Copy singleton instance references from parent (both eager and lazy)
+    // Copy singleton instance references from parent (both eager and lazy).
+    // A lazy singleton not yet created is null here; its resolver then delegates to _root,
+    // so singleton synchronization always happens on the root's fields.
     _eagerSingletonService = parent._eagerSingletonService;
     _lazySingletonService = parent._lazySingletonService;
 
-    // Singleton synchronization fields are NOT copied (parent already initialized)
     // Scoped fields are fresh for each scope (both instance and sync fields)
 
-    // Initialize eager scoped services
-    _eagerScopedService = GetEagerScopedService();
+    // Initialize Lazy/Func wrapper fields, then eager scoped services
+    _lazy_IMyService_MyService = new global::System.Lazy<global::IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+    GetEagerScopedService();
 }
 ```
 

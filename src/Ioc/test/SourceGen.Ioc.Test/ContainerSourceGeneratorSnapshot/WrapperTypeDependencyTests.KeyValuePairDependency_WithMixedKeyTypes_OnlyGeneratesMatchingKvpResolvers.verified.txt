@@ -19,6 +19,7 @@ namespace TestNamespace;
 partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -61,10 +62,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.Keyed _testNamespace_Keyed__Key_ = null!;
-    private global::TestNamespace.Keyed GetTestNamespace_Keyed__Key_()
-    {
-        if(_testNamespace_Keyed__Key_ is not null) return _testNamespace_Keyed__Key_;
+    private global::TestNamespace.Keyed GetTestNamespace_Keyed__Key_() => _testNamespace_Keyed__Key_ ?? CreateTestNamespace_Keyed__Key_();
 
+    private global::TestNamespace.Keyed CreateTestNamespace_Keyed__Key_()
+    {
         var instance = new global::TestNamespace.Keyed();
 
         _testNamespace_Keyed__Key_ = instance;
@@ -72,10 +73,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.KeyedEnum _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 = null!;
-    private global::TestNamespace.KeyedEnum GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0()
-    {
-        if(_testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 is not null) return _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0;
+    private global::TestNamespace.KeyedEnum GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0() => _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 ?? CreateTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0();
 
+    private global::TestNamespace.KeyedEnum CreateTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0()
+    {
         var instance = new global::TestNamespace.KeyedEnum();
 
         _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 = instance;
@@ -83,10 +84,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.KeyedCsharp _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key = null!;
-    private global::TestNamespace.KeyedCsharp GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key()
-    {
-        if(_testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key is not null) return _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key;
+    private global::TestNamespace.KeyedCsharp GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key() => _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key ?? CreateTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key();
 
+    private global::TestNamespace.KeyedCsharp CreateTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key()
+    {
         var instance = new global::TestNamespace.KeyedCsharp();
 
         _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key = instance;
@@ -94,10 +95,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.StringConsumer _testNamespace_StringConsumer = null!;
-    private global::TestNamespace.StringConsumer GetTestNamespace_StringConsumer()
-    {
-        if(_testNamespace_StringConsumer is not null) return _testNamespace_StringConsumer;
+    private global::TestNamespace.StringConsumer GetTestNamespace_StringConsumer() => _testNamespace_StringConsumer ?? CreateTestNamespace_StringConsumer();
 
+    private global::TestNamespace.StringConsumer CreateTestNamespace_StringConsumer()
+    {
         var instance = new global::TestNamespace.StringConsumer(new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>(default!, (global::TestNamespace.IKeyed)GetRequiredService(typeof(global::TestNamespace.IKeyed))));
 
         _testNamespace_StringConsumer = instance;
@@ -105,10 +106,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.EnumConsumer _testNamespace_EnumConsumer = null!;
-    private global::TestNamespace.EnumConsumer GetTestNamespace_EnumConsumer()
-    {
-        if(_testNamespace_EnumConsumer is not null) return _testNamespace_EnumConsumer;
+    private global::TestNamespace.EnumConsumer GetTestNamespace_EnumConsumer() => _testNamespace_EnumConsumer ?? CreateTestNamespace_EnumConsumer();
 
+    private global::TestNamespace.EnumConsumer CreateTestNamespace_EnumConsumer()
+    {
         var instance = new global::TestNamespace.EnumConsumer(new global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>(default!, (global::TestNamespace.IKeyed)GetRequiredService(typeof(global::TestNamespace.IKeyed))));
 
         _testNamespace_EnumConsumer = instance;
@@ -154,7 +155,26 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -170,7 +190,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -289,14 +309,14 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Keyed), "Key"), static c => c._testNamespace_Keyed__Key_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), "Key"), static c => c._testNamespace_Keyed__Key_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.KeyedEnum), global::TestNamespace.KeyEnum.Key0), static c => c._testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyEnum.Key0), static c => c._testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.KeyedCsharp), global::TestNamespace.KeyedExtensions.Key), static c => c._testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyedExtensions.Key), static c => c._testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.StringConsumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_StringConsumer!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.EnumConsumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_EnumConsumer!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Keyed), "Key"), static c => c.GetTestNamespace_Keyed__Key_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), "Key"), static c => c.GetTestNamespace_Keyed__Key_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.KeyedEnum), global::TestNamespace.KeyEnum.Key0), static c => c.GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyEnum.Key0), static c => c.GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.KeyedCsharp), global::TestNamespace.KeyedExtensions.Key), static c => c.GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyedExtensions.Key), static c => c.GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.StringConsumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_StringConsumer()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.EnumConsumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_EnumConsumer()),
 
         // KeyValuePair resolvers
         new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
@@ -330,13 +350,15 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new TestContainer(fallbackProvider);
+        return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -349,6 +371,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
@@ -357,6 +380,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         DisposeService(_testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key);
         DisposeService(_testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0);
         DisposeService(_testNamespace_Keyed__Key_);
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
@@ -365,6 +389,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope);
             return;
         }
 
@@ -373,6 +398,7 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         await DisposeServiceAsync(_testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key);
         await DisposeServiceAsync(_testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0);
         await DisposeServiceAsync(_testNamespace_Keyed__Key_);
+        await DisposeServiceAsync(_ownedFallbackProvider);
     }
 
     private void ThrowIfDisposed()

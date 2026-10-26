@@ -46,10 +46,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     #region Service Resolution
 
     private global::TestNamespace.MyService _testNamespace_MyService = null!;
-    private global::TestNamespace.MyService GetTestNamespace_MyService()
-    {
-        if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
 
+    private global::TestNamespace.MyService CreateTestNamespace_MyService()
+    {
         var instance = new global::TestNamespace.MyService(GetTestNamespace_Logger_TestNamespace_MyService_());
 
         _testNamespace_MyService = instance;
@@ -57,10 +57,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     }
 
     private global::TestNamespace.Logger<global::TestNamespace.MyService> _testNamespace_Logger_TestNamespace_MyService_ = null!;
-    private global::TestNamespace.Logger<global::TestNamespace.MyService> GetTestNamespace_Logger_TestNamespace_MyService_()
-    {
-        if(_testNamespace_Logger_TestNamespace_MyService_ is not null) return _testNamespace_Logger_TestNamespace_MyService_;
+    private global::TestNamespace.Logger<global::TestNamespace.MyService> GetTestNamespace_Logger_TestNamespace_MyService_() => _testNamespace_Logger_TestNamespace_MyService_ ?? CreateTestNamespace_Logger_TestNamespace_MyService_();
 
+    private global::TestNamespace.Logger<global::TestNamespace.MyService> CreateTestNamespace_Logger_TestNamespace_MyService_()
+    {
         var instance = new global::TestNamespace.Logger<global::TestNamespace.MyService>();
 
         _testNamespace_Logger_TestNamespace_MyService_ = instance;
@@ -213,10 +213,10 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
         new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
         new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_MyService!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Logger<global::TestNamespace.MyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Logger_TestNamespace_MyService_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.ILogger<global::TestNamespace.MyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_Logger_TestNamespace_MyService_!),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Logger<global::TestNamespace.MyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Logger_TestNamespace_MyService_()),
+        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.ILogger<global::TestNamespace.MyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Logger_TestNamespace_MyService_()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

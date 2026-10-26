@@ -8,7 +8,7 @@ The container supports all three service lifetimes: Singleton (shared across all
 
 |Lifetime|Storage|Scope Behavior|
 |:---|:---|:---|
-|Singleton|Root container field|Shared across all scopes|
+|Singleton|Root container field|Shared across all scopes. Scopes copy eager instances and MUST delegate lazily created singletons to the root via `_root`.|
 |Scoped|Scope-local field|New instance per scope|
 |Transient|None|New instance per resolution|
 
@@ -42,14 +42,17 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
+    // Root container reference (null in the root); emitted only when some singleton is created lazily
+    private readonly AppContainer? _root;
+
     private AppContainer(AppContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        // Copy only singleton references from parent
+        _root = parent._root ?? parent;
+        // Copy singleton references from parent (fast path when already created)
         _singletonService = parent._singletonService;
         // _scopedService is NOT copied - each scope has its own
-        _serviceResolvers = parent._serviceResolvers;
     }
 
     #region Service Resolution
@@ -57,9 +60,12 @@ partial class AppContainer
     // Singleton - stored in root, shared across scopes
     private global::SingletonService? _singletonService;
     private readonly SemaphoreSlim _singletonServiceSemaphore = new(1, 1);
-    private global::SingletonService GetSingletonService()
+    private global::SingletonService GetSingletonService() => _singletonService ?? CreateSingletonService();
+
+    private global::SingletonService CreateSingletonService()
     {
-        if (_singletonService is not null) return _singletonService;
+        // Scopes never create singletons; the root creates, caches, and disposes them
+        if(_root is not null) return _root.GetSingletonService();
 
         _singletonServiceSemaphore.Wait();
         try
@@ -79,10 +85,10 @@ partial class AppContainer
     // Scoped - stored in each scope instance
     private global::ScopedService? _scopedService;
     private readonly SemaphoreSlim _scopedServiceSemaphore = new(1, 1);
-    private global::ScopedService GetScopedService()
-    {
-        if (_scopedService is not null) return _scopedService;
+    private global::ScopedService GetScopedService() => _scopedService ?? CreateScopedService();
 
+    private global::ScopedService CreateScopedService()
+    {
         _scopedServiceSemaphore.Wait();
         try
         {

@@ -55,7 +55,7 @@ partial class IocSourceGenerator
         // Fallback
         if(container.IntegrateServiceProvider)
         {
-            writer.WriteLine("return _fallbackProvider?.GetService(serviceType);");
+            writer.WriteLine("return GetFallbackServiceProvider()?.GetService(serviceType);");
         }
         else
         {
@@ -66,7 +66,44 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
+        if(container.IntegrateServiceProvider)
+        {
+            WriteFallbackServiceProviderMethods(writer);
+        }
+
         writer.WriteLine("#endregion");
+        writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes the fallback provider accessor. Container scopes create the matching fallback scope
+    /// only when a service is first resolved from the fallback provider.
+    /// </summary>
+    private static void WriteFallbackServiceProviderMethods(SourceWriter writer)
+    {
+        writer.WriteLine("private IServiceProvider? GetFallbackServiceProvider()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;");
+        writer.WriteLine();
+        writer.WriteLine("return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        writer.WriteLine("private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;");
+        writer.WriteLine();
+        writer.WriteLine("var scope = scopeFactory.CreateScope();");
+        writer.WriteLine("var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);");
+        writer.WriteLine("if(existing is null) return scope;");
+        writer.WriteLine();
+        writer.WriteLine("scope.Dispose();");
+        writer.WriteLine("return existing;");
+        writer.Indentation--;
+        writer.WriteLine("}");
         writer.WriteLine();
     }
 
@@ -113,7 +150,7 @@ partial class IocSourceGenerator
                 // Fallback in switch default case
                 if(container.IntegrateServiceProvider)
                 {
-                    writer.WriteLine("_ => _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null");
+                    writer.WriteLine("_ => GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null");
                 }
                 else
                 {
@@ -128,7 +165,7 @@ partial class IocSourceGenerator
                 // No keyed services, just return fallback
                 if(container.IntegrateServiceProvider)
                 {
-                    writer.WriteLine("return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
+                    writer.WriteLine("return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
                 }
                 else
                 {
@@ -147,7 +184,7 @@ partial class IocSourceGenerator
             // Fallback
             if(container.IntegrateServiceProvider)
             {
-                writer.WriteLine("return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
+                writer.WriteLine("return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
             }
             else
             {
@@ -599,6 +636,10 @@ partial class IocSourceGenerator
         writer.WriteLine("public IServiceCollection CreateBuilder(IServiceCollection services) => services;");
         writer.WriteLine();
 
+        // Provider built by CreateServiceProvider is owned (and disposed) by the returned container
+        writer.WriteLine("private object? _ownedFallbackProvider;");
+        writer.WriteLine();
+
         writer.WriteLine("/// <summary>");
         writer.WriteLine("/// Creates the service provider from the built IServiceCollection.");
         writer.WriteLine("/// </summary>");
@@ -606,7 +647,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
         writer.WriteLine("var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);");
-        writer.WriteLine($"return new {container.ClassName}(fallbackProvider);");
+        writer.WriteLine($"return new {container.ClassName}(fallbackProvider) {{ _ownedFallbackProvider = fallbackProvider }};");
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -621,7 +662,8 @@ partial class IocSourceGenerator
     private static void WriteDisposalImplementation(
         SourceWriter writer,
         ContainerModel container,
-        ContainerRegistrationGroups groups)
+        ContainerRegistrationGroups groups,
+        bool ownsFallbackProvider)
     {
         writer.WriteLine("#region Disposal");
         writer.WriteLine();
@@ -632,7 +674,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
         writer.WriteLine("if(Interlocked.Exchange(ref _disposed, 1) != 0) return;");
         writer.WriteLine();
-        WriteDisposalBody(writer, container, groups, isAsync: false);
+        WriteDisposalBody(writer, container, groups, ownsFallbackProvider, isAsync: false);
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -643,7 +685,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
         writer.WriteLine("if(Interlocked.Exchange(ref _disposed, 1) != 0) return;");
         writer.WriteLine();
-        WriteDisposalBody(writer, container, groups, isAsync: true);
+        WriteDisposalBody(writer, container, groups, ownsFallbackProvider, isAsync: true);
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -947,14 +989,24 @@ partial class IocSourceGenerator
         SourceWriter writer,
         ContainerModel container,
         ContainerRegistrationGroups groups,
+        bool ownsFallbackProvider,
         bool isAsync)
     {
+        var disposeMethod = isAsync ? "await DisposeServiceAsync" : "DisposeService";
+
         // Dispose scoped services if this is a scope
         writer.WriteLine("if(!_isRootScope)");
         writer.WriteLine("{");
         writer.Indentation++;
 
         WriteDisposalCalls(writer, groups.ScopedEntries, container.ImportedModules, isAsync);
+
+        // Fallback scope last: container services may depend on its services
+        if(container.IntegrateServiceProvider)
+        {
+            writer.WriteLine($"{disposeMethod}(_fallbackScope);");
+        }
+
         writer.WriteLine("return;");
 
         writer.Indentation--;
@@ -963,6 +1015,11 @@ partial class IocSourceGenerator
 
         // Root scope disposal
         WriteDisposalCalls(writer, groups.SingletonEntries, container.ImportedModules, isAsync);
+
+        if(ownsFallbackProvider)
+        {
+            writer.WriteLine($"{disposeMethod}(_ownedFallbackProvider);");
+        }
     }
 
     /// <summary>
@@ -1223,7 +1280,8 @@ partial class IocSourceGenerator
         return entry switch
         {
             InstanceContainerEntry instance => $"static _ => {instance.Registration.Instance}",
-            EagerContainerEntry eager => $"static c => c.{eager.FieldName}!",
+            // Eager services also go through their resolver method: during construction the field may still be unset
+            EagerContainerEntry eager => $"static c => c.{eager.ResolverMethodName}()",
             LazyThreadSafeContainerEntry lazy => $"static c => c.{lazy.ResolverMethodName}()",
             TransientContainerEntry transient => $"static c => c.{transient.ResolverMethodName}()",
             AsyncServiceContainerEntry asyncEntry => $"static c => c.{asyncEntry.AsyncEntryMethodName}()",
