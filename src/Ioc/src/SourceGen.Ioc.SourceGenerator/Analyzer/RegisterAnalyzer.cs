@@ -298,7 +298,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "An open generic implementation can only be registered as open generic service types it implements with its type parameters in the same order, and a closed implementation cannot be registered as an open generic service type. Incompatible service types are skipped during generation.");
+        description: "An open generic implementation can only be registered as open generic service types it implements, and a closed implementation cannot be registered as an open generic service type. Incompatible service types are skipped during generation.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
