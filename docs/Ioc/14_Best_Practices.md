@@ -302,7 +302,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC013`|`[ServiceKey]` type mismatch|[Keyed Services](05_Keyed.md#diagnostics)|
 |`SGIOC014`|`[ServiceKey]` used without keyed registration|[Keyed Services](05_Keyed.md#diagnostics)|
 |`SGIOC015`|Key type mismatch in keyed wrappers|[Keyed Services](05_Keyed.md#diagnostics)|
-|`SGIOC016`|Generic factory missing `[IocGenericFactory]`|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
+|`SGIOC016`|Generic factory has no valid type parameter mapping|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 |`SGIOC017`|Duplicate placeholder types in `[IocGenericFactory]`|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 |`SGIOC018`|Container dependency unresolved with strict integration|[Container](12_Container.md#diagnostics)|
 |`SGIOC019`|Invalid container type declaration|[Container](12_Container.md#diagnostics)|
@@ -311,6 +311,14 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC022`|Injection feature disabled by MSBuild feature flags|[Injection](04_Field_Property_Method_Injection.md#diagnostics), [MSBuild Configuration](13_MSBuild_Configuration.md#sourcegeniocfeatures)|
 |`SGIOC023`|Unrecognized `InjectMembers` element format|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
 |`SGIOC024`|Non-injectable member specified via `InjectMembers`|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
+|`SGIOC025`|Circular module import|[Container](12_Container.md#diagnostics)|
+|`SGIOC026`|`AsyncMethodInject` enabled without `MethodInject`|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
+|`SGIOC027`|Partial accessor must return `Task<T>` for an async-init service|[Container](12_Container.md#diagnostics)|
+|`SGIOC028`|`async void` injection method|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
+|`SGIOC029`|Unsupported async partial accessor type|[Container](12_Container.md#diagnostics)|
+|`SGIOC030`|Synchronous dependency on an async-init service|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
+|`SGIOC031`|Container feature disabled by MSBuild feature flags|[Container](12_Container.md#diagnostics), [MSBuild Configuration](13_MSBuild_Configuration.md#sourcegeniocfeatures)|
+|`SGIOC032`|Explicit service type incompatible with implementation|[Basic Usage](02_Basic.md#diagnostics)|
 
 ## Production Checklist
 

@@ -288,7 +288,7 @@ Both use the same format:
 - **Remaining types**: The placeholder types that map to factory method type parameters in order
 
 > [!WARNING]
-> If `Factory` points to a generic method but neither `[IocGenericFactory]` nor a valid `GenericFactoryTypeMapping` is specified, analyzer `SGIOC016` is reported and registration will not be generated. The number of placeholder types must match the factory method's type parameter count.
+> If `Factory` points to a generic method but neither `[IocGenericFactory]` nor a valid `GenericFactoryTypeMapping` is specified, analyzer `SGIOC016` is reported and registration will not be generated. The number of placeholder types must match the factory method's type parameter count, and each placeholder type must appear in the service type template.
 
 > [!NOTE]
 > When both `GenericFactoryTypeMapping` on the attribute and `[IocGenericFactory]` on the method are present, `[IocGenericFactory]` takes precedence.
@@ -477,7 +477,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
 |SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Factory` takes precedence.|
-|SGIOC016|Error|Generic factory method does not have `[IocGenericFactory]` attribute and `GenericFactoryTypeMapping` is not specified on the registration attribute, or the placeholder count does not match the factory method's type parameters.|
+|SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
 
 ---

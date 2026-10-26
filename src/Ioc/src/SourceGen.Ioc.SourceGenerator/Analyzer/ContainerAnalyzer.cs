@@ -24,16 +24,16 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
-    /// SGIOC019: Container class must be partial and cannot be static - The class marked with [IocContainer] is missing the partial modifier or is static.
+    /// SGIOC019: Container class must be partial and cannot be static - The class marked with [IocContainer] is missing the partial modifier, is static, or is a record.
     /// </summary>
     public static readonly DiagnosticDescriptor ContainerMustBePartialAndNotStatic = new(
         id: "SGIOC019",
         title: "Container class must be partial and cannot be static",
-        messageFormat: "Container class '{0}' must be declared as partial and cannot be static",
+        messageFormat: "Container class '{0}' must be declared as partial and cannot be static or a record",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A class marked with [IocContainer] must be declared as partial to allow source generation and cannot be static.");
+        description: "A class marked with [IocContainer] must be declared as partial to allow source generation, cannot be static, and cannot be a record.");
 
     /// <summary>
     /// SGIOC020: UseSwitchStatement should not be true when importing modules - The setting is ignored when there are imported modules.
@@ -99,6 +99,18 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         description: "When an async-init service is targeted by a partial accessor, only Task<TService> is a valid return type. Other wrapper types (Lazy<T>, Func<T>, ValueTask<T>, collections, etc.) and nested wrapper shapes are not supported.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC031: Container is not generated because the Container feature is disabled.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ContainerFeatureDisabled = new(
+        id: "SGIOC031",
+        title: "Container ignored due to disabled feature",
+        messageFormat: "Container '{0}' will not be generated because the Container feature is not enabled. Add 'Container' to <SourceGenIocFeatures> in your project file.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "When SourceGenIocFeatures does not include Container, classes marked with [IocContainer] are ignored during generation.");
+
     private static readonly SymbolDisplayFormat s_qualifiedFormat = new(
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
 
@@ -110,7 +122,8 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         UnableToResolvePartialAccessor,
         CircularModuleImport,
         PartialAccessorMustReturnTask,
-        UnsupportedAsyncPartialAccessorType
+        UnsupportedAsyncPartialAccessorType,
+        ContainerFeatureDisabled
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -189,22 +202,37 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         if(containerAttribute is null)
             return;
 
-        // SGIOC019: Check for partial modifier and static modifier
+        // SGIOC031: The generator skips every container when the Container feature is disabled
+        if((analyzerContext.Features & IocFeatures.Container) == 0)
+        {
+            var location = containerAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
+                ?? typeSymbol.Locations.FirstOrDefault();
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                ContainerFeatureDisabled,
+                location,
+                typeSymbol.Name));
+        }
+
+        // SGIOC019: Check for partial modifier and static modifier.
+        // Records are reported too because the generator only handles class declarations.
         foreach(var syntaxRef in typeSymbol.DeclaringSyntaxReferences)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
 
             var syntax = syntaxRef.GetSyntax(context.CancellationToken);
-            if(syntax is not ClassDeclarationSyntax classDeclaration)
+            if(syntax is not (ClassDeclarationSyntax or RecordDeclarationSyntax))
                 continue;
 
-            var hasPartial = classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword);
-            var hasStatic = classDeclaration.Modifiers.Any(SyntaxKind.StaticKeyword);
+            var typeDeclaration = (TypeDeclarationSyntax)syntax;
+            var hasPartial = typeDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword);
+            var hasStatic = typeDeclaration.Modifiers.Any(SyntaxKind.StaticKeyword);
+            var isRecord = typeDeclaration is RecordDeclarationSyntax;
 
-            if(!hasPartial || hasStatic)
+            if(!hasPartial || hasStatic || isRecord)
             {
                 var location = containerAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
-                    ?? classDeclaration.Identifier.GetLocation();
+                    ?? typeDeclaration.Identifier.GetLocation();
 
                 context.ReportDiagnostic(Diagnostic.Create(
                     ContainerMustBePartialAndNotStatic,

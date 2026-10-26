@@ -253,4 +253,87 @@ public class SGIOC023Tests
 
         await Assert.That(sgioc023).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC023_NonConstantValueKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [new object[] { nameof(MyService.Dep), typeof(IDependency) }])]
+            public static class MyModule { }
+
+            public class MyService
+            {
+                public IDependency? Dep { get; set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc023 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC023);
+
+        await Assert.That(sgioc023).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC023_NullValueKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [new object?[] { nameof(MyService.Dep), null }])]
+            public static class MyModule { }
+
+            public class MyService
+            {
+                public IDependency? Dep { get; set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc023 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC023);
+
+        await Assert.That(sgioc023).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC023_CsharpKeyTypeWithNonConstantKey_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public static class Keys
+            {
+                public static readonly object Primary = new();
+            }
+
+            [IocRegisterFor(typeof(MyService), InjectMembers = [new object[] { nameof(MyService.Dep), nameof(Keys.Primary), KeyType.Csharp }])]
+            public static class MyModule { }
+
+            public class MyService
+            {
+                public IDependency? Dep { get; set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc023 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC023);
+
+        await Assert.That(sgioc023).Count().IsEqualTo(0);
+    }
 }

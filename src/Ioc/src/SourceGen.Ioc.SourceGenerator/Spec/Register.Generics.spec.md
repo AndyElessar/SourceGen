@@ -184,7 +184,7 @@ When a generic factory method is used with open generic service registration, th
 
 ### Rules
 
-- The factory method must have the same number of type parameters as placeholder types provided
+- The factory method must have the same number of type parameters as placeholder types provided, and each placeholder type must appear in the service type template; otherwise SGIOC016 is reported and the registration is not generated
 - Each placeholder type should be unique - duplicate placeholders cannot be distinguished and will not generate registration
 - The service type template must match the structure of the open generic service type in the `IocRegisterDefaults`
 - If `[IocGenericFactory]` is missing on a generic factory method, SGIOC016 diagnostic is reported

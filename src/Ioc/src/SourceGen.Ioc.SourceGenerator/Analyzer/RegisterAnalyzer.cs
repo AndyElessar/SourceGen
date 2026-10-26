@@ -192,16 +192,16 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "When injecting KeyValuePair<K, V>, IDictionary<K, V>, or collection of KeyValuePair<K, V>, the key type K must match the registered key type of at least one keyed service for V.");
 
     /// <summary>
-    /// SGIOC016: Factory Method is unmatched - Generic factory method does not have [IocGenericFactory] attribute.
+    /// SGIOC016: Factory Method is unmatched - Generic factory method has no valid type parameter mapping.
     /// </summary>
     public static readonly DiagnosticDescriptor GenericFactoryMissingAttribute = new(
         id: "SGIOC016",
         title: "Factory Method is unmatched",
-        messageFormat: "Generic factory method '{0}' must be marked with [IocGenericFactory] attribute to specify type parameter mapping",
+        messageFormat: "Generic factory method '{0}' has no valid type parameter mapping: {1}",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When using a generic factory method, you must mark it with [IocGenericFactory] attribute to specify how service type placeholders map to factory method type parameters.");
+        description: "When using a generic factory method, you must mark it with [IocGenericFactory] attribute (or specify GenericFactoryTypeMapping) to specify how service type placeholders map to factory method type parameters. The mapping must provide one placeholder per factory method type parameter, and each placeholder must appear in the service type template.");
 
     /// <summary>
     /// SGIOC017: Generic Factory Method's type parameters are duplicated - Placeholder types in [IocGenericFactory] must be unique.
@@ -237,7 +237,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Each element in InjectMembers must be either a nameof() expression or an array literal with member name, optional key, and optional KeyType.");
+        description: "Each element in InjectMembers must be either a nameof() expression or an array literal with member name, key, and optional KeyType. With KeyType.Value (the default), the key must be a non-null constant.");
 
     /// <summary>
     /// SGIOC024: InjectMembers specifies non-injectable member.
@@ -288,6 +288,18 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Methods marked with [IocInject] that are declared as async void cannot be awaited by the source generator. Change the return type to Task to enable async injection, or remove the async modifier if the method is synchronous.");
 
+    /// <summary>
+    /// SGIOC032: Explicit service type is not compatible with the implementation and is skipped.
+    /// </summary>
+    public static readonly DiagnosticDescriptor IncompatibleServiceType = new(
+        id: "SGIOC032",
+        title: "Service type is not compatible with implementation",
+        messageFormat: "Service type '{0}' cannot be registered for implementation '{1}' and will be skipped: {2}",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "An open generic implementation can only be registered as open generic service types it implements with its type parameters in the same order, and a closed implementation cannot be registered as an open generic service type. Incompatible service types are skipped during generation.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -312,7 +324,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         InjectMembersNonInjectableMember,
         AsyncMethodInjectRequiresMethodInject,
         SyncDependencyOnAsyncInitService,
-        AsyncVoidInjectMethod
+        AsyncVoidInjectMethod,
+        IncompatibleServiceType
     ];
 
     public override void Initialize(AnalysisContext context)

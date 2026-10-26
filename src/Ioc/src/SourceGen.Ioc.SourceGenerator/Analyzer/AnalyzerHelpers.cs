@@ -283,6 +283,88 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
+    /// Returns why a generic factory type mapping cannot fill every factory method type parameter,
+    /// or <see langword="null"/> when the mapping is valid. Duplicate placeholders are reported separately (SGIOC017).
+    /// </summary>
+    /// <param name="template">The service type template (first mapping type).</param>
+    /// <param name="placeholders">The placeholder types (following mapping types).</param>
+    /// <param name="typeParameterCount">The factory method's type parameter count.</param>
+    public static string? GetGenericFactoryMappingIssue(
+        ITypeSymbol? template,
+        IReadOnlyList<ITypeSymbol?> placeholders,
+        int typeParameterCount)
+    {
+        if(template is not INamedTypeSymbol || placeholders.Count == 0)
+            return "the mapping must specify a service type template followed by at least one placeholder type";
+
+        if(placeholders.Count != typeParameterCount)
+            return $"the mapping specifies {placeholders.Count} placeholder type(s) but the method has {typeParameterCount} type parameter(s)";
+
+        foreach(var placeholder in placeholders)
+        {
+            if(placeholder is not null && !ContainsType(template, placeholder))
+            {
+                return $"placeholder type '{placeholder.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' does not appear in the service type template '{template.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'";
+            }
+        }
+
+        return null;
+
+        static bool ContainsType(ITypeSymbol type, ITypeSymbol target)
+        {
+            if(SymbolEqualityComparer.Default.Equals(type, target))
+                return true;
+
+            return type switch
+            {
+                INamedTypeSymbol named => named.TypeArguments.Any(arg => ContainsType(arg, target)),
+                IArrayTypeSymbol array => ContainsType(array.ElementType, target),
+                _ => false
+            };
+        }
+    }
+
+    /// <summary>
+    /// Returns why an explicit service type is skipped by the generator for the implementation type,
+    /// or <see langword="null"/> when the service type can be registered.
+    /// Mirrors the generator's open generic service type validation.
+    /// </summary>
+    public static string? GetServiceTypeIncompatibilityReason(INamedTypeSymbol implementationType, INamedTypeSymbol serviceType)
+    {
+        var isOpenImplementation = IsOpenGeneric(implementationType);
+        var isOpenServiceType = IsOpenGeneric(serviceType);
+
+        if(isOpenImplementation && !isOpenServiceType)
+            return "an open generic implementation requires an open generic service type";
+
+        if(!isOpenImplementation && isOpenServiceType)
+            return "a closed implementation cannot be registered as an open generic service type";
+
+        if(!isOpenServiceType)
+            return null;
+
+        var implementationDefinition = implementationType.OriginalDefinition;
+        var serviceDefinition = serviceType.OriginalDefinition;
+        if(SymbolEqualityComparer.Default.Equals(implementationDefinition, serviceDefinition))
+            return null;
+
+        foreach(var candidate in EnumerateImplicitServiceTypes(implementationDefinition))
+        {
+            if(SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, serviceDefinition)
+                && candidate.TypeArguments.SequenceEqual<ITypeSymbol>(implementationDefinition.TypeParameters, SymbolEqualityComparer.Default))
+            {
+                return null;
+            }
+        }
+
+        return "the implementation does not implement it with its own type parameters in the same order";
+
+        static bool IsOpenGeneric(INamedTypeSymbol type)
+            => type.IsUnboundGenericType
+                || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
+    }
+
+    /// <summary>
     /// Enumerates the implicit service aliases used by the analyzers for an implementation type.
     /// </summary>
     public static IEnumerable<INamedTypeSymbol> EnumerateImplicitServiceTypes(INamedTypeSymbol implementationType)

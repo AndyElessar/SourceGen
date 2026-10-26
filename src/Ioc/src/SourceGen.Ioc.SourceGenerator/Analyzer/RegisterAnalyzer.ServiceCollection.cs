@@ -80,6 +80,9 @@ public sealed partial class RegisterAnalyzer
 
             // SGIOC011: Check for duplicated registrations (same implementation type and key)
             AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
+
+            // SGIOC032: Check explicit service types that would be skipped
+            AnalyzeIncompatibleServiceTypes(context.ReportDiagnostic, attribute, targetType, location);
         }
     }
 
@@ -129,6 +132,9 @@ public sealed partial class RegisterAnalyzer
 
             // SGIOC011: Check for duplicated registrations (same implementation type and key)
             AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
+
+            // SGIOC032: Check explicit service types that would be skipped
+            AnalyzeIncompatibleServiceTypes(context.ReportDiagnostic, attribute, targetType, location);
 
             // Skip registration if type is invalid
             if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
