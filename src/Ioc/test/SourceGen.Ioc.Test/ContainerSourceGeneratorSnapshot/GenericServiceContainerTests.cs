@@ -111,5 +111,64 @@ public class GenericServiceContainerTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_ClosedGenericWithQualifiedNameMatchingTypeParameter_KeepsQualifiedName()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+
+            public static class Keys
+            {
+                [IocRegister]
+                public class T { }
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public class Handler<T>(Keys.T marker) : IHandler<T> { }
+
+            [IocDiscover<IHandler<int>>]
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_ClosedGenericWithTupleElementNamedLikeTypeParameter_KeepsElementName()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+
+            [IocRegister]
+            public class Options<T> { }
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public class Handler<T>(Options<(T T, int Count)> options) : IHandler<T> { }
+
+            [IocDiscover<IHandler<string>>]
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }
 

@@ -115,13 +115,13 @@ partial class IocSourceGenerator
             return paramType.Name;
         }
 
-        var result = paramType.Name;
+        var typeArguments = new Dictionary<string, string>(decoratorTypeParams.Length, StringComparer.Ordinal);
         for(int i = 0; i < decoratorTypeParams.Length; i++)
         {
-            result = ReplaceTypeParameter(result, decoratorTypeParams[i].ParameterName, serviceTypeParams[i].Type.Name);
+            typeArguments[decoratorTypeParams[i].ParameterName] = serviceTypeParams[i].Type.Name;
         }
 
-        return result;
+        return SubstituteTypeArguments(paramType.Name, typeArguments);
     }
 
     /// <summary>
