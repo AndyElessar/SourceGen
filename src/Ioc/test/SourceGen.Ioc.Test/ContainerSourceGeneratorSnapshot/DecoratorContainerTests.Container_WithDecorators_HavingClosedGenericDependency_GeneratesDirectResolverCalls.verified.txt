@@ -41,6 +41,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Initialize eager singletons
         GetTestNamespace_TestHandler();
         GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___();
+        GetTestNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__();
     }
 
     private TestContainer(TestContainer parent)
@@ -49,20 +50,19 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _isRootScope = false;
         _testNamespace_TestHandler = parent._testNamespace_TestHandler;
         _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = parent._testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___;
+        _testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__ = parent._testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> _testNamespace_TestHandler = null!;
-    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> GetTestNamespace_TestHandler() => _testNamespace_TestHandler ?? CreateTestNamespace_TestHandler();
+    private global::TestNamespace.TestHandler _testNamespace_TestHandler = null!;
+    private global::TestNamespace.TestHandler GetTestNamespace_TestHandler() => _testNamespace_TestHandler ?? CreateTestNamespace_TestHandler();
 
-    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> CreateTestNamespace_TestHandler()
+    private global::TestNamespace.TestHandler CreateTestNamespace_TestHandler()
     {
-        global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> instance = new global::TestNamespace.TestHandler();
-
-        instance = new global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>(instance, GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___());
+        var instance = new global::TestNamespace.TestHandler();
 
         _testNamespace_TestHandler = instance;
         return instance;
@@ -76,6 +76,19 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         var instance = new global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>();
 
         _testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___ = instance;
+        return instance;
+    }
+
+    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> _testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__ = null!;
+    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> GetTestNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__() => _testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__ ?? CreateTestNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__();
+
+    private global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> CreateTestNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__()
+    {
+        global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>> instance = GetTestNamespace_TestHandler();
+
+        instance = new global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>(instance, GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___());
+
+        _testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__ = instance;
         return instance;
     }
 
@@ -245,7 +258,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::TestNamespace.TestHandler), static c => c.GetTestNamespace_TestHandler()),
-        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>), static c => c.GetTestNamespace_TestHandler()),
+        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>), static c => c.GetTestNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__()),
         __Resolver(typeof(global::TestNamespace.Logger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>), static c => c.GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___()),
         __Resolver(typeof(global::TestNamespace.ILogger<global::TestNamespace.HandlerDecorator<global::TestNamespace.TestRequest, global::System.Collections.Generic.List<string>>>), static c => c.GetTestNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___()),
     ];
@@ -289,6 +302,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
+        DisposeService(_testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__);
         DisposeService(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___);
         DisposeService(_testNamespace_TestHandler);
         DisposeService(_ownedFallbackProvider);
@@ -304,6 +318,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_TestHandler_As_TestNamespace_IRequestHandler_TestNamespace_TestRequest__System_Collections_Generic_List_string__).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_Logger_TestNamespace_HandlerDecorator_TestNamespace_TestRequest__System_Collections_Generic_List_string___).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_TestHandler).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);

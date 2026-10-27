@@ -153,6 +153,11 @@ partial class IocSourceGenerator
         var scopedMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (ServiceLookupEntry Cached, bool HasDecorators)>();
         var transientMap = new Dictionary<(string ImplName, string? Key, string? InstanceOrFactory), (ServiceLookupEntry Cached, bool HasDecorators)>();
 
+        // Decorated service entries of split registrations, by resolver method name
+        var decoratedSingletonMap = new Dictionary<string, ServiceLookupEntry>(StringComparer.Ordinal);
+        var decoratedScopedMap = new Dictionary<string, ServiceLookupEntry>(StringComparer.Ordinal);
+        var decoratedTransientMap = new Dictionary<string, ServiceLookupEntry>(StringComparer.Ordinal);
+
         var hasAllInjectionFeatures = IocFeaturesHelper.HasAllInjectionFeatures(features);
         var hasOpenGenerics = false;
         var hasKeyedServices = false;
@@ -168,8 +173,34 @@ partial class IocSourceGenerator
                 continue;
             }
 
+            // A decorated registration is split like the Register output: the implementation type resolves the
+            // undecorated instance, and the service type wraps that same instance with the decorators.
+            var splitDecorators = effectiveRegistration.Decorators.Length > 0
+                && effectiveRegistration.Instance is null
+                && effectiveRegistration.ImplementationType.Name != effectiveRegistration.ServiceType.Name;
+
             // Pre-compute field and method names once, including IsEager flag
-            var cached = CreateServiceLookupEntry(effectiveRegistration, eagerResolveOptions, reservedNames);
+            var cached = CreateServiceLookupEntry(
+                splitDecorators ? effectiveRegistration with { Decorators = [] } : effectiveRegistration,
+                eagerResolveOptions,
+                reservedNames);
+            var serviceCached = cached;
+
+            if(splitDecorators)
+            {
+                serviceCached = CreateDecoratedServiceLookupEntry(effectiveRegistration, cached, eagerResolveOptions, reservedNames);
+
+                var decoratedMap = effectiveRegistration.Lifetime switch
+                {
+                    ServiceLifetime.Singleton => decoratedSingletonMap,
+                    ServiceLifetime.Scoped => decoratedScopedMap,
+                    _ => decoratedTransientMap
+                };
+                if(!decoratedMap.ContainsKey(serviceCached.ResolverMethodName))
+                {
+                    decoratedMap[serviceCached.ResolverMethodName] = serviceCached;
+                }
+            }
 
             var key = (effectiveRegistration.ServiceType.Name, effectiveRegistration.Key);
             if(effectiveRegistration.Key is not null)
@@ -182,8 +213,8 @@ partial class IocSourceGenerator
                 list = [];
                 serviceLookup[key] = list;
             }
-            list.Add(cached);
-            lastWinsLookup[key] = cached;
+            list.Add(serviceCached);
+            lastWinsLookup[key] = serviceCached;
 
             // Also add implementation type as a service type (for self-registration)
             if(effectiveRegistration.ImplementationType.Name != effectiveRegistration.ServiceType.Name)
@@ -206,7 +237,7 @@ partial class IocSourceGenerator
             // Include Instance or Factory in the key to distinguish multiple instance/factory registrations
             var instanceOrFactory = effectiveRegistration.Instance ?? effectiveRegistration.Factory?.Path;
             var lifetimeKey = (effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key, instanceOrFactory);
-            var hasDecorators = effectiveRegistration.Decorators.Length > 0;
+            var hasDecorators = cached.Registration.Decorators.Length > 0;
 
             var targetMap = effectiveRegistration.Lifetime switch
             {
@@ -227,10 +258,11 @@ partial class IocSourceGenerator
             targetMap[lifetimeKey] = (cached, hasDecorators);
         }
 
-        // Convert maps to lists (preserving insertion order via Dictionary enumeration order in .NET)
-        var singletons = singletonMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
-        var scoped = scopedMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
-        var transients = transientMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
+        // Convert maps to lists (preserving insertion order via Dictionary enumeration order in .NET).
+        // Decorated entries come after the undecorated instances they wrap, so they are disposed first.
+        var singletons = singletonMap.Values.Select(static v => v.Cached).Concat(decoratedSingletonMap.Values).ToImmutableEquatableArray();
+        var scoped = scopedMap.Values.Select(static v => v.Cached).Concat(decoratedScopedMap.Values).ToImmutableEquatableArray();
+        var transients = transientMap.Values.Select(static v => v.Cached).Concat(decoratedTransientMap.Values).ToImmutableEquatableArray();
 
         // Collect service types with multiple registrations for IEnumerable<T> resolution, plus single-registration
         // service types that something requests as a collection (dependencies or IServiceProvider invocations).
@@ -427,6 +459,39 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Creates the entry resolving a decorated service type: it wraps the instance resolved by
+    /// <paramref name="inner"/> (the undecorated implementation type entry) with the decorators.
+    /// </summary>
+    private static ServiceLookupEntry CreateDecoratedServiceLookupEntry(
+        ServiceRegistrationModel reg,
+        ServiceLookupEntry inner,
+        EagerResolveOptions eagerResolveOptions,
+        HashSet<string> reservedNames)
+    {
+        var entry = CreateServiceLookupEntry(reg, eagerResolveOptions, reservedNames);
+        var safeServiceType = GetSafeIdentifier(reg.ServiceType.Name);
+        var methodName = $"{inner.ResolverMethodName}_As_{safeServiceType}";
+        if(reservedNames.Contains(methodName))
+        {
+            methodName = $"{methodName}_Resolve";
+        }
+
+        // Transient async-init services only have a creation method (no cached resolver)
+        var innerResolverMethodName = !inner.IsAsyncInit
+            ? inner.ResolverMethodName
+            : reg.Lifetime == ServiceLifetime.Transient
+                ? GetAsyncCreateMethodName(inner.ResolverMethodName)
+                : GetAsyncResolverMethodName(inner.ResolverMethodName);
+
+        return entry with
+        {
+            ResolverMethodName = methodName,
+            FieldName = $"{inner.FieldName}_As_{safeServiceType}",
+            InnerResolverMethodName = innerResolverMethodName
+        };
+    }
+
+    /// <summary>
     /// Returns <see langword="true"/> when the registration has at least one
     /// <see cref="InjectionMemberType.AsyncMethod"/> member, making it an async-init service.
     /// </summary>
@@ -506,13 +571,16 @@ partial class IocSourceGenerator
         foreach(var cached in registrations)
         {
             var reg = cached.Registration;
-            var constructorParameters = ResolveConstructorParametersForContainerEntryModel(
+
+            // A decorated service entry takes the instance from its inner entry, which does the construction and injection
+            var isDecoratedEntry = cached.InnerResolverMethodName is not null;
+            var constructorParameters = isDecoratedEntry ? [] : ResolveConstructorParametersForContainerEntryModel(
                 reg,
                 serviceLookup,
                 collectionRegistrations,
                 wrapperFields,
                 allowServiceKeyAttribute: true);
-            var injectionMembers = ResolveInjectionMembersForContainerEntryModel(
+            var injectionMembers = isDecoratedEntry ? [] : ResolveInjectionMembersForContainerEntryModel(
                 reg.InjectionMembers,
                 reg,
                 serviceLookup,
@@ -525,12 +593,19 @@ partial class IocSourceGenerator
                 collectionRegistrations,
                 wrapperFields);
 
-            entries.Add(CreateServiceContainerEntryModel(
+            var entry = CreateServiceContainerEntryModel(
                 cached,
                 threadSafeStrategy,
                 constructorParameters,
                 injectionMembers,
-                decorators));
+                decorators);
+
+            if(isDecoratedEntry && entry is ServiceContainerEntry serviceEntry)
+            {
+                entry = serviceEntry with { InnerResolverMethodName = cached.InnerResolverMethodName };
+            }
+
+            entries.Add(entry);
         }
 
         return entries.ToImmutableEquatableArray();
@@ -1209,12 +1284,17 @@ partial class IocSourceGenerator
         return false;
     }
 
+    /// <param name="InnerResolverMethodName">
+    /// For a decorated service entry, the method resolving the undecorated instance it wraps
+    /// (<c>Task&lt;T&gt;</c> for async-init services); otherwise <see langword="null"/>.
+    /// </param>
     private readonly record struct ServiceLookupEntry(
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
         string? FieldName,
         bool IsAsyncInit,
-        bool IsEager);
+        bool IsEager,
+        string? InnerResolverMethodName = null);
 
     /// <summary>
     /// Registrations by (service type, key), with the last registration of each keyed service indexed by service type,

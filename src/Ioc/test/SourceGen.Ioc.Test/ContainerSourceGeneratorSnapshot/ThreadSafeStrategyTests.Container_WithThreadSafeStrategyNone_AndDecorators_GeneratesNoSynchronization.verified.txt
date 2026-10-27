@@ -46,24 +46,38 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _isRootScope = false;
         _root = parent._root ?? parent;
         _testNamespace_MyService = parent._testNamespace_MyService;
+        _testNamespace_MyService_As_TestNamespace_IMyService = parent._testNamespace_MyService_As_TestNamespace_IMyService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.IMyService? _testNamespace_MyService;
-    private global::TestNamespace.IMyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
+    private global::TestNamespace.MyService? _testNamespace_MyService;
+    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
 
-    private global::TestNamespace.IMyService CreateTestNamespace_MyService()
+    private global::TestNamespace.MyService CreateTestNamespace_MyService()
     {
         if(_root is not null) return _root.GetTestNamespace_MyService();
 
-        global::TestNamespace.IMyService instance = new global::TestNamespace.MyService();
+        var instance = new global::TestNamespace.MyService();
+
+        _testNamespace_MyService = instance;
+        return instance;
+    }
+
+    private global::TestNamespace.IMyService? _testNamespace_MyService_As_TestNamespace_IMyService;
+    private global::TestNamespace.IMyService GetTestNamespace_MyService_As_TestNamespace_IMyService() => _testNamespace_MyService_As_TestNamespace_IMyService ?? CreateTestNamespace_MyService_As_TestNamespace_IMyService();
+
+    private global::TestNamespace.IMyService CreateTestNamespace_MyService_As_TestNamespace_IMyService()
+    {
+        if(_root is not null) return _root.GetTestNamespace_MyService_As_TestNamespace_IMyService();
+
+        global::TestNamespace.IMyService instance = GetTestNamespace_MyService();
 
         instance = new global::TestNamespace.MyServiceDecorator(instance);
 
-        _testNamespace_MyService = instance;
+        _testNamespace_MyService_As_TestNamespace_IMyService = instance;
         return instance;
     }
 
@@ -233,7 +247,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetTestNamespace_MyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetTestNamespace_MyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetTestNamespace_MyService_As_TestNamespace_IMyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -275,6 +289,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
+        DisposeService(_testNamespace_MyService_As_TestNamespace_IMyService);
         DisposeService(_testNamespace_MyService);
         DisposeService(_ownedFallbackProvider);
     }
@@ -289,6 +304,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_MyService_As_TestNamespace_IMyService).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }

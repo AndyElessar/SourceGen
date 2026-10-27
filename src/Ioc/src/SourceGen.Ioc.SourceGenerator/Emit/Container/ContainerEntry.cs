@@ -76,6 +76,13 @@ partial class IocSourceGenerator
         public string ResolvedTypeName { get; } = GetResolvedTypeName(Registration);
 
         /// <summary>
+        /// Gets the method resolving the undecorated instance that this decorated service entry wraps
+        /// (returning <c>Task&lt;T&gt;</c> for async-init services), or <see langword="null"/> when the entry
+        /// creates the instance itself.
+        /// </summary>
+        public string? InnerResolverMethodName { get; init; }
+
+        /// <summary>
         /// Formats the expression resolving <paramref name="serviceType"/> through this entry,
         /// with <paramref name="receiver"/> (e.g. <c>"c."</c> or <c>""</c>) prefixing member access.
         /// </summary>
@@ -89,6 +96,12 @@ partial class IocSourceGenerator
         protected void WriteInstanceCreationWithInjection(SourceWriter writer)
         {
             var typeDeclaration = Decorators.Length > 0 ? Registration.ServiceType.Name : "var";
+
+            if(InnerResolverMethodName is not null)
+            {
+                writer.WriteLine($"{typeDeclaration} instance = {InnerResolverMethodName}();");
+                return;
+            }
 
             if(Registration.Factory is not null)
             {
@@ -166,6 +179,15 @@ partial class IocSourceGenerator
 
         protected void WriteAsyncInstanceCreationBody(SourceWriter writer)
         {
+            if(InnerResolverMethodName is not null)
+            {
+                writer.WriteLine($"{Registration.ServiceType.Name} instance = await {InnerResolverMethodName}().ConfigureAwait(false);");
+                writer.WriteLine();
+                WriteDecoratorApplication(writer);
+                writer.WriteLine("return instance;");
+                return;
+            }
+
             var properties = new List<ResolvedInjectionMember>();
             var syncMethods = new List<ResolvedInjectionMember>();
             var asyncMethods = new List<ResolvedInjectionMember>();
@@ -617,8 +639,13 @@ partial class IocSourceGenerator
             writer.WriteLine("if(existing is not null)");
             writer.WriteLine("{");
             writer.Indentation++;
-            // Not DisposeService: resolution must not throw for an IAsyncDisposable-only losing instance
-            writer.WriteLine("((object)instance as global::System.IDisposable)?.Dispose();");
+            // A losing decorator wraps the shared inner instance, so disposing it could dispose that instance too
+            if(InnerResolverMethodName is null)
+            {
+                // Not DisposeService: resolution must not throw for an IAsyncDisposable-only losing instance
+                writer.WriteLine("((object)instance as global::System.IDisposable)?.Dispose();");
+            }
+
             writer.WriteLine("return existing;");
             writer.Indentation--;
             writer.WriteLine("}");

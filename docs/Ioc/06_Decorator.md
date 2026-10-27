@@ -47,6 +47,8 @@ services.AddTransient<global::MyNamespace.IHandler>((global::System.IServiceProv
 </details>
 
 > [!NOTE]
+> Resolving the implementation type (`MyHandler`) returns the undecorated instance; only the service type (`IHandler`) is decorated. For singleton and scoped services, the decorators wrap that same instance. The generated container behaves the same way.
+>
 > A decorator is only applied to service types it implements. An open generic decorator is closed from the decorated service type (see [Type Constraint Validation](#type-constraint-validation)), so a generic decorator such as `LoggingDecorator<T> : IHandler` cannot be closed for the non-generic `IHandler` and is skipped.
 
 ## Multiple Decorators

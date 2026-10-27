@@ -77,17 +77,34 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.IHandler? _testNamespace_Handler;
+    private global::TestNamespace.Handler? _testNamespace_Handler;
     private readonly global::System.Threading.Lock _testNamespace_HandlerLock = new();
-    private global::TestNamespace.IHandler GetTestNamespace_Handler() => _testNamespace_Handler ?? CreateTestNamespace_Handler();
+    private global::TestNamespace.Handler GetTestNamespace_Handler() => _testNamespace_Handler ?? CreateTestNamespace_Handler();
 
-    private global::TestNamespace.IHandler CreateTestNamespace_Handler()
+    private global::TestNamespace.Handler CreateTestNamespace_Handler()
     {
         lock(_testNamespace_HandlerLock)
         {
             if(_testNamespace_Handler is not null) return _testNamespace_Handler;
 
-            global::TestNamespace.IHandler instance = new global::TestNamespace.Handler();
+            var instance = new global::TestNamespace.Handler();
+
+            _testNamespace_Handler = instance;
+            return instance;
+        }
+    }
+
+    private global::TestNamespace.IHandler? _testNamespace_Handler_As_TestNamespace_IHandler;
+    private readonly global::System.Threading.Lock _testNamespace_Handler_As_TestNamespace_IHandlerLock = new();
+    private global::TestNamespace.IHandler GetTestNamespace_Handler_As_TestNamespace_IHandler() => _testNamespace_Handler_As_TestNamespace_IHandler ?? CreateTestNamespace_Handler_As_TestNamespace_IHandler();
+
+    private global::TestNamespace.IHandler CreateTestNamespace_Handler_As_TestNamespace_IHandler()
+    {
+        lock(_testNamespace_Handler_As_TestNamespace_IHandlerLock)
+        {
+            if(_testNamespace_Handler_As_TestNamespace_IHandler is not null) return _testNamespace_Handler_As_TestNamespace_IHandler;
+
+            global::TestNamespace.IHandler instance = GetTestNamespace_Handler();
 
             var decorator0 = new global::TestNamespace.CachingDecorator(instance)
             {
@@ -96,7 +113,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             decorator0.SetLogger(GetTestNamespace_Logger());
             instance = decorator0;
 
-            _testNamespace_Handler = instance;
+            _testNamespace_Handler_As_TestNamespace_IHandler = instance;
             return instance;
         }
     }
@@ -271,7 +288,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetTestNamespace_Logger()),
         __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetTestNamespace_Logger()),
         __Resolver(typeof(global::TestNamespace.Handler), static c => c.GetTestNamespace_Handler()),
-        __Resolver(typeof(global::TestNamespace.IHandler), static c => c.GetTestNamespace_Handler()),
+        __Resolver(typeof(global::TestNamespace.IHandler), static c => c.GetTestNamespace_Handler_As_TestNamespace_IHandler()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -307,6 +324,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
+        DisposeService(_testNamespace_Handler_As_TestNamespace_IHandler);
         DisposeService(_testNamespace_Handler);
         if(!_isRootScope)
         {
@@ -323,6 +341,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
+        await DisposeServiceAsync(_testNamespace_Handler_As_TestNamespace_IHandler).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_Handler).ConfigureAwait(false);
         if(!_isRootScope)
         {

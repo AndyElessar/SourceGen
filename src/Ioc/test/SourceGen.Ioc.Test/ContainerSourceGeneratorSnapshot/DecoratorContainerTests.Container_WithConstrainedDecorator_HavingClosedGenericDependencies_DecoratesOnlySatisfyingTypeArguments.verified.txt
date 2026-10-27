@@ -42,6 +42,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         GetTestNamespace_Consumer();
         GetTestNamespace_Handler_string_();
         GetTestNamespace_Handler_TestNamespace_PlainEntity_();
+        GetTestNamespace_Handler_string__As_TestNamespace_IHandler_string_();
     }
 
     private TestContainer(TestContainer parent)
@@ -51,6 +52,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _testNamespace_Consumer = parent._testNamespace_Consumer;
         _testNamespace_Handler_string_ = parent._testNamespace_Handler_string_;
         _testNamespace_Handler_TestNamespace_PlainEntity_ = parent._testNamespace_Handler_TestNamespace_PlainEntity_;
+        _testNamespace_Handler_string__As_TestNamespace_IHandler_string_ = parent._testNamespace_Handler_string__As_TestNamespace_IHandler_string_;
     }
 
     #endregion
@@ -62,20 +64,18 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
     {
-        var instance = new global::TestNamespace.Consumer(GetTestNamespace_Handler_string_(), GetTestNamespace_Handler_TestNamespace_PlainEntity_());
+        var instance = new global::TestNamespace.Consumer(GetTestNamespace_Handler_string__As_TestNamespace_IHandler_string_(), GetTestNamespace_Handler_TestNamespace_PlainEntity_());
 
         _testNamespace_Consumer = instance;
         return instance;
     }
 
-    private global::TestNamespace.IHandler<string> _testNamespace_Handler_string_ = null!;
-    private global::TestNamespace.IHandler<string> GetTestNamespace_Handler_string_() => _testNamespace_Handler_string_ ?? CreateTestNamespace_Handler_string_();
+    private global::TestNamespace.Handler<string> _testNamespace_Handler_string_ = null!;
+    private global::TestNamespace.Handler<string> GetTestNamespace_Handler_string_() => _testNamespace_Handler_string_ ?? CreateTestNamespace_Handler_string_();
 
-    private global::TestNamespace.IHandler<string> CreateTestNamespace_Handler_string_()
+    private global::TestNamespace.Handler<string> CreateTestNamespace_Handler_string_()
     {
-        global::TestNamespace.IHandler<string> instance = new global::TestNamespace.Handler<string>();
-
-        instance = new global::TestNamespace.ConvertibleDecorator<string>(instance);
+        var instance = new global::TestNamespace.Handler<string>();
 
         _testNamespace_Handler_string_ = instance;
         return instance;
@@ -89,6 +89,19 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         var instance = new global::TestNamespace.Handler<global::TestNamespace.PlainEntity>();
 
         _testNamespace_Handler_TestNamespace_PlainEntity_ = instance;
+        return instance;
+    }
+
+    private global::TestNamespace.IHandler<string> _testNamespace_Handler_string__As_TestNamespace_IHandler_string_ = null!;
+    private global::TestNamespace.IHandler<string> GetTestNamespace_Handler_string__As_TestNamespace_IHandler_string_() => _testNamespace_Handler_string__As_TestNamespace_IHandler_string_ ?? CreateTestNamespace_Handler_string__As_TestNamespace_IHandler_string_();
+
+    private global::TestNamespace.IHandler<string> CreateTestNamespace_Handler_string__As_TestNamespace_IHandler_string_()
+    {
+        global::TestNamespace.IHandler<string> instance = GetTestNamespace_Handler_string_();
+
+        instance = new global::TestNamespace.ConvertibleDecorator<string>(instance);
+
+        _testNamespace_Handler_string__As_TestNamespace_IHandler_string_ = instance;
         return instance;
     }
 
@@ -259,7 +272,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
         __Resolver(typeof(global::TestNamespace.Handler<string>), static c => c.GetTestNamespace_Handler_string_()),
-        __Resolver(typeof(global::TestNamespace.IHandler<string>), static c => c.GetTestNamespace_Handler_string_()),
+        __Resolver(typeof(global::TestNamespace.IHandler<string>), static c => c.GetTestNamespace_Handler_string__As_TestNamespace_IHandler_string_()),
         __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.PlainEntity>), static c => c.GetTestNamespace_Handler_TestNamespace_PlainEntity_()),
         __Resolver(typeof(global::TestNamespace.IHandler<global::TestNamespace.PlainEntity>), static c => c.GetTestNamespace_Handler_TestNamespace_PlainEntity_()),
     ];
@@ -303,6 +316,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
+        DisposeService(_testNamespace_Handler_string__As_TestNamespace_IHandler_string_);
         DisposeService(_testNamespace_Handler_TestNamespace_PlainEntity_);
         DisposeService(_testNamespace_Handler_string_);
         DisposeService(_testNamespace_Consumer);
@@ -319,6 +333,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
+        await DisposeServiceAsync(_testNamespace_Handler_string__As_TestNamespace_IHandler_string_).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_PlainEntity_).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_Handler_string_).ConfigureAwait(false);
         await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
