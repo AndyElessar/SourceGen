@@ -107,4 +107,117 @@ public class CollectionResolutionContainerTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithSingleRegistrationInjectedAsCollection_GeneratesCollectionResolver()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class PluginHost(IEnumerable<IPlugin> plugins) { }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithSingleRegistrationRequestedByServiceProviderInvocation_GeneratesCollectionResolver()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin : IPlugin { }
+
+            public static class PluginRunner
+            {
+                public static IEnumerable<IPlugin> All(IServiceProvider serviceProvider) => serviceProvider.GetServices<IPlugin>();
+            }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithSingleRegistrationDiscoveredAsCollection_GeneratesCollectionResolver()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin : IPlugin { }
+
+            [IocDiscover<IEnumerable<IPlugin>>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>");
+    }
+
+    [Test]
+    public async Task Container_WithSingleRegistrationNotRequestedAsCollection_DoesNotGenerateCollectionResolver()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin : IPlugin { }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("GetAllTestNamespace_IPluginArray");
+    }
 }

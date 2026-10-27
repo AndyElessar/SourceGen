@@ -46,8 +46,15 @@ internal sealed class LifecycleLazySingleton : ILifecycleLazySingleton, IDisposa
     public void Dispose() => DisposeCount++;
 }
 
+/// <summary>Consumer injecting a collection of a service that has a single registration.</summary>
+public sealed class LifecycleSingleCollectionConsumer(IEnumerable<ILifecycleLazySingleton> singletons)
+{
+    public IEnumerable<ILifecycleLazySingleton> Singletons { get; } = singletons;
+}
+
 /// <summary>Lazily created singleton that may be first requested from a scope.</summary>
 [IocRegisterFor<LifecycleLazySingleton>(ServiceLifetime.Singleton, ServiceTypes = [typeof(ILifecycleLazySingleton)])]
+[IocRegisterFor<LifecycleSingleCollectionConsumer>(ServiceLifetime.Transient)]
 [IocContainer(ExplicitOnly = true, EagerResolveOptions = EagerResolveOptions.None)]
 public sealed partial class LazySingletonScopeContainer;
 

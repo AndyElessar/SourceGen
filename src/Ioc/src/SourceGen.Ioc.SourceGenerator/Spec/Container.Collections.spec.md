@@ -8,6 +8,13 @@ Support for collection resolution when multiple implementations are registered f
 
 Support for collection resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localResolvers`.
 
+|Non-keyed registrations of `T`|Collection resolver (`GetAllT_Array()` + `IEnumerable<T>`/`IReadOnlyCollection<T>`/`ICollection<T>`/`IReadOnlyList<T>`/`IList<T>`/`T[]` entries)|
+|:---|:---|
+|Two or more unique implementations|MUST be generated.|
+|Exactly one|MUST be generated only when something requests `T` as a collection. The sources MUST match closed-generic discovery: a constructor, factory or decorator parameter, or an injection member (including inside `Lazy`/`Func`/`Task` wrappers); an `IServiceProvider` invocation (`GetServices<T>()`, `GetServices(typeof(T))`, or `GetService`/`GetRequiredService` of a collection of `T`); or `[IocDiscover]` of a collection of `T`. Otherwise it MUST NOT be generated, to keep the resolver table small.|
+
+> **Note**: Invocation discovery uses a single syntax provider (`TransformInvocation`) whose result feeds both closed-generic resolution (`ClosedGenericDependencies`) and collection resolver generation (`CollectionElementTypeName`). Keyed collection requests are not counted, because keyed collections resolve through `GetKeyedServices`. Without a generated collection resolver, `GetServices<T>()` falls back to the fallback provider. Only invocations visible to the generator (in the compilation that declares the container) are detected.
+
 ### Supported Collection Types
 
 |Type|Resolution Method|Notes|
@@ -131,7 +138,7 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 > - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => GetMyService()))`
 > - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => GetMyService()))`
 > - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => GetServices<T>())`
-> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Resolved via `GetServices<Lazy<T>>()` which uses the wrapper resolver methods
+> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` (non-keyed, parameterless `Func<T>`) — MUST call the generated wrapper array resolver directly (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`) when one exists, so the switch-statement container (which has no wrapper dictionary entries) resolves them too. Otherwise they fall back to `GetServices<Lazy<T>>()`.
 >
 > **Design rationale (inline nested wrappers):**
 >

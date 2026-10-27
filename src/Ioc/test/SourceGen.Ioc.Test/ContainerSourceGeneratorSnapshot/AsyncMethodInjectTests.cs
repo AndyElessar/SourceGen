@@ -508,6 +508,46 @@ public class AsyncMethodInjectTests
     }
 
     [Test]
+    public async Task AsyncMethodInject_TaskDependency_TransientAsyncInitService_UsesCreateMethod()
+    {
+        // Transient async-init services have no cached Get…Async resolver, only the Create…Async method
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Task<IMyService> service) { }
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task AsyncMethodInject_TaskDependency_SyncService_UsesTaskFromResult()
     {
         // A consumer takes Task<ISyncService> — should resolve via Task.FromResult(GetSync())

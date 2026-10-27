@@ -148,11 +148,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::Services.Consumer GetServices_Consumer()
     {
-        return new global::Services.Consumer(_lazy_Services_IDependency_Services_Dependency, _func_Services_IDependency_Services_Dependency, GetServices<global::Services.IDependency>(), GetAllKvp_string_Services_IDependency_Dictionary(), ((global::System.Func<global::System.Threading.Tasks.Task<global::Services.IAsyncService>>)(async () => (global::Services.IAsyncService)(await GetServices_AsyncServiceAsync().ConfigureAwait(false))))());
+        return new global::Services.Consumer(_lazy_Services_IDependency_Services_Dependency, _func_Services_IDependency_Services_Dependency, GetAllServices_IDependencyArray(), GetAllKvp_string_Services_IDependency_Dictionary(), __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetServices_AsyncServiceAsync()));
     }
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private global::Services.IDependency[] GetAllServices_IDependencyArray() =>
+        [
+            GetServices_Dependency(),
+        ];
 
     // KeyValuePair resolver methods
 
@@ -365,6 +370,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Threading.Tasks.Task<global::Services.AsyncService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetServices_AsyncServiceAsync()),
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(c.GetServices_AsyncServiceAsync())),
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Services.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetServices_Consumer()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::Services.IDependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllServices_IDependencyArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::Services.IDependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllServices_IDependencyArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::Services.IDependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllServices_IDependencyArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::Services.IDependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllServices_IDependencyArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::Services.IDependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllServices_IDependencyArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Services.IDependency[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllServices_IDependencyArray()),
 
         // KeyValuePair resolvers
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),

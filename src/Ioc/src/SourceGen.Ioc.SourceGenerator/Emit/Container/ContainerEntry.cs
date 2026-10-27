@@ -4,6 +4,13 @@ namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
+    /// <summary>
+    /// Gets the type returned by a registration's resolver method: the service type when decorators
+    /// wrap the instance, otherwise the implementation type.
+    /// </summary>
+    private static string GetResolvedTypeName(ServiceRegistrationModel registration) =>
+        registration.Decorators.Length > 0 ? registration.ServiceType.Name : registration.ImplementationType.Name;
+
     internal closed record class ContainerEntry
     {
         public virtual void WriteField(SourceWriter writer)
@@ -66,7 +73,7 @@ partial class IocSourceGenerator
         /// Gets the type returned by the resolver method. Captured at construction so that alias copies
         /// (<c>with { Registration = ... }</c>) keep the resolver's actual return type.
         /// </summary>
-        public string ResolvedTypeName { get; } = Decorators.Length > 0 ? Registration.ServiceType.Name : Registration.ImplementationType.Name;
+        public string ResolvedTypeName { get; } = GetResolvedTypeName(Registration);
 
         /// <summary>
         /// Formats the expression resolving <paramref name="serviceType"/> through this entry,

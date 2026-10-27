@@ -1,4 +1,4 @@
-﻿using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.SourceGenerator.Models.Constants;
 
 namespace SourceGen.Ioc;
 
@@ -11,12 +11,13 @@ partial class IocSourceGenerator
     private static ContainerWithGroups GroupRegistrationsForContainer(
         ContainerModel container,
         ImmutableEquatableArray<ServiceRegistrationModel> registrations,
-        IocFeatures features)
+        IocFeatures features,
+        ImmutableEquatableArray<string> requestedCollectionServiceTypes)
     {
         var reservedNames = GetReservedNames(container);
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames);
+        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -60,7 +61,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static ContainerWithGroups GroupExplicitOnlyRegistrations(
         ContainerModel container,
-        IocFeatures features)
+        IocFeatures features,
+        ImmutableEquatableArray<string> requestedCollectionServiceTypes)
     {
         var registrations = new List<ServiceRegistrationModel>(container.ExplicitRegistrations.Length);
 
@@ -80,7 +82,8 @@ partial class IocSourceGenerator
             features,
             container.ThreadSafeStrategy,
             container.EagerResolveOptions,
-            reservedNames);
+            reservedNames,
+            requestedCollectionServiceTypes);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -134,7 +137,8 @@ partial class IocSourceGenerator
         IocFeatures features,
         ThreadSafeStrategy threadSafeStrategy,
         EagerResolveOptions eagerResolveOptions,
-        HashSet<string> reservedNames)
+        HashSet<string> reservedNames,
+        ImmutableEquatableArray<string> requestedCollectionServiceTypes)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
         var serviceLookup = new Dictionary<(string ServiceType, string? Key), List<ServiceLookupEntry>>();
@@ -228,15 +232,17 @@ partial class IocSourceGenerator
         var scoped = scopedMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
         var transients = transientMap.Values.Select(static v => v.Cached).ToImmutableEquatableArray();
 
-        // Collect service types with multiple registrations for IEnumerable<T> resolution
+        // Collect service types with multiple registrations for IEnumerable<T> resolution, plus single-registration
+        // service types that something requests as a collection (dependencies or IServiceProvider invocations).
         // Async-init services are excluded from collection resolution (only Task<T> can access them).
         var collectionServiceTypes = new List<string>();
         var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<ServiceLookupEntry>>();
+        var requestedCollectionTypes = CollectRequestedCollectionServiceTypes(registrations, requestedCollectionServiceTypes);
 
         foreach(var kvp in serviceLookup)
         {
-            // Include non-keyed service types with multiple registrations
-            if(kvp.Key.Key is null && kvp.Value.Count > 1)
+            // Include non-keyed service types only
+            if(kvp.Key.Key is null)
             {
                 // Filter out async-init registrations — they cannot appear in IEnumerable<T> resolvers
                 var effectiveRegistrations = kvp.Value.Where(static c => !c.IsAsyncInit).ToImmutableEquatableArray();
@@ -248,8 +254,9 @@ partial class IocSourceGenerator
                     uniqueResolvers.Add(cached.ResolverMethodName);
                 }
 
-                // Only generate collection if there are multiple unique resolvers
-                if(uniqueResolvers.Count > 1)
+                // Generate the collection for multiple unique resolvers, or for a single one that is requested as a collection
+                if(uniqueResolvers.Count > 1
+                    || (uniqueResolvers.Count == 1 && requestedCollectionTypes.Contains(kvp.Key.ServiceType)))
                 {
                     collectionServiceTypes.Add(kvp.Key.ServiceType);
                     collectionRegistrations[kvp.Key.ServiceType] = effectiveRegistrations;
@@ -267,28 +274,30 @@ partial class IocSourceGenerator
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
         var funcFieldByResolver = funcWrapperEntries
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
+        var wrapperFields = new WrapperFieldLookup(
+            lazyFieldByResolver,
+            funcFieldByResolver,
+            new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
+            new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal));
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,
             threadSafeStrategy,
             serviceLookupEntries,
             collectionRegistrations,
-            lazyFieldByResolver,
-            funcFieldByResolver);
+            wrapperFields);
         var scopedEntries = CreateServiceContainerEntries(
             scoped,
             threadSafeStrategy,
             serviceLookupEntries,
             collectionRegistrations,
-            lazyFieldByResolver,
-            funcFieldByResolver);
+            wrapperFields);
         var transientEntries = CreateServiceContainerEntries(
             transients,
             threadSafeStrategy,
             serviceLookupEntries,
             collectionRegistrations,
-            lazyFieldByResolver,
-            funcFieldByResolver);
+            wrapperFields);
         var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations);
         var immutableLastWinsByServiceType = CreateLastWinsByServiceType(
             lastWinsLookup,
@@ -489,8 +498,7 @@ partial class IocSourceGenerator
         ThreadSafeStrategy threadSafeStrategy,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver)
+        WrapperFieldLookup wrapperFields)
     {
         var entries = new List<IocSourceGenerator.ContainerEntry>(registrations.Length);
 
@@ -501,23 +509,20 @@ partial class IocSourceGenerator
                 reg,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver,
+                wrapperFields,
                 allowServiceKeyAttribute: true);
             var injectionMembers = ResolveInjectionMembersForContainerEntryModel(
                 reg.InjectionMembers,
                 reg,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver,
+                wrapperFields,
                 allowServiceKeyAttributeForMethods: true);
             var decorators = ResolveDecoratorsForContainerEntryModel(
                 reg,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver);
+                wrapperFields);
 
             entries.Add(CreateServiceContainerEntryModel(
                 cached,
@@ -629,7 +634,7 @@ partial class IocSourceGenerator
                 }
             }
 
-            if(elementResolvers.Count < 2)
+            if(elementResolvers.Count == 0)
                 continue;
 
             entries.Add(new CollectionContainerEntry(
@@ -645,8 +650,7 @@ partial class IocSourceGenerator
         ServiceRegistrationModel registration,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        WrapperFieldLookup wrapperFields,
         bool allowServiceKeyAttribute)
     {
         var constructorParameters = registration.Factory?.AdditionalParameters ?? registration.ImplementationType.ConstructorParameters;
@@ -662,8 +666,7 @@ partial class IocSourceGenerator
                 registration,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver,
+                wrapperFields,
                 allowServiceKeyAttribute);
 
             resolved.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
@@ -677,8 +680,7 @@ partial class IocSourceGenerator
         ServiceRegistrationModel ownerRegistration,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        WrapperFieldLookup wrapperFields,
         bool allowServiceKeyAttributeForMethods)
     {
         if(injectionMembers.Length == 0)
@@ -700,8 +702,7 @@ partial class IocSourceGenerator
                         member.IsNullable,
                         serviceLookup,
                         collectionRegistrations,
-                        lazyFieldByResolver,
-                        funcFieldByResolver);
+                        wrapperFields);
                     break;
 
                 case InjectionMemberType.Method or InjectionMemberType.AsyncMethod:
@@ -718,8 +719,7 @@ partial class IocSourceGenerator
                                 ownerRegistration,
                                 serviceLookup,
                                 collectionRegistrations,
-                                lazyFieldByResolver,
-                                funcFieldByResolver,
+                                wrapperFields,
                                 allowServiceKeyAttributeForMethods));
                         }
 
@@ -744,8 +744,7 @@ partial class IocSourceGenerator
         ServiceRegistrationModel registration,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver)
+        WrapperFieldLookup wrapperFields)
     {
         if(registration.Decorators.Length == 0)
             return [];
@@ -768,8 +767,7 @@ partial class IocSourceGenerator
                         parameter.IsOptional,
                         serviceLookup,
                         collectionRegistrations,
-                        lazyFieldByResolver,
-                        funcFieldByResolver);
+                        wrapperFields);
 
                     resolvedParameters.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
                 }
@@ -781,8 +779,7 @@ partial class IocSourceGenerator
                 registration,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver,
+                wrapperFields,
                 allowServiceKeyAttributeForMethods: false);
 
             var decoratorRegistration = new ServiceRegistrationModel(
@@ -807,13 +804,94 @@ partial class IocSourceGenerator
         return decorators.ToImmutableEquatableArray();
     }
 
+    /// <summary>
+    /// Collects the element types that registrations request as collections (constructor, factory and decorator
+    /// parameters, injection members, including inside Lazy/Func/Task wrappers), plus those requested through
+    /// IServiceProvider invocations.
+    /// </summary>
+    private static HashSet<string> CollectRequestedCollectionServiceTypes(
+        ImmutableEquatableArray<ServiceRegistrationModel> registrations,
+        ImmutableEquatableArray<string> requestedCollectionServiceTypes)
+    {
+        var requested = new HashSet<string>(requestedCollectionServiceTypes, StringComparer.Ordinal);
+
+        foreach(var reg in registrations)
+        {
+            ScanParameters(reg.Factory?.AdditionalParameters ?? reg.ImplementationType.ConstructorParameters);
+            ScanInjectionMembers(reg.InjectionMembers);
+
+            foreach(var decorator in reg.Decorators)
+            {
+                ScanParameters(decorator.ConstructorParameters);
+                ScanInjectionMembers(decorator.InjectionMembers);
+            }
+        }
+
+        return requested;
+
+        void ScanParameters(ImmutableEquatableArray<ParameterData>? parameters)
+        {
+            if(parameters is null)
+                return;
+
+            foreach(var parameter in parameters)
+                ScanType(parameter.Type);
+        }
+
+        void ScanInjectionMembers(ImmutableEquatableArray<InjectionMemberData>? members)
+        {
+            if(members is null)
+                return;
+
+            foreach(var member in members)
+            {
+                if(member.Type is not null)
+                    ScanType(member.Type);
+
+                ScanParameters(member.Parameters);
+            }
+        }
+
+        void ScanType(TypeData type)
+        {
+            switch(type)
+            {
+                case CollectionWrapperTypeData collection:
+                    requested.Add(collection.ElementType.Name);
+                    ScanType(collection.ElementType);
+                    break;
+                case LazyTypeData lazy:
+                    ScanType(lazy.InstanceType);
+                    break;
+                case FuncTypeData func:
+                    ScanType(func.ReturnType);
+                    break;
+                case TaskTypeData task:
+                    ScanType(task.InnerType);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Field and collection-resolver lookups for the container's Lazy/Func wrapper entries.
+    /// </summary>
+    /// <param name="LazyFieldByResolver">Lazy wrapper field name by inner resolver method name.</param>
+    /// <param name="FuncFieldByResolver">Func wrapper field name by inner resolver method name.</param>
+    /// <param name="LazyCollectionServiceTypes">Inner service types with a generated <c>Lazy&lt;T&gt;[]</c> resolver.</param>
+    /// <param name="FuncCollectionServiceTypes">Inner service types with a generated <c>Func&lt;T&gt;[]</c> resolver.</param>
+    private sealed record WrapperFieldLookup(
+        IReadOnlyDictionary<string, string> LazyFieldByResolver,
+        IReadOnlyDictionary<string, string> FuncFieldByResolver,
+        HashSet<string> LazyCollectionServiceTypes,
+        HashSet<string> FuncCollectionServiceTypes);
+
     private static ResolvedDependency ResolveParameterDependencyForContainerEntryModel(
         ParameterData parameter,
         ServiceRegistrationModel ownerRegistration,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        WrapperFieldLookup wrapperFields,
         bool allowServiceKeyAttribute)
     {
         if(allowServiceKeyAttribute && parameter.HasServiceKeyAttribute)
@@ -832,8 +910,7 @@ partial class IocSourceGenerator
             parameter.IsOptional,
             serviceLookup,
             collectionRegistrations,
-            lazyFieldByResolver,
-            funcFieldByResolver);
+            wrapperFields);
     }
 
     private static ResolvedDependency ResolveServiceDependencyForContainerEntryModel(
@@ -842,8 +919,7 @@ partial class IocSourceGenerator
         bool isOptional,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver)
+        WrapperFieldLookup wrapperFields)
     {
         if(type is CollectionWrapperTypeData collectionType)
         {
@@ -868,6 +944,19 @@ partial class IocSourceGenerator
                 return new CollectionDependency(GetArrayResolverMethodName(elementTypeName));
             }
 
+            // Collections of Lazy<T> / Func<T> call the wrapper array resolver directly instead of GetServices<Lazy<T>>()
+            if(collectionType.ElementType is LazyTypeData lazyElement
+                && wrapperFields.LazyCollectionServiceTypes.Contains(lazyElement.InstanceType.Name))
+            {
+                return new CollectionDependency(GetLazyArrayResolverMethodName(lazyElement.InstanceType.Name));
+            }
+
+            if(collectionType.ElementType is FuncTypeData { HasInputParameters: false } funcElement
+                && wrapperFields.FuncCollectionServiceTypes.Contains(funcElement.ReturnType.Name))
+            {
+                return new CollectionDependency(GetFuncArrayResolverMethodName(funcElement.ReturnType.Name));
+            }
+
             return new CollectionFallbackDependency(elementTypeName, IsKeyed: false, Key: null);
         }
 
@@ -879,8 +968,7 @@ partial class IocSourceGenerator
                 isOptional,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver,
+                wrapperFields,
                 useResolverMethods: true);
         }
 
@@ -906,8 +994,7 @@ partial class IocSourceGenerator
         bool isOptional,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver,
+        WrapperFieldLookup wrapperFields,
         bool useResolverMethods)
     {
         switch(type)
@@ -921,7 +1008,7 @@ partial class IocSourceGenerator
                     if(serviceLookup.TryGetValue((innerType.Name, key), out var innerRegistrations))
                     {
                         var resolverMethodName = innerRegistrations[^1].ResolverMethodName;
-                        if(lazyFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
+                        if(wrapperFields.LazyFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
                         {
                             return new LazyFieldReferenceDependency(fieldName);
                         }
@@ -940,8 +1027,7 @@ partial class IocSourceGenerator
                         isOptional,
                         serviceLookup,
                         collectionRegistrations,
-                        lazyFieldByResolver,
-                        funcFieldByResolver));
+                        wrapperFields));
             }
 
             case FuncTypeData func:
@@ -960,23 +1046,20 @@ partial class IocSourceGenerator
                                 targetRegistration,
                                 serviceLookup,
                                 collectionRegistrations,
-                                lazyFieldByResolver,
-                                funcFieldByResolver,
+                                wrapperFields,
                                 allowServiceKeyAttribute: true),
                             ResolveInjectionMembersForContainerEntryModel(
                                 targetRegistration.InjectionMembers,
                                 targetRegistration,
                                 serviceLookup,
                                 collectionRegistrations,
-                                lazyFieldByResolver,
-                                funcFieldByResolver,
+                                wrapperFields,
                                 allowServiceKeyAttributeForMethods: true),
                             ResolveDecoratorsForContainerEntryModel(
                                 targetRegistration,
                                 serviceLookup,
                                 collectionRegistrations,
-                                lazyFieldByResolver,
-                                funcFieldByResolver),
+                                wrapperFields),
                             targetRegistration.ImplementationType.Name);
                     }
 
@@ -988,7 +1071,7 @@ partial class IocSourceGenerator
                     if(serviceLookup.TryGetValue((innerType.Name, key), out var innerRegistrations))
                     {
                         var resolverMethodName = innerRegistrations[^1].ResolverMethodName;
-                        if(funcFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
+                        if(wrapperFields.FuncFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
                         {
                             return new FuncFieldReferenceDependency(fieldName);
                         }
@@ -1007,8 +1090,7 @@ partial class IocSourceGenerator
                         isOptional,
                         serviceLookup,
                         collectionRegistrations,
-                        lazyFieldByResolver,
-                        funcFieldByResolver));
+                        wrapperFields));
             }
 
             case KeyValuePairTypeData kvp:
@@ -1022,8 +1104,7 @@ partial class IocSourceGenerator
                         isOptional,
                         serviceLookup,
                         collectionRegistrations,
-                        lazyFieldByResolver,
-                        funcFieldByResolver));
+                        wrapperFields));
 
             case DictionaryTypeData dictionary:
             {
@@ -1043,7 +1124,11 @@ partial class IocSourceGenerator
                     var cached = innerRegistrations[^1];
                     if(cached.IsAsyncInit)
                     {
-                        return new TaskAsyncDependency(GetAsyncResolverMethodName(cached.ResolverMethodName), task.InnerType.Name);
+                        // Transient async-init services only have a creation method (no cached resolver)
+                        var asyncMethodName = cached.Registration.Lifetime == ServiceLifetime.Transient
+                            ? GetAsyncCreateMethodName(cached.ResolverMethodName)
+                            : GetAsyncResolverMethodName(cached.ResolverMethodName);
+                        return new TaskAsyncDependency(asyncMethodName, task.InnerType.Name, GetResolvedTypeName(cached.Registration));
                     }
 
                     return new TaskFromResultDependency(new DirectServiceDependency(cached.ResolverMethodName), task.InnerType.Name);
@@ -1059,8 +1144,7 @@ partial class IocSourceGenerator
                     isOptional,
                     serviceLookup,
                     collectionRegistrations,
-                    lazyFieldByResolver,
-                    funcFieldByResolver);
+                    wrapperFields);
         }
     }
 
@@ -1070,8 +1154,7 @@ partial class IocSourceGenerator
         bool isOptional,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        IReadOnlyDictionary<string, string> lazyFieldByResolver,
-        IReadOnlyDictionary<string, string> funcFieldByResolver)
+        WrapperFieldLookup wrapperFields)
     {
         if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
         {
@@ -1081,8 +1164,7 @@ partial class IocSourceGenerator
                 isOptional,
                 serviceLookup,
                 collectionRegistrations,
-                lazyFieldByResolver,
-                funcFieldByResolver,
+                wrapperFields,
                 useResolverMethods: false);
         }
 
@@ -1092,8 +1174,7 @@ partial class IocSourceGenerator
             isOptional,
             serviceLookup,
             collectionRegistrations,
-            lazyFieldByResolver,
-            funcFieldByResolver);
+            wrapperFields);
     }
 
     private static ImmutableEquatableArray<ParameterData> CreateFuncInputParameters(ImmutableEquatableArray<TypeParameter> inputTypes)

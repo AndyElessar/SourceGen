@@ -80,7 +80,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(_root is not null) return _root.GetTestNamespace_Consumer();
 
-        var instance = new global::TestNamespace.Consumer(((global::System.Func<global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>>)(async () => (global::TestNamespace.IMyService)(await GetTestNamespace_MyServiceAsync().ConfigureAwait(false))))());
+        var instance = new global::TestNamespace.Consumer(__ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(GetTestNamespace_MyServiceAsync()));
 
         _testNamespace_Consumer = instance;
         return instance;

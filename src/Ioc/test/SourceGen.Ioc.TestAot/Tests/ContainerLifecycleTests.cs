@@ -64,6 +64,27 @@ public sealed class ContainerLifecycleTests
     }
 
     [Test]
+    public async Task SingleRegistration_InjectedAsCollection_ContainsTheService()
+    {
+        using var container = new LazySingletonScopeContainer();
+
+        var consumer = container.GetRequiredService<LifecycleSingleCollectionConsumer>();
+
+        await Assert.That(consumer.Singletons.Single()).IsSameReferenceAs(container.GetRequiredService<ILifecycleLazySingleton>());
+    }
+
+    [Test]
+    public async Task SingleRegistration_RequestedThroughGetServices_ContainsTheService()
+    {
+        using var container = new EagerInitOrderContainer();
+
+        // This GetServices<T>() invocation is what makes the generator emit the IEnumerable<ILifecycleEagerDependency> resolver
+        var dependencies = container.GetServices<ILifecycleEagerDependency>();
+
+        await Assert.That(dependencies.Single()).IsSameReferenceAs(container.GetRequiredService<ILifecycleEagerDependency>());
+    }
+
+    [Test]
     public async Task FallbackProvider_ScopedService_IsScopedPerContainerScope()
     {
         var services = new ServiceCollection();

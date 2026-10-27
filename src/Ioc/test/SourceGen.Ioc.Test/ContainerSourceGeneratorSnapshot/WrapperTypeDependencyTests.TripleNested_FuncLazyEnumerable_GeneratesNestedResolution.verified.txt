@@ -71,11 +71,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
     {
-        var instance = new global::TestNamespace.Consumer(new global::System.Func<global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IMyService>>>(() => new global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IMyService>>(() => GetServices<global::TestNamespace.IMyService>(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)));
+        var instance = new global::TestNamespace.Consumer(new global::System.Func<global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IMyService>>>(() => new global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IMyService>>(() => GetAllTestNamespace_IMyServiceArray(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)));
 
         _testNamespace_Consumer = instance;
         return instance;
     }
+
+    private global::TestNamespace.IMyService[] GetAllTestNamespace_IMyServiceArray() =>
+        [
+            GetTestNamespace_MyService(),
+        ];
 
     #endregion
 
@@ -245,6 +250,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_MyService()),
         new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Consumer()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IMyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IMyServiceArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.IMyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IMyServiceArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::TestNamespace.IMyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IMyServiceArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IMyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IMyServiceArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::TestNamespace.IMyService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IMyServiceArray()),
+        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IMyService[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IMyServiceArray()),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

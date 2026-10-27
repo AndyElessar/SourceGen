@@ -92,7 +92,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.PluginManager CreateTestNamespace_PluginManager()
     {
-        var instance = new global::TestNamespace.PluginManager(GetServices<global::System.Lazy<global::TestNamespace.IPlugin>>());
+        var instance = new global::TestNamespace.PluginManager(GetAllLazy_TestNamespace_IPlugin_Array());
 
         _testNamespace_PluginManager = instance;
         return instance;

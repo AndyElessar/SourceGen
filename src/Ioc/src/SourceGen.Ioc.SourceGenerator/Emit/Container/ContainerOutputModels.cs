@@ -217,11 +217,17 @@ partial class IocSourceGenerator
         }
     }
 
-    private sealed record class TaskAsyncDependency(string AsyncMethodName, string TypeName) : ResolvedDependency
+    /// <summary>
+    /// <c>Task&lt;TypeName&gt;</c> dependency on an async-init service whose resolver returns <c>Task&lt;ResultTypeName&gt;</c>.
+    /// </summary>
+    private sealed record class TaskAsyncDependency(string AsyncMethodName, string TypeName, string ResultTypeName) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
         {
-            return $"((global::System.Func<global::System.Threading.Tasks.Task<{TypeName}>>)(async () => ({TypeName})(await {AsyncMethodName}().ConfigureAwait(false))))()";
+            // Task<T> is invariant: project only when the requested type differs from the resolver's result type
+            return TypeName == ResultTypeName
+                ? $"{AsyncMethodName}()"
+                : $"{ProjectTaskMethodName}<{TypeName}, {ResultTypeName}>({AsyncMethodName}())";
         }
     }
 
