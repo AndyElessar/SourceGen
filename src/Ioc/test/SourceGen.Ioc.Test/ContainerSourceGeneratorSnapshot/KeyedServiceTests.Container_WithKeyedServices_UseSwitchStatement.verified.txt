@@ -216,14 +216,20 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.KeyedService1), "key1"), static c => c.GetTestNamespace_KeyedService1__key1_()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key1"), static c => c.GetTestNamespace_KeyedService1__key1_()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.KeyedService2), "key2"), static c => c.GetTestNamespace_KeyedService2__key2_()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IKeyedService), "key2"), static c => c.GetTestNamespace_KeyedService2__key2_()),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedService1), "key1", static c => c.GetTestNamespace_KeyedService1__key1_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key1", static c => c.GetTestNamespace_KeyedService1__key1_()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedService2), "key2", static c => c.GetTestNamespace_KeyedService2__key2_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key2", static c => c.GetTestNamespace_KeyedService2__key2_()),
     ];
+
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+
+    private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
 
     #endregion
 

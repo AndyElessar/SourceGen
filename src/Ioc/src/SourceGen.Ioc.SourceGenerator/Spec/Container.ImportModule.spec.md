@@ -51,11 +51,11 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     // Local services array with container-typed resolvers
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::ILocalService1), KeyedService.AnyKey), static c => c.GetLocalService1()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::ILocalService2), KeyedService.AnyKey), static c => c.GetLocalService2()),
+        __Resolver(typeof(IServiceProvider), static c => c),
+        __Resolver(typeof(IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::AppContainer), static c => c),
+        __Resolver(typeof(global::ILocalService1), static c => c.GetLocalService1()),
+        __Resolver(typeof(global::ILocalService2), static c => c.GetLocalService2()),
         // ... more local services
     ];
 

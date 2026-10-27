@@ -239,14 +239,17 @@ partial class FeatureContainer : global::SourceGen.Ioc.IIocContainer<global::Tes
 
     private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.FeatureContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.FeatureContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.Feature1Service), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Feature1Service()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IFeature1Service), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Feature1Service()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.Feature2Service), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Feature2Service()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IFeature2Service), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Feature2Service()),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::TestNamespace.FeatureContainer), static c => c),
+        __Resolver(typeof(global::TestNamespace.Feature1Service), static c => c.GetTestNamespace_Feature1Service()),
+        __Resolver(typeof(global::TestNamespace.IFeature1Service), static c => c.GetTestNamespace_Feature1Service()),
+        __Resolver(typeof(global::TestNamespace.Feature2Service), static c => c.GetTestNamespace_Feature2Service()),
+        __Resolver(typeof(global::TestNamespace.IFeature2Service), static c => c.GetTestNamespace_Feature2Service()),
     ];
+
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.FeatureContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.FeatureContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

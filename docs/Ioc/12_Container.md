@@ -153,11 +153,11 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 private static readonly KeyValuePair<ServiceIdentifier, Func<global::MediatorContainer, object>>[] _localResolvers =
 [
-    new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-    new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-    new __IocResolver(new ServiceIdentifier(typeof(global::MediatorContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-    new __IocResolver(new ServiceIdentifier(typeof(global::MessageBus), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMessageBus()),
-    new __IocResolver(new ServiceIdentifier(typeof(global::IMessageBus), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMessageBus()),
+    __Resolver(typeof(IServiceProvider), static c => c),
+    __Resolver(typeof(IServiceScopeFactory), static c => c),
+    __Resolver(typeof(global::MediatorContainer), static c => c),
+    __Resolver(typeof(global::MessageBus), static c => c.GetMessageBus()),
+    __Resolver(typeof(global::IMessageBus), static c => c.GetMessageBus()),
 ];
 ```
 

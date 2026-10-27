@@ -224,12 +224,15 @@ partial class GlobalContainer : global::SourceGen.Ioc.IIocContainer<global::Glob
 
     private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::GlobalContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::GlobalContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::MyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::IMyService), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetMyService()),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::GlobalContainer), static c => c),
+        __Resolver(typeof(global::MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::IMyService), static c => c.GetMyService()),
     ];
+
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::GlobalContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::GlobalContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

@@ -258,19 +258,27 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.Plugin1), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Plugin1()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IPlugin), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Plugin2()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.Plugin2), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Plugin2()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.Consumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetTestNamespace_Consumer()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::TestNamespace.IPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllTestNamespace_IPluginArray()),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
+        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetTestNamespace_Plugin1()),
+        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetTestNamespace_Plugin2()),
+        __Resolver(typeof(global::TestNamespace.Plugin2), static c => c.GetTestNamespace_Plugin2()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
+        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllTestNamespace_IPluginArray()),
+    ];
+
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+
+    private static __IocResolver[] __CollectionResolvers<T>(global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
+    [
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<T>), resolver),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), resolver),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<T>), resolver),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),
+        __Resolver(typeof(global::System.Collections.Generic.IList<T>), resolver),
+        __Resolver(typeof(T[]), resolver),
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();

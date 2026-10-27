@@ -294,15 +294,19 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         // Built-in services
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
+        __Resolver(typeof(IServiceProvider), static c => c),
+        __Resolver(typeof(IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::AppContainer), static c => c),
         // Eager singletons - resolver method calls (fields may still be unset while the constructor runs)
-        new __IocResolver(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c.GetMyDependency()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c.GetMyService()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c.GetMyService()),
+        __Resolver(typeof(global::MyDependency), static c => c.GetMyDependency()),
+        __Resolver(typeof(global::IMyDependency), static c => c.GetMyDependency()),
+        __Resolver(typeof(global::MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::IMyService), static c => c.GetMyService()),
     ];
+
+    // Entry helper (see Container.Performance.spec.md for __KeyedResolver and __CollectionResolvers<T>)
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::AppContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
     // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. If reversed, _localResolvers would be null when _serviceResolvers initializes.

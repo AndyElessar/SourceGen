@@ -241,8 +241,9 @@ partial class IocSourceGenerator
 
         foreach(var kvp in serviceLookup)
         {
-            // Include non-keyed service types only
-            if(kvp.Key.Key is null)
+            // Include non-keyed service types only; a single registration needs a collection only when one is requested
+            if(kvp.Key.Key is null
+                && (kvp.Value.Count > 1 || requestedCollectionTypes.Contains(kvp.Key.ServiceType)))
             {
                 // Filter out async-init registrations — they cannot appear in IEnumerable<T> resolvers
                 var effectiveRegistrations = kvp.Value.Where(static c => !c.IsAsyncInit).ToImmutableEquatableArray();

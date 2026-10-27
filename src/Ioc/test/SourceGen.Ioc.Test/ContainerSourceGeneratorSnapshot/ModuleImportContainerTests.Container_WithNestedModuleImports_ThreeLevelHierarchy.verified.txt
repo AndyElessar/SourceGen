@@ -220,12 +220,15 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::LevelA.
 
     private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::LevelA.AppContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::LevelA.AppContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::LevelA.ServiceA), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetLevelA_ServiceA()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::LevelA.IServiceA), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetLevelA_ServiceA()),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::LevelA.AppContainer), static c => c),
+        __Resolver(typeof(global::LevelA.ServiceA), static c => c.GetLevelA_ServiceA()),
+        __Resolver(typeof(global::LevelA.IServiceA), static c => c.GetLevelA_ServiceA()),
     ];
+
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::LevelA.AppContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::LevelA.AppContainer, object>> _serviceResolvers =
         global::LevelB.ModuleB.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::LevelA.AppContainer, object>>(kvp.Key, c => kvp.Value(c._levelB_ModuleB)))

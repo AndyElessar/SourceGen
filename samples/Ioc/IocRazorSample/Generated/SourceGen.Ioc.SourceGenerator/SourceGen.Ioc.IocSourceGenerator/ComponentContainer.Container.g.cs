@@ -17,7 +17,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocRazorSample;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.180")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.181")]
 partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::IocRazorSample.ComponentContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
@@ -222,12 +222,15 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
 
     private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocRazorSample.ComponentContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::IocRazorSample.ComponentContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::IocRazorSample.LoadData), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
-        new __IocResolver(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.AspNetCore.Components.IComponent), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetIocRazorSample_LoadData()),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::IocRazorSample.ComponentContainer), static c => c),
+        __Resolver(typeof(global::IocRazorSample.LoadData), static c => c.GetIocRazorSample_LoadData()),
+        __Resolver(typeof(global::Microsoft.AspNetCore.Components.IComponent), static c => c.GetIocRazorSample_LoadData()),
     ];
+
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::IocRazorSample.ComponentContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocRazorSample.ComponentContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
@@ -329,7 +332,7 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
     #endregion
 
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.180")]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.181")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(global::System.Type[]? _)

@@ -106,13 +106,11 @@ partial class AppContainer
     // Registered in _localResolvers
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new ServiceIdentifier(typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::Plugin2), KeyedService.AnyKey), static c => c.GetPlugin2()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPlugin()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IPlugin[]), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        __Resolver(typeof(global::Plugin1), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::IPlugin), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::Plugin2), static c => c.GetPlugin2()),
+        // IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T> and T[]
+        ..__CollectionResolvers<global::IPlugin>(static c => c.GetAllIPluginArray()),
     ];
 }
 #endregion
@@ -210,8 +208,7 @@ When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `I
 3. **`_localResolvers` entries** — For `IEnumerable<KVP>`, `IReadOnlyCollection<KVP>`, `IReadOnlyList<KVP>`, and `KVP[]`:
 
    ```csharp
-   new __IocResolver(new ServiceIdentifier(typeof(IEnumerable<KeyValuePair<string, IHandler>>), KeyedService.AnyKey),
-       static c => c.GetAllKvp_string_IHandler_Array()),
+   __Resolver(typeof(IEnumerable<KeyValuePair<string, IHandler>>), static c => c.GetAllKvp_string_IHandler_Array()),
    ```
 
 ## See Also

@@ -537,9 +537,9 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Built-in services: IServiceProvider, IServiceScopeFactory, and the container itself
-        writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.IServiceProvider), {KeyedServiceAnyKey}), static c => c),");
-        writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), {KeyedServiceAnyKey}), static c => c),");
-        writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({container.ContainerTypeName}), {KeyedServiceAnyKey}), static c => c),");
+        writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.IServiceProvider), static c => c),");
+        writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),");
+        writer.WriteLine($"{ResolverEntryMethodName}(typeof({container.ContainerTypeName}), static c => c),");
 
         // Use service type resolver mappings (already filtered for non-open-generics)
         foreach(var kvp in groups.LastWinsByServiceType)
@@ -548,20 +548,16 @@ partial class IocSourceGenerator
                 continue;
 
             var serviceType = kvp.Key.ServiceType;
-            var keyExpr = kvp.Key.Key ?? KeyedServiceAnyKey;
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({entry.GetExposedServiceType(serviceType)}), {keyExpr}), {entry.FormatResolverLambda(serviceType)}),");
+            var exposedServiceType = entry.GetExposedServiceType(serviceType);
+            writer.WriteLine(kvp.Key.Key is { } key
+                ? $"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, {entry.FormatResolverLambda(serviceType)}),"
+                : $"{ResolverEntryMethodName}(typeof({exposedServiceType}), {entry.FormatResolverLambda(serviceType)}),");
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
         foreach(var serviceType in groups.CollectionServiceTypes)
         {
-            var methodName = GetArrayResolverMethodName(serviceType);
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IList<{serviceType}>), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
-            writer.WriteLine($"new {ResolverEntryAlias}(new global::SourceGen.Ioc.ServiceIdentifier(typeof({serviceType}[]), {KeyedServiceAnyKey}), static c => c.{methodName}()),");
+            writer.WriteLine(FormatCollectionResolverEntries(serviceType, $"static c => c.{GetArrayResolverMethodName(serviceType)}()"));
         }
 
         // Add local resolvers for wrapper entries (KVP first, then Lazy, then Func)
@@ -569,6 +565,9 @@ partial class IocSourceGenerator
 
         writer.Indentation--;
         writer.WriteLine("];");
+        writer.WriteLine();
+
+        WriteResolverEntryHelpers(writer, container, groups);
 
         // Write _serviceResolvers as static field (only when not using switch statement)
         if(!effectiveUseSwitchStatement)
@@ -1171,6 +1170,58 @@ partial class IocSourceGenerator
     }
 
     private const string ProjectTaskMethodName = "__ProjectTask";
+    private const string ResolverEntryMethodName = "__Resolver";
+    private const string KeyedResolverEntryMethodName = "__KeyedResolver";
+    private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
+
+    /// <summary>
+    /// Formats the spread of the <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
+    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>T[]</c> resolver entries for <paramref name="elementType"/>.
+    /// </summary>
+    private static string FormatCollectionResolverEntries(string elementType, string resolverLambda) =>
+        $"..{CollectionResolverEntriesMethodName}<{elementType}>({resolverLambda}),";
+
+    /// <summary>
+    /// Writes the helpers that build resolver entries, so each entry in <c>_localResolvers</c> stays short.
+    /// </summary>
+    private static void WriteResolverEntryHelpers(SourceWriter writer, ContainerModel container, ContainerRegistrationGroups groups)
+    {
+        var resolverType = $"global::System.Func<{container.ContainerTypeName}, object>";
+
+        writer.WriteLine($"private static {ResolverEntryAlias} {ResolverEntryMethodName}(global::System.Type serviceType, {resolverType} resolver) =>");
+        writer.Indentation++;
+        writer.WriteLine($"new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {KeyedServiceAnyKey}), resolver);");
+        writer.Indentation--;
+
+        if(groups.LastWinsByServiceType.Keys.Any(static key => key.Key is not null))
+        {
+            writer.WriteLine();
+            writer.WriteLine($"private static {ResolverEntryAlias} {KeyedResolverEntryMethodName}(global::System.Type serviceType, object key, {resolverType} resolver) =>");
+            writer.Indentation++;
+            writer.WriteLine("new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);");
+            writer.Indentation--;
+        }
+
+        var hasCollectionEntries = groups.CollectionServiceTypes.Length > 0
+            || groups.LazyWrapperEntries.Any(static e => e.EmitCollectionResolver)
+            || groups.FuncWrapperEntries.Any(static e => e.EmitCollectionResolver);
+
+        if(hasCollectionEntries)
+        {
+            writer.WriteLine();
+            writer.WriteLine($"private static {ResolverEntryAlias}[] {CollectionResolverEntriesMethodName}<T>({resolverType} resolver) =>");
+            writer.WriteLine("[");
+            writer.Indentation++;
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), resolver),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), resolver),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.ICollection<T>), resolver),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IList<T>), resolver),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(T[]), resolver),");
+            writer.Indentation--;
+            writer.WriteLine("];");
+        }
+    }
 
     /// <summary>
     /// Writes the helper that converts <c>Task&lt;TResult&gt;</c> to <c>Task&lt;TService&gt;</c> for async-init service aliases.
