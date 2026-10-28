@@ -1,18 +1,3 @@
 {
-  "mcpServers": {
-    "binlog": {
-      "type": "local",
-      "tools": [
-        "*"
-      ],
-      "id": "",
-      "command": "dotnet",
-      "args": [
-        "dnx",
-        "Microsoft.AITools.BinlogMcp",
-        "--yes",
-        "--prerelease"
-      ]
-    }
-  }
+  "mcpServers": {}
 }

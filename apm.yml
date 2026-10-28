@@ -10,7 +10,6 @@ dependencies:
   apm:
     - git: https://github.com/thomhurst/TUnit
       path: skills/tunit
-    - dotnet/skills/plugins/dotnet-msbuild
   mcp: []
 includes: auto
 scripts: {}
