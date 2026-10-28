@@ -212,6 +212,33 @@ public class BasicRegistrationTests
     }
 
     [Test]
+    public async Task OpenGenericService_WithClosedImplementation_RegistersImplementedClosedServiceTypes()
+    {
+        // A closed implementation is registered as each closed form of the open service type it implements or inherits
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { }
+            public abstract class RepositoryBase<T> { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>), typeof(RepositoryBase<>)])]
+            public class UserRepository : RepositoryBase<string>, IRepository<string>, IRepository<int> { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>), typeof(IRepository<long>)])]
+            public class LongRepository : IRepository<long> { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task OpenGenericService_DoNotGenerateNestedOpenGeneric()
     {
         const string source = """
