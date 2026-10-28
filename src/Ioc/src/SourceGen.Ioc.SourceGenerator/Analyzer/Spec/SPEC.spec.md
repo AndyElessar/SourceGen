@@ -286,6 +286,7 @@ Report when `ServiceKeyAttribute` is mark on parameter, but there is no specifie
 
 - Checks whether the service registration has a `Key` specified.
 - Checks constructor and `[Inject]` method parameters marked with `[ServiceKey]`.
+- Checks the parameters marked with `[ServiceKey]` of the registration's own `Factory` method (the generator passes `default` for them). The `Factory` of `IocRegisterDefaultsAttribute` is not checked, because it is shared by keyed and non-keyed registrations; the diagnostic is reported on the `Factory` argument.
 - Reports when `[ServiceKey]` is used but the registration has no Key specified.
 
 ---

@@ -8,6 +8,91 @@ namespace SourceGen.Ioc.Test.Analyzer;
 public class SGIOC014Tests
 {
     [Test]
+    public async Task SGIOC014_FactoryServiceKeyParameter_NoKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, [ServiceKey] string key) => new MyService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014").ToList();
+
+        await Assert.That(sgioc014).Count().IsEqualTo(1);
+        await Assert.That(sgioc014[0].GetMessage()).Contains("key");
+    }
+
+    [Test]
+    public async Task SGIOC014_FactoryServiceKeyParameter_WithKey_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Key = "MyKey", Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, [ServiceKey] string key) => new MyService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC014_DefaultsFactoryServiceKeyParameter_NoKey_NoDiagnostic()
+    {
+        // A defaults Factory is shared by keyed and non-keyed registrations, so its [ServiceKey] parameter is not reported
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.MyServiceFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister]
+            public class MyService : IMyService { }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp, [ServiceKey] object? key) => new MyService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).IsEmpty();
+    }
+
+    [Test]
     public async Task SGIOC014_ServiceKeyAttribute_NoKey_InjectMethod_ReportsDiagnostic()
     {
         const string source = """
