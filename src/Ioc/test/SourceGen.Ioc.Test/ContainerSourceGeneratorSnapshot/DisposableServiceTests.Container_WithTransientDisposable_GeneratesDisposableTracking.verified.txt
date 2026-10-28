@@ -49,7 +49,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::TestNamespace.DisposableService GetTestNamespace_DisposableService()
+    private global::TestNamespace.DisposableService GetDisposableService()
     {
         return new global::TestNamespace.DisposableService();
     }
@@ -219,8 +219,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.DisposableService), static c => c.GetTestNamespace_DisposableService()),
-        __Resolver(typeof(global::TestNamespace.IDisposableService), static c => c.GetTestNamespace_DisposableService()),
+        __Resolver(typeof(global::TestNamespace.DisposableService), static c => c.GetDisposableService()),
+        __Resolver(typeof(global::TestNamespace.IDisposableService), static c => c.GetDisposableService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

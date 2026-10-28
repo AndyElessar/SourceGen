@@ -39,28 +39,28 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Consumer();
+        GetConsumer();
     }
 
     private ExplicitContainer(ExplicitContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Consumer _testNamespace_Consumer = null!;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer _consumer = null!;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
         var instance = new global::TestNamespace.Consumer((global::System.Func<string, global::TestNamespace.IService>)GetRequiredKeyedService(typeof(global::System.Func<string, global::TestNamespace.IService>), "myKey"));
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
@@ -229,7 +229,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.ExplicitContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.ExplicitContainer, object> resolver) =>
@@ -271,7 +271,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
+        DisposeService(_consumer);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -285,7 +285,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

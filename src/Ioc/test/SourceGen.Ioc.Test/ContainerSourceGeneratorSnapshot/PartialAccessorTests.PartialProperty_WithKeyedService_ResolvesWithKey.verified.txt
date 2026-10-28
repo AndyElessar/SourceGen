@@ -39,28 +39,28 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_MemoryCache__memory_();
+        GetMemoryCache__memory_();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_MemoryCache__memory_ = parent._testNamespace_MemoryCache__memory_;
+        _memoryCache__memory_ = parent._memoryCache__memory_;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.MemoryCache _testNamespace_MemoryCache__memory_ = null!;
-    private global::TestNamespace.MemoryCache GetTestNamespace_MemoryCache__memory_() => _testNamespace_MemoryCache__memory_ ?? CreateTestNamespace_MemoryCache__memory_();
+    private global::TestNamespace.MemoryCache _memoryCache__memory_ = null!;
+    private global::TestNamespace.MemoryCache GetMemoryCache__memory_() => _memoryCache__memory_ ?? CreateMemoryCache__memory_();
 
-    private global::TestNamespace.MemoryCache CreateTestNamespace_MemoryCache__memory_()
+    private global::TestNamespace.MemoryCache CreateMemoryCache__memory_()
     {
         var instance = new global::TestNamespace.MemoryCache();
 
-        _testNamespace_MemoryCache__memory_ = instance;
+        _memoryCache__memory_ = instance;
         return instance;
     }
 
@@ -68,7 +68,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Partial Accessor Implementations
 
-    public partial global::TestNamespace.ICache MemoryCache { get => GetTestNamespace_MemoryCache__memory_(); }
+    public partial global::TestNamespace.ICache MemoryCache { get => GetMemoryCache__memory_(); }
 
     #endregion
 
@@ -235,8 +235,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.MemoryCache), "memory", static c => c.GetTestNamespace_MemoryCache__memory_()),
-        __KeyedResolver(typeof(global::TestNamespace.ICache), "memory", static c => c.GetTestNamespace_MemoryCache__memory_()),
+        __KeyedResolver(typeof(global::TestNamespace.MemoryCache), "memory", static c => c.GetMemoryCache__memory_()),
+        __KeyedResolver(typeof(global::TestNamespace.ICache), "memory", static c => c.GetMemoryCache__memory_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -281,7 +281,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MemoryCache__memory_);
+        DisposeService(_memoryCache__memory_);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -295,7 +295,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MemoryCache__memory_).ConfigureAwait(false);
+        await DisposeServiceAsync(_memoryCache__memory_).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

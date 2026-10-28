@@ -39,28 +39,28 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_KeyedService__factoryKey_();
+        GetKeyedService__factoryKey_();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_KeyedService__factoryKey_ = parent._testNamespace_KeyedService__factoryKey_;
+        _keyedService__factoryKey_ = parent._keyedService__factoryKey_;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.KeyedService _testNamespace_KeyedService__factoryKey_ = null!;
-    private global::TestNamespace.KeyedService GetTestNamespace_KeyedService__factoryKey_() => _testNamespace_KeyedService__factoryKey_ ?? CreateTestNamespace_KeyedService__factoryKey_();
+    private global::TestNamespace.KeyedService _keyedService__factoryKey_ = null!;
+    private global::TestNamespace.KeyedService GetKeyedService__factoryKey_() => _keyedService__factoryKey_ ?? CreateKeyedService__factoryKey_();
 
-    private global::TestNamespace.KeyedService CreateTestNamespace_KeyedService__factoryKey_()
+    private global::TestNamespace.KeyedService CreateKeyedService__factoryKey_()
     {
         var instance = (global::TestNamespace.KeyedService)global::TestNamespace.ServiceFactory.Create("factoryKey");
 
-        _testNamespace_KeyedService__factoryKey_ = instance;
+        _keyedService__factoryKey_ = instance;
         return instance;
     }
 
@@ -229,8 +229,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedService), "factoryKey", static c => c.GetTestNamespace_KeyedService__factoryKey_()),
-        __KeyedResolver(typeof(global::TestNamespace.IService), "factoryKey", static c => c.GetTestNamespace_KeyedService__factoryKey_()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedService), "factoryKey", static c => c.GetKeyedService__factoryKey_()),
+        __KeyedResolver(typeof(global::TestNamespace.IService), "factoryKey", static c => c.GetKeyedService__factoryKey_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -275,7 +275,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_KeyedService__factoryKey_);
+        DisposeService(_keyedService__factoryKey_);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -289,7 +289,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_KeyedService__factoryKey_).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyedService__factoryKey_).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

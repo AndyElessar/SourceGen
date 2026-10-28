@@ -59,6 +59,20 @@ The container generates generic instance methods matching the signatures from `S
 
 > **Limitation**: An imported module scope is created through the module's own `CreateScope()` and therefore opens its own fallback scope. Within one container scope, fallback scoped services resolved through an imported module are a different instance from those resolved through the importing container.
 
+## Member Names
+
+Generated service fields and resolver methods are named after short type names, so large containers stay small:
+
+|Name part|Rule|
+|---|---|
+|Short type name|The simple type name with namespaces and containing types removed, also in generic arguments; non-identifier characters become a single `_` and trailing `_` is dropped: `global::A.Logger<global::A.Request, global::System.Collections.Generic.List<string>>` → `Logger_Request_List_string`.|
+|Collisions|When different types of one container get the same short name, each of them MUST get `_` and the 8-digit hex FNV-1a hash of its fully qualified name appended (e.g. `Service_4b7ca1a9`). The hash MUST be deterministic (not `string.GetHashCode`).|
+|Length|A short name longer than 80 characters MUST be truncated to 60 characters and get the hash appended.|
+|Members|Resolver `Get{Name}()` (creation `Create{Name}()`, async `Get{Name}Async()` / `Create{Name}Async()`), field `_{name}` (synchronization `_{name}Lock` / `Semaphore` / `SpinLock`), keyed `…_{key}`, decorated service type `…_As_{ServiceName}`, collections `GetAll{Name}Array()`, `GetAllLazy_{Name}_Array()`, `GetAllFunc_{Name}_Array()`, `GetAllKvp_{Key}_{Value}_Array()` / `_Dictionary()`.|
+|Reserved names|A resolver or field name MUST get `_Resolve` appended when it, or a member derived from it, equals a member the user declares on the container class or its base classes (including partial accessors), an imported module field, or a member of the generated container infrastructure (e.g. `GetService`, `CreateScope`, `_root`).|
+
+Names are computed while grouping registrations and stored in the container entries, so the emitters never recompute them.
+
 ## Basic Container Example
 
 Generate a container implementing all required interfaces with eager singleton resolution (default behavior):

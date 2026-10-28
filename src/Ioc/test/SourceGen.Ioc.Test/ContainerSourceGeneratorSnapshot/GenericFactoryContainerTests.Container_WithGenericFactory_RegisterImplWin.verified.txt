@@ -39,80 +39,80 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Handler_TestNamespace_Entity_();
-        GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create();
-        GetTestNamespace_Handler_TestNamespace_Entity2_();
-        GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create();
+        GetHandler_Entity();
+        GetHandler_Entity_TestNamespace_FactoryContainer_Create();
+        GetHandler_Entity2();
+        GetHandler_Entity2_TestNamespace_FactoryContainer_Create();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Handler_TestNamespace_Entity_ = parent._testNamespace_Handler_TestNamespace_Entity_;
-        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = parent._testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create;
-        _testNamespace_Handler_TestNamespace_Entity2_ = parent._testNamespace_Handler_TestNamespace_Entity2_;
-        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = parent._testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create;
+        _handler_Entity = parent._handler_Entity;
+        _handler_Entity_TestNamespace_FactoryContainer_Create = parent._handler_Entity_TestNamespace_FactoryContainer_Create;
+        _handler_Entity2 = parent._handler_Entity2;
+        _handler_Entity2_TestNamespace_FactoryContainer_Create = parent._handler_Entity2_TestNamespace_FactoryContainer_Create;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> _testNamespace_Handler_TestNamespace_Entity_ = null!;
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> GetTestNamespace_Handler_TestNamespace_Entity_() => _testNamespace_Handler_TestNamespace_Entity_ ?? CreateTestNamespace_Handler_TestNamespace_Entity_();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> _handler_Entity = null!;
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> GetHandler_Entity() => _handler_Entity ?? CreateHandler_Entity();
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> CreateTestNamespace_Handler_TestNamespace_Entity_()
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> CreateHandler_Entity()
     {
         var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity>();
 
-        _testNamespace_Handler_TestNamespace_Entity_ = instance;
+        _handler_Entity = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = null!;
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create() => _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create ?? CreateTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> _handler_Entity_TestNamespace_FactoryContainer_Create = null!;
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> GetHandler_Entity_TestNamespace_FactoryContainer_Create() => _handler_Entity_TestNamespace_FactoryContainer_Create ?? CreateHandler_Entity_TestNamespace_FactoryContainer_Create();
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> CreateTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()
+    private global::TestNamespace.Handler<global::TestNamespace.Entity> CreateHandler_Entity_TestNamespace_FactoryContainer_Create()
     {
         var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
 
-        _testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create = instance;
+        _handler_Entity_TestNamespace_FactoryContainer_Create = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _testNamespace_Handler_TestNamespace_Entity2_ = null!;
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetTestNamespace_Handler_TestNamespace_Entity2_() => _testNamespace_Handler_TestNamespace_Entity2_ ?? CreateTestNamespace_Handler_TestNamespace_Entity2_();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _handler_Entity2 = null!;
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetHandler_Entity2() => _handler_Entity2 ?? CreateHandler_Entity2();
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> CreateTestNamespace_Handler_TestNamespace_Entity2_()
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> CreateHandler_Entity2()
     {
         var instance = new global::TestNamespace.Handler<global::TestNamespace.Entity2>();
 
-        _testNamespace_Handler_TestNamespace_Entity2_ = instance;
+        _handler_Entity2 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = null!;
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create() => _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create ?? CreateTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create();
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _handler_Entity2_TestNamespace_FactoryContainer_Create = null!;
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetHandler_Entity2_TestNamespace_FactoryContainer_Create() => _handler_Entity2_TestNamespace_FactoryContainer_Create ?? CreateHandler_Entity2_TestNamespace_FactoryContainer_Create();
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> CreateTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2> CreateHandler_Entity2_TestNamespace_FactoryContainer_Create()
     {
         var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity2>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
 
-        _testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create = instance;
+        _handler_Entity2_TestNamespace_FactoryContainer_Create = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity>[] GetAllTestNamespace_Handler_TestNamespace_Entity_Array() =>
+    private global::TestNamespace.Handler<global::TestNamespace.Entity>[] GetAllHandler_EntityArray() =>
         [
-            GetTestNamespace_Handler_TestNamespace_Entity_(),
-            GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create(),
+            GetHandler_Entity(),
+            GetHandler_Entity_TestNamespace_FactoryContainer_Create(),
         ];
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2>[] GetAllTestNamespace_Handler_TestNamespace_Entity2_Array() =>
+    private global::TestNamespace.Handler<global::TestNamespace.Entity2>[] GetAllHandler_Entity2Array() =>
         [
-            GetTestNamespace_Handler_TestNamespace_Entity2_(),
-            GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create(),
+            GetHandler_Entity2(),
+            GetHandler_Entity2_TestNamespace_FactoryContainer_Create(),
         ];
 
     #endregion
@@ -280,12 +280,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
-        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), static c => c.GetTestNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create()),
-        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
-        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), static c => c.GetTestNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create()),
-        ..__CollectionResolvers<global::TestNamespace.Handler<global::TestNamespace.Entity>>(static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity_Array()),
-        ..__CollectionResolvers<global::TestNamespace.Handler<global::TestNamespace.Entity2>>(static c => c.GetAllTestNamespace_Handler_TestNamespace_Entity2_Array()),
+        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), static c => c.GetHandler_Entity_TestNamespace_FactoryContainer_Create()),
+        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), static c => c.GetHandler_Entity_TestNamespace_FactoryContainer_Create()),
+        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), static c => c.GetHandler_Entity2_TestNamespace_FactoryContainer_Create()),
+        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), static c => c.GetHandler_Entity2_TestNamespace_FactoryContainer_Create()),
+        ..__CollectionResolvers<global::TestNamespace.Handler<global::TestNamespace.Entity>>(static c => c.GetAllHandler_EntityArray()),
+        ..__CollectionResolvers<global::TestNamespace.Handler<global::TestNamespace.Entity2>>(static c => c.GetAllHandler_Entity2Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -337,10 +337,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create);
-        DisposeService(_testNamespace_Handler_TestNamespace_Entity2_);
-        DisposeService(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create);
-        DisposeService(_testNamespace_Handler_TestNamespace_Entity_);
+        DisposeService(_handler_Entity2_TestNamespace_FactoryContainer_Create);
+        DisposeService(_handler_Entity2);
+        DisposeService(_handler_Entity_TestNamespace_FactoryContainer_Create);
+        DisposeService(_handler_Entity);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -354,10 +354,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity2__TestNamespace_FactoryContainer_Create).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity2_).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity__TestNamespace_FactoryContainer_Create).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler_TestNamespace_Entity_).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler_Entity2_TestNamespace_FactoryContainer_Create).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler_Entity2).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler_Entity_TestNamespace_FactoryContainer_Create).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler_Entity).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

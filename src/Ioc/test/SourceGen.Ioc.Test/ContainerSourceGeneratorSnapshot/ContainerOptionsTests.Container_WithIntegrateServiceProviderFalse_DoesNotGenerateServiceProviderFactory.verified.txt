@@ -30,27 +30,27 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
 
         // Initialize eager singletons
-        GetTestNamespace_MyService();
+        GetMyService();
     }
 
     private TestContainer(TestContainer parent)
     {
         _isRootScope = false;
-        _testNamespace_MyService = parent._testNamespace_MyService;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.MyService _testNamespace_MyService = null!;
-    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
+    private global::TestNamespace.MyService _myService = null!;
+    private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
-    private global::TestNamespace.MyService CreateTestNamespace_MyService()
+    private global::TestNamespace.MyService CreateMyService()
     {
         var instance = new global::TestNamespace.MyService();
 
-        _testNamespace_MyService = instance;
+        _myService = instance;
         return instance;
     }
 
@@ -200,8 +200,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetTestNamespace_MyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetTestNamespace_MyService()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -222,7 +222,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MyService);
+        DisposeService(_myService);
     }
 
     public async global::System.Threading.Tasks.ValueTask DisposeAsync()
@@ -234,7 +234,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()

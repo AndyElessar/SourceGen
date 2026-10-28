@@ -193,7 +193,7 @@ public class CollectionResolutionContainerTests
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
-        await Assert.That(generatedSource).Contains("private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>");
+        await Assert.That(generatedSource).Contains("private global::TestNamespace.IPlugin[] GetAllIPluginArray() =>");
     }
 
     [Test]
@@ -218,6 +218,6 @@ public class CollectionResolutionContainerTests
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
-        await Assert.That(generatedSource).DoesNotContain("GetAllTestNamespace_IPluginArray");
+        await Assert.That(generatedSource).DoesNotContain("GetAllIPluginArray");
     }
 }

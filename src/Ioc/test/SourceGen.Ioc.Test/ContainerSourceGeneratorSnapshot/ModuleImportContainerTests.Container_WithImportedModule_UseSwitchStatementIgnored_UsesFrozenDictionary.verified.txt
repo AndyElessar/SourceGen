@@ -42,14 +42,14 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
         _sharedLib_SharedModule = new global::SharedLib.SharedModule(fallbackProvider);
 
         // Initialize eager singletons
-        GetMainApp_LocalService();
+        GetLocalService();
     }
 
     private AppContainer(AppContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _mainApp_LocalService = parent._mainApp_LocalService;
+        _localService = parent._localService;
         _sharedLib_SharedModule = (global::SharedLib.SharedModule)parent._sharedLib_SharedModule.CreateScope().ServiceProvider;
     }
 
@@ -57,14 +57,14 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
 
     #region Service Resolution
 
-    private global::MainApp.LocalService _mainApp_LocalService = null!;
-    private global::MainApp.LocalService GetMainApp_LocalService() => _mainApp_LocalService ?? CreateMainApp_LocalService();
+    private global::MainApp.LocalService _localService = null!;
+    private global::MainApp.LocalService GetLocalService() => _localService ?? CreateLocalService();
 
-    private global::MainApp.LocalService CreateMainApp_LocalService()
+    private global::MainApp.LocalService CreateLocalService()
     {
         var instance = new global::MainApp.LocalService();
 
-        _mainApp_LocalService = instance;
+        _localService = instance;
         return instance;
     }
 
@@ -233,8 +233,8 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::MainApp.AppContainer), static c => c),
-        __Resolver(typeof(global::MainApp.LocalService), static c => c.GetMainApp_LocalService()),
-        __Resolver(typeof(global::MainApp.ILocalService), static c => c.GetMainApp_LocalService()),
+        __Resolver(typeof(global::MainApp.LocalService), static c => c.GetLocalService()),
+        __Resolver(typeof(global::MainApp.ILocalService), static c => c.GetLocalService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::MainApp.AppContainer, object> resolver) =>
@@ -280,7 +280,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
             return;
         }
 
-        DisposeService(_mainApp_LocalService);
+        DisposeService(_localService);
         _sharedLib_SharedModule.Dispose();
         DisposeService(_ownedFallbackProvider);
     }
@@ -296,7 +296,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
             return;
         }
 
-        await DisposeServiceAsync(_mainApp_LocalService).ConfigureAwait(false);
+        await DisposeServiceAsync(_localService).ConfigureAwait(false);
         await _sharedLib_SharedModule.DisposeAsync().ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }

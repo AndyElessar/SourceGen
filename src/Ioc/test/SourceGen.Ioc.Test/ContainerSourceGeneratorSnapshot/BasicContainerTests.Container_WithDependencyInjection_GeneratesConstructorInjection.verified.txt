@@ -39,41 +39,41 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Logger();
-        GetTestNamespace_Repository();
+        GetLogger();
+        GetRepository();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Logger = parent._testNamespace_Logger;
-        _testNamespace_Repository = parent._testNamespace_Repository;
+        _logger = parent._logger;
+        _repository = parent._repository;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Logger _testNamespace_Logger = null!;
-    private global::TestNamespace.Logger GetTestNamespace_Logger() => _testNamespace_Logger ?? CreateTestNamespace_Logger();
+    private global::TestNamespace.Logger _logger = null!;
+    private global::TestNamespace.Logger GetLogger() => _logger ?? CreateLogger();
 
-    private global::TestNamespace.Logger CreateTestNamespace_Logger()
+    private global::TestNamespace.Logger CreateLogger()
     {
         var instance = new global::TestNamespace.Logger();
 
-        _testNamespace_Logger = instance;
+        _logger = instance;
         return instance;
     }
 
-    private global::TestNamespace.Repository _testNamespace_Repository = null!;
-    private global::TestNamespace.Repository GetTestNamespace_Repository() => _testNamespace_Repository ?? CreateTestNamespace_Repository();
+    private global::TestNamespace.Repository _repository = null!;
+    private global::TestNamespace.Repository GetRepository() => _repository ?? CreateRepository();
 
-    private global::TestNamespace.Repository CreateTestNamespace_Repository()
+    private global::TestNamespace.Repository CreateRepository()
     {
-        var instance = new global::TestNamespace.Repository(GetTestNamespace_Logger());
+        var instance = new global::TestNamespace.Repository(GetLogger());
 
-        _testNamespace_Repository = instance;
+        _repository = instance;
         return instance;
     }
 
@@ -242,10 +242,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetTestNamespace_Logger()),
-        __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetTestNamespace_Logger()),
-        __Resolver(typeof(global::TestNamespace.Repository), static c => c.GetTestNamespace_Repository()),
-        __Resolver(typeof(global::TestNamespace.IRepository), static c => c.GetTestNamespace_Repository()),
+        __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetLogger()),
+        __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetLogger()),
+        __Resolver(typeof(global::TestNamespace.Repository), static c => c.GetRepository()),
+        __Resolver(typeof(global::TestNamespace.IRepository), static c => c.GetRepository()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -287,8 +287,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Repository);
-        DisposeService(_testNamespace_Logger);
+        DisposeService(_repository);
+        DisposeService(_logger);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -302,8 +302,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Repository).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Logger).ConfigureAwait(false);
+        await DisposeServiceAsync(_repository).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

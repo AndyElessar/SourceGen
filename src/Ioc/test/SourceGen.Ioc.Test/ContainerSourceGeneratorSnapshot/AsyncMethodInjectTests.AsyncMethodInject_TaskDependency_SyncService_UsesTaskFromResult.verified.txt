@@ -45,37 +45,37 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_SyncService = parent._testNamespace_SyncService;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _syncService = parent._syncService;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.SyncService? _testNamespace_SyncService;
-    private global::TestNamespace.SyncService GetTestNamespace_SyncService() => _testNamespace_SyncService ?? CreateTestNamespace_SyncService();
+    private global::TestNamespace.SyncService? _syncService;
+    private global::TestNamespace.SyncService GetSyncService() => _syncService ?? CreateSyncService();
 
-    private global::TestNamespace.SyncService CreateTestNamespace_SyncService()
+    private global::TestNamespace.SyncService CreateSyncService()
     {
-        if(_root is not null) return _root.GetTestNamespace_SyncService();
+        if(_root is not null) return _root.GetSyncService();
 
         var instance = new global::TestNamespace.SyncService();
 
-        _testNamespace_SyncService = instance;
+        _syncService = instance;
         return instance;
     }
 
-    private global::TestNamespace.Consumer? _testNamespace_Consumer;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer? _consumer;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
-        if(_root is not null) return _root.GetTestNamespace_Consumer();
+        if(_root is not null) return _root.GetConsumer();
 
-        var instance = new global::TestNamespace.Consumer(global::System.Threading.Tasks.Task.FromResult((global::TestNamespace.ISyncService)GetTestNamespace_SyncService()));
+        var instance = new global::TestNamespace.Consumer(global::System.Threading.Tasks.Task.FromResult((global::TestNamespace.ISyncService)GetSyncService()));
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
@@ -244,9 +244,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.SyncService), static c => c.GetTestNamespace_SyncService()),
-        __Resolver(typeof(global::TestNamespace.ISyncService), static c => c.GetTestNamespace_SyncService()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
+        __Resolver(typeof(global::TestNamespace.SyncService), static c => c.GetSyncService()),
+        __Resolver(typeof(global::TestNamespace.ISyncService), static c => c.GetSyncService()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -288,8 +288,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
-        DisposeService(_testNamespace_SyncService);
+        DisposeService(_consumer);
+        DisposeService(_syncService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -303,8 +303,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_SyncService).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_syncService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

@@ -39,45 +39,45 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Logger();
+        GetLogger();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Logger = parent._testNamespace_Logger;
+        _logger = parent._logger;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Logger _testNamespace_Logger = null!;
-    private global::TestNamespace.Logger GetTestNamespace_Logger() => _testNamespace_Logger ?? CreateTestNamespace_Logger();
+    private global::TestNamespace.Logger _logger = null!;
+    private global::TestNamespace.Logger GetLogger() => _logger ?? CreateLogger();
 
-    private global::TestNamespace.Logger CreateTestNamespace_Logger()
+    private global::TestNamespace.Logger CreateLogger()
     {
         var instance = new global::TestNamespace.Logger();
 
-        _testNamespace_Logger = instance;
+        _logger = instance;
         return instance;
     }
 
-    private global::TestNamespace.MyHandler? _testNamespace_MyHandler__myHandler_;
-    private readonly global::System.Threading.Lock _testNamespace_MyHandler__myHandler_Lock = new();
-    private global::TestNamespace.MyHandler GetTestNamespace_MyHandler__myHandler_() => _testNamespace_MyHandler__myHandler_ ?? CreateTestNamespace_MyHandler__myHandler_();
+    private global::TestNamespace.MyHandler? _myHandler__myHandler_;
+    private readonly global::System.Threading.Lock _myHandler__myHandler_Lock = new();
+    private global::TestNamespace.MyHandler GetMyHandler__myHandler_() => _myHandler__myHandler_ ?? CreateMyHandler__myHandler_();
 
-    private global::TestNamespace.MyHandler CreateTestNamespace_MyHandler__myHandler_()
+    private global::TestNamespace.MyHandler CreateMyHandler__myHandler_()
     {
-        lock(_testNamespace_MyHandler__myHandler_Lock)
+        lock(_myHandler__myHandler_Lock)
         {
-            if(_testNamespace_MyHandler__myHandler_ is not null) return _testNamespace_MyHandler__myHandler_;
+            if(_myHandler__myHandler_ is not null) return _myHandler__myHandler_;
 
             var instance = new global::TestNamespace.MyHandler();
-            instance.Initialize(GetTestNamespace_Logger(), "myHandler");
+            instance.Initialize(GetLogger(), "myHandler");
 
-            _testNamespace_MyHandler__myHandler_ = instance;
+            _myHandler__myHandler_ = instance;
             return instance;
         }
     }
@@ -247,10 +247,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetTestNamespace_Logger()),
-        __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetTestNamespace_Logger()),
-        __KeyedResolver(typeof(global::TestNamespace.MyHandler), "myHandler", static c => c.GetTestNamespace_MyHandler__myHandler_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "myHandler", static c => c.GetTestNamespace_MyHandler__myHandler_()),
+        __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetLogger()),
+        __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetLogger()),
+        __KeyedResolver(typeof(global::TestNamespace.MyHandler), "myHandler", static c => c.GetMyHandler__myHandler_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "myHandler", static c => c.GetMyHandler__myHandler_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -289,14 +289,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_MyHandler__myHandler_);
+        DisposeService(_myHandler__myHandler_);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
             return;
         }
 
-        DisposeService(_testNamespace_Logger);
+        DisposeService(_logger);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -304,14 +304,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_MyHandler__myHandler_).ConfigureAwait(false);
+        await DisposeServiceAsync(_myHandler__myHandler_).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Logger).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

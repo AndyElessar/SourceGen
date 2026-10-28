@@ -39,48 +39,48 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Handler1();
-        GetTestNamespace_Handler2();
+        GetHandler1();
+        GetHandler2();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Handler1 = parent._testNamespace_Handler1;
-        _testNamespace_Handler2 = parent._testNamespace_Handler2;
+        _handler1 = parent._handler1;
+        _handler2 = parent._handler2;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler1 _testNamespace_Handler1 = null!;
-    private global::TestNamespace.Handler1 GetTestNamespace_Handler1() => _testNamespace_Handler1 ?? CreateTestNamespace_Handler1();
+    private global::TestNamespace.Handler1 _handler1 = null!;
+    private global::TestNamespace.Handler1 GetHandler1() => _handler1 ?? CreateHandler1();
 
-    private global::TestNamespace.Handler1 CreateTestNamespace_Handler1()
+    private global::TestNamespace.Handler1 CreateHandler1()
     {
         var instance = new global::TestNamespace.Handler1();
 
-        _testNamespace_Handler1 = instance;
+        _handler1 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler2 _testNamespace_Handler2 = null!;
-    private global::TestNamespace.Handler2 GetTestNamespace_Handler2() => _testNamespace_Handler2 ?? CreateTestNamespace_Handler2();
+    private global::TestNamespace.Handler2 _handler2 = null!;
+    private global::TestNamespace.Handler2 GetHandler2() => _handler2 ?? CreateHandler2();
 
-    private global::TestNamespace.Handler2 CreateTestNamespace_Handler2()
+    private global::TestNamespace.Handler2 CreateHandler2()
     {
         var instance = new global::TestNamespace.Handler2();
 
-        _testNamespace_Handler2 = instance;
+        _handler2 = instance;
         return instance;
     }
 
-    private global::TestNamespace.IHandler[] GetAllTestNamespace_IHandlerArray() =>
+    private global::TestNamespace.IHandler[] GetAllIHandlerArray() =>
         [
-            GetTestNamespace_Handler1(),
-            GetTestNamespace_Handler2(),
+            GetHandler1(),
+            GetHandler2(),
         ];
 
     #endregion
@@ -248,10 +248,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Handler1), static c => c.GetTestNamespace_Handler1()),
-        __Resolver(typeof(global::TestNamespace.IHandler), static c => c.GetTestNamespace_Handler2()),
-        __Resolver(typeof(global::TestNamespace.Handler2), static c => c.GetTestNamespace_Handler2()),
-        ..__CollectionResolvers<global::TestNamespace.IHandler>(static c => c.GetAllTestNamespace_IHandlerArray()),
+        __Resolver(typeof(global::TestNamespace.Handler1), static c => c.GetHandler1()),
+        __Resolver(typeof(global::TestNamespace.IHandler), static c => c.GetHandler2()),
+        __Resolver(typeof(global::TestNamespace.Handler2), static c => c.GetHandler2()),
+        ..__CollectionResolvers<global::TestNamespace.IHandler>(static c => c.GetAllIHandlerArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -303,8 +303,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Handler2);
-        DisposeService(_testNamespace_Handler1);
+        DisposeService(_handler2);
+        DisposeService(_handler1);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -318,8 +318,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Handler2).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler1).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler2).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler1).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

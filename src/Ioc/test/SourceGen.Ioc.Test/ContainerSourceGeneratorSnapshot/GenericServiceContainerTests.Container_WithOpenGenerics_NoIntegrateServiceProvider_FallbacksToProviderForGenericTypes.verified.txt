@@ -30,40 +30,40 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
 
         // Initialize eager singletons
-        GetTestNamespace_MyService();
-        GetTestNamespace_Logger_TestNamespace_MyService_();
+        GetMyService();
+        GetLogger_MyService();
     }
 
     private TestContainer(TestContainer parent)
     {
         _isRootScope = false;
-        _testNamespace_MyService = parent._testNamespace_MyService;
-        _testNamespace_Logger_TestNamespace_MyService_ = parent._testNamespace_Logger_TestNamespace_MyService_;
+        _myService = parent._myService;
+        _logger_MyService = parent._logger_MyService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.MyService _testNamespace_MyService = null!;
-    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
+    private global::TestNamespace.MyService _myService = null!;
+    private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
-    private global::TestNamespace.MyService CreateTestNamespace_MyService()
+    private global::TestNamespace.MyService CreateMyService()
     {
-        var instance = new global::TestNamespace.MyService(GetTestNamespace_Logger_TestNamespace_MyService_());
+        var instance = new global::TestNamespace.MyService(GetLogger_MyService());
 
-        _testNamespace_MyService = instance;
+        _myService = instance;
         return instance;
     }
 
-    private global::TestNamespace.Logger<global::TestNamespace.MyService> _testNamespace_Logger_TestNamespace_MyService_ = null!;
-    private global::TestNamespace.Logger<global::TestNamespace.MyService> GetTestNamespace_Logger_TestNamespace_MyService_() => _testNamespace_Logger_TestNamespace_MyService_ ?? CreateTestNamespace_Logger_TestNamespace_MyService_();
+    private global::TestNamespace.Logger<global::TestNamespace.MyService> _logger_MyService = null!;
+    private global::TestNamespace.Logger<global::TestNamespace.MyService> GetLogger_MyService() => _logger_MyService ?? CreateLogger_MyService();
 
-    private global::TestNamespace.Logger<global::TestNamespace.MyService> CreateTestNamespace_Logger_TestNamespace_MyService_()
+    private global::TestNamespace.Logger<global::TestNamespace.MyService> CreateLogger_MyService()
     {
         var instance = new global::TestNamespace.Logger<global::TestNamespace.MyService>();
 
-        _testNamespace_Logger_TestNamespace_MyService_ = instance;
+        _logger_MyService = instance;
         return instance;
     }
 
@@ -213,10 +213,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetTestNamespace_MyService()),
-        __Resolver(typeof(global::TestNamespace.IService), static c => c.GetTestNamespace_MyService()),
-        __Resolver(typeof(global::TestNamespace.Logger<global::TestNamespace.MyService>), static c => c.GetTestNamespace_Logger_TestNamespace_MyService_()),
-        __Resolver(typeof(global::TestNamespace.ILogger<global::TestNamespace.MyService>), static c => c.GetTestNamespace_Logger_TestNamespace_MyService_()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.Logger<global::TestNamespace.MyService>), static c => c.GetLogger_MyService()),
+        __Resolver(typeof(global::TestNamespace.ILogger<global::TestNamespace.MyService>), static c => c.GetLogger_MyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -237,8 +237,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Logger_TestNamespace_MyService_);
-        DisposeService(_testNamespace_MyService);
+        DisposeService(_logger_MyService);
+        DisposeService(_myService);
     }
 
     public async global::System.Threading.Tasks.ValueTask DisposeAsync()
@@ -250,8 +250,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Logger_TestNamespace_MyService_).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()

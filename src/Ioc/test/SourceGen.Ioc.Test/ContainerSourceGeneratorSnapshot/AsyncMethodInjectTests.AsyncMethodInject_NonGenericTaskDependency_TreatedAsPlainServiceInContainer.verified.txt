@@ -45,23 +45,23 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Consumer? _testNamespace_Consumer;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer? _consumer;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
-        if(_root is not null) return _root.GetTestNamespace_Consumer();
+        if(_root is not null) return _root.GetConsumer();
 
         var instance = new global::TestNamespace.Consumer((global::System.Threading.Tasks.Task)GetRequiredService(typeof(global::System.Threading.Tasks.Task)));
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
@@ -230,7 +230,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -272,7 +272,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
+        DisposeService(_consumer);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -286,7 +286,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

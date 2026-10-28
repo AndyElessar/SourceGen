@@ -39,41 +39,41 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Dependency();
-        GetTestNamespace_KeyedService__myKey_();
+        GetDependency();
+        GetKeyedService__myKey_();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Dependency = parent._testNamespace_Dependency;
-        _testNamespace_KeyedService__myKey_ = parent._testNamespace_KeyedService__myKey_;
+        _dependency = parent._dependency;
+        _keyedService__myKey_ = parent._keyedService__myKey_;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Dependency _testNamespace_Dependency = null!;
-    private global::TestNamespace.Dependency GetTestNamespace_Dependency() => _testNamespace_Dependency ?? CreateTestNamespace_Dependency();
+    private global::TestNamespace.Dependency _dependency = null!;
+    private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
-    private global::TestNamespace.Dependency CreateTestNamespace_Dependency()
+    private global::TestNamespace.Dependency CreateDependency()
     {
         var instance = new global::TestNamespace.Dependency();
 
-        _testNamespace_Dependency = instance;
+        _dependency = instance;
         return instance;
     }
 
-    private global::TestNamespace.KeyedService _testNamespace_KeyedService__myKey_ = null!;
-    private global::TestNamespace.KeyedService GetTestNamespace_KeyedService__myKey_() => _testNamespace_KeyedService__myKey_ ?? CreateTestNamespace_KeyedService__myKey_();
+    private global::TestNamespace.KeyedService _keyedService__myKey_ = null!;
+    private global::TestNamespace.KeyedService GetKeyedService__myKey_() => _keyedService__myKey_ ?? CreateKeyedService__myKey_();
 
-    private global::TestNamespace.KeyedService CreateTestNamespace_KeyedService__myKey_()
+    private global::TestNamespace.KeyedService CreateKeyedService__myKey_()
     {
         var instance = new global::TestNamespace.KeyedService("myKey", (global::TestNamespace.IDependency)GetRequiredService(typeof(global::TestNamespace.IDependency)));
 
-        _testNamespace_KeyedService__myKey_ = instance;
+        _keyedService__myKey_ = instance;
         return instance;
     }
 
@@ -242,9 +242,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetTestNamespace_Dependency()),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedService), "myKey", static c => c.GetTestNamespace_KeyedService__myKey_()),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "myKey", static c => c.GetTestNamespace_KeyedService__myKey_()),
+        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetDependency()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedService), "myKey", static c => c.GetKeyedService__myKey_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "myKey", static c => c.GetKeyedService__myKey_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -289,8 +289,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_KeyedService__myKey_);
-        DisposeService(_testNamespace_Dependency);
+        DisposeService(_keyedService__myKey_);
+        DisposeService(_dependency);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -304,8 +304,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_KeyedService__myKey_).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Dependency).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyedService__myKey_).ConfigureAwait(false);
+        await DisposeServiceAsync(_dependency).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

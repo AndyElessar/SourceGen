@@ -45,35 +45,35 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_MyService = parent._testNamespace_MyService;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.MyService? _testNamespace_MyService;
-    private global::System.Threading.SpinLock _testNamespace_MyServiceSpinLock = new(false);
-    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
+    private global::TestNamespace.MyService? _myService;
+    private global::System.Threading.SpinLock _myServiceSpinLock = new(false);
+    private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
-    private global::TestNamespace.MyService CreateTestNamespace_MyService()
+    private global::TestNamespace.MyService CreateMyService()
     {
-        if(_root is not null) return _root.GetTestNamespace_MyService();
+        if(_root is not null) return _root.GetMyService();
 
         bool lockTaken = false;
         try
         {
-            _testNamespace_MyServiceSpinLock.Enter(ref lockTaken);
-            if(_testNamespace_MyService is not null) return _testNamespace_MyService;
+            _myServiceSpinLock.Enter(ref lockTaken);
+            if(_myService is not null) return _myService;
 
             var instance = new global::TestNamespace.MyService();
 
-            _testNamespace_MyService = instance;
+            _myService = instance;
             return instance;
         }
         finally
         {
-            if(lockTaken) _testNamespace_MyServiceSpinLock.Exit();
+            if(lockTaken) _myServiceSpinLock.Exit();
         }
     }
 
@@ -242,8 +242,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetTestNamespace_MyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetTestNamespace_MyService()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -285,7 +285,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MyService);
+        DisposeService(_myService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -299,7 +299,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

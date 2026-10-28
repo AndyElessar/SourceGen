@@ -30,43 +30,43 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
 
         // Initialize eager singletons
-        GetTestNamespace_UserService();
+        GetUserService();
     }
 
     private TestContainer(TestContainer parent)
     {
         _isRootScope = false;
-        _testNamespace_UserService = parent._testNamespace_UserService;
+        _userService = parent._userService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.UserService _testNamespace_UserService = null!;
-    private global::TestNamespace.UserService GetTestNamespace_UserService() => _testNamespace_UserService ?? CreateTestNamespace_UserService();
+    private global::TestNamespace.UserService _userService = null!;
+    private global::TestNamespace.UserService GetUserService() => _userService ?? CreateUserService();
 
-    private global::TestNamespace.UserService CreateTestNamespace_UserService()
+    private global::TestNamespace.UserService CreateUserService()
     {
-        var instance = new global::TestNamespace.UserService(GetTestNamespace_Repository_TestNamespace_User_());
+        var instance = new global::TestNamespace.UserService(GetRepository_User());
 
-        _testNamespace_UserService = instance;
+        _userService = instance;
         return instance;
     }
 
-    private global::TestNamespace.Repository<global::TestNamespace.User>? _testNamespace_Repository_TestNamespace_User_;
-    private readonly global::System.Threading.Lock _testNamespace_Repository_TestNamespace_User_Lock = new();
-    private global::TestNamespace.Repository<global::TestNamespace.User> GetTestNamespace_Repository_TestNamespace_User_() => _testNamespace_Repository_TestNamespace_User_ ?? CreateTestNamespace_Repository_TestNamespace_User_();
+    private global::TestNamespace.Repository<global::TestNamespace.User>? _repository_User;
+    private readonly global::System.Threading.Lock _repository_UserLock = new();
+    private global::TestNamespace.Repository<global::TestNamespace.User> GetRepository_User() => _repository_User ?? CreateRepository_User();
 
-    private global::TestNamespace.Repository<global::TestNamespace.User> CreateTestNamespace_Repository_TestNamespace_User_()
+    private global::TestNamespace.Repository<global::TestNamespace.User> CreateRepository_User()
     {
-        lock(_testNamespace_Repository_TestNamespace_User_Lock)
+        lock(_repository_UserLock)
         {
-            if(_testNamespace_Repository_TestNamespace_User_ is not null) return _testNamespace_Repository_TestNamespace_User_;
+            if(_repository_User is not null) return _repository_User;
 
             var instance = new global::TestNamespace.Repository<global::TestNamespace.User>();
 
-            _testNamespace_Repository_TestNamespace_User_ = instance;
+            _repository_User = instance;
             return instance;
         }
     }
@@ -83,10 +83,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         if(serviceType == typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) return this;
         if(serviceType == typeof(TestContainer)) return this;
 
-        if(serviceType == typeof(global::TestNamespace.UserService)) return GetTestNamespace_UserService();
-        if(serviceType == typeof(global::TestNamespace.IUserService)) return GetTestNamespace_UserService();
-        if(serviceType == typeof(global::TestNamespace.Repository<global::TestNamespace.User>)) return GetTestNamespace_Repository_TestNamespace_User_();
-        if(serviceType == typeof(global::TestNamespace.IRepository<global::TestNamespace.User>)) return GetTestNamespace_Repository_TestNamespace_User_();
+        if(serviceType == typeof(global::TestNamespace.UserService)) return GetUserService();
+        if(serviceType == typeof(global::TestNamespace.IUserService)) return GetUserService();
+        if(serviceType == typeof(global::TestNamespace.Repository<global::TestNamespace.User>)) return GetRepository_User();
+        if(serviceType == typeof(global::TestNamespace.IRepository<global::TestNamespace.User>)) return GetRepository_User();
 
         return null;
     }
@@ -192,10 +192,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.UserService), static c => c.GetTestNamespace_UserService()),
-        __Resolver(typeof(global::TestNamespace.IUserService), static c => c.GetTestNamespace_UserService()),
-        __Resolver(typeof(global::TestNamespace.Repository<global::TestNamespace.User>), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
-        __Resolver(typeof(global::TestNamespace.IRepository<global::TestNamespace.User>), static c => c.GetTestNamespace_Repository_TestNamespace_User_()),
+        __Resolver(typeof(global::TestNamespace.UserService), static c => c.GetUserService()),
+        __Resolver(typeof(global::TestNamespace.IUserService), static c => c.GetUserService()),
+        __Resolver(typeof(global::TestNamespace.Repository<global::TestNamespace.User>), static c => c.GetRepository_User()),
+        __Resolver(typeof(global::TestNamespace.IRepository<global::TestNamespace.User>), static c => c.GetRepository_User()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -209,26 +209,26 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_Repository_TestNamespace_User_);
+        DisposeService(_repository_User);
         if(!_isRootScope)
         {
             return;
         }
 
-        DisposeService(_testNamespace_UserService);
+        DisposeService(_userService);
     }
 
     public async global::System.Threading.Tasks.ValueTask DisposeAsync()
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_Repository_TestNamespace_User_).ConfigureAwait(false);
+        await DisposeServiceAsync(_repository_User).ConfigureAwait(false);
         if(!_isRootScope)
         {
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_UserService).ConfigureAwait(false);
+        await DisposeServiceAsync(_userService).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()

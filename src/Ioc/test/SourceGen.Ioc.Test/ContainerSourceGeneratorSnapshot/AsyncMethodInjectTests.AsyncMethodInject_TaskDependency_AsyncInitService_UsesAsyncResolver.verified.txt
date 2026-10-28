@@ -45,44 +45,44 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_MyService = parent._testNamespace_MyService;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _myService = parent._myService;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _testNamespace_MyService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
     {
-        if(_testNamespace_MyService is not null)
-            return await _testNamespace_MyService.ConfigureAwait(false);
+        if(_myService is not null)
+            return await _myService.ConfigureAwait(false);
         if(_root is not null)
-            return await _root.GetTestNamespace_MyServiceAsync().ConfigureAwait(false);
+            return await _root.GetMyServiceAsync().ConfigureAwait(false);
 
-        _testNamespace_MyService = CreateTestNamespace_MyServiceAsync();
-        return await _testNamespace_MyService.ConfigureAwait(false);
+        _myService = CreateMyServiceAsync();
+        return await _myService.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {
         var instance = new global::TestNamespace.MyService();
         await instance.InitAsync().ConfigureAwait(false);
         return instance;
     }
 
-    private global::TestNamespace.Consumer? _testNamespace_Consumer;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer? _consumer;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
-        if(_root is not null) return _root.GetTestNamespace_Consumer();
+        if(_root is not null) return _root.GetConsumer();
 
-        var instance = new global::TestNamespace.Consumer(__ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(GetTestNamespace_MyServiceAsync()));
+        var instance = new global::TestNamespace.Consumer(__ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(GetMyServiceAsync()));
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
@@ -254,9 +254,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetTestNamespace_MyServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetTestNamespace_MyServiceAsync())),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetMyServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -298,8 +298,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
-        DisposeService(_testNamespace_MyService);
+        DisposeService(_consumer);
+        DisposeService(_myService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -313,8 +313,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

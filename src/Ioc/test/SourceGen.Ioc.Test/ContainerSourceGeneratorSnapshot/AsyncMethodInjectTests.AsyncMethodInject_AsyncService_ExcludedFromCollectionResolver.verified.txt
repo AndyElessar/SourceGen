@@ -45,41 +45,41 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_SyncImpl = parent._testNamespace_SyncImpl;
-        _testNamespace_AsyncImpl = parent._testNamespace_AsyncImpl;
+        _syncImpl = parent._syncImpl;
+        _asyncImpl = parent._asyncImpl;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.SyncImpl? _testNamespace_SyncImpl;
-    private global::TestNamespace.SyncImpl GetTestNamespace_SyncImpl() => _testNamespace_SyncImpl ?? CreateTestNamespace_SyncImpl();
+    private global::TestNamespace.SyncImpl? _syncImpl;
+    private global::TestNamespace.SyncImpl GetSyncImpl() => _syncImpl ?? CreateSyncImpl();
 
-    private global::TestNamespace.SyncImpl CreateTestNamespace_SyncImpl()
+    private global::TestNamespace.SyncImpl CreateSyncImpl()
     {
-        if(_root is not null) return _root.GetTestNamespace_SyncImpl();
+        if(_root is not null) return _root.GetSyncImpl();
 
         var instance = new global::TestNamespace.SyncImpl();
 
-        _testNamespace_SyncImpl = instance;
+        _syncImpl = instance;
         return instance;
     }
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>? _testNamespace_AsyncImpl;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>? _asyncImpl;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> GetTestNamespace_AsyncImplAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> GetAsyncImplAsync()
     {
-        if(_testNamespace_AsyncImpl is not null)
-            return await _testNamespace_AsyncImpl.ConfigureAwait(false);
+        if(_asyncImpl is not null)
+            return await _asyncImpl.ConfigureAwait(false);
         if(_root is not null)
-            return await _root.GetTestNamespace_AsyncImplAsync().ConfigureAwait(false);
+            return await _root.GetAsyncImplAsync().ConfigureAwait(false);
 
-        _testNamespace_AsyncImpl = CreateTestNamespace_AsyncImplAsync();
-        return await _testNamespace_AsyncImpl.ConfigureAwait(false);
+        _asyncImpl = CreateAsyncImplAsync();
+        return await _asyncImpl.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> CreateTestNamespace_AsyncImplAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> CreateAsyncImplAsync()
     {
         var instance = new global::TestNamespace.AsyncImpl();
         await instance.InitAsync().ConfigureAwait(false);
@@ -254,9 +254,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.SyncImpl), static c => c.GetTestNamespace_SyncImpl()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.AsyncImpl>(c.GetTestNamespace_AsyncImplAsync())),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>), static c => c.GetTestNamespace_AsyncImplAsync()),
+        __Resolver(typeof(global::TestNamespace.SyncImpl), static c => c.GetSyncImpl()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.AsyncImpl>(c.GetAsyncImplAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>), static c => c.GetAsyncImplAsync()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -298,8 +298,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_AsyncImpl);
-        DisposeService(_testNamespace_SyncImpl);
+        DisposeService(_asyncImpl);
+        DisposeService(_syncImpl);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -313,8 +313,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_AsyncImpl).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_SyncImpl).ConfigureAwait(false);
+        await DisposeServiceAsync(_asyncImpl).ConfigureAwait(false);
+        await DisposeServiceAsync(_syncImpl).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

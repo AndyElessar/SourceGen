@@ -39,14 +39,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::TestNamespace.Keys.T GetTestNamespace_Keys_T()
+    private global::TestNamespace.Keys.T GetT()
     {
         return new global::TestNamespace.Keys.T();
     }
 
-    private global::TestNamespace.Handler<int> GetTestNamespace_Handler_int_()
+    private global::TestNamespace.Handler<int> GetHandler_int()
     {
-        return new global::TestNamespace.Handler<int>(GetTestNamespace_Keys_T());
+        return new global::TestNamespace.Handler<int>(GetT());
     }
 
     #endregion
@@ -195,9 +195,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Keys.T), static c => c.GetTestNamespace_Keys_T()),
-        __Resolver(typeof(global::TestNamespace.Handler<int>), static c => c.GetTestNamespace_Handler_int_()),
-        __Resolver(typeof(global::TestNamespace.IHandler<int>), static c => c.GetTestNamespace_Handler_int_()),
+        __Resolver(typeof(global::TestNamespace.Keys.T), static c => c.GetT()),
+        __Resolver(typeof(global::TestNamespace.Handler<int>), static c => c.GetHandler_int()),
+        __Resolver(typeof(global::TestNamespace.IHandler<int>), static c => c.GetHandler_int()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

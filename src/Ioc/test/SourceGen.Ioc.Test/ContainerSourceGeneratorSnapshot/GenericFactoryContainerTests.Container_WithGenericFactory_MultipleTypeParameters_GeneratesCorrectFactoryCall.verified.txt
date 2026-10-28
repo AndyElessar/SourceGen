@@ -39,28 +39,28 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create();
+        GetIRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = parent._testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create;
+        _iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create = parent._iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = null!;
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create() => _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create ?? CreateTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create();
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> _iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create = null!;
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> GetIRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create() => _iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create ?? CreateIRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create();
 
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> CreateTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create()
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>> CreateIRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create()
     {
         var instance = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity, global::TestNamespace.Dto>();
 
-        _testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create = instance;
+        _iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create = instance;
         return instance;
     }
 
@@ -229,7 +229,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>), static c => c.GetTestNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create()),
+        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>), static c => c.GetIRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -271,7 +271,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create);
+        DisposeService(_iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -285,7 +285,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_IRequestHandler_System_Threading_Tasks_Task_TestNamespace_Entity___System_Collections_Generic_List_TestNamespace_Dto___TestNamespace_FactoryContainer_Create).ConfigureAwait(false);
+        await DisposeServiceAsync(_iRequestHandler_Task_Entity_List_Dto_TestNamespace_FactoryContainer_Create).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

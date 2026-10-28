@@ -39,61 +39,61 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Plugin1();
-        GetTestNamespace_Plugin2();
-        GetTestNamespace_Consumer();
+        GetPlugin1();
+        GetPlugin2();
+        GetConsumer();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Plugin1 = parent._testNamespace_Plugin1;
-        _testNamespace_Plugin2 = parent._testNamespace_Plugin2;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _plugin1 = parent._plugin1;
+        _plugin2 = parent._plugin2;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Plugin1 _testNamespace_Plugin1 = null!;
-    private global::TestNamespace.Plugin1 GetTestNamespace_Plugin1() => _testNamespace_Plugin1 ?? CreateTestNamespace_Plugin1();
+    private global::TestNamespace.Plugin1 _plugin1 = null!;
+    private global::TestNamespace.Plugin1 GetPlugin1() => _plugin1 ?? CreatePlugin1();
 
-    private global::TestNamespace.Plugin1 CreateTestNamespace_Plugin1()
+    private global::TestNamespace.Plugin1 CreatePlugin1()
     {
         var instance = new global::TestNamespace.Plugin1();
 
-        _testNamespace_Plugin1 = instance;
+        _plugin1 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Plugin2 _testNamespace_Plugin2 = null!;
-    private global::TestNamespace.Plugin2 GetTestNamespace_Plugin2() => _testNamespace_Plugin2 ?? CreateTestNamespace_Plugin2();
+    private global::TestNamespace.Plugin2 _plugin2 = null!;
+    private global::TestNamespace.Plugin2 GetPlugin2() => _plugin2 ?? CreatePlugin2();
 
-    private global::TestNamespace.Plugin2 CreateTestNamespace_Plugin2()
+    private global::TestNamespace.Plugin2 CreatePlugin2()
     {
         var instance = new global::TestNamespace.Plugin2();
 
-        _testNamespace_Plugin2 = instance;
+        _plugin2 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Consumer _testNamespace_Consumer = null!;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer _consumer = null!;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
-        var instance = new global::TestNamespace.Consumer(new global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>>(() => GetAllTestNamespace_IPluginArray(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+        var instance = new global::TestNamespace.Consumer(new global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>>(() => GetAllIPluginArray(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
-    private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>
+    private global::TestNamespace.IPlugin[] GetAllIPluginArray() =>
         [
-            GetTestNamespace_Plugin1(),
-            GetTestNamespace_Plugin2(),
+            GetPlugin1(),
+            GetPlugin2(),
         ];
 
     #endregion
@@ -261,11 +261,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetTestNamespace_Plugin1()),
-        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetTestNamespace_Plugin2()),
-        __Resolver(typeof(global::TestNamespace.Plugin2), static c => c.GetTestNamespace_Plugin2()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
-        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllTestNamespace_IPluginArray()),
+        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetPlugin2()),
+        __Resolver(typeof(global::TestNamespace.Plugin2), static c => c.GetPlugin2()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllIPluginArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -317,9 +317,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
-        DisposeService(_testNamespace_Plugin2);
-        DisposeService(_testNamespace_Plugin1);
+        DisposeService(_consumer);
+        DisposeService(_plugin2);
+        DisposeService(_plugin1);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -333,9 +333,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Plugin2).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Plugin1).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_plugin2).ConfigureAwait(false);
+        await DisposeServiceAsync(_plugin1).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

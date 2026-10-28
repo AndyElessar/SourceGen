@@ -166,26 +166,6 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Gets the array resolver method name for a KVP type pair.
-    /// </summary>
-    private static string GetKvpArrayResolverMethodName(string keyTypeName, string valueTypeName)
-    {
-        var safeKeyType = GetSafeIdentifier(keyTypeName);
-        var safeValueType = GetSafeIdentifier(valueTypeName);
-        return $"GetAllKvp_{safeKeyType}_{safeValueType}_Array";
-    }
-
-    /// <summary>
-    /// Gets the dictionary resolver method name for a KVP type pair.
-    /// </summary>
-    private static string GetKvpDictionaryResolverMethodName(string keyTypeName, string valueTypeName)
-    {
-        var safeKeyType = GetSafeIdentifier(keyTypeName);
-        var safeValueType = GetSafeIdentifier(valueTypeName);
-        return $"GetAllKvp_{safeKeyType}_{safeValueType}_Dictionary";
-    }
-
-    /// <summary>
     /// Checks if a registration's key value type is compatible with the requested KVP key type.
     /// </summary>
     /// <param name="requestedKeyTypeName">The key type name requested by the consumer (e.g., "string", "object").</param>
@@ -208,7 +188,8 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ContainerNames names)
     {
         var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
 
@@ -247,17 +228,16 @@ partial class IocSourceGenerator
                 if(!addedKeys.Add(entryKey))
                     continue;
 
-                var safeKey = GetSafeIdentifier(key);
-                var safeKeyType = GetSafeIdentifier(keyTypeName);
-                var safeValueType = GetSafeIdentifier(valueTypeName);
-                var kvpResolverName = $"GetKvp_{safeKeyType}_{safeValueType}_{safeKey}";
+                var kvpResolverName = $"GetKvp_{names.Get(keyTypeName)}_{names.Get(valueTypeName)}_{GetSafeIdentifier(key)}";
 
                 wrapperEntries.Add(new KvpWrapperContainerEntry(
                     keyTypeName,
                     valueTypeName,
                     key,
                     cached.ResolverMethodName,
-                    kvpResolverName));
+                    kvpResolverName,
+                    names.KvpArrayResolver(keyTypeName, valueTypeName),
+                    names.KvpDictionaryResolver(keyTypeName, valueTypeName)));
             }
         }
 

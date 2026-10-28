@@ -53,7 +53,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::LevelA.
 
     #region Service Resolution
 
-    private global::LevelA.ServiceA GetLevelA_ServiceA()
+    private global::LevelA.ServiceA GetServiceA()
     {
         return new global::LevelA.ServiceA((global::LevelB.IServiceB)GetRequiredService(typeof(global::LevelB.IServiceB)));
     }
@@ -223,8 +223,8 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::LevelA.
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::LevelA.AppContainer), static c => c),
-        __Resolver(typeof(global::LevelA.ServiceA), static c => c.GetLevelA_ServiceA()),
-        __Resolver(typeof(global::LevelA.IServiceA), static c => c.GetLevelA_ServiceA()),
+        __Resolver(typeof(global::LevelA.ServiceA), static c => c.GetServiceA()),
+        __Resolver(typeof(global::LevelA.IServiceA), static c => c.GetServiceA()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::LevelA.AppContainer, object> resolver) =>

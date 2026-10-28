@@ -39,39 +39,39 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Plugin();
+        GetPlugin();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Plugin = parent._testNamespace_Plugin;
+        _plugin = parent._plugin;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Plugin _testNamespace_Plugin = null!;
-    private global::TestNamespace.Plugin GetTestNamespace_Plugin() => _testNamespace_Plugin ?? CreateTestNamespace_Plugin();
+    private global::TestNamespace.Plugin _plugin = null!;
+    private global::TestNamespace.Plugin GetPlugin() => _plugin ?? CreatePlugin();
 
-    private global::TestNamespace.Plugin CreateTestNamespace_Plugin()
+    private global::TestNamespace.Plugin CreatePlugin()
     {
         var instance = new global::TestNamespace.Plugin();
 
-        _testNamespace_Plugin = instance;
+        _plugin = instance;
         return instance;
     }
 
-    private global::TestNamespace.PluginHost GetTestNamespace_PluginHost()
+    private global::TestNamespace.PluginHost GetPluginHost()
     {
-        return new global::TestNamespace.PluginHost(GetAllTestNamespace_IPluginArray());
+        return new global::TestNamespace.PluginHost(GetAllIPluginArray());
     }
 
-    private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>
+    private global::TestNamespace.IPlugin[] GetAllIPluginArray() =>
         [
-            GetTestNamespace_Plugin(),
+            GetPlugin(),
         ];
 
     #endregion
@@ -239,10 +239,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Plugin), static c => c.GetTestNamespace_Plugin()),
-        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetTestNamespace_Plugin()),
-        __Resolver(typeof(global::TestNamespace.PluginHost), static c => c.GetTestNamespace_PluginHost()),
-        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllTestNamespace_IPluginArray()),
+        __Resolver(typeof(global::TestNamespace.Plugin), static c => c.GetPlugin()),
+        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetPlugin()),
+        __Resolver(typeof(global::TestNamespace.PluginHost), static c => c.GetPluginHost()),
+        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllIPluginArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -294,7 +294,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Plugin);
+        DisposeService(_plugin);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -308,7 +308,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Plugin).ConfigureAwait(false);
+        await DisposeServiceAsync(_plugin).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

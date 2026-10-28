@@ -45,27 +45,27 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_MyService = parent._testNamespace_MyService;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _testNamespace_MyService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
     {
-        if(_testNamespace_MyService is not null)
-            return await _testNamespace_MyService.ConfigureAwait(false);
+        if(_myService is not null)
+            return await _myService.ConfigureAwait(false);
         if(_root is not null)
-            return await _root.GetTestNamespace_MyServiceAsync().ConfigureAwait(false);
+            return await _root.GetMyServiceAsync().ConfigureAwait(false);
 
-        _testNamespace_MyService = CreateTestNamespace_MyServiceAsync();
-        return await _testNamespace_MyService.ConfigureAwait(false);
+        _myService = CreateMyServiceAsync();
+        return await _myService.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {
         var instance = new global::TestNamespace.MyService();
         await instance.InitAsync().ConfigureAwait(false);
@@ -240,9 +240,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetTestNamespace_MyServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IFoo>), static c => __ProjectTask<global::TestNamespace.IFoo, global::TestNamespace.MyService>(c.GetTestNamespace_MyServiceAsync())),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IBar>), static c => __ProjectTask<global::TestNamespace.IBar, global::TestNamespace.MyService>(c.GetTestNamespace_MyServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetMyServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IFoo>), static c => __ProjectTask<global::TestNamespace.IFoo, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IBar>), static c => __ProjectTask<global::TestNamespace.IBar, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -284,7 +284,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MyService);
+        DisposeService(_myService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -298,7 +298,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

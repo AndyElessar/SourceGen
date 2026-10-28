@@ -555,9 +555,12 @@ partial class IocSourceGenerator
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
-        foreach(var serviceType in groups.CollectionServiceTypes)
+        foreach(var entry in groups.CollectionEntries)
         {
-            writer.WriteLine(FormatCollectionResolverEntries(serviceType, $"static c => c.{GetArrayResolverMethodName(serviceType)}()"));
+            if(entry is CollectionContainerEntry collection)
+            {
+                writer.WriteLine(FormatCollectionResolverEntries(collection.ElementServiceTypeName, $"static c => c.{collection.ArrayMethodName}()"));
+            }
         }
 
         // Add local resolvers for wrapper entries (KVP first, then Lazy, then Func)

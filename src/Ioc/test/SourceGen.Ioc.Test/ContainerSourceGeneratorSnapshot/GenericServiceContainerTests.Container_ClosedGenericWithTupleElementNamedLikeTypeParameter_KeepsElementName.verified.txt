@@ -39,7 +39,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler<string> GetTestNamespace_Handler_string_()
+    private global::TestNamespace.Handler<string> GetHandler_string()
     {
         return new global::TestNamespace.Handler<string>((global::TestNamespace.Options<(string T, int Count)>)GetRequiredService(typeof(global::TestNamespace.Options<(string T, int Count)>)));
     }
@@ -190,8 +190,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Handler<string>), static c => c.GetTestNamespace_Handler_string_()),
-        __Resolver(typeof(global::TestNamespace.IHandler<string>), static c => c.GetTestNamespace_Handler_string_()),
+        __Resolver(typeof(global::TestNamespace.Handler<string>), static c => c.GetHandler_string()),
+        __Resolver(typeof(global::TestNamespace.IHandler<string>), static c => c.GetHandler_string()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

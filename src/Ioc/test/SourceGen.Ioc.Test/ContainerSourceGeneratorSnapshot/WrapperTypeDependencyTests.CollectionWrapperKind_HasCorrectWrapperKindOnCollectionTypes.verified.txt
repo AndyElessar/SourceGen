@@ -39,61 +39,61 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_ServiceA();
-        GetTestNamespace_ServiceB();
-        GetTestNamespace_Consumer();
+        GetServiceA();
+        GetServiceB();
+        GetConsumer();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_ServiceA = parent._testNamespace_ServiceA;
-        _testNamespace_ServiceB = parent._testNamespace_ServiceB;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _serviceA = parent._serviceA;
+        _serviceB = parent._serviceB;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.ServiceA _testNamespace_ServiceA = null!;
-    private global::TestNamespace.ServiceA GetTestNamespace_ServiceA() => _testNamespace_ServiceA ?? CreateTestNamespace_ServiceA();
+    private global::TestNamespace.ServiceA _serviceA = null!;
+    private global::TestNamespace.ServiceA GetServiceA() => _serviceA ?? CreateServiceA();
 
-    private global::TestNamespace.ServiceA CreateTestNamespace_ServiceA()
+    private global::TestNamespace.ServiceA CreateServiceA()
     {
         var instance = new global::TestNamespace.ServiceA();
 
-        _testNamespace_ServiceA = instance;
+        _serviceA = instance;
         return instance;
     }
 
-    private global::TestNamespace.ServiceB _testNamespace_ServiceB = null!;
-    private global::TestNamespace.ServiceB GetTestNamespace_ServiceB() => _testNamespace_ServiceB ?? CreateTestNamespace_ServiceB();
+    private global::TestNamespace.ServiceB _serviceB = null!;
+    private global::TestNamespace.ServiceB GetServiceB() => _serviceB ?? CreateServiceB();
 
-    private global::TestNamespace.ServiceB CreateTestNamespace_ServiceB()
+    private global::TestNamespace.ServiceB CreateServiceB()
     {
         var instance = new global::TestNamespace.ServiceB();
 
-        _testNamespace_ServiceB = instance;
+        _serviceB = instance;
         return instance;
     }
 
-    private global::TestNamespace.Consumer _testNamespace_Consumer = null!;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer _consumer = null!;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
-        var instance = new global::TestNamespace.Consumer(GetAllTestNamespace_IServiceArray(), GetAllTestNamespace_IServiceArray(), GetAllTestNamespace_IServiceArray());
+        var instance = new global::TestNamespace.Consumer(GetAllIServiceArray(), GetAllIServiceArray(), GetAllIServiceArray());
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
-    private global::TestNamespace.IService[] GetAllTestNamespace_IServiceArray() =>
+    private global::TestNamespace.IService[] GetAllIServiceArray() =>
         [
-            GetTestNamespace_ServiceA(),
-            GetTestNamespace_ServiceB(),
+            GetServiceA(),
+            GetServiceB(),
         ];
 
     #endregion
@@ -261,11 +261,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.ServiceA), static c => c.GetTestNamespace_ServiceA()),
-        __Resolver(typeof(global::TestNamespace.IService), static c => c.GetTestNamespace_ServiceB()),
-        __Resolver(typeof(global::TestNamespace.ServiceB), static c => c.GetTestNamespace_ServiceB()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
-        ..__CollectionResolvers<global::TestNamespace.IService>(static c => c.GetAllTestNamespace_IServiceArray()),
+        __Resolver(typeof(global::TestNamespace.ServiceA), static c => c.GetServiceA()),
+        __Resolver(typeof(global::TestNamespace.IService), static c => c.GetServiceB()),
+        __Resolver(typeof(global::TestNamespace.ServiceB), static c => c.GetServiceB()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        ..__CollectionResolvers<global::TestNamespace.IService>(static c => c.GetAllIServiceArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -317,9 +317,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
-        DisposeService(_testNamespace_ServiceB);
-        DisposeService(_testNamespace_ServiceA);
+        DisposeService(_consumer);
+        DisposeService(_serviceB);
+        DisposeService(_serviceA);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -333,9 +333,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_ServiceB).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_ServiceA).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_serviceB).ConfigureAwait(false);
+        await DisposeServiceAsync(_serviceA).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

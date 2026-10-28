@@ -39,74 +39,74 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Handler1__handler1_();
-        GetTestNamespace_Handler2__handler2_();
-        GetTestNamespace_Consumer();
+        GetHandler1__handler1_();
+        GetHandler2__handler2_();
+        GetConsumer();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Handler1__handler1_ = parent._testNamespace_Handler1__handler1_;
-        _testNamespace_Handler2__handler2_ = parent._testNamespace_Handler2__handler2_;
-        _testNamespace_Consumer = parent._testNamespace_Consumer;
+        _handler1__handler1_ = parent._handler1__handler1_;
+        _handler2__handler2_ = parent._handler2__handler2_;
+        _consumer = parent._consumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler1 _testNamespace_Handler1__handler1_ = null!;
-    private global::TestNamespace.Handler1 GetTestNamespace_Handler1__handler1_() => _testNamespace_Handler1__handler1_ ?? CreateTestNamespace_Handler1__handler1_();
+    private global::TestNamespace.Handler1 _handler1__handler1_ = null!;
+    private global::TestNamespace.Handler1 GetHandler1__handler1_() => _handler1__handler1_ ?? CreateHandler1__handler1_();
 
-    private global::TestNamespace.Handler1 CreateTestNamespace_Handler1__handler1_()
+    private global::TestNamespace.Handler1 CreateHandler1__handler1_()
     {
         var instance = new global::TestNamespace.Handler1();
 
-        _testNamespace_Handler1__handler1_ = instance;
+        _handler1__handler1_ = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler2 _testNamespace_Handler2__handler2_ = null!;
-    private global::TestNamespace.Handler2 GetTestNamespace_Handler2__handler2_() => _testNamespace_Handler2__handler2_ ?? CreateTestNamespace_Handler2__handler2_();
+    private global::TestNamespace.Handler2 _handler2__handler2_ = null!;
+    private global::TestNamespace.Handler2 GetHandler2__handler2_() => _handler2__handler2_ ?? CreateHandler2__handler2_();
 
-    private global::TestNamespace.Handler2 CreateTestNamespace_Handler2__handler2_()
+    private global::TestNamespace.Handler2 CreateHandler2__handler2_()
     {
         var instance = new global::TestNamespace.Handler2();
 
-        _testNamespace_Handler2__handler2_ = instance;
+        _handler2__handler2_ = instance;
         return instance;
     }
 
-    private global::TestNamespace.Consumer _testNamespace_Consumer = null!;
-    private global::TestNamespace.Consumer GetTestNamespace_Consumer() => _testNamespace_Consumer ?? CreateTestNamespace_Consumer();
+    private global::TestNamespace.Consumer _consumer = null!;
+    private global::TestNamespace.Consumer GetConsumer() => _consumer ?? CreateConsumer();
 
-    private global::TestNamespace.Consumer CreateTestNamespace_Consumer()
+    private global::TestNamespace.Consumer CreateConsumer()
     {
         var instance = new global::TestNamespace.Consumer(new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>(default!, (global::TestNamespace.IHandler)GetRequiredService(typeof(global::TestNamespace.IHandler))));
 
-        _testNamespace_Consumer = instance;
+        _consumer = instance;
         return instance;
     }
 
     // KeyValuePair resolver methods
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler> GetKvp_string_TestNamespace_IHandler__handler1_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>("handler1", GetTestNamespace_Handler1__handler1_());
+    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler> GetKvp_string_IHandler__handler1_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>("handler1", GetHandler1__handler1_());
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler> GetKvp_string_TestNamespace_IHandler__handler2_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>("handler2", GetTestNamespace_Handler2__handler2_());
+    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler> GetKvp_string_IHandler__handler2_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>("handler2", GetHandler2__handler2_());
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>[] GetAllKvp_string_TestNamespace_IHandler_Array() =>
+    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>[] GetAllKvp_string_IHandler_Array() =>
         [
-            GetKvp_string_TestNamespace_IHandler__handler1_(),
-            GetKvp_string_TestNamespace_IHandler__handler2_(),
+            GetKvp_string_IHandler__handler1_(),
+            GetKvp_string_IHandler__handler2_(),
         ];
 
-    private global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler> GetAllKvp_string_TestNamespace_IHandler_Dictionary() =>
+    private global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler> GetAllKvp_string_IHandler_Dictionary() =>
         new global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler>()
         {
-            ["handler1"] = GetTestNamespace_Handler1__handler1_(),
-            ["handler2"] = GetTestNamespace_Handler2__handler2_(),
+            ["handler1"] = GetHandler1__handler1_(),
+            ["handler2"] = GetHandler2__handler2_(),
         };
 
     #endregion
@@ -274,22 +274,22 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.Handler1), "handler1", static c => c.GetTestNamespace_Handler1__handler1_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler1", static c => c.GetTestNamespace_Handler1__handler1_()),
-        __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler2", static c => c.GetTestNamespace_Handler2__handler2_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler2", static c => c.GetTestNamespace_Handler2__handler2_()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetTestNamespace_Consumer()),
+        __KeyedResolver(typeof(global::TestNamespace.Handler1), "handler1", static c => c.GetHandler1__handler1_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler1", static c => c.GetHandler1__handler1_()),
+        __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler2", static c => c.GetHandler2__handler2_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler2", static c => c.GetHandler2__handler2_()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
 
         // KeyValuePair resolvers
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>[]), static c => c.GetAllKvp_string_TestNamespace_IHandler_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_TestNamespace_IHandler_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_IHandler_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_IHandler_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>[]), static c => c.GetAllKvp_string_IHandler_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -334,9 +334,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Consumer);
-        DisposeService(_testNamespace_Handler2__handler2_);
-        DisposeService(_testNamespace_Handler1__handler1_);
+        DisposeService(_consumer);
+        DisposeService(_handler2__handler2_);
+        DisposeService(_handler1__handler1_);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -350,9 +350,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler2__handler2_).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler1__handler1_).ConfigureAwait(false);
+        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler2__handler2_).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler1__handler1_).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

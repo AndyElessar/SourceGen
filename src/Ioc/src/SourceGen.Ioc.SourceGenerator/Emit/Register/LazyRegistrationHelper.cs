@@ -148,20 +148,12 @@ partial class IocSourceGenerator
         }
     }
 
-    /// <summary>
-    /// Gets the array resolver method name for a Lazy wrapper type.
-    /// </summary>
-    private static string GetLazyArrayResolverMethodName(string innerServiceTypeName)
-    {
-        var safeInnerType = GetSafeIdentifier(innerServiceTypeName);
-        return $"GetAllLazy_{safeInnerType}_Array";
-    }
-
     private static ImmutableEquatableArray<IocSourceGenerator.LazyWrapperContainerEntry> CreateLazyWrapperContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ContainerNames names)
     {
         var neededTypes = new HashSet<string>(StringComparer.Ordinal);
 
@@ -197,9 +189,7 @@ partial class IocSourceGenerator
                 if(!addedKeys.Add(entryKey))
                     continue;
 
-                var safeInnerType = GetSafeIdentifier(serviceType);
-                var safeImplType = GetSafeIdentifier(reg.ImplementationType.Name);
-                var fieldName = $"_lazy_{safeInnerType}_{safeImplType}";
+                var fieldName = $"_lazy_{names.Get(serviceType)}_{names.Get(reg.ImplementationType.Name)}";
 
                 entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
             }
@@ -241,6 +231,7 @@ partial class IocSourceGenerator
                 entry.ResolverMethodName,
                 entry.Key,
                 emitCollectionResolver,
+                emitCollectionResolver ? names.LazyArrayResolver(entry.InnerServiceTypeName) : null,
                 collectionFieldNames));
         }
 

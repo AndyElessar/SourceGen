@@ -39,28 +39,28 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_ReadWriteService();
+        GetReadWriteService();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_ReadWriteService = parent._testNamespace_ReadWriteService;
+        _readWriteService = parent._readWriteService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.ReadWriteService _testNamespace_ReadWriteService = null!;
-    private global::TestNamespace.ReadWriteService GetTestNamespace_ReadWriteService() => _testNamespace_ReadWriteService ?? CreateTestNamespace_ReadWriteService();
+    private global::TestNamespace.ReadWriteService _readWriteService = null!;
+    private global::TestNamespace.ReadWriteService GetReadWriteService() => _readWriteService ?? CreateReadWriteService();
 
-    private global::TestNamespace.ReadWriteService CreateTestNamespace_ReadWriteService()
+    private global::TestNamespace.ReadWriteService CreateReadWriteService()
     {
         var instance = new global::TestNamespace.ReadWriteService();
 
-        _testNamespace_ReadWriteService = instance;
+        _readWriteService = instance;
         return instance;
     }
 
@@ -229,9 +229,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.ReadWriteService), static c => c.GetTestNamespace_ReadWriteService()),
-        __Resolver(typeof(global::TestNamespace.IReader), static c => c.GetTestNamespace_ReadWriteService()),
-        __Resolver(typeof(global::TestNamespace.IWriter), static c => c.GetTestNamespace_ReadWriteService()),
+        __Resolver(typeof(global::TestNamespace.ReadWriteService), static c => c.GetReadWriteService()),
+        __Resolver(typeof(global::TestNamespace.IReader), static c => c.GetReadWriteService()),
+        __Resolver(typeof(global::TestNamespace.IWriter), static c => c.GetReadWriteService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -273,7 +273,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_ReadWriteService);
+        DisposeService(_readWriteService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -287,7 +287,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_ReadWriteService).ConfigureAwait(false);
+        await DisposeServiceAsync(_readWriteService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

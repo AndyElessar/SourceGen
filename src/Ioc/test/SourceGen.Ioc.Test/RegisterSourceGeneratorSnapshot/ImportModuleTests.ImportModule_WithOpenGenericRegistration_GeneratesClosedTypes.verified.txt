@@ -53,12 +53,12 @@ partial class MainContainer : global::SourceGen.Ioc.IIocContainer<global::MainAp
 
     #region Service Resolution
 
-    private global::MainApp.Consumer GetMainApp_Consumer()
+    private global::MainApp.Consumer GetConsumer()
     {
-        return new global::MainApp.Consumer(GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_());
+        return new global::MainApp.Consumer(GetGenericHandler_Request1_Response1());
     }
 
-    private global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1> GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()
+    private global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1> GetGenericHandler_Request1_Response1()
     {
         return new global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>();
     }
@@ -228,9 +228,9 @@ partial class MainContainer : global::SourceGen.Ioc.IIocContainer<global::MainAp
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::MainApp.MainContainer), static c => c),
-        __Resolver(typeof(global::MainApp.Consumer), static c => c.GetMainApp_Consumer()),
-        __Resolver(typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
-        __Resolver(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), static c => c.GetSharedModule_GenericHandler_MainApp_Request1__MainApp_Response1_()),
+        __Resolver(typeof(global::MainApp.Consumer), static c => c.GetConsumer()),
+        __Resolver(typeof(global::SharedModule.GenericHandler<global::MainApp.Request1, global::MainApp.Response1>), static c => c.GetGenericHandler_Request1_Response1()),
+        __Resolver(typeof(global::SharedModule.IHandler<global::MainApp.Request1, global::MainApp.Response1>), static c => c.GetGenericHandler_Request1_Response1()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::MainApp.MainContainer, object> resolver) =>

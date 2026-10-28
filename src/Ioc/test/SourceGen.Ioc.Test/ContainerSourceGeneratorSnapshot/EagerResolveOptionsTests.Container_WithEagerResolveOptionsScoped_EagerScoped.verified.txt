@@ -45,43 +45,43 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_SingletonService = parent._testNamespace_SingletonService;
+        _singletonService = parent._singletonService;
 
         // Initialize eager scoped services
-        GetTestNamespace_ScopedService();
+        GetScopedService();
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.SingletonService? _testNamespace_SingletonService;
-    private readonly global::System.Threading.Lock _testNamespace_SingletonServiceLock = new();
-    private global::TestNamespace.SingletonService GetTestNamespace_SingletonService() => _testNamespace_SingletonService ?? CreateTestNamespace_SingletonService();
+    private global::TestNamespace.SingletonService? _singletonService;
+    private readonly global::System.Threading.Lock _singletonServiceLock = new();
+    private global::TestNamespace.SingletonService GetSingletonService() => _singletonService ?? CreateSingletonService();
 
-    private global::TestNamespace.SingletonService CreateTestNamespace_SingletonService()
+    private global::TestNamespace.SingletonService CreateSingletonService()
     {
-        if(_root is not null) return _root.GetTestNamespace_SingletonService();
+        if(_root is not null) return _root.GetSingletonService();
 
-        lock(_testNamespace_SingletonServiceLock)
+        lock(_singletonServiceLock)
         {
-            if(_testNamespace_SingletonService is not null) return _testNamespace_SingletonService;
+            if(_singletonService is not null) return _singletonService;
 
             var instance = new global::TestNamespace.SingletonService();
 
-            _testNamespace_SingletonService = instance;
+            _singletonService = instance;
             return instance;
         }
     }
 
-    private global::TestNamespace.ScopedService _testNamespace_ScopedService = null!;
-    private global::TestNamespace.ScopedService GetTestNamespace_ScopedService() => _testNamespace_ScopedService ?? CreateTestNamespace_ScopedService();
+    private global::TestNamespace.ScopedService _scopedService = null!;
+    private global::TestNamespace.ScopedService GetScopedService() => _scopedService ?? CreateScopedService();
 
-    private global::TestNamespace.ScopedService CreateTestNamespace_ScopedService()
+    private global::TestNamespace.ScopedService CreateScopedService()
     {
         var instance = new global::TestNamespace.ScopedService();
 
-        _testNamespace_ScopedService = instance;
+        _scopedService = instance;
         return instance;
     }
 
@@ -250,10 +250,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.SingletonService), static c => c.GetTestNamespace_SingletonService()),
-        __Resolver(typeof(global::TestNamespace.ISingletonService), static c => c.GetTestNamespace_SingletonService()),
-        __Resolver(typeof(global::TestNamespace.ScopedService), static c => c.GetTestNamespace_ScopedService()),
-        __Resolver(typeof(global::TestNamespace.IScopedService), static c => c.GetTestNamespace_ScopedService()),
+        __Resolver(typeof(global::TestNamespace.SingletonService), static c => c.GetSingletonService()),
+        __Resolver(typeof(global::TestNamespace.ISingletonService), static c => c.GetSingletonService()),
+        __Resolver(typeof(global::TestNamespace.ScopedService), static c => c.GetScopedService()),
+        __Resolver(typeof(global::TestNamespace.IScopedService), static c => c.GetScopedService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -289,14 +289,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_ScopedService);
+        DisposeService(_scopedService);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
             return;
         }
 
-        DisposeService(_testNamespace_SingletonService);
+        DisposeService(_singletonService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -304,14 +304,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_ScopedService).ConfigureAwait(false);
+        await DisposeServiceAsync(_scopedService).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_SingletonService).ConfigureAwait(false);
+        await DisposeServiceAsync(_singletonService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

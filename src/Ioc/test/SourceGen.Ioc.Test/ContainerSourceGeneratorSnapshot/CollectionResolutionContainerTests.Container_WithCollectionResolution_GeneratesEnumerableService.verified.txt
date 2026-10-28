@@ -39,62 +39,62 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Plugin1();
-        GetTestNamespace_Plugin2();
-        GetTestNamespace_Plugin3();
+        GetPlugin1();
+        GetPlugin2();
+        GetPlugin3();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Plugin1 = parent._testNamespace_Plugin1;
-        _testNamespace_Plugin2 = parent._testNamespace_Plugin2;
-        _testNamespace_Plugin3 = parent._testNamespace_Plugin3;
+        _plugin1 = parent._plugin1;
+        _plugin2 = parent._plugin2;
+        _plugin3 = parent._plugin3;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Plugin1 _testNamespace_Plugin1 = null!;
-    private global::TestNamespace.Plugin1 GetTestNamespace_Plugin1() => _testNamespace_Plugin1 ?? CreateTestNamespace_Plugin1();
+    private global::TestNamespace.Plugin1 _plugin1 = null!;
+    private global::TestNamespace.Plugin1 GetPlugin1() => _plugin1 ?? CreatePlugin1();
 
-    private global::TestNamespace.Plugin1 CreateTestNamespace_Plugin1()
+    private global::TestNamespace.Plugin1 CreatePlugin1()
     {
         var instance = new global::TestNamespace.Plugin1();
 
-        _testNamespace_Plugin1 = instance;
+        _plugin1 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Plugin2 _testNamespace_Plugin2 = null!;
-    private global::TestNamespace.Plugin2 GetTestNamespace_Plugin2() => _testNamespace_Plugin2 ?? CreateTestNamespace_Plugin2();
+    private global::TestNamespace.Plugin2 _plugin2 = null!;
+    private global::TestNamespace.Plugin2 GetPlugin2() => _plugin2 ?? CreatePlugin2();
 
-    private global::TestNamespace.Plugin2 CreateTestNamespace_Plugin2()
+    private global::TestNamespace.Plugin2 CreatePlugin2()
     {
         var instance = new global::TestNamespace.Plugin2();
 
-        _testNamespace_Plugin2 = instance;
+        _plugin2 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Plugin3 _testNamespace_Plugin3 = null!;
-    private global::TestNamespace.Plugin3 GetTestNamespace_Plugin3() => _testNamespace_Plugin3 ?? CreateTestNamespace_Plugin3();
+    private global::TestNamespace.Plugin3 _plugin3 = null!;
+    private global::TestNamespace.Plugin3 GetPlugin3() => _plugin3 ?? CreatePlugin3();
 
-    private global::TestNamespace.Plugin3 CreateTestNamespace_Plugin3()
+    private global::TestNamespace.Plugin3 CreatePlugin3()
     {
         var instance = new global::TestNamespace.Plugin3();
 
-        _testNamespace_Plugin3 = instance;
+        _plugin3 = instance;
         return instance;
     }
 
-    private global::TestNamespace.IPlugin[] GetAllTestNamespace_IPluginArray() =>
+    private global::TestNamespace.IPlugin[] GetAllIPluginArray() =>
         [
-            GetTestNamespace_Plugin1(),
-            GetTestNamespace_Plugin2(),
-            GetTestNamespace_Plugin3(),
+            GetPlugin1(),
+            GetPlugin2(),
+            GetPlugin3(),
         ];
 
     #endregion
@@ -262,11 +262,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetTestNamespace_Plugin1()),
-        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetTestNamespace_Plugin3()),
-        __Resolver(typeof(global::TestNamespace.Plugin2), static c => c.GetTestNamespace_Plugin2()),
-        __Resolver(typeof(global::TestNamespace.Plugin3), static c => c.GetTestNamespace_Plugin3()),
-        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllTestNamespace_IPluginArray()),
+        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetPlugin3()),
+        __Resolver(typeof(global::TestNamespace.Plugin2), static c => c.GetPlugin2()),
+        __Resolver(typeof(global::TestNamespace.Plugin3), static c => c.GetPlugin3()),
+        ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllIPluginArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -318,9 +318,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Plugin3);
-        DisposeService(_testNamespace_Plugin2);
-        DisposeService(_testNamespace_Plugin1);
+        DisposeService(_plugin3);
+        DisposeService(_plugin2);
+        DisposeService(_plugin1);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -334,9 +334,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Plugin3).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Plugin2).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Plugin1).ConfigureAwait(false);
+        await DisposeServiceAsync(_plugin3).ConfigureAwait(false);
+        await DisposeServiceAsync(_plugin2).ConfigureAwait(false);
+        await DisposeServiceAsync(_plugin1).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

@@ -49,7 +49,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::TestNamespace.TransientService GetTestNamespace_TransientService()
+    private global::TestNamespace.TransientService GetTransientService()
     {
         return new global::TestNamespace.TransientService();
     }
@@ -219,8 +219,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.TransientService), static c => c.GetTestNamespace_TransientService()),
-        __Resolver(typeof(global::TestNamespace.ITransientService), static c => c.GetTestNamespace_TransientService()),
+        __Resolver(typeof(global::TestNamespace.TransientService), static c => c.GetTransientService()),
+        __Resolver(typeof(global::TestNamespace.ITransientService), static c => c.GetTransientService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

@@ -39,41 +39,41 @@ partial class FeatureContainer : global::SourceGen.Ioc.IIocContainer<global::Tes
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Feature1Service();
-        GetTestNamespace_Feature2Service();
+        GetFeature1Service();
+        GetFeature2Service();
     }
 
     private FeatureContainer(FeatureContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Feature1Service = parent._testNamespace_Feature1Service;
-        _testNamespace_Feature2Service = parent._testNamespace_Feature2Service;
+        _feature1Service = parent._feature1Service;
+        _feature2Service = parent._feature2Service;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Feature1Service _testNamespace_Feature1Service = null!;
-    private global::TestNamespace.Feature1Service GetTestNamespace_Feature1Service() => _testNamespace_Feature1Service ?? CreateTestNamespace_Feature1Service();
+    private global::TestNamespace.Feature1Service _feature1Service = null!;
+    private global::TestNamespace.Feature1Service GetFeature1Service() => _feature1Service ?? CreateFeature1Service();
 
-    private global::TestNamespace.Feature1Service CreateTestNamespace_Feature1Service()
+    private global::TestNamespace.Feature1Service CreateFeature1Service()
     {
         var instance = new global::TestNamespace.Feature1Service();
 
-        _testNamespace_Feature1Service = instance;
+        _feature1Service = instance;
         return instance;
     }
 
-    private global::TestNamespace.Feature2Service _testNamespace_Feature2Service = null!;
-    private global::TestNamespace.Feature2Service GetTestNamespace_Feature2Service() => _testNamespace_Feature2Service ?? CreateTestNamespace_Feature2Service();
+    private global::TestNamespace.Feature2Service _feature2Service = null!;
+    private global::TestNamespace.Feature2Service GetFeature2Service() => _feature2Service ?? CreateFeature2Service();
 
-    private global::TestNamespace.Feature2Service CreateTestNamespace_Feature2Service()
+    private global::TestNamespace.Feature2Service CreateFeature2Service()
     {
         var instance = new global::TestNamespace.Feature2Service();
 
-        _testNamespace_Feature2Service = instance;
+        _feature2Service = instance;
         return instance;
     }
 
@@ -242,10 +242,10 @@ partial class FeatureContainer : global::SourceGen.Ioc.IIocContainer<global::Tes
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.FeatureContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Feature1Service), static c => c.GetTestNamespace_Feature1Service()),
-        __Resolver(typeof(global::TestNamespace.IFeature1Service), static c => c.GetTestNamespace_Feature1Service()),
-        __Resolver(typeof(global::TestNamespace.Feature2Service), static c => c.GetTestNamespace_Feature2Service()),
-        __Resolver(typeof(global::TestNamespace.IFeature2Service), static c => c.GetTestNamespace_Feature2Service()),
+        __Resolver(typeof(global::TestNamespace.Feature1Service), static c => c.GetFeature1Service()),
+        __Resolver(typeof(global::TestNamespace.IFeature1Service), static c => c.GetFeature1Service()),
+        __Resolver(typeof(global::TestNamespace.Feature2Service), static c => c.GetFeature2Service()),
+        __Resolver(typeof(global::TestNamespace.IFeature2Service), static c => c.GetFeature2Service()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.FeatureContainer, object> resolver) =>
@@ -287,8 +287,8 @@ partial class FeatureContainer : global::SourceGen.Ioc.IIocContainer<global::Tes
             return;
         }
 
-        DisposeService(_testNamespace_Feature2Service);
-        DisposeService(_testNamespace_Feature1Service);
+        DisposeService(_feature2Service);
+        DisposeService(_feature1Service);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -302,8 +302,8 @@ partial class FeatureContainer : global::SourceGen.Ioc.IIocContainer<global::Tes
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Feature2Service).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Feature1Service).ConfigureAwait(false);
+        await DisposeServiceAsync(_feature2Service).ConfigureAwait(false);
+        await DisposeServiceAsync(_feature1Service).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

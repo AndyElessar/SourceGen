@@ -39,41 +39,41 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Dependency();
-        GetTestNamespace_MyService();
+        GetDependency();
+        GetMyService();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Dependency = parent._testNamespace_Dependency;
-        _testNamespace_MyService = parent._testNamespace_MyService;
+        _dependency = parent._dependency;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Dependency _testNamespace_Dependency = null!;
-    private global::TestNamespace.Dependency GetTestNamespace_Dependency() => _testNamespace_Dependency ?? CreateTestNamespace_Dependency();
+    private global::TestNamespace.Dependency _dependency = null!;
+    private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
-    private global::TestNamespace.Dependency CreateTestNamespace_Dependency()
+    private global::TestNamespace.Dependency CreateDependency()
     {
         var instance = new global::TestNamespace.Dependency();
 
-        _testNamespace_Dependency = instance;
+        _dependency = instance;
         return instance;
     }
 
-    private global::TestNamespace.MyService _testNamespace_MyService = null!;
-    private global::TestNamespace.MyService GetTestNamespace_MyService() => _testNamespace_MyService ?? CreateTestNamespace_MyService();
+    private global::TestNamespace.MyService _myService = null!;
+    private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
-    private global::TestNamespace.MyService CreateTestNamespace_MyService()
+    private global::TestNamespace.MyService CreateMyService()
     {
-        var instance = new global::TestNamespace.MyService(GetTestNamespace_Dependency());
+        var instance = new global::TestNamespace.MyService(GetDependency());
 
-        _testNamespace_MyService = instance;
+        _myService = instance;
         return instance;
     }
 
@@ -242,10 +242,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetTestNamespace_Dependency()),
-        __Resolver(typeof(global::TestNamespace.IDependency), static c => c.GetTestNamespace_Dependency()),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetTestNamespace_MyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetTestNamespace_MyService()),
+        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::TestNamespace.IDependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -287,8 +287,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MyService);
-        DisposeService(_testNamespace_Dependency);
+        DisposeService(_myService);
+        DisposeService(_dependency);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -302,8 +302,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Dependency).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
+        await DisposeServiceAsync(_dependency).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

@@ -17,7 +17,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocRazorSample;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.182")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.183")]
 partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::IocRazorSample.ComponentContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
@@ -51,7 +51,7 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
 
     #region Service Resolution
 
-    private global::IocRazorSample.LoadData GetIocRazorSample_LoadData()
+    private global::IocRazorSample.LoadData GetLoadData()
     {
         var instance = new global::IocRazorSample.LoadData()
         {
@@ -225,8 +225,8 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::IocRazorSample.ComponentContainer), static c => c),
-        __Resolver(typeof(global::IocRazorSample.LoadData), static c => c.GetIocRazorSample_LoadData()),
-        __Resolver(typeof(global::Microsoft.AspNetCore.Components.IComponent), static c => c.GetIocRazorSample_LoadData()),
+        __Resolver(typeof(global::IocRazorSample.LoadData), static c => c.GetLoadData()),
+        __Resolver(typeof(global::Microsoft.AspNetCore.Components.IComponent), static c => c.GetLoadData()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::IocRazorSample.ComponentContainer, object> resolver) =>
@@ -332,7 +332,7 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
     #endregion
 
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.182")]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.183")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(global::System.Type[]? _)

@@ -913,6 +913,7 @@ partial class IocSourceGenerator
         string InnerResolverMethodName,
         string? Key,
         bool EmitCollectionResolver,
+        string? ArrayMethodName,
         ImmutableEquatableArray<string> CollectionFieldNames) : ContainerEntry
     {
         public override void WriteField(SourceWriter writer)
@@ -937,9 +938,8 @@ partial class IocSourceGenerator
             }
 
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
-            var arrayMethodName = GetLazyArrayResolverMethodName(InnerServiceTypeName);
 
-            writer.WriteLine($"private {wrapperTypeName}[] {arrayMethodName}() =>");
+            writer.WriteLine($"private {wrapperTypeName}[] {ArrayMethodName}() =>");
             writer.Indentation++;
             writer.WriteLine("[");
             writer.Indentation++;
@@ -962,10 +962,9 @@ partial class IocSourceGenerator
             }
 
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
-            var arrayMethodName = GetLazyArrayResolverMethodName(InnerServiceTypeName);
 
             writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
-            writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{arrayMethodName}()"));
+            writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{ArrayMethodName}()"));
         }
     }
 
@@ -976,6 +975,7 @@ partial class IocSourceGenerator
         string InnerResolverMethodName,
         string? Key,
         bool EmitCollectionResolver,
+        string? ArrayMethodName,
         ImmutableEquatableArray<string> CollectionFieldNames) : ContainerEntry
     {
         public override void WriteField(SourceWriter writer)
@@ -1000,9 +1000,8 @@ partial class IocSourceGenerator
             }
 
             var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-            var arrayMethodName = GetFuncArrayResolverMethodName(InnerServiceTypeName);
 
-            writer.WriteLine($"private {wrapperTypeName}[] {arrayMethodName}() =>");
+            writer.WriteLine($"private {wrapperTypeName}[] {ArrayMethodName}() =>");
             writer.Indentation++;
             writer.WriteLine("[");
             writer.Indentation++;
@@ -1025,10 +1024,9 @@ partial class IocSourceGenerator
             }
 
             var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-            var arrayMethodName = GetFuncArrayResolverMethodName(InnerServiceTypeName);
 
             writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
-            writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{arrayMethodName}()"));
+            writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{ArrayMethodName}()"));
         }
     }
 
@@ -1037,7 +1035,9 @@ partial class IocSourceGenerator
         string ValueTypeName,
         string KeyExpr,
         string ResolverMethodName,
-        string KvpResolverMethodName) : ContainerEntry
+        string KvpResolverMethodName,
+        string ArrayMethodName,
+        string DictionaryMethodName) : ContainerEntry
     {
         public override void WriteResolver(SourceWriter writer)
         {
@@ -1048,18 +1048,16 @@ partial class IocSourceGenerator
         public override void WriteLocalResolverEntries(SourceWriter writer)
         {
             var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>";
-            var arrayMethodName = GetKvpArrayResolverMethodName(KeyTypeName, ValueTypeName);
-            var dictionaryMethodName = GetKvpDictionaryResolverMethodName(KeyTypeName, ValueTypeName);
 
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof({kvpTypeName}[]), static c => c.{arrayMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{dictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{dictionaryMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), static c => c.{DictionaryMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), static c => c.{DictionaryMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), static c => c.{DictionaryMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), static c => c.{ArrayMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), static c => c.{ArrayMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof({kvpTypeName}[]), static c => c.{ArrayMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{DictionaryMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{DictionaryMethodName}()),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{DictionaryMethodName}()),");
         }
     }
 

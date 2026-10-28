@@ -39,28 +39,28 @@ partial class DeepNamespaceContainer : global::SourceGen.Ioc.IIocContainer<globa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetCompany_Product_Module_MyService();
+        GetMyService();
     }
 
     private DeepNamespaceContainer(DeepNamespaceContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _company_Product_Module_MyService = parent._company_Product_Module_MyService;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::Company.Product.Module.MyService _company_Product_Module_MyService = null!;
-    private global::Company.Product.Module.MyService GetCompany_Product_Module_MyService() => _company_Product_Module_MyService ?? CreateCompany_Product_Module_MyService();
+    private global::Company.Product.Module.MyService _myService = null!;
+    private global::Company.Product.Module.MyService GetMyService() => _myService ?? CreateMyService();
 
-    private global::Company.Product.Module.MyService CreateCompany_Product_Module_MyService()
+    private global::Company.Product.Module.MyService CreateMyService()
     {
         var instance = new global::Company.Product.Module.MyService();
 
-        _company_Product_Module_MyService = instance;
+        _myService = instance;
         return instance;
     }
 
@@ -229,8 +229,8 @@ partial class DeepNamespaceContainer : global::SourceGen.Ioc.IIocContainer<globa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::Company.Product.Module.DeepNamespaceContainer), static c => c),
-        __Resolver(typeof(global::Company.Product.Module.MyService), static c => c.GetCompany_Product_Module_MyService()),
-        __Resolver(typeof(global::Company.Product.Module.IMyService), static c => c.GetCompany_Product_Module_MyService()),
+        __Resolver(typeof(global::Company.Product.Module.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::Company.Product.Module.IMyService), static c => c.GetMyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::Company.Product.Module.DeepNamespaceContainer, object> resolver) =>
@@ -272,7 +272,7 @@ partial class DeepNamespaceContainer : global::SourceGen.Ioc.IIocContainer<globa
             return;
         }
 
-        DisposeService(_company_Product_Module_MyService);
+        DisposeService(_myService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -286,7 +286,7 @@ partial class DeepNamespaceContainer : global::SourceGen.Ioc.IIocContainer<globa
             return;
         }
 
-        await DisposeServiceAsync(_company_Product_Module_MyService).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

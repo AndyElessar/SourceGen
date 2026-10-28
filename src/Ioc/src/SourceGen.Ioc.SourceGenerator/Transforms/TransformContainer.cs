@@ -124,7 +124,23 @@ partial class IocSourceGenerator
             partialAccessors,
             implementControllerActivator,
             implementComponentActivator,
-            implementComponentPropertyActivator);
+            implementComponentPropertyActivator,
+            GetDeclaredMemberNames(typeSymbol));
+    }
+
+    /// <summary>
+    /// Gets the names of the members declared on the container class and its base classes (except <see cref="object"/>),
+    /// sorted so the model stays equatable regardless of declaration order.
+    /// </summary>
+    private static ImmutableEquatableArray<string> GetDeclaredMemberNames(INamedTypeSymbol containerSymbol)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        for(var type = containerSymbol; type is not null && type.SpecialType != SpecialType.System_Object; type = type.BaseType)
+        {
+            names.UnionWith(type.MemberNames);
+        }
+
+        return names.OrderBy(static name => name, StringComparer.Ordinal).ToImmutableEquatableArray();
     }
 
     /// <summary>

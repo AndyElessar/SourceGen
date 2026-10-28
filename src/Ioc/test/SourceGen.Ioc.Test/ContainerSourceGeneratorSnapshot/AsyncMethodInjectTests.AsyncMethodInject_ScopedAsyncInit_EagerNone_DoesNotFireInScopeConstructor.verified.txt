@@ -49,32 +49,32 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>? _testNamespace_AsyncScopedService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>? _asyncScopedService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> GetTestNamespace_AsyncScopedServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> GetAsyncScopedServiceAsync()
     {
-        if(_testNamespace_AsyncScopedService is not null)
-            return await _testNamespace_AsyncScopedService.ConfigureAwait(false);
+        if(_asyncScopedService is not null)
+            return await _asyncScopedService.ConfigureAwait(false);
 
-        _testNamespace_AsyncScopedService = CreateTestNamespace_AsyncScopedServiceAsync();
-        return await _testNamespace_AsyncScopedService.ConfigureAwait(false);
+        _asyncScopedService = CreateAsyncScopedServiceAsync();
+        return await _asyncScopedService.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> CreateTestNamespace_AsyncScopedServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> CreateAsyncScopedServiceAsync()
     {
         var instance = new global::TestNamespace.AsyncScopedService();
         await instance.InitAsync().ConfigureAwait(false);
         return instance;
     }
 
-    private global::TestNamespace.SyncScopedService? _testNamespace_SyncScopedService;
-    private global::TestNamespace.SyncScopedService GetTestNamespace_SyncScopedService() => _testNamespace_SyncScopedService ?? CreateTestNamespace_SyncScopedService();
+    private global::TestNamespace.SyncScopedService? _syncScopedService;
+    private global::TestNamespace.SyncScopedService GetSyncScopedService() => _syncScopedService ?? CreateSyncScopedService();
 
-    private global::TestNamespace.SyncScopedService CreateTestNamespace_SyncScopedService()
+    private global::TestNamespace.SyncScopedService CreateSyncScopedService()
     {
         var instance = new global::TestNamespace.SyncScopedService();
 
-        _testNamespace_SyncScopedService = instance;
+        _syncScopedService = instance;
         return instance;
     }
 
@@ -246,10 +246,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>), static c => c.GetTestNamespace_AsyncScopedServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncScopedService>), static c => __ProjectTask<global::TestNamespace.IAsyncScopedService, global::TestNamespace.AsyncScopedService>(c.GetTestNamespace_AsyncScopedServiceAsync())),
-        __Resolver(typeof(global::TestNamespace.SyncScopedService), static c => c.GetTestNamespace_SyncScopedService()),
-        __Resolver(typeof(global::TestNamespace.ISyncScopedService), static c => c.GetTestNamespace_SyncScopedService()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>), static c => c.GetAsyncScopedServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncScopedService>), static c => __ProjectTask<global::TestNamespace.IAsyncScopedService, global::TestNamespace.AsyncScopedService>(c.GetAsyncScopedServiceAsync())),
+        __Resolver(typeof(global::TestNamespace.SyncScopedService), static c => c.GetSyncScopedService()),
+        __Resolver(typeof(global::TestNamespace.ISyncScopedService), static c => c.GetSyncScopedService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -285,8 +285,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_SyncScopedService);
-        DisposeService(_testNamespace_AsyncScopedService);
+        DisposeService(_syncScopedService);
+        DisposeService(_asyncScopedService);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
@@ -300,8 +300,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_SyncScopedService).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_AsyncScopedService).ConfigureAwait(false);
+        await DisposeServiceAsync(_syncScopedService).ConfigureAwait(false);
+        await DisposeServiceAsync(_asyncScopedService).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);

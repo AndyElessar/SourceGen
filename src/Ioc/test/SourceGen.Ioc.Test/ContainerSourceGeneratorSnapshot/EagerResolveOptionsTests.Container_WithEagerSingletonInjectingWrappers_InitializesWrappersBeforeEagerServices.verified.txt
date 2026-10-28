@@ -39,86 +39,86 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_TestNamespace_IDependency_TestNamespace_Dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetTestNamespace_Dependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_Dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_TestNamespace_IDependency_TestNamespace_Dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetTestNamespace_Dependency());
+        _func_IDependency_Dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetDependency());
 
         // Initialize eager singletons
-        GetTestNamespace_Dependency();
-        GetTestNamespace_SingletonConsumer();
+        GetDependency();
+        GetSingletonConsumer();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Dependency = parent._testNamespace_Dependency;
-        _testNamespace_SingletonConsumer = parent._testNamespace_SingletonConsumer;
+        _dependency = parent._dependency;
+        _singletonConsumer = parent._singletonConsumer;
 
         // Initialize Lazy wrapper fields
-        _lazy_TestNamespace_IDependency_TestNamespace_Dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetTestNamespace_Dependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_Dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_TestNamespace_IDependency_TestNamespace_Dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetTestNamespace_Dependency());
+        _func_IDependency_Dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetDependency());
 
         // Initialize eager scoped services
-        GetTestNamespace_ScopedConsumer();
+        GetScopedConsumer();
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Dependency _testNamespace_Dependency = null!;
-    private global::TestNamespace.Dependency GetTestNamespace_Dependency() => _testNamespace_Dependency ?? CreateTestNamespace_Dependency();
+    private global::TestNamespace.Dependency _dependency = null!;
+    private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
-    private global::TestNamespace.Dependency CreateTestNamespace_Dependency()
+    private global::TestNamespace.Dependency CreateDependency()
     {
         var instance = new global::TestNamespace.Dependency();
 
-        _testNamespace_Dependency = instance;
+        _dependency = instance;
         return instance;
     }
 
-    private global::TestNamespace.SingletonConsumer _testNamespace_SingletonConsumer = null!;
-    private global::TestNamespace.SingletonConsumer GetTestNamespace_SingletonConsumer() => _testNamespace_SingletonConsumer ?? CreateTestNamespace_SingletonConsumer();
+    private global::TestNamespace.SingletonConsumer _singletonConsumer = null!;
+    private global::TestNamespace.SingletonConsumer GetSingletonConsumer() => _singletonConsumer ?? CreateSingletonConsumer();
 
-    private global::TestNamespace.SingletonConsumer CreateTestNamespace_SingletonConsumer()
+    private global::TestNamespace.SingletonConsumer CreateSingletonConsumer()
     {
-        var instance = new global::TestNamespace.SingletonConsumer(_lazy_TestNamespace_IDependency_TestNamespace_Dependency, _func_TestNamespace_IDependency_TestNamespace_Dependency);
+        var instance = new global::TestNamespace.SingletonConsumer(_lazy_IDependency_Dependency, _func_IDependency_Dependency);
 
-        _testNamespace_SingletonConsumer = instance;
+        _singletonConsumer = instance;
         return instance;
     }
 
-    private global::TestNamespace.ScopedConsumer _testNamespace_ScopedConsumer = null!;
-    private global::TestNamespace.ScopedConsumer GetTestNamespace_ScopedConsumer() => _testNamespace_ScopedConsumer ?? CreateTestNamespace_ScopedConsumer();
+    private global::TestNamespace.ScopedConsumer _scopedConsumer = null!;
+    private global::TestNamespace.ScopedConsumer GetScopedConsumer() => _scopedConsumer ?? CreateScopedConsumer();
 
-    private global::TestNamespace.ScopedConsumer CreateTestNamespace_ScopedConsumer()
+    private global::TestNamespace.ScopedConsumer CreateScopedConsumer()
     {
-        var instance = new global::TestNamespace.ScopedConsumer(_lazy_TestNamespace_IDependency_TestNamespace_Dependency);
+        var instance = new global::TestNamespace.ScopedConsumer(_lazy_IDependency_Dependency);
 
-        _testNamespace_ScopedConsumer = instance;
+        _scopedConsumer = instance;
         return instance;
     }
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::TestNamespace.IDependency> _lazy_TestNamespace_IDependency_TestNamespace_Dependency;
+    private readonly global::System.Lazy<global::TestNamespace.IDependency> _lazy_IDependency_Dependency;
 
-    private global::System.Lazy<global::TestNamespace.IDependency>[] GetAllLazy_TestNamespace_IDependency_Array() =>
+    private global::System.Lazy<global::TestNamespace.IDependency>[] GetAllLazy_IDependency_Array() =>
         [
-            _lazy_TestNamespace_IDependency_TestNamespace_Dependency,
+            _lazy_IDependency_Dependency,
         ];
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::TestNamespace.IDependency> _func_TestNamespace_IDependency_TestNamespace_Dependency;
+    private readonly global::System.Func<global::TestNamespace.IDependency> _func_IDependency_Dependency;
 
-    private global::System.Func<global::TestNamespace.IDependency>[] GetAllFunc_TestNamespace_IDependency_Array() =>
+    private global::System.Func<global::TestNamespace.IDependency>[] GetAllFunc_IDependency_Array() =>
         [
-            _func_TestNamespace_IDependency_TestNamespace_Dependency,
+            _func_IDependency_Dependency,
         ];
 
     #endregion
@@ -286,18 +286,18 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetTestNamespace_Dependency()),
-        __Resolver(typeof(global::TestNamespace.IDependency), static c => c.GetTestNamespace_Dependency()),
-        __Resolver(typeof(global::TestNamespace.SingletonConsumer), static c => c.GetTestNamespace_SingletonConsumer()),
-        __Resolver(typeof(global::TestNamespace.ScopedConsumer), static c => c.GetTestNamespace_ScopedConsumer()),
+        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::TestNamespace.IDependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::TestNamespace.SingletonConsumer), static c => c.GetSingletonConsumer()),
+        __Resolver(typeof(global::TestNamespace.ScopedConsumer), static c => c.GetScopedConsumer()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IDependency>), static c => c._lazy_TestNamespace_IDependency_TestNamespace_Dependency),
-        ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IDependency>>(static c => c.GetAllLazy_TestNamespace_IDependency_Array()),
+        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IDependency>), static c => c._lazy_IDependency_Dependency),
+        ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IDependency>>(static c => c.GetAllLazy_IDependency_Array()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::TestNamespace.IDependency>), static c => c._func_TestNamespace_IDependency_TestNamespace_Dependency),
-        ..__CollectionResolvers<global::System.Func<global::TestNamespace.IDependency>>(static c => c.GetAllFunc_TestNamespace_IDependency_Array()),
+        __Resolver(typeof(global::System.Func<global::TestNamespace.IDependency>), static c => c._func_IDependency_Dependency),
+        ..__CollectionResolvers<global::System.Func<global::TestNamespace.IDependency>>(static c => c.GetAllFunc_IDependency_Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -343,15 +343,15 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_ScopedConsumer);
+        DisposeService(_scopedConsumer);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
             return;
         }
 
-        DisposeService(_testNamespace_SingletonConsumer);
-        DisposeService(_testNamespace_Dependency);
+        DisposeService(_singletonConsumer);
+        DisposeService(_dependency);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -359,15 +359,15 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_ScopedConsumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_scopedConsumer).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_SingletonConsumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Dependency).ConfigureAwait(false);
+        await DisposeServiceAsync(_singletonConsumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_dependency).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

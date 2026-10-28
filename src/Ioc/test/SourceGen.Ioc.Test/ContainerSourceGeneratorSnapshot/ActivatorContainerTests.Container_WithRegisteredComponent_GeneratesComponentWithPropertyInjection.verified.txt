@@ -41,36 +41,36 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_DataService();
+        GetDataService();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_DataService = parent._testNamespace_DataService;
+        _dataService = parent._dataService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.DataService _testNamespace_DataService = null!;
-    private global::TestNamespace.DataService GetTestNamespace_DataService() => _testNamespace_DataService ?? CreateTestNamespace_DataService();
+    private global::TestNamespace.DataService _dataService = null!;
+    private global::TestNamespace.DataService GetDataService() => _dataService ?? CreateDataService();
 
-    private global::TestNamespace.DataService CreateTestNamespace_DataService()
+    private global::TestNamespace.DataService CreateDataService()
     {
         var instance = new global::TestNamespace.DataService();
 
-        _testNamespace_DataService = instance;
+        _dataService = instance;
         return instance;
     }
 
-    private global::TestNamespace.MyComponent GetTestNamespace_MyComponent()
+    private global::TestNamespace.MyComponent GetMyComponent()
     {
         var instance = new global::TestNamespace.MyComponent()
         {
-            DataService = GetTestNamespace_DataService(),
+            DataService = GetDataService(),
         };
         return instance;
     }
@@ -240,9 +240,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.DataService), static c => c.GetTestNamespace_DataService()),
-        __Resolver(typeof(global::TestNamespace.IDataService), static c => c.GetTestNamespace_DataService()),
-        __Resolver(typeof(global::TestNamespace.MyComponent), static c => c.GetTestNamespace_MyComponent()),
+        __Resolver(typeof(global::TestNamespace.DataService), static c => c.GetDataService()),
+        __Resolver(typeof(global::TestNamespace.IDataService), static c => c.GetDataService()),
+        __Resolver(typeof(global::TestNamespace.MyComponent), static c => c.GetMyComponent()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -284,7 +284,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_DataService);
+        DisposeService(_dataService);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -298,7 +298,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_DataService).ConfigureAwait(false);
+        await DisposeServiceAsync(_dataService).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

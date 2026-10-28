@@ -45,64 +45,64 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_Dependency = parent._testNamespace_Dependency;
-        _testNamespace_MyService = parent._testNamespace_MyService;
+        _dependency = parent._dependency;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Dependency? _testNamespace_Dependency;
-    private readonly global::System.Threading.SemaphoreSlim _testNamespace_DependencySemaphore = new(1, 1);
-    private global::TestNamespace.Dependency GetTestNamespace_Dependency() => _testNamespace_Dependency ?? CreateTestNamespace_Dependency();
+    private global::TestNamespace.Dependency? _dependency;
+    private readonly global::System.Threading.SemaphoreSlim _dependencySemaphore = new(1, 1);
+    private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
-    private global::TestNamespace.Dependency CreateTestNamespace_Dependency()
+    private global::TestNamespace.Dependency CreateDependency()
     {
-        if(_root is not null) return _root.GetTestNamespace_Dependency();
+        if(_root is not null) return _root.GetDependency();
 
-        _testNamespace_DependencySemaphore.Wait();
+        _dependencySemaphore.Wait();
         try
         {
-            if(_testNamespace_Dependency is not null) return _testNamespace_Dependency;
+            if(_dependency is not null) return _dependency;
 
             var instance = new global::TestNamespace.Dependency();
 
-            _testNamespace_Dependency = instance;
+            _dependency = instance;
             return instance;
         }
         finally
         {
-            _testNamespace_DependencySemaphore.Release();
+            _dependencySemaphore.Release();
         }
     }
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _testNamespace_MyService;
-    private readonly global::System.Threading.SemaphoreSlim _testNamespace_MyServiceSemaphore = new(1, 1);
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
+    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = new(1, 1);
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
     {
-        if(_testNamespace_MyService is not null)
-            return await _testNamespace_MyService.ConfigureAwait(false);
+        if(_myService is not null)
+            return await _myService.ConfigureAwait(false);
         if(_root is not null)
-            return await _root.GetTestNamespace_MyServiceAsync().ConfigureAwait(false);
+            return await _root.GetMyServiceAsync().ConfigureAwait(false);
 
-        await _testNamespace_MyServiceSemaphore.WaitAsync().ConfigureAwait(false);
+        await _myServiceSemaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            if(_testNamespace_MyService is null)
+            if(_myService is null)
             {
-                _testNamespace_MyService = CreateTestNamespace_MyServiceAsync();
+                _myService = CreateMyServiceAsync();
             }
         }
         finally
         {
-            _testNamespace_MyServiceSemaphore.Release();
+            _myServiceSemaphore.Release();
         }
-        return await _testNamespace_MyService.ConfigureAwait(false);
+        return await _myService.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {
         var instance = new global::TestNamespace.MyService();
         await instance.InitAsync((global::TestNamespace.IDependency)GetRequiredService(typeof(global::TestNamespace.IDependency))).ConfigureAwait(false);
@@ -277,9 +277,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetTestNamespace_Dependency()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetTestNamespace_MyServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetTestNamespace_MyServiceAsync())),
+        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetMyServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -321,10 +321,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MyService);
-        _testNamespace_MyServiceSemaphore.Dispose();
-        DisposeService(_testNamespace_Dependency);
-        _testNamespace_DependencySemaphore.Dispose();
+        DisposeService(_myService);
+        _myServiceSemaphore.Dispose();
+        DisposeService(_dependency);
+        _dependencySemaphore.Dispose();
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -338,10 +338,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
-        _testNamespace_MyServiceSemaphore.Dispose();
-        await DisposeServiceAsync(_testNamespace_Dependency).ConfigureAwait(false);
-        _testNamespace_DependencySemaphore.Dispose();
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
+        _myServiceSemaphore.Dispose();
+        await DisposeServiceAsync(_dependency).ConfigureAwait(false);
+        _dependencySemaphore.Dispose();
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

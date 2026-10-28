@@ -39,81 +39,81 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_MemoryCache();
-        GetTestNamespace_Logger();
+        GetMemoryCache();
+        GetLogger();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_MemoryCache = parent._testNamespace_MemoryCache;
-        _testNamespace_Logger = parent._testNamespace_Logger;
+        _memoryCache = parent._memoryCache;
+        _logger = parent._logger;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.MemoryCache _testNamespace_MemoryCache = null!;
-    private global::TestNamespace.MemoryCache GetTestNamespace_MemoryCache() => _testNamespace_MemoryCache ?? CreateTestNamespace_MemoryCache();
+    private global::TestNamespace.MemoryCache _memoryCache = null!;
+    private global::TestNamespace.MemoryCache GetMemoryCache() => _memoryCache ?? CreateMemoryCache();
 
-    private global::TestNamespace.MemoryCache CreateTestNamespace_MemoryCache()
+    private global::TestNamespace.MemoryCache CreateMemoryCache()
     {
         var instance = new global::TestNamespace.MemoryCache();
 
-        _testNamespace_MemoryCache = instance;
+        _memoryCache = instance;
         return instance;
     }
 
-    private global::TestNamespace.Logger _testNamespace_Logger = null!;
-    private global::TestNamespace.Logger GetTestNamespace_Logger() => _testNamespace_Logger ?? CreateTestNamespace_Logger();
+    private global::TestNamespace.Logger _logger = null!;
+    private global::TestNamespace.Logger GetLogger() => _logger ?? CreateLogger();
 
-    private global::TestNamespace.Logger CreateTestNamespace_Logger()
+    private global::TestNamespace.Logger CreateLogger()
     {
         var instance = new global::TestNamespace.Logger();
 
-        _testNamespace_Logger = instance;
+        _logger = instance;
         return instance;
     }
 
-    private global::TestNamespace.Handler? _testNamespace_Handler;
-    private readonly global::System.Threading.Lock _testNamespace_HandlerLock = new();
-    private global::TestNamespace.Handler GetTestNamespace_Handler() => _testNamespace_Handler ?? CreateTestNamespace_Handler();
+    private global::TestNamespace.Handler? _handler;
+    private readonly global::System.Threading.Lock _handlerLock = new();
+    private global::TestNamespace.Handler GetHandler() => _handler ?? CreateHandler();
 
-    private global::TestNamespace.Handler CreateTestNamespace_Handler()
+    private global::TestNamespace.Handler CreateHandler()
     {
-        lock(_testNamespace_HandlerLock)
+        lock(_handlerLock)
         {
-            if(_testNamespace_Handler is not null) return _testNamespace_Handler;
+            if(_handler is not null) return _handler;
 
             var instance = new global::TestNamespace.Handler();
 
-            _testNamespace_Handler = instance;
+            _handler = instance;
             return instance;
         }
     }
 
-    private global::TestNamespace.IHandler? _testNamespace_Handler_As_TestNamespace_IHandler;
-    private readonly global::System.Threading.Lock _testNamespace_Handler_As_TestNamespace_IHandlerLock = new();
-    private global::TestNamespace.IHandler GetTestNamespace_Handler_As_TestNamespace_IHandler() => _testNamespace_Handler_As_TestNamespace_IHandler ?? CreateTestNamespace_Handler_As_TestNamespace_IHandler();
+    private global::TestNamespace.IHandler? _handler_As_IHandler;
+    private readonly global::System.Threading.Lock _handler_As_IHandlerLock = new();
+    private global::TestNamespace.IHandler GetHandler_As_IHandler() => _handler_As_IHandler ?? CreateHandler_As_IHandler();
 
-    private global::TestNamespace.IHandler CreateTestNamespace_Handler_As_TestNamespace_IHandler()
+    private global::TestNamespace.IHandler CreateHandler_As_IHandler()
     {
-        lock(_testNamespace_Handler_As_TestNamespace_IHandlerLock)
+        lock(_handler_As_IHandlerLock)
         {
-            if(_testNamespace_Handler_As_TestNamespace_IHandler is not null) return _testNamespace_Handler_As_TestNamespace_IHandler;
+            if(_handler_As_IHandler is not null) return _handler_As_IHandler;
 
-            global::TestNamespace.IHandler instance = GetTestNamespace_Handler();
+            global::TestNamespace.IHandler instance = GetHandler();
 
             var decorator0 = new global::TestNamespace.CachingDecorator(instance)
             {
-                Cache = GetTestNamespace_MemoryCache(),
+                Cache = GetMemoryCache(),
             };
-            decorator0.SetLogger(GetTestNamespace_Logger());
+            decorator0.SetLogger(GetLogger());
             instance = decorator0;
 
-            _testNamespace_Handler_As_TestNamespace_IHandler = instance;
+            _handler_As_IHandler = instance;
             return instance;
         }
     }
@@ -283,12 +283,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MemoryCache), static c => c.GetTestNamespace_MemoryCache()),
-        __Resolver(typeof(global::TestNamespace.ICache), static c => c.GetTestNamespace_MemoryCache()),
-        __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetTestNamespace_Logger()),
-        __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetTestNamespace_Logger()),
-        __Resolver(typeof(global::TestNamespace.Handler), static c => c.GetTestNamespace_Handler()),
-        __Resolver(typeof(global::TestNamespace.IHandler), static c => c.GetTestNamespace_Handler_As_TestNamespace_IHandler()),
+        __Resolver(typeof(global::TestNamespace.MemoryCache), static c => c.GetMemoryCache()),
+        __Resolver(typeof(global::TestNamespace.ICache), static c => c.GetMemoryCache()),
+        __Resolver(typeof(global::TestNamespace.Logger), static c => c.GetLogger()),
+        __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetLogger()),
+        __Resolver(typeof(global::TestNamespace.Handler), static c => c.GetHandler()),
+        __Resolver(typeof(global::TestNamespace.IHandler), static c => c.GetHandler_As_IHandler()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -324,16 +324,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_Handler_As_TestNamespace_IHandler);
-        DisposeService(_testNamespace_Handler);
+        DisposeService(_handler_As_IHandler);
+        DisposeService(_handler);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
             return;
         }
 
-        DisposeService(_testNamespace_Logger);
-        DisposeService(_testNamespace_MemoryCache);
+        DisposeService(_logger);
+        DisposeService(_memoryCache);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -341,16 +341,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_Handler_As_TestNamespace_IHandler).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler_As_IHandler).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Logger).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_MemoryCache).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger).ConfigureAwait(false);
+        await DisposeServiceAsync(_memoryCache).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

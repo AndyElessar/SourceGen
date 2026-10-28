@@ -140,7 +140,7 @@ partial class IocSourceGenerator
         {
             var (keyTypeName, valueTypeName) = group.Key;
             var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyTypeName}, {valueTypeName}>";
-            var arrayMethodName = GetKvpArrayResolverMethodName(keyTypeName, valueTypeName);
+            var arrayMethodName = group.First().ArrayMethodName;
 
             writer.WriteLine($"private {kvpTypeName}[] {arrayMethodName}() =>");
             writer.Indentation++;
@@ -161,7 +161,7 @@ partial class IocSourceGenerator
         foreach(var group in grouped)
         {
             var (keyTypeName, valueTypeName) = group.Key;
-            var dictionaryMethodName = GetKvpDictionaryResolverMethodName(keyTypeName, valueTypeName);
+            var dictionaryMethodName = group.First().DictionaryMethodName;
 
             writer.WriteLine($"private global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}> {dictionaryMethodName}() =>");
             writer.Indentation++;
@@ -317,14 +317,5 @@ partial class IocSourceGenerator
         }
         innerTypeName = string.Empty;
         return false;
-    }
-
-    /// <summary>
-    /// Gets the array resolver method name for IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[] resolution.
-    /// </summary>
-    private static string GetArrayResolverMethodName(string serviceType)
-    {
-        var baseName = GetSafeIdentifier(serviceType);
-        return $"GetAll{baseName}Array";
     }
 }

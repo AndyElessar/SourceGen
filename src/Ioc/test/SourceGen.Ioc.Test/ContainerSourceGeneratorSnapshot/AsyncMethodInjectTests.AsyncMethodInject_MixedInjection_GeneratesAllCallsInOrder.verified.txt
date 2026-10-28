@@ -45,69 +45,69 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _testNamespace_Dep1 = parent._testNamespace_Dep1;
-        _testNamespace_Dep2 = parent._testNamespace_Dep2;
-        _testNamespace_Dep3 = parent._testNamespace_Dep3;
-        _testNamespace_MyService = parent._testNamespace_MyService;
+        _dep1 = parent._dep1;
+        _dep2 = parent._dep2;
+        _dep3 = parent._dep3;
+        _myService = parent._myService;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Dep1? _testNamespace_Dep1;
-    private global::TestNamespace.Dep1 GetTestNamespace_Dep1() => _testNamespace_Dep1 ?? CreateTestNamespace_Dep1();
+    private global::TestNamespace.Dep1? _dep1;
+    private global::TestNamespace.Dep1 GetDep1() => _dep1 ?? CreateDep1();
 
-    private global::TestNamespace.Dep1 CreateTestNamespace_Dep1()
+    private global::TestNamespace.Dep1 CreateDep1()
     {
-        if(_root is not null) return _root.GetTestNamespace_Dep1();
+        if(_root is not null) return _root.GetDep1();
 
         var instance = new global::TestNamespace.Dep1();
 
-        _testNamespace_Dep1 = instance;
+        _dep1 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Dep2? _testNamespace_Dep2;
-    private global::TestNamespace.Dep2 GetTestNamespace_Dep2() => _testNamespace_Dep2 ?? CreateTestNamespace_Dep2();
+    private global::TestNamespace.Dep2? _dep2;
+    private global::TestNamespace.Dep2 GetDep2() => _dep2 ?? CreateDep2();
 
-    private global::TestNamespace.Dep2 CreateTestNamespace_Dep2()
+    private global::TestNamespace.Dep2 CreateDep2()
     {
-        if(_root is not null) return _root.GetTestNamespace_Dep2();
+        if(_root is not null) return _root.GetDep2();
 
         var instance = new global::TestNamespace.Dep2();
 
-        _testNamespace_Dep2 = instance;
+        _dep2 = instance;
         return instance;
     }
 
-    private global::TestNamespace.Dep3? _testNamespace_Dep3;
-    private global::TestNamespace.Dep3 GetTestNamespace_Dep3() => _testNamespace_Dep3 ?? CreateTestNamespace_Dep3();
+    private global::TestNamespace.Dep3? _dep3;
+    private global::TestNamespace.Dep3 GetDep3() => _dep3 ?? CreateDep3();
 
-    private global::TestNamespace.Dep3 CreateTestNamespace_Dep3()
+    private global::TestNamespace.Dep3 CreateDep3()
     {
-        if(_root is not null) return _root.GetTestNamespace_Dep3();
+        if(_root is not null) return _root.GetDep3();
 
         var instance = new global::TestNamespace.Dep3();
 
-        _testNamespace_Dep3 = instance;
+        _dep3 = instance;
         return instance;
     }
 
-    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _testNamespace_MyService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
     {
-        if(_testNamespace_MyService is not null)
-            return await _testNamespace_MyService.ConfigureAwait(false);
+        if(_myService is not null)
+            return await _myService.ConfigureAwait(false);
         if(_root is not null)
-            return await _root.GetTestNamespace_MyServiceAsync().ConfigureAwait(false);
+            return await _root.GetMyServiceAsync().ConfigureAwait(false);
 
-        _testNamespace_MyService = CreateTestNamespace_MyServiceAsync();
-        return await _testNamespace_MyService.ConfigureAwait(false);
+        _myService = CreateMyServiceAsync();
+        return await _myService.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateTestNamespace_MyServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {
         var instance = new global::TestNamespace.MyService()
         {
@@ -286,11 +286,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Dep1), static c => c.GetTestNamespace_Dep1()),
-        __Resolver(typeof(global::TestNamespace.Dep2), static c => c.GetTestNamespace_Dep2()),
-        __Resolver(typeof(global::TestNamespace.Dep3), static c => c.GetTestNamespace_Dep3()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetTestNamespace_MyServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetTestNamespace_MyServiceAsync())),
+        __Resolver(typeof(global::TestNamespace.Dep1), static c => c.GetDep1()),
+        __Resolver(typeof(global::TestNamespace.Dep2), static c => c.GetDep2()),
+        __Resolver(typeof(global::TestNamespace.Dep3), static c => c.GetDep3()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetMyServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -332,10 +332,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_MyService);
-        DisposeService(_testNamespace_Dep3);
-        DisposeService(_testNamespace_Dep2);
-        DisposeService(_testNamespace_Dep1);
+        DisposeService(_myService);
+        DisposeService(_dep3);
+        DisposeService(_dep2);
+        DisposeService(_dep1);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -349,10 +349,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_MyService).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Dep3).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Dep2).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Dep1).ConfigureAwait(false);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
+        await DisposeServiceAsync(_dep3).ConfigureAwait(false);
+        await DisposeServiceAsync(_dep2).ConfigureAwait(false);
+        await DisposeServiceAsync(_dep1).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

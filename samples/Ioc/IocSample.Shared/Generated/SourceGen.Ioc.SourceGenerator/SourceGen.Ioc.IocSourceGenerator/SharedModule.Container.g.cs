@@ -15,7 +15,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocSample.Shared;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.182")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.183")]
 partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSample.Shared.SharedModule>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
@@ -39,168 +39,168 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetIocSample_Shared_TestHandler();
-        GetIocSample_Shared_TestRequest2Handler();
-        GetIocSample_Shared_TestRequest3Handler();
-        GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___();
-        GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_();
-        GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___();
-        GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
-        GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__();
-        GetIocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__();
-        GetIocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__();
-        GetIocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_();
+        GetTestHandler();
+        GetTestRequest2Handler();
+        GetTestRequest3Handler();
+        GetLogger_HandlerDecorator1_TestRequest_List_string();
+        GetLogger_TestRequest2Handler();
+        GetLogger_HandlerDecorator1_TestRequest2_List_string();
+        GetLogger_TestRequest3Handler();
+        GetLogger_HandlerDecorator1_TestRequest3_int();
+        GetTestHandler_As_IRequestHandler_TestRequest_List_string();
+        GetTestRequest2Handler_As_IRequestHandler_TestRequest2_List_string();
+        GetTestRequest3Handler_As_IRequestHandler_TestRequest3_int();
     }
 
     private SharedModule(SharedModule parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _iocSample_Shared_TestHandler = parent._iocSample_Shared_TestHandler;
-        _iocSample_Shared_TestRequest2Handler = parent._iocSample_Shared_TestRequest2Handler;
-        _iocSample_Shared_TestRequest3Handler = parent._iocSample_Shared_TestRequest3Handler;
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ = parent._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___;
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ = parent._iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_;
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = parent._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___;
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = parent._iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_;
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = parent._iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__;
-        _iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__ = parent._iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__;
-        _iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__ = parent._iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__;
-        _iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_ = parent._iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_;
+        _testHandler = parent._testHandler;
+        _testRequest2Handler = parent._testRequest2Handler;
+        _testRequest3Handler = parent._testRequest3Handler;
+        _logger_HandlerDecorator1_TestRequest_List_string = parent._logger_HandlerDecorator1_TestRequest_List_string;
+        _logger_TestRequest2Handler = parent._logger_TestRequest2Handler;
+        _logger_HandlerDecorator1_TestRequest2_List_string = parent._logger_HandlerDecorator1_TestRequest2_List_string;
+        _logger_TestRequest3Handler = parent._logger_TestRequest3Handler;
+        _logger_HandlerDecorator1_TestRequest3_int = parent._logger_HandlerDecorator1_TestRequest3_int;
+        _testHandler_As_IRequestHandler_TestRequest_List_string = parent._testHandler_As_IRequestHandler_TestRequest_List_string;
+        _testRequest2Handler_As_IRequestHandler_TestRequest2_List_string = parent._testRequest2Handler_As_IRequestHandler_TestRequest2_List_string;
+        _testRequest3Handler_As_IRequestHandler_TestRequest3_int = parent._testRequest3Handler_As_IRequestHandler_TestRequest3_int;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::IocSample.Shared.TestHandler _iocSample_Shared_TestHandler = null!;
-    private global::IocSample.Shared.TestHandler GetIocSample_Shared_TestHandler() => _iocSample_Shared_TestHandler ?? CreateIocSample_Shared_TestHandler();
+    private global::IocSample.Shared.TestHandler _testHandler = null!;
+    private global::IocSample.Shared.TestHandler GetTestHandler() => _testHandler ?? CreateTestHandler();
 
-    private global::IocSample.Shared.TestHandler CreateIocSample_Shared_TestHandler()
+    private global::IocSample.Shared.TestHandler CreateTestHandler()
     {
         var instance = new global::IocSample.Shared.TestHandler();
 
-        _iocSample_Shared_TestHandler = instance;
+        _testHandler = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.TestRequest2Handler _iocSample_Shared_TestRequest2Handler = null!;
-    private global::IocSample.Shared.TestRequest2Handler GetIocSample_Shared_TestRequest2Handler() => _iocSample_Shared_TestRequest2Handler ?? CreateIocSample_Shared_TestRequest2Handler();
+    private global::IocSample.Shared.TestRequest2Handler _testRequest2Handler = null!;
+    private global::IocSample.Shared.TestRequest2Handler GetTestRequest2Handler() => _testRequest2Handler ?? CreateTestRequest2Handler();
 
-    private global::IocSample.Shared.TestRequest2Handler CreateIocSample_Shared_TestRequest2Handler()
+    private global::IocSample.Shared.TestRequest2Handler CreateTestRequest2Handler()
     {
-        var instance = new global::IocSample.Shared.TestRequest2Handler(GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_());
+        var instance = new global::IocSample.Shared.TestRequest2Handler(GetLogger_TestRequest2Handler());
 
-        _iocSample_Shared_TestRequest2Handler = instance;
+        _testRequest2Handler = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.TestRequest3Handler _iocSample_Shared_TestRequest3Handler = null!;
-    private global::IocSample.Shared.TestRequest3Handler GetIocSample_Shared_TestRequest3Handler() => _iocSample_Shared_TestRequest3Handler ?? CreateIocSample_Shared_TestRequest3Handler();
+    private global::IocSample.Shared.TestRequest3Handler _testRequest3Handler = null!;
+    private global::IocSample.Shared.TestRequest3Handler GetTestRequest3Handler() => _testRequest3Handler ?? CreateTestRequest3Handler();
 
-    private global::IocSample.Shared.TestRequest3Handler CreateIocSample_Shared_TestRequest3Handler()
+    private global::IocSample.Shared.TestRequest3Handler CreateTestRequest3Handler()
     {
-        var instance = new global::IocSample.Shared.TestRequest3Handler(GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_());
+        var instance = new global::IocSample.Shared.TestRequest3Handler(GetLogger_TestRequest3Handler());
 
-        _iocSample_Shared_TestRequest3Handler = instance;
+        _testRequest3Handler = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ = null!;
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___() => _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ ?? CreateIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___();
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> _logger_HandlerDecorator1_TestRequest_List_string = null!;
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> GetLogger_HandlerDecorator1_TestRequest_List_string() => _logger_HandlerDecorator1_TestRequest_List_string ?? CreateLogger_HandlerDecorator1_TestRequest_List_string();
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> CreateIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>> CreateLogger_HandlerDecorator1_TestRequest_List_string()
     {
         var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>();
 
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___ = instance;
+        _logger_HandlerDecorator1_TestRequest_List_string = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ = null!;
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_() => _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ ?? CreateIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_();
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> _logger_TestRequest2Handler = null!;
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> GetLogger_TestRequest2Handler() => _logger_TestRequest2Handler ?? CreateLogger_TestRequest2Handler();
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> CreateIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler> CreateLogger_TestRequest2Handler()
     {
         var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>();
 
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_ = instance;
+        _logger_TestRequest2Handler = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = null!;
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___() => _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ ?? CreateIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___();
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> _logger_HandlerDecorator1_TestRequest2_List_string = null!;
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> GetLogger_HandlerDecorator1_TestRequest2_List_string() => _logger_HandlerDecorator1_TestRequest2_List_string ?? CreateLogger_HandlerDecorator1_TestRequest2_List_string();
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> CreateIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>> CreateLogger_HandlerDecorator1_TestRequest2_List_string()
     {
         var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>();
 
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___ = instance;
+        _logger_HandlerDecorator1_TestRequest2_List_string = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = null!;
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_() => _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ ?? CreateIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_();
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> _logger_TestRequest3Handler = null!;
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> GetLogger_TestRequest3Handler() => _logger_TestRequest3Handler ?? CreateLogger_TestRequest3Handler();
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> CreateIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler> CreateLogger_TestRequest3Handler()
     {
         var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>();
 
-        _iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_ = instance;
+        _logger_TestRequest3Handler = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = null!;
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__() => _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ ?? CreateIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__();
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> _logger_HandlerDecorator1_TestRequest3_int = null!;
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> GetLogger_HandlerDecorator1_TestRequest3_int() => _logger_HandlerDecorator1_TestRequest3_int ?? CreateLogger_HandlerDecorator1_TestRequest3_int();
 
-    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> CreateIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()
+    private global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>> CreateLogger_HandlerDecorator1_TestRequest3_int()
     {
         var instance = new global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>();
 
-        _iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__ = instance;
+        _logger_HandlerDecorator1_TestRequest3_int = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> _iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> GetIocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__() => _iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__ ?? CreateIocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__();
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> _testHandler_As_IRequestHandler_TestRequest_List_string = null!;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> GetTestHandler_As_IRequestHandler_TestRequest_List_string() => _testHandler_As_IRequestHandler_TestRequest_List_string ?? CreateTestHandler_As_IRequestHandler_TestRequest_List_string();
 
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> CreateIocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__()
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> CreateTestHandler_As_IRequestHandler_TestRequest_List_string()
     {
-        global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> instance = GetIocSample_Shared_TestHandler();
+        global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>> instance = GetTestHandler();
 
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>(instance);
-        instance = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>(instance, GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___());
+        instance = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>(instance, GetLogger_HandlerDecorator1_TestRequest_List_string());
 
-        _iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__ = instance;
+        _testHandler_As_IRequestHandler_TestRequest_List_string = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> _iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> GetIocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__() => _iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__ ?? CreateIocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__();
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> _testRequest2Handler_As_IRequestHandler_TestRequest2_List_string = null!;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> GetTestRequest2Handler_As_IRequestHandler_TestRequest2_List_string() => _testRequest2Handler_As_IRequestHandler_TestRequest2_List_string ?? CreateTestRequest2Handler_As_IRequestHandler_TestRequest2_List_string();
 
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> CreateIocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__()
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> CreateTestRequest2Handler_As_IRequestHandler_TestRequest2_List_string()
     {
-        global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> instance = GetIocSample_Shared_TestRequest2Handler();
+        global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>> instance = GetTestRequest2Handler();
 
         instance = new global::IocSample.Shared.HandlerDecorator3<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>(instance);
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>(instance);
-        instance = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>(instance, GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___());
+        instance = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>(instance, GetLogger_HandlerDecorator1_TestRequest2_List_string());
 
-        _iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__ = instance;
+        _testRequest2Handler_As_IRequestHandler_TestRequest2_List_string = instance;
         return instance;
     }
 
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> _iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_ = null!;
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> GetIocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_() => _iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_ ?? CreateIocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_();
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> _testRequest3Handler_As_IRequestHandler_TestRequest3_int = null!;
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> GetTestRequest3Handler_As_IRequestHandler_TestRequest3_int() => _testRequest3Handler_As_IRequestHandler_TestRequest3_int ?? CreateTestRequest3Handler_As_IRequestHandler_TestRequest3_int();
 
-    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> CreateIocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_()
+    private global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> CreateTestRequest3Handler_As_IRequestHandler_TestRequest3_int()
     {
-        global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> instance = GetIocSample_Shared_TestRequest3Handler();
+        global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int> instance = GetTestRequest3Handler();
 
-        instance = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>(instance, GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__());
+        instance = new global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>(instance, GetLogger_HandlerDecorator1_TestRequest3_int());
         instance = new global::IocSample.Shared.HandlerDecorator2<global::IocSample.Shared.TestRequest3, int>(instance);
 
-        _iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_ = instance;
+        _testRequest3Handler_As_IRequestHandler_TestRequest3_int = instance;
         return instance;
     }
 
@@ -369,22 +369,22 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::IocSample.Shared.SharedModule), static c => c),
-        __Resolver(typeof(global::IocSample.Shared.TestHandler), static c => c.GetIocSample_Shared_TestHandler()),
-        __Resolver(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), static c => c.GetIocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__()),
-        __Resolver(typeof(global::IocSample.Shared.TestRequest2Handler), static c => c.GetIocSample_Shared_TestRequest2Handler()),
-        __Resolver(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>), static c => c.GetIocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__()),
-        __Resolver(typeof(global::IocSample.Shared.TestRequest3Handler), static c => c.GetIocSample_Shared_TestRequest3Handler()),
-        __Resolver(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>), static c => c.GetIocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_()),
-        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()),
-        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___()),
-        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
-        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_()),
-        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()),
-        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___()),
-        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
-        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_()),
-        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()),
-        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), static c => c.GetIocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__()),
+        __Resolver(typeof(global::IocSample.Shared.TestHandler), static c => c.GetTestHandler()),
+        __Resolver(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>), static c => c.GetTestHandler_As_IRequestHandler_TestRequest_List_string()),
+        __Resolver(typeof(global::IocSample.Shared.TestRequest2Handler), static c => c.GetTestRequest2Handler()),
+        __Resolver(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>), static c => c.GetTestRequest2Handler_As_IRequestHandler_TestRequest2_List_string()),
+        __Resolver(typeof(global::IocSample.Shared.TestRequest3Handler), static c => c.GetTestRequest3Handler()),
+        __Resolver(typeof(global::IocSample.Shared.IRequestHandler<global::IocSample.Shared.TestRequest3, int>), static c => c.GetTestRequest3Handler_As_IRequestHandler_TestRequest3_int()),
+        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), static c => c.GetLogger_HandlerDecorator1_TestRequest_List_string()),
+        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest, global::System.Collections.Generic.List<string>>>), static c => c.GetLogger_HandlerDecorator1_TestRequest_List_string()),
+        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest2Handler>), static c => c.GetLogger_TestRequest2Handler()),
+        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest2Handler>), static c => c.GetLogger_TestRequest2Handler()),
+        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), static c => c.GetLogger_HandlerDecorator1_TestRequest2_List_string()),
+        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest2, global::System.Collections.Generic.List<string>>>), static c => c.GetLogger_HandlerDecorator1_TestRequest2_List_string()),
+        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.TestRequest3Handler>), static c => c.GetLogger_TestRequest3Handler()),
+        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.TestRequest3Handler>), static c => c.GetLogger_TestRequest3Handler()),
+        __Resolver(typeof(global::IocSample.Shared.Logger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), static c => c.GetLogger_HandlerDecorator1_TestRequest3_int()),
+        __Resolver(typeof(global::IocSample.Shared.ILogger<global::IocSample.Shared.HandlerDecorator1<global::IocSample.Shared.TestRequest3, int>>), static c => c.GetLogger_HandlerDecorator1_TestRequest3_int()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::IocSample.Shared.SharedModule, object> resolver) =>
@@ -406,17 +406,17 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
             return;
         }
 
-        DisposeService(_iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_);
-        DisposeService(_iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__);
-        DisposeService(_iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__);
-        DisposeService(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__);
-        DisposeService(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_);
-        DisposeService(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___);
-        DisposeService(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_);
-        DisposeService(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___);
-        DisposeService(_iocSample_Shared_TestRequest3Handler);
-        DisposeService(_iocSample_Shared_TestRequest2Handler);
-        DisposeService(_iocSample_Shared_TestHandler);
+        DisposeService(_testRequest3Handler_As_IRequestHandler_TestRequest3_int);
+        DisposeService(_testRequest2Handler_As_IRequestHandler_TestRequest2_List_string);
+        DisposeService(_testHandler_As_IRequestHandler_TestRequest_List_string);
+        DisposeService(_logger_HandlerDecorator1_TestRequest3_int);
+        DisposeService(_logger_TestRequest3Handler);
+        DisposeService(_logger_HandlerDecorator1_TestRequest2_List_string);
+        DisposeService(_logger_TestRequest2Handler);
+        DisposeService(_logger_HandlerDecorator1_TestRequest_List_string);
+        DisposeService(_testRequest3Handler);
+        DisposeService(_testRequest2Handler);
+        DisposeService(_testHandler);
     }
 
     public async global::System.Threading.Tasks.ValueTask DisposeAsync()
@@ -429,17 +429,17 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
             return;
         }
 
-        await DisposeServiceAsync(_iocSample_Shared_TestRequest3Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest3__int_).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_TestRequest2Handler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string__).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_TestHandler_As_IocSample_Shared_IRequestHandler_IocSample_Shared_TestRequest__System_Collections_Generic_List_string__).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest3__int__).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_TestRequest3Handler_).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest2__System_Collections_Generic_List_string___).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_TestRequest2Handler_).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_Logger_IocSample_Shared_HandlerDecorator1_IocSample_Shared_TestRequest__System_Collections_Generic_List_string___).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_TestRequest3Handler).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_TestRequest2Handler).ConfigureAwait(false);
-        await DisposeServiceAsync(_iocSample_Shared_TestHandler).ConfigureAwait(false);
+        await DisposeServiceAsync(_testRequest3Handler_As_IRequestHandler_TestRequest3_int).ConfigureAwait(false);
+        await DisposeServiceAsync(_testRequest2Handler_As_IRequestHandler_TestRequest2_List_string).ConfigureAwait(false);
+        await DisposeServiceAsync(_testHandler_As_IRequestHandler_TestRequest_List_string).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger_HandlerDecorator1_TestRequest3_int).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger_TestRequest3Handler).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger_HandlerDecorator1_TestRequest2_List_string).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger_TestRequest2Handler).ConfigureAwait(false);
+        await DisposeServiceAsync(_logger_HandlerDecorator1_TestRequest_List_string).ConfigureAwait(false);
+        await DisposeServiceAsync(_testRequest3Handler).ConfigureAwait(false);
+        await DisposeServiceAsync(_testRequest2Handler).ConfigureAwait(false);
+        await DisposeServiceAsync(_testHandler).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()

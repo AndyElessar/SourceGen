@@ -393,20 +393,12 @@ partial class IocSourceGenerator
         }
     }
 
-    /// <summary>
-    /// Gets the array resolver method name for a Func wrapper type.
-    /// </summary>
-    private static string GetFuncArrayResolverMethodName(string innerServiceTypeName)
-    {
-        var safeInnerType = GetSafeIdentifier(innerServiceTypeName);
-        return $"GetAllFunc_{safeInnerType}_Array";
-    }
-
     private static ImmutableEquatableArray<IocSourceGenerator.FuncWrapperContainerEntry> CreateFuncWrapperContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ContainerNames names)
     {
         var neededTypes = new HashSet<string>(StringComparer.Ordinal);
 
@@ -442,9 +434,7 @@ partial class IocSourceGenerator
                 if(!addedKeys.Add(entryKey))
                     continue;
 
-                var safeInnerType = GetSafeIdentifier(serviceType);
-                var safeImplType = GetSafeIdentifier(reg.ImplementationType.Name);
-                var fieldName = $"_func_{safeInnerType}_{safeImplType}";
+                var fieldName = $"_func_{names.Get(serviceType)}_{names.Get(reg.ImplementationType.Name)}";
 
                 entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
             }
@@ -486,6 +476,7 @@ partial class IocSourceGenerator
                 entry.ResolverMethodName,
                 entry.Key,
                 emitCollectionResolver,
+                emitCollectionResolver ? names.FuncArrayResolver(entry.InnerServiceTypeName) : null,
                 collectionFieldNames));
         }
 

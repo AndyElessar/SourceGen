@@ -39,43 +39,43 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_PrimaryService_TestNamespace_ServiceKey_Primary();
-        GetTestNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary();
+        GetPrimaryService_TestNamespace_ServiceKey_Primary();
+        GetSecondaryService_TestNamespace_ServiceKey_Secondary();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary = parent._testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary;
-        _testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary = parent._testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary;
+        _primaryService_TestNamespace_ServiceKey_Primary = parent._primaryService_TestNamespace_ServiceKey_Primary;
+        _secondaryService_TestNamespace_ServiceKey_Secondary = parent._secondaryService_TestNamespace_ServiceKey_Secondary;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.PrimaryService _testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary = null!;
-    private global::TestNamespace.PrimaryService GetTestNamespace_PrimaryService_TestNamespace_ServiceKey_Primary() => _testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary ?? CreateTestNamespace_PrimaryService_TestNamespace_ServiceKey_Primary();
+    private global::TestNamespace.PrimaryService _primaryService_TestNamespace_ServiceKey_Primary = null!;
+    private global::TestNamespace.PrimaryService GetPrimaryService_TestNamespace_ServiceKey_Primary() => _primaryService_TestNamespace_ServiceKey_Primary ?? CreatePrimaryService_TestNamespace_ServiceKey_Primary();
 
-    private global::TestNamespace.PrimaryService CreateTestNamespace_PrimaryService_TestNamespace_ServiceKey_Primary()
+    private global::TestNamespace.PrimaryService CreatePrimaryService_TestNamespace_ServiceKey_Primary()
     {
         var instance = new global::TestNamespace.PrimaryService();
         instance.Initialize(global::TestNamespace.ServiceKey.Primary);
 
-        _testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary = instance;
+        _primaryService_TestNamespace_ServiceKey_Primary = instance;
         return instance;
     }
 
-    private global::TestNamespace.SecondaryService _testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary = null!;
-    private global::TestNamespace.SecondaryService GetTestNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary() => _testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary ?? CreateTestNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary();
+    private global::TestNamespace.SecondaryService _secondaryService_TestNamespace_ServiceKey_Secondary = null!;
+    private global::TestNamespace.SecondaryService GetSecondaryService_TestNamespace_ServiceKey_Secondary() => _secondaryService_TestNamespace_ServiceKey_Secondary ?? CreateSecondaryService_TestNamespace_ServiceKey_Secondary();
 
-    private global::TestNamespace.SecondaryService CreateTestNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary()
+    private global::TestNamespace.SecondaryService CreateSecondaryService_TestNamespace_ServiceKey_Secondary()
     {
         var instance = new global::TestNamespace.SecondaryService();
         instance.Initialize(global::TestNamespace.ServiceKey.Secondary);
 
-        _testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary = instance;
+        _secondaryService_TestNamespace_ServiceKey_Secondary = instance;
         return instance;
     }
 
@@ -244,10 +244,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.PrimaryService), global::TestNamespace.ServiceKey.Primary, static c => c.GetTestNamespace_PrimaryService_TestNamespace_ServiceKey_Primary()),
-        __KeyedResolver(typeof(global::TestNamespace.IService), global::TestNamespace.ServiceKey.Primary, static c => c.GetTestNamespace_PrimaryService_TestNamespace_ServiceKey_Primary()),
-        __KeyedResolver(typeof(global::TestNamespace.SecondaryService), global::TestNamespace.ServiceKey.Secondary, static c => c.GetTestNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary()),
-        __KeyedResolver(typeof(global::TestNamespace.IService), global::TestNamespace.ServiceKey.Secondary, static c => c.GetTestNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary()),
+        __KeyedResolver(typeof(global::TestNamespace.PrimaryService), global::TestNamespace.ServiceKey.Primary, static c => c.GetPrimaryService_TestNamespace_ServiceKey_Primary()),
+        __KeyedResolver(typeof(global::TestNamespace.IService), global::TestNamespace.ServiceKey.Primary, static c => c.GetPrimaryService_TestNamespace_ServiceKey_Primary()),
+        __KeyedResolver(typeof(global::TestNamespace.SecondaryService), global::TestNamespace.ServiceKey.Secondary, static c => c.GetSecondaryService_TestNamespace_ServiceKey_Secondary()),
+        __KeyedResolver(typeof(global::TestNamespace.IService), global::TestNamespace.ServiceKey.Secondary, static c => c.GetSecondaryService_TestNamespace_ServiceKey_Secondary()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -292,8 +292,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary);
-        DisposeService(_testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary);
+        DisposeService(_secondaryService_TestNamespace_ServiceKey_Secondary);
+        DisposeService(_primaryService_TestNamespace_ServiceKey_Primary);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -307,8 +307,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_SecondaryService_TestNamespace_ServiceKey_Secondary).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_PrimaryService_TestNamespace_ServiceKey_Primary).ConfigureAwait(false);
+        await DisposeServiceAsync(_secondaryService_TestNamespace_ServiceKey_Secondary).ConfigureAwait(false);
+        await DisposeServiceAsync(_primaryService_TestNamespace_ServiceKey_Primary).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

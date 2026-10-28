@@ -75,6 +75,7 @@ internal enum ThreadSafeStrategy
 /// <param name="ImplementControllerActivator">Whether to generate IControllerActivator explicit implementation for this container.</param>
 /// <param name="ImplementComponentActivator">Whether to generate IComponentActivator explicit implementation for this container.</param>
 /// <param name="ImplementComponentPropertyActivator">Whether to generate IComponentPropertyActivator explicit implementation for this container.</param>
+/// <param name="MemberNames">Names of the members the user declares on the container class and its base classes, which generated members must not reuse.</param>
 internal sealed record class ContainerModel(
     string ContainerTypeName,
     string ContainerNamespace,
@@ -90,4 +91,5 @@ internal sealed record class ContainerModel(
     ImmutableEquatableArray<PartialAccessorData> PartialAccessors,
     bool ImplementControllerActivator,
     bool ImplementComponentActivator,
-    bool ImplementComponentPropertyActivator);
+    bool ImplementComponentPropertyActivator,
+    ImmutableEquatableArray<string> MemberNames);

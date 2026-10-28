@@ -49,19 +49,19 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::TestNamespace.AsyncDisposableService? _testNamespace_AsyncDisposableService;
-    private readonly global::System.Threading.Lock _testNamespace_AsyncDisposableServiceLock = new();
-    private global::TestNamespace.AsyncDisposableService GetTestNamespace_AsyncDisposableService() => _testNamespace_AsyncDisposableService ?? CreateTestNamespace_AsyncDisposableService();
+    private global::TestNamespace.AsyncDisposableService? _asyncDisposableService;
+    private readonly global::System.Threading.Lock _asyncDisposableServiceLock = new();
+    private global::TestNamespace.AsyncDisposableService GetAsyncDisposableService() => _asyncDisposableService ?? CreateAsyncDisposableService();
 
-    private global::TestNamespace.AsyncDisposableService CreateTestNamespace_AsyncDisposableService()
+    private global::TestNamespace.AsyncDisposableService CreateAsyncDisposableService()
     {
-        lock(_testNamespace_AsyncDisposableServiceLock)
+        lock(_asyncDisposableServiceLock)
         {
-            if(_testNamespace_AsyncDisposableService is not null) return _testNamespace_AsyncDisposableService;
+            if(_asyncDisposableService is not null) return _asyncDisposableService;
 
             var instance = new global::TestNamespace.AsyncDisposableService();
 
-            _testNamespace_AsyncDisposableService = instance;
+            _asyncDisposableService = instance;
             return instance;
         }
     }
@@ -231,8 +231,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.AsyncDisposableService), static c => c.GetTestNamespace_AsyncDisposableService()),
-        __Resolver(typeof(global::TestNamespace.IAsyncDisposableService), static c => c.GetTestNamespace_AsyncDisposableService()),
+        __Resolver(typeof(global::TestNamespace.AsyncDisposableService), static c => c.GetAsyncDisposableService()),
+        __Resolver(typeof(global::TestNamespace.IAsyncDisposableService), static c => c.GetAsyncDisposableService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -268,7 +268,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_AsyncDisposableService);
+        DisposeService(_asyncDisposableService);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
@@ -282,7 +282,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_AsyncDisposableService).ConfigureAwait(false);
+        await DisposeServiceAsync(_asyncDisposableService).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);

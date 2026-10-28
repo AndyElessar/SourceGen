@@ -39,28 +39,28 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_RedisCache__redis_();
+        GetRedisCache__redis_();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_RedisCache__redis_ = parent._testNamespace_RedisCache__redis_;
+        _redisCache__redis_ = parent._redisCache__redis_;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.RedisCache _testNamespace_RedisCache__redis_ = null!;
-    private global::TestNamespace.RedisCache GetTestNamespace_RedisCache__redis_() => _testNamespace_RedisCache__redis_ ?? CreateTestNamespace_RedisCache__redis_();
+    private global::TestNamespace.RedisCache _redisCache__redis_ = null!;
+    private global::TestNamespace.RedisCache GetRedisCache__redis_() => _redisCache__redis_ ?? CreateRedisCache__redis_();
 
-    private global::TestNamespace.RedisCache CreateTestNamespace_RedisCache__redis_()
+    private global::TestNamespace.RedisCache CreateRedisCache__redis_()
     {
         var instance = new global::TestNamespace.RedisCache();
 
-        _testNamespace_RedisCache__redis_ = instance;
+        _redisCache__redis_ = instance;
         return instance;
     }
 
@@ -68,7 +68,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Partial Accessor Implementations
 
-    public partial global::TestNamespace.ICache GetRedisCache() => GetTestNamespace_RedisCache__redis_();
+    public partial global::TestNamespace.ICache GetRedisCache() => GetRedisCache__redis_();
 
     #endregion
 
@@ -235,8 +235,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.RedisCache), "redis", static c => c.GetTestNamespace_RedisCache__redis_()),
-        __KeyedResolver(typeof(global::TestNamespace.ICache), "redis", static c => c.GetTestNamespace_RedisCache__redis_()),
+        __KeyedResolver(typeof(global::TestNamespace.RedisCache), "redis", static c => c.GetRedisCache__redis_()),
+        __KeyedResolver(typeof(global::TestNamespace.ICache), "redis", static c => c.GetRedisCache__redis_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -281,7 +281,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_RedisCache__redis_);
+        DisposeService(_redisCache__redis_);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -295,7 +295,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_RedisCache__redis_).ConfigureAwait(false);
+        await DisposeServiceAsync(_redisCache__redis_).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

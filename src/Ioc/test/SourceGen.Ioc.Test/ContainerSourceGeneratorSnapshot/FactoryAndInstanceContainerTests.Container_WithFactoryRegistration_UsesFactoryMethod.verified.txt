@@ -39,28 +39,28 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create();
+        GetConnection_TestNamespace_ConnectionFactory_Create();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = parent._testNamespace_Connection_TestNamespace_ConnectionFactory_Create;
+        _connection_TestNamespace_ConnectionFactory_Create = parent._connection_TestNamespace_ConnectionFactory_Create;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Connection _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = null!;
-    private global::TestNamespace.Connection GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create() => _testNamespace_Connection_TestNamespace_ConnectionFactory_Create ?? CreateTestNamespace_Connection_TestNamespace_ConnectionFactory_Create();
+    private global::TestNamespace.Connection _connection_TestNamespace_ConnectionFactory_Create = null!;
+    private global::TestNamespace.Connection GetConnection_TestNamespace_ConnectionFactory_Create() => _connection_TestNamespace_ConnectionFactory_Create ?? CreateConnection_TestNamespace_ConnectionFactory_Create();
 
-    private global::TestNamespace.Connection CreateTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()
+    private global::TestNamespace.Connection CreateConnection_TestNamespace_ConnectionFactory_Create()
     {
         var instance = (global::TestNamespace.Connection)global::TestNamespace.ConnectionFactory.Create(this);
 
-        _testNamespace_Connection_TestNamespace_ConnectionFactory_Create = instance;
+        _connection_TestNamespace_ConnectionFactory_Create = instance;
         return instance;
     }
 
@@ -229,8 +229,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Connection), static c => c.GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()),
-        __Resolver(typeof(global::TestNamespace.IConnection), static c => c.GetTestNamespace_Connection_TestNamespace_ConnectionFactory_Create()),
+        __Resolver(typeof(global::TestNamespace.Connection), static c => c.GetConnection_TestNamespace_ConnectionFactory_Create()),
+        __Resolver(typeof(global::TestNamespace.IConnection), static c => c.GetConnection_TestNamespace_ConnectionFactory_Create()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -272,7 +272,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create);
+        DisposeService(_connection_TestNamespace_ConnectionFactory_Create);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -286,7 +286,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_Connection_TestNamespace_ConnectionFactory_Create).ConfigureAwait(false);
+        await DisposeServiceAsync(_connection_TestNamespace_ConnectionFactory_Create).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

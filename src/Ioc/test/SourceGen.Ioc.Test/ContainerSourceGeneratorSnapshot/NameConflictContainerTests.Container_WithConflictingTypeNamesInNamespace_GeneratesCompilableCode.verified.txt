@@ -40,17 +40,17 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_Services_IDependency_Services_Dependency = new global::System.Lazy<global::Services.IDependency>(() => GetServices_Dependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_Services_IDependency_Services_KeyedDependency = new global::System.Lazy<global::Services.IDependency>(() => GetServices_KeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_Dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_KeyedDependency = new global::System.Lazy<global::Services.IDependency>(() => GetKeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_Services_IDependency_Services_Dependency = new global::System.Func<global::Services.IDependency>(() => GetServices_Dependency());
-        _func_Services_IDependency_Services_KeyedDependency = new global::System.Func<global::Services.IDependency>(() => GetServices_KeyedDependency__keyed_());
+        _func_IDependency_Dependency = new global::System.Func<global::Services.IDependency>(() => GetDependency());
+        _func_IDependency_KeyedDependency = new global::System.Func<global::Services.IDependency>(() => GetKeyedDependency__keyed_());
 
         // Initialize eager singletons
-        GetServices_Dependency();
-        GetServices_KeyedDependency__keyed_();
-        _ = GetServices_AsyncServiceAsync();
+        GetDependency();
+        GetKeyedDependency__keyed_();
+        _ = GetAsyncServiceAsync();
     }
 
     private TestContainer(TestContainer parent)
@@ -58,142 +58,142 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
         _root = parent._root ?? parent;
-        _services_Dependency = parent._services_Dependency;
-        _services_KeyedDependency__keyed_ = parent._services_KeyedDependency__keyed_;
-        _services_AsyncService = parent._services_AsyncService;
+        _dependency = parent._dependency;
+        _keyedDependency__keyed_ = parent._keyedDependency__keyed_;
+        _asyncService = parent._asyncService;
 
         // Initialize Lazy wrapper fields
-        _lazy_Services_IDependency_Services_Dependency = new global::System.Lazy<global::Services.IDependency>(() => GetServices_Dependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_Services_IDependency_Services_KeyedDependency = new global::System.Lazy<global::Services.IDependency>(() => GetServices_KeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_Dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_KeyedDependency = new global::System.Lazy<global::Services.IDependency>(() => GetKeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_Services_IDependency_Services_Dependency = new global::System.Func<global::Services.IDependency>(() => GetServices_Dependency());
-        _func_Services_IDependency_Services_KeyedDependency = new global::System.Func<global::Services.IDependency>(() => GetServices_KeyedDependency__keyed_());
+        _func_IDependency_Dependency = new global::System.Func<global::Services.IDependency>(() => GetDependency());
+        _func_IDependency_KeyedDependency = new global::System.Func<global::Services.IDependency>(() => GetKeyedDependency__keyed_());
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::Services.Dependency _services_Dependency = null!;
-    private global::Services.Dependency GetServices_Dependency() => _services_Dependency ?? CreateServices_Dependency();
+    private global::Services.Dependency _dependency = null!;
+    private global::Services.Dependency GetDependency() => _dependency ?? CreateDependency();
 
-    private global::Services.Dependency CreateServices_Dependency()
+    private global::Services.Dependency CreateDependency()
     {
         var instance = new global::Services.Dependency();
 
-        _services_Dependency = instance;
+        _dependency = instance;
         return instance;
     }
 
-    private global::Services.KeyedDependency _services_KeyedDependency__keyed_ = null!;
-    private global::Services.KeyedDependency GetServices_KeyedDependency__keyed_() => _services_KeyedDependency__keyed_ ?? CreateServices_KeyedDependency__keyed_();
+    private global::Services.KeyedDependency _keyedDependency__keyed_ = null!;
+    private global::Services.KeyedDependency GetKeyedDependency__keyed_() => _keyedDependency__keyed_ ?? CreateKeyedDependency__keyed_();
 
-    private global::Services.KeyedDependency CreateServices_KeyedDependency__keyed_()
+    private global::Services.KeyedDependency CreateKeyedDependency__keyed_()
     {
         var instance = new global::Services.KeyedDependency();
 
-        _services_KeyedDependency__keyed_ = instance;
+        _keyedDependency__keyed_ = instance;
         return instance;
     }
 
-    private global::System.Threading.Tasks.Task<global::Services.AsyncService>? _services_AsyncService;
-    private readonly global::System.Threading.SemaphoreSlim _services_AsyncServiceSemaphore = new(1, 1);
+    private global::System.Threading.Tasks.Task<global::Services.AsyncService>? _asyncService;
+    private readonly global::System.Threading.SemaphoreSlim _asyncServiceSemaphore = new(1, 1);
 
-    private async global::System.Threading.Tasks.Task<global::Services.AsyncService> GetServices_AsyncServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::Services.AsyncService> GetAsyncServiceAsync()
     {
-        if(_services_AsyncService is not null)
-            return await _services_AsyncService.ConfigureAwait(false);
+        if(_asyncService is not null)
+            return await _asyncService.ConfigureAwait(false);
         if(_root is not null)
-            return await _root.GetServices_AsyncServiceAsync().ConfigureAwait(false);
+            return await _root.GetAsyncServiceAsync().ConfigureAwait(false);
 
-        await _services_AsyncServiceSemaphore.WaitAsync().ConfigureAwait(false);
+        await _asyncServiceSemaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            if(_services_AsyncService is null)
+            if(_asyncService is null)
             {
-                _services_AsyncService = CreateServices_AsyncServiceAsync();
+                _asyncService = CreateAsyncServiceAsync();
             }
         }
         finally
         {
-            _services_AsyncServiceSemaphore.Release();
+            _asyncServiceSemaphore.Release();
         }
-        return await _services_AsyncService.ConfigureAwait(false);
+        return await _asyncService.ConfigureAwait(false);
     }
 
-    private async global::System.Threading.Tasks.Task<global::Services.AsyncService> CreateServices_AsyncServiceAsync()
+    private async global::System.Threading.Tasks.Task<global::Services.AsyncService> CreateAsyncServiceAsync()
     {
         var instance = new global::Services.AsyncService();
-        await instance.InitAsync(GetServices_Dependency()).ConfigureAwait(false);
+        await instance.InitAsync(GetDependency()).ConfigureAwait(false);
         return instance;
     }
 
-    private global::Services.Scoped? _services_Scoped;
-    private readonly global::System.Threading.Lock _services_ScopedLock = new();
-    private global::Services.Scoped GetServices_Scoped() => _services_Scoped ?? CreateServices_Scoped();
+    private global::Services.Scoped? _scoped;
+    private readonly global::System.Threading.Lock _scopedLock = new();
+    private global::Services.Scoped GetScoped() => _scoped ?? CreateScoped();
 
-    private global::Services.Scoped CreateServices_Scoped()
+    private global::Services.Scoped CreateScoped()
     {
-        lock(_services_ScopedLock)
+        lock(_scopedLock)
         {
-            if(_services_Scoped is not null) return _services_Scoped;
+            if(_scoped is not null) return _scoped;
 
             var instance = new global::Services.Scoped();
 
-            _services_Scoped = instance;
+            _scoped = instance;
             return instance;
         }
     }
 
-    private global::Services.Consumer GetServices_Consumer()
+    private global::Services.Consumer GetConsumer()
     {
-        return new global::Services.Consumer(_lazy_Services_IDependency_Services_Dependency, _func_Services_IDependency_Services_Dependency, GetAllServices_IDependencyArray(), GetAllKvp_string_Services_IDependency_Dictionary(), __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetServices_AsyncServiceAsync()));
+        return new global::Services.Consumer(_lazy_IDependency_Dependency, _func_IDependency_Dependency, GetAllIDependencyArray(), GetAllKvp_string_IDependency_Dictionary(), __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetAsyncServiceAsync()));
     }
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
 
-    private global::Services.IDependency[] GetAllServices_IDependencyArray() =>
+    private global::Services.IDependency[] GetAllIDependencyArray() =>
         [
-            GetServices_Dependency(),
+            GetDependency(),
         ];
 
     // KeyValuePair resolver methods
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency> GetKvp_string_Services_IDependency__keyed_() => new global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>("keyed", GetServices_KeyedDependency__keyed_());
+    private global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency> GetKvp_string_IDependency__keyed_() => new global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>("keyed", GetKeyedDependency__keyed_());
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>[] GetAllKvp_string_Services_IDependency_Array() =>
+    private global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>[] GetAllKvp_string_IDependency_Array() =>
         [
-            GetKvp_string_Services_IDependency__keyed_(),
+            GetKvp_string_IDependency__keyed_(),
         ];
 
-    private global::System.Collections.Generic.Dictionary<string, global::Services.IDependency> GetAllKvp_string_Services_IDependency_Dictionary() =>
+    private global::System.Collections.Generic.Dictionary<string, global::Services.IDependency> GetAllKvp_string_IDependency_Dictionary() =>
         new global::System.Collections.Generic.Dictionary<string, global::Services.IDependency>()
         {
-            ["keyed"] = GetServices_KeyedDependency__keyed_(),
+            ["keyed"] = GetKeyedDependency__keyed_(),
         };
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::Services.IDependency> _lazy_Services_IDependency_Services_Dependency;
-    private readonly global::System.Lazy<global::Services.IDependency> _lazy_Services_IDependency_Services_KeyedDependency;
+    private readonly global::System.Lazy<global::Services.IDependency> _lazy_IDependency_Dependency;
+    private readonly global::System.Lazy<global::Services.IDependency> _lazy_IDependency_KeyedDependency;
 
-    private global::System.Lazy<global::Services.IDependency>[] GetAllLazy_Services_IDependency_Array() =>
+    private global::System.Lazy<global::Services.IDependency>[] GetAllLazy_IDependency_Array() =>
         [
-            _lazy_Services_IDependency_Services_Dependency,
-            _lazy_Services_IDependency_Services_KeyedDependency,
+            _lazy_IDependency_Dependency,
+            _lazy_IDependency_KeyedDependency,
         ];
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::Services.IDependency> _func_Services_IDependency_Services_Dependency;
-    private readonly global::System.Func<global::Services.IDependency> _func_Services_IDependency_Services_KeyedDependency;
+    private readonly global::System.Func<global::Services.IDependency> _func_IDependency_Dependency;
+    private readonly global::System.Func<global::Services.IDependency> _func_IDependency_KeyedDependency;
 
-    private global::System.Func<global::Services.IDependency>[] GetAllFunc_Services_IDependency_Array() =>
+    private global::System.Func<global::Services.IDependency>[] GetAllFunc_IDependency_Array() =>
         [
-            _func_Services_IDependency_Services_Dependency,
-            _func_Services_IDependency_Services_KeyedDependency,
+            _func_IDependency_Dependency,
+            _func_IDependency_KeyedDependency,
         ];
 
     #endregion
@@ -361,35 +361,35 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::Services.Dependency), static c => c.GetServices_Dependency()),
-        __Resolver(typeof(global::Services.IDependency), static c => c.GetServices_Dependency()),
-        __KeyedResolver(typeof(global::Services.KeyedDependency), "keyed", static c => c.GetServices_KeyedDependency__keyed_()),
-        __KeyedResolver(typeof(global::Services.IDependency), "keyed", static c => c.GetServices_KeyedDependency__keyed_()),
-        __Resolver(typeof(global::Services.Scoped), static c => c.GetServices_Scoped()),
-        __Resolver(typeof(global::Services.IScoped), static c => c.GetServices_Scoped()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.AsyncService>), static c => c.GetServices_AsyncServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), static c => __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(c.GetServices_AsyncServiceAsync())),
-        __Resolver(typeof(global::Services.Consumer), static c => c.GetServices_Consumer()),
-        ..__CollectionResolvers<global::Services.IDependency>(static c => c.GetAllServices_IDependencyArray()),
+        __Resolver(typeof(global::Services.Dependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::Services.IDependency), static c => c.GetDependency()),
+        __KeyedResolver(typeof(global::Services.KeyedDependency), "keyed", static c => c.GetKeyedDependency__keyed_()),
+        __KeyedResolver(typeof(global::Services.IDependency), "keyed", static c => c.GetKeyedDependency__keyed_()),
+        __Resolver(typeof(global::Services.Scoped), static c => c.GetScoped()),
+        __Resolver(typeof(global::Services.IScoped), static c => c.GetScoped()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.AsyncService>), static c => c.GetAsyncServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), static c => __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(c.GetAsyncServiceAsync())),
+        __Resolver(typeof(global::Services.Consumer), static c => c.GetConsumer()),
+        ..__CollectionResolvers<global::Services.IDependency>(static c => c.GetAllIDependencyArray()),
 
         // KeyValuePair resolvers
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_Services_IDependency_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_Services_IDependency_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>[]), static c => c.GetAllKvp_string_Services_IDependency_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_Services_IDependency_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_IDependency_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_IDependency_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>[]), static c => c.GetAllKvp_string_IDependency_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::Services.IDependency>), static c => c._lazy_Services_IDependency_Services_KeyedDependency),
-        ..__CollectionResolvers<global::System.Lazy<global::Services.IDependency>>(static c => c.GetAllLazy_Services_IDependency_Array()),
+        __Resolver(typeof(global::System.Lazy<global::Services.IDependency>), static c => c._lazy_IDependency_KeyedDependency),
+        ..__CollectionResolvers<global::System.Lazy<global::Services.IDependency>>(static c => c.GetAllLazy_IDependency_Array()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::Services.IDependency>), static c => c._func_Services_IDependency_Services_KeyedDependency),
-        ..__CollectionResolvers<global::System.Func<global::Services.IDependency>>(static c => c.GetAllFunc_Services_IDependency_Array()),
+        __Resolver(typeof(global::System.Func<global::Services.IDependency>), static c => c._func_IDependency_KeyedDependency),
+        ..__CollectionResolvers<global::System.Func<global::Services.IDependency>>(static c => c.GetAllFunc_IDependency_Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -438,17 +438,17 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_services_Scoped);
+        DisposeService(_scoped);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
             return;
         }
 
-        DisposeService(_services_AsyncService);
-        _services_AsyncServiceSemaphore.Dispose();
-        DisposeService(_services_KeyedDependency__keyed_);
-        DisposeService(_services_Dependency);
+        DisposeService(_asyncService);
+        _asyncServiceSemaphore.Dispose();
+        DisposeService(_keyedDependency__keyed_);
+        DisposeService(_dependency);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -456,17 +456,17 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_services_Scoped).ConfigureAwait(false);
+        await DisposeServiceAsync(_scoped).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
-        await DisposeServiceAsync(_services_AsyncService).ConfigureAwait(false);
-        _services_AsyncServiceSemaphore.Dispose();
-        await DisposeServiceAsync(_services_KeyedDependency__keyed_).ConfigureAwait(false);
-        await DisposeServiceAsync(_services_Dependency).ConfigureAwait(false);
+        await DisposeServiceAsync(_asyncService).ConfigureAwait(false);
+        _asyncServiceSemaphore.Dispose();
+        await DisposeServiceAsync(_keyedDependency__keyed_).ConfigureAwait(false);
+        await DisposeServiceAsync(_dependency).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

@@ -89,20 +89,52 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collect partial accessor method names to avoid naming conflicts
+    /// Member names that the generated service fields and resolvers must not use: the members of the generated
+    /// container infrastructure, inherited <see cref="object"/> members, imported module fields, and the members
+    /// the user declares on the container class (including partial accessors).
     /// </summary>
+    private static readonly string[] GeneratedMemberNames =
+    [
+        "GetService", "GetRequiredService", "GetKeyedService", "GetRequiredKeyedService", "GetServices", "GetKeyedServices",
+        "GetFallbackServiceProvider", "GetType", "GetHashCode",
+        "CreateScope", "CreateAsyncScope", "CreateBuilder", "CreateServiceProvider", "CreateFallbackScope",
+        "CreateControllerFactory", "CreateComponentFactory", "CreateComponentPropertyInjector",
+        "_root", "_disposed", "_isRootScope", "_fallbackProvider", "_ownedFallbackProvider", "_fallbackScope",
+        "_localResolvers", "_serviceResolvers", "_controllerFactoryCache", "_componentFactoryCache", "_propertyActivatorCache",
+    ];
+
     private static HashSet<string> GetReservedNames(ContainerModel container)
     {
-        var reservedNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach(var accessor in container.PartialAccessors)
+        var reservedNames = new HashSet<string>(GeneratedMemberNames, StringComparer.Ordinal);
+        reservedNames.UnionWith(container.MemberNames);
+        foreach(var module in container.ImportedModules)
         {
-            if(accessor.Kind == PartialAccessorKind.Method)
-            {
-                reservedNames.Add(accessor.Name);
-            }
+            reservedNames.Add(GetModuleFieldName(module.Name));
         }
+
         return reservedNames;
     }
+
+    /// <summary>
+    /// Gets whether a resolver method name, or a method derived from it (<c>Create…</c>, <c>…Async</c>), is reserved.
+    /// </summary>
+    private static bool IsReservedResolverName(string methodName, HashSet<string> reservedNames)
+    {
+        var createName = GetCreateMethodName(methodName);
+        return reservedNames.Contains(methodName)
+            || reservedNames.Contains(createName)
+            || reservedNames.Contains(GetAsyncResolverMethodName(methodName))
+            || reservedNames.Contains(GetAsyncResolverMethodName(createName));
+    }
+
+    /// <summary>
+    /// Gets whether a service field name, or a synchronization field derived from it, is reserved.
+    /// </summary>
+    private static bool IsReservedFieldName(string fieldName, HashSet<string> reservedNames) =>
+        reservedNames.Contains(fieldName)
+        || reservedNames.Contains($"{fieldName}Lock")
+        || reservedNames.Contains($"{fieldName}Semaphore")
+        || reservedNames.Contains($"{fieldName}SpinLock");
 
     /// <summary>
     /// Converts explicit RegistrationData to ServiceRegistrationModel for container generation.
@@ -162,6 +194,11 @@ partial class IocSourceGenerator
         var hasOpenGenerics = false;
         var hasKeyedServices = false;
 
+        // Member names use short type names; collisions among the registered types are detected up front
+        var names = new ContainerNames(registrations
+            .Where(static r => !r.IsOpenGeneric)
+            .SelectMany(static r => new[] { GetNamingTypeName(r.ImplementationType), r.ServiceType.Name }));
+
         foreach(var reg in registrations)
         {
             var effectiveRegistration = hasAllInjectionFeatures ? reg : FilterRegistrationForFeatures(reg, features);
@@ -183,12 +220,13 @@ partial class IocSourceGenerator
             var cached = CreateServiceLookupEntry(
                 splitDecorators ? effectiveRegistration with { Decorators = [] } : effectiveRegistration,
                 eagerResolveOptions,
-                reservedNames);
+                reservedNames,
+                names);
             var serviceCached = cached;
 
             if(splitDecorators)
             {
-                serviceCached = CreateDecoratedServiceLookupEntry(effectiveRegistration, cached, eagerResolveOptions, reservedNames);
+                serviceCached = CreateDecoratedServiceLookupEntry(effectiveRegistration, cached, eagerResolveOptions, reservedNames, names);
 
                 var decoratedMap = effectiveRegistration.Lifetime switch
                 {
@@ -299,9 +337,9 @@ partial class IocSourceGenerator
 
         var serviceLookupEntries = new ServiceLookup(serviceLookup);
 
-        var lazyWrapperEntries = CreateLazyWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries);
-        var funcWrapperEntries = CreateFuncWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries);
-        var kvpWrapperEntries = CreateKvpWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries);
+        var lazyWrapperEntries = CreateLazyWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
+        var funcWrapperEntries = CreateFuncWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
+        var kvpWrapperEntries = CreateKvpWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
 
         var lazyFieldByResolver = lazyWrapperEntries
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
@@ -311,7 +349,8 @@ partial class IocSourceGenerator
             lazyFieldByResolver,
             funcFieldByResolver,
             new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
-            new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal));
+            new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
+            names);
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,
@@ -331,7 +370,7 @@ partial class IocSourceGenerator
             serviceLookupEntries,
             collectionRegistrations,
             wrapperFields);
-        var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations);
+        var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations, names);
         var immutableLastWinsByServiceType = CreateLastWinsByServiceType(
             lastWinsLookup,
             singletonEntries,
@@ -434,14 +473,20 @@ partial class IocSourceGenerator
     private static ServiceLookupEntry CreateServiceLookupEntry(
         ServiceRegistrationModel reg,
         EagerResolveOptions eagerResolveOptions,
-        HashSet<string> reservedNames)
+        HashSet<string> reservedNames,
+        ContainerNames names)
     {
-        var (fieldName, methodName) = ComputeServiceNames(reg);
+        var (fieldName, methodName) = ComputeServiceNames(reg, names);
 
-        // Avoid naming conflicts with user-declared partial accessor methods
-        if(reservedNames.Contains(methodName))
+        // Avoid naming conflicts with user-declared and generated infrastructure members
+        if(IsReservedResolverName(methodName, reservedNames))
         {
             methodName = $"{methodName}_Resolve";
+        }
+
+        if(IsReservedFieldName(fieldName, reservedNames))
+        {
+            fieldName = $"{fieldName}_Resolve";
         }
 
         // Determine if this registration should be eagerly resolved via EagerResolveOptions.
@@ -466,14 +511,21 @@ partial class IocSourceGenerator
         ServiceRegistrationModel reg,
         ServiceLookupEntry inner,
         EagerResolveOptions eagerResolveOptions,
-        HashSet<string> reservedNames)
+        HashSet<string> reservedNames,
+        ContainerNames names)
     {
-        var entry = CreateServiceLookupEntry(reg, eagerResolveOptions, reservedNames);
-        var safeServiceType = GetSafeIdentifier(reg.ServiceType.Name);
+        var entry = CreateServiceLookupEntry(reg, eagerResolveOptions, reservedNames, names);
+        var safeServiceType = names.Get(reg.ServiceType.Name);
         var methodName = $"{inner.ResolverMethodName}_As_{safeServiceType}";
-        if(reservedNames.Contains(methodName))
+        if(IsReservedResolverName(methodName, reservedNames))
         {
             methodName = $"{methodName}_Resolve";
+        }
+
+        var fieldName = $"{inner.FieldName}_As_{safeServiceType}";
+        if(IsReservedFieldName(fieldName, reservedNames))
+        {
+            fieldName = $"{fieldName}_Resolve";
         }
 
         // Transient async-init services only have a creation method (no cached resolver)
@@ -486,7 +538,7 @@ partial class IocSourceGenerator
         return entry with
         {
             ResolverMethodName = methodName,
-            FieldName = $"{inner.FieldName}_As_{safeServiceType}",
+            FieldName = fieldName,
             InnerResolverMethodName = innerResolverMethodName
         };
     }
@@ -506,20 +558,23 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Gets the type name that member names of an implementation type are derived from.
+    /// </summary>
+    private static string GetNamingTypeName(TypeData implType) => implType switch
+    {
+        GenericTypeData { IsOpenGeneric: false } genericTypeData when genericTypeData.Name != genericTypeData.NameWithoutGeneric => genericTypeData.Name,
+        GenericTypeData genericTypeData => genericTypeData.NameWithoutGeneric,
+        _ => implType.Name,
+    };
+
+    /// <summary>
     /// Computes both field name and resolver method name for a service in a single pass.
     /// This avoids redundant GetSafeIdentifier calls and string operations.
     /// </summary>
     /// <returns>A tuple containing (FieldName, ResolverMethodName).</returns>
-    private static (string FieldName, string ResolverMethodName) ComputeServiceNames(ServiceRegistrationModel reg)
+    private static (string FieldName, string ResolverMethodName) ComputeServiceNames(ServiceRegistrationModel reg, ContainerNames names)
     {
-        var implType = reg.ImplementationType;
-        var typeName = implType switch
-        {
-            GenericTypeData { IsOpenGeneric: false } genericTypeData when genericTypeData.Name != genericTypeData.NameWithoutGeneric => genericTypeData.Name,
-            GenericTypeData genericTypeData => genericTypeData.NameWithoutGeneric,
-            _ => implType.Name,
-        };
-        var baseName = GetSafeIdentifier(typeName);
+        var baseName = names.Get(GetNamingTypeName(reg.ImplementationType));
         var lowerFirstChar = char.ToLowerInvariant(baseName[0]);
         var restOfName = baseName[1..];
 
@@ -685,7 +740,8 @@ partial class IocSourceGenerator
     }
 
     private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateCollectionContainerEntries(
-        IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations)
+        IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
+        ContainerNames names)
     {
         var entries = new List<IocSourceGenerator.ContainerEntry>(collectionRegistrations.Count);
 
@@ -715,7 +771,7 @@ partial class IocSourceGenerator
 
             entries.Add(new CollectionContainerEntry(
                 kvp.Key,
-                GetArrayResolverMethodName(kvp.Key),
+                names.ArrayResolver(kvp.Key),
                 elementResolvers.ToImmutableEquatableArray()));
         }
 
@@ -950,17 +1006,19 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Field and collection-resolver lookups for the container's Lazy/Func wrapper entries.
+    /// Field and collection-resolver lookups for the container's Lazy/Func wrapper entries, and the container's member names.
     /// </summary>
     /// <param name="LazyFieldByResolver">Lazy wrapper field name by inner resolver method name.</param>
     /// <param name="FuncFieldByResolver">Func wrapper field name by inner resolver method name.</param>
     /// <param name="LazyCollectionServiceTypes">Inner service types with a generated <c>Lazy&lt;T&gt;[]</c> resolver.</param>
     /// <param name="FuncCollectionServiceTypes">Inner service types with a generated <c>Func&lt;T&gt;[]</c> resolver.</param>
+    /// <param name="Names">The container's member names for type names.</param>
     private sealed record WrapperFieldLookup(
         IReadOnlyDictionary<string, string> LazyFieldByResolver,
         IReadOnlyDictionary<string, string> FuncFieldByResolver,
         HashSet<string> LazyCollectionServiceTypes,
-        HashSet<string> FuncCollectionServiceTypes);
+        HashSet<string> FuncCollectionServiceTypes,
+        ContainerNames Names);
 
     private static ResolvedDependency ResolveParameterDependencyForContainerEntryModel(
         ParameterData parameter,
@@ -1011,26 +1069,26 @@ partial class IocSourceGenerator
             {
                 var isArrayType = collectionType.WrapperKind is WrapperKind.ReadOnlyList or WrapperKind.List or WrapperKind.Array;
                 return isArrayType
-                    ? new KvpResolverDependency(GetKvpArrayResolverMethodName(kvpElement.KeyType.Name, kvpElement.ValueType.Name))
-                    : new DictionaryResolverDependency(GetKvpDictionaryResolverMethodName(kvpElement.KeyType.Name, kvpElement.ValueType.Name));
+                    ? new KvpResolverDependency(wrapperFields.Names.KvpArrayResolver(kvpElement.KeyType.Name, kvpElement.ValueType.Name))
+                    : new DictionaryResolverDependency(wrapperFields.Names.KvpDictionaryResolver(kvpElement.KeyType.Name, kvpElement.ValueType.Name));
             }
 
             if(collectionRegistrations.ContainsKey(elementTypeName))
             {
-                return new CollectionDependency(GetArrayResolverMethodName(elementTypeName));
+                return new CollectionDependency(wrapperFields.Names.ArrayResolver(elementTypeName));
             }
 
             // Collections of Lazy<T> / Func<T> call the wrapper array resolver directly instead of GetServices<Lazy<T>>()
             if(collectionType.ElementType is LazyTypeData lazyElement
                 && wrapperFields.LazyCollectionServiceTypes.Contains(lazyElement.InstanceType.Name))
             {
-                return new CollectionDependency(GetLazyArrayResolverMethodName(lazyElement.InstanceType.Name));
+                return new CollectionDependency(wrapperFields.Names.LazyArrayResolver(lazyElement.InstanceType.Name));
             }
 
             if(collectionType.ElementType is FuncTypeData { HasInputParameters: false } funcElement
                 && wrapperFields.FuncCollectionServiceTypes.Contains(funcElement.ReturnType.Name))
             {
-                return new CollectionDependency(GetFuncArrayResolverMethodName(funcElement.ReturnType.Name));
+                return new CollectionDependency(wrapperFields.Names.FuncArrayResolver(funcElement.ReturnType.Name));
             }
 
             return new CollectionFallbackDependency(elementTypeName, IsKeyed: false, Key: null);
@@ -1186,7 +1244,7 @@ partial class IocSourceGenerator
             {
                 if(key is null && HasKvpRegistrationsForContainerEntryModel(dictionary.KeyType.Name, dictionary.ValueType.Name, serviceLookup))
                 {
-                    return new DictionaryResolverDependency(GetKvpDictionaryResolverMethodName(dictionary.KeyType.Name, dictionary.ValueType.Name));
+                    return new DictionaryResolverDependency(wrapperFields.Names.KvpDictionaryResolver(dictionary.KeyType.Name, dictionary.ValueType.Name));
                 }
 
                 var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{dictionary.KeyType.Name}, {dictionary.ValueType.Name}>";

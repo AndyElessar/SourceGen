@@ -49,36 +49,36 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
-    private global::TestNamespace.Handler1? _testNamespace_Handler1__handler_1_;
-    private readonly global::System.Threading.Lock _testNamespace_Handler1__handler_1_Lock = new();
-    private global::TestNamespace.Handler1 GetTestNamespace_Handler1__handler_1_() => _testNamespace_Handler1__handler_1_ ?? CreateTestNamespace_Handler1__handler_1_();
+    private global::TestNamespace.Handler1? _handler1__handler_1_;
+    private readonly global::System.Threading.Lock _handler1__handler_1_Lock = new();
+    private global::TestNamespace.Handler1 GetHandler1__handler_1_() => _handler1__handler_1_ ?? CreateHandler1__handler_1_();
 
-    private global::TestNamespace.Handler1 CreateTestNamespace_Handler1__handler_1_()
+    private global::TestNamespace.Handler1 CreateHandler1__handler_1_()
     {
-        lock(_testNamespace_Handler1__handler_1_Lock)
+        lock(_handler1__handler_1_Lock)
         {
-            if(_testNamespace_Handler1__handler_1_ is not null) return _testNamespace_Handler1__handler_1_;
+            if(_handler1__handler_1_ is not null) return _handler1__handler_1_;
 
             var instance = new global::TestNamespace.Handler1("handler-1");
 
-            _testNamespace_Handler1__handler_1_ = instance;
+            _handler1__handler_1_ = instance;
             return instance;
         }
     }
 
-    private global::TestNamespace.Handler2? _testNamespace_Handler2__handler_2_;
-    private readonly global::System.Threading.Lock _testNamespace_Handler2__handler_2_Lock = new();
-    private global::TestNamespace.Handler2 GetTestNamespace_Handler2__handler_2_() => _testNamespace_Handler2__handler_2_ ?? CreateTestNamespace_Handler2__handler_2_();
+    private global::TestNamespace.Handler2? _handler2__handler_2_;
+    private readonly global::System.Threading.Lock _handler2__handler_2_Lock = new();
+    private global::TestNamespace.Handler2 GetHandler2__handler_2_() => _handler2__handler_2_ ?? CreateHandler2__handler_2_();
 
-    private global::TestNamespace.Handler2 CreateTestNamespace_Handler2__handler_2_()
+    private global::TestNamespace.Handler2 CreateHandler2__handler_2_()
     {
-        lock(_testNamespace_Handler2__handler_2_Lock)
+        lock(_handler2__handler_2_Lock)
         {
-            if(_testNamespace_Handler2__handler_2_ is not null) return _testNamespace_Handler2__handler_2_;
+            if(_handler2__handler_2_ is not null) return _handler2__handler_2_;
 
             var instance = new global::TestNamespace.Handler2("handler-2");
 
-            _testNamespace_Handler2__handler_2_ = instance;
+            _handler2__handler_2_ = instance;
             return instance;
         }
     }
@@ -248,10 +248,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.Handler1), "handler-1", static c => c.GetTestNamespace_Handler1__handler_1_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler-1", static c => c.GetTestNamespace_Handler1__handler_1_()),
-        __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler-2", static c => c.GetTestNamespace_Handler2__handler_2_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler-2", static c => c.GetTestNamespace_Handler2__handler_2_()),
+        __KeyedResolver(typeof(global::TestNamespace.Handler1), "handler-1", static c => c.GetHandler1__handler_1_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler-1", static c => c.GetHandler1__handler_1_()),
+        __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler-2", static c => c.GetHandler2__handler_2_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler-2", static c => c.GetHandler2__handler_2_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -290,8 +290,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        DisposeService(_testNamespace_Handler2__handler_2_);
-        DisposeService(_testNamespace_Handler1__handler_1_);
+        DisposeService(_handler2__handler_2_);
+        DisposeService(_handler1__handler_1_);
         if(!_isRootScope)
         {
             DisposeService(_fallbackScope);
@@ -305,8 +305,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        await DisposeServiceAsync(_testNamespace_Handler2__handler_2_).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_Handler1__handler_1_).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler2__handler_2_).ConfigureAwait(false);
+        await DisposeServiceAsync(_handler1__handler_1_).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);

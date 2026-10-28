@@ -39,41 +39,41 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_KeyedService1__key1_();
-        GetTestNamespace_KeyedService2__key2_();
+        GetKeyedService1__key1_();
+        GetKeyedService2__key2_();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_KeyedService1__key1_ = parent._testNamespace_KeyedService1__key1_;
-        _testNamespace_KeyedService2__key2_ = parent._testNamespace_KeyedService2__key2_;
+        _keyedService1__key1_ = parent._keyedService1__key1_;
+        _keyedService2__key2_ = parent._keyedService2__key2_;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.KeyedService1 _testNamespace_KeyedService1__key1_ = null!;
-    private global::TestNamespace.KeyedService1 GetTestNamespace_KeyedService1__key1_() => _testNamespace_KeyedService1__key1_ ?? CreateTestNamespace_KeyedService1__key1_();
+    private global::TestNamespace.KeyedService1 _keyedService1__key1_ = null!;
+    private global::TestNamespace.KeyedService1 GetKeyedService1__key1_() => _keyedService1__key1_ ?? CreateKeyedService1__key1_();
 
-    private global::TestNamespace.KeyedService1 CreateTestNamespace_KeyedService1__key1_()
+    private global::TestNamespace.KeyedService1 CreateKeyedService1__key1_()
     {
         var instance = new global::TestNamespace.KeyedService1();
 
-        _testNamespace_KeyedService1__key1_ = instance;
+        _keyedService1__key1_ = instance;
         return instance;
     }
 
-    private global::TestNamespace.KeyedService2 _testNamespace_KeyedService2__key2_ = null!;
-    private global::TestNamespace.KeyedService2 GetTestNamespace_KeyedService2__key2_() => _testNamespace_KeyedService2__key2_ ?? CreateTestNamespace_KeyedService2__key2_();
+    private global::TestNamespace.KeyedService2 _keyedService2__key2_ = null!;
+    private global::TestNamespace.KeyedService2 GetKeyedService2__key2_() => _keyedService2__key2_ ?? CreateKeyedService2__key2_();
 
-    private global::TestNamespace.KeyedService2 CreateTestNamespace_KeyedService2__key2_()
+    private global::TestNamespace.KeyedService2 CreateKeyedService2__key2_()
     {
         var instance = new global::TestNamespace.KeyedService2();
 
-        _testNamespace_KeyedService2__key2_ = instance;
+        _keyedService2__key2_ = instance;
         return instance;
     }
 
@@ -124,10 +124,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
         return (serviceType, key) switch
         {
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService1) && Equals(k, "key1") => GetTestNamespace_KeyedService1__key1_(),
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key1") => GetTestNamespace_KeyedService1__key1_(),
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService2) && Equals(k, "key2") => GetTestNamespace_KeyedService2__key2_(),
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key2") => GetTestNamespace_KeyedService2__key2_(),
+            (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService1) && Equals(k, "key1") => GetKeyedService1__key1_(),
+            (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key1") => GetKeyedService1__key1_(),
+            (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService2) && Equals(k, "key2") => GetKeyedService2__key2_(),
+            (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key2") => GetKeyedService2__key2_(),
             _ => GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null
         };
     }
@@ -219,10 +219,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedService1), "key1", static c => c.GetTestNamespace_KeyedService1__key1_()),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key1", static c => c.GetTestNamespace_KeyedService1__key1_()),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedService2), "key2", static c => c.GetTestNamespace_KeyedService2__key2_()),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key2", static c => c.GetTestNamespace_KeyedService2__key2_()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedService1), "key1", static c => c.GetKeyedService1__key1_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key1", static c => c.GetKeyedService1__key1_()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedService2), "key2", static c => c.GetKeyedService2__key2_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key2", static c => c.GetKeyedService2__key2_()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -265,8 +265,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_testNamespace_KeyedService2__key2_);
-        DisposeService(_testNamespace_KeyedService1__key1_);
+        DisposeService(_keyedService2__key2_);
+        DisposeService(_keyedService1__key1_);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -280,8 +280,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_KeyedService2__key2_).ConfigureAwait(false);
-        await DisposeServiceAsync(_testNamespace_KeyedService1__key1_).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyedService2__key2_).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyedService1__key1_).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
