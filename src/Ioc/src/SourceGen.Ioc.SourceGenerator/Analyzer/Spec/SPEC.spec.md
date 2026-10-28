@@ -122,7 +122,7 @@ Report when there are singleton service depending on scoped service.
 
 - Collects all registered services with their lifetimes (Singleton/Scoped/Transient).
 - Analyzes each service's constructor parameters and queries the dependency's lifetime.
-- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to detect captive dependencies through wrappers.
+- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to detect captive dependencies through wrappers. A `Func` is reported too, because a Singleton resolves the Scoped service from the root scope.
 - Reports when a Singleton service depends on a Scoped service.
 
 ---
@@ -134,7 +134,7 @@ Report when there are singleton service depending on transient service.
 **Analysis:**
 
 - Same as SGIOC003, analyzes lifetime relationships between services.
-- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types.
+- Unwraps `Lazy<T>`, which keeps the instance it creates. A dependency through `Func<T>` or `Func<T1, ..., TReturn>` is not reported: the factory resolves a new transient instance on every call, so none is captured.
 - Reports when a Singleton service depends on a Transient service.
 
 ---
@@ -146,7 +146,7 @@ Report when there are scoped service depending on transient service.
 **Analysis:**
 
 - Same as SGIOC003, analyzes lifetime relationships between services.
-- Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types.
+- Unwraps `Lazy<T>`, which keeps the instance it creates. A dependency through `Func<T>` or `Func<T1, ..., TReturn>` is not reported: the factory resolves a new transient instance on every call, so none is captured.
 - Reports when a Scoped service depends on a Transient service.
 
 ---

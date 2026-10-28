@@ -53,8 +53,8 @@ services.AddMyProject(); // Generated extension method
 |:---|:---|:---|
 |SGIOC002|Error|Circular dependency detected among registered services.|
 |SGIOC003|Error|Singleton service depends on a scoped service.|
-|SGIOC004|Error|Singleton service depends on a transient service.|
-|SGIOC005|Error|Scoped service depends on a transient service.|
+|SGIOC004|Error|Singleton service depends on a transient service (directly or through `Lazy<T>`; a `Func` factory creates a new instance per call and is not reported).|
+|SGIOC005|Error|Scoped service depends on a transient service (directly or through `Lazy<T>`; a `Func` factory creates a new instance per call and is not reported).|
 
 ### Better Generic Support
 

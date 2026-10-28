@@ -125,8 +125,9 @@ public class SGIOC004Tests
     }
 
     [Test]
-    public async Task SGIOC004_SingletonDependsOnTransientViaFunc_ReportsDiagnostic()
+    public async Task SGIOC004_SingletonDependsOnTransientViaFunc_NoDiagnostic()
     {
+        // A Func resolves a new transient instance on every call, so none is captured
         const string source = """
             using System;
             using Microsoft.Extensions.DependencyInjection;
@@ -149,7 +150,7 @@ public class SGIOC004Tests
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
 
-        await Assert.That(sgioc004).Count().IsEqualTo(1);
+        await Assert.That(sgioc004).IsEmpty();
     }
 
     [Test]
@@ -181,8 +182,9 @@ public class SGIOC004Tests
     }
 
     [Test]
-    public async Task SGIOC004_SingletonDependsOnTransientViaMultiParamFunc_ReportsDiagnostic()
+    public async Task SGIOC004_SingletonDependsOnTransientViaMultiParamFunc_NoDiagnostic()
     {
+        // A Func resolves a new transient instance on every call, so none is captured
         const string source = """
             using System;
             using Microsoft.Extensions.DependencyInjection;
@@ -208,6 +210,6 @@ public class SGIOC004Tests
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
 
-        await Assert.That(sgioc004).Count().IsEqualTo(1);
+        await Assert.That(sgioc004).IsEmpty();
     }
 }
