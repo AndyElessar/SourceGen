@@ -39,7 +39,7 @@ public sealed partial class RegisterAnalyzer
             }
 
             // SGIOC003-005: Check for lifetime conflict
-            var lifetimeConflictDescriptor = GetLifetimeConflictDescriptor(currentLifetime, dependencyInfo.Lifetime);
+            var lifetimeConflictDescriptor = GetLifetimeConflictDescriptor(currentLifetime, dependencyInfo.Lifetime, dependencyInfo.IsThroughFunc);
             if (lifetimeConflictDescriptor is not null)
             {
                 reportDiagnostic(Diagnostic.Create(
@@ -52,19 +52,34 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
+    /// A registered constructor dependency of a service.
+    /// </summary>
+    /// <param name="Info">The registered dependency.</param>
+    /// <param name="IsThroughFunc">
+    /// Whether the dependency is resolved through a <c>Func&lt;...&gt;</c> factory, which resolves it on every call,
+    /// so a transient dependency is not captured.
+    /// </param>
+    private readonly record struct DependencyEdge(ServiceInfo Info, bool IsThroughFunc)
+    {
+        public INamedTypeSymbol Type => Info.Type;
+
+        public ServiceLifetime Lifetime => Info.Lifetime;
+    }
+
+    /// <summary>
     /// Registered service dependency graph with cached constructor dependencies and lazily computed
     /// strongly connected components (Tarjan), so edges that cannot form a cycle skip the cycle DFS.
     /// </summary>
     private sealed class DependencyGraph(AnalyzerContext analyzerContext)
     {
-        private readonly Dictionary<INamedTypeSymbol, ImmutableArray<ServiceInfo>> _dependencies = new(SymbolEqualityComparer.Default);
+        private readonly Dictionary<INamedTypeSymbol, ImmutableArray<DependencyEdge>> _dependencies = new(SymbolEqualityComparer.Default);
         private Dictionary<INamedTypeSymbol, int>? _componentIds;
 
         /// <summary>
         /// Gets the registered dependencies of a registered service's constructor, in parameter order.
         /// Func&lt;...&gt;/Lazy&lt;T&gt; parameters are unwrapped when the direct lookup fails.
         /// </summary>
-        public ImmutableArray<ServiceInfo> GetDependencies(INamedTypeSymbol type)
+        public ImmutableArray<DependencyEdge> GetDependencies(INamedTypeSymbol type)
         {
             if (_dependencies.TryGetValue(type, out var cached))
                 return cached;
@@ -76,18 +91,21 @@ public sealed partial class RegisterAnalyzer
                 return [];
             }
 
-            var builder = ImmutableArray.CreateBuilder<ServiceInfo>(constructor.Parameters.Length);
+            var builder = ImmutableArray.CreateBuilder<DependencyEdge>(constructor.Parameters.Length);
             foreach (var parameter in constructor.Parameters)
             {
                 if (parameter.Type is not INamedTypeSymbol parameterType)
                     continue;
 
-                var dependency = FindRegisteredDependency(analyzerContext, parameterType)
-                    ?? (TryUnwrapServiceType(parameterType, out var unwrappedType)
-                        ? FindRegisteredDependency(analyzerContext, unwrappedType)
-                        : null);
-                if (dependency is not null)
-                    builder.Add(dependency);
+                if (FindRegisteredDependency(analyzerContext, parameterType) is { } dependency)
+                {
+                    builder.Add(new DependencyEdge(dependency, IsThroughFunc: false));
+                }
+                else if (TryUnwrapServiceType(parameterType, out var unwrappedType, out var isFunc)
+                    && FindRegisteredDependency(analyzerContext, unwrappedType) is { } unwrappedDependency)
+                {
+                    builder.Add(new DependencyEdge(unwrappedDependency, isFunc));
+                }
             }
 
             var result = builder.ToImmutable();
@@ -248,8 +266,13 @@ public sealed partial class RegisterAnalyzer
         return false;
     }
 
-    private static DiagnosticDescriptor? GetLifetimeConflictDescriptor(ServiceLifetime consumerLifetime, ServiceLifetime dependencyLifetime)
+    private static DiagnosticDescriptor? GetLifetimeConflictDescriptor(ServiceLifetime consumerLifetime, ServiceLifetime dependencyLifetime, bool isThroughFunc)
     {
+        // A Func<...> factory resolves a new transient instance on every call, so nothing is captured (SGIOC004/005).
+        // A scoped service resolved through it from a singleton still comes from the root (SGIOC003).
+        if (isThroughFunc && dependencyLifetime is ServiceLifetime.Transient)
+            return null;
+
         // SGIOC003: Singleton depending on Scoped is a conflict (captive dependency)
         if (consumerLifetime is ServiceLifetime.Singleton && dependencyLifetime is ServiceLifetime.Scoped)
             return SingletonDependsOnScoped;
@@ -272,9 +295,10 @@ public sealed partial class RegisterAnalyzer
     /// For <c>Lazy&lt;T&gt;</c> and <c>Func&lt;T&gt;</c>, returns the single type argument.
     /// For <c>Func&lt;T1, ..., TReturn&gt;</c>, returns the last type argument (the return type).
     /// </summary>
-    private static bool TryUnwrapServiceType(INamedTypeSymbol parameterType, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out INamedTypeSymbol? serviceType)
+    private static bool TryUnwrapServiceType(INamedTypeSymbol parameterType, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out INamedTypeSymbol? serviceType, out bool isFunc)
     {
         serviceType = null;
+        isFunc = false;
 
         if (!parameterType.IsGenericType)
             return false;
@@ -298,6 +322,7 @@ public sealed partial class RegisterAnalyzer
         // Func<...> — arity >= 1, extract last type argument (the return type)
         if (name.StartsWith("Func`", StringComparison.Ordinal))
         {
+            isFunc = true;
             serviceType = parameterType.TypeArguments[^1] as INamedTypeSymbol;
             return serviceType is not null;
         }

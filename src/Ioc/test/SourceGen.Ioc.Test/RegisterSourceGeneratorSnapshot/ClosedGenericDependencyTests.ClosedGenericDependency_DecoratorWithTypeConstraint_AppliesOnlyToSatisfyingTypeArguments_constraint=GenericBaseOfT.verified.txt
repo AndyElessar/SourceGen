@@ -35,12 +35,13 @@ namespace TestAssembly
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.DerivedEntity>, global::TestNamespace.Handler<global::TestNamespace.DerivedEntity>>();
                 services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.DerivedEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.DerivedEntity>>());
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.SelfEntity>, global::TestNamespace.Handler<global::TestNamespace.SelfEntity>>();
-                services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.SelfEntity>>((global::System.IServiceProvider sp) =>
+                services.AddKeyedSingleton<global::TestNamespace.IHandler<global::TestNamespace.SelfEntity>>("SourceGen.Ioc.Decorated:TestNamespace.IHandler<TestNamespace.SelfEntity>|TestNamespace.Handler<TestNamespace.SelfEntity>", (global::System.IServiceProvider sp, object? key) =>
                 {
                     var s0 = sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.SelfEntity>>();
                     var s1 = new global::TestNamespace.ConstrainedDecorator<global::TestNamespace.SelfEntity>(s0);
                     return s1;
                 });
+                services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.SelfEntity>>((global::System.IServiceProvider sp) => sp.GetRequiredKeyedService<global::TestNamespace.IHandler<global::TestNamespace.SelfEntity>>("SourceGen.Ioc.Decorated:TestNamespace.IHandler<TestNamespace.SelfEntity>|TestNamespace.Handler<TestNamespace.SelfEntity>"));
             }
 
             return services;

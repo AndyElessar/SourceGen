@@ -321,6 +321,34 @@ public sealed class ContainerTests
         await Assert.That(service.GetMessage()).IsEqualTo("Decorator1(Decorator2(Core))");
     }
 
+    [Test]
+    public async Task Container_Decorator_ImplementationTypeResolvesSharedUndecoratedInstance()
+    {
+        using var container = new DecoratorImplementationTypeModule();
+        using var scope = container.CreateScope();
+
+        var implementation = scope.ServiceProvider.GetRequiredService<InnerExposingService>();
+        var decorated = scope.ServiceProvider.GetRequiredService<IInnerExposingService>();
+
+        await Assert.That(implementation.Inner).IsNull();
+        await Assert.That(decorated).IsTypeOf<InnerExposingDecorator>();
+        await Assert.That(decorated.Inner).IsSameReferenceAs(implementation);
+    }
+
+    [Test]
+    public async Task Container_AsyncDecorator_ImplementationTypeResolvesSharedUndecoratedInstance()
+    {
+        await using var container = new DecoratorImplementationTypeModule();
+
+        var implementation = await container.GetRequiredService<Task<AsyncInnerExposingService>>();
+        var decorated = await container.GetRequiredService<Task<IAsyncInnerExposingService>>();
+
+        await Assert.That(implementation.IsInitialized).IsTrue();
+        await Assert.That(decorated).IsTypeOf<AsyncInnerExposingDecorator>();
+        await Assert.That(decorated.IsInitialized).IsTrue();
+        await Assert.That(decorated.Inner).IsSameReferenceAs(implementation);
+    }
+
     #endregion
 
     #region Open Generic Tests

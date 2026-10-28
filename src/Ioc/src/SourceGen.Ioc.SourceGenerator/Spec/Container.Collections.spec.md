@@ -8,6 +8,13 @@ Support for collection resolution when multiple implementations are registered f
 
 Support for collection resolution when multiple implementations are registered for a service type. Collection resolvers are generated and registered in `_localResolvers`.
 
+|Non-keyed registrations of `T`|Collection resolver (`GetAllT_Array()` + `IEnumerable<T>`/`IReadOnlyCollection<T>`/`ICollection<T>`/`IReadOnlyList<T>`/`IList<T>`/`T[]` entries)|
+|:---|:---|
+|Two or more unique implementations|MUST be generated.|
+|Exactly one|MUST be generated only when something requests `T` as a collection. The sources MUST match closed-generic discovery: a constructor, factory or decorator parameter, or an injection member (including inside `Lazy`/`Func`/`Task` wrappers); an `IServiceProvider` invocation (`GetServices<T>()`, `GetServices(typeof(T))`, or `GetService`/`GetRequiredService` of a collection of `T`); or `[IocDiscover]` of a collection of `T`. Otherwise it MUST NOT be generated, to keep the resolver table small.|
+
+> **Note**: Invocation discovery uses a single syntax provider (`TransformInvocation`) whose result feeds both closed-generic resolution (`ClosedGenericDependencies`) and collection resolver generation (`CollectionElementTypeName`). Keyed collection requests are not counted, because keyed collections resolve through `GetKeyedServices`. Without a generated collection resolver, `GetServices<T>()` falls back to the fallback provider. Only invocations visible to the generator (in the compilation that declares the container) are detected.
+
 ### Supported Collection Types
 
 |Type|Resolution Method|Notes|
@@ -99,13 +106,11 @@ partial class AppContainer
     // Registered in _localResolvers
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new ServiceIdentifier(typeof(global::Plugin1), KeyedService.AnyKey), static c => c.GetPlugin1()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IPlugin), KeyedService.AnyKey), static c => c.GetPlugin1()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::Plugin2), KeyedService.AnyKey), static c => c.GetPlugin2()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPlugin()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::IPlugin>), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IPlugin[]), KeyedService.AnyKey), static c => c.GetAllIPluginArray()),
+        __Resolver(typeof(global::Plugin1), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::IPlugin), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::Plugin2), static c => c.GetPlugin2()),
+        // IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T> and T[]
+        ..__CollectionResolvers<global::IPlugin>(static c => c.GetAllIPluginArray()),
     ];
 }
 #endregion
@@ -119,9 +124,16 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 
 | Wrapper Type | Generated Code | Notes |
 | :--- | :--- | :--- |
-| `Lazy<T>` | `GetLazy_T_Impl()` (dedicated resolver method) | Standalone resolver registered in `_localResolvers` |
-| `Func<T>` | `GetFunc_T_Impl()` (dedicated resolver method) | Standalone resolver registered in `_localResolvers` |
+| `Lazy<T>` | `_lazy_{T}{field}` (one readonly field per resolver) | Created in the container and scope constructors; registered in `_localResolvers` |
+| `Func<T>` | `_func_{T}{field}` (one readonly field per resolver) | Created in the container and scope constructors; registered in `_localResolvers` |
 | `KeyValuePair<K, V>` | `new KeyValuePair<K, V>(key, GetMyService())` | Key from service key or `default` |
+
+`Lazy<T>` and `Func<T>` wrapper fields MUST be created once per resolver of `T`, so the keyed, factory and instance registrations of one implementation each get their own field; the field name is the wrapper prefix, the short name of `T` and the resolver's field name (`_lazy_IMyService_myService`, `_lazy_IMyService_myService__keyed_`). `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` resolvers (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`) MUST contain only the non-keyed registrations of `T`, like `IEnumerable<T>`.
+
+A `Lazy<T>` of a transient registration MUST NOT be shared: no field is generated, and every consumer, collection resolver call and container resolution creates a new `Lazy<T>` (`new Lazy<T>(() => GetMyService(), ...)`), so each gets its own instance, like the Register output where the wrapper inherits the transient lifetime. `Func<T>` fields stay shared, because each invocation calls the resolver.
+
+`Func<T1, ..., TReturn>` with input parameters is built inline per dependency and MUST behave like the Register output (see [Register Injection](Register.Injection.spec.md)): each call constructs a new implementation instance from the arguments, also for singleton and scoped registrations, then wraps it in the registration's decorators (locals `decorated` / `decorated_{n}`, so they cannot clash with the enclosing resolver's locals). The arguments are only matched to the implementation. A keyed dependency uses the keyed registration, whose `[ServiceKey]` parameters receive its key; for a non-keyed registration they receive `default(T)`.
+
 | `IDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `IReadOnlyDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `Dictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
@@ -131,7 +143,7 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 > - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => GetMyService()))`
 > - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => GetMyService()))`
 > - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => GetServices<T>())`
-> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Resolved via `GetServices<Lazy<T>>()` which uses the wrapper resolver methods
+> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` (non-keyed, parameterless `Func<T>`) — MUST call the generated wrapper array resolver directly (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`) when one exists, so the switch-statement container (which has no wrapper dictionary entries) resolves them too. Otherwise they fall back to `GetServices<Lazy<T>>()`.
 >
 > **Design rationale (inline nested wrappers):**
 >
@@ -161,19 +173,15 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    // Standalone wrapper resolver methods
-    private global::System.Lazy<global::IMyService> GetLazy_IMyService_MyService()
-        => new global::System.Lazy<global::IMyService>(() => GetMyService());
-
-    private global::System.Func<global::IMyService> GetFunc_IMyService_MyService()
-        => new global::System.Func<global::IMyService>(() => GetMyService());
+    // Wrapper fields, created in the container and scope constructors:
+    // _lazy_IMyService_myService = new global::System.Lazy<global::IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+    // _func_IMyService_myService = new global::System.Func<global::IMyService>(() => GetMyService());
+    private readonly global::System.Lazy<global::IMyService> _lazy_IMyService_myService;
+    private readonly global::System.Func<global::IMyService> _func_IMyService_myService;
 
     private global::Consumer GetConsumer()
     {
-        // Direct Lazy/Func resolved via wrapper resolver methods
-        var instance = new global::Consumer(
-            GetLazy_IMyService_MyService(),
-            GetFunc_IMyService_MyService());
+        var instance = new global::Consumer(_lazy_IMyService_myService, _func_IMyService_myService);
         return instance;
     }
 }
@@ -203,8 +211,7 @@ When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `I
 3. **`_localResolvers` entries** — For `IEnumerable<KVP>`, `IReadOnlyCollection<KVP>`, `IReadOnlyList<KVP>`, and `KVP[]`:
 
    ```csharp
-   new __IocResolver(new ServiceIdentifier(typeof(IEnumerable<KeyValuePair<string, IHandler>>), KeyedService.AnyKey),
-       static c => c.GetAllKvp_string_IHandler_Array()),
+   __Resolver(typeof(IEnumerable<KeyValuePair<string, IHandler>>), static c => c.GetAllKvp_string_IHandler_Array()),
    ```
 
 ## See Also

@@ -46,6 +46,126 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task LazyDependency_OnTransientService_CreatesLazyPerConsumer()
+    {
+        // A shared Lazy field would hand every consumer the same transient instance.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class SingletonService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Lazy<MyService> lazy, IEnumerable<Lazy<IMyService>> all);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task LazyAndFuncDependency_WithKeyedAndNonKeyedRegistrationsOfSameImplementation_GeneratesDistinctFields()
+    {
+        // The keyed registration gets its own Lazy/Func fields and is not part of the non-keyed collections.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyService), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IMyService)], Key = "keyed")]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(
+                Lazy<IMyService> lazy,
+                [FromKeyedServices("keyed")] Lazy<IMyService> keyedLazy,
+                Func<IMyService> factory,
+                [FromKeyedServices("keyed")] Func<IMyService> keyedFactory,
+                IEnumerable<Lazy<IMyService>> allLazy,
+                IEnumerable<Func<IMyService>> allFactories);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task MultiParamFuncDependency_WithDecoratedAndKeyedServices_AppliesDecoratorsAndKeys()
+    {
+        // Each call creates a new implementation from the arguments and wraps it in the registration's decorators;
+        // the keyed registration is resolved through its own keyed Func and gets its key as [ServiceKey].
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Plain), Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(TestNamespace.IPlain)], Key = "keyed")]
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDep)])]
+            public sealed class Dep : IDep;
+
+            public interface IDecorated;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDecorated)], Decorators = [typeof(Decorator)])]
+            public sealed class Decorated(string name, IDep dep) : IDecorated;
+
+            public sealed class Decorator(IDecorated inner, IDep dep) : IDecorated;
+
+            public interface IPlain;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IPlain)])]
+            public sealed class Plain(string name, [ServiceKey] object? key) : IPlain;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(
+                Func<string, IDecorated> decorated,
+                Func<string, IPlain> plain,
+                [FromKeyedServices("keyed")] Func<string, IPlain> keyedPlain);
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task FuncDependency_GeneratesFuncResolution()
     {
         const string source = """

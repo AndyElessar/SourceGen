@@ -24,14 +24,16 @@ partial class IocSourceGenerator
             if(InputTypes.Length == 0)
             {
                 var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-                var resolveCall = $"sp.{GetRequiredService}<{ImplementationTypeName}>()";
-                writer.WriteLine(
-                    $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
-                    $"new {wrapperTypeName}(() => {resolveCall}));");
+                var newFunc = $"new {wrapperTypeName}(() => {ResolveCall})";
+                writer.WriteLine(Key is not null
+                    ? $"services.AddKeyed{lifetime}<{wrapperTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) => {newFunc});"
+                    : $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => {newFunc});");
                 return;
             }
 
-            writer.WriteLine($"services.Add{lifetime}<{FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
+            writer.WriteLine(Key is not null
+                ? $"services.AddKeyed{lifetime}<{FuncServiceTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) =>"
+                : $"services.Add{lifetime}<{FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
             writer.Indentation++;
             writer.WriteLine($"new {FuncServiceTypeName}(({BuildFuncLambdaParameters(InputTypes)}) =>");
             writer.WriteLine("{");
@@ -86,6 +88,9 @@ partial class IocSourceGenerator
                     reg.ImplementationType.ConstructorParameters,
                     reg.InjectionMembers,
                     needed.InputTypes,
+                    reg.Key,
+                    GetWrapperResolveCall(reg),
+                    reg,
                     regWithTags.Tags));
             }
         }
@@ -208,7 +213,7 @@ partial class IocSourceGenerator
             }
 
             var paramVar = $"p{resolvedParamIndex}";
-            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: false, registrationKey: null);
+            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Key is not null, registrationKey: entry.Key);
             constructorParamEntries.Add((param.Name, resolvedVar));
             resolvedParamIndex++;
         }
@@ -269,13 +274,13 @@ partial class IocSourceGenerator
                         param,
                         paramVar,
                         method.Key,
-                        isKeyedRegistration: false,
-                        registrationKey: null,
+                        isKeyedRegistration: entry.Key is not null,
+                        registrationKey: entry.Key,
                         typeNameResolver: null);
                 }
                 else
                 {
-                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: false, registrationKey: null);
+                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Key is not null, registrationKey: entry.Key);
                 }
 
                 methodEntries.Add((param.Name, resolvedVar));
@@ -286,7 +291,9 @@ partial class IocSourceGenerator
             writer.WriteLine($"s0.{method.Name}({methodArgs});");
         }
 
-        writer.WriteLine("return s0;");
+        // The input arguments are for the implementation only; decorator dependencies are resolved from DI
+        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServiceTypeNames: null);
+        writer.WriteLine($"return {outermostVar};");
     }
 
     /// <summary>
@@ -393,20 +400,12 @@ partial class IocSourceGenerator
         }
     }
 
-    /// <summary>
-    /// Gets the array resolver method name for a Func wrapper type.
-    /// </summary>
-    private static string GetFuncArrayResolverMethodName(string innerServiceTypeName)
-    {
-        var safeInnerType = GetSafeIdentifier(innerServiceTypeName);
-        return $"GetAllFunc_{safeInnerType}_Array";
-    }
-
-    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateFuncWrapperContainerEntries(
+    private static ImmutableEquatableArray<IocSourceGenerator.FuncWrapperContainerEntry> CreateFuncWrapperContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ContainerNames names)
     {
         var neededTypes = new HashSet<string>(StringComparer.Ordinal);
 
@@ -438,13 +437,12 @@ partial class IocSourceGenerator
                 if(reg.IsOpenGeneric || cached.IsAsyncInit)
                     continue;
 
-                var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";
+                // One wrapper per resolver: keyed, factory and instance registrations of one implementation have their own resolvers
+                var entryKey = $"{serviceType}|{cached.ResolverMethodName}";
                 if(!addedKeys.Add(entryKey))
                     continue;
 
-                var safeInnerType = GetSafeIdentifier(serviceType);
-                var safeImplType = GetSafeIdentifier(reg.ImplementationType.Name);
-                var fieldName = $"_func_{safeInnerType}_{safeImplType}";
+                var fieldName = $"_func_{names.Get(serviceType)}{cached.FieldName}";
 
                 entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
             }
@@ -453,7 +451,9 @@ partial class IocSourceGenerator
         if(entries.Count == 0)
             return [];
 
+        // Collections of wrappers contain the non-keyed registrations only
         var collectionFieldsByServiceType = entries
+            .Where(static e => e.Key is null)
             .GroupBy(static e => e.InnerServiceTypeName)
             .ToDictionary(
                 static g => g.Key,
@@ -461,20 +461,19 @@ partial class IocSourceGenerator
                 StringComparer.Ordinal);
 
         var collectionEmitterFieldByServiceType = entries
+            .Where(static e => e.Key is null)
             .GroupBy(static e => e.InnerServiceTypeName)
             .ToDictionary(
                 static g => g.Key,
                 static g => g.Last().FieldName,
                 StringComparer.Ordinal);
 
-        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Count);
+        var wrapperEntries = new List<IocSourceGenerator.FuncWrapperContainerEntry>(entries.Count);
 
         foreach(var entry in entries)
         {
-            var emitCollectionResolver = string.Equals(
-                entry.FieldName,
-                collectionEmitterFieldByServiceType[entry.InnerServiceTypeName],
-                StringComparison.Ordinal);
+            var emitCollectionResolver = collectionEmitterFieldByServiceType.TryGetValue(entry.InnerServiceTypeName, out var emitterFieldName)
+                && string.Equals(entry.FieldName, emitterFieldName, StringComparison.Ordinal);
             var collectionFieldNames = emitCollectionResolver
                 ? collectionFieldsByServiceType[entry.InnerServiceTypeName]
                 : [];
@@ -486,6 +485,7 @@ partial class IocSourceGenerator
                 entry.ResolverMethodName,
                 entry.Key,
                 emitCollectionResolver,
+                emitCollectionResolver ? names.FuncArrayResolver(entry.InnerServiceTypeName) : null,
                 collectionFieldNames));
         }
 

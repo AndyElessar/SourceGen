@@ -17,10 +17,10 @@ partial class IocSourceGenerator
         {
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
             var lifetime = Lifetime.Name;
-            var resolveCall = $"sp.{GetRequiredService}<{ImplementationTypeName}>()";
-            writer.WriteLine(
-                $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
-                $"new {wrapperTypeName}(() => {resolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));");
+            var newLazy = $"new {wrapperTypeName}(() => {ResolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
+            writer.WriteLine(Key is not null
+                ? $"services.AddKeyed{lifetime}<{wrapperTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) => {newLazy});"
+                : $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => {newLazy});");
         }
     }
 
@@ -58,6 +58,8 @@ partial class IocSourceGenerator
                 reg.ServiceType.Name,
                 reg.ImplementationType.Name,
                 reg.Lifetime,
+                reg.Key,
+                GetWrapperResolveCall(reg),
                 regWithTags.Tags));
         }
 
@@ -148,20 +150,12 @@ partial class IocSourceGenerator
         }
     }
 
-    /// <summary>
-    /// Gets the array resolver method name for a Lazy wrapper type.
-    /// </summary>
-    private static string GetLazyArrayResolverMethodName(string innerServiceTypeName)
-    {
-        var safeInnerType = GetSafeIdentifier(innerServiceTypeName);
-        return $"GetAllLazy_{safeInnerType}_Array";
-    }
-
-    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateLazyWrapperContainerEntries(
+    private static ImmutableEquatableArray<IocSourceGenerator.LazyWrapperContainerEntry> CreateLazyWrapperContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup)
+        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        ContainerNames names)
     {
         var neededTypes = new HashSet<string>(StringComparer.Ordinal);
 
@@ -178,7 +172,7 @@ partial class IocSourceGenerator
         if(neededTypes.Count == 0)
             return [];
 
-        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Key)>();
+        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Key, bool IsShared)>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach(var kvp in serviceLookup)
@@ -193,45 +187,49 @@ partial class IocSourceGenerator
                 if(reg.IsOpenGeneric || cached.IsAsyncInit)
                     continue;
 
-                var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";
+                // One wrapper per resolver: keyed, factory and instance registrations of one implementation have their own resolvers
+                var entryKey = $"{serviceType}|{cached.ResolverMethodName}";
                 if(!addedKeys.Add(entryKey))
                     continue;
 
-                var safeInnerType = GetSafeIdentifier(serviceType);
-                var safeImplType = GetSafeIdentifier(reg.ImplementationType.Name);
-                var fieldName = $"_lazy_{safeInnerType}_{safeImplType}";
+                var fieldName = $"_lazy_{names.Get(serviceType)}{cached.FieldName}";
 
-                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
+                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key, reg.Lifetime != ServiceLifetime.Transient));
             }
         }
 
         if(entries.Count == 0)
             return [];
 
-        var collectionFieldsByServiceType = entries
+        // Collections of wrappers contain the non-keyed registrations only
+        var collectionElementsByServiceType = entries
+            .Where(static e => e.Key is null)
             .GroupBy(static e => e.InnerServiceTypeName)
             .ToDictionary(
                 static g => g.Key,
-                static g => g.Select(static e => e.FieldName).ToImmutableEquatableArray(),
+                static g => g
+                    .Select(static e => e.IsShared
+                        ? e.FieldName
+                        : LazyWrapperContainerEntry.FormatNewLazy(e.InnerServiceTypeName, $"{e.ResolverMethodName}()"))
+                    .ToImmutableEquatableArray(),
                 StringComparer.Ordinal);
 
         var collectionEmitterFieldByServiceType = entries
+            .Where(static e => e.Key is null)
             .GroupBy(static e => e.InnerServiceTypeName)
             .ToDictionary(
                 static g => g.Key,
                 static g => g.Last().FieldName,
                 StringComparer.Ordinal);
 
-        var wrapperEntries = new List<IocSourceGenerator.ContainerEntry>(entries.Count);
+        var wrapperEntries = new List<IocSourceGenerator.LazyWrapperContainerEntry>(entries.Count);
 
         foreach(var entry in entries)
         {
-            var emitCollectionResolver = string.Equals(
-                entry.FieldName,
-                collectionEmitterFieldByServiceType[entry.InnerServiceTypeName],
-                StringComparison.Ordinal);
-            var collectionFieldNames = emitCollectionResolver
-                ? collectionFieldsByServiceType[entry.InnerServiceTypeName]
+            var emitCollectionResolver = collectionEmitterFieldByServiceType.TryGetValue(entry.InnerServiceTypeName, out var emitterFieldName)
+                && string.Equals(entry.FieldName, emitterFieldName, StringComparison.Ordinal);
+            var collectionElements = emitCollectionResolver
+                ? collectionElementsByServiceType[entry.InnerServiceTypeName]
                 : [];
 
             wrapperEntries.Add(new LazyWrapperContainerEntry(
@@ -240,8 +238,10 @@ partial class IocSourceGenerator
                 entry.FieldName,
                 entry.ResolverMethodName,
                 entry.Key,
+                entry.IsShared,
                 emitCollectionResolver,
-                collectionFieldNames));
+                emitCollectionResolver ? names.LazyArrayResolver(entry.InnerServiceTypeName) : null,
+                collectionElements));
         }
 
         return wrapperEntries.ToImmutableEquatableArray();

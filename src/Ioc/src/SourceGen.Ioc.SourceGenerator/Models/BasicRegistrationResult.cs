@@ -62,3 +62,15 @@ internal readonly record struct ClosedGenericDependency(
     string ClosedTypeName,
     TypeData ClosedType,
     string OpenGenericKey);
+
+/// <summary>
+/// Dependency information extracted from one IServiceProvider invocation (e.g. <c>GetService&lt;T&gt;()</c>).
+/// </summary>
+/// <param name="ClosedGenericDependencies">Closed generic types the requested type depends on.</param>
+/// <param name="CollectionElementTypeName">The element type requested as a non-keyed collection, or <see langword="null"/>.</param>
+internal readonly record struct ServiceProviderInvocation(
+    ImmutableEquatableArray<ClosedGenericDependency> ClosedGenericDependencies,
+    string? CollectionElementTypeName)
+{
+    public static ServiceProviderInvocation Empty { get; } = new([], null);
+}

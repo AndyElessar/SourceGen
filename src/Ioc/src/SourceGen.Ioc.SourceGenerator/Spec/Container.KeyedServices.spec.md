@@ -43,13 +43,13 @@ partial class AppContainer
                 "memory" => GetMemoryCache(),
                 "redis" => GetRedisCache(),
                 CacheType.Distributed => GetDistributedCache(),
-                _ => _fallbackProvider is IKeyedServiceProvider keyed
+                _ => GetFallbackServiceProvider() is IKeyedServiceProvider keyed
                     ? keyed.GetKeyedService(serviceType, serviceKey)
                     : null
             };
         }
 
-        return _fallbackProvider is IKeyedServiceProvider keyed2
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed2
             ? keyed2.GetKeyedService(serviceType, serviceKey)
             : null;
     }

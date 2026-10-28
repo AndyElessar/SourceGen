@@ -77,7 +77,7 @@ When a registration contains one or more async inject methods, the container MUS
 
 |Condition|Required behavior|
 |:--------|:----------------|
-|Registration contains one or more `InjectionMemberType.AsyncMethod` members|The container MUST generate an async resolver path that returns `Task<ImplementationType>`. Service-type aliases MUST project from that resolver as `Task<ServiceType>`.|
+|Registration contains one or more `InjectionMemberType.AsyncMethod` members|The container MUST generate an async resolver path that returns `Task<ImplementationType>`. Service-type aliases MUST project from that resolver as `Task<ServiceType>`: resolver entries (dictionary, switch, and `IsService`) MUST be keyed by `Task<ServiceType>`, never by `ServiceType`. When `ServiceType` differs from the resolver's result type, the entry MUST project the task with the generated `__ProjectTask<TService, TResult>` helper, because `Task<T>` is invariant.|
 |Singleton or scoped async-init registration|The container MUST cache `Task<ImplementationType>` in a field.|
 |Transient async-init registration|The container MUST create a new `Task<ImplementationType>` per resolution and MUST NOT cache it.|
 |Multiple service-type aliases resolve the same implementation, key, and instance/factory identity|The container MUST share a single cached `Task<ImplementationType>` field. The deduplication key MUST be `(ImplementationType, Key, InstanceOrFactory)`. Service type is **not** part of the cache key.|
@@ -161,9 +161,9 @@ partial class AppContainer
     private async global::System.Threading.Tasks.Task<global::FooBar> GetFooBarAsync()
     {
         if(_fooBar is not null)
-            return await _fooBar;
+            return await _fooBar.ConfigureAwait(false);
 
-        await _fooBarSemaphore.WaitAsync();
+        await _fooBarSemaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             if(_fooBar is null)
@@ -176,7 +176,7 @@ partial class AppContainer
             _fooBarSemaphore.Release();
         }
 
-        return await _fooBar;
+        return await _fooBar.ConfigureAwait(false);
     }
 
     private async global::System.Threading.Tasks.Task<global::FooBar> CreateFooBarAsync()
@@ -187,13 +187,13 @@ partial class AppContainer
         };
 
         instance.InitializeSync();
-        await instance.InitializeAsync((global::IAsyncInitializer)GetRequiredService(typeof(global::IAsyncInitializer)));
+        await instance.InitializeAsync((global::IAsyncInitializer)GetRequiredService(typeof(global::IAsyncInitializer))).ConfigureAwait(false);
         return instance;
     }
 
-    public partial async global::System.Threading.Tasks.Task<global::IFoo> GetFooAsync() => await GetFooBarAsync();
+    public partial async global::System.Threading.Tasks.Task<global::IFoo> GetFooAsync() => await GetFooBarAsync().ConfigureAwait(false);
 
-    public partial async global::System.Threading.Tasks.Task<global::IBar> GetBarAsync() => await GetFooBarAsync();
+    public partial async global::System.Threading.Tasks.Task<global::IBar> GetBarAsync() => await GetFooBarAsync().ConfigureAwait(false);
 }
 #endregion
 ```
@@ -235,7 +235,7 @@ partial class AppContainer : IAsyncDisposable, IDisposable
         {
             try
             {
-                await DisposeServiceAsync(await task);
+                await DisposeServiceAsync(await task.ConfigureAwait(false)).ConfigureAwait(false);
             }
             catch(Exception ex)
             {
@@ -261,7 +261,7 @@ partial class AppContainer : IAsyncDisposable, IDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await DisposeServiceAsync(_fooBar);
+        await DisposeServiceAsync(_fooBar).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -287,7 +287,7 @@ global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException = static ex =
 public async ValueTask DisposeAsync()
 {
     if(_fooBar is not null)
-        await DisposeServiceAsync(await _fooBar);
+        await DisposeServiceAsync(await _fooBar.ConfigureAwait(false)).ConfigureAwait(false);
 }
 
 public void Dispose()

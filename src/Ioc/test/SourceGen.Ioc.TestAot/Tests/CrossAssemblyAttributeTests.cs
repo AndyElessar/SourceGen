@@ -59,7 +59,7 @@ public sealed class CrossAssemblyAttributeTests
 
         // Verify that the open generic resolver was generated
         var hasGeneratedOpenGenericResolver = containerModuleType
-            .GetMethod("GetSourceGen_Ioc_TestCase_GenericHandler_SourceGen_Ioc_TestCase_RequestA__SourceGen_Ioc_TestCase_ResponseA_",
+            .GetMethod("GetGenericHandler_RequestA_ResponseA",
                 BindingFlags.NonPublic | BindingFlags.Instance) is not null;
 
         await Assert.That(hasGeneratedOpenGenericResolver).IsTrue()

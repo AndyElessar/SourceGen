@@ -131,13 +131,33 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 .Collect())
             .Select(static (combined, _) => combined.Left.AddRange(combined.Right));
 
-        // IServiceProvider.GetService / GetRequiredService / GetKeyedService / GetServices invocations
-        var invocations = context.SyntaxProvider
+        // IServiceProvider.GetService / GetRequiredService / GetKeyedService / GetServices invocations.
+        // One syntax provider feeds both closed-generic resolution and collection resolver generation.
+        var serviceProviderInvocations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => PredicateInvocations(node),
-                transform: static (ctx, ct) => TransformInvocations(ctx, ct).ToImmutableEquatableArray())
-            .SelectMany(static (candidates, _) => candidates)
+                transform: static (ctx, ct) => TransformInvocation(ctx, ct));
+
+        var invocations = serviceProviderInvocations
+            .SelectMany(static (invocation, _) => invocation.ClosedGenericDependencies)
             .Collect();
+
+        // Element types requested as non-keyed collections, from the same sources as closed generics:
+        // IServiceProvider invocations and [IocDiscover] (registration dependencies are scanned during grouping)
+        var requestedCollectionServiceTypes = serviceProviderInvocations
+            .Where(static invocation => invocation.CollectionElementTypeName is not null)
+            .Select(static (invocation, _) => invocation.CollectionElementTypeName!)
+            .Collect()
+            .Combine(allDiscoverProviders)
+            .Select(static (combined, _) => combined.Left
+                .Concat(combined.Right
+                    .Select(static dependency => dependency.ClosedType)
+                    .OfType<CollectionWrapperTypeData>()
+                    .Select(static collection => collection.ElementType.Name))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static t => t, StringComparer.Ordinal)
+                .ToImmutableEquatableArray())
+            .WithTrackingName("RequestedCollectionServiceTypes");
 
         // [IocContainer]
         var containerProvider = context.SyntaxProvider
@@ -243,10 +263,11 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         var explicitOnlyContainerWithGroups = enabledContainers
             .Where(static c => c.ExplicitOnly)
             .Combine(msbuildPropertiesProvider)
+            .Combine(requestedCollectionServiceTypes)
             .Select(static (source, _) =>
             {
-                var (container, msbuildProps) = source;
-                return GroupExplicitOnlyRegistrations(container, msbuildProps.Features);
+                var ((container, msbuildProps), requestedCollections) = source;
+                return GroupExplicitOnlyRegistrations(container, msbuildProps.Features, requestedCollections);
             })
             .WithTrackingName("ExplicitContainerGroups");
 
@@ -260,10 +281,11 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
                 return (container, filtered);
             })
             .Combine(msbuildPropertiesProvider)
+            .Combine(requestedCollectionServiceTypes)
             .Select(static (source, _) =>
             {
-                var ((container, filtered), msbuildProps) = source;
-                return GroupRegistrationsForContainer(container, filtered, msbuildProps.Features);
+                var (((container, filtered), msbuildProps), requestedCollections) = source;
+                return GroupRegistrationsForContainer(container, filtered, msbuildProps.Features, requestedCollections);
             })
             .WithTrackingName("ContainerGroups");
 

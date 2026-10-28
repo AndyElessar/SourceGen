@@ -99,6 +99,29 @@ public sealed class AsyncInjectionTests
     #region Composite Container Tests
 
     [Test]
+    public async Task AsyncInitService_StandaloneContainer_IsResolvedAsTaskOfServiceType()
+    {
+        using var fallback = new InjectionModule();
+        await using var module = new AsyncInjectionModule(fallback);
+
+        var service1 = await module.GetRequiredService<Task<IAsyncInitService>>();
+        var service2 = await (Task<IAsyncInitService>)module.GetRequiredService(typeof(Task<IAsyncInitService>));
+
+        await Assert.That(service1.IsInitialized).IsTrue();
+        await Assert.That(service2).IsSameReferenceAs(service1);
+    }
+
+    [Test]
+    public async Task AsyncInjectionContainer_AsyncInitService_IsNotResolvedAsServiceType()
+    {
+        using var container = new AsyncInjectionContainer();
+
+        await Assert.That(container.GetService<IAsyncInitService>()).IsNull();
+        await Assert.That(container.IsService(typeof(IAsyncInitService))).IsFalse();
+        await Assert.That(container.IsService(typeof(Task<IAsyncInitService>))).IsTrue();
+    }
+
+    [Test]
     public async Task AsyncInjectionContainer_InjectionDependency_IsResolvableFromCompositeContainer()
     {
         // Arrange — AsyncInjectionContainer imports both InjectionModule and AsyncInjectionModule

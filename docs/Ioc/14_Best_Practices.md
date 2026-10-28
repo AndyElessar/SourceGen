@@ -319,6 +319,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC030`|Synchronous dependency on an async-init service|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
 |`SGIOC031`|Container feature disabled by MSBuild feature flags|[Container](12_Container.md#diagnostics), [MSBuild Configuration](13_MSBuild_Configuration.md#sourcegeniocfeatures)|
 |`SGIOC032`|Explicit service type incompatible with implementation|[Basic Usage](02_Basic.md#diagnostics)|
+|`SGIOC033`|Parameterized `Func` ignores a Singleton or Scoped lifetime|[Wrapper Types](10_Wrapper.md#diagnostics)|
 
 ## Production Checklist
 

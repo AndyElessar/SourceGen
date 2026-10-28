@@ -55,6 +55,15 @@ services.AddTransient<global::System.Lazy<global::MyNamespace.IExpensiveService>
 
 </details>
 
+`Lazy<T>` and `Func<T>` resolve the same instance as injecting `T` directly:
+
+- Singleton and scoped services are shared (within a scope for scoped services).
+- A transient service gives each `Lazy<T>` its own instance; each `Func<T>` call creates a new one.
+- A decorated service is resolved decorated.
+- A keyed service is resolved through `[FromKeyedServices(key)] Lazy<T>`; keyed services are not part of `IEnumerable<Lazy<T>>`.
+
+The generated container behaves the same way.
+
 ## `Func<T>`
 
 Inject `Func<T>` to create a new service instance on each invocation:
@@ -134,6 +143,13 @@ services.AddScoped<global::System.Func<string, global::MyNamespace.IService>>((g
 
 > [!NOTE]
 > The generator matches Func input types (`string` in this example) to the implementation constructor parameters by type. Unmatched constructor parameters (`ILogger`) are resolved from the service provider automatically.
+
+- Decorators of the service are applied to every created instance; the Func arguments are passed to the implementation only, and decorator dependencies are resolved from the service provider.
+- For a keyed service, inject `[FromKeyedServices(key)] Func<T1, ..., TReturn>`. A `[ServiceKey]` parameter of the implementation receives the key.
+- The generated container behaves the same way.
+
+> [!IMPORTANT]
+> Each call of a parameterized `Func<T1, ..., TReturn>` creates a **new** instance, even when the service is registered as singleton or scoped: the arguments may differ between calls, so the instance cannot be shared. The parameterless `Func<T>` follows the service lifetime instead. The analyzer reports [SGIOC033](#diagnostics) for this case.
 
 ## Collection Wrappers
 
@@ -503,6 +519,12 @@ services.AddTransient<global::System.Func<global::MyNamespace.IRequestHandler<gl
 ```
 
 </details>
+
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC033|Warning|A service depends on a parameterized `Func<T1, ..., TReturn>` whose `TReturn` is registered as Singleton or Scoped. Each call creates a new instance, so the lifetime does not apply. Register the service as Transient, or depend on `Func<T>` or the service itself.|
 
 ---
 

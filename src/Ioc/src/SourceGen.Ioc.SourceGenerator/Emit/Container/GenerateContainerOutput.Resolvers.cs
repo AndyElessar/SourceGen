@@ -23,17 +23,17 @@ partial class IocSourceGenerator
         WriteServiceResolverGroup(writer, groups.ScopedEntries, writtenMethods, writeField: true);
         WriteServiceResolverGroup(writer, groups.TransientEntries, writtenMethods, writeField: false);
 
+        WriteProjectTaskHelper(writer, groups);
+
         foreach(var entry in groups.CollectionEntries)
         {
             entry.WriteResolver(writer);
             writer.WriteLine();
         }
 
-        var kvpEntries = groups.WrapperEntries
-            .OfType<KvpWrapperContainerEntry>()
-            .ToList();
+        var kvpEntries = groups.KvpWrapperEntries;
 
-        if(kvpEntries.Count > 0)
+        if(kvpEntries.Length > 0)
         {
             writer.WriteLine("// KeyValuePair resolver methods");
             writer.WriteLine();
@@ -47,11 +47,9 @@ partial class IocSourceGenerator
             WriteKvpCollectionResolvers(writer, kvpEntries);
         }
 
-        var lazyEntries = groups.WrapperEntries
-            .OfType<LazyWrapperContainerEntry>()
-            .ToList();
+        var lazyEntries = groups.LazyWrapperEntries;
 
-        if(lazyEntries.Count > 0)
+        if(lazyEntries.Length > 0)
         {
             writer.WriteLine("// Lazy wrapper fields");
             writer.WriteLine();
@@ -73,11 +71,9 @@ partial class IocSourceGenerator
             }
         }
 
-        var funcEntries = groups.WrapperEntries
-            .OfType<FuncWrapperContainerEntry>()
-            .ToList();
+        var funcEntries = groups.FuncWrapperEntries;
 
-        if(funcEntries.Count > 0)
+        if(funcEntries.Length > 0)
         {
             writer.WriteLine("// Func wrapper fields");
             writer.WriteLine();
@@ -111,7 +107,7 @@ partial class IocSourceGenerator
     {
         foreach(var entry in entries)
         {
-            if(!TryGetResolverMethodName(entry, out var resolverMethodName))
+            if(entry is not ServiceContainerEntry { ResolverMethodName: var resolverMethodName })
                 continue;
 
             if(!writtenMethods.Add(resolverMethodName))
@@ -134,7 +130,7 @@ partial class IocSourceGenerator
 
     private static void WriteKvpCollectionResolvers(
         SourceWriter writer,
-        List<KvpWrapperContainerEntry> kvpEntries)
+        ImmutableEquatableArray<KvpWrapperContainerEntry> kvpEntries)
     {
         var grouped = kvpEntries
             .GroupBy(static e => (e.KeyTypeName, e.ValueTypeName))
@@ -144,7 +140,7 @@ partial class IocSourceGenerator
         {
             var (keyTypeName, valueTypeName) = group.Key;
             var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{keyTypeName}, {valueTypeName}>";
-            var arrayMethodName = GetKvpArrayResolverMethodName(keyTypeName, valueTypeName);
+            var arrayMethodName = group.First().ArrayMethodName;
 
             writer.WriteLine($"private {kvpTypeName}[] {arrayMethodName}() =>");
             writer.Indentation++;
@@ -165,7 +161,7 @@ partial class IocSourceGenerator
         foreach(var group in grouped)
         {
             var (keyTypeName, valueTypeName) = group.Key;
-            var dictionaryMethodName = GetKvpDictionaryResolverMethodName(keyTypeName, valueTypeName);
+            var dictionaryMethodName = group.First().DictionaryMethodName;
 
             writer.WriteLine($"private global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}> {dictionaryMethodName}() =>");
             writer.Indentation++;
@@ -253,7 +249,7 @@ partial class IocSourceGenerator
                 switch(entry)
                 {
                     case AsyncServiceContainerEntry asyncEntry:
-                        return $"await {asyncEntry.AsyncEntryMethodName}()";
+                        return $"await {asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false)";
                     case InstanceContainerEntry instanceEntry:
                         return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})";
                     case ServiceContainerEntry serviceEntry:
@@ -277,12 +273,10 @@ partial class IocSourceGenerator
         {
             switch(directEntry)
             {
-                case InstanceContainerEntry instanceEntry:
-                    return instanceEntry.Registration.Instance!;
                 case AsyncServiceContainerEntry asyncEntry:
                     return $"{asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false).GetAwaiter().GetResult()";
                 case ServiceContainerEntry serviceEntry:
-                    return $"{serviceEntry.ResolverMethodName}()";
+                    return serviceEntry.FormatResolveExpression(serviceType, "");
             }
         }
 
@@ -323,14 +317,5 @@ partial class IocSourceGenerator
         }
         innerTypeName = string.Empty;
         return false;
-    }
-
-    /// <summary>
-    /// Gets the array resolver method name for IEnumerable&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, IReadOnlyList&lt;T&gt;, T[] resolution.
-    /// </summary>
-    private static string GetArrayResolverMethodName(string serviceType)
-    {
-        var baseName = GetSafeIdentifier(serviceType);
-        return $"GetAll{baseName}Array";
     }
 }

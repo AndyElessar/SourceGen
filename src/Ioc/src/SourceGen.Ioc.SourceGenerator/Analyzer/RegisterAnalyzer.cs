@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SourceGen.Ioc;
@@ -300,6 +300,18 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "An open generic implementation can only be registered as open generic service types it implements, and a closed implementation cannot be registered as an open generic service type. Incompatible service types are skipped during generation.");
 
+    /// <summary>
+    /// SGIOC033: A Func factory with arguments creates a new instance per call, ignoring the service's Singleton or Scoped lifetime.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FuncWithArgumentsIgnoresLifetime = new(
+        id: "SGIOC033",
+        title: "Func with arguments ignores the service lifetime",
+        messageFormat: "'{0}' depends on '{1}', which creates a new '{2}' on every call although '{2}' is registered as {3}",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "A Func<T1, ..., TReturn> with input parameters constructs a new instance from its arguments on every call, so a Singleton or Scoped lifetime of the service does not apply. Register the service as Transient, or depend on the parameterless Func<T> or the service itself to follow its lifetime.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         InvalidAttributeUsage,
@@ -325,7 +337,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         AsyncMethodInjectRequiresMethodInject,
         SyncDependencyOnAsyncInitService,
         AsyncVoidInjectMethod,
-        IncompatibleServiceType
+        IncompatibleServiceType,
+        FuncWithArgumentsIgnoresLifetime
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -458,6 +471,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
             // SGIOC015: Analyze KeyValuePair/Dictionary key type mismatches
             AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, context.CancellationToken);
+
+            // SGIOC033: Func factories with arguments ignore Singleton/Scoped lifetimes
+            AnalyzeFuncWithArgumentsLifetime(context.ReportDiagnostic, serviceInfo, analyzerContext, context.CancellationToken);
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,

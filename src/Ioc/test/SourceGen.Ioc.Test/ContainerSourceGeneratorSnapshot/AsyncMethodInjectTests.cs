@@ -508,6 +508,46 @@ public class AsyncMethodInjectTests
     }
 
     [Test]
+    public async Task AsyncMethodInject_TaskDependency_TransientAsyncInitService_UsesCreateMethod()
+    {
+        // Transient async-init services have no cached Get…Async resolver, only the Create…Async method
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Task<IMyService> service) { }
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task AsyncMethodInject_TaskDependency_SyncService_UsesTaskFromResult()
     {
         // A consumer takes Task<ISyncService> — should resolve via Task.FromResult(GetSync())
@@ -616,6 +656,58 @@ public class AsyncMethodInjectTests
             public class MyServiceDecorator(IMyService inner) : IMyService { }
 
             [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_WithDecorator_ResolvesImplementationTypeUndecorated()
+    {
+        // Task<MyService> resolves the undecorated instance; Task<IMyService> awaits it and applies the decorator.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)], Decorators = [typeof(TransientServiceDecorator)])]
+            public class TransientService : ITransientService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            public class TransientServiceDecorator(ITransientService inner) : ITransientService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Task<MyService> service, Task<IMyService> decorated, Task<TransientService> transient, Task<ITransientService> transientDecorated);
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim, EagerResolveOptions = EagerResolveOptions.None)]
             public partial class TestContainer { }
             """;
 

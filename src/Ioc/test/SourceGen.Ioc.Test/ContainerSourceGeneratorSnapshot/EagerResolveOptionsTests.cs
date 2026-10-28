@@ -203,4 +203,37 @@ public class EagerResolveOptionsTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithEagerSingletonInjectingWrappers_InitializesWrappersBeforeEagerServices()
+    {
+        // Eager services may inject Lazy/Func wrapper fields, so wrappers must be initialized first
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDependency)])]
+            public class Dependency : IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonConsumer(Lazy<IDependency> lazy, Func<IDependency> factory) { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedConsumer(Lazy<IDependency> lazy) { }
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.SingletonAndScoped)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }

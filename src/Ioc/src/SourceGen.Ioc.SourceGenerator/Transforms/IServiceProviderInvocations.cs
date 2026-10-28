@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc;
+namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
@@ -13,7 +13,8 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Transforms GetService/GetRequiredService/GetKeyedService/GetRequiredKeyedService/GetServices invocations
-    /// to extract closed generic type information for factory registration generation.
+    /// into the dependency information that both closed-generic resolution and collection resolver generation use.
+    /// The requested type is resolved once and shared by both.
     /// </summary>
     /// <remarks>
     /// This method handles the following patterns: <br/>
@@ -23,21 +24,14 @@ partial class IocSourceGenerator
     /// - GetService(typeof(T)) / GetRequiredService(typeof(T)) <br/>
     /// - GetKeyedService(typeof(T), key) / GetRequiredKeyedService(typeof(T), key) <br/>
     /// - GetServices(typeof(T)) / GetKeyedServices(typeof(T), key) <br/>
-    /// Only closed generic types from open generic registrations are collected. <br/>
-    /// For collection types (IEnumerable&lt;T&gt;, IList&lt;T&gt;, etc.), the element type T is also extracted. <br/>
     /// </remarks>
-    private static IEnumerable<ClosedGenericDependency> TransformInvocations(GeneratorSyntaxContext context, CancellationToken ct)
+    private static ServiceProviderInvocation TransformInvocation(GeneratorSyntaxContext context, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
-        if(context.Node is not InvocationExpressionSyntax invocation)
+        if(context.Node is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax memberAccess } invocation)
         {
-            yield break;
-        }
-
-        if(invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
-        {
-            yield break;
+            return ServiceProviderInvocation.Empty;
         }
 
         var semanticModel = context.SemanticModel;
@@ -58,6 +52,44 @@ partial class IocSourceGenerator
             }
         }
 
+        if(typeSymbol is null)
+        {
+            return ServiceProviderInvocation.Empty;
+        }
+
+        return new ServiceProviderInvocation(
+            CollectClosedGenericDependencies(typeSymbol).ToImmutableEquatableArray(),
+            GetRequestedCollectionElementTypeName(memberAccess.Name.Identifier.ValueText, typeSymbol));
+    }
+
+    /// <summary>
+    /// Gets the element type requested as a non-keyed collection: <c>GetServices&lt;T&gt;()</c> / <c>GetServices(typeof(T))</c>,
+    /// or <c>GetService</c> / <c>GetRequiredService</c> of <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>,
+    /// <c>ICollection&lt;T&gt;</c>, <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> or <c>T[]</c>.
+    /// Keyed collections are resolved through GetKeyedServices, not the generated collection resolvers, so they are skipped.
+    /// </summary>
+    private static string? GetRequestedCollectionElementTypeName(string methodName, ITypeSymbol typeSymbol)
+    {
+        if(typeSymbol.ContainsGenericParameters)
+            return null;
+
+        if(methodName == "GetServices")
+            return typeSymbol.FullyQualifiedName;
+
+        if(methodName is not ("GetService" or "GetRequiredService"))
+            return null;
+
+        return typeSymbol.TryGetWrapperInfo(out var wrapperInfo) && wrapperInfo.Kind.IsCollectionWrapperKind() && wrapperInfo.ElementType is { } elementType
+            ? elementType.FullyQualifiedName
+            : null;
+    }
+
+    /// <summary>
+    /// Collects the closed generic types a requested type depends on.
+    /// Only closed generic types are collected; for wrapper and collection types the inner/element type is also extracted.
+    /// </summary>
+    private static IEnumerable<ClosedGenericDependency> CollectClosedGenericDependencies(ITypeSymbol typeSymbol)
+    {
         // Handle array types (e.g., GetService<IHandler<T>[]>())
         if(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
         {

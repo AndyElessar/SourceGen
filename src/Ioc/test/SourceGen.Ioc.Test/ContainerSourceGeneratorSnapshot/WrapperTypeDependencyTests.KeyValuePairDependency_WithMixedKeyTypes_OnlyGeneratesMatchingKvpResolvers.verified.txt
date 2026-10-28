@@ -16,9 +16,10 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 namespace TestNamespace;
 
 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>, IServiceProvider, IKeyedServiceProvider, IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService, IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
+partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNamespace.TestContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
 {
-    private readonly IServiceProvider? _fallbackProvider;
+    private readonly global::System.IServiceProvider? _fallbackProvider;
+    private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -27,166 +28,185 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     /// <summary>
     /// Creates a new standalone container without external service provider fallback.
     /// </summary>
-    public TestContainer() : this((IServiceProvider?)null) { }
+    public TestContainer() : this((global::System.IServiceProvider?)null) { }
 
     /// <summary>
     /// Creates a new container with optional fallback to external service provider.
     /// </summary>
     /// <param name="fallbackProvider">Optional external service provider for unknown dependencies.</param>
-    public TestContainer(IServiceProvider? fallbackProvider)
+    public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
 
         // Initialize eager singletons
-        GetTestNamespace_Keyed__Key_();
-        GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0();
-        GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key();
-        GetTestNamespace_StringConsumer();
-        GetTestNamespace_EnumConsumer();
+        GetKeyed__Key_();
+        GetKeyedEnum_TestNamespace_KeyEnum_Key0();
+        GetKeyedCsharp_TestNamespace_KeyedExtensions_Key();
+        GetStringConsumer();
+        GetEnumConsumer();
     }
 
     private TestContainer(TestContainer parent)
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        _testNamespace_Keyed__Key_ = parent._testNamespace_Keyed__Key_;
-        _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 = parent._testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0;
-        _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key = parent._testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key;
-        _testNamespace_StringConsumer = parent._testNamespace_StringConsumer;
-        _testNamespace_EnumConsumer = parent._testNamespace_EnumConsumer;
+        _keyed__Key_ = parent._keyed__Key_;
+        _keyedEnum_TestNamespace_KeyEnum_Key0 = parent._keyedEnum_TestNamespace_KeyEnum_Key0;
+        _keyedCsharp_TestNamespace_KeyedExtensions_Key = parent._keyedCsharp_TestNamespace_KeyedExtensions_Key;
+        _stringConsumer = parent._stringConsumer;
+        _enumConsumer = parent._enumConsumer;
     }
 
     #endregion
 
     #region Service Resolution
 
-    private global::TestNamespace.Keyed _testNamespace_Keyed__Key_ = null!;
-    private global::TestNamespace.Keyed GetTestNamespace_Keyed__Key_()
-    {
-        if(_testNamespace_Keyed__Key_ is not null) return _testNamespace_Keyed__Key_;
+    private global::TestNamespace.Keyed _keyed__Key_ = null!;
+    private global::TestNamespace.Keyed GetKeyed__Key_() => _keyed__Key_ ?? CreateKeyed__Key_();
 
+    private global::TestNamespace.Keyed CreateKeyed__Key_()
+    {
         var instance = new global::TestNamespace.Keyed();
 
-        _testNamespace_Keyed__Key_ = instance;
+        _keyed__Key_ = instance;
         return instance;
     }
 
-    private global::TestNamespace.KeyedEnum _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 = null!;
-    private global::TestNamespace.KeyedEnum GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0()
-    {
-        if(_testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 is not null) return _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0;
+    private global::TestNamespace.KeyedEnum _keyedEnum_TestNamespace_KeyEnum_Key0 = null!;
+    private global::TestNamespace.KeyedEnum GetKeyedEnum_TestNamespace_KeyEnum_Key0() => _keyedEnum_TestNamespace_KeyEnum_Key0 ?? CreateKeyedEnum_TestNamespace_KeyEnum_Key0();
 
+    private global::TestNamespace.KeyedEnum CreateKeyedEnum_TestNamespace_KeyEnum_Key0()
+    {
         var instance = new global::TestNamespace.KeyedEnum();
 
-        _testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0 = instance;
+        _keyedEnum_TestNamespace_KeyEnum_Key0 = instance;
         return instance;
     }
 
-    private global::TestNamespace.KeyedCsharp _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key = null!;
-    private global::TestNamespace.KeyedCsharp GetTestNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key()
-    {
-        if(_testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key is not null) return _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key;
+    private global::TestNamespace.KeyedCsharp _keyedCsharp_TestNamespace_KeyedExtensions_Key = null!;
+    private global::TestNamespace.KeyedCsharp GetKeyedCsharp_TestNamespace_KeyedExtensions_Key() => _keyedCsharp_TestNamespace_KeyedExtensions_Key ?? CreateKeyedCsharp_TestNamespace_KeyedExtensions_Key();
 
+    private global::TestNamespace.KeyedCsharp CreateKeyedCsharp_TestNamespace_KeyedExtensions_Key()
+    {
         var instance = new global::TestNamespace.KeyedCsharp();
 
-        _testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key = instance;
+        _keyedCsharp_TestNamespace_KeyedExtensions_Key = instance;
         return instance;
     }
 
-    private global::TestNamespace.StringConsumer _testNamespace_StringConsumer = null!;
-    private global::TestNamespace.StringConsumer GetTestNamespace_StringConsumer()
-    {
-        if(_testNamespace_StringConsumer is not null) return _testNamespace_StringConsumer;
+    private global::TestNamespace.StringConsumer _stringConsumer = null!;
+    private global::TestNamespace.StringConsumer GetStringConsumer() => _stringConsumer ?? CreateStringConsumer();
 
+    private global::TestNamespace.StringConsumer CreateStringConsumer()
+    {
         var instance = new global::TestNamespace.StringConsumer(new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>(default!, (global::TestNamespace.IKeyed)GetRequiredService(typeof(global::TestNamespace.IKeyed))));
 
-        _testNamespace_StringConsumer = instance;
+        _stringConsumer = instance;
         return instance;
     }
 
-    private global::TestNamespace.EnumConsumer _testNamespace_EnumConsumer = null!;
-    private global::TestNamespace.EnumConsumer GetTestNamespace_EnumConsumer()
-    {
-        if(_testNamespace_EnumConsumer is not null) return _testNamespace_EnumConsumer;
+    private global::TestNamespace.EnumConsumer _enumConsumer = null!;
+    private global::TestNamespace.EnumConsumer GetEnumConsumer() => _enumConsumer ?? CreateEnumConsumer();
 
+    private global::TestNamespace.EnumConsumer CreateEnumConsumer()
+    {
         var instance = new global::TestNamespace.EnumConsumer(new global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>(default!, (global::TestNamespace.IKeyed)GetRequiredService(typeof(global::TestNamespace.IKeyed))));
 
-        _testNamespace_EnumConsumer = instance;
+        _enumConsumer = instance;
         return instance;
     }
 
     // KeyValuePair resolver methods
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed> GetKvp_string_TestNamespace_IKeyed__Key_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>("Key", GetTestNamespace_Keyed__Key_());
+    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed> GetKvp_string_IKeyed__Key_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>("Key", GetKeyed__Key_());
 
-    private global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed> GetKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_TestNamespace_KeyEnum_Key0() => new global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>(global::TestNamespace.KeyEnum.Key0, GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0());
+    private global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed> GetKvp_KeyEnum_IKeyed_TestNamespace_KeyEnum_Key0() => new global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>(global::TestNamespace.KeyEnum.Key0, GetKeyedEnum_TestNamespace_KeyEnum_Key0());
 
-    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>[] GetAllKvp_string_TestNamespace_IKeyed_Array() =>
+    private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>[] GetAllKvp_string_IKeyed_Array() =>
         [
-            GetKvp_string_TestNamespace_IKeyed__Key_(),
+            GetKvp_string_IKeyed__Key_(),
         ];
 
-    private global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>[] GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Array() =>
+    private global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>[] GetAllKvp_KeyEnum_IKeyed_Array() =>
         [
-            GetKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_TestNamespace_KeyEnum_Key0(),
+            GetKvp_KeyEnum_IKeyed_TestNamespace_KeyEnum_Key0(),
         ];
 
-    private global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IKeyed> GetAllKvp_string_TestNamespace_IKeyed_Dictionary() =>
+    private global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IKeyed> GetAllKvp_string_IKeyed_Dictionary() =>
         new global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IKeyed>()
         {
-            ["Key"] = GetTestNamespace_Keyed__Key_(),
+            ["Key"] = GetKeyed__Key_(),
         };
 
-    private global::System.Collections.Generic.Dictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed> GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary() =>
+    private global::System.Collections.Generic.Dictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed> GetAllKvp_KeyEnum_IKeyed_Dictionary() =>
         new global::System.Collections.Generic.Dictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>()
         {
-            [global::TestNamespace.KeyEnum.Key0] = GetTestNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0(),
+            [global::TestNamespace.KeyEnum.Key0] = GetKeyedEnum_TestNamespace_KeyEnum_Key0(),
         };
 
     #endregion
 
     #region IServiceProvider
 
-    public object? GetService(Type serviceType)
+    public object? GetService(global::System.Type serviceType)
     {
         ThrowIfDisposed();
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private global::System.IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private global::Microsoft.Extensions.DependencyInjection.IServiceScope? CreateFallbackScope(global::System.IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) is not global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
 
     #region IKeyedServiceProvider
 
-    public object? GetKeyedService(Type serviceType, object? serviceKey)
+    public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)
     {
         ThrowIfDisposed();
 
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
+        if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
-    public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
+    public object GetRequiredKeyedService(global::System.Type serviceType, object? serviceKey)
     {
         ThrowIfDisposed();
-        return GetKeyedService(serviceType, serviceKey) ?? throw new InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
+        return GetKeyedService(serviceType, serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{serviceType}' with key '{serviceKey}' has been registered.");
     }
 
     #endregion
 
     #region ISupportRequiredService
 
-    public object GetRequiredService(Type serviceType)
+    public object GetRequiredService(global::System.Type serviceType)
     {
         ThrowIfDisposed();
-        return GetService(serviceType) ?? throw new InvalidOperationException($"No service for type '{serviceType}' has been registered.");
+        return GetService(serviceType) ?? throw new global::System.InvalidOperationException($"No service for type '{serviceType}' has been registered.");
     }
 
     #endregion
@@ -196,130 +216,136 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     public T? GetService<T>() where T : class
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? resolver(this) as T
-            : null;
+            : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
     }
 
     public T GetRequiredService<T>() where T : notnull
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (T)resolver(this)
-            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+            : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
 
-    public System.Collections.Generic.IEnumerable<T> GetServices<T>()
+    public global::System.Collections.Generic.IEnumerable<T> GetServices<T>()
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
-            ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : [];
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
+            : GetFallbackServiceProvider()?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     public T? GetKeyedService<T>(object? serviceKey) where T : class
     {
         ThrowIfDisposed();
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? resolver(this) as T
-            : null;
+            : (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) as T;
     }
 
     public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
     {
         ThrowIfDisposed();
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), key), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? (T)resolver(this)
-            : throw new InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.");
+            : (T)((GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
     }
 
-    public System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
+    public global::System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
     {
         ThrowIfDisposed();
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(System.Collections.Generic.IEnumerable<T>), key), out var resolver)
-            ? (System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : [];
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), out var resolver)
+            ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
+            : (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     #endregion
 
     #region IServiceProviderIsService
 
-    public bool IsService(Type serviceType)
+    public bool IsService(global::System.Type serviceType)
     {
-        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
-        return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
+        return _fallbackProvider is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService isService && isService.IsService(serviceType);
     }
 
-    public bool IsKeyedService(Type serviceType, object? serviceKey)
+    public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
     {
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
+        if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;
 
-        return _fallbackProvider is IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
+        return _fallbackProvider is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
 
     #endregion
 
     #region IServiceScopeFactory
 
-    public IServiceScope CreateScope()
+    public global::Microsoft.Extensions.DependencyInjection.IServiceScope CreateScope()
     {
         ThrowIfDisposed();
         return new TestContainer(this);
     }
 
-    public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
+    public global::Microsoft.Extensions.DependencyInjection.AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
-    IServiceProvider IServiceScope.ServiceProvider => this;
+    global::System.IServiceProvider global::Microsoft.Extensions.DependencyInjection.IServiceScope.ServiceProvider => this;
 
     #endregion
 
     #region IIocContainer
 
-    public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
+    public static global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>>> Resolvers => _serviceResolvers;
 
-    private static readonly KeyValuePair<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
+    private static readonly global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>>[] _localResolvers =
     [
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.TestContainer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.Keyed), "Key"), static c => c._testNamespace_Keyed__Key_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), "Key"), static c => c._testNamespace_Keyed__Key_!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.KeyedEnum), global::TestNamespace.KeyEnum.Key0), static c => c._testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyEnum.Key0), static c => c._testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.KeyedCsharp), global::TestNamespace.KeyedExtensions.Key), static c => c._testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyedExtensions.Key), static c => c._testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.StringConsumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_StringConsumer!),
-        new __IocResolver(new ServiceIdentifier(typeof(global::TestNamespace.EnumConsumer), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c._testNamespace_EnumConsumer!),
+        __Resolver(typeof(global::System.IServiceProvider), static c => c),
+        __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
+        __KeyedResolver(typeof(global::TestNamespace.Keyed), "Key", static c => c.GetKeyed__Key_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyed), "Key", static c => c.GetKeyed__Key_()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedEnum), global::TestNamespace.KeyEnum.Key0, static c => c.GetKeyedEnum_TestNamespace_KeyEnum_Key0()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyEnum.Key0, static c => c.GetKeyedEnum_TestNamespace_KeyEnum_Key0()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedCsharp), global::TestNamespace.KeyedExtensions.Key, static c => c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyedExtensions.Key, static c => c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key()),
+        __Resolver(typeof(global::TestNamespace.StringConsumer), static c => c.GetStringConsumer()),
+        __Resolver(typeof(global::TestNamespace.EnumConsumer), static c => c.GetEnumConsumer()),
 
         // KeyValuePair resolvers
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Array()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Array()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Array()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_string_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Array()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Array()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Array()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IReadOnlyDictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.IDictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary()),
-        new __IocResolver(new ServiceIdentifier(typeof(global::System.Collections.Generic.Dictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static c => c.GetAllKvp_TestNamespace_KeyEnum_TestNamespace_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>[]), static c => c.GetAllKvp_string_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_KeyEnum_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_KeyEnum_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>[]), static c => c.GetAllKvp_KeyEnum_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IDictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.Dictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
     ];
 
-    private static readonly global::System.Collections.Frozen.FrozenDictionary<ServiceIdentifier, Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+
+    private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
     #endregion
 
@@ -328,15 +354,17 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
     /// <summary>
     /// Creates a new container builder (returns the same IServiceCollection).
     /// </summary>
-    public IServiceCollection CreateBuilder(IServiceCollection services) => services;
+    public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
+
+    private object? _ownedFallbackProvider;
 
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
-    public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
+    public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new TestContainer(fallbackProvider);
+        return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -345,50 +373,55 @@ partial class TestContainer : IIocContainer<global::TestNamespace.TestContainer>
 
     public void Dispose()
     {
-        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
-        DisposeService(_testNamespace_EnumConsumer);
-        DisposeService(_testNamespace_StringConsumer);
-        DisposeService(_testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key);
-        DisposeService(_testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0);
-        DisposeService(_testNamespace_Keyed__Key_);
+        DisposeService(_enumConsumer);
+        DisposeService(_stringConsumer);
+        DisposeService(_keyedCsharp_TestNamespace_KeyedExtensions_Key);
+        DisposeService(_keyedEnum_TestNamespace_KeyEnum_Key0);
+        DisposeService(_keyed__Key_);
+        DisposeService(_ownedFallbackProvider);
     }
 
-    public async ValueTask DisposeAsync()
+    public async global::System.Threading.Tasks.ValueTask DisposeAsync()
     {
-        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
-        await DisposeServiceAsync(_testNamespace_EnumConsumer);
-        await DisposeServiceAsync(_testNamespace_StringConsumer);
-        await DisposeServiceAsync(_testNamespace_KeyedCsharp_TestNamespace_KeyedExtensions_Key);
-        await DisposeServiceAsync(_testNamespace_KeyedEnum_TestNamespace_KeyEnum_Key0);
-        await DisposeServiceAsync(_testNamespace_Keyed__Key_);
+        await DisposeServiceAsync(_enumConsumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_stringConsumer).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyedCsharp_TestNamespace_KeyedExtensions_Key).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyedEnum_TestNamespace_KeyEnum_Key0).ConfigureAwait(false);
+        await DisposeServiceAsync(_keyed__Key_).ConfigureAwait(false);
+        await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
+        global::System.ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
-    private static async ValueTask DisposeServiceAsync(object? service)
+    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
-        else if(service is IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+        else if(service is global::System.IDisposable disposable) disposable.Dispose();
     }
 
     private static void DisposeService(object? service)
     {
-        if(service is IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        else if(service is global::System.IAsyncDisposable) throw new global::System.InvalidOperationException($"'{service.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
     }
 
     #endregion

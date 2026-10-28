@@ -14,6 +14,8 @@ A decorator is only applied to service types it implements, also for non-generic
 
 An open generic decorator's type arguments are found by matching the service type as the decorator implements it against the decorated service type, so type parameter names and order MAY differ from the service type's. Constraints are closed with these type arguments before they are checked, including constraints that refer to other type parameters. A decorator is skipped for a service type it cannot implement.
 
+A non-keyed decorator chain MUST be registered as a keyed service under the hidden key `"SourceGen.Ioc.Decorated:{ServiceType}|{ImplementationType}"` (type names without `global::`), and the service type MUST be registered as a forwarder to it (`sp.GetRequiredKeyedService<IMyService>(hiddenKey)`). Resolving the service type and the `Lazy<T>` / `Func<T>` wrappers of the registration (see [Injection](Register.Injection.spec.md)) therefore share one decorated instance; resolving the implementation type returns the undecorated instance. A keyed decorator chain is registered under its own key.
+
 | Decorator | Service type | Closed decorator |
 | :--- | :--- | :--- |
 | `Decorator<TResponse, TRequest> : IHandler<TRequest, TResponse>` | `IHandler<Req, Res>` | `Decorator<Res, Req>` |
@@ -48,7 +50,7 @@ public class MyServiceDecorator2(ILogger<MyServiceDecorator2> logger, IMyService
 
 #region Generate:
 service.AddSingleton<MyService>();
-service.AddSingleton<IMyService>((IServiceProvider sp) =>
+service.AddKeyedSingleton<IMyService>("SourceGen.Ioc.Decorated:IMyService|MyService", (IServiceProvider sp, object? key) =>
 {
     var s0 = sp.GetRequiredService<MyService>();
     var s1_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator2>>();
@@ -57,6 +59,7 @@ service.AddSingleton<IMyService>((IServiceProvider sp) =>
     var s2 = new MyServiceDecorator(s2_p1, s1);
     return s2;
 });
+service.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredKeyedService<IMyService>("SourceGen.Ioc.Decorated:IMyService|MyService"));
 #endregion
 ```
 
@@ -134,7 +137,7 @@ internal sealed class HandlerDecorator2<TRequest, TResponse>(
 #endregion
 
 #region Generate:
-services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) =>
+services.AddKeyedSingleton<IRequestHandler<TestRequest, List<string>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest, List<string>>|TestHandler", (IServiceProvider sp, object? key) =>
 {
     var s0 = sp.GetRequiredService<TestHandler>();
 
@@ -144,6 +147,7 @@ services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvi
     var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p0);
     return s2;
 });
+services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<TestRequest, List<string>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest, List<string>>|TestHandler"));
 #endregion
 ```
 

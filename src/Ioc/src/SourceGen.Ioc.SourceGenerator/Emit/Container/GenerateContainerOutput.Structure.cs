@@ -35,7 +35,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         // Write fields
-        WriteContainerFields(writer, container);
+        WriteContainerFields(writer, container, groups);
 
         // Write constructors
         WriteContainerConstructors(writer, container, groups, effectiveUseSwitchStatement);
@@ -74,7 +74,7 @@ partial class IocSourceGenerator
         }
 
         // Write Disposal implementation
-        WriteDisposalImplementation(writer, container, groups);
+        WriteDisposalImplementation(writer, container, groups, canGenerateServiceProviderFactory);
 
         // Write IControllerActivator implementation (if container declares the interface)
         if(container.ImplementControllerActivator)
@@ -105,15 +105,15 @@ partial class IocSourceGenerator
     }
 
     private static readonly string[] _FixedContainerInterfaces = [
-        "IServiceProvider",
-        "IKeyedServiceProvider",
-        "IServiceProviderIsService",
-        "IServiceProviderIsKeyedService",
-        "ISupportRequiredService",
-        "IServiceScopeFactory",
-        "IServiceScope",
-        "IDisposable",
-        "IAsyncDisposable"
+        "global::System.IServiceProvider",
+        "global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService",
+        "global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory",
+        "global::Microsoft.Extensions.DependencyInjection.IServiceScope",
+        "global::System.IDisposable",
+        "global::System.IAsyncDisposable"
     ];
 
     /// <summary>
@@ -121,13 +121,13 @@ partial class IocSourceGenerator
     /// </summary>
     private static IEnumerable<string> GetContainerInterfaces(ContainerModel container, bool canGenerateServiceProviderFactory)
     {
-        yield return $"IIocContainer<{container.ContainerTypeName}>";
+        yield return $"global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>";
 
         foreach(var i in _FixedContainerInterfaces)
             yield return i;
 
         if(canGenerateServiceProviderFactory)
-            yield return "IServiceProviderFactory<IServiceCollection>";
+            yield return "global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>";
     }
 
     /// <summary>
@@ -135,12 +135,21 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteContainerFields(
         SourceWriter writer,
-        ContainerModel container)
+        ContainerModel container,
+        ContainerRegistrationGroups groups)
     {
         // Fallback provider field (only if IntegrateServiceProvider is enabled)
         if(container.IntegrateServiceProvider)
         {
-            writer.WriteLine("private readonly IServiceProvider? _fallbackProvider;");
+            writer.WriteLine("private readonly global::System.IServiceProvider? _fallbackProvider;");
+            // Scope on the fallback provider, created on first fallback resolution in a container scope (null in the root)
+            writer.WriteLine("private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;");
+        }
+
+        // Root container reference used by scopes to resolve lazily created singletons (null in the root)
+        if(HasRootResolvedSingletons(groups))
+        {
+            writer.WriteLine($"private readonly {container.ClassName}? _root;");
         }
 
         // Scope tracking
@@ -186,9 +195,9 @@ partial class IocSourceGenerator
         // SpinLock must NOT be readonly because Enter/Exit mutate it
         var syncFieldDeclaration = strategy switch
         {
-            ThreadSafeStrategy.Lock => $"private readonly Lock {fieldName}Lock = new();",
-            ThreadSafeStrategy.SemaphoreSlim => $"private readonly SemaphoreSlim {fieldName}Semaphore = new(1, 1);",
-            ThreadSafeStrategy.SpinLock => $"private SpinLock {fieldName}SpinLock = new(false);",
+            ThreadSafeStrategy.Lock => $"private readonly global::System.Threading.Lock {fieldName}Lock = new();",
+            ThreadSafeStrategy.SemaphoreSlim => $"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);",
+            ThreadSafeStrategy.SpinLock => $"private global::System.Threading.SpinLock {fieldName}SpinLock = new(false);",
             _ => null
         };
 
@@ -220,7 +229,7 @@ partial class IocSourceGenerator
 
         if(needsFallbackProvider)
         {
-            writer.WriteLine($"public {container.ClassName}() : this((IServiceProvider?)null) {{ }}");
+            writer.WriteLine($"public {container.ClassName}() : this((global::System.IServiceProvider?)null) {{ }}");
         }
         else
         {
@@ -241,7 +250,7 @@ partial class IocSourceGenerator
             writer.WriteLine("/// Creates a new container with optional fallback to external service provider.");
             writer.WriteLine("/// </summary>");
             writer.WriteLine("/// <param name=\"fallbackProvider\">Optional external service provider for unknown dependencies.</param>");
-            writer.WriteLine($"public {container.ClassName}(IServiceProvider? fallbackProvider)");
+            writer.WriteLine($"public {container.ClassName}(global::System.IServiceProvider? fallbackProvider)");
             writer.WriteLine("{");
             writer.Indentation++;
             writer.WriteLine("_fallbackProvider = fallbackProvider;");
@@ -257,17 +266,20 @@ partial class IocSourceGenerator
         writer.Indentation++;
         if(needsFallbackProvider)
         {
+            // Root fallback provider; the matching fallback scope is created lazily by GetFallbackServiceProvider()
             writer.WriteLine("_fallbackProvider = parent._fallbackProvider;");
         }
         writer.WriteLine("_isRootScope = false;");
 
+        if(HasRootResolvedSingletons(groups))
+        {
+            writer.WriteLine("_root = parent._root ?? parent;");
+        }
+
         // Copy singleton references from parent (already filtered for non-open-generics)
         foreach(var entry in groups.SingletonEntries)
         {
-            if(!TryGetServiceFieldName(entry, out var fieldName))
-                continue;
-
-            writer.WriteLine($"{fieldName} = parent.{fieldName};");
+            entry.WriteCopyFromParent(writer);
         }
 
         // Create scopes for imported modules (so their scoped services are properly isolated)
@@ -277,8 +289,12 @@ partial class IocSourceGenerator
             writer.WriteLine($"{fieldName} = ({module.Name})parent.{fieldName}.CreateScope().ServiceProvider;");
         }
 
+        // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers).
+        // Must precede eager initialization because eager services may inject these fields.
+        WriteWrapperInitializations(writer, groups);
+
         // Initialize eager scoped services
-        if(groups.ScopedEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry { IsEager: true }))
+        if(groups.ScopedEntries.Any(static entry => entry.IsEagerlyInitialized))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager scoped services");
@@ -287,9 +303,6 @@ partial class IocSourceGenerator
                 entry.WriteEagerInit(writer);
             }
         }
-
-        // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers)
-        WriteWrapperInitializations(writer, groups.WrapperEntries);
 
         writer.Indentation--;
         writer.WriteLine("}");
@@ -323,8 +336,12 @@ partial class IocSourceGenerator
             }
         }
 
+        // Initialize Lazy/Func wrapper fields.
+        // Must precede eager initialization because eager services may inject these fields.
+        WriteWrapperInitializations(writer, groups);
+
         // Initialize eager singleton services
-        if(groups.SingletonEntries.Any(static entry => entry is EagerContainerEntry or AsyncContainerEntry { IsEager: true }))
+        if(groups.SingletonEntries.Any(static entry => entry.IsEagerlyInitialized))
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize eager singletons");
@@ -333,22 +350,16 @@ partial class IocSourceGenerator
                 entry.WriteEagerInit(writer);
             }
         }
-
-        // Initialize Lazy/Func wrapper fields
-        WriteWrapperInitializations(writer, groups.WrapperEntries);
     }
 
     private static void WriteWrapperInitializations(
         SourceWriter writer,
-        ImmutableEquatableArray<ContainerEntry> wrapperEntries)
+        ContainerRegistrationGroups groups)
     {
-        var lazyEntries = wrapperEntries.OfType<LazyWrapperContainerEntry>().ToList();
-        var funcEntries = wrapperEntries.OfType<FuncWrapperContainerEntry>().ToList();
+        var lazyEntries = groups.LazyWrapperEntries;
+        var funcEntries = groups.FuncWrapperEntries;
 
-        if(lazyEntries.Count == 0 && funcEntries.Count == 0)
-            return;
-
-        if(lazyEntries.Count > 0)
+        if(lazyEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize Lazy wrapper fields");
@@ -358,7 +369,7 @@ partial class IocSourceGenerator
             }
         }
 
-        if(funcEntries.Count > 0)
+        if(funcEntries.Length > 0)
         {
             writer.WriteLine();
             writer.WriteLine("// Initialize Func wrapper fields");
@@ -369,24 +380,12 @@ partial class IocSourceGenerator
         }
     }
 
-    private static bool TryGetServiceFieldName(ContainerEntry entry, out string fieldName)
-    {
-        switch(entry)
-        {
-            case EagerContainerEntry eager:
-                fieldName = eager.FieldName;
-                return true;
-            case LazyThreadSafeContainerEntry lazy:
-                fieldName = lazy.FieldName;
-                return true;
-            case AsyncContainerEntry asyncEntry:
-                fieldName = asyncEntry.FieldName;
-                return true;
-            default:
-                fieldName = string.Empty;
-                return false;
-        }
-    }
+    /// <summary>
+    /// Whether any singleton is created on demand, in which case scopes must resolve it through the root container.
+    /// </summary>
+    private static bool HasRootResolvedSingletons(ContainerRegistrationGroups groups) =>
+        groups.SingletonEntries.Any(static entry => entry.DelegatesToRoot);
+
 
     /// <summary>
     /// Gets the field name for an imported module.

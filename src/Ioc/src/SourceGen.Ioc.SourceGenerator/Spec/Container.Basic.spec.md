@@ -38,8 +38,40 @@ The container generates generic instance methods matching the signatures from `S
 
 ### Resolution strategy by mode
 
-- **FrozenDictionary mode** (default): Methods directly query `_serviceResolvers` FrozenDictionary for O(1) lookup, bypassing the non-generic `GetService(Type)` overhead.
+- **FrozenDictionary mode** (default): Methods directly query `_serviceResolvers` FrozenDictionary for O(1) lookup, bypassing the non-generic `GetService(Type)` overhead. On a miss they MUST fall back exactly like their non-generic counterparts (`GetFallbackServiceProvider()`, or its `IKeyedServiceProvider` for keyed methods, passing the original `serviceKey`), so `container.GetRequiredService<T>()` and `((IServiceProvider)container).GetRequiredService<T>()` behave the same. `Required` methods MUST throw `InvalidOperationException` only when neither the container nor the fallback provider resolves the service; `GetServices<T>` / `GetKeyedServices<T>` MUST return an empty sequence in that case. Without `IntegrateServiceProvider`, a miss returns `null` / empty or throws directly.
 - **Switch mode** (`UseSwitchStatement = true`): Methods delegate to their non-generic counterparts (e.g., `GetService<T>()` calls `GetService(typeof(T)) as T`).
+
+## Construction, Scopes, and Fallback Provider
+
+|Rule|Required behavior|
+|:---|:---|
+|Constructor order|Constructors MUST initialize Lazy/Func wrapper fields **before** eager services, because eager services may inject those fields.|
+|Resolver entries|Resolver entries and switch branches MUST call the service's resolver method (e.g. `GetMyService()`), never read an eager field directly: a factory or `IServiceProvider` call running during construction may resolve a service whose eager field is still unset.|
+|Resolver shape|Synchronous singleton/scoped resolvers MUST be split into an expression-bodied fast path `GetX() => _x ?? CreateX();` and a slow-path `CreateX()` that holds creation, synchronization, and root delegation, so the fast path stays small enough to inline.|
+|Singletons in scopes|A scope MUST NOT create a singleton. Lazily created singletons (non-eager, including async-init) MUST delegate to the root container through `_root` (see [Lifetime](Container.Lifetime.spec.md)).|
+|Fallback scope|When `IntegrateServiceProvider = true`, fallback resolution MUST go through `GetFallbackServiceProvider()`. In a container scope it MUST lazily create one scope on the fallback provider (via its `IServiceScopeFactory`, if available) on the first fallback resolution, publish it with `Interlocked.CompareExchange`, and dispose a losing duplicate. Scopes that never use the fallback provider MUST NOT create one. The scope MUST dispose the fallback scope after its own scoped services. `IsService`/`IsKeyedService` MAY query the root fallback provider directly.|
+|Fallback ownership|The provider built by `IServiceProviderFactory.CreateServiceProvider` MUST be disposed by the returned root container. A provider passed to the public constructor is owned by the caller and MUST NOT be disposed.|
+|Scoped services in the root|A scoped service resolved directly from the root container is cached in the root. Both `Dispose` and `DisposeAsync` MUST dispose scoped services first (in scopes and in the root), then singletons.|
+|Transient disposables|Transient services are NOT tracked. The container MUST NOT dispose them; the caller owns their lifetime.|
+|`IAsyncDisposable`-only services|Synchronous `Dispose` MUST throw `InvalidOperationException` when it reaches a tracked service that implements only `IAsyncDisposable` (matching `Microsoft.Extensions.DependencyInjection`); `DisposeAsync` MUST be used instead. Disposing a losing `CompareExchange` instance during resolution MUST NOT throw.|
+|Fully qualified names|Generated container code MUST reference every type with a `global::`-qualified name, so types declared in the container's namespace (e.g. `Lock`, `Task`, `Type`, `System`) cannot shadow them. The `using` directives are kept only for extension methods.|
+|Awaits|Every `await` in generated code MUST use `ConfigureAwait(false)`.|
+
+> **Limitation**: An imported module scope is created through the module's own `CreateScope()` and therefore opens its own fallback scope. Within one container scope, fallback scoped services resolved through an imported module are a different instance from those resolved through the importing container.
+
+## Member Names
+
+Generated service fields and resolver methods are named after short type names, so large containers stay small:
+
+|Name part|Rule|
+|---|---|
+|Short type name|The simple type name with namespaces and containing types removed, also in generic arguments; non-identifier characters become a single `_` and trailing `_` is dropped: `global::A.Logger<global::A.Request, global::System.Collections.Generic.List<string>>` → `Logger_Request_List_string`.|
+|Collisions|When different types of one container get the same short name, each of them MUST get `_` and the 8-digit hex FNV-1a hash of its fully qualified name appended (e.g. `Service_4b7ca1a9`). The hash MUST be deterministic (not `string.GetHashCode`).|
+|Length|A short name longer than 80 characters MUST be truncated to 60 characters and get the hash appended.|
+|Members|Resolver `Get{Name}()` (creation `Create{Name}()`, async `Get{Name}Async()` / `Create{Name}Async()`), field `_{name}` (synchronization `_{name}Lock` / `Semaphore` / `SpinLock`), keyed `…_{key}`, decorated service type `…_As_{ServiceName}`, wrapper fields `_lazy_{ServiceName}{field}` / `_func_{ServiceName}{field}`, collections `GetAll{Name}Array()`, `GetAllLazy_{Name}_Array()`, `GetAllFunc_{Name}_Array()`, `GetAllKvp_{Key}_{Value}_Array()` / `_Dictionary()`.|
+|Reserved names|A resolver or field name MUST get `_Resolve` appended when it, or a member derived from it, equals a member the user declares on the container class or its base classes (including partial accessors), an imported module field, or a member of the generated container infrastructure (e.g. `GetService`, `CreateScope`, `_root`).|
+
+Names are computed while grouping registrations and stored in the container entries, so the emitters never recompute them.
 
 ## Basic Container Example
 
@@ -66,6 +98,7 @@ public partial class AppContainer;
 #endregion
 
 #region Generate:
+// NOTE: type names are abbreviated for readability; generated code uses global::-qualified names.
 // <auto-generated/>
 #nullable enable annotations
 #nullable disable warnings
@@ -85,6 +118,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
 {
     private readonly IServiceProvider? _fallbackProvider;
+    private IServiceScope? _fallbackScope; // created lazily in container scopes
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -122,22 +156,22 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     #region Service Resolution
 
     // Eager singleton - non-nullable field, no synchronization
-    private global::MyDependency _myDependency;
-    private global::MyDependency GetMyDependency()
-    {
-        if (_myDependency is not null) return _myDependency;
+    private global::MyDependency _myDependency = null!;
+    private global::MyDependency GetMyDependency() => _myDependency ?? CreateMyDependency();
 
+    private global::MyDependency CreateMyDependency()
+    {
         var instance = new global::MyDependency();
         _myDependency = instance;
         return instance;
     }
 
     // Eager singleton - non-nullable field, no synchronization
-    private global::MyService _myService;
-    private global::MyService GetMyService()
-    {
-        if (_myService is not null) return _myService;
+    private global::MyService _myService = null!;
+    private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+    private global::MyService CreateMyService()
+    {
         var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
         _myService = instance;
         return instance;
@@ -154,7 +188,26 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider?.GetService(serviceType);
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private IServiceScope? CreateFallbackScope(IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(IServiceScopeFactory)) is not IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -168,7 +221,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return _fallbackProvider is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
@@ -196,7 +249,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
             ? resolver(this) as T
-            : null;
+            : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
     }
 
     public T GetRequiredService<T>() where T : notnull
@@ -204,7 +257,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
             ? (T)resolver(this)
-            : throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+            : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
 
     public IEnumerable<T> GetServices<T>() { /* ... */ }
@@ -255,15 +308,19 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
         // Built-in services
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceProvider), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(IServiceScopeFactory), KeyedService.AnyKey), static c => c),
-        new __IocResolver(new ServiceIdentifier(typeof(global::AppContainer), KeyedService.AnyKey), static c => c),
-        // Eager singletons - direct field access (not method calls)
-        new __IocResolver(new ServiceIdentifier(typeof(global::MyDependency), KeyedService.AnyKey), static c => c._myDependency),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IMyDependency), KeyedService.AnyKey), static c => c._myDependency),
-        new __IocResolver(new ServiceIdentifier(typeof(global::MyService), KeyedService.AnyKey), static c => c._myService),
-        new __IocResolver(new ServiceIdentifier(typeof(global::IMyService), KeyedService.AnyKey), static c => c._myService),
+        __Resolver(typeof(IServiceProvider), static c => c),
+        __Resolver(typeof(IServiceScopeFactory), static c => c),
+        __Resolver(typeof(global::AppContainer), static c => c),
+        // Eager singletons - resolver method calls (fields may still be unset while the constructor runs)
+        __Resolver(typeof(global::MyDependency), static c => c.GetMyDependency()),
+        __Resolver(typeof(global::IMyDependency), static c => c.GetMyDependency()),
+        __Resolver(typeof(global::MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::IMyService), static c => c.GetMyService()),
     ];
+
+    // Entry helper (see Container.Performance.spec.md for __KeyedResolver and __CollectionResolvers<T>)
+    private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::AppContainer, object> resolver) =>
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
     // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. If reversed, _localResolvers would be null when _serviceResolvers initializes.
@@ -277,13 +334,16 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     /// </summary>
     public IServiceCollection CreateBuilder(IServiceCollection services) => services;
 
+    // Provider built by CreateServiceProvider is owned (and disposed) by the returned container
+    private object? _ownedFallbackProvider;
+
     /// <summary>
     /// Creates the service provider from the built IServiceCollection.
     /// </summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
     {
         var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new AppContainer(fallbackProvider);
+        return new AppContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
     }
 
     #endregion
@@ -296,37 +356,46 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
         if(!_isRootScope)
         {
+            // Scoped services first, then the fallback scope they may depend on
+            DisposeService(_fallbackScope);
             return;
         }
 
         // Eager singletons - no SemaphoreSlim to dispose
         DisposeService(_myService);
         DisposeService(_myDependency);
+        DisposeService(_ownedFallbackProvider);
     }
 
     public async ValueTask DisposeAsync()
     {
         if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
+        // Scoped services (none in this example) are disposed here, before the branch,
+        // because the root caches scoped services resolved directly from it.
+
         if(!_isRootScope)
         {
+            await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
             return;
         }
 
         // Eager singletons - no SemaphoreSlim to dispose
-        await DisposeServiceAsync(_myService);
-        await DisposeServiceAsync(_myDependency);
+        await DisposeServiceAsync(_myService).ConfigureAwait(false);
+        await DisposeServiceAsync(_myDependency).ConfigureAwait(false);
+        await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
     private static async ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
+        if(service is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
         else if(service is IDisposable disposable) disposable.Dispose();
     }
 
     private static void DisposeService(object? service)
     {
         if(service is IDisposable disposable) disposable.Dispose();
+        else if(service is IAsyncDisposable) throw new InvalidOperationException($"'{service.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
     }
 
     // These overloads handle async-init services that store their instance as Task<T>?.
@@ -336,7 +405,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         {
             try
             {
-                await DisposeServiceAsync(await task);
+                await DisposeServiceAsync(await task.ConfigureAwait(false)).ConfigureAwait(false);
             }
             catch(Exception ex)
             {

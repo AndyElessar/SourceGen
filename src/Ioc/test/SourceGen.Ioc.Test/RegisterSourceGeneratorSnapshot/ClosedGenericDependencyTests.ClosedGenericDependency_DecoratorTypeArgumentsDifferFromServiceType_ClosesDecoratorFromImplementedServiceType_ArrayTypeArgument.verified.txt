@@ -27,12 +27,13 @@ namespace TestAssembly
                 services.AddSingleton(typeof(global::TestNamespace.IHandler<,>), typeof(global::TestNamespace.Handler<,>));
                 services.AddSingleton<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Req[], global::TestNamespace.Req>, global::TestNamespace.Handler<global::TestNamespace.Req[], global::TestNamespace.Req>>();
-                services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Req[], global::TestNamespace.Req>>((global::System.IServiceProvider sp) =>
+                services.AddKeyedSingleton<global::TestNamespace.IHandler<global::TestNamespace.Req[], global::TestNamespace.Req>>("SourceGen.Ioc.Decorated:TestNamespace.IHandler<TestNamespace.Req[], TestNamespace.Req>|TestNamespace.Handler<TestNamespace.Req[], TestNamespace.Req>", (global::System.IServiceProvider sp, object? key) =>
                 {
                     var s0 = sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Req[], global::TestNamespace.Req>>();
                     var s1 = new global::TestNamespace.Decorator<global::TestNamespace.Req>(s0);
                     return s1;
                 });
+                services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Req[], global::TestNamespace.Req>>((global::System.IServiceProvider sp) => sp.GetRequiredKeyedService<global::TestNamespace.IHandler<global::TestNamespace.Req[], global::TestNamespace.Req>>("SourceGen.Ioc.Decorated:TestNamespace.IHandler<TestNamespace.Req[], TestNamespace.Req>|TestNamespace.Handler<TestNamespace.Req[], TestNamespace.Req>"));
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Req[], global::TestNamespace.Res>, global::TestNamespace.Handler<global::TestNamespace.Req[], global::TestNamespace.Res>>();
                 services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Req[], global::TestNamespace.Res>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Req[], global::TestNamespace.Res>>());
             }
