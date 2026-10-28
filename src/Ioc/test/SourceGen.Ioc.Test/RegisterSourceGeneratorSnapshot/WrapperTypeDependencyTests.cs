@@ -87,6 +87,51 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task MultiParamFuncDependency_WithDecoratedAndKeyedServices_AppliesDecoratorsAndKeys()
+    {
+        // Each call creates a new implementation from the arguments and wraps it in the registration's decorators;
+        // the keyed registration is resolved through its own keyed Func and gets its key as [ServiceKey].
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Plain), Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(TestNamespace.IPlain)], Key = "keyed")]
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDep)])]
+            public sealed class Dep : IDep;
+
+            public interface IDecorated;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDecorated)], Decorators = [typeof(Decorator)])]
+            public sealed class Decorated(string name, IDep dep) : IDecorated;
+
+            public sealed class Decorator(IDecorated inner, IDep dep) : IDecorated;
+
+            public interface IPlain;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IPlain)])]
+            public sealed class Plain(string name, [ServiceKey] object? key) : IPlain;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(
+                Func<string, IDecorated> decorated,
+                Func<string, IPlain> plain,
+                [FromKeyedServices("keyed")] Func<string, IPlain> keyedPlain);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task FuncDependency_GeneratesFuncResolution()
     {
         const string source = """

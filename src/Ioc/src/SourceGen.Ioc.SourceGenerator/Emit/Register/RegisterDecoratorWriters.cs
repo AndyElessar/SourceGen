@@ -24,15 +24,7 @@ partial class IocSourceGenerator
     /// </remarks>
     private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
     {
-        var decorators = registration.Decorators;
-        var decoratorCount = decorators.Length;
-
-        var serviceTypeParams = registration.ServiceType is GenericTypeData genericServiceType
-            ? genericServiceType.TypeParameters
-            : null;
         var serviceTypeName = registration.ServiceType.Name;
-
-        var serviceTypeNames = BuildServiceTypeNames(registration);
 
         // A non-keyed chain is registered under a hidden key, so Lazy/Func wrappers can resolve this registration's
         // decorated instance; the service type forwards to it, sharing the instance. The body still resolves non-keyed.
@@ -47,6 +39,34 @@ partial class IocSourceGenerator
             ? $"sp.{methodName}<{registration.ImplementationType.Name}>(key)"
             : $"sp.{methodName}<{registration.ImplementationType.Name}>()";
         writer.WriteLine($"var s0 = {resolveCall};");
+
+        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
+        writer.WriteLine($"return {outermostVar};");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
+
+        if(decoratedServiceKey is not null)
+        {
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) => sp.{GetRequiredKeyedService}<{serviceTypeName}>({decoratedServiceKey}));");
+        }
+    }
+
+    /// <summary>
+    /// Writes the statements wrapping the instance in variable <c>s0</c> with <paramref name="registration"/>'s decorators,
+    /// the last decorator outermost, and returns the variable holding the outermost instance (<c>s{n}</c>).
+    /// Decorator dependencies are resolved from <c>sp</c> (and <c>key</c> for keyed registrations).
+    /// </summary>
+    private static string WriteDecoratorChain(SourceWriter writer, ServiceRegistrationModel registration, ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+    {
+        var decorators = registration.Decorators;
+        var decoratorCount = decorators.Length;
+
+        var serviceTypeParams = registration.ServiceType is GenericTypeData genericServiceType
+            ? genericServiceType.TypeParameters
+            : null;
+
+        var serviceTypeNames = BuildServiceTypeNames(registration);
 
         for(int i = 0; i < decoratorCount; i++)
         {
@@ -78,15 +98,7 @@ partial class IocSourceGenerator
                 asyncInitServiceTypeNames: asyncInitServiceTypeNames);
         }
 
-        writer.WriteLine($"return s{decoratorCount};");
-
-        writer.Indentation--;
-        writer.WriteLine("});");
-
-        if(decoratedServiceKey is not null)
-        {
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) => sp.{GetRequiredKeyedService}<{serviceTypeName}>({decoratedServiceKey}));");
-        }
+        return $"s{decoratorCount}";
     }
 
     /// <summary>

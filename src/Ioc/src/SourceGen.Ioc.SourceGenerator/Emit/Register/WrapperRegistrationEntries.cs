@@ -29,8 +29,9 @@ partial class IocSourceGenerator
     /// <param name="ImplementationTypeConstructorParams">The implementation constructor parameters.</param>
     /// <param name="ImplementationTypeInjectionMembers">The implementation injection members.</param>
     /// <param name="InputTypes">The Func input type parameters.</param>
-    /// <param name="Key">The key of a keyed source registration, which a parameterless Func is registered under; otherwise <see langword="null"/>.</param>
+    /// <param name="Key">The key of a keyed source registration, which the Func is registered under; otherwise <see langword="null"/>.</param>
     /// <param name="ResolveCall">The expression resolving the source registration's instance (parameterless Func only).</param>
+    /// <param name="Registration">The source registration, whose decorators a Func with input parameters applies.</param>
     /// <param name="Tags">The tags inherited from the source registration.</param>
     private readonly partial record struct FuncRegistrationEntry(
         string FuncServiceTypeName,
@@ -42,6 +43,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<TypeParameter> InputTypes,
         string? Key,
         string ResolveCall,
+        ServiceRegistrationModel Registration,
         ImmutableEquatableArray<string> Tags);
 
     /// <summary>

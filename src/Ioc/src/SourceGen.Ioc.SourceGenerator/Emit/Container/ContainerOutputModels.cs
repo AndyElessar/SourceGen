@@ -60,7 +60,8 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
         ImmutableEquatableArray<ResolvedDecorator> Decorators,
-        string? ImplementationTypeName = null) : ResolvedDependency
+        string? ImplementationTypeName = null,
+        string? RegistrationKey = null) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
         {
@@ -91,7 +92,10 @@ partial class IocSourceGenerator
                 }
 
                 var paramVar = $"p{resolvedParamIndex}";
-                var expr = param.Dependency.FormatExpression(param.IsOptional);
+                // A null service key needs a type, because the value is assigned to an implicitly typed variable
+                var expr = param.Dependency is ServiceKeyLiteralDependency { KeyValue: "null" } serviceKey
+                    ? $"default({serviceKey.KeyType})"
+                    : param.Dependency.FormatExpression(param.IsOptional);
                 statements.Add($"var {paramVar} = {expr};");
                 ctorEntries.Add((param.Parameter.Name, paramVar));
                 resolvedParamIndex++;
@@ -168,7 +172,25 @@ partial class IocSourceGenerator
                 statements.Add($"s0.{member.Name}({methodArgs});");
             }
 
-            statements.Add("return s0;");
+            if(Decorators.Length > 0)
+            {
+                // The input arguments are for the implementation only; decorator dependencies are resolved from the container.
+                // Names that cannot clash with the locals of the enclosing resolver method.
+                statements.Add($"{ReturnTypeName} decorated = s0;");
+
+                var decoratorWriter = new SourceWriter();
+                ServiceContainerEntry.WriteDecoratorApplication(decoratorWriter, Decorators, RegistrationKey, "decorated", "decorated_");
+                statements.AddRange(decoratorWriter.ToString()
+                    .Split('\n')
+                    .Select(static line => line.Trim())
+                    .Where(static line => line.Length > 0));
+
+                statements.Add("return decorated;");
+            }
+            else
+            {
+                statements.Add("return s0;");
+            }
 
             var funcTypeName = BuildMultiParamFuncTypeName(InputParameters, ReturnTypeName);
             return $"new {funcTypeName}(({lambdaParams}) => {{ {string.Join(" ", statements)} }})";

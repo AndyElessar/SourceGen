@@ -132,6 +132,8 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 
 A `Lazy<T>` of a transient registration MUST NOT be shared: no field is generated, and every consumer, collection resolver call and container resolution creates a new `Lazy<T>` (`new Lazy<T>(() => GetMyService(), ...)`), so each gets its own instance, like the Register output where the wrapper inherits the transient lifetime. `Func<T>` fields stay shared, because each invocation calls the resolver.
 
+`Func<T1, ..., TReturn>` with input parameters is built inline per dependency and MUST behave like the Register output (see [Register Injection](Register.Injection.spec.md)): each call constructs a new implementation instance from the arguments, also for singleton and scoped registrations, then wraps it in the registration's decorators (locals `decorated` / `decorated_{n}`, so they cannot clash with the enclosing resolver's locals). The arguments are only matched to the implementation. A keyed dependency uses the keyed registration, whose `[ServiceKey]` parameters receive its key; for a non-keyed registration they receive `default(T)`.
+
 | `IDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `IReadOnlyDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `Dictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |

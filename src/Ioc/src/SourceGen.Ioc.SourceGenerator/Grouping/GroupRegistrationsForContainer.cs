@@ -1201,7 +1201,8 @@ partial class IocSourceGenerator
                                 serviceLookup,
                                 collectionRegistrations,
                                 wrapperFields),
-                            targetRegistration.ImplementationType.Name);
+                            targetRegistration.ImplementationType.Name,
+                            targetRegistration.Key);
                     }
 
                     return new FallbackProviderDependency(type.Name, key, isOptional);

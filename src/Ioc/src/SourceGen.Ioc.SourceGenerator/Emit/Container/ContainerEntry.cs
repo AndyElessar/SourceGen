@@ -144,17 +144,30 @@ partial class IocSourceGenerator
             }
         }
 
-        protected void WriteDecoratorApplication(SourceWriter writer)
+        protected void WriteDecoratorApplication(SourceWriter writer) =>
+            WriteDecoratorApplication(writer, Decorators, Registration.Key, "instance", "decorator");
+
+        /// <summary>
+        /// Writes the statements wrapping variable <paramref name="instanceVar"/> with <paramref name="decorators"/>,
+        /// the first decorator outermost. Decorators with injection members are built in variables named
+        /// <paramref name="decoratorVarPrefix"/> followed by an index.
+        /// </summary>
+        public static void WriteDecoratorApplication(
+            SourceWriter writer,
+            ImmutableEquatableArray<ResolvedDecorator> decorators,
+            string? registrationKey,
+            string instanceVar,
+            string decoratorVarPrefix)
         {
-            for(var i = Decorators.Length - 1; i >= 0; i--)
+            for(var i = decorators.Length - 1; i >= 0; i--)
             {
-                var decorator = Decorators[i];
+                var decorator = decorators[i];
                 var decoratorName = decorator.Decorator.ImplementationType.Name;
                 var hasInjectionMembers = decorator.InjectionMembers.Length > 0;
 
                 var args = new List<string>(1 + decorator.Parameters.Length)
                 {
-                    "instance"
+                    instanceVar
                 };
 
                 foreach(var parameter in decorator.Parameters)
@@ -166,13 +179,13 @@ partial class IocSourceGenerator
 
                 if(hasInjectionMembers)
                 {
-                    var decoratorVarName = $"decorator{Decorators.Length - 1 - i}";
-                    WriteDecoratorCreationWithInjection(writer, decoratorVarName, decoratorName, decorator.InjectionMembers, argsString, Registration.Key);
-                    writer.WriteLine($"instance = {decoratorVarName};");
+                    var decoratorVarName = $"{decoratorVarPrefix}{decorators.Length - 1 - i}";
+                    WriteDecoratorCreationWithInjection(writer, decoratorVarName, decoratorName, decorator.InjectionMembers, argsString, registrationKey);
+                    writer.WriteLine($"{instanceVar} = {decoratorVarName};");
                 }
                 else
                 {
-                    writer.WriteLine($"instance = new {decoratorName}({argsString});");
+                    writer.WriteLine($"{instanceVar} = new {decoratorName}({argsString});");
                 }
             }
         }

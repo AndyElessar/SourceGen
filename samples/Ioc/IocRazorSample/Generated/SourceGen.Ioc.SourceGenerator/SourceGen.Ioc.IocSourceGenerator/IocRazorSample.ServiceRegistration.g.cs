@@ -11,7 +11,7 @@ namespace IocRazorSample
     /// <summary>
     /// Extension methods for registering services from IocRazorSample.
     /// </summary>
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.185")]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.186")]
     public static class IocRazorSampleServiceCollectionExtensions
     {
         /// <summary>

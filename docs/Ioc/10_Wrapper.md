@@ -144,6 +144,13 @@ services.AddScoped<global::System.Func<string, global::MyNamespace.IService>>((g
 > [!NOTE]
 > The generator matches Func input types (`string` in this example) to the implementation constructor parameters by type. Unmatched constructor parameters (`ILogger`) are resolved from the service provider automatically.
 
+- Decorators of the service are applied to every created instance; the Func arguments are passed to the implementation only, and decorator dependencies are resolved from the service provider.
+- For a keyed service, inject `[FromKeyedServices(key)] Func<T1, ..., TReturn>`. A `[ServiceKey]` parameter of the implementation receives the key.
+- The generated container behaves the same way.
+
+> [!IMPORTANT]
+> Each call of a parameterized `Func<T1, ..., TReturn>` creates a **new** instance, even when the service is registered as singleton or scoped: the arguments may differ between calls, so the instance cannot be shared. The parameterless `Func<T>` follows the service lifetime instead.
+
 ## Collection Wrappers
 
 Inject collection types to receive all registrations of a service type:

@@ -73,7 +73,9 @@ One `Lazy<T>` / parameterless `Func<T>` registration is emitted per registration
 |Keyed|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<Impl>(key)`|
 |Keyed, decorated|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
 
-A keyed registration MUST NOT emit a non-keyed wrapper registration. `Func<T1, ..., TReturn>` with input parameters keeps constructing the implementation inline and is always registered non-keyed.
+A keyed registration MUST NOT emit a non-keyed wrapper registration.
+
+`Func<T1, ..., TReturn>` with input parameters is a factory: each call MUST construct a **new** implementation instance from the arguments, also for singleton and scoped registrations, because the arguments may differ between calls (unlike the parameterless `Func<T>`, which follows the lifetime). The call MUST then wrap the instance in the registration's decorators, also new per call; the arguments are only matched to the implementation, and decorator dependencies are resolved from DI. A keyed registration MUST be registered as a keyed Func (`services.AddKeyedXXX<Func<T1,...,TReturn>>(key, (sp, key) => ...)`), resolved through `[FromKeyedServices(key)]`, and the implementation's `[ServiceKey]` parameters MUST receive the registration key.
 
 | Wrapper Type | Standalone Registration | Consumer Resolution |
 | --- | --- | --- |

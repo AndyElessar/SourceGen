@@ -31,7 +31,9 @@ partial class IocSourceGenerator
                 return;
             }
 
-            writer.WriteLine($"services.Add{lifetime}<{FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
+            writer.WriteLine(Key is not null
+                ? $"services.AddKeyed{lifetime}<{FuncServiceTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) =>"
+                : $"services.Add{lifetime}<{FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
             writer.Indentation++;
             writer.WriteLine($"new {FuncServiceTypeName}(({BuildFuncLambdaParameters(InputTypes)}) =>");
             writer.WriteLine("{");
@@ -86,8 +88,9 @@ partial class IocSourceGenerator
                     reg.ImplementationType.ConstructorParameters,
                     reg.InjectionMembers,
                     needed.InputTypes,
-                    needed.HasInputParameters ? null : reg.Key,
+                    reg.Key,
                     GetWrapperResolveCall(reg),
+                    reg,
                     regWithTags.Tags));
             }
         }
@@ -210,7 +213,7 @@ partial class IocSourceGenerator
             }
 
             var paramVar = $"p{resolvedParamIndex}";
-            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: false, registrationKey: null);
+            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Key is not null, registrationKey: entry.Key);
             constructorParamEntries.Add((param.Name, resolvedVar));
             resolvedParamIndex++;
         }
@@ -271,13 +274,13 @@ partial class IocSourceGenerator
                         param,
                         paramVar,
                         method.Key,
-                        isKeyedRegistration: false,
-                        registrationKey: null,
+                        isKeyedRegistration: entry.Key is not null,
+                        registrationKey: entry.Key,
                         typeNameResolver: null);
                 }
                 else
                 {
-                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: false, registrationKey: null);
+                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Key is not null, registrationKey: entry.Key);
                 }
 
                 methodEntries.Add((param.Name, resolvedVar));
@@ -288,7 +291,9 @@ partial class IocSourceGenerator
             writer.WriteLine($"s0.{method.Name}({methodArgs});");
         }
 
-        writer.WriteLine("return s0;");
+        // The input arguments are for the implementation only; decorator dependencies are resolved from DI
+        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServiceTypeNames: null);
+        writer.WriteLine($"return {outermostVar};");
     }
 
     /// <summary>

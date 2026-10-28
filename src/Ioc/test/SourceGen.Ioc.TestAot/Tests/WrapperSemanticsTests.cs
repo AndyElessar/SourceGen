@@ -52,4 +52,36 @@ public class WrapperSemanticsTests
         await Assert.That(all[0].Value).IsSameReferenceAs(nonKeyed);
         await ((IAsyncDisposable)provider).DisposeAsync();
     }
+
+    [Test]
+    [MethodDataSource(nameof(Providers))]
+    public async Task FuncWithArguments_OfDecoratedSingleton_CreatesNewDecoratedInstancePerCall(IServiceProvider provider)
+    {
+        var consumer = provider.GetRequiredService<FuncWithArgumentsConsumer>();
+
+        var first = consumer.Factory("first");
+        var second = consumer.Factory("first");
+
+        await Assert.That(first).IsTypeOf<NamedServiceDecorator>();
+        await Assert.That(first.Inner).IsTypeOf<NamedService>();
+        await Assert.That(first.Name).IsEqualTo("first");
+        await Assert.That(second).IsNotSameReferenceAs(first);
+        await Assert.That(second.Inner).IsNotSameReferenceAs(first.Inner);
+        await ((IAsyncDisposable)provider).DisposeAsync();
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Providers))]
+    public async Task FuncWithArguments_OfKeyedService_CreatesKeyedImplementationWithServiceKey(IServiceProvider provider)
+    {
+        var consumer = provider.GetRequiredService<FuncWithArgumentsConsumer>();
+
+        var keyed = consumer.KeyedFactory("keyed-name");
+
+        await Assert.That(keyed).IsTypeOf<KeyedNamedService>();
+        await Assert.That(keyed.Name).IsEqualTo("keyed-name");
+        await Assert.That(keyed.Key).IsEqualTo("keyed");
+        await Assert.That(consumer.Factory("name")).IsTypeOf<NamedServiceDecorator>();
+        await ((IAsyncDisposable)provider).DisposeAsync();
+    }
 }

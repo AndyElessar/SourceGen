@@ -41,6 +41,49 @@ public sealed class WrapperSemanticsConsumer(
     public IEnumerable<Lazy<IKeyedWrappedService>> AllKeyedWrapped => allKeyedWrapped;
 }
 
+/// <summary>Service created by a <c>Func&lt;string, T&gt;</c> from its name argument.</summary>
+public interface INamedService
+{
+    string Name { get; }
+    INamedService? Inner { get; }
+    object? Key { get; }
+}
+
+public sealed class NamedService(string name) : INamedService
+{
+    public string Name => name;
+    public INamedService? Inner => null;
+    public object? Key => null;
+}
+
+public sealed class NamedServiceDecorator(INamedService inner) : INamedService
+{
+    public string Name => inner.Name;
+    public INamedService? Inner => inner;
+    public object? Key => inner.Key;
+}
+
+public sealed class KeyedNamedService(string name, [ServiceKey] object? key) : INamedService
+{
+    public string Name => name;
+    public INamedService? Inner => null;
+    public object? Key => key;
+}
+
+public sealed class FuncWithArgumentsConsumer(
+    Func<string, INamedService> factory,
+    [FromKeyedServices("keyed")] Func<string, INamedService> keyedFactory)
+{
+    public Func<string, INamedService> Factory => factory;
+    public Func<string, INamedService> KeyedFactory => keyedFactory;
+}
+
+[IocRegisterFor<NamedService>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(INamedService)],
+    Decorators = [typeof(NamedServiceDecorator)])]
+[IocRegisterFor<KeyedNamedService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(INamedService)], Key = "keyed")]
+[IocRegisterFor<FuncWithArgumentsConsumer>(ServiceLifetime.Transient)]
 [IocRegisterFor<WrappedService>(
     ServiceLifetime.Singleton,
     ServiceTypes = [typeof(IWrappedService)],
@@ -49,5 +92,6 @@ public sealed class WrapperSemanticsConsumer(
 [IocRegisterFor<KeyedWrappedService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedWrappedService)])]
 [IocRegisterFor<KeyedWrappedService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedWrappedService)], Key = "keyed")]
 [IocRegisterFor<WrapperSemanticsConsumer>(ServiceLifetime.Transient)]
-[IocContainer(ExplicitOnly = true)]
+// Not eager: NamedService takes its name from the Func argument and cannot be resolved directly
+[IocContainer(ExplicitOnly = true, EagerResolveOptions = EagerResolveOptions.None)]
 public sealed partial class WrapperSemanticsModule;
