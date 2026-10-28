@@ -15,7 +15,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocSample;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.183")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.184")]
 partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Module>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
@@ -42,11 +42,11 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         _iocSample_Shared_SharedModule = new global::IocSample.Shared.SharedModule(fallbackProvider);
 
         // Initialize Lazy wrapper fields
-        _lazy_IWrapperService_int_WrapperService_int = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IWrapperService_string_WrapperService_string = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IWrapperService_int_wrapperService_int = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IWrapperService_string_wrapperService_string = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_IWrapperService_string_WrapperService_string = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string());
+        _func_IWrapperService_string_wrapperService_string = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string());
 
         // Initialize eager singletons
         GetTestQueryHandler();
@@ -92,11 +92,11 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)parent._iocSample_Shared_SharedModule.CreateScope().ServiceProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_IWrapperService_int_WrapperService_int = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IWrapperService_string_WrapperService_string = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IWrapperService_int_wrapperService_int = new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IWrapperService_string_wrapperService_string = new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_IWrapperService_string_WrapperService_string = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string());
+        _func_IWrapperService_string_wrapperService_string = new global::System.Func<global::IocSample.IWrapperService<string>>(() => GetWrapperService_string());
     }
 
     #endregion
@@ -120,7 +120,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private global::IocSample.Consumer CreateConsumer()
     {
-        var instance = new global::IocSample.Consumer(_lazy_IWrapperService_int_WrapperService_int, _func_IWrapperService_string_WrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), GetAllLazy_IWrapperService_string_Array());
+        var instance = new global::IocSample.Consumer(_lazy_IWrapperService_int_wrapperService_int, _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), GetAllLazy_IWrapperService_string_Array());
 
         _consumer = instance;
         return instance;
@@ -594,26 +594,26 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::IocSample.IWrapperService<int>> _lazy_IWrapperService_int_WrapperService_int;
-    private readonly global::System.Lazy<global::IocSample.IWrapperService<string>> _lazy_IWrapperService_string_WrapperService_string;
+    private readonly global::System.Lazy<global::IocSample.IWrapperService<int>> _lazy_IWrapperService_int_wrapperService_int;
+    private readonly global::System.Lazy<global::IocSample.IWrapperService<string>> _lazy_IWrapperService_string_wrapperService_string;
 
     private global::System.Lazy<global::IocSample.IWrapperService<int>>[] GetAllLazy_IWrapperService_int_Array() =>
         [
-            _lazy_IWrapperService_int_WrapperService_int,
+            _lazy_IWrapperService_int_wrapperService_int,
         ];
 
     private global::System.Lazy<global::IocSample.IWrapperService<string>>[] GetAllLazy_IWrapperService_string_Array() =>
         [
-            _lazy_IWrapperService_string_WrapperService_string,
+            _lazy_IWrapperService_string_wrapperService_string,
         ];
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::IocSample.IWrapperService<string>> _func_IWrapperService_string_WrapperService_string;
+    private readonly global::System.Func<global::IocSample.IWrapperService<string>> _func_IWrapperService_string_wrapperService_string;
 
     private global::System.Func<global::IocSample.IWrapperService<string>>[] GetAllFunc_IWrapperService_string_Array() =>
         [
-            _func_IWrapperService_string_WrapperService_string,
+            _func_IWrapperService_string_wrapperService_string,
         ];
 
     #endregion
@@ -877,13 +877,13 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         __Resolver(typeof(global::System.Collections.Generic.Dictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<int>>), static c => c._lazy_IWrapperService_int_WrapperService_int),
+        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<int>>), static c => c._lazy_IWrapperService_int_wrapperService_int),
         ..__CollectionResolvers<global::System.Lazy<global::IocSample.IWrapperService<int>>>(static c => c.GetAllLazy_IWrapperService_int_Array()),
-        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<string>>), static c => c._lazy_IWrapperService_string_WrapperService_string),
+        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<string>>), static c => c._lazy_IWrapperService_string_wrapperService_string),
         ..__CollectionResolvers<global::System.Lazy<global::IocSample.IWrapperService<string>>>(static c => c.GetAllLazy_IWrapperService_string_Array()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::IocSample.IWrapperService<string>>), static c => c._func_IWrapperService_string_WrapperService_string),
+        __Resolver(typeof(global::System.Func<global::IocSample.IWrapperService<string>>), static c => c._func_IWrapperService_string_wrapperService_string),
         ..__CollectionResolvers<global::System.Func<global::IocSample.IWrapperService<string>>>(static c => c.GetAllFunc_IWrapperService_string_Array()),
     ];
 

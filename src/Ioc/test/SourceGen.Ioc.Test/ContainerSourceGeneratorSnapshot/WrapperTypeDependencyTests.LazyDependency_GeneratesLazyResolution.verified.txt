@@ -39,7 +39,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_IMyService_MyService = new global::System.Lazy<global::TestNamespace.IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IMyService_myService = new global::System.Lazy<global::TestNamespace.IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize eager singletons
         GetMyService();
@@ -54,7 +54,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _consumer = parent._consumer;
 
         // Initialize Lazy wrapper fields
-        _lazy_IMyService_MyService = new global::System.Lazy<global::TestNamespace.IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IMyService_myService = new global::System.Lazy<global::TestNamespace.IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     #endregion
@@ -77,7 +77,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.Consumer CreateConsumer()
     {
-        var instance = new global::TestNamespace.Consumer(_lazy_IMyService_MyService);
+        var instance = new global::TestNamespace.Consumer(_lazy_IMyService_myService);
 
         _consumer = instance;
         return instance;
@@ -85,11 +85,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::TestNamespace.IMyService> _lazy_IMyService_MyService;
+    private readonly global::System.Lazy<global::TestNamespace.IMyService> _lazy_IMyService_myService;
 
     private global::System.Lazy<global::TestNamespace.IMyService>[] GetAllLazy_IMyService_Array() =>
         [
-            _lazy_IMyService_MyService,
+            _lazy_IMyService_myService,
         ];
 
     #endregion
@@ -262,7 +262,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IMyService>), static c => c._lazy_IMyService_MyService),
+        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IMyService>), static c => c._lazy_IMyService_myService),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IMyService>>(static c => c.GetAllLazy_IMyService_Array()),
     ];
 

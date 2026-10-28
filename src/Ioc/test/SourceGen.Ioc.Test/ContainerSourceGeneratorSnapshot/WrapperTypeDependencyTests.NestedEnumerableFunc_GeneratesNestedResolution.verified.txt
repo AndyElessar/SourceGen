@@ -39,8 +39,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Func wrapper fields
-        _func_IPlugin_Plugin1 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin1());
-        _func_IPlugin_Plugin2 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin2());
+        _func_IPlugin_plugin1 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin1());
+        _func_IPlugin_plugin2 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin2());
 
         // Initialize eager singletons
         GetPlugin1();
@@ -57,8 +57,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _pluginManager = parent._pluginManager;
 
         // Initialize Func wrapper fields
-        _func_IPlugin_Plugin1 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin1());
-        _func_IPlugin_Plugin2 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin2());
+        _func_IPlugin_plugin1 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin1());
+        _func_IPlugin_plugin2 = new global::System.Func<global::TestNamespace.IPlugin>(() => GetPlugin2());
     }
 
     #endregion
@@ -106,13 +106,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::TestNamespace.IPlugin> _func_IPlugin_Plugin1;
-    private readonly global::System.Func<global::TestNamespace.IPlugin> _func_IPlugin_Plugin2;
+    private readonly global::System.Func<global::TestNamespace.IPlugin> _func_IPlugin_plugin1;
+    private readonly global::System.Func<global::TestNamespace.IPlugin> _func_IPlugin_plugin2;
 
     private global::System.Func<global::TestNamespace.IPlugin>[] GetAllFunc_IPlugin_Array() =>
         [
-            _func_IPlugin_Plugin1,
-            _func_IPlugin_Plugin2,
+            _func_IPlugin_plugin1,
+            _func_IPlugin_plugin2,
         ];
 
     #endregion
@@ -287,7 +287,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllIPluginArray()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::TestNamespace.IPlugin>), static c => c._func_IPlugin_Plugin2),
+        __Resolver(typeof(global::System.Func<global::TestNamespace.IPlugin>), static c => c._func_IPlugin_plugin2),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IPlugin>>(static c => c.GetAllFunc_IPlugin_Array()),
     ];
 

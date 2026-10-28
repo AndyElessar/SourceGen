@@ -185,11 +185,12 @@ partial class IocSourceGenerator
                 if(reg.IsOpenGeneric || cached.IsAsyncInit)
                     continue;
 
-                var entryKey = $"{serviceType}|{reg.ImplementationType.Name}|{reg.Key}";
+                // One wrapper per resolver: keyed, factory and instance registrations of one implementation have their own resolvers
+                var entryKey = $"{serviceType}|{cached.ResolverMethodName}";
                 if(!addedKeys.Add(entryKey))
                     continue;
 
-                var fieldName = $"_lazy_{names.Get(serviceType)}_{names.Get(reg.ImplementationType.Name)}";
+                var fieldName = $"_lazy_{names.Get(serviceType)}{cached.FieldName}";
 
                 entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
             }
@@ -198,7 +199,9 @@ partial class IocSourceGenerator
         if(entries.Count == 0)
             return [];
 
+        // Collections of wrappers contain the non-keyed registrations only
         var collectionFieldsByServiceType = entries
+            .Where(static e => e.Key is null)
             .GroupBy(static e => e.InnerServiceTypeName)
             .ToDictionary(
                 static g => g.Key,
@@ -206,6 +209,7 @@ partial class IocSourceGenerator
                 StringComparer.Ordinal);
 
         var collectionEmitterFieldByServiceType = entries
+            .Where(static e => e.Key is null)
             .GroupBy(static e => e.InnerServiceTypeName)
             .ToDictionary(
                 static g => g.Key,
@@ -216,10 +220,8 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
-            var emitCollectionResolver = string.Equals(
-                entry.FieldName,
-                collectionEmitterFieldByServiceType[entry.InnerServiceTypeName],
-                StringComparison.Ordinal);
+            var emitCollectionResolver = collectionEmitterFieldByServiceType.TryGetValue(entry.InnerServiceTypeName, out var emitterFieldName)
+                && string.Equals(entry.FieldName, emitterFieldName, StringComparison.Ordinal);
             var collectionFieldNames = emitCollectionResolver
                 ? collectionFieldsByServiceType[entry.InnerServiceTypeName]
                 : [];

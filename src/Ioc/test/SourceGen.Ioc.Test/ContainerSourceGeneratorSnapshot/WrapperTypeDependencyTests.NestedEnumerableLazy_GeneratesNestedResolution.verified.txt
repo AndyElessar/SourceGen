@@ -39,8 +39,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_IPlugin_Plugin1 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin1(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IPlugin_Plugin2 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin2(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IPlugin_plugin1 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin1(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IPlugin_plugin2 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin2(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize eager singletons
         GetPlugin1();
@@ -57,8 +57,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _pluginManager = parent._pluginManager;
 
         // Initialize Lazy wrapper fields
-        _lazy_IPlugin_Plugin1 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin1(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IPlugin_Plugin2 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin2(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IPlugin_plugin1 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin1(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IPlugin_plugin2 = new global::System.Lazy<global::TestNamespace.IPlugin>(() => GetPlugin2(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     #endregion
@@ -106,13 +106,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::TestNamespace.IPlugin> _lazy_IPlugin_Plugin1;
-    private readonly global::System.Lazy<global::TestNamespace.IPlugin> _lazy_IPlugin_Plugin2;
+    private readonly global::System.Lazy<global::TestNamespace.IPlugin> _lazy_IPlugin_plugin1;
+    private readonly global::System.Lazy<global::TestNamespace.IPlugin> _lazy_IPlugin_plugin2;
 
     private global::System.Lazy<global::TestNamespace.IPlugin>[] GetAllLazy_IPlugin_Array() =>
         [
-            _lazy_IPlugin_Plugin1,
-            _lazy_IPlugin_Plugin2,
+            _lazy_IPlugin_plugin1,
+            _lazy_IPlugin_plugin2,
         ];
 
     #endregion
@@ -287,7 +287,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         ..__CollectionResolvers<global::TestNamespace.IPlugin>(static c => c.GetAllIPluginArray()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IPlugin>), static c => c._lazy_IPlugin_Plugin2),
+        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IPlugin>), static c => c._lazy_IPlugin_plugin2),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IPlugin>>(static c => c.GetAllLazy_IPlugin_Array()),
     ];
 

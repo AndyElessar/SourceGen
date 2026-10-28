@@ -46,6 +46,45 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task LazyAndFuncDependency_WithKeyedAndNonKeyedRegistrationsOfSameImplementation_GeneratesDistinctFields()
+    {
+        // The keyed registration gets its own Lazy/Func fields and is not part of the non-keyed collections.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyService), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IMyService)], Key = "keyed")]
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(
+                Lazy<IMyService> lazy,
+                [FromKeyedServices("keyed")] Lazy<IMyService> keyedLazy,
+                Func<IMyService> factory,
+                [FromKeyedServices("keyed")] Func<IMyService> keyedFactory,
+                IEnumerable<Lazy<IMyService>> allLazy,
+                IEnumerable<Func<IMyService>> allFactories);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task FuncDependency_GeneratesFuncResolution()
     {
         const string source = """

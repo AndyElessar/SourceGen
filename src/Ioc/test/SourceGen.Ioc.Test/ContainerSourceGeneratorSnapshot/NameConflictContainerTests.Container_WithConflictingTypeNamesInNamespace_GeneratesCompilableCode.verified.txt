@@ -40,12 +40,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_IDependency_Dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IDependency_KeyedDependency = new global::System.Lazy<global::Services.IDependency>(() => GetKeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_keyedDependency__keyed_ = new global::System.Lazy<global::Services.IDependency>(() => GetKeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_IDependency_Dependency = new global::System.Func<global::Services.IDependency>(() => GetDependency());
-        _func_IDependency_KeyedDependency = new global::System.Func<global::Services.IDependency>(() => GetKeyedDependency__keyed_());
+        _func_IDependency_dependency = new global::System.Func<global::Services.IDependency>(() => GetDependency());
+        _func_IDependency_keyedDependency__keyed_ = new global::System.Func<global::Services.IDependency>(() => GetKeyedDependency__keyed_());
 
         // Initialize eager singletons
         GetDependency();
@@ -63,12 +63,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _asyncService = parent._asyncService;
 
         // Initialize Lazy wrapper fields
-        _lazy_IDependency_Dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
-        _lazy_IDependency_KeyedDependency = new global::System.Lazy<global::Services.IDependency>(() => GetKeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_keyedDependency__keyed_ = new global::System.Lazy<global::Services.IDependency>(() => GetKeyedDependency__keyed_(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_IDependency_Dependency = new global::System.Func<global::Services.IDependency>(() => GetDependency());
-        _func_IDependency_KeyedDependency = new global::System.Func<global::Services.IDependency>(() => GetKeyedDependency__keyed_());
+        _func_IDependency_dependency = new global::System.Func<global::Services.IDependency>(() => GetDependency());
+        _func_IDependency_keyedDependency__keyed_ = new global::System.Func<global::Services.IDependency>(() => GetKeyedDependency__keyed_());
     }
 
     #endregion
@@ -148,7 +148,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::Services.Consumer GetConsumer()
     {
-        return new global::Services.Consumer(_lazy_IDependency_Dependency, _func_IDependency_Dependency, GetAllIDependencyArray(), GetAllKvp_string_IDependency_Dictionary(), __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetAsyncServiceAsync()));
+        return new global::Services.Consumer(_lazy_IDependency_dependency, _func_IDependency_dependency, GetAllIDependencyArray(), GetAllKvp_string_IDependency_Dictionary(), __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetAsyncServiceAsync()));
     }
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
@@ -176,24 +176,22 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::Services.IDependency> _lazy_IDependency_Dependency;
-    private readonly global::System.Lazy<global::Services.IDependency> _lazy_IDependency_KeyedDependency;
+    private readonly global::System.Lazy<global::Services.IDependency> _lazy_IDependency_dependency;
+    private readonly global::System.Lazy<global::Services.IDependency> _lazy_IDependency_keyedDependency__keyed_;
 
     private global::System.Lazy<global::Services.IDependency>[] GetAllLazy_IDependency_Array() =>
         [
-            _lazy_IDependency_Dependency,
-            _lazy_IDependency_KeyedDependency,
+            _lazy_IDependency_dependency,
         ];
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::Services.IDependency> _func_IDependency_Dependency;
-    private readonly global::System.Func<global::Services.IDependency> _func_IDependency_KeyedDependency;
+    private readonly global::System.Func<global::Services.IDependency> _func_IDependency_dependency;
+    private readonly global::System.Func<global::Services.IDependency> _func_IDependency_keyedDependency__keyed_;
 
     private global::System.Func<global::Services.IDependency>[] GetAllFunc_IDependency_Array() =>
         [
-            _func_IDependency_Dependency,
-            _func_IDependency_KeyedDependency,
+            _func_IDependency_dependency,
         ];
 
     #endregion
@@ -384,12 +382,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::Services.IDependency>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::Services.IDependency>), static c => c._lazy_IDependency_KeyedDependency),
-        ..__CollectionResolvers<global::System.Lazy<global::Services.IDependency>>(static c => c.GetAllLazy_IDependency_Array()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::Services.IDependency>), static c => c._func_IDependency_KeyedDependency),
-        ..__CollectionResolvers<global::System.Func<global::Services.IDependency>>(static c => c.GetAllFunc_IDependency_Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

@@ -39,10 +39,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Lazy wrapper fields
-        _lazy_IDependency_Dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_IDependency_Dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetDependency());
+        _func_IDependency_dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetDependency());
 
         // Initialize eager singletons
         GetDependency();
@@ -57,10 +57,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _singletonConsumer = parent._singletonConsumer;
 
         // Initialize Lazy wrapper fields
-        _lazy_IDependency_Dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazy_IDependency_dependency = new global::System.Lazy<global::TestNamespace.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         // Initialize Func wrapper fields
-        _func_IDependency_Dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetDependency());
+        _func_IDependency_dependency = new global::System.Func<global::TestNamespace.IDependency>(() => GetDependency());
 
         // Initialize eager scoped services
         GetScopedConsumer();
@@ -86,7 +86,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.SingletonConsumer CreateSingletonConsumer()
     {
-        var instance = new global::TestNamespace.SingletonConsumer(_lazy_IDependency_Dependency, _func_IDependency_Dependency);
+        var instance = new global::TestNamespace.SingletonConsumer(_lazy_IDependency_dependency, _func_IDependency_dependency);
 
         _singletonConsumer = instance;
         return instance;
@@ -97,7 +97,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.ScopedConsumer CreateScopedConsumer()
     {
-        var instance = new global::TestNamespace.ScopedConsumer(_lazy_IDependency_Dependency);
+        var instance = new global::TestNamespace.ScopedConsumer(_lazy_IDependency_dependency);
 
         _scopedConsumer = instance;
         return instance;
@@ -105,20 +105,20 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     // Lazy wrapper fields
 
-    private readonly global::System.Lazy<global::TestNamespace.IDependency> _lazy_IDependency_Dependency;
+    private readonly global::System.Lazy<global::TestNamespace.IDependency> _lazy_IDependency_dependency;
 
     private global::System.Lazy<global::TestNamespace.IDependency>[] GetAllLazy_IDependency_Array() =>
         [
-            _lazy_IDependency_Dependency,
+            _lazy_IDependency_dependency,
         ];
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::TestNamespace.IDependency> _func_IDependency_Dependency;
+    private readonly global::System.Func<global::TestNamespace.IDependency> _func_IDependency_dependency;
 
     private global::System.Func<global::TestNamespace.IDependency>[] GetAllFunc_IDependency_Array() =>
         [
-            _func_IDependency_Dependency,
+            _func_IDependency_dependency,
         ];
 
     #endregion
@@ -292,11 +292,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.ScopedConsumer), static c => c.GetScopedConsumer()),
 
         // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IDependency>), static c => c._lazy_IDependency_Dependency),
+        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IDependency>), static c => c._lazy_IDependency_dependency),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IDependency>>(static c => c.GetAllLazy_IDependency_Array()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::TestNamespace.IDependency>), static c => c._func_IDependency_Dependency),
+        __Resolver(typeof(global::System.Func<global::TestNamespace.IDependency>), static c => c._func_IDependency_dependency),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IDependency>>(static c => c.GetAllFunc_IDependency_Array()),
     ];
 

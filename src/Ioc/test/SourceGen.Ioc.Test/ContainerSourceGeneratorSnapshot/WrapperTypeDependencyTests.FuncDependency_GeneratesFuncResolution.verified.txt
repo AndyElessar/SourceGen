@@ -39,7 +39,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _fallbackProvider = fallbackProvider;
 
         // Initialize Func wrapper fields
-        _func_IMyService_MyService = new global::System.Func<global::TestNamespace.IMyService>(() => GetMyService());
+        _func_IMyService_myService = new global::System.Func<global::TestNamespace.IMyService>(() => GetMyService());
 
         // Initialize eager singletons
         GetConsumer();
@@ -52,7 +52,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _consumer = parent._consumer;
 
         // Initialize Func wrapper fields
-        _func_IMyService_MyService = new global::System.Func<global::TestNamespace.IMyService>(() => GetMyService());
+        _func_IMyService_myService = new global::System.Func<global::TestNamespace.IMyService>(() => GetMyService());
     }
 
     #endregion
@@ -64,7 +64,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.Consumer CreateConsumer()
     {
-        var instance = new global::TestNamespace.Consumer(_func_IMyService_MyService);
+        var instance = new global::TestNamespace.Consumer(_func_IMyService_myService);
 
         _consumer = instance;
         return instance;
@@ -89,11 +89,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     // Func wrapper fields
 
-    private readonly global::System.Func<global::TestNamespace.IMyService> _func_IMyService_MyService;
+    private readonly global::System.Func<global::TestNamespace.IMyService> _func_IMyService_myService;
 
     private global::System.Func<global::TestNamespace.IMyService>[] GetAllFunc_IMyService_Array() =>
         [
-            _func_IMyService_MyService,
+            _func_IMyService_myService,
         ];
 
     #endregion
@@ -266,7 +266,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
 
         // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::TestNamespace.IMyService>), static c => c._func_IMyService_MyService),
+        __Resolver(typeof(global::System.Func<global::TestNamespace.IMyService>), static c => c._func_IMyService_myService),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IMyService>>(static c => c.GetAllFunc_IMyService_Array()),
     ];
 

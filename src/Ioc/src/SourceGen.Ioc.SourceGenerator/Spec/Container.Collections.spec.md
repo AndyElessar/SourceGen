@@ -124,9 +124,12 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 
 | Wrapper Type | Generated Code | Notes |
 | :--- | :--- | :--- |
-| `Lazy<T>` | `GetLazy_T_Impl()` (dedicated resolver method) | Standalone resolver registered in `_localResolvers` |
-| `Func<T>` | `GetFunc_T_Impl()` (dedicated resolver method) | Standalone resolver registered in `_localResolvers` |
+| `Lazy<T>` | `_lazy_{T}{field}` (one readonly field per resolver) | Created in the container and scope constructors; registered in `_localResolvers` |
+| `Func<T>` | `_func_{T}{field}` (one readonly field per resolver) | Created in the container and scope constructors; registered in `_localResolvers` |
 | `KeyValuePair<K, V>` | `new KeyValuePair<K, V>(key, GetMyService())` | Key from service key or `default` |
+
+`Lazy<T>` and `Func<T>` wrapper fields MUST be created once per resolver of `T`, so the keyed, factory and instance registrations of one implementation each get their own field; the field name is the wrapper prefix, the short name of `T` and the resolver's field name (`_lazy_IMyService_myService`, `_lazy_IMyService_myService__keyed_`). `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` resolvers (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`) MUST contain only the non-keyed registrations of `T`, like `IEnumerable<T>`.
+
 | `IDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `IReadOnlyDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `Dictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
@@ -166,19 +169,15 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    // Standalone wrapper resolver methods
-    private global::System.Lazy<global::IMyService> GetLazy_IMyService_MyService()
-        => new global::System.Lazy<global::IMyService>(() => GetMyService());
-
-    private global::System.Func<global::IMyService> GetFunc_IMyService_MyService()
-        => new global::System.Func<global::IMyService>(() => GetMyService());
+    // Wrapper fields, created in the container and scope constructors:
+    // _lazy_IMyService_myService = new global::System.Lazy<global::IMyService>(() => GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+    // _func_IMyService_myService = new global::System.Func<global::IMyService>(() => GetMyService());
+    private readonly global::System.Lazy<global::IMyService> _lazy_IMyService_myService;
+    private readonly global::System.Func<global::IMyService> _func_IMyService_myService;
 
     private global::Consumer GetConsumer()
     {
-        // Direct Lazy/Func resolved via wrapper resolver methods
-        var instance = new global::Consumer(
-            GetLazy_IMyService_MyService(),
-            GetFunc_IMyService_MyService());
+        var instance = new global::Consumer(_lazy_IMyService_myService, _func_IMyService_myService);
         return instance;
     }
 }
