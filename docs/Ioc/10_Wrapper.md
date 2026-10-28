@@ -149,7 +149,7 @@ services.AddScoped<global::System.Func<string, global::MyNamespace.IService>>((g
 - The generated container behaves the same way.
 
 > [!IMPORTANT]
-> Each call of a parameterized `Func<T1, ..., TReturn>` creates a **new** instance, even when the service is registered as singleton or scoped: the arguments may differ between calls, so the instance cannot be shared. The parameterless `Func<T>` follows the service lifetime instead.
+> Each call of a parameterized `Func<T1, ..., TReturn>` creates a **new** instance, even when the service is registered as singleton or scoped: the arguments may differ between calls, so the instance cannot be shared. The parameterless `Func<T>` follows the service lifetime instead. The analyzer reports [SGIOC033](#diagnostics) for this case.
 
 ## Collection Wrappers
 
@@ -519,6 +519,12 @@ services.AddTransient<global::System.Func<global::MyNamespace.IRequestHandler<gl
 ```
 
 </details>
+
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC033|Warning|A service depends on a parameterized `Func<T1, ..., TReturn>` whose `TReturn` is registered as Singleton or Scoped. Each call creates a new instance, so the lifetime does not apply. Register the service as Transient, or depend on `Func<T>` or the service itself.|
 
 ---
 

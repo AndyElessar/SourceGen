@@ -34,3 +34,4 @@ SGIOC029 | Design | Error | Unsupported async partial accessor type - Partial ac
 SGIOC030 | Usage | Error | Synchronous dependency requested for async-init service - Consumer requests T but the service has async inject methods and no synchronous registration exists.
 SGIOC031 | Usage | Warning | Container ignored due to disabled feature - [IocContainer] is ignored when SourceGenIocFeatures does not include Container.
 SGIOC032 | Design | Warning | Service type is not compatible with implementation - An explicit service type has an incompatible generic shape and is skipped.
+SGIOC033 | Design | Warning | Func with arguments ignores the service lifetime - A Func<T1, ..., TReturn> with input parameters creates a new instance per call although the service is registered as Singleton or Scoped.

@@ -35,12 +35,12 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
 | SemanticModel | `AnalyzeAssemblyLevelRegistrations` | Assembly-level register-for IDE squiggles | SGIOC001, 009, 011, 032 |
-| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030 |
+| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030, 033 |
 
 #### CompilationEnd: AnalyzeAllDependencies
 
 1. Report buffered duplicated defaults (SGIOC012)
-2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), dependency DFS (SGIOC002-005)
+2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
 3. Build async-init-only pairs → sync dependency analysis (SGIOC030)
 
 #### Partial Files
@@ -81,7 +81,7 @@ Pass 2 (IntegrateServiceProvider=false only): `AnalyzeContainerServiceDependenci
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ## Diagnostics
@@ -645,6 +645,23 @@ Report when an explicit service type of `[IocRegister]`/`[IocRegister<T>]`/`[Ioc
 - Service types implicitly added by `RegisterAllInterfaces`/`RegisterAllBaseClasses` are not reported.
 
 **Message format:** `Service type '{ServiceType}' cannot be registered for implementation '{ImplementationType}' and will be skipped: {Reason}`
+
+---
+
+### SGIOC033 - Warning - Design - Func with arguments ignores the service lifetime
+
+Report when a registered service depends on `Func<T1, ..., TReturn>` with at least one input parameter and `TReturn` is registered as Singleton or Scoped. Each call creates a new instance from its arguments (see [Register Injection](../../Spec/Register.Injection.spec.md)), so the registered lifetime does not apply.
+
+**Analysis:**
+
+- Checks constructor parameters, and the types of `[IocInject]`/`[Inject]` properties, fields and method parameters.
+- Looks up `TReturn` like the lifetime checks (SGIOC003-005): directly, through the service type index, and through the open generic definition. The service key of `[FromKeyedServices]` is not considered.
+- Does not report the parameterless `Func<T>` or `Lazy<T>`, which follow the lifetime, or a `TReturn` that is not registered.
+- Reports one diagnostic per dependency at the consumer's registration.
+
+**Message format:** `'{Consumer}' depends on '{FuncType}', which creates a new '{ServiceType}' on every call although '{ServiceType}' is registered as {Lifetime}`
+
+**Fix:** Register the service as Transient, or depend on the parameterless `Func<T>` or the service itself to follow its lifetime.
 
 ---
 

@@ -83,7 +83,10 @@ public sealed class FuncWithArgumentsConsumer(
     ServiceTypes = [typeof(INamedService)],
     Decorators = [typeof(NamedServiceDecorator)])]
 [IocRegisterFor<KeyedNamedService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(INamedService)], Key = "keyed")]
+// Deliberately a Func with arguments of a singleton, to test that each call creates a new instance
+#pragma warning disable SGIOC033
 [IocRegisterFor<FuncWithArgumentsConsumer>(ServiceLifetime.Transient)]
+#pragma warning restore SGIOC033
 [IocRegisterFor<WrappedService>(
     ServiceLifetime.Singleton,
     ServiceTypes = [typeof(IWrappedService)],
