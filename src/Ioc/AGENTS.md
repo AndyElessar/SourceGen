@@ -2,20 +2,6 @@
 
 IoC (Inversion of Control) source generator domain — compile-time dependency injection container generation.
 
-## Projects
-
-| Project                          | Purpose                                     | Path                                     |
-| -------------------------------- | ------------------------------------------- | ---------------------------------------- |
-| SourceGen.Ioc                    | Public API: attributes and runtime types    | `src/SourceGen.Ioc/`                     |
-| SourceGen.Ioc.Cli                | CLI tool for container visualization        | `src/SourceGen.Ioc.Cli/`                 |
-| SourceGen.Ioc.SourceGenerator    | Incremental source generator and analyzer   | `src/SourceGen.Ioc.SourceGenerator/`     |
-| SourceGen.Ioc.Test               | TUnit tests for generator output            | `test/SourceGen.Ioc.Test/`               |
-| SourceGen.Ioc.TestAot            | Native AOT validation tests                 | `test/SourceGen.Ioc.TestAot/`            |
-| SourceGen.Ioc.TestCase           | Shared test case projects                   | `test/SourceGen.Ioc.TestCase/`           |
-| SourceGen.Ioc.Cli.Test           | CLI tool tests                              | `test/SourceGen.Ioc.Cli.Test/`           |
-| SourceGen.Ioc.Benchmark          | BenchmarkDotNet performance tests           | `test/SourceGen.Ioc.Benchmark/`          |
-| SourceGen.Ioc.GeneratorBenchmark | BenchmarkDotNet source generator benchmarks | `test/SourceGen.Ioc.GeneratorBenchmark/` |
-
 ## Commands
 
 ```powershell
