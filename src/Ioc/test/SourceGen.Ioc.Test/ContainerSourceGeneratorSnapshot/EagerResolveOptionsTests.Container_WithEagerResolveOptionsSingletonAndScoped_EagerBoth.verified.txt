@@ -67,15 +67,21 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.ScopedService _scopedService = null!;
+    private global::TestNamespace.ScopedService? _scopedService;
+    private readonly global::System.Threading.Lock _scopedServiceLock = new();
     private global::TestNamespace.ScopedService GetScopedService() => _scopedService ?? CreateScopedService();
 
     private global::TestNamespace.ScopedService CreateScopedService()
     {
-        var instance = new global::TestNamespace.ScopedService();
+        lock(_scopedServiceLock)
+        {
+            if(_scopedService is not null) return _scopedService;
 
-        _scopedService = instance;
-        return instance;
+            var instance = new global::TestNamespace.ScopedService();
+
+            _scopedService = instance;
+            return instance;
+        }
     }
 
     #endregion

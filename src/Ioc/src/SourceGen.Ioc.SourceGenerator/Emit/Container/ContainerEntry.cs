@@ -443,6 +443,10 @@ partial class IocSourceGenerator
         public override bool HasResolverMethodLambda => false;
     }
 
+    /// <summary>
+    /// An eager singleton: the root constructor creates it before the container can be used from other threads,
+    /// so its resolver needs no synchronization, and scopes copy the instance.
+    /// </summary>
     private sealed record class EagerContainerEntry(
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
@@ -501,10 +505,15 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <param name="IsEager">
+    /// Whether scope constructors create the (scoped) service eagerly. The root still creates it on demand,
+    /// possibly from several threads, so the resolver stays synchronized.
+    /// </param>
     private sealed record class LazyThreadSafeContainerEntry(
         ServiceRegistrationModel Registration,
         string ResolverMethodName,
         string FieldName,
+        bool IsEager,
         ThreadSafeStrategy ThreadSafeStrategy,
         ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
@@ -512,6 +521,16 @@ partial class IocSourceGenerator
     {
         // Scopes never create singletons themselves; the root owns and disposes them
         public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
+
+        public override bool IsEagerlyInitialized => IsEager;
+
+        public override void WriteEagerInit(SourceWriter writer)
+        {
+            if(IsEager)
+            {
+                writer.WriteLine($"{ResolverMethodName}();");
+            }
+        }
 
         public override void WriteCopyFromParent(SourceWriter writer)
         {

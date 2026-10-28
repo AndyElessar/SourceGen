@@ -71,7 +71,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.SyncScopedService _syncScopedService = null!;
+    private global::TestNamespace.SyncScopedService? _syncScopedService;
     private global::TestNamespace.SyncScopedService GetSyncScopedService() => _syncScopedService ?? CreateSyncScopedService();
 
     private global::TestNamespace.SyncScopedService CreateSyncScopedService()

@@ -780,7 +780,10 @@ partial class IocSourceGenerator
 
         if(reg.Lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
         {
-            if(cached.IsEager)
+            // Only eager singletons are always created in a constructor (the root's) before any other thread can
+            // resolve them. Eager scoped services are created in scope constructors, but the root creates them on
+            // demand, so they keep the synchronized shape.
+            if(cached.IsEager && reg.Lifetime == ServiceLifetime.Singleton)
             {
                 return new EagerContainerEntry(
                     reg,
@@ -795,6 +798,7 @@ partial class IocSourceGenerator
                 reg,
                 cached.ResolverMethodName,
                 cached.FieldName!,
+                cached.IsEager,
                 threadSafeStrategy,
                 constructorParameters,
                 injectionMembers,

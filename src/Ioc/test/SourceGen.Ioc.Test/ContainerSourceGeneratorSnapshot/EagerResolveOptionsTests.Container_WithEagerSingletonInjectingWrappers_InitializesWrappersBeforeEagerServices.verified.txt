@@ -92,15 +92,21 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.ScopedConsumer _scopedConsumer = null!;
+    private global::TestNamespace.ScopedConsumer? _scopedConsumer;
+    private readonly global::System.Threading.Lock _scopedConsumerLock = new();
     private global::TestNamespace.ScopedConsumer GetScopedConsumer() => _scopedConsumer ?? CreateScopedConsumer();
 
     private global::TestNamespace.ScopedConsumer CreateScopedConsumer()
     {
-        var instance = new global::TestNamespace.ScopedConsumer(_lazy_IDependency_dependency);
+        lock(_scopedConsumerLock)
+        {
+            if(_scopedConsumer is not null) return _scopedConsumer;
 
-        _scopedConsumer = instance;
-        return instance;
+            var instance = new global::TestNamespace.ScopedConsumer(_lazy_IDependency_dependency);
+
+            _scopedConsumer = instance;
+            return instance;
+        }
     }
 
     // Lazy wrapper fields

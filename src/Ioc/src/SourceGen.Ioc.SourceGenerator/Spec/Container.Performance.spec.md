@@ -143,14 +143,18 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private global::IEagerScoped _eagerScoped;  // Not nullable
+    // Nullable and synchronized like a lazy scoped service: the root creates it on demand,
+    // possibly from several threads
+    private global::EagerScoped? _eagerScoped;
+    private readonly global::System.Threading.Lock _eagerScopedLock = new();
+    private global::EagerScoped GetEagerScoped() => _eagerScoped ?? CreateEagerScoped();
 
     public AppContainer() : this((IServiceProvider?)null) { }
 
     public AppContainer(IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        _isRootScope = true;
+        // Eager resolution happens only when creating child scopes
     }
 
     private AppContainer(AppContainer parent)
@@ -158,16 +162,20 @@ partial class AppContainer
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
 
-        // Root scope doesn't have scoped instances yet
-        // Eager resolution happens only when creating child scopes
-
         // Eagerly resolve scoped services for this scope
-        _eagerScoped = GetEagerScoped_Internal();
+        GetEagerScoped();
     }
 
-    private global::IEagerScoped GetEagerScoped_Internal()
+    private global::EagerScoped CreateEagerScoped()
     {
-        return new global::EagerScoped();
+        lock(_eagerScopedLock)
+        {
+            if(_eagerScoped is not null) return _eagerScoped;
+
+            var instance = new global::EagerScoped();
+            _eagerScoped = instance;
+            return instance;
+        }
     }
 }
 #endregion
