@@ -15,7 +15,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocSample.Shared;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.194")]
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
 partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSample.Shared.SharedModule>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;

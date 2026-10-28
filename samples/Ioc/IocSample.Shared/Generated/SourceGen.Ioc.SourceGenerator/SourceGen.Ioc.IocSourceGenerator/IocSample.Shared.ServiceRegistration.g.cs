@@ -11,7 +11,7 @@ namespace IocSample.Shared
     /// <summary>
     /// Extension methods for registering services from IocSample.Shared.
     /// </summary>
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.194")]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
     public static class SharedServiceCollectionExtensions
     {
         /// <summary>

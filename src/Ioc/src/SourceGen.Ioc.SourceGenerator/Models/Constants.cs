@@ -76,7 +76,17 @@ internal static class Constants
     /// <c>[GeneratedCode]</c> with this generator's version, for generated types.
     /// </summary>
     public static readonly string GeneratedCodeAttribute =
-        $"[global::System.CodeDom.Compiler.GeneratedCode(\"SourceGen.Ioc\", \"{typeof(Constants).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version}\")]";
+        $"[global::System.CodeDom.Compiler.GeneratedCode(\"SourceGen.Ioc\", \"{GetGeneratorVersion()}\")]";
+
+    /// <summary>
+    /// Gets the generator's file version without its fourth component, the git height that nbgv increments
+    /// with every commit, so generated code changes only when the version in <c>version.json</c> changes.
+    /// </summary>
+    private static string? GetGeneratorVersion() =>
+        typeof(Constants).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version is { } fileVersion
+            && Version.TryParse(fileVersion, out var version)
+            ? version.ToString(3)
+            : null;
 
     public const string IServiceProviderTypeName = "System.IServiceProvider";
     public const string IServiceProviderGlobalTypeName = "global::System.IServiceProvider";
