@@ -8,32 +8,29 @@ partial class IocSourceGenerator
     /// Represents a Func standalone service registration entry to be generated.
     /// </summary>
     /// <param name="FuncServiceTypeName">The full Func service type name (e.g. Func&lt;string, IService&gt;).</param>
-    /// <param name="InnerServiceTypeName">The fully-qualified return service type name.</param>
-    /// <param name="ImplementationTypeName">The fully-qualified implementation type name.</param>
-    /// <param name="Lifetime">The service lifetime matching the inner service.</param>
-    /// <param name="ImplementationTypeConstructorParams">The implementation constructor parameters.</param>
-    /// <param name="ImplementationTypeInjectionMembers">The implementation injection members.</param>
-    /// <param name="InputTypes">The Func input type parameters.</param>
-    /// <param name="Tags">The tags inherited from the source registration.</param>
     private readonly partial record struct FuncRegistrationEntry
     {
         public void WriteRegistration(SourceWriter writer)
         {
-            var lifetime = Lifetime.Name;
+            var lifetime = Registration.Lifetime.Name;
+            var key = Registration.Key;
 
             if(InputTypes.Length == 0)
             {
-                var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-                var newFunc = $"new {wrapperTypeName}(() => {ResolveCall})";
-                writer.WriteLine(Key is not null
-                    ? $"services.AddKeyed{lifetime}<{wrapperTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) => {newFunc});"
-                    : $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => {newFunc});");
+                var resolveCall = GetWrapperResolveCall(Registration);
+                if(key is not null)
+                {
+                    writer.WriteLine($"services.AddKeyed{lifetime}<global::System.Func<{InnerServiceTypeName}>>({key}, ({IServiceProviderGlobalTypeName} sp, object? key) => new global::System.Func<{InnerServiceTypeName}>(() => {resolveCall}));");
+                }
+                else
+                {
+                    writer.WriteLine($"services.Add{lifetime}<global::System.Func<{InnerServiceTypeName}>>(({IServiceProviderGlobalTypeName} sp) => new global::System.Func<{InnerServiceTypeName}>(() => {resolveCall}));");
+                }
+
                 return;
             }
 
-            writer.WriteLine(Key is not null
-                ? $"services.AddKeyed{lifetime}<{FuncServiceTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) =>"
-                : $"services.Add{lifetime}<{FuncServiceTypeName}>(({IServiceProviderGlobalTypeName} sp) =>");
+            writer.WriteServiceLambdaOpen(lifetime, FuncServiceTypeName, key);
             writer.Indentation++;
             writer.WriteLine($"new {FuncServiceTypeName}(({BuildFuncLambdaParameters(InputTypes)}) =>");
             writer.WriteLine("{");
@@ -65,7 +62,7 @@ partial class IocSourceGenerator
             return [];
 
         var entries = new List<FuncRegistrationEntry>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var addedKeys = new HashSet<(string FuncServiceType, string ImplementationType, string? Key)>();
         var neededByReturnType = neededFuncTypes.Values.ToLookup(static needed => needed.ReturnType.Name, StringComparer.Ordinal);
 
         foreach(var regWithTags in registrations)
@@ -76,20 +73,13 @@ partial class IocSourceGenerator
 
             foreach(var needed in neededByReturnType[reg.ServiceType.Name])
             {
-                var entryKey = $"{needed.Name}|{reg.ImplementationType.Name}|{reg.Key}";
-                if(!addedKeys.Add(entryKey))
+                if(!addedKeys.Add((needed.Name, reg.ImplementationType.Name, reg.Key)))
                     continue;
 
                 entries.Add(new FuncRegistrationEntry(
                     needed.Name,
                     needed.ReturnType.Name,
-                    reg.ImplementationType.Name,
-                    reg.Lifetime,
-                    reg.ImplementationType.ConstructorParameters,
-                    reg.InjectionMembers,
                     needed.InputTypes,
-                    reg.Key,
-                    GetWrapperResolveCall(reg),
                     reg,
                     regWithTags.Tags));
             }
@@ -189,7 +179,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteFuncFactoryBody(SourceWriter writer, FuncRegistrationEntry entry)
     {
-        var constructorParams = entry.ImplementationTypeConstructorParams ?? [];
+        var constructorParams = entry.Registration.ImplementationType.ConstructorParameters ?? [];
         var inputArgNames = new string[entry.InputTypes.Length];
         var inputArgTypeNames = new string[entry.InputTypes.Length];
         var inputArgUsed = new bool[entry.InputTypes.Length];
@@ -213,14 +203,14 @@ partial class IocSourceGenerator
             }
 
             var paramVar = $"p{resolvedParamIndex}";
-            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Key is not null, registrationKey: entry.Key);
+            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Registration.Key is not null, registrationKey: entry.Registration.Key);
             constructorParamEntries.Add((param.Name, resolvedVar));
             resolvedParamIndex++;
         }
 
         var propertyInits = new List<string>();
         var propertyFieldIndex = 0;
-        foreach(var member in entry.ImplementationTypeInjectionMembers)
+        foreach(var member in entry.Registration.InjectionMembers)
         {
             if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
                 continue;
@@ -245,11 +235,11 @@ partial class IocSourceGenerator
 
         var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
         var initializerPart = propertyInits.Count > 0 ? $" {{ {string.Join(", ", propertyInits)} }}" : string.Empty;
-        var constructorInvocation = BuildConstructorInvocation(entry.ImplementationTypeName, constructorArgs, initializerPart);
+        var constructorInvocation = BuildConstructorInvocation(entry.Registration.ImplementationType.Name, constructorArgs, initializerPart);
         writer.WriteLine($"var s0 = {constructorInvocation};");
 
         var methodParamIndex = 0;
-        foreach(var method in entry.ImplementationTypeInjectionMembers)
+        foreach(var method in entry.Registration.InjectionMembers)
         {
             if(method.MemberType != InjectionMemberType.Method)
                 continue;
@@ -274,13 +264,13 @@ partial class IocSourceGenerator
                         param,
                         paramVar,
                         method.Key,
-                        isKeyedRegistration: entry.Key is not null,
-                        registrationKey: entry.Key,
+                        isKeyedRegistration: entry.Registration.Key is not null,
+                        registrationKey: entry.Registration.Key,
                         typeNameResolver: null);
                 }
                 else
                 {
-                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Key is not null, registrationKey: entry.Key);
+                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Registration.Key is not null, registrationKey: entry.Registration.Key);
                 }
 
                 methodEntries.Add((param.Name, resolvedVar));

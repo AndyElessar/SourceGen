@@ -93,6 +93,12 @@ partial class IocSourceGenerator
         /// </summary>
         public virtual string FormatResolverLambda(string serviceType) => $"static c => {FormatResolveExpression(serviceType, "c.")}";
 
+        /// <summary>
+        /// Gets whether <see cref="FormatResolverLambda"/> is <c>static c => c.ResolverMethodName()</c>, which writers emit
+        /// without formatting it. Entries that override <see cref="FormatResolveExpression"/> or <see cref="FormatResolverLambda"/> return <see langword="false"/>.
+        /// </summary>
+        public virtual bool HasResolverMethodLambda => true;
+
         protected void WriteInstanceCreationWithInjection(SourceWriter writer)
         {
             var typeDeclaration = Decorators.Length > 0 ? Registration.ServiceType.Name : "var";
@@ -433,6 +439,8 @@ partial class IocSourceGenerator
         public override string FormatResolveExpression(string serviceType, string receiver) => Registration.Instance!;
 
         public override string FormatResolverLambda(string serviceType) => $"static _ => {Registration.Instance}";
+
+        public override bool HasResolverMethodLambda => false;
     }
 
     private sealed record class EagerContainerEntry(
@@ -489,7 +497,7 @@ partial class IocSourceGenerator
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            writer.WriteLine(FormatDisposeCall(FieldName, isAsync));
+            WriteDisposeCall(writer, FieldName, isAsync);
         }
     }
 
@@ -564,7 +572,7 @@ partial class IocSourceGenerator
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            writer.WriteLine(FormatDisposeCall(FieldName, isAsync));
+            WriteDisposeCall(writer, FieldName, isAsync);
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
@@ -773,6 +781,8 @@ partial class IocSourceGenerator
                 : call;
         }
 
+        public override bool HasResolverMethodLambda => false;
+
         protected void WriteCreateMethod(SourceWriter writer)
         {
             writer.WriteLine($"private async {TaskReturnTypeName} {GetAsyncCreateMethodName(ResolverMethodName)}()");
@@ -867,7 +877,7 @@ partial class IocSourceGenerator
 
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            writer.WriteLine(FormatDisposeCall(FieldName, isAsync));
+            WriteDisposeCall(writer, FieldName, isAsync);
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
@@ -996,7 +1006,7 @@ partial class IocSourceGenerator
             var lazyExpression = IsShared ? $"c.{FieldName}" : FormatNewLazy(InnerServiceTypeName, $"c.{InnerResolverMethodName}()");
 
             writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => {lazyExpression}),");
-            writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{ArrayMethodName}()"));
+            WriteCollectionResolverEntries(writer, wrapperTypeName, ArrayMethodName!);
         }
     }
 
@@ -1058,7 +1068,7 @@ partial class IocSourceGenerator
             var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
 
             writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
-            writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{ArrayMethodName}()"));
+            WriteCollectionResolverEntries(writer, wrapperTypeName, ArrayMethodName!);
         }
     }
 

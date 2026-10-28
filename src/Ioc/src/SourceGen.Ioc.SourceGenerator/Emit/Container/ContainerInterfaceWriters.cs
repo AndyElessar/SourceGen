@@ -547,11 +547,7 @@ partial class IocSourceGenerator
             if(kvp.Value is not ServiceContainerEntry entry)
                 continue;
 
-            var serviceType = kvp.Key.ServiceType;
-            var exposedServiceType = entry.GetExposedServiceType(serviceType);
-            writer.WriteLine(kvp.Key.Key is { } key
-                ? $"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, {entry.FormatResolverLambda(serviceType)}),"
-                : $"{ResolverEntryMethodName}(typeof({exposedServiceType}), {entry.FormatResolverLambda(serviceType)}),");
+            WriteLocalResolverEntry(writer, entry, kvp.Key.ServiceType, kvp.Key.Key);
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
@@ -559,7 +555,7 @@ partial class IocSourceGenerator
         {
             if(entry is CollectionContainerEntry collection)
             {
-                writer.WriteLine(FormatCollectionResolverEntries(collection.ElementServiceTypeName, $"static c => c.{collection.ArrayMethodName}()"));
+                WriteCollectionResolverEntries(writer, collection.ElementServiceTypeName, collection.ArrayMethodName);
             }
         }
 
@@ -997,7 +993,7 @@ partial class IocSourceGenerator
         // Fallback scope last: container services may depend on its services
         if(container.IntegrateServiceProvider)
         {
-            writer.WriteLine(FormatDisposeCall("_fallbackScope", isAsync));
+            WriteDisposeCall(writer, "_fallbackScope", isAsync);
         }
 
         writer.WriteLine("return;");
@@ -1012,7 +1008,7 @@ partial class IocSourceGenerator
 
         if(ownsFallbackProvider)
         {
-            writer.WriteLine(FormatDisposeCall("_ownedFallbackProvider", isAsync));
+            WriteDisposeCall(writer, "_ownedFallbackProvider", isAsync);
         }
     }
 
@@ -1041,19 +1037,31 @@ partial class IocSourceGenerator
         foreach(var module in modules)
         {
             var fieldName = GetModuleFieldName(module.Name);
-            writer.WriteLine(isAsync
-                ? $"await {fieldName}.DisposeAsync().ConfigureAwait(false);"
-                : $"{fieldName}.Dispose();");
+            if(isAsync)
+            {
+                writer.WriteLine($"await {fieldName}.DisposeAsync().ConfigureAwait(false);");
+            }
+            else
+            {
+                writer.WriteLine($"{fieldName}.Dispose();");
+            }
         }
     }
 
     /// <summary>
-    /// Formats a sync or async disposal statement for a service, scope, or provider field.
+    /// Writes a sync or async disposal statement for a service, scope, or provider field.
     /// </summary>
-    private static string FormatDisposeCall(string target, bool isAsync) =>
-        isAsync
-            ? $"await DisposeServiceAsync({target}).ConfigureAwait(false);"
-            : $"DisposeService({target});";
+    private static void WriteDisposeCall(SourceWriter writer, string target, bool isAsync)
+    {
+        if(isAsync)
+        {
+            writer.WriteLine($"await DisposeServiceAsync({target}).ConfigureAwait(false);");
+        }
+        else
+        {
+            writer.WriteLine($"DisposeService({target});");
+        }
+    }
 
     /// <summary>
     /// Writes the static helper methods for disposal.
@@ -1178,11 +1186,44 @@ partial class IocSourceGenerator
     private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
 
     /// <summary>
-    /// Formats the spread of the <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
-    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>T[]</c> resolver entries for <paramref name="elementType"/>.
+    /// Writes the <c>_localResolvers</c> entry resolving <paramref name="serviceType"/> (with <paramref name="key"/> when keyed) through <paramref name="entry"/>.
     /// </summary>
-    private static string FormatCollectionResolverEntries(string elementType, string resolverLambda) =>
-        $"..{CollectionResolverEntriesMethodName}<{elementType}>({resolverLambda}),";
+    private static void WriteLocalResolverEntry(SourceWriter writer, ServiceContainerEntry entry, string serviceType, string? key)
+    {
+        var exposedServiceType = entry.GetExposedServiceType(serviceType);
+
+        // The common lambda is written directly instead of being formatted first
+        if(entry.HasResolverMethodLambda)
+        {
+            if(key is not null)
+            {
+                writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, static c => c.{entry.ResolverMethodName}()),");
+            }
+            else
+            {
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof({exposedServiceType}), static c => c.{entry.ResolverMethodName}()),");
+            }
+
+            return;
+        }
+
+        if(key is not null)
+        {
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, {entry.FormatResolverLambda(serviceType)}),");
+        }
+        else
+        {
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof({exposedServiceType}), {entry.FormatResolverLambda(serviceType)}),");
+        }
+    }
+
+    /// <summary>
+    /// Writes the spread of the <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
+    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>T[]</c> resolver entries for <paramref name="elementType"/>,
+    /// all resolved through the <paramref name="arrayMethodName"/> array resolver.
+    /// </summary>
+    private static void WriteCollectionResolverEntries(SourceWriter writer, string elementType, string arrayMethodName) =>
+        writer.WriteLine($"..{CollectionResolverEntriesMethodName}<{elementType}>(static c => c.{arrayMethodName}()),");
 
     /// <summary>
     /// Writes the helpers that build resolver entries, so each entry in <c>_localResolvers</c> stays short.
