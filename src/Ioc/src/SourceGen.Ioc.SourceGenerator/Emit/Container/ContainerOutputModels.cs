@@ -305,21 +305,35 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <param name="FallbackValue">
+    /// The value of an optional dependency that the provider does not resolve (its parameter's default value), or
+    /// <see langword="null"/> when it is <c>null</c>.
+    /// </param>
     private sealed record class FallbackProviderDependency(
         string TypeName,
         string? Key,
-        bool IsOptional) : ResolvedDependency
+        bool IsOptional,
+        string? FallbackValue = null) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
         {
-            return BuildServiceProviderFallbackExpression(TypeName, Key, IsOptional || isOptional);
+            return BuildServiceProviderFallbackExpression(TypeName, Key, IsOptional || isOptional, FallbackValue);
         }
 
         private static string BuildServiceProviderFallbackExpression(
             string typeName,
             string? key,
-            bool isOptional)
+            bool isOptional,
+            string? fallbackValue)
         {
+            // The untyped form also compiles for value types, which 'as' does not accept
+            if(isOptional && fallbackValue is not null)
+            {
+                return key is not null
+                    ? $"({typeName})(GetKeyedService(typeof({typeName}), {key}) ?? {fallbackValue})"
+                    : $"({typeName})(GetService(typeof({typeName})) ?? {fallbackValue})";
+            }
+
             if(key is not null)
             {
                 return isOptional

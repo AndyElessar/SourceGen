@@ -120,18 +120,18 @@ internal static partial class TransformExtensions
 
         private static bool IsDecoratorNullExpression(ExpressionSyntax expression)
         {
-            // Direct null literal
+            // Direct null or default literal
             if(expression is LiteralExpressionSyntax literal &&
-               literal.Kind() == SyntaxKind.NullLiteralExpression)
+               literal.Kind() is SyntaxKind.NullLiteralExpression or SyntaxKind.DefaultLiteralExpression)
             {
                 return true;
             }
 
-            // Null-forgiving expression: null!
+            // Null-forgiving expression: null! or default!
             if(expression is PostfixUnaryExpressionSyntax postfix &&
                postfix.Kind() == SyntaxKind.SuppressNullableWarningExpression &&
                postfix.Operand is LiteralExpressionSyntax innerLiteral &&
-               innerLiteral.Kind() == SyntaxKind.NullLiteralExpression)
+               innerLiteral.Kind() is SyntaxKind.NullLiteralExpression or SyntaxKind.DefaultLiteralExpression)
             {
                 return true;
             }
@@ -150,7 +150,7 @@ internal static partial class TransformExtensions
                         p.Type.GetTypeData(),
                         IsNullable: p.NullableAnnotation == NullableAnnotation.Annotated,
                         HasDefaultValue: p.HasExplicitDefaultValue,
-                        DefaultValue: p.HasExplicitDefaultValue ? DecoratorToDefaultValueCodeString(p.ExplicitDefaultValue) : null,
+                        DefaultValue: p.HasExplicitDefaultValue ? ToDefaultValueCodeString(p.ExplicitDefaultValue, p.Type) : null,
                         ServiceKey: serviceKey,
                         HasInjectAttribute: hasInjectAttribute,
                         HasServiceKeyAttribute: hasServiceKeyAttribute,
@@ -164,18 +164,6 @@ internal static partial class TransformExtensions
                 null,
                 parameters,
                 key);
-        }
-
-        private static string? DecoratorToDefaultValueCodeString(object? value)
-        {
-            return value switch
-            {
-                null => null,
-                string s => $"\"{s}\"",
-                char c => $"'{c}'",
-                bool b => b ? "true" : "false",
-                _ => value.ToString()
-            };
         }
     }
 }

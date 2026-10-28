@@ -25,12 +25,12 @@ namespace TestAssembly
             {
                 services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) =>
                 {
-                    var f_p0 = sp.GetService<global::TestNamespace.ILogger>() ?? default;
+                    var f_p0 = (global::TestNamespace.ILogger)(sp.GetService(typeof(global::TestNamespace.ILogger)) ?? default(global::TestNamespace.ILogger)!);
                     return (global::TestNamespace.MyService)global::TestNamespace.MyServiceFactory.Create(sp, f_p0);
                 });
                 services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) =>
                 {
-                    var f_p0 = sp.GetService<global::TestNamespace.ILogger>() ?? default;
+                    var f_p0 = (global::TestNamespace.ILogger)(sp.GetService(typeof(global::TestNamespace.ILogger)) ?? default(global::TestNamespace.ILogger)!);
                     return global::TestNamespace.MyServiceFactory.Create(sp, f_p0);
                 });
             }

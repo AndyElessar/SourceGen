@@ -901,14 +901,21 @@ partial class IocSourceGenerator
 
             switch(member.MemberType)
             {
+                case InjectionMemberType.Property or InjectionMemberType.Field when member.Type?.Name is IServiceProviderTypeName or IServiceProviderGlobalTypeName:
+                    dependency = new ServiceProviderSelfDependency();
+                    break;
+
                 case InjectionMemberType.Property or InjectionMemberType.Field when member.Type is not null:
+                    // A member with a non-null initializer keeps it when the service is not registered, like the Register output
+                    var hasNonNullDefault = member.HasDefaultValue && !member.DefaultValueIsNull;
                     dependency = ResolveServiceDependencyForContainerEntryModel(
                         member.Type,
                         member.Key,
-                        member.IsNullable,
+                        member.IsNullable || hasNonNullDefault,
                         serviceLookup,
                         collectionRegistrations,
-                        wrapperFields);
+                        wrapperFields,
+                        hasNonNullDefault ? member.DefaultValue : null);
                     break;
 
                 case InjectionMemberType.Method or InjectionMemberType.AsyncMethod:
@@ -973,7 +980,8 @@ partial class IocSourceGenerator
                         parameter.IsOptional,
                         serviceLookup,
                         collectionRegistrations,
-                        wrapperFields);
+                        wrapperFields,
+                        parameter.GetFallbackValue(parameter.Type.Name));
 
                     resolvedParameters.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
                 }
@@ -1118,16 +1126,19 @@ partial class IocSourceGenerator
             parameter.IsOptional,
             serviceLookup,
             collectionRegistrations,
-            wrapperFields);
+            wrapperFields,
+            parameter.GetFallbackValue(parameter.Type.Name));
     }
 
+    /// <param name="fallbackValue">The value of an optional dependency the provider does not resolve, or <see langword="null"/> for <c>null</c>.</param>
     private static ResolvedDependency ResolveServiceDependencyForContainerEntryModel(
         TypeData type,
         string? key,
         bool isOptional,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        WrapperFieldLookup wrapperFields)
+        WrapperFieldLookup wrapperFields,
+        string? fallbackValue = null)
     {
         if(type is CollectionWrapperTypeData collectionType)
         {
@@ -1193,7 +1204,7 @@ partial class IocSourceGenerator
             return new DirectServiceDependency(cached.ResolverMethodName);
         }
 
-        return new FallbackProviderDependency(type.Name, key, isOptional);
+        return new FallbackProviderDependency(type.Name, key, isOptional, fallbackValue);
     }
 
     private static ResolvedDependency ResolveWrapperDependencyForContainerEntryModel(

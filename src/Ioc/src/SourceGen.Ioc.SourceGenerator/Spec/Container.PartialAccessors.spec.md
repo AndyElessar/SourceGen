@@ -12,6 +12,8 @@ Users can declare partial methods or partial properties in the `[IocContainer]` 
 |Partial property|`public partial IMyService MyService { get; }`|`public partial IMyService MyService { get => GetMyService_Resolve(); }`|
 |Nullable (optional)|`public partial IMyService? GetMyService();`|Returns `null` if unresolvable (no throw)|
 |Keyed service|`[IocInject("key")] public partial IMyService GetMyService();`|Resolves service with specified key|
+|Task of an async-init service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial async Task<IMyService> GetMyServiceAsync() => await GetMyServiceAsync_Resolve().ConfigureAwait(false);`|
+|Task of a synchronous service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial Task<IMyService> GetMyServiceAsync() => Task.FromResult((IMyService)GetMyService());` (no `async` modifier: only an awaited resolver needs it)|
 
 ## Resolution Rules
 
@@ -37,6 +39,12 @@ internal class MyService : IMyService;
 
 [IocRegister<IOtherService>(ServiceLifetime.Singleton)]
 internal class OtherService : IOtherService;
+
+public interface ICache;
+[IocRegister<ICache>(ServiceLifetime.Singleton, Key = "redis")]
+internal class RedisCache : ICache;
+
+public interface IUnknownService;
 
 [IocContainer]
 public partial class AppContainer
@@ -67,7 +75,7 @@ partial class AppContainer
 
     public partial global::IUnknownService? TryGetUnknown() => GetService(typeof(global::IUnknownService)) as global::IUnknownService;
 
-    public partial global::ICache GetRedisCache() => GetCache_redis();
+    public partial global::ICache GetRedisCache() => GetRedisCache__redis_();
 
     #endregion
 }

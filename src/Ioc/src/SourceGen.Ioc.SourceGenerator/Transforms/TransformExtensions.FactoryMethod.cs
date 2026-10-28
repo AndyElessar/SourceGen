@@ -172,7 +172,7 @@ internal static partial class TransformExtensions
                     param.Type.GetTypeData(),
                     IsNullable: param.NullableAnnotation == NullableAnnotation.Annotated,
                     HasDefaultValue: param.HasExplicitDefaultValue,
-                    DefaultValue: param.HasExplicitDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue) : null,
+                    DefaultValue: param.HasExplicitDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue, param.Type) : null,
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: false, // Already handled above

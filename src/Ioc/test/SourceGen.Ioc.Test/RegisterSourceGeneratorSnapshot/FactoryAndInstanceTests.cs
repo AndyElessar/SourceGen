@@ -507,7 +507,7 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
-    public async Task Factory_WithServiceKeyParameterButNoKey_GeneratesCodeWithMissingKeyArgument()
+    public async Task Factory_WithServiceKeyParameterButNoKey_PassesDefaultKey()
     {
         const string source = """
             using System;
@@ -526,15 +526,13 @@ public class FactoryAndInstanceTests
 
             public static class MyServiceFactory
             {
-                // [ServiceKey] is present but no Key in registration - this will cause compile error
+                // [ServiceKey] is present but the registration has no Key: the factory gets default
                 public static IMyService Create(IServiceProvider sp, [ServiceKey] string key) => new MyService();
             }
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
-        // Factory method requires key parameter but no Key is specified in registration.
-        // This causes compilation failure because the generated code won't pass the key argument.
-        await result.VerifyHasCompilationErrorsAsync();
+        await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
         await Verify(generatedSource);

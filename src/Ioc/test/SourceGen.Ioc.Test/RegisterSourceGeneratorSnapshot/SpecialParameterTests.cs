@@ -240,6 +240,44 @@ public class SpecialParameterTests
     }
 
     [Test]
+    public async Task Service_WithOptionalValueTypeParameters_UsesDefaultValues()
+    {
+        // Value-type defaults need the untyped GetService form; '= default!' marks a required member, not a default
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+            public enum Mode { Fast, Safe }
+            public struct Settings { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDependency)])]
+            public class Dependency : IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class MyService(int timeout = 30, Mode mode = Mode.Safe, int? retries = null, string name = "default", Settings settings = default)
+            {
+                [IocInject]
+                public IDependency Dependency { get; set; } = default!;
+
+                [IocInject]
+                public int Count { get; set; } = 5;
+
+                [IocInject]
+                public void Initialize([FromKeyedServices("limit")] int limit = 10) { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task CombinedSpecialParameters_AllHandledCorrectly()
     {
         const string source = """

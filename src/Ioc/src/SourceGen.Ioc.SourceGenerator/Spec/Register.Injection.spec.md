@@ -48,15 +48,22 @@ Properties and fields marked with `[IocInject]` or `[Inject]` are analyzed for i
 - Collection types (`IEnumerable<T>`, `T[]`, `IReadOnlyList<T>`, etc.): Use `GetServices<T>()` or `GetKeyedServices<T>(key)`
 - Wrapper types: Generate inline wrapper construction (see **Wrapper Type Resolution** below)
 - Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
-- Property/Field with initializer: Treated as having a default value, use optional resolution
+- Property/Field with initializer: Treated as having a default value, use optional resolution. An initializer of `null`, `null!`, `default` or `default!` marks a required member, not a default value.
 
 ### Optional Parameter Handling (constructor and method parameters)
 
-When a parameter has a default value:
+When a parameter has a default value, it MUST receive the resolved service, or its default value when the service is not registered. The Register and Container output MUST compile for any parameter type:
 
-- Use `GetService<T>()` (non-required) and conditionally assign:
-  - If the resolved value is not null: Use the resolved value
-  - If the resolved value is null: Do not specify the argument (use default value)
+|Parameter|Resolution|
+|---|---|
+|Default value `null` and nullable type (`IDependency? dep = null`, `int? count = null`)|`sp.GetService<T>() ?? default`|
+|Any other default value (`int timeout = 30`, `string name = "x"`, `Mode mode = Mode.Safe`)|`(T)(sp.GetService(typeof(T)) ?? defaultValue)`|
+|Non-nullable type defaulting to `null` or `default` (`Settings settings = default`)|`(T)(sp.GetService(typeof(T)) ?? default(T)!)`|
+
+- The untyped `GetService(typeof(T))` form is required because `GetService<T>()` returns `default` for an unregistered value type, which cannot be told apart from a registered value.
+- Keyed parameters use `GetKeyedService<T>(key)` / `GetKeyedService(typeof(T), key)` in the same way.
+- An enum default value MUST be cast to the enum type (`(Mode)(1)`), because the parameter symbol stores its underlying constant.
+- Properties and fields with a non-null initializer use the same untyped form with the initializer expression.
 
 ### Wrapper Type Resolution
 
@@ -79,8 +86,8 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
 
 | Wrapper Type | Standalone Registration | Consumer Resolution |
 | --- | --- | --- |
-| `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Lazy<T>>()` |
-| `Func<T>` | `services.AddXXX<Func<T>>(sp => new Func<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Func<T>>()` |
+| `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<Impl>(), LazyThreadSafetyMode.ExecutionAndPublication))` (resolution as in the table above) | `sp.GetRequiredService<Lazy<T>>()` |
+| `Func<T>` | `services.AddXXX<Func<T>>(sp => new Func<T>(() => sp.GetRequiredService<Impl>()))` (resolution as in the table above) | `sp.GetRequiredService<Func<T>>()` |
 | `Func<T1, ..., TReturn>` | `services.AddXXX<Func<T1,...,TReturn>>(sp => new Func<T1,...,TReturn>((arg0,...) => ...))` | `sp.GetRequiredService<Func<T1,...,TReturn>>()` |
 | `KeyValuePair<K, V>` | `services.Add(new ServiceDescriptor(typeof(KVP<K,V>), sp => ..., lifetime))` | (used by Dictionary resolution) |
 | `IDictionary<K, V>` | — | `sp.GetServices<KeyValuePair<K, V>>().ToDictionary(...)` |
@@ -137,7 +144,7 @@ flowchart LR
 
 #### Register-Path Generation
 
-When a registration contains one or more async inject methods, the registration generator MUST emit a `Task<TService>` registration. The generated factory MUST create an `async Task<TImplementation> Init(...)` local function, perform synchronous injection first, then `await` each async inject method in stage order.
+When a registration contains one or more async inject methods, the registration generator MUST emit a `Task<TImplementation>` registration, and a `Task<TService>` registration for each service type that awaits it. The `Task<TImplementation>` factory MUST create an `async Task<TImplementation> Init()` local function, perform synchronous injection first, then `await` each async inject method in stage order.
 
 ```csharp
 #region Define:
@@ -171,23 +178,21 @@ public class MyService : IMyService
 #endregion
 
 #region Generate:
-services.AddSingleton<Task<IMyService>>(sp =>
+services.AddSingleton<Task<MyService>>((IServiceProvider sp) =>
 {
-    async Task<global::MyService> Init(global::System.IServiceProvider provider)
+    async Task<MyService> Init()
     {
-        var initializer = provider.GetRequiredService<global::IAsyncInitializer>();
-        var instance = new global::MyService
-        {
-            Logger = provider.GetRequiredService<global::ILogger>(),
-        };
-
-        instance.InitializeSync();
-        await instance.InitializeAsync(initializer);
-        return instance;
+        var s0_p0 = sp.GetRequiredService<ILogger>();
+        var s0_m1 = sp.GetRequiredService<IAsyncInitializer>();
+        var s0 = new MyService() { Logger = s0_p0 };
+        s0.InitializeSync();
+        await s0.InitializeAsync(s0_m1);
+        return s0;
     }
 
-    return Init(sp);
+    return Init();
 });
+services.AddSingleton<Task<IMyService>>(async (IServiceProvider sp) => await sp.GetRequiredService<Task<MyService>>());
 #endregion
 ```
 
@@ -225,15 +230,19 @@ public class BadConsumer
 
 ```csharp
 #region Define:
-[IocRegister]
-public class MyService([Inject(Key = 10)]IMayServiceDependency1 sd)
+public interface IMayServiceDependency1;
+public interface IMayServiceDependency2;
+public interface IMayServiceDependency3;
+
+[IocRegister(ServiceLifetime.Singleton)]
+public class MyService([IocInject(Key = 10)] IMayServiceDependency1 sd)
 {
     private readonly IMayServiceDependency1 sd = sd;
 
-    [Inject]
-    public IMayServiceDependency2 Dependency { get; init; }
+    [IocInject]
+    public IMayServiceDependency2 Dependency { get; init; } = default!;
 
-    [Inject]
+    [IocInject]
     public void Initialize(IMayServiceDependency3 sd3)
     {
         // Initialization code
@@ -242,22 +251,15 @@ public class MyService([Inject(Key = 10)]IMayServiceDependency1 sd)
 #endregion
 
 #region Generate:
-public static class ServiceCollectionExtensions
+services.AddSingleton<MyService>((IServiceProvider sp) =>
 {
-    public static IServiceCollection Add{ProjectName}(this IServiceCollection services)
-    {
-            services.AddSingleton<MyService>((IServiceProvider sp) =>
-            {
-                var s0_p0 = sp.GetRequiredKeyedService<IMayServiceDependency1>(10);
-                var s0_p1 = sp.GetRequiredService<IMayServiceDependency2>();
-                var s0_p2 = sp.GetRequiredService<IMayServiceDependency3>();
-                var s0 = new MyService(s0_p0) { Dependency = s0_p1 };
-                s0.Initialize(s0_p2);
-                return s0;
-            });
-            return services;
-    }
-}
+    var p0 = sp.GetRequiredKeyedService<IMayServiceDependency1>(10);
+    var s0_p0 = sp.GetRequiredService<IMayServiceDependency2>();
+    var s0_m1 = sp.GetRequiredService<IMayServiceDependency3>();
+    var s0 = new MyService(p0) { Dependency = s0_p0 };
+    s0.Initialize(s0_m1);
+    return s0;
+});
 #endregion
 ```
 
@@ -265,7 +267,10 @@ public static class ServiceCollectionExtensions
 
 ```csharp
 #region Define:
-[IocRegister(Key = "MyKey")]
+public interface IMyService;
+public interface IDependency;
+
+[IocRegister(ServiceLifetime.Singleton, Key = "MyKey")]
 public class MyService : IMyService
 {
     public IDependency? Dep { get; private set; }
@@ -284,7 +289,7 @@ public class MyService : IMyService
 #endregion
 
 #region Generate:
-services.AddKeyedSingleton<MyService>("MyKey", (global::System.IServiceProvider sp, object? key) =>
+services.AddKeyedSingleton<MyService>("MyKey", (IServiceProvider sp, object? key) =>
 {
     var s0_m0 = sp.GetRequiredKeyedService<IDependency>("special");
     var s0_m1 = "MyKey";
@@ -299,7 +304,10 @@ services.AddKeyedSingleton<MyService>("MyKey", (global::System.IServiceProvider 
 
 ```csharp
 #region Define:
-[IocRegister]
+public interface IMyService;
+public interface IOptionalDependency;
+
+[IocRegister(ServiceLifetime.Singleton)]
 public class MyService : IMyService
 {
     public IOptionalDependency? OptDep { get; private set; }
@@ -313,20 +321,13 @@ public class MyService : IMyService
 #endregion
 
 #region Generate:
-services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
+services.AddSingleton<MyService>((IServiceProvider sp) =>
 {
-    var s0_m0 = sp.GetService<IOptionalDependency>();
+    // An unregistered service gets the parameter's default value (see Optional Parameter Handling)
+    var s0_m0 = sp.GetService<IOptionalDependency>() ?? default;
     var s0_m1 = (int)(sp.GetService(typeof(int)) ?? 30);
     var s0 = new MyService();
-    // Use named argument only when value is not null
-    if (s0_m0 is not null)
-    {
-        s0.Initialize(optDep: s0_m0, timeout: s0_m1);
-    }
-    else
-    {
-        s0.Initialize(timeout: s0_m1);
-    }
+    s0.Initialize(s0_m0, s0_m1);
     return s0;
 });
 #endregion
@@ -336,7 +337,10 @@ services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
 
 ```csharp
 #region Define:
-[IocRegister]
+public interface IMyService;
+public interface IOptionalDependency;
+
+[IocRegister(ServiceLifetime.Singleton)]
 public class MyService(IOptionalDependency? optDep = null) : IMyService
 {
     public IOptionalDependency? OptDep { get; } = optDep;
@@ -344,11 +348,10 @@ public class MyService(IOptionalDependency? optDep = null) : IMyService
 #endregion
 
 #region Generate:
-services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
+services.AddSingleton<MyService>((IServiceProvider sp) =>
 {
-    var p0 = sp.GetService<IOptionalDependency>();
-    // Use named argument only when value is not null
-    var s0 = p0 is not null ? new MyService(optDep: p0) : new MyService();
+    var p0 = sp.GetService<IOptionalDependency>() ?? default;
+    var s0 = new MyService(p0);
     return s0;
 });
 #endregion
@@ -358,40 +361,44 @@ services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
 
 ```csharp
 #region Define:
-[IocRegister]
+public interface IMyService;
+public interface IDependency;
+public interface IOptionalDependency;
+public interface ILogger;
+public sealed class NullLogger : ILogger
+{
+    public static readonly NullLogger Instance = new();
+}
+
+[IocRegister(ServiceLifetime.Singleton)]
 public class MyService : IMyService
 {
-    // Required property injection with key
+    // Required property injection with key (default! marks it required, not a default value)
     [IocInject(Key = "special")]
-    public IDependency Dep { get; init; }
+    public IDependency Dep { get; init; } = default!;
 
     // Nullable property injection (uses GetService instead of GetRequiredService)
-    [Inject]
+    [IocInject]
     public IOptionalDependency? OptionalDep { get; set; }
 
     // Property with initializer (treated as optional)
-    [Inject]
+    [IocInject]
     public ILogger Logger { get; set; } = NullLogger.Instance;
 
-    // Field injection
-    [Inject]
-    private IServiceProvider _serviceProvider;
+    // Field injection (requires the FieldInject feature; the field must be accessible)
+    [IocInject]
+    internal IServiceProvider ServiceProvider = default!;
 }
 #endregion
 
 #region Generate:
-services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
+services.AddSingleton<MyService>((IServiceProvider sp) =>
 {
-    var s0_dep = sp.GetRequiredKeyedService<IDependency>("special");
-    var s0_optDep = sp.GetService<IOptionalDependency>();
-    var s0_logger = sp.GetService<ILogger>();
-    var s0 = new MyService
-    {
-        Dep = s0_dep,
-        OptionalDep = s0_optDep,
-        Logger = s0_logger ?? NullLogger.Instance,
-        _serviceProvider = sp
-    };
+    var s0_p0 = sp.GetRequiredKeyedService<IDependency>("special");
+    var s0_p1 = sp.GetService<IOptionalDependency>();
+    var s0_p2 = (ILogger)(sp.GetService(typeof(ILogger)) ?? NullLogger.Instance);
+    var s0_p3 = sp;
+    var s0 = new MyService() { Dep = s0_p0, OptionalDep = s0_p1, Logger = s0_p2, ServiceProvider = s0_p3 };
     return s0;
 });
 #endregion
@@ -401,7 +408,10 @@ services.AddSingleton<MyService>((global::System.IServiceProvider sp) =>
 
 ```csharp
 #region Define:
-[IocRegister<IMyService>]
+public interface IMyService;
+public interface IDependency;
+
+[IocRegister<IMyService>(ServiceLifetime.Singleton)]
 public class MyService(
     [FromKeyedServices("special")] IDependency dep,  // MS.E.DI handles [FromKeyedServices]
     IServiceProvider sp                              // MS.E.DI handles IServiceProvider
@@ -411,7 +421,7 @@ public class MyService(
 #region Generate:
 // Simple type-based registration - MS.E.DI handles the special parameters automatically
 services.AddSingleton<MyService, MyService>();
-services.AddSingleton<IMyService, MyService>();
+services.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredService<MyService>());
 #endregion
 ```
 
@@ -419,23 +429,28 @@ services.AddSingleton<IMyService, MyService>();
 
 ```csharp
 #region Define:
+public interface IMyService;
+public interface IOtherService;
+
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+public class MyService : IMyService;
+
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IOtherService)])]
+public class OtherService : IOtherService;
+
 [IocRegister(Lifetime = ServiceLifetime.Singleton)]
 public class Consumer(Lazy<IMyService> lazyService, Func<IOtherService> factory) { }
 #endregion
 
 #region Generate:
-// Standalone wrapper registrations
-services.AddSingleton<Lazy<IMyService>>(sp => new Lazy<IMyService>(() => sp.GetRequiredService<IMyService>()));
-services.AddSingleton<Func<IOtherService>>(sp => new Func<IOtherService>(() => sp.GetRequiredService<IOtherService>()));
+// ...MyService and OtherService registrations...
 
-// Consumer resolves wrappers from DI
-services.AddSingleton<Consumer>((IServiceProvider sp) =>
-{
-    var p0 = sp.GetRequiredService<global::System.Lazy<IMyService>>();
-    var p1 = sp.GetRequiredService<global::System.Func<IOtherService>>();
-    var s0 = new Consumer(p0, p1);
-    return s0;
-});
+// Consumer resolves the wrappers from DI, so MS.E.DI constructs it directly
+services.AddSingleton<Consumer, Consumer>();
+
+// Standalone wrapper registrations for the registered inner services, resolving their implementations
+services.AddSingleton<Lazy<IMyService>>((IServiceProvider sp) => new Lazy<IMyService>(() => sp.GetRequiredService<MyService>(), LazyThreadSafetyMode.ExecutionAndPublication));
+services.AddSingleton<Func<IOtherService>>((IServiceProvider sp) => new Func<IOtherService>(() => sp.GetRequiredService<OtherService>()));
 #endregion
 ```
 

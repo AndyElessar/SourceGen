@@ -70,10 +70,11 @@ The following parameter kinds are supported:
 |Parameter Kind|Example|Resolution|
 |:---|:---|:---|
 |`IServiceProvider`|`IServiceProvider sp`|Passed directly as `sp`|
-|`[ServiceKey]`|`[ServiceKey] string key`|Passed as the registration key value|
+|`[ServiceKey]`|`[ServiceKey] string key`|Passed as the registration key value, or `default!` when the registration has no key|
 |Required service|`ILogger logger`|`sp.GetRequiredService<ILogger>()`|
 |Optional service (nullable)|`ILogger? logger`|`sp.GetService<ILogger>() ?? default`|
-|Default value|`ILogger logger = null`|`sp.GetService<ILogger>() ?? default`|
+|Default value|`int retries = 3`|`(int)(sp.GetService(typeof(int)) ?? 3)` (also compiles for value types)|
+|Default `null` on a non-nullable type|`ILogger logger = null`|`(ILogger)(sp.GetService(typeof(ILogger)) ?? default(ILogger)!)`|
 |Keyed service|`[FromKeyedServices("key")] IConfig cfg`|`sp.GetRequiredKeyedService<IConfig>("key")`|
 |Collection|`IEnumerable<IHandler> handlers`|`sp.GetServices<IHandler>()`|
 
