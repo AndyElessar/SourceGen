@@ -265,6 +265,13 @@ public class SpecialParameterTests
                 [IocInject]
                 public int Count { get; set; } = 5;
 
+                // Target-typed initializers are typed by the member type
+                [IocInject]
+                public Settings Options { get; set; } = new();
+
+                [IocInject]
+                public System.Collections.Generic.List<string> Names { get; set; } = [];
+
                 [IocInject]
                 public void Initialize([FromKeyedServices("limit")] int limit = 10) { }
             }

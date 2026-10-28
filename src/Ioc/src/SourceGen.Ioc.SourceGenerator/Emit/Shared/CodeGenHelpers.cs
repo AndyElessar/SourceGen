@@ -62,6 +62,13 @@ partial class IocSourceGenerator
     private static string GetGenericString(int arity) =>
         arity <= 9 ? s_genericArityStrings[arity - 1] : '<' + new string(',', arity - 1) + '>';
 
+    /// <summary>
+    /// Gets the type name usable in a type pattern: a nullable value type <c>T?</c> is matched by its underlying type,
+    /// because a nullable type is not allowed in a pattern.
+    /// </summary>
+    private static string GetPatternTypeName(string typeName) =>
+        typeName.EndsWith("?", StringComparison.Ordinal) ? typeName[..^1] : typeName;
+
     private static string GetServiceResolutionMethod(string? serviceKey, bool isOptional) =>
         (serviceKey is not null, isOptional) switch
         {

@@ -331,13 +331,15 @@ partial class IocSourceGenerator
             : $"sp.{methodName}<{typeName}>()";
 
     /// <summary>
-    /// Builds <c>(T)(sp.GetService(typeof(T)) ?? fallback)</c>, which returns <paramref name="fallbackValue"/> for an unregistered
-    /// service. Unlike <c>sp.GetService&lt;T&gt;() ?? fallback</c>, it compiles for value types, which GetService&lt;T&gt; returns as <c>default</c>.
+    /// Builds <c>sp.GetService(typeof(T)) switch { T service => service, _ => fallback }</c>, which returns
+    /// <paramref name="fallbackValue"/> for an unregistered service. Unlike <c>sp.GetService&lt;T&gt;() ?? fallback</c>, it
+    /// compiles for value types, which GetService&lt;T&gt; returns as <c>default</c>; the fallback is typed by the
+    /// <c>T</c> arm, so target-typed initializers such as <c>new()</c> and <c>[]</c> create a <c>T</c>.
     /// </summary>
     private static string BuildOptionalServiceCallWithFallback(string typeName, string? serviceKey, string fallbackValue) =>
         serviceKey is not null
-            ? $"({typeName})(sp.{GetKeyedService}(typeof({typeName}), {serviceKey}) ?? {fallbackValue})"
-            : $"({typeName})(sp.{GetService}(typeof({typeName})) ?? {fallbackValue})";
+            ? $"sp.{GetKeyedService}(typeof({typeName}), {serviceKey}) switch {{ {GetPatternTypeName(typeName)} service => service, _ => {fallbackValue} }}"
+            : $"sp.{GetService}(typeof({typeName})) switch {{ {GetPatternTypeName(typeName)} service => service, _ => {fallbackValue} }}";
 
     /// <summary>
     /// Attempts to resolve common parameter cases and emit any required variable declarations.

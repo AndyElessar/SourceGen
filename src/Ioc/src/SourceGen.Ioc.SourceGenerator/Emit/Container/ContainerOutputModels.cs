@@ -326,12 +326,13 @@ partial class IocSourceGenerator
             bool isOptional,
             string? fallbackValue)
         {
-            // The untyped form also compiles for value types, which 'as' does not accept
+            // The switch also compiles for value types, which 'as' does not accept, and types target-typed fallbacks
+            // such as new() and [] by the T arm (see BuildOptionalServiceCallWithFallback)
             if(isOptional && fallbackValue is not null)
             {
                 return key is not null
-                    ? $"({typeName})(GetKeyedService(typeof({typeName}), {key}) ?? {fallbackValue})"
-                    : $"({typeName})(GetService(typeof({typeName})) ?? {fallbackValue})";
+                    ? $"(GetKeyedService(typeof({typeName}), {key}) switch {{ {GetPatternTypeName(typeName)} service => service, _ => {fallbackValue} }})"
+                    : $"(GetService(typeof({typeName})) switch {{ {GetPatternTypeName(typeName)} service => service, _ => {fallbackValue} }})";
             }
 
             if(key is not null)

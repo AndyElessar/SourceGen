@@ -4,7 +4,7 @@
 
 The container supports all injection patterns including constructor parameters, properties, synchronous methods, awaited async methods, and optional parameters, consistent with the registration generator.
 
-An optional dependency that the container does not register falls back to its `IServiceProvider` methods and MUST get the same default value as in the Register output (see [Optional Parameter Handling](Register.Injection.spec.md#optional-parameter-handling-constructor-and-method-parameters)): `(T)(GetService(typeof(T)) ?? defaultValue)`, or `GetService(typeof(T)) as T` when the default value is `null` for a nullable type.
+An optional dependency that the container does not register falls back to its `IServiceProvider` methods and MUST get the same default value as in the Register output (see [Optional Parameter Handling](Register.Injection.spec.md#optional-parameter-handling-constructor-and-method-parameters)): `GetService(typeof(T)) switch { T service => service, _ => defaultValue }`, or `GetService(typeof(T)) as T` when the default value is `null` for a nullable type.
 
 ## Injection Support
 

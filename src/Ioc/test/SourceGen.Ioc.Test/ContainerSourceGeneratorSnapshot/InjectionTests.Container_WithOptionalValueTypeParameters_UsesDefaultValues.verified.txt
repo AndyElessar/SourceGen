@@ -71,12 +71,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.MyService CreateMyService()
     {
-        var instance = new global::TestNamespace.MyService((int)(GetService(typeof(int)) ?? 30), (global::TestNamespace.Mode)(GetService(typeof(global::TestNamespace.Mode)) ?? (global::TestNamespace.Mode)(1)), GetService(typeof(int?)) as int?, (string)(GetService(typeof(string)) ?? "default"), (global::TestNamespace.Settings)(GetService(typeof(global::TestNamespace.Settings)) ?? default(global::TestNamespace.Settings)!))
+        var instance = new global::TestNamespace.MyService((GetService(typeof(int)) switch { int service => service, _ => 30 }), (GetService(typeof(global::TestNamespace.Mode)) switch { global::TestNamespace.Mode service => service, _ => (global::TestNamespace.Mode)(1) }), GetService(typeof(int?)) as int?, (GetService(typeof(string)) switch { string service => service, _ => "default" }), (GetService(typeof(global::TestNamespace.Settings)) switch { global::TestNamespace.Settings service => service, _ => default(global::TestNamespace.Settings)! }))
         {
             Dependency = GetDependency(),
-            Count = (int)(GetService(typeof(int)) ?? 5),
+            Count = (GetService(typeof(int)) switch { int service => service, _ => 5 }),
+            Options = (GetService(typeof(global::TestNamespace.Settings)) switch { global::TestNamespace.Settings service => service, _ => new() }),
+            Names = (GetService(typeof(global::System.Collections.Generic.List<string>)) switch { global::System.Collections.Generic.List<string> service => service, _ => [] }),
         };
-        instance.Initialize((int)(GetKeyedService(typeof(int), "limit") ?? 10));
+        instance.Initialize((GetKeyedService(typeof(int), "limit") switch { int service => service, _ => 10 }));
 
         _myService = instance;
         return instance;

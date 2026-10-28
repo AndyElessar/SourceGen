@@ -57,13 +57,13 @@ When a parameter has a default value, it MUST receive the resolved service, or i
 |Parameter|Resolution|
 |---|---|
 |Default value `null` and nullable type (`IDependency? dep = null`, `int? count = null`)|`sp.GetService<T>() ?? default`|
-|Any other default value (`int timeout = 30`, `string name = "x"`, `Mode mode = Mode.Safe`)|`(T)(sp.GetService(typeof(T)) ?? defaultValue)`|
-|Non-nullable type defaulting to `null` or `default` (`Settings settings = default`)|`(T)(sp.GetService(typeof(T)) ?? default(T)!)`|
+|Any other default value (`int timeout = 30`, `string name = "x"`, `Mode mode = Mode.Safe`)|`sp.GetService(typeof(T)) switch { T service => service, _ => defaultValue }`|
+|Non-nullable type defaulting to `null` or `default` (`Settings settings = default`)|`sp.GetService(typeof(T)) switch { T service => service, _ => default(T)! }`|
 
-- The untyped `GetService(typeof(T))` form is required because `GetService<T>()` returns `default` for an unregistered value type, which cannot be told apart from a registered value.
+- The untyped `GetService(typeof(T))` form is required because `GetService<T>()` returns `default` for an unregistered value type, which cannot be told apart from a registered value. The `T` arm types the fallback, so target-typed initializers such as `new()` and `[]` create a `T`, and the fallback is only evaluated when the service is not registered. A nullable value type `T?` is matched by its underlying type in the pattern.
 - Keyed parameters use `GetKeyedService<T>(key)` / `GetKeyedService(typeof(T), key)` in the same way.
 - An enum default value MUST be cast to the enum type (`(Mode)(1)`), because the parameter symbol stores its underlying constant.
-- Properties and fields with a non-null initializer use the same untyped form with the initializer expression.
+- The default value is the parameter's own declared default value (a constant). Properties and fields with a non-null initializer use the same form with the initializer expression, copied as written.
 
 ### Wrapper Type Resolution
 
@@ -325,7 +325,7 @@ services.AddSingleton<MyService>((IServiceProvider sp) =>
 {
     // An unregistered service gets the parameter's default value (see Optional Parameter Handling)
     var s0_m0 = sp.GetService<IOptionalDependency>() ?? default;
-    var s0_m1 = (int)(sp.GetService(typeof(int)) ?? 30);
+    var s0_m1 = sp.GetService(typeof(int)) switch { int service => service, _ => 30 };
     var s0 = new MyService();
     s0.Initialize(s0_m0, s0_m1);
     return s0;
@@ -396,7 +396,7 @@ services.AddSingleton<MyService>((IServiceProvider sp) =>
 {
     var s0_p0 = sp.GetRequiredKeyedService<IDependency>("special");
     var s0_p1 = sp.GetService<IOptionalDependency>();
-    var s0_p2 = (ILogger)(sp.GetService(typeof(ILogger)) ?? NullLogger.Instance);
+    var s0_p2 = sp.GetService(typeof(ILogger)) switch { ILogger service => service, _ => NullLogger.Instance };
     var s0_p3 = sp;
     var s0 = new MyService() { Dep = s0_p0, OptionalDep = s0_p1, Logger = s0_p2, ServiceProvider = s0_p3 };
     return s0;
