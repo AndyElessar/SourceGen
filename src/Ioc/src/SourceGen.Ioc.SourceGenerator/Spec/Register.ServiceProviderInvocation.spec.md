@@ -12,20 +12,21 @@ If Type is closed generic from open generic registration, generate factory to re
 
 ```csharp
 #region Method Call:
-var handler = IServiceProvider.GetRequiredService<IRequestHandler<QueryRequest<TestEntity>>>();
+// With the open generic handler registration and decorators of Generic Registration Feature 1
+var handler = serviceProvider.GetRequiredService<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>();
 #endregion
 
 #region Generate:
-services.AddSingleton<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
+services.AddSingleton<QueryRequestHandler<TestEntity>, QueryRequestHandler<TestEntity>>();
+services.AddKeyedSingleton<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>("SourceGen.Ioc.Decorated:IRequestHandler<QueryRequest<TestEntity>, System.Collections.Generic.List<TestEntity>>|QueryRequestHandler<TestEntity>", (IServiceProvider sp, object? key) =>
 {
     var s0 = sp.GetRequiredService<QueryRequestHandler<TestEntity>>();
-
     var s1 = new HandlerDecorator2<QueryRequest<TestEntity>, List<TestEntity>>(s0);
-
     var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<QueryRequest<TestEntity>, List<TestEntity>>>>();
     var s2 = new HandlerDecorator1<QueryRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
     return s2;
 });
+services.AddSingleton<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<QueryRequest<TestEntity>, List<TestEntity>>>("SourceGen.Ioc.Decorated:IRequestHandler<QueryRequest<TestEntity>, System.Collections.Generic.List<TestEntity>>|QueryRequestHandler<TestEntity>"));
 #endregion
 ```
 

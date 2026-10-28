@@ -32,27 +32,27 @@ public class MyTaggedServiceImplementation : IMyTaggedService;
 
 public interface INoTagService;
 
-[IocRegister(Lifetime = ServiceLifetime.Singleton)]
+[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INoTagService)])]
 public class NoTagServiceImplementation : INoTagService;
 #endregion
 
 #region Generate:
-public static class ServiceCollectionExtensions
+public static class {AssemblyName}ServiceCollectionExtensions
 {
-    public static IServiceCollection Add{ProjectName}(this IServiceCollection services, params IEnumerable<string> tags)
+    public static IServiceCollection Add{AssemblyName}(this IServiceCollection services, params IEnumerable<string> tags)
     {
         // Services without tags - only register when no tags passed
         if (!tags.Any())
         {
             services.AddSingleton<NoTagServiceImplementation, NoTagServiceImplementation>();
-            services.AddSingleton<INoTagService>(sp => sp.GetRequiredService<NoTagServiceImplementation>());
+            services.AddSingleton<INoTagService>((IServiceProvider sp) => sp.GetRequiredService<NoTagServiceImplementation>());
         }
 
         // Services with tags - only register when tags match
         if (tags.Contains("Tag1") || tags.Contains("Tag2"))
         {
             services.AddSingleton<MyTaggedServiceImplementation, MyTaggedServiceImplementation>();
-            services.AddSingleton<IMyTaggedService>(sp => sp.GetRequiredService<MyTaggedServiceImplementation>());
+            services.AddSingleton<IMyTaggedService>((IServiceProvider sp) => sp.GetRequiredService<MyTaggedServiceImplementation>());
         }
 
         return services;

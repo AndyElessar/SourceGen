@@ -137,9 +137,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         _fallbackProvider = fallbackProvider;
 
-        // Initialize eager singletons (calls Get methods to handle dependencies)
-        _myDependency = GetMyDependency();
-        _myService = GetMyService();
+        // Initialize eager singletons (Get methods resolve dependencies first and assign the fields)
+        GetMyDependency();
+        GetMyService();
     }
 
     private AppContainer(AppContainer parent)
@@ -172,7 +172,8 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     private global::MyService CreateMyService()
     {
-        var instance = new global::MyService((global::IMyDependency)GetRequiredService(typeof(global::IMyDependency)));
+        // A registered dependency is resolved through its resolver directly
+        var instance = new global::MyService(GetMyDependency());
         _myService = instance;
         return instance;
     }
@@ -398,40 +399,12 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         else if(service is IAsyncDisposable) throw new InvalidOperationException($"'{service.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
     }
 
-    // These overloads handle async-init services that store their instance as Task<T>?.
-    private static async ValueTask DisposeServiceAsync<T>(Task<T>? task)
-    {
-        if(task is { IsCompletedSuccessfully: true })
-        {
-            try
-            {
-                await DisposeServiceAsync(await task.ConfigureAwait(false)).ConfigureAwait(false);
-            }
-            catch(Exception ex)
-            {
-                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
-            }
-        }
-    }
-
-    private static void DisposeService<T>(Task<T>? task)
-    {
-        if(task is { IsCompletedSuccessfully: true })
-        {
-            try
-            {
-                DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult());
-            }
-            catch(Exception ex)
-            {
-                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
-            }
-        }
-    }
+    // Containers with async-init services also emit overloads for their Task<T>? fields:
+    // DisposeServiceAsync<T>(Task<T>? task) and DisposeService<T>(Task<T>? task) (see Container.Injection)
 
     private void ThrowIfDisposed()
     {
-        if (_disposed != 0) throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
     #endregion

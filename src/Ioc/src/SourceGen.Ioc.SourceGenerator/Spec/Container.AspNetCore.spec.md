@@ -30,16 +30,20 @@ public partial class AppContainer : IControllerActivator;
 partial class AppContainer : IControllerActivator, /* ... other interfaces */
 {
     private static readonly ConcurrentDictionary<Type, ObjectFactory> _controllerFactoryCache = new();
+    private static ObjectFactory CreateControllerFactory(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type t)
+        => ActivatorUtilities.CreateFactory(t, Type.EmptyTypes);
 
-    object IControllerActivator.Create(ControllerContext context)
+    object IControllerActivator.Create(ControllerContext controllerContext)
     {
-        var controllerType = context.ActionDescriptor.ControllerTypeInfo.AsType();
+        ArgumentNullException.ThrowIfNull(controllerContext);
+        var controllerType = controllerContext.ActionDescriptor.ControllerTypeInfo.AsType();
         var instance = GetService(controllerType);
-        if(instance is not null) return instance;
+        if (instance is not null) return instance;
 
         if (!_controllerFactoryCache.TryGetValue(controllerType, out var factory))
         {
-            factory = global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(controllerType, Type.EmptyTypes);
+            factory = CreateControllerFactory(controllerType);
             _controllerFactoryCache.TryAdd(controllerType, factory);
         }
 
@@ -48,7 +52,25 @@ partial class AppContainer : IControllerActivator, /* ... other interfaces */
 
     void IControllerActivator.Release(ControllerContext context, object controller)
     {
-        if(controller is IDisposable disposable) disposable.Dispose();
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(controller);
+        if (controller is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+    }
+
+    ValueTask IControllerActivator.ReleaseAsync(ControllerContext context, object controller)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(controller);
+        if (controller is IAsyncDisposable asyncDisposable)
+        {
+            return asyncDisposable.DisposeAsync();
+        }
+
+        ((IControllerActivator)this).Release(context, controller);
+        return default;
     }
 }
 #endregion
@@ -62,6 +84,8 @@ partial class AppContainer : IControllerActivator, /* ... other interfaces */
 // The source generator only reads .cs files.
 using Microsoft.AspNetCore.Components;
 
+namespace MyApp;
+
 [IocContainer]
 public partial class AppContainer : IComponentActivator;
 #endregion
@@ -72,15 +96,23 @@ public partial class AppContainer : IComponentActivator;
 partial class AppContainer : IComponentActivator, /* ... other interfaces */
 {
     private static readonly ConcurrentDictionary<Type, ObjectFactory> _componentFactoryCache = new();
+    private static ObjectFactory CreateComponentFactory(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type t)
+        => ActivatorUtilities.CreateFactory(t, Type.EmptyTypes);
 
-    IComponent IComponentActivator.CreateInstance(Type componentType)
+    IComponent IComponentActivator.CreateInstance([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type componentType)
     {
+        if (!typeof(IComponent).IsAssignableFrom(componentType))
+        {
+            throw new ArgumentException($"The type {componentType.FullName} does not implement {nameof(IComponent)}.", nameof(componentType));
+        }
+
         var instance = GetService(componentType);
-        if(instance is IComponent component) return component;
+        if (instance is IComponent component) return component;
 
         if (!_componentFactoryCache.TryGetValue(componentType, out var factory))
         {
-            factory = global::Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateFactory(componentType, Type.EmptyTypes);
+            factory = CreateComponentFactory(componentType);
             _componentFactoryCache.TryAdd(componentType, factory);
         }
 
@@ -88,6 +120,7 @@ partial class AppContainer : IComponentActivator, /* ... other interfaces */
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
+    [GeneratedCode("SourceGen.Ioc", "{Version}")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(Type[]? _)

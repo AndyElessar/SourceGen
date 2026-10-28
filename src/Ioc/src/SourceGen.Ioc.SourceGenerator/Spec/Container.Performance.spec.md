@@ -10,7 +10,7 @@ Singleton and scoped services are disposed in LIFO (Last In, First Out) order wh
 
 ### Disposal Field Registration
 
-Only services with `Singleton` or `Scoped` lifetime that implement `IDisposable` or `IAsyncDisposable` are tracked for disposal. Service fields are collected during code generation and stored in the order they are declared.
+Every `Singleton` or `Scoped` service field is passed to `DisposeService`/`DisposeServiceAsync`, which dispose the instance only when it implements `IDisposable` or `IAsyncDisposable` (checked at runtime). Fields are disposed in reverse declaration order.
 
 ### Example
 
@@ -39,49 +39,53 @@ public partial class AppContainer;
 partial class AppContainer : IDisposable, IAsyncDisposable
 {
     private int _disposed;
-    private Connection? _connection;
-    private Logger? _logger;
+    // Eager singletons (the default EagerResolveOptions)
+    private global::Connection _connection = null!;
+    private global::Logger _logger = null!;
 
     public void Dispose()
     {
-        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        // A scope disposes its scoped services, then its fallback scope
+        if(!_isRootScope)
+        {
+            DisposeService(_fallbackScope);
+            return;
+        }
 
         // LIFO order: newest services are disposed first
         DisposeService(_logger);
         DisposeService(_connection);
-
-        _logger = null;
-        _connection = null;
+        DisposeService(_ownedFallbackProvider);
     }
 
-    public async ValueTask DisposeAsync()
+    public async global::System.Threading.Tasks.ValueTask DisposeAsync()
     {
-        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        if(!_isRootScope)
+        {
+            await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
+            return;
+        }
 
         // LIFO order
-        await DisposeServiceAsync(_logger);
-        await DisposeServiceAsync(_connection);
-
-        _logger = null;
-        _connection = null;
+        await DisposeServiceAsync(_logger).ConfigureAwait(false);
+        await DisposeServiceAsync(_connection).ConfigureAwait(false);
+        await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
-    private static void DisposeService(object? obj)
+    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        (obj as IDisposable)?.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+        else if(service is global::System.IDisposable disposable) disposable.Dispose();
     }
 
-    private static async ValueTask DisposeServiceAsync(object? obj)
+    private static void DisposeService(object? service)
     {
-        switch(obj)
-        {
-            case IAsyncDisposable asyncDisposable:
-                await asyncDisposable.DisposeAsync();
-                break;
-            case IDisposable disposable:
-                disposable.Dispose();
-                break;
-        }
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        else if(service is global::System.IAsyncDisposable) throw new global::System.InvalidOperationException($"'{service.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
     }
 }
 #endregion
@@ -95,6 +99,8 @@ When `EagerResolveOptions` is set to `Singleton`, `Scoped`, or `SingletonAndScop
 
 ```csharp
 #region Define:
+public interface IEagerService;
+
 [IocRegister<IEagerService>(ServiceLifetime.Singleton)]
 public class EagerService : IEagerService;
 
@@ -106,7 +112,7 @@ public partial class AppContainer;
 partial class AppContainer
 {
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
-    private global::IEagerService _eagerService;  // Not nullable (eagerly initialized)
+    private global::EagerService _eagerService = null!;  // Not nullable (eagerly initialized)
 
     public AppContainer() : this((IServiceProvider?)null) { }
 
@@ -114,17 +120,27 @@ partial class AppContainer
     {
         _fallbackProvider = fallbackProvider;
 
-        // Eagerly resolve singleton services
-        _eagerService = GetEagerService_Internal();
+        // Initialize eager singletons
+        GetEagerService();
     }
 
-    private global::IEagerService GetEagerService_Internal()
+    private AppContainer(AppContainer parent)
     {
-        return new global::EagerService();
+        // ...
+        _eagerService = parent._eagerService;
     }
 
-    // No synchronization field needed for eager services
-    // (field is non-nullable and initialized in constructor)
+    private global::EagerService GetEagerService() => _eagerService ?? CreateEagerService();
+
+    // No synchronization field needed for eager singletons:
+    // the root constructor creates them before the container can be used from other threads
+    private global::EagerService CreateEagerService()
+    {
+        var instance = new global::EagerService();
+
+        _eagerService = instance;
+        return instance;
+    }
 }
 #endregion
 ```
@@ -133,6 +149,8 @@ partial class AppContainer
 
 ```csharp
 #region Define:
+public interface IEagerScoped;
+
 [IocRegister<IEagerScoped>(ServiceLifetime.Scoped)]
 public class EagerScoped : IEagerScoped;
 

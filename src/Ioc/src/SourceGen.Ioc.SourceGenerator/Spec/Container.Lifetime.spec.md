@@ -28,6 +28,10 @@ The container supports all three service lifetimes: Singleton (shared across all
 
 ```csharp
 #region Define:
+public interface ISingleton;
+public interface IScoped;
+public interface ITransient;
+
 [IocRegister<ISingleton>(ServiceLifetime.Singleton)]
 public class SingletonService : ISingleton;
 
@@ -37,7 +41,8 @@ public class ScopedService : IScoped;
 [IocRegister<ITransient>(ServiceLifetime.Transient)]
 public class TransientService : ITransient;
 
-[IocContainer]
+// Lazy singletons (the default EagerResolveOptions.Singleton creates them in the root constructor)
+[IocContainer(EagerResolveOptions = EagerResolveOptions.None, ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim)]
 public partial class AppContainer;
 #endregion
 

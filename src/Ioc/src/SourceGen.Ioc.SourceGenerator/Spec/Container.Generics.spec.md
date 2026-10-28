@@ -9,6 +9,8 @@ Handle open generic registrations with closed generic resolution. The container 
 ```csharp
 #region Define:
 public interface IRepository<T>;
+public class User;
+public class Order;
 
 [IocRegister(ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<>)])]
 public class Repository<T> : IRepository<T>;
@@ -16,7 +18,7 @@ public class Repository<T> : IRepository<T>;
 // Discovered via GetService<IRepository<User>>() call or [IocDiscover]
 [IocDiscover<IRepository<User>>]
 [IocDiscover<IRepository<Order>>]
-[IocContainer]
+[IocContainer(UseSwitchStatement = true)]
 public partial class AppContainer;
 #endregion
 
@@ -25,57 +27,51 @@ partial class AppContainer
 {
     #region Service Resolution
 
-    private global::Repository<global::User>? _repositoryUser;
-    private readonly SemaphoreSlim _repositoryUserSemaphore = new(1, 1);
-    private global::Repository<global::User> GetRepositoryUser()
-    {
-        if (_repositoryUser is not null) return _repositoryUser;
+    // Closed generic members are named after the type arguments
+    private global::Repository<global::User>? _repository_User;
+    private readonly global::System.Threading.Lock _repository_UserLock = new();
+    private global::Repository<global::User> GetRepository_User() => _repository_User ?? CreateRepository_User();
 
-        _repositoryUserSemaphore.Wait();
-        try
+    private global::Repository<global::User> CreateRepository_User()
+    {
+        lock(_repository_UserLock)
         {
-            if (_repositoryUser is not null) return _repositoryUser;
+            if(_repository_User is not null) return _repository_User;
 
             var instance = new global::Repository<global::User>();
-            _repositoryUser = instance;
+
+            _repository_User = instance;
             return instance;
-        }
-        finally
-        {
-            _repositoryUserSemaphore.Release();
         }
     }
 
-    private global::Repository<global::Order>? _repositoryOrder;
-    private readonly SemaphoreSlim _repositoryOrderSemaphore = new(1, 1);
-    private global::Repository<global::Order> GetRepositoryOrder()
-    {
-        if (_repositoryOrder is not null) return _repositoryOrder;
+    private global::Repository<global::Order>? _repository_Order;
+    private readonly global::System.Threading.Lock _repository_OrderLock = new();
+    private global::Repository<global::Order> GetRepository_Order() => _repository_Order ?? CreateRepository_Order();
 
-        _repositoryOrderSemaphore.Wait();
-        try
+    private global::Repository<global::Order> CreateRepository_Order()
+    {
+        lock(_repository_OrderLock)
         {
-            if (_repositoryOrder is not null) return _repositoryOrder;
+            if(_repository_Order is not null) return _repository_Order;
 
             var instance = new global::Repository<global::Order>();
-            _repositoryOrder = instance;
+
+            _repository_Order = instance;
             return instance;
-        }
-        finally
-        {
-            _repositoryOrderSemaphore.Release();
         }
     }
 
     #endregion
 
-    public object? GetService(Type serviceType)
+    public object? GetService(global::System.Type serviceType)
     {
-        // Closed generic resolution
-        if(serviceType == typeof(global::IRepository<global::User>)) return GetRepositoryUser();
-        if(serviceType == typeof(global::IRepository<global::Order>)) return GetRepositoryOrder();
-        if(serviceType == typeof(global::Repository<global::User>)) return GetRepositoryUser();
-        if(serviceType == typeof(global::Repository<global::Order>)) return GetRepositoryOrder();
+        // ...built-in services...
+        // Closed generic resolution (UseSwitchStatement = true)
+        if(serviceType == typeof(global::Repository<global::User>)) return GetRepository_User();
+        if(serviceType == typeof(global::IRepository<global::User>)) return GetRepository_User();
+        if(serviceType == typeof(global::Repository<global::Order>)) return GetRepository_Order();
+        if(serviceType == typeof(global::IRepository<global::Order>)) return GetRepository_Order();
         // ...
     }
 }
