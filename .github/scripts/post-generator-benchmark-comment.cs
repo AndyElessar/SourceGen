@@ -8,7 +8,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-const string Marker = "<!-- sourcegen-ioc-generator-benchmark -->";
+// Each commit gets its own comment; the prefix also matches older comments without a commit.
+const string MarkerPrefix = "<!-- sourcegen-ioc-generator-benchmark";
 
 var commentDirectory = RequiredEnvironmentVariable("COMMENT_DIR");
 var headSha = RequiredEnvironmentVariable("HEAD_SHA");
@@ -50,10 +51,12 @@ if(report.Length > reportLimit)
     report = $"{report[..reportLimit]}\n\n_The report was truncated. See the workflow run for the full results._";
 }
 
-var body = $"{Marker}\n{report}\n\n[Workflow run]({runUrl}) for {headSha}.";
+var marker = $"{MarkerPrefix} sha={headSha} -->";
+var body = $"{marker}\n{report}\n\n[Workflow run]({runUrl}) for {headSha}.";
 try
 {
-    var existingCommentId = await FindExistingCommentAsync(client, owner, repository, pullRequestNumber);
+    var comments = await ListBenchmarkCommentsAsync(client, owner, repository, pullRequestNumber);
+    var existingCommentId = comments.FirstOrDefault(comment => comment.Body.StartsWith(marker, StringComparison.Ordinal))?.Id;
     var endpoint = existingCommentId is { } commentId
         ? $"repos/{owner}/{repository}/issues/comments/{commentId.ToString(CultureInfo.InvariantCulture)}"
         : $"repos/{owner}/{repository}/issues/{pullRequestNumber.ToString(CultureInfo.InvariantCulture)}/comments";
@@ -64,6 +67,12 @@ try
     };
     using var response = await client.SendAsync(request);
     response.EnsureSuccessStatusCode();
+
+    // Reports for earlier commits stay in the history but are collapsed as outdated.
+    string[] outdatedNodeIds = [.. comments
+        .Where(comment => !comment.Body.StartsWith(marker, StringComparison.Ordinal))
+        .Select(comment => comment.NodeId)];
+    await MinimizeCommentsAsync(client, outdatedNodeIds);
 }
 catch(HttpRequestException exception) when(exception.StatusCode is HttpStatusCode.Forbidden)
 {
@@ -104,8 +113,9 @@ static async Task<JsonDocument> GetJsonAsync(HttpClient client, string endpoint)
     return await JsonDocument.ParseAsync(stream);
 }
 
-static async Task<long?> FindExistingCommentAsync(HttpClient client, string owner, string repository, long pullRequestNumber)
+static async Task<List<BenchmarkComment>> ListBenchmarkCommentsAsync(HttpClient client, string owner, string repository, long pullRequestNumber)
 {
+    List<BenchmarkComment> result = [];
     for(var page = 1; ; page++)
     {
         var endpoint = $"repos/{owner}/{repository}/issues/{pullRequestNumber.ToString(CultureInfo.InvariantCulture)}/comments?per_page=100&page={page.ToString(CultureInfo.InvariantCulture)}";
@@ -116,20 +126,77 @@ static async Task<long?> FindExistingCommentAsync(HttpClient client, string owne
             var isActionsBot = comment.TryGetProperty("user", out var user)
                 && user.TryGetProperty("login", out var login)
                 && login.GetString() is "github-actions[bot]";
-            var hasMarker = comment.TryGetProperty("body", out var commentBody)
-                && commentBody.ValueKind is JsonValueKind.String
-                && commentBody.GetString()?.StartsWith(Marker, StringComparison.Ordinal) is true;
-            if(isActionsBot && hasMarker)
+            var body = comment.TryGetProperty("body", out var commentBody) && commentBody.ValueKind is JsonValueKind.String
+                ? commentBody.GetString() ?? ""
+                : "";
+            if(isActionsBot && body.StartsWith(MarkerPrefix, StringComparison.Ordinal))
             {
-                return comment.GetProperty("id").GetInt64();
+                result.Add(new(comment.GetProperty("id").GetInt64(), comment.GetProperty("node_id").GetString()!, body));
             }
         }
 
         if(entries.GetArrayLength() < 100)
         {
-            return null;
+            return result;
         }
     }
+}
+
+static async Task MinimizeCommentsAsync(HttpClient client, string[] nodeIds)
+{
+    // The REST API does not report whether a comment is minimized, so GraphQL is asked first.
+    foreach(var chunk in nodeIds.Chunk(100))
+    {
+        using var state = await PostGraphQLAsync(client,
+            "query($ids: [ID!]!) { nodes(ids: $ids) { ... on IssueComment { id isMinimized } } }",
+            new { ids = chunk });
+        if(!TryGetData(state, out var data))
+        {
+            return;
+        }
+
+        foreach(var node in data.GetProperty("nodes").EnumerateArray())
+        {
+            if(node.ValueKind is not JsonValueKind.Object
+                || !node.TryGetProperty("isMinimized", out var isMinimized)
+                || isMinimized.GetBoolean())
+            {
+                continue;
+            }
+
+            using var minimized = await PostGraphQLAsync(client,
+                "mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }",
+                new { id = node.GetProperty("id").GetString() });
+            if(!TryGetData(minimized, out _))
+            {
+                return;
+            }
+        }
+    }
+}
+
+static async Task<JsonDocument> PostGraphQLAsync(HttpClient client, string query, object variables)
+{
+    using var content = new StringContent(JsonSerializer.Serialize(new { query, variables }), Encoding.UTF8, "application/json");
+    using var response = await client.PostAsync("graphql", content);
+    response.EnsureSuccessStatusCode();
+    await using var stream = await response.Content.ReadAsStreamAsync();
+    return await JsonDocument.ParseAsync(stream);
+}
+
+// GraphQL reports failures such as missing permissions in the response body; a failed collapse only warns.
+static bool TryGetData(JsonDocument document, out JsonElement data)
+{
+    var root = document.RootElement;
+    if(root.TryGetProperty("errors", out var errors) && errors.ValueKind is JsonValueKind.Array && errors.GetArrayLength() > 0)
+    {
+        var message = errors[0].TryGetProperty("message", out var errorMessage) ? errorMessage.GetString() : null;
+        WriteCommand("warning", $"Could not collapse outdated benchmark comments: {message}");
+        data = default;
+        return false;
+    }
+
+    return root.TryGetProperty("data", out data) && data.ValueKind is JsonValueKind.Object;
 }
 
 static void WriteCommand(string level, string message)
@@ -137,3 +204,5 @@ static void WriteCommand(string level, string message)
     var escapedMessage = message.Replace("%", "%25").Replace("\r", "%0D").Replace("\n", "%0A");
     Console.WriteLine($"::{level}::{escapedMessage}");
 }
+
+record BenchmarkComment(long Id, string NodeId, string Body);

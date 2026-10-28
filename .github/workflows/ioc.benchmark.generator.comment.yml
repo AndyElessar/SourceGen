@@ -5,7 +5,7 @@ on:
     workflows: [SourceGen.Ioc Generator Benchmark]
     types: [completed]
 
-# Serializes reports for the same pull request branch so the sticky comment is updated instead of duplicated.
+# Serializes reports for the same pull request branch so a commit's comment is updated instead of duplicated.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false

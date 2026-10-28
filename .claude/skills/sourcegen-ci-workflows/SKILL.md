@@ -18,7 +18,7 @@ To run an actual release (set version, tag, push, monitor), use the `sourcegen-r
 | `docs.yml` | Docs site (GitHub Pages) | push to `main` + `paths: docs/**`, `workflow_dispatch` |
 | `ioc.benchmark.nativeaot.yml` | Native AOT benchmark | tags `ioc-v*`, `workflow_dispatch` |
 | `ioc.benchmark.generator.yml` | Generator and analyzer benchmark: measures the base (merge commit's first parent) and head in the same job and compares them; fails on >5% allocation regression (>10% for `AnalyzerBenchmarks`) or a removed benchmark unless the PR has the `benchmark-accept-allocation` label, or on a failed or allocation-less head result | `pull_request` (incl. `labeled`/`unlabeled`) + push to `main` with `paths` filters (`*.md` excluded), `workflow_dispatch` |
-| `ioc.benchmark.generator.comment.yml` | Posts the generator benchmark report as a pull request comment | `workflow_run` of the generator benchmark |
+| `ioc.benchmark.generator.comment.yml` | Posts one generator benchmark comment per pull request head commit, updates it on re-runs, and collapses the comments of earlier commits as outdated | `workflow_run` of the generator benchmark |
 
 Read the existing workflow (and a sibling of the same type) before editing; mirror its structure.
 
