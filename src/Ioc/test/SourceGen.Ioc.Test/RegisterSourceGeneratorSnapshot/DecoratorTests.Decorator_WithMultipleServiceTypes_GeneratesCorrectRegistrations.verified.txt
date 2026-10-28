@@ -24,18 +24,20 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddTransient<global::TestNamespace.MyService, global::TestNamespace.MyService>();
-                services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) =>
+                services.AddKeyedTransient<global::TestNamespace.IMyService>("SourceGen.Ioc.Decorated:TestNamespace.IMyService|TestNamespace.MyService", (global::System.IServiceProvider sp, object? key) =>
                 {
                     var s0 = sp.GetRequiredService<global::TestNamespace.MyService>();
                     var s1 = new global::TestNamespace.MyServiceDecorator(s0);
                     return s1;
                 });
-                services.AddTransient<global::TestNamespace.IMyOtherService>((global::System.IServiceProvider sp) =>
+                services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredKeyedService<global::TestNamespace.IMyService>("SourceGen.Ioc.Decorated:TestNamespace.IMyService|TestNamespace.MyService"));
+                services.AddKeyedTransient<global::TestNamespace.IMyOtherService>("SourceGen.Ioc.Decorated:TestNamespace.IMyOtherService|TestNamespace.MyService", (global::System.IServiceProvider sp, object? key) =>
                 {
                     var s0 = sp.GetRequiredService<global::TestNamespace.MyService>();
                     var s1 = new global::TestNamespace.MyServiceDecorator(s0);
                     return s1;
                 });
+                services.AddTransient<global::TestNamespace.IMyOtherService>((global::System.IServiceProvider sp) => sp.GetRequiredKeyedService<global::TestNamespace.IMyOtherService>("SourceGen.Ioc.Decorated:TestNamespace.IMyOtherService|TestNamespace.MyService"));
             }
 
             return services;

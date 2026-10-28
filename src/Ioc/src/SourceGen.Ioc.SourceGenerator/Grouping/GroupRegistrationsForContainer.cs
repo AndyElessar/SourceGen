@@ -342,6 +342,7 @@ partial class IocSourceGenerator
         var kvpWrapperEntries = CreateKvpWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
 
         var lazyFieldByResolver = lazyWrapperEntries
+            .Where(static e => e.IsShared)
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
         var funcFieldByResolver = funcWrapperEntries
             .ToDictionary(static e => e.InnerResolverMethodName, static e => e.FieldName, StringComparer.Ordinal);
@@ -1141,10 +1142,16 @@ partial class IocSourceGenerator
                 {
                     if(serviceLookup.TryGetValue((innerType.Name, key), out var innerRegistrations))
                     {
-                        var resolverMethodName = innerRegistrations[^1].ResolverMethodName;
-                        if(wrapperFields.LazyFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
+                        var inner = innerRegistrations[^1];
+                        if(wrapperFields.LazyFieldByResolver.TryGetValue(inner.ResolverMethodName, out var fieldName))
                         {
                             return new LazyFieldReferenceDependency(fieldName);
+                        }
+
+                        // Transient services have no shared Lazy field: each consumer gets its own Lazy, like the Register output
+                        if(!inner.IsAsyncInit)
+                        {
+                            return new LazyInlineDependency(innerType.Name, new DirectServiceDependency(inner.ResolverMethodName));
                         }
                     }
 

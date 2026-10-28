@@ -46,6 +46,40 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task LazyDependency_OnTransientService_CreatesLazyPerConsumer()
+    {
+        // A shared Lazy field would hand every consumer the same transient instance.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class SingletonService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Lazy<MyService> lazy, IEnumerable<Lazy<IMyService>> all);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task LazyAndFuncDependency_WithKeyedAndNonKeyedRegistrationsOfSameImplementation_GeneratesDistinctFields()
     {
         // The keyed registration gets its own Lazy/Func fields and is not part of the non-keyed collections.

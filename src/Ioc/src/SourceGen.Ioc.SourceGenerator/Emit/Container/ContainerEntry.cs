@@ -906,19 +906,34 @@ partial class IocSourceGenerator
         public override void WriteResolver(SourceWriter writer) => WriteCreateMethod(writer);
     }
 
+    /// <param name="IsShared">
+    /// Whether one <c>Lazy&lt;T&gt;</c> field is shared by the container (or scope). Transient services are not shared:
+    /// each consumer gets its own <c>Lazy&lt;T&gt;</c> and therefore its own instance, like the Register output.
+    /// </param>
+    /// <param name="CollectionElements">The <c>Lazy&lt;T&gt;[]</c> elements: field names, or inline <c>Lazy&lt;T&gt;</c> creations.</param>
     internal sealed record class LazyWrapperContainerEntry(
         string InnerServiceTypeName,
         string InnerImplTypeName,
         string FieldName,
         string InnerResolverMethodName,
         string? Key,
+        bool IsShared,
         bool EmitCollectionResolver,
         string? ArrayMethodName,
-        ImmutableEquatableArray<string> CollectionFieldNames) : ContainerEntry
+        ImmutableEquatableArray<string> CollectionElements) : ContainerEntry
     {
+        /// <summary>
+        /// Formats a new <c>Lazy&lt;T&gt;</c> of <paramref name="innerServiceTypeName"/> over <paramref name="resolverCall"/>.
+        /// </summary>
+        public static string FormatNewLazy(string innerServiceTypeName, string resolverCall) =>
+            $"new global::System.Lazy<{innerServiceTypeName}>(() => {resolverCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
+
         public override void WriteField(SourceWriter writer)
         {
-            writer.WriteLine($"private readonly global::System.Lazy<{InnerServiceTypeName}> {FieldName};");
+            if(IsShared)
+            {
+                writer.WriteLine($"private readonly global::System.Lazy<{InnerServiceTypeName}> {FieldName};");
+            }
         }
 
         public override void WriteResolver(SourceWriter writer)
@@ -927,7 +942,10 @@ partial class IocSourceGenerator
 
         public override void WriteInit(SourceWriter writer)
         {
-            writer.WriteLine($"{FieldName} = new global::System.Lazy<{InnerServiceTypeName}>(() => {InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
+            if(IsShared)
+            {
+                writer.WriteLine($"{FieldName} = {FormatNewLazy(InnerServiceTypeName, $"{InnerResolverMethodName}()")};");
+            }
         }
 
         public override void WriteCollectionResolver(SourceWriter writer)
@@ -944,9 +962,9 @@ partial class IocSourceGenerator
             writer.WriteLine("[");
             writer.Indentation++;
 
-            foreach(var fieldName in CollectionFieldNames)
+            foreach(var element in CollectionElements)
             {
-                writer.WriteLine($"{fieldName},");
+                writer.WriteLine($"{element},");
             }
 
             writer.Indentation--;
@@ -962,8 +980,9 @@ partial class IocSourceGenerator
             }
 
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
+            var lazyExpression = IsShared ? $"c.{FieldName}" : FormatNewLazy(InnerServiceTypeName, $"c.{InnerResolverMethodName}()");
 
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => {lazyExpression}),");
             writer.WriteLine(FormatCollectionResolverEntries(wrapperTypeName, $"static c => c.{ArrayMethodName}()"));
         }
     }

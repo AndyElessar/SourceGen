@@ -27,12 +27,13 @@ namespace TestAssembly
                 services.AddSingleton(typeof(global::TestNamespace.IHandler<>), typeof(global::TestNamespace.Handler<>));
                 services.AddSingleton<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
                 services.AddSingleton<global::TestNamespace.Handler<string>, global::TestNamespace.Handler<string>>();
-                services.AddSingleton<global::TestNamespace.IHandler<string>>((global::System.IServiceProvider sp) =>
+                services.AddKeyedSingleton<global::TestNamespace.IHandler<string>>("SourceGen.Ioc.Decorated:TestNamespace.IHandler<string>|TestNamespace.Handler<string>", (global::System.IServiceProvider sp, object? key) =>
                 {
                     var s0 = sp.GetRequiredService<global::TestNamespace.Handler<string>>();
                     var s1 = new global::TestNamespace.ConstrainedDecorator<string>(s0);
                     return s1;
                 });
+                services.AddSingleton<global::TestNamespace.IHandler<string>>((global::System.IServiceProvider sp) => sp.GetRequiredKeyedService<global::TestNamespace.IHandler<string>>("SourceGen.Ioc.Decorated:TestNamespace.IHandler<string>|TestNamespace.Handler<string>"));
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Entity>, global::TestNamespace.Handler<global::TestNamespace.Entity>>();
                 services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Entity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Entity>>());
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.PlainEntity>, global::TestNamespace.Handler<global::TestNamespace.PlainEntity>>();

@@ -1,3 +1,5 @@
+using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
@@ -32,7 +34,10 @@ partial class IocSourceGenerator
 
         var serviceTypeNames = BuildServiceTypeNames(registration);
 
-        writer.WriteServiceLambdaOpen(lifetime, serviceTypeName, registration.Key);
+        // A non-keyed chain is registered under a hidden key, so Lazy/Func wrappers can resolve this registration's
+        // decorated instance; the service type forwards to it, sharing the instance. The body still resolves non-keyed.
+        var decoratedServiceKey = registration.Key is null ? GetDecoratedServiceKey(registration) : null;
+        writer.WriteServiceLambdaOpen(lifetime, serviceTypeName, decoratedServiceKey ?? registration.Key);
 
         writer.WriteLine("{");
         writer.Indentation++;
@@ -77,6 +82,40 @@ partial class IocSourceGenerator
 
         writer.Indentation--;
         writer.WriteLine("});");
+
+        if(decoratedServiceKey is not null)
+        {
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) => sp.{GetRequiredKeyedService}<{serviceTypeName}>({decoratedServiceKey}));");
+        }
+    }
+
+    /// <summary>
+    /// Gets the hidden service key (a C# string literal) of a non-keyed decorated registration's decorator chain.
+    /// </summary>
+    private static string GetDecoratedServiceKey(ServiceRegistrationModel registration)
+    {
+        var key = $"SourceGen.Ioc.Decorated:{registration.ServiceType.Name}|{registration.ImplementationType.Name}".Replace("global::", "");
+        return $"\"{key.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+    }
+
+    /// <summary>
+    /// Gets the expression (using <c>sp</c>, and <c>key</c> for keyed registrations) that a standalone
+    /// <c>Lazy&lt;T&gt;</c> / <c>Func&lt;T&gt;</c> registration uses to resolve <paramref name="registration"/>'s instance.
+    /// </summary>
+    /// <remarks>
+    /// The implementation type identifies the registration among several of one service type, but it is undecorated;
+    /// a decorated registration is resolved through its hidden key, or its own key when keyed.
+    /// </remarks>
+    private static string GetWrapperResolveCall(ServiceRegistrationModel registration)
+    {
+        var hasDecorators = registration.Decorators.Length > 0;
+        return (hasDecorators, registration.Key) switch
+        {
+            (true, null) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>({GetDecoratedServiceKey(registration)})",
+            (true, _) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>(key)",
+            (false, null) => $"sp.{GetRequiredService}<{registration.ImplementationType.Name}>()",
+            (false, _) => $"sp.{GetRequiredKeyedService}<{registration.ImplementationType.Name}>(key)",
+        };
     }
 
     /// <summary>

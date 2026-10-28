@@ -130,6 +130,8 @@ When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, 
 
 `Lazy<T>` and `Func<T>` wrapper fields MUST be created once per resolver of `T`, so the keyed, factory and instance registrations of one implementation each get their own field; the field name is the wrapper prefix, the short name of `T` and the resolver's field name (`_lazy_IMyService_myService`, `_lazy_IMyService_myService__keyed_`). `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` resolvers (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`) MUST contain only the non-keyed registrations of `T`, like `IEnumerable<T>`.
 
+A `Lazy<T>` of a transient registration MUST NOT be shared: no field is generated, and every consumer, collection resolver call and container resolution creates a new `Lazy<T>` (`new Lazy<T>(() => GetMyService(), ...)`), so each gets its own instance, like the Register output where the wrapper inherits the transient lifetime. `Func<T>` fields stay shared, because each invocation calls the resolver.
+
 | `IDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `IReadOnlyDictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |
 | `Dictionary<K, V>` | `GetServices<KVP<K, V>>().ToDictionary(kvp => kvp.Key, kvp => kvp.Value)` | Collection-based dictionary resolution |

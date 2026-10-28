@@ -24,10 +24,10 @@ partial class IocSourceGenerator
             if(InputTypes.Length == 0)
             {
                 var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-                var resolveCall = $"sp.{GetRequiredService}<{ImplementationTypeName}>()";
-                writer.WriteLine(
-                    $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => " +
-                    $"new {wrapperTypeName}(() => {resolveCall}));");
+                var newFunc = $"new {wrapperTypeName}(() => {ResolveCall})";
+                writer.WriteLine(Key is not null
+                    ? $"services.AddKeyed{lifetime}<{wrapperTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) => {newFunc});"
+                    : $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => {newFunc});");
                 return;
             }
 
@@ -86,6 +86,8 @@ partial class IocSourceGenerator
                     reg.ImplementationType.ConstructorParameters,
                     reg.InjectionMembers,
                     needed.InputTypes,
+                    needed.HasInputParameters ? null : reg.Key,
+                    GetWrapperResolveCall(reg),
                     regWithTags.Tags));
             }
         }

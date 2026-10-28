@@ -46,6 +46,47 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task LazyAndFuncDependency_WithDecoratedAndKeyedServices_ResolvesServiceRegistrations()
+    {
+        // Lazy<IDecorated> / Func<IDecorated> must apply the decorator; the keyed registration must not add a non-keyed wrapper.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.KeyedService), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IKeyed)], Key = "keyed")]
+
+            namespace TestNamespace;
+
+            public interface IDecorated;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDecorated)], Decorators = [typeof(Decorator)])]
+            public sealed class Decorated : IDecorated;
+
+            public sealed class Decorator(IDecorated inner) : IDecorated;
+
+            public interface IKeyed;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyed)])]
+            public sealed class KeyedService : IKeyed;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(
+                Lazy<IDecorated> lazy,
+                Func<IDecorated> factory,
+                IEnumerable<Lazy<IKeyed>> allLazy,
+                [FromKeyedServices("keyed")] Lazy<IKeyed> keyedLazy);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task FuncDependency_GeneratesFuncResolution()
     {
         const string source = """

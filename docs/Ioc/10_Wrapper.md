@@ -55,6 +55,15 @@ services.AddTransient<global::System.Lazy<global::MyNamespace.IExpensiveService>
 
 </details>
 
+`Lazy<T>` and `Func<T>` resolve the same instance as injecting `T` directly:
+
+- Singleton and scoped services are shared (within a scope for scoped services).
+- A transient service gives each `Lazy<T>` its own instance; each `Func<T>` call creates a new one.
+- A decorated service is resolved decorated.
+- A keyed service is resolved through `[FromKeyedServices(key)] Lazy<T>`; keyed services are not part of `IEnumerable<Lazy<T>>`.
+
+The generated container behaves the same way.
+
 ## `Func<T>`
 
 Inject `Func<T>` to create a new service instance on each invocation:

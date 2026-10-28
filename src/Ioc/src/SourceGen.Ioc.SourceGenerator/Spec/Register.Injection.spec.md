@@ -64,6 +64,17 @@ When a parameter or member type is a recognized wrapper type, the generator reso
 
 **Direct `Lazy<T>` / `Func<...>`**: Standalone registrations are emitted so wrapper services can be resolved directly from DI. Lifetimes and tags are inherited from the matched inner service `T`.
 
+One `Lazy<T>` / parameterless `Func<T>` registration is emitted per registration of `T`, so `IEnumerable<Lazy<T>>` contains one wrapper per implementation. Each MUST resolve that registration's instance, the same instance as resolving `T`:
+
+|Registration of `T`|Wrapper registration|Resolves|
+|---|---|---|
+|Non-keyed|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredService<Impl>()`|
+|Non-keyed, decorated|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredKeyedService<T>("SourceGen.Ioc.Decorated:{T}\|{Impl}")`, the hidden key of the decorator chain (see [Decorators](Register.Decorators.spec.md))|
+|Keyed|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<Impl>(key)`|
+|Keyed, decorated|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
+
+A keyed registration MUST NOT emit a non-keyed wrapper registration. `Func<T1, ..., TReturn>` with input parameters keeps constructing the implementation inline and is always registered non-keyed.
+
 | Wrapper Type | Standalone Registration | Consumer Resolution |
 | --- | --- | --- |
 | `Lazy<T>` | `services.AddXXX<Lazy<T>>(sp => new Lazy<T>(() => sp.GetRequiredService<T>()))` | `sp.GetRequiredService<Lazy<T>>()` |
