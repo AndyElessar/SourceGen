@@ -8,7 +8,7 @@ The `[IocContainer]` attribute provides multiple configuration options to custom
 
 ```csharp
 [IocContainer(
-    IntegrateServiceProvider = true,   // Allow fallback to IServiceCollection and implement IServiceProviderFactory
+    IntegrateServiceProvider = true,   // Allow fallback to IServiceCollection and generate ServiceProviderFactory
     ExplicitOnly = false,              // Only register explicitly marked services
     IncludeTags = ["Tag1", "Tag2"],    // Only include services with specified tags
     UseSwitchStatement = false,        // Use FrozenDictionary by default; set true to use switch statement
@@ -20,7 +20,7 @@ public partial class MyContainer;
 
 |Property|Default|Description|
 |:---|:---|:---|
-|`IntegrateServiceProvider`|`true`|Whether the container should integrate with external IServiceProvider and implement `IServiceProviderFactory<IServiceCollection>`|
+|`IntegrateServiceProvider`|`true`|Whether the container should integrate with external IServiceProvider and generate the nested `ServiceProviderFactory` type implementing `IServiceProviderFactory<IServiceCollection>`|
 |`ExplicitOnly`|`false`|When true, only register services explicitly marked on the container class|
 |`IncludeTags`|`[]`|When non-empty, only include services that have at least one matching tag. Services without tags are excluded.|
 |`UseSwitchStatement`|`false`|When true, use cascading `if`/`switch` statements instead of `FrozenDictionary`. Only beneficial for small service counts (≤ 50). **Note**: When there are imported modules (`IocImportModuleAttribute`), `FrozenDictionary` is always used regardless of this setting, because combining services from multiple sources requires dictionary-based lookup.|

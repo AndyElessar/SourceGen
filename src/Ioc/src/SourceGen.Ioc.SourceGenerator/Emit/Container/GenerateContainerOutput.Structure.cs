@@ -26,7 +26,7 @@ partial class IocSourceGenerator
         }
 
         // Get interface list
-        var interfaces = GetContainerInterfaces(container, canGenerateServiceProviderFactory);
+        var interfaces = GetContainerInterfaces(container);
 
         // Write class declaration
         writer.WriteLine(GeneratedCodeAttribute);
@@ -67,10 +67,10 @@ partial class IocSourceGenerator
         // Write IIocContainer implementation
         WriteIIocContainerImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
-        // Write IServiceProviderFactory implementation (if DI package is available)
+        // Write the nested ServiceProviderFactory type (if DI package is available)
         if(canGenerateServiceProviderFactory)
         {
-            WriteIServiceProviderFactoryImplementation(writer, container);
+            WriteServiceProviderFactory(writer, container);
         }
 
         // Write Disposal implementation
@@ -119,15 +119,12 @@ partial class IocSourceGenerator
     /// <summary>
     /// Builds the list of interfaces the container should implement.
     /// </summary>
-    private static IEnumerable<string> GetContainerInterfaces(ContainerModel container, bool canGenerateServiceProviderFactory)
+    private static IEnumerable<string> GetContainerInterfaces(ContainerModel container)
     {
         yield return $"global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>";
 
         foreach(var i in _FixedContainerInterfaces)
             yield return i;
-
-        if(canGenerateServiceProviderFactory)
-            yield return "global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>";
     }
 
     /// <summary>

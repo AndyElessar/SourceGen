@@ -97,7 +97,7 @@ partial class IocSourceGenerator
     [
         "GetService", "GetRequiredService", "GetKeyedService", "GetRequiredKeyedService", "GetServices", "GetKeyedServices",
         "GetFallbackServiceProvider", "GetType", "GetHashCode",
-        "CreateScope", "CreateAsyncScope", "CreateBuilder", "CreateServiceProvider", "CreateFallbackScope",
+        "CreateScope", "CreateAsyncScope", "CreateFallbackScope", "ServiceProviderFactory",
         "CreateControllerFactory", "CreateComponentFactory", "CreateComponentPropertyInjector",
         "_root", "_disposed", "_isRootScope", "_fallbackProvider", "_ownedFallbackProvider", "_fallbackScope",
         "_localResolvers", "_serviceResolvers", "_controllerFactoryCache", "_componentFactoryCache", "_propertyActivatorCache",

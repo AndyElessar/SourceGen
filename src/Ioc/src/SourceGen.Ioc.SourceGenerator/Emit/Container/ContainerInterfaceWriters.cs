@@ -612,21 +612,29 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes IServiceProviderFactory implementation.
+    /// Writes the nested ServiceProviderFactory type, which implements IServiceProviderFactory.
+    /// A separate type is used so that no container instance (and no eager service) is created just to build one.
     /// </summary>
-    private static void WriteIServiceProviderFactoryImplementation(SourceWriter writer, ContainerModel container)
+    private static void WriteServiceProviderFactory(SourceWriter writer, ContainerModel container)
     {
         writer.WriteLine("#region IServiceProviderFactory<IServiceCollection>");
         writer.WriteLine();
+
+        // Provider built by ServiceProviderFactory.CreateServiceProvider is owned (and disposed) by the returned container
+        writer.WriteLine("private object? _ownedFallbackProvider;");
+        writer.WriteLine();
+
+        writer.WriteLine("/// <summary>");
+        writer.WriteLine($"/// Builds a <see cref=\"{container.ClassName}\"/> from an IServiceCollection, which becomes its fallback service provider.");
+        writer.WriteLine("/// </summary>");
+        writer.WriteLine("public sealed class ServiceProviderFactory : global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>");
+        writer.WriteLine("{");
+        writer.Indentation++;
 
         writer.WriteLine("/// <summary>");
         writer.WriteLine("/// Creates a new container builder (returns the same IServiceCollection).");
         writer.WriteLine("/// </summary>");
         writer.WriteLine("public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;");
-        writer.WriteLine();
-
-        // Provider built by CreateServiceProvider is owned (and disposed) by the returned container
-        writer.WriteLine("private object? _ownedFallbackProvider;");
         writer.WriteLine();
 
         writer.WriteLine("/// <summary>");
@@ -637,6 +645,9 @@ partial class IocSourceGenerator
         writer.Indentation++;
         writer.WriteLine("var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);");
         writer.WriteLine($"return new {container.ClassName}(fallbackProvider) {{ _ownedFallbackProvider = fallbackProvider }};");
+        writer.Indentation--;
+        writer.WriteLine("}");
+
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();

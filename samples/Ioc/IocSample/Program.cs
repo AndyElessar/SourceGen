@@ -15,8 +15,7 @@ Test(sp);
 
 Console.WriteLine();
 Console.WriteLine("Use SourceGen.Ioc");
-// Module() eagerly creates singletons whose ILogger<T> only the fallback provider can supply
-using var module = new Module(sp);
+using var module = (Module)new Module.ServiceProviderFactory().CreateServiceProvider(services);
 Test(module);
 
 static void Test(IServiceProvider sp)

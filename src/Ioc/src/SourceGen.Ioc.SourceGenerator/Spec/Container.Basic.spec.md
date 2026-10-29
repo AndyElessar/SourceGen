@@ -16,7 +16,7 @@ Basic container generation creates a `partial class` that implements multiple DI
 |`ISupportRequiredService`|Required service resolution|
 |`IServiceScopeFactory`|Create service scopes|
 |`IServiceScope`|Represents a service scope (container is its own scope)|
-|`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection (only when `IntegrateServiceProvider = true` AND DI package is referenced)|
+|`IServiceProviderFactory<IServiceCollection>`|Build container from IServiceCollection. Implemented by the nested `ServiceProviderFactory` type, not by the container (only when `IntegrateServiceProvider = true` AND DI package is referenced)|
 |`IControllerActivator`|Generates MVC controller activation (only when container class declares this interface AND `Microsoft.AspNetCore.Mvc.Core` package is referenced)|
 |`IComponentActivator`|Generates Blazor component activation (only when container class declares this interface AND `Microsoft.AspNetCore.Components` package is referenced)|
 |`IComponentPropertyActivator`|Generates Blazor component property activation (only when container class declares this interface AND `Microsoft.AspNetCore.Components` package version ≥ 11 is referenced, which defines this type)|
@@ -50,7 +50,8 @@ The container generates generic instance methods matching the signatures from `S
 |Resolver shape|Synchronous singleton/scoped resolvers MUST be split into an expression-bodied fast path `GetX() => _x ?? CreateX();` and a slow-path `CreateX()` that holds creation, synchronization, and root delegation, so the fast path stays small enough to inline.|
 |Singletons in scopes|A scope MUST NOT create a singleton. Lazily created singletons (non-eager, including async-init) MUST delegate to the root container through `_root` (see [Lifetime](Container.Lifetime.spec.md)).|
 |Fallback scope|When `IntegrateServiceProvider = true`, fallback resolution MUST go through `GetFallbackServiceProvider()`. In a container scope it MUST lazily create one scope on the fallback provider (via its `IServiceScopeFactory`, if available) on the first fallback resolution, publish it with `Interlocked.CompareExchange`, and dispose a losing duplicate. Scopes that never use the fallback provider MUST NOT create one. The scope MUST dispose the fallback scope after its own scoped services. `IsService`/`IsKeyedService` MAY query the root fallback provider directly.|
-|Fallback ownership|The provider built by `IServiceProviderFactory.CreateServiceProvider` MUST be disposed by the returned root container. A provider passed to the public constructor is owned by the caller and MUST NOT be disposed.|
+|Fallback ownership|The provider built by `ServiceProviderFactory.CreateServiceProvider` MUST be disposed by the returned root container. A provider passed to the public constructor is owned by the caller and MUST NOT be disposed.|
+|Service provider factory|`IServiceProviderFactory<IServiceCollection>` MUST be implemented by a nested `public sealed class ServiceProviderFactory`, not by the container, so that building a container from an `IServiceCollection` does not first construct a container instance. Such an instance would create eager services, which can fail without a fallback provider.|
 |Scoped services in the root|A scoped service resolved directly from the root container is cached in the root. Both `Dispose` and `DisposeAsync` MUST dispose scoped services first (in scopes and in the root), then singletons.|
 |Transient disposables|Transient services are NOT tracked. The container MUST NOT dispose them; the caller owns their lifetime.|
 |`IAsyncDisposable`-only services|Synchronous `Dispose` MUST throw `InvalidOperationException` when it reaches a tracked service that implements only `IAsyncDisposable` (matching `Microsoft.Extensions.DependencyInjection`); `DisposeAsync` MUST be used instead. Disposing a losing `CompareExchange` instance during resolution MUST NOT throw.|
@@ -115,7 +116,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvider, IKeyedServiceProvider,
     IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService,
-    IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IServiceProviderFactory<IServiceCollection>
+    IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable
 {
     private readonly IServiceProvider? _fallbackProvider;
     private IServiceScope? _fallbackScope; // created lazily in container scopes
@@ -330,21 +331,27 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     #region IServiceProviderFactory<IServiceCollection>
 
-    /// <summary>
-    /// Creates a new container builder (returns the same IServiceCollection).
-    /// </summary>
-    public IServiceCollection CreateBuilder(IServiceCollection services) => services;
-
-    // Provider built by CreateServiceProvider is owned (and disposed) by the returned container
+    // Provider built by ServiceProviderFactory.CreateServiceProvider is owned (and disposed) by the returned container
     private object? _ownedFallbackProvider;
 
     /// <summary>
-    /// Creates the service provider from the built IServiceCollection.
+    /// Builds a <see cref="AppContainer"/> from an IServiceCollection, which becomes its fallback service provider.
     /// </summary>
-    public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
+    public sealed class ServiceProviderFactory : IServiceProviderFactory<IServiceCollection>
     {
-        var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new AppContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        /// <summary>
+        /// Creates a new container builder (returns the same IServiceCollection).
+        /// </summary>
+        public IServiceCollection CreateBuilder(IServiceCollection services) => services;
+
+        /// <summary>
+        /// Creates the service provider from the built IServiceCollection.
+        /// </summary>
+        public IServiceProvider CreateServiceProvider(IServiceCollection containerBuilder)
+        {
+            var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
+            return new AppContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        }
     }
 
     #endregion
