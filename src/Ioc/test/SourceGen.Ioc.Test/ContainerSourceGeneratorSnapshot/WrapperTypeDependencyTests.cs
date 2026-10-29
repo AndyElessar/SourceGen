@@ -493,7 +493,6 @@ public class WrapperTypeDependencyTests
                 public IEnumerable<Lazy<IPlugin>> LazyPlugins { get; } = lazyPlugins;
             }
 
-            [IocDiscover<IEnumerable<IPlugin>>]
             [IocContainer]
             public partial class TestContainer { }
             """;
@@ -530,7 +529,6 @@ public class WrapperTypeDependencyTests
                 public IEnumerable<Func<IPlugin>> FuncPlugins { get; } = funcPlugins;
             }
 
-            [IocDiscover<IEnumerable<IPlugin>>]
             [IocContainer]
             public partial class TestContainer { }
             """;
@@ -633,7 +631,6 @@ public class WrapperTypeDependencyTests
                 public Lazy<IEnumerable<IPlugin>> LazyPlugins { get; } = lazyPlugins;
             }
 
-            [IocDiscover<IEnumerable<IPlugin>>]
             [IocContainer]
             public partial class TestContainer { }
             """;
@@ -675,9 +672,6 @@ public class WrapperTypeDependencyTests
                 public IReadOnlyList<IService> ReadOnlyList { get; } = readOnlyList;
             }
 
-            [IocDiscover<IEnumerable<IService>>]
-            [IocDiscover<IReadOnlyCollection<IService>>]
-            [IocDiscover<IReadOnlyList<IService>>]
             [IocContainer]
             public partial class TestContainer { }
             """;

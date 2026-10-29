@@ -31,6 +31,5 @@ public sealed class PluginHost(IEnumerable<IPlugin> plugins)
 [IocRegisterFor<PluginB>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
 [IocRegisterFor<PluginC>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
 [IocRegisterFor<PluginHost>(ServiceLifetime.Transient)]
-[IocDiscover<IEnumerable<IPlugin>>]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class CollectionModule;
