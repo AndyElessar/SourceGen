@@ -314,9 +314,10 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer, bool integrateServiceProvider)
     {
-        // Fallback lookups used on a dictionary miss (null when the container is standalone)
-        string? fallback = integrateServiceProvider ? "GetFallbackServiceProvider()" : null;
-        string? keyedFallback = integrateServiceProvider ? "(GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)" : null;
+        // Fallback lookups used on a dictionary miss (only when the container integrates a service provider).
+        // They are constants, so each miss expression below is a constant string as well.
+        const string fallback = "GetFallbackServiceProvider()";
+        const string keyedFallback = "(GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)";
 
         // GetService<T>
         WriteGenericResolveMethod(writer,
@@ -324,7 +325,7 @@ partial class IocSourceGenerator
             keyed: false,
             "typeof(T)",
             "? resolver(this) as T",
-            fallback is null ? ": null;" : $": {fallback}?.GetService(typeof(T)) as T;");
+            integrateServiceProvider ? $": {fallback}?.GetService(typeof(T)) as T;" : ": null;");
 
         // GetRequiredService<T>
         const string notFound = "throw new global::System.InvalidOperationException($\"No service for type '{typeof(T)}' has been registered.\")";
@@ -333,7 +334,7 @@ partial class IocSourceGenerator
             keyed: false,
             "typeof(T)",
             "? (T)resolver(this)",
-            fallback is null ? $": {notFound};" : $": (T)({fallback}?.GetService(typeof(T)) ?? {notFound});");
+            integrateServiceProvider ? $": (T)({fallback}?.GetService(typeof(T)) ?? {notFound});" : $": {notFound};");
 
         // GetServices<T>
         WriteGenericResolveMethod(writer,
@@ -341,7 +342,7 @@ partial class IocSourceGenerator
             keyed: false,
             "typeof(global::System.Collections.Generic.IEnumerable<T>)",
             "? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)",
-            fallback is null ? ": [];" : $": {fallback}?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];");
+            integrateServiceProvider ? $": {fallback}?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];" : ": [];");
 
         // GetKeyedService<T>
         WriteGenericResolveMethod(writer,
@@ -349,7 +350,7 @@ partial class IocSourceGenerator
             keyed: true,
             "typeof(T)",
             "? resolver(this) as T",
-            keyedFallback is null ? ": null;" : $": {keyedFallback}?.GetKeyedService(typeof(T), serviceKey) as T;");
+            integrateServiceProvider ? $": {keyedFallback}?.GetKeyedService(typeof(T), serviceKey) as T;" : ": null;");
 
         // GetRequiredKeyedService<T>
         const string keyedNotFound = "throw new global::System.InvalidOperationException($\"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.\")";
@@ -358,7 +359,7 @@ partial class IocSourceGenerator
             keyed: true,
             "typeof(T)",
             "? (T)resolver(this)",
-            keyedFallback is null ? $": {keyedNotFound};" : $": (T)({keyedFallback}?.GetKeyedService(typeof(T), serviceKey) ?? {keyedNotFound});");
+            integrateServiceProvider ? $": (T)({keyedFallback}?.GetKeyedService(typeof(T), serviceKey) ?? {keyedNotFound});" : $": {keyedNotFound};");
 
         // GetKeyedServices<T>
         WriteGenericResolveMethod(writer,
@@ -366,7 +367,7 @@ partial class IocSourceGenerator
             keyed: true,
             "typeof(global::System.Collections.Generic.IEnumerable<T>)",
             "? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)",
-            keyedFallback is null ? ": [];" : $": {keyedFallback}?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];");
+            integrateServiceProvider ? $": {keyedFallback}?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];" : ": [];");
     }
 
     private static void WriteGenericResolveMethod(
@@ -583,17 +584,10 @@ partial class IocSourceGenerator
                 foreach(var module in container.ImportedModules)
                 {
                     var fieldName = GetModuleFieldName(module.Name);
-                    var source = $"{module.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
 
-                    if(isFirst)
-                    {
-                        writer.WriteLine(source);
-                        isFirst = false;
-                    }
-                    else
-                    {
-                        writer.WriteLine($".Concat({source})");
-                    }
+                    // Every module after the first is appended with .Concat(...)
+                    writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{module.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))){(isFirst ? "" : ")")}");
+                    isFirst = false;
                 }
 
                 writer.WriteLine(".Concat(_localResolvers)");

@@ -331,49 +331,43 @@ partial class IocSourceGenerator
                 return;
             }
 
-            var propertyAssignments = new List<string>();
-            var methodInvocations = new List<string>();
-
+            // Property/field assignments go in the object initializer, method invocations follow it
+            var hasPropertyAssignments = false;
             foreach(var member in injectionMembers)
             {
-                switch(member.Member.MemberType)
+                if(member.Member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                    continue;
+
+                if(member.Dependency is null)
+                    throw new InvalidOperationException($"Missing resolved dependency for decorator member '{member.Member.Name}'.");
+
+                if(!hasPropertyAssignments)
                 {
-                    case InjectionMemberType.Property:
-                    case InjectionMemberType.Field:
-                        if(member.Dependency is null)
-                            throw new InvalidOperationException($"Missing resolved dependency for decorator member '{member.Member.Name}'.");
-
-                        propertyAssignments.Add($"{member.Member.Name} = {member.Dependency.FormatExpression(member.Member.IsNullable)},");
-                        break;
-
-                    case InjectionMemberType.Method:
-                        var args = BuildMethodArguments(member, registrationKey);
-                        methodInvocations.Add($"{variableName}.{member.Member.Name}({args});");
-                        break;
-                }
-            }
-
-            if(propertyAssignments.Count == 0)
-            {
-                writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString});");
-            }
-            else
-            {
-                writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString})");
-                writer.WriteLine("{");
-                writer.Indentation++;
-                foreach(var assignment in propertyAssignments)
-                {
-                    writer.WriteLine(assignment);
+                    hasPropertyAssignments = true;
+                    writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString})");
+                    writer.WriteLine("{");
+                    writer.Indentation++;
                 }
 
+                writer.WriteLine($"{member.Member.Name} = {member.Dependency.FormatExpression(member.Member.IsNullable)},");
+            }
+
+            if(hasPropertyAssignments)
+            {
                 writer.Indentation--;
                 writer.WriteLine("};");
             }
-
-            foreach(var invocation in methodInvocations)
+            else
             {
-                writer.WriteLine(invocation);
+                writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString});");
+            }
+
+            foreach(var member in injectionMembers)
+            {
+                if(member.Member.MemberType is InjectionMemberType.Method)
+                {
+                    writer.WriteLine($"{variableName}.{member.Member.Name}({BuildMethodArguments(member, registrationKey)});");
+                }
             }
         }
 
@@ -540,19 +534,7 @@ partial class IocSourceGenerator
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {ResolvedTypeName}? {FieldName};");
-
-            var syncFieldDeclaration = ThreadSafeStrategy switch
-            {
-                ThreadSafeStrategy.Lock => $"private readonly global::System.Threading.Lock {FieldName}Lock = new();",
-                ThreadSafeStrategy.SemaphoreSlim => $"private readonly global::System.Threading.SemaphoreSlim {FieldName}Semaphore = new(1, 1);",
-                ThreadSafeStrategy.SpinLock => $"private global::System.Threading.SpinLock {FieldName}SpinLock = new(false);",
-                _ => null
-            };
-
-            if(syncFieldDeclaration is not null)
-            {
-                writer.WriteLine(syncFieldDeclaration);
-            }
+            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
         }
 
         public override void WriteResolver(SourceWriter writer)
@@ -729,8 +711,15 @@ partial class IocSourceGenerator
                         [.. ConstructorParameters.Select(static parameter => parameter.Dependency.FormatExpression(parameter.IsOptional))]);
 
                     var genericTypeArgs = BuildGenericFactoryTypeArgs(factory, Registration.ServiceType);
-                    var factoryCallPath = genericTypeArgs is not null ? $"{factory.Path}<{genericTypeArgs}>" : factory.Path;
-                    writer.WriteLine($"return ({Registration.ImplementationType.Name}){factoryCallPath}({string.Join(", ", args)});");
+                    var argList = string.Join(", ", args);
+                    if(genericTypeArgs is null)
+                    {
+                        writer.WriteLine($"return ({Registration.ImplementationType.Name}){factory.Path}({argList});");
+                    }
+                    else
+                    {
+                        writer.WriteLine($"return ({Registration.ImplementationType.Name}){factory.Path}<{genericTypeArgs}>({argList});");
+                    }
                 }
                 else
                 {
@@ -986,7 +975,7 @@ partial class IocSourceGenerator
         {
             if(IsShared)
             {
-                writer.WriteLine($"{FieldName} = {FormatNewLazy(InnerServiceTypeName, $"{InnerResolverMethodName}()")};");
+                writer.WriteLine($"{FieldName} = new global::System.Lazy<{InnerServiceTypeName}>(() => {InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
             }
         }
 
@@ -997,9 +986,7 @@ partial class IocSourceGenerator
                 return;
             }
 
-            var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
-
-            writer.WriteLine($"private {wrapperTypeName}[] {ArrayMethodName}() =>");
+            writer.WriteLine($"private global::System.Lazy<{InnerServiceTypeName}>[] {ArrayMethodName}() =>");
             writer.Indentation++;
             writer.WriteLine("[");
             writer.Indentation++;
@@ -1022,9 +1009,16 @@ partial class IocSourceGenerator
             }
 
             var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
-            var lazyExpression = IsShared ? $"c.{FieldName}" : FormatNewLazy(InnerServiceTypeName, $"c.{InnerResolverMethodName}()");
 
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => {lazyExpression}),");
+            if(IsShared)
+            {
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
+            }
+            else
+            {
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => new {wrapperTypeName}(() => c.{InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),");
+            }
+
             WriteCollectionResolverEntries(writer, wrapperTypeName, ArrayMethodName!);
         }
     }
@@ -1060,9 +1054,7 @@ partial class IocSourceGenerator
                 return;
             }
 
-            var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-
-            writer.WriteLine($"private {wrapperTypeName}[] {ArrayMethodName}() =>");
+            writer.WriteLine($"private global::System.Func<{InnerServiceTypeName}>[] {ArrayMethodName}() =>");
             writer.Indentation++;
             writer.WriteLine("[");
             writer.Indentation++;
@@ -1102,8 +1094,7 @@ partial class IocSourceGenerator
     {
         public override void WriteResolver(SourceWriter writer)
         {
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>";
-            writer.WriteLine($"private {kvpTypeName} {KvpResolverMethodName}() => new {kvpTypeName}({KeyExpr}, {ResolverMethodName}());");
+            writer.WriteLine($"private global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}> {KvpResolverMethodName}() => new global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>({KeyExpr}, {ResolverMethodName}());");
         }
 
         public override void WriteLocalResolverEntries(SourceWriter writer)

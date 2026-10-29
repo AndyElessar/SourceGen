@@ -67,16 +67,14 @@ partial class IocSourceGenerator
         }
 
         var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
-        if(param.HasDefaultValue)
+        if(param.HasDefaultValue && param.GetFallbackValue(resolvedTypeName) is { } fallbackValue)
         {
-            writer.WriteLine(param.GetFallbackValue(resolvedTypeName) is { } fallbackValue
-                ? $"var {paramVar} = {BuildOptionalServiceCallWithFallback(resolvedTypeName, methodKey, fallbackValue)};"
-                : $"var {paramVar} = {BuildServiceCall(GetServiceResolutionMethod(methodKey, isOptional: true), resolvedTypeName, methodKey)} ?? default;");
+            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(resolvedTypeName, methodKey, fallbackValue)};");
             return paramVar;
         }
 
-        var requiredCall = BuildServiceCall(GetServiceResolutionMethod(methodKey, isOptional: false), resolvedTypeName, methodKey);
-        writer.WriteLine($"var {paramVar} = {requiredCall};");
+        var methodName = GetServiceResolutionMethod(methodKey, isOptional: param.HasDefaultValue);
+        writer.WriteLine($"var {paramVar} = {BuildServiceCall(methodName, resolvedTypeName, methodKey)}{(param.HasDefaultValue ? " ?? default" : "")};");
         return paramVar;
     }
 
@@ -127,18 +125,14 @@ partial class IocSourceGenerator
         }
 
         var isOptional = param.HasDefaultValue || param.IsOptional;
-        var methodName = GetServiceResolutionMethod(param.ServiceKey, isOptional);
-        var svcCall = BuildServiceCall(methodName, paramTypeName, param.ServiceKey);
-
-        if(isOptional)
+        if(isOptional && param.GetFallbackValue(paramTypeName) is { } fallbackValue)
         {
-            writer.WriteLine(param.GetFallbackValue(paramTypeName) is { } fallbackValue
-                ? $"var {paramVar} = {BuildOptionalServiceCallWithFallback(paramTypeName, param.ServiceKey, fallbackValue)};"
-                : $"var {paramVar} = {svcCall} ?? default;");
+            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(paramTypeName, param.ServiceKey, fallbackValue)};");
             return paramVar;
         }
 
-        writer.WriteLine($"var {paramVar} = {svcCall};");
+        var methodName = GetServiceResolutionMethod(param.ServiceKey, isOptional);
+        writer.WriteLine($"var {paramVar} = {BuildServiceCall(methodName, paramTypeName, param.ServiceKey)}{(isOptional ? " ?? default" : "")};");
         return paramVar;
     }
 
