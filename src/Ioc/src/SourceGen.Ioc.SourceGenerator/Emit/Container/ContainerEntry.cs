@@ -11,7 +11,7 @@ partial class IocSourceGenerator
     private static string GetResolvedTypeName(ServiceRegistrationModel registration) =>
         registration.Decorators.Length > 0 ? registration.ServiceType.Name : registration.ImplementationType.Name;
 
-    internal closed record class ContainerEntry
+    private closed record class ContainerEntry
     {
         public virtual void WriteField(SourceWriter writer)
         {
@@ -942,7 +942,7 @@ partial class IocSourceGenerator
     /// each consumer gets its own <c>Lazy&lt;T&gt;</c> and therefore its own instance, like the Register output.
     /// </param>
     /// <param name="CollectionElements">The <c>Lazy&lt;T&gt;[]</c> elements: field names, or inline <c>Lazy&lt;T&gt;</c> creations.</param>
-    internal sealed record class LazyWrapperContainerEntry(
+    private sealed record class LazyWrapperContainerEntry(
         string InnerServiceTypeName,
         string InnerImplTypeName,
         string FieldName,
@@ -1023,7 +1023,7 @@ partial class IocSourceGenerator
         }
     }
 
-    internal sealed record class FuncWrapperContainerEntry(
+    private sealed record class FuncWrapperContainerEntry(
         string InnerServiceTypeName,
         string InnerImplTypeName,
         string FieldName,
@@ -1083,7 +1083,7 @@ partial class IocSourceGenerator
         }
     }
 
-    internal sealed record class KvpWrapperContainerEntry(
+    private sealed record class KvpWrapperContainerEntry(
         string KeyTypeName,
         string ValueTypeName,
         string KeyExpr,

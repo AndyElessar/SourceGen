@@ -110,8 +110,8 @@ All under `Models/` unless noted; all immutable with value equality.
 | `BasicRegistrationResult` | Cacheable Stage 3 intermediate |
 | `ServiceRegistrationModel` / `ServiceRegistrationWithTags` | Stage 4 registration record (+ tags) |
 | `ContainerModel` | `[IocContainer]` input |
-| `ContainerWithGroups` | Container + pre-grouped `ContainerRegistrationGroups` |
-| `ContainerRegistrationGroups` | Grouped `ContainerEntry` arrays + `LastWinsByServiceType` lookup |
+| `ContainerWithGroups` (`Grouping/`) | Container + pre-grouped `ContainerRegistrationGroups` |
+| `ContainerRegistrationGroups` (`Grouping/`) | Grouped `ContainerEntry` arrays + `LastWinsByServiceType` lookup |
 | `RegisterOutputModel` (`Emit/Register/`) | Top-level Register output model with per-tag `RegisterTagGroup` |
 | `MsBuildProperties` | `RootNamespace`, `CustomIocName`, `Features` |
 | `IocFeatures` | Feature-flag enum (`Register`, `Container`, `PropertyInject`, `FieldInject`, `MethodInject`, `AsyncMethodInject`) |

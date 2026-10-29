@@ -181,7 +181,7 @@ partial class IocSourceGenerator
         return string.Equals(registrationKeyValueType.Name, requestedKeyTypeName, StringComparison.Ordinal);
     }
 
-    private static ImmutableEquatableArray<IocSourceGenerator.KvpWrapperContainerEntry> CreateKvpWrapperContainerEntries(
+    private static ImmutableEquatableArray<KvpWrapperContainerEntry> CreateKvpWrapperContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
@@ -203,7 +203,7 @@ partial class IocSourceGenerator
         if(neededPairs.Count == 0)
             return [];
 
-        var wrapperEntries = new List<IocSourceGenerator.KvpWrapperContainerEntry>();
+        var wrapperEntries = new List<KvpWrapperContainerEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
         var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
 

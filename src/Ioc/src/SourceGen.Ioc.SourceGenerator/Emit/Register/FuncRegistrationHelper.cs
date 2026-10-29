@@ -390,7 +390,7 @@ partial class IocSourceGenerator
         }
     }
 
-    private static ImmutableEquatableArray<IocSourceGenerator.FuncWrapperContainerEntry> CreateFuncWrapperContainerEntries(
+    private static ImmutableEquatableArray<FuncWrapperContainerEntry> CreateFuncWrapperContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
@@ -458,7 +458,7 @@ partial class IocSourceGenerator
                 static g => g.Last().FieldName,
                 StringComparer.Ordinal);
 
-        var wrapperEntries = new List<IocSourceGenerator.FuncWrapperContainerEntry>(entries.Count);
+        var wrapperEntries = new List<FuncWrapperContainerEntry>(entries.Count);
 
         foreach(var entry in entries)
         {

@@ -464,14 +464,14 @@ partial class IocSourceGenerator
             collectionEntries);
     }
 
-    private static ImmutableEquatableDictionary<(string ServiceType, string? Key), IocSourceGenerator.ContainerEntry> CreateLastWinsByServiceType(
+    private static ImmutableEquatableDictionary<(string ServiceType, string? Key), ContainerEntry> CreateLastWinsByServiceType(
         Dictionary<(string ServiceType, string? Key), ServiceLookupEntry> lastWinsLookup,
-        ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> singletonEntries,
-        ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> scopedEntries,
-        ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> transientEntries)
+        ImmutableEquatableArray<ContainerEntry> singletonEntries,
+        ImmutableEquatableArray<ContainerEntry> scopedEntries,
+        ImmutableEquatableArray<ContainerEntry> transientEntries)
     {
-        var entryByResolverMethodName = new Dictionary<string, IocSourceGenerator.ContainerEntry>(StringComparer.Ordinal);
-        var entryByResolverAndServiceType = new Dictionary<(string ResolverMethodName, string ServiceType, string? Key), IocSourceGenerator.ContainerEntry>();
+        var entryByResolverMethodName = new Dictionary<string, ContainerEntry>(StringComparer.Ordinal);
+        var entryByResolverAndServiceType = new Dictionary<(string ResolverMethodName, string ServiceType, string? Key), ContainerEntry>();
 
         foreach(var entry in singletonEntries)
             AddEntriesByLookup(entryByResolverMethodName, entryByResolverAndServiceType, entry);
@@ -480,7 +480,7 @@ partial class IocSourceGenerator
         foreach(var entry in transientEntries)
             AddEntriesByLookup(entryByResolverMethodName, entryByResolverAndServiceType, entry);
 
-        var lastWinsByServiceType = new Dictionary<(string ServiceType, string? Key), IocSourceGenerator.ContainerEntry>(lastWinsLookup.Count);
+        var lastWinsByServiceType = new Dictionary<(string ServiceType, string? Key), ContainerEntry>(lastWinsLookup.Count);
 
         foreach(var kvp in lastWinsLookup)
         {
@@ -506,9 +506,9 @@ partial class IocSourceGenerator
     }
 
     private static void AddEntriesByLookup(
-        Dictionary<string, IocSourceGenerator.ContainerEntry> entryByResolverMethodName,
-        Dictionary<(string ResolverMethodName, string ServiceType, string? Key), IocSourceGenerator.ContainerEntry> entryByResolverAndServiceType,
-        IocSourceGenerator.ContainerEntry entry)
+        Dictionary<string, ContainerEntry> entryByResolverMethodName,
+        Dictionary<(string ResolverMethodName, string ServiceType, string? Key), ContainerEntry> entryByResolverAndServiceType,
+        ContainerEntry entry)
     {
         if(entry is not ServiceContainerEntry serviceEntry)
         {
@@ -684,14 +684,14 @@ partial class IocSourceGenerator
         );
     }
 
-    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateServiceContainerEntries(
+    private static ImmutableEquatableArray<ContainerEntry> CreateServiceContainerEntries(
         ImmutableEquatableArray<ServiceLookupEntry> registrations,
         ThreadSafeStrategy threadSafeStrategy,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         WrapperFieldLookup wrapperFields)
     {
-        var entries = new List<IocSourceGenerator.ContainerEntry>(registrations.Length);
+        var entries = new List<ContainerEntry>(registrations.Length);
 
         foreach(var cached in registrations)
         {
@@ -736,7 +736,7 @@ partial class IocSourceGenerator
         return entries.ToImmutableEquatableArray();
     }
 
-    private static IocSourceGenerator.ContainerEntry CreateServiceContainerEntryModel(
+    private static ContainerEntry CreateServiceContainerEntryModel(
         ServiceLookupEntry cached,
         ThreadSafeStrategy threadSafeStrategy,
         ImmutableEquatableArray<ResolvedConstructorParameter> constructorParameters,
@@ -813,11 +813,11 @@ partial class IocSourceGenerator
             decorators);
     }
 
-    private static ImmutableEquatableArray<IocSourceGenerator.ContainerEntry> CreateCollectionContainerEntries(
+    private static ImmutableEquatableArray<ContainerEntry> CreateCollectionContainerEntries(
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         ContainerNames names)
     {
-        var entries = new List<IocSourceGenerator.ContainerEntry>(collectionRegistrations.Count);
+        var entries = new List<ContainerEntry>(collectionRegistrations.Count);
 
         foreach(var kvp in collectionRegistrations)
         {
@@ -1095,7 +1095,7 @@ partial class IocSourceGenerator
     /// <param name="LazyCollectionServiceTypes">Inner service types with a generated <c>Lazy&lt;T&gt;[]</c> resolver.</param>
     /// <param name="FuncCollectionServiceTypes">Inner service types with a generated <c>Func&lt;T&gt;[]</c> resolver.</param>
     /// <param name="Names">The container's member names for type names.</param>
-    private sealed record WrapperFieldLookup(
+    private sealed record class WrapperFieldLookup(
         IReadOnlyDictionary<string, string> LazyFieldByResolver,
         IReadOnlyDictionary<string, string> FuncFieldByResolver,
         HashSet<string> LazyCollectionServiceTypes,

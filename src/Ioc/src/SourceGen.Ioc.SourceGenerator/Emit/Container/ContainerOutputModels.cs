@@ -208,27 +208,6 @@ partial class IocSourceGenerator
             var inputTypeList = string.Join(", ", inputParameters.Select(static p => p.Type.Name));
             return $"global::System.Func<{inputTypeList}, {returnTypeName}>";
         }
-
-        private static string? TryConsumeMatchingFuncInputArg(
-            string requestedTypeName,
-            string[] inputArgNames,
-            string[] inputArgTypeNames,
-            bool[] inputArgUsed)
-        {
-            for(var i = 0; i < inputArgTypeNames.Length; i++)
-            {
-                if(inputArgUsed[i])
-                    continue;
-
-                if(!string.Equals(inputArgTypeNames[i], requestedTypeName, StringComparison.Ordinal))
-                    continue;
-
-                inputArgUsed[i] = true;
-                return inputArgNames[i];
-            }
-
-            return null;
-        }
     }
 
     private sealed record class TaskFromResultDependency(ResolvedDependency Inner, string TypeName) : ResolvedDependency
