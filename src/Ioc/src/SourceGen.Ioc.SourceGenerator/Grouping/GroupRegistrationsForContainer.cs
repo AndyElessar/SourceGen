@@ -123,8 +123,8 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<string> requestedCollectionServiceTypes)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
-        var serviceLookup = new Dictionary<(string ServiceType, string? Key), List<ServiceLookupEntry>>();
-        var lastWinsLookup = new Dictionary<(string ServiceType, string? Key), ServiceLookupEntry>();
+        var serviceLookup = new Dictionary<ServiceTypeKey, List<ServiceLookupEntry>>();
+        var lastWinsLookup = new Dictionary<ServiceTypeKey, ServiceLookupEntry>();
 
         // Track all unique service types for IsService checks
         var allServiceTypes = new HashSet<string>();
@@ -198,7 +198,7 @@ partial class IocSourceGenerator
                 }
             }
 
-            var key = (effectiveRegistration.ServiceType.Name, effectiveRegistration.Key);
+            var key = new ServiceTypeKey(effectiveRegistration.ServiceType.Name, effectiveRegistration.Key);
             if(effectiveRegistration.Key is not null)
             {
                 hasKeyedServices = true;
@@ -215,7 +215,7 @@ partial class IocSourceGenerator
             // Also add implementation type as a service type (for self-registration)
             if(effectiveRegistration.ImplementationType.Name != effectiveRegistration.ServiceType.Name)
             {
-                var implKey = (effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key);
+                var implKey = new ServiceTypeKey(effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key);
                 if(!serviceLookup.TryGetValue(implKey, out var implList))
                 {
                     implList = [];
@@ -351,8 +351,8 @@ partial class IocSourceGenerator
             collectionEntries);
     }
 
-    private static ImmutableEquatableDictionary<(string ServiceType, string? Key), ContainerEntry> CreateLastWinsByServiceType(
-        Dictionary<(string ServiceType, string? Key), ServiceLookupEntry> lastWinsLookup,
+    private static ImmutableEquatableDictionary<ServiceTypeKey, ContainerEntry> CreateLastWinsByServiceType(
+        Dictionary<ServiceTypeKey, ServiceLookupEntry> lastWinsLookup,
         ImmutableEquatableArray<ContainerEntry> singletonEntries,
         ImmutableEquatableArray<ContainerEntry> scopedEntries,
         ImmutableEquatableArray<ContainerEntry> transientEntries)
@@ -367,7 +367,7 @@ partial class IocSourceGenerator
         foreach(var entry in transientEntries)
             AddEntriesByLookup(entryByResolverMethodName, entryByResolverAndServiceType, entry);
 
-        var lastWinsByServiceType = new Dictionary<(string ServiceType, string? Key), ContainerEntry>(lastWinsLookup.Count);
+        var lastWinsByServiceType = new Dictionary<ServiceTypeKey, ContainerEntry>(lastWinsLookup.Count);
 
         foreach(var kvp in lastWinsLookup)
         {

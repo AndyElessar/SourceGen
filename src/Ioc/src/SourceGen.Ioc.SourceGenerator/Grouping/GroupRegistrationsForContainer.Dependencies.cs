@@ -267,7 +267,7 @@ partial class IocSourceGenerator
                 useResolverMethods: true);
         }
 
-        if(serviceLookup.TryGetValue((type.Name, key), out var registrations))
+        if(serviceLookup.TryGetValue(new(type.Name, key), out var registrations))
         {
             var cached = registrations[^1];
             if(cached.IsAsyncInit)
@@ -300,7 +300,7 @@ partial class IocSourceGenerator
 
                 if(innerType is not WrapperTypeData && useResolverMethods)
                 {
-                    if(serviceLookup.TryGetValue((innerType.Name, key), out var innerRegistrations))
+                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations))
                     {
                         var inner = innerRegistrations[^1];
                         if(wrapperFields.LazyFieldByResolver.TryGetValue(inner.ResolverMethodName, out var fieldName))
@@ -337,7 +337,7 @@ partial class IocSourceGenerator
 
                 if(func.HasInputParameters)
                 {
-                    if(serviceLookup.TryGetValue((innerType.Name, key), out var innerRegistrations))
+                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations))
                     {
                         var targetRegistration = innerRegistrations[^1].Registration;
                         return new MultiParamFuncDependency(
@@ -370,7 +370,7 @@ partial class IocSourceGenerator
 
                 if(innerType is not WrapperTypeData && useResolverMethods)
                 {
-                    if(serviceLookup.TryGetValue((innerType.Name, key), out var innerRegistrations))
+                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations))
                     {
                         var resolverMethodName = innerRegistrations[^1].ResolverMethodName;
                         if(wrapperFields.FuncFieldByResolver.TryGetValue(resolverMethodName, out var fieldName))
@@ -421,7 +421,7 @@ partial class IocSourceGenerator
 
             case TaskTypeData task:
             {
-                if(serviceLookup.TryGetValue((task.InnerType.Name, key), out var innerRegistrations))
+                if(serviceLookup.TryGetValue(new(task.InnerType.Name, key), out var innerRegistrations))
                 {
                     var cached = innerRegistrations[^1];
                     if(cached.IsAsyncInit)

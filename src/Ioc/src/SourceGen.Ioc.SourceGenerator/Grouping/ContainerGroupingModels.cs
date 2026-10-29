@@ -3,6 +3,13 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
+    /// Identifies a registered service by its service type name and key.
+    /// </summary>
+    /// <param name="ServiceType">The fully-qualified service type name.</param>
+    /// <param name="Key">The service key expression, or <see langword="null"/> for a non-keyed service.</param>
+    private readonly record struct ServiceTypeKey(string ServiceType, string? Key);
+
+    /// <summary>
     /// Combined container and grouped registrations for pipeline caching.
     /// </summary>
     /// <param name="Container">The container model.</param>
@@ -28,7 +35,7 @@ partial class IocSourceGenerator
     /// <param name="KvpWrapperEntries">Wrapper entry model for <c>KeyValuePair&lt;TKey, TValue&gt;</c> registrations.</param>
     /// <param name="CollectionEntries">Parallel collection entry model for IEnumerable and related wrappers.</param>
     private sealed record class ContainerRegistrationGroups(
-        ImmutableEquatableDictionary<(string ServiceType, string? Key), ContainerEntry> LastWinsByServiceType,
+        ImmutableEquatableDictionary<ServiceTypeKey, ContainerEntry> LastWinsByServiceType,
         ImmutableEquatableSet<string> AllServiceTypes,
         bool HasOpenGenerics,
         bool HasKeyedServices,

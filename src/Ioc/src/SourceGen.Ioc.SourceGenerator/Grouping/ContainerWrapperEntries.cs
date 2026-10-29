@@ -6,7 +6,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
         ContainerNames names)
     {
         var neededTypes = new HashSet<string>(StringComparer.Ordinal);
@@ -169,7 +169,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
         ContainerNames names)
     {
         var neededTypes = new HashSet<string>(StringComparer.Ordinal);
@@ -261,7 +261,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ServiceLookupEntry> singletons,
         ImmutableEquatableArray<ServiceLookupEntry> scoped,
         ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
         ContainerNames names)
     {
         var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();

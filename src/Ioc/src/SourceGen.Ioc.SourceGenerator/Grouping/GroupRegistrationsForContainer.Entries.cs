@@ -357,9 +357,9 @@ partial class IocSourceGenerator
     /// Registrations by (service type, key), with the last registration of each keyed service indexed by service type,
     /// so KeyValuePair and Dictionary dependencies find their keyed registrations without scanning every service.
     /// </summary>
-    private sealed class ServiceLookup : Dictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>>
+    private sealed class ServiceLookup : Dictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>>
     {
-        public ServiceLookup(Dictionary<(string ServiceType, string? Key), List<ServiceLookupEntry>> registrations)
+        public ServiceLookup(Dictionary<ServiceTypeKey, List<ServiceLookupEntry>> registrations)
             : base(registrations.Count)
         {
             foreach(var kvp in registrations)

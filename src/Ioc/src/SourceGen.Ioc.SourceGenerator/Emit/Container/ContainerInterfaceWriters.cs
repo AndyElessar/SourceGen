@@ -427,7 +427,7 @@ partial class IocSourceGenerator
             foreach(var serviceType in groups.AllServiceTypes)
             {
                 // Async-init services are exposed as Task<ServiceType>
-                var exposedType = groups.LastWinsByServiceType.TryGetValue((serviceType, null), out var entry)
+                var exposedType = groups.LastWinsByServiceType.TryGetValue(new(serviceType, null), out var entry)
                     ? entry.GetExposedServiceType(serviceType)
                     : serviceType;
                 writer.WriteLine($"if(serviceType == typeof({exposedType})) return true;");
