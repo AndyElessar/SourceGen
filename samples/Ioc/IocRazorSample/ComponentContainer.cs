@@ -9,7 +9,7 @@ namespace IocRazorSample;
     //ImplementationTypes = [typeof(LoadData)],
     Tags = [ComponentTag])]
 [IocContainer]
-public partial class ComponentContainer : IComponentActivator
+public partial class ComponentContainer : IComponentActivator, IComponentPropertyActivator
 {
     public const string ComponentTag = "Component";
 }

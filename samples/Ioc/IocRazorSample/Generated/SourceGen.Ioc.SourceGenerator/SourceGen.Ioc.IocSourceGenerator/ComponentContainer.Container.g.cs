@@ -331,6 +331,71 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
 
     #endregion
 
+    #region IComponentPropertyActivator
+
+    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent>> _propertyActivatorCache = new();
+
+    global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> global::Microsoft.AspNetCore.Components.IComponentPropertyActivator.GetActivator(
+        [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)
+    {
+        if (!_propertyActivatorCache.TryGetValue(componentType, out var activator))
+        {
+            activator = _serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(componentType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))
+                ? static (_, _) => { }
+                : CreateComponentPropertyInjector(componentType);
+            _propertyActivatorCache.TryAdd(componentType, activator);
+        }
+        return activator;
+    }
+
+    private static global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> CreateComponentPropertyInjector(
+        [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)
+    {
+        const global::System.Reflection.BindingFlags flags = global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic;
+        global::System.Collections.Generic.List<(global::System.Reflection.PropertyInfo Property, object? Key)>? injectables = null;
+
+        for (var type = componentType; type is not null; type = type.BaseType)
+        {
+            foreach (var property in type.GetProperties(flags))
+            {
+                if (property.DeclaringType != type) continue;
+                var injectAttr = property.GetCustomAttributes(true)
+                    .FirstOrDefault(a => a.GetType().Name is "InjectAttribute" or "IocInjectAttribute");
+                if (injectAttr is null) continue;
+
+                var keyProp = injectAttr.GetType().GetProperty("Key");
+                var key = keyProp?.GetValue(injectAttr);
+                injectables ??= new();
+                injectables.Add((property, key));
+            }
+        }
+
+        if (injectables is null) return static (_, _) => { };
+
+        return (serviceProvider, component) =>
+        {
+            foreach (var (property, serviceKey) in injectables)
+            {
+                object? value;
+                if (serviceKey is not null)
+                {
+                    if (serviceProvider is not global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyedProvider)
+                    {
+                        throw new global::System.InvalidOperationException($"Cannot provide a value for property '{property.Name}' on type '{componentType.FullName}'. The service provider does not implement 'IKeyedServiceProvider'.");
+                    }
+                    value = keyedProvider.GetRequiredKeyedService(property.PropertyType, serviceKey);
+                }
+                else
+                {
+                    value = serviceProvider.GetService(property.PropertyType) ?? throw new global::System.InvalidOperationException($"Cannot provide a value for property '{property.Name}' on type '{componentType.FullName}'. There is no registered service of type '{property.PropertyType}'.");
+                }
+                property.SetValue(component, value);
+            }
+        };
+    }
+
+    #endregion
+
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
     internal static class __HotReloadHandler
@@ -338,6 +403,7 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
         public static void ClearCache(global::System.Type[]? _)
         {
             _componentFactoryCache.Clear();
+            _propertyActivatorCache.Clear();
         }
     }
 }

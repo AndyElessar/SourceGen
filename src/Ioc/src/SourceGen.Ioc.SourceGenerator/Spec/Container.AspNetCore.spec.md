@@ -139,6 +139,8 @@ partial class AppContainer : IComponentActivator, /* ... other interfaces */
 // NOTE: Must be in a .cs file (code-behind), not in a .razor file.
 using Microsoft.AspNetCore.Components;
 
+namespace MyApp;
+
 [IocContainer]
 public partial class AppContainer : IComponentActivator, IComponentPropertyActivator;
 #endregion
@@ -175,6 +177,7 @@ partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
+    [GeneratedCode("SourceGen.Ioc", "{Version}")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(Type[]? _)
