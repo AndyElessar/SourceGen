@@ -227,23 +227,6 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
-    /// Comparer for (service type, key) tuples that uses symbol equality for the type component.
-    /// </summary>
-    public static IEqualityComparer<(INamedTypeSymbol ServiceType, string? Key)> ServiceTypeAndKeyComparer { get; }
-        = new ServiceTypeAndKeySymbolComparer();
-
-    private sealed class ServiceTypeAndKeySymbolComparer : IEqualityComparer<(INamedTypeSymbol ServiceType, string? Key)>
-    {
-        public bool Equals((INamedTypeSymbol ServiceType, string? Key) x, (INamedTypeSymbol ServiceType, string? Key) y)
-            => SymbolEqualityComparer.Default.Equals(x.ServiceType, y.ServiceType)
-                && StringComparer.Ordinal.Equals(x.Key, y.Key);
-
-        public int GetHashCode((INamedTypeSymbol ServiceType, string? Key) obj)
-            => unchecked((SymbolEqualityComparer.Default.GetHashCode(obj.ServiceType) * 397)
-                ^ StringComparer.Ordinal.GetHashCode(obj.Key ?? string.Empty));
-    }
-
-    /// <summary>
     /// Enumerates the service types exposed by a registration attribute for the specified implementation type.
     /// Includes self-registration plus any explicit aliases or register-all flags.
     /// </summary>

@@ -146,7 +146,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         var registeredServiceTypes = new ConcurrentDictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
 
         // Maps (service type, key) -> implementation type for async partial accessor validation.
-        var serviceImplementationTypes = new ConcurrentDictionary<(INamedTypeSymbol ServiceType, string? Key), INamedTypeSymbol>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+        var serviceImplementationTypes = new ConcurrentDictionary<ServiceSymbolKey, INamedTypeSymbol>();
 
         // Tracks every registration entry so async-init checks can evaluate all implementations for a (service type, key) pair.
         var registrations = new ConcurrentBag<ServiceRegistration>();
@@ -623,7 +623,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         {
             analyzerContext.RegisteredServiceTypes.TryAdd(serviceType, true);
             analyzerContext.Registrations.Add(new ServiceRegistration(serviceType, serviceKey, implementationType));
-            analyzerContext.ServiceImplementationTypes[(serviceType, serviceKey)] = implementationType;
+            analyzerContext.ServiceImplementationTypes[new(serviceType, serviceKey)] = implementationType;
         }
     }
 
@@ -833,7 +833,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         string? serviceKey,
         ContainerAnalyzerContext analyzerContext)
     {
-        if(analyzerContext.ServiceImplementationTypes.ContainsKey((serviceType, serviceKey)))
+        if(analyzerContext.ServiceImplementationTypes.ContainsKey(new(serviceType, serviceKey)))
             return true;
 
         if(AnalyzerHelpers.IsAlwaysResolvable(serviceType))
@@ -977,7 +977,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     private sealed class ContainerAnalyzerContext(
         IocAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, bool> registeredServiceTypes,
-        ConcurrentDictionary<(INamedTypeSymbol ServiceType, string? Key), INamedTypeSymbol> serviceImplementationTypes,
+        ConcurrentDictionary<ServiceSymbolKey, INamedTypeSymbol> serviceImplementationTypes,
         ConcurrentBag<ServiceRegistration> registrations,
         ConcurrentBag<INamedTypeSymbol> containersWithNoFallback,
         ConcurrentBag<INamedTypeSymbol> allContainers,
@@ -986,7 +986,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     {
         public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
         public ConcurrentDictionary<INamedTypeSymbol, bool> RegisteredServiceTypes { get; } = registeredServiceTypes;
-        public ConcurrentDictionary<(INamedTypeSymbol ServiceType, string? Key), INamedTypeSymbol> ServiceImplementationTypes { get; } = serviceImplementationTypes;
+        public ConcurrentDictionary<ServiceSymbolKey, INamedTypeSymbol> ServiceImplementationTypes { get; } = serviceImplementationTypes;
         public ConcurrentBag<ServiceRegistration> Registrations { get; } = registrations;
         public ConcurrentBag<INamedTypeSymbol> ContainersWithNoFallback { get; } = containersWithNoFallback;
         public ConcurrentBag<INamedTypeSymbol> AllContainers { get; } = allContainers;

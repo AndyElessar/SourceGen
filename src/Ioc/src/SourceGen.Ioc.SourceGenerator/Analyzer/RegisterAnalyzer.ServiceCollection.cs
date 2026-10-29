@@ -290,14 +290,14 @@ public sealed partial class RegisterAnalyzer
                 && analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
             {
                 foreach(var st in registrationServiceTypes)
-                    existingInfo.AllRegistrations.Add((st, serviceKey));
+                    existingInfo.AllRegistrations.Add(new(st, serviceKey));
             }
             return;
         }
 
         if(registrationServiceTypes is not null)
             foreach(var st in registrationServiceTypes)
-                serviceInfo.AllRegistrations.Add((st, serviceKey));
+                serviceInfo.AllRegistrations.Add(new(st, serviceKey));
 
         // Only build type index for non-keyed services.
         // Keyed services are resolved by key + type, not by type alone,
@@ -555,7 +555,7 @@ public sealed partial class RegisterAnalyzer
         /// where <see cref="RegisteredServices"/> only stores the first entry per implementation type.
         /// Used by SGIOC030 analysis to correctly identify all async-init-only service type/key pairs.
         /// </summary>
-        public ConcurrentBag<(INamedTypeSymbol ServiceType, string? Key)> AllRegistrations { get; } = [];
+        public ConcurrentBag<ServiceSymbolKey> AllRegistrations { get; } = [];
 
         /// <summary>
         /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
