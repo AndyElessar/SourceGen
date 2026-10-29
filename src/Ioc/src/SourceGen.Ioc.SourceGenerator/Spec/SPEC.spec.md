@@ -74,7 +74,7 @@ src/SourceGen.Ioc.SourceGenerator/
 ├── Emit/
 │   ├── Shared/    (CodeGenHelpers, SourceWriterExtensions, FeatureFilterHelper)
 │   ├── Register/  (GenerateRegisterOutput + RegisterEntry hierarchy + Lazy/Func/Kvp wrapper registrations)
-│   └── Container/ (GenerateContainerOutput + ContainerEntry hierarchy + ResolvedDependencies + injection/interface/async helpers)
+│   └── Container/ (GenerateContainerOutput + ContainerEntry hierarchy + ResolvedDependencies + interface/async helpers)
 ├── Models/       — pipeline-shared immutable data models + Constants
 ├── Analyzer/     — diagnostic analyzers (separate concern; see Analyzer/Spec/SPEC.spec.md)
 └── Spec/         — this file + per-feature specs
