@@ -13,7 +13,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Base model for a single registration entry that can write itself.
     /// </summary>
-    private abstract record class RegisterEntry(ServiceRegistrationModel Registration)
+    private closed record class RegisterEntry(ServiceRegistrationModel Registration)
     {
         public abstract void WriteRegistration(SourceWriter writer, RegisterWriteContext context);
     }
