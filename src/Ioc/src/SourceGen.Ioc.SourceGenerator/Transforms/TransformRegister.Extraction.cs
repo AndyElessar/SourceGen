@@ -150,12 +150,11 @@ partial class IocSourceGenerator
         // Try to get the default value from property initializer
         var (hasDefaultValue, defaultValue) = GetPropertyDefaultValue(property);
 
-        return new InjectionMemberData(
-            InjectionMemberType.Property,
+        return new PropertyOrFieldInjectionData(
             property.Name,
-            propertyType,
-            null,
             key,
+            propertyType,
+            IsField: false,
             isNullable,
             hasDefaultValue,
             defaultValue);
@@ -172,12 +171,11 @@ partial class IocSourceGenerator
         // Try to get the default value from field initializer
         var (hasDefaultValue, defaultValue) = GetFieldDefaultValue(field);
 
-        return new InjectionMemberData(
-            InjectionMemberType.Field,
+        return new PropertyOrFieldInjectionData(
             field.Name,
-            fieldType,
-            null,
             key,
+            fieldType,
+            IsField: true,
             isNullable,
             hasDefaultValue,
             defaultValue);
@@ -282,16 +280,11 @@ partial class IocSourceGenerator
             .ToImmutableEquatableArray();
 
         // Detect async injection methods: non-generic Task return type → AsyncMethod
-        var memberType = RoslynExtensions.IsNonGenericTaskReturnType(method)
-            ? InjectionMemberType.AsyncMethod
-            : InjectionMemberType.Method;
-
-        return new InjectionMemberData(
-            memberType,
+        return new MethodInjectionData(
             method.Name,
-            null,
+            key,
             parameters,
-            key);
+            IsAsync: RoslynExtensions.IsNonGenericTaskReturnType(method));
     }
 
     /// <summary>

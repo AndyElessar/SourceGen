@@ -104,13 +104,16 @@ partial class IocSourceGenerator
 
         foreach(var member in members)
         {
-            if(member.Type is not null)
-                ScanTypeForLazyNeeds(member.Type, neededTypes);
-
-            if(member.Parameters is not null)
+            switch(member)
             {
-                foreach(var param in member.Parameters)
-                    ScanTypeForLazyNeeds(param.Type, neededTypes);
+                case PropertyOrFieldInjectionData propertyOrField:
+                    ScanTypeForLazyNeeds(propertyOrField.Type, neededTypes);
+                    break;
+
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                        ScanTypeForLazyNeeds(param.Type, neededTypes);
+                    break;
             }
         }
     }

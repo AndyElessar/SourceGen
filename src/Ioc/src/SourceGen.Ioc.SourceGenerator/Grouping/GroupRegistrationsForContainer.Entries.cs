@@ -307,10 +307,16 @@ partial class IocSourceGenerator
 
             foreach(var member in members)
             {
-                if(member.Type is not null)
-                    ScanType(member.Type);
+                switch(member)
+                {
+                    case PropertyOrFieldInjectionData propertyOrField:
+                        ScanType(propertyOrField.Type);
+                        break;
 
-                ScanParameters(member.Parameters);
+                    case MethodInjectionData method:
+                        ScanParameters(method.Parameters);
+                        break;
+                }
             }
         }
 

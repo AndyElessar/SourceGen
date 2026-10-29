@@ -51,29 +51,29 @@ partial class IocSourceGenerator
             ResolvedDependency? dependency = null;
             ImmutableEquatableArray<ResolvedDependency> parameterDependencies = [];
 
-            switch(member.MemberType)
+            switch(member)
             {
-                case InjectionMemberType.Property or InjectionMemberType.Field when member.Type?.Name is IServiceProviderTypeName or IServiceProviderGlobalTypeName:
+                case PropertyOrFieldInjectionData { Type.Name: IServiceProviderTypeName or IServiceProviderGlobalTypeName }:
                     dependency = new ServiceProviderSelfDependency();
                     break;
 
-                case InjectionMemberType.Property or InjectionMemberType.Field when member.Type is not null:
+                case PropertyOrFieldInjectionData propertyOrField:
                     // A member with a non-null initializer keeps it when the service is not registered, like the Register output
-                    var hasNonNullDefault = member.HasDefaultValue && !member.DefaultValueIsNull;
+                    var hasNonNullDefault = propertyOrField.HasDefaultValue && !propertyOrField.DefaultValueIsNull;
                     dependency = ResolveServiceDependencyForContainerEntryModel(
-                        member.Type,
-                        member.Key,
-                        member.IsNullable || hasNonNullDefault,
+                        propertyOrField.Type,
+                        propertyOrField.Key,
+                        propertyOrField.IsNullable || hasNonNullDefault,
                         serviceLookup,
                         collectionRegistrations,
                         wrapperFields,
-                        hasNonNullDefault ? member.DefaultValue : null);
+                        hasNonNullDefault ? propertyOrField.DefaultValue : null);
                     break;
 
-                case InjectionMemberType.Method or InjectionMemberType.AsyncMethod:
+                case MethodInjectionData method:
                 {
-                    var methodParameters = member.Parameters;
-                    if(methodParameters is { Length: > 0 })
+                    var methodParameters = method.Parameters;
+                    if(methodParameters.Length > 0)
                     {
                         var resolvedParameters = new List<ResolvedDependency>(methodParameters.Length);
 

@@ -237,27 +237,28 @@ partial class IocSourceGenerator
                     {
                         foreach(var member in decorator.InjectionMembers)
                         {
-                            // For properties and fields, check the member type
-                            if(member.Type is not null)
+                            switch(member)
                             {
-                                CollectNewDependencyFromType(
-                                    member.Type,
-                                    pendingDependencies,
-                                    processedDependencies,
-                                    generatedClosedGenerics);
-                            }
-
-                            // For methods, check each parameter type
-                            if(member.Parameters is not null)
-                            {
-                                foreach(var param in member.Parameters)
-                                {
+                                // For properties and fields, check the member type
+                                case PropertyOrFieldInjectionData propertyOrField:
                                     CollectNewDependencyFromType(
-                                        param.Type,
+                                        propertyOrField.Type,
                                         pendingDependencies,
                                         processedDependencies,
                                         generatedClosedGenerics);
-                                }
+                                    break;
+
+                                // For methods, check each parameter type
+                                case MethodInjectionData method:
+                                    foreach(var param in method.Parameters)
+                                    {
+                                        CollectNewDependencyFromType(
+                                            param.Type,
+                                            pendingDependencies,
+                                            processedDependencies,
+                                            generatedClosedGenerics);
+                                    }
+                                    break;
                             }
                         }
                     }

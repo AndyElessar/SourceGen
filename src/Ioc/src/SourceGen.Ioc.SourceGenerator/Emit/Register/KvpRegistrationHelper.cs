@@ -113,13 +113,16 @@ partial class IocSourceGenerator
 
         foreach(var member in members)
         {
-            if(member.Type is not null)
-                ScanTypeForKvpNeeds(member.Type, neededPairs);
-
-            if(member.Parameters is not null)
+            switch(member)
             {
-                foreach(var param in member.Parameters)
-                    ScanTypeForKvpNeeds(param.Type, neededPairs);
+                case PropertyOrFieldInjectionData propertyOrField:
+                    ScanTypeForKvpNeeds(propertyOrField.Type, neededPairs);
+                    break;
+
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                        ScanTypeForKvpNeeds(param.Type, neededPairs);
+                    break;
             }
         }
     }

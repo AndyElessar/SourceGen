@@ -110,14 +110,10 @@ partial class IocSourceGenerator
             var propertyIndex = 0;
             foreach(var injectionMember in InjectionMembers)
             {
-                var member = injectionMember.Member;
-                if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                if(injectionMember.Member is not PropertyOrFieldInjectionData member)
                     continue;
 
                 var memberType = member.Type;
-                if(memberType is null)
-                    continue;
-
                 var matchedArg = TryConsumeMatchingFuncInputArg(memberType.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                 if(matchedArg is not null)
                 {
@@ -146,11 +142,10 @@ partial class IocSourceGenerator
             var methodIndex = 0;
             foreach(var injectionMember in InjectionMembers)
             {
-                var member = injectionMember.Member;
-                if(member.MemberType != InjectionMemberType.Method)
+                if(injectionMember.Member is not MethodInjectionData { IsAsync: false } member)
                     continue;
 
-                var methodParams = member.Parameters ?? [];
+                var methodParams = member.Parameters;
                 var methodEntries = new List<(string Name, string? Value)>(methodParams.Length);
                 foreach(var param in methodParams)
                 {

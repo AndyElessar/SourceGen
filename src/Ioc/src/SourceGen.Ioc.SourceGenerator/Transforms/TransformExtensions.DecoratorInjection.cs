@@ -45,12 +45,11 @@ internal static partial class TransformExtensions
             // Try to get the default value from property initializer
             var (hasDefaultValue, defaultValue) = GetDecoratorPropertyDefaultValue(property);
 
-            return new InjectionMemberData(
-                InjectionMemberType.Property,
+            return new PropertyOrFieldInjectionData(
                 property.Name,
-                propertyType,
-                null,
                 key,
+                propertyType,
+                IsField: false,
                 isNullable,
                 hasDefaultValue,
                 defaultValue);
@@ -64,12 +63,11 @@ internal static partial class TransformExtensions
             // Try to get the default value from field initializer
             var (hasDefaultValue, defaultValue) = GetDecoratorFieldDefaultValue(field);
 
-            return new InjectionMemberData(
-                InjectionMemberType.Field,
+            return new PropertyOrFieldInjectionData(
                 field.Name,
-                fieldType,
-                null,
                 key,
+                fieldType,
+                IsField: true,
                 isNullable,
                 hasDefaultValue,
                 defaultValue);
@@ -158,12 +156,12 @@ internal static partial class TransformExtensions
                 })
                 .ToImmutableEquatableArray();
 
-            return new InjectionMemberData(
-                InjectionMemberType.Method,
+            // Decorators do not support async injection methods
+            return new MethodInjectionData(
                 method.Name,
-                null,
+                key,
                 parameters,
-                key);
+                IsAsync: false);
         }
     }
 }

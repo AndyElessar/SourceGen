@@ -127,13 +127,16 @@ partial class IocSourceGenerator
 
         foreach(var member in members)
         {
-            if(member.Type is not null)
-                ScanTypeForContainerFuncNeeds(member.Type, neededTypes);
-
-            if(member.Parameters is not null)
+            switch(member)
             {
-                foreach(var param in member.Parameters)
-                    ScanTypeForContainerFuncNeeds(param.Type, neededTypes);
+                case PropertyOrFieldInjectionData propertyOrField:
+                    ScanTypeForContainerFuncNeeds(propertyOrField.Type, neededTypes);
+                    break;
+
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                        ScanTypeForContainerFuncNeeds(param.Type, neededTypes);
+                    break;
             }
         }
     }

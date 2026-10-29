@@ -307,10 +307,10 @@ partial class IocSourceGenerator
 
             foreach(var member in propertyMembers)
             {
-                if(member.Dependency is null)
+                if(member is not { Member: PropertyOrFieldInjectionData propertyOrField, Dependency: { } dependency })
                     throw new InvalidOperationException($"Missing resolved dependency for injection member '{member.Member.Name}'.");
 
-                writer.WriteLine($"{member.Member.Name} = {member.Dependency.FormatExpression(member.Member.IsNullable)},");
+                writer.WriteLine($"{propertyOrField.Name} = {dependency.FormatExpression(propertyOrField.IsNullable)},");
             }
 
             writer.Indentation--;
@@ -335,11 +335,11 @@ partial class IocSourceGenerator
             var hasPropertyAssignments = false;
             foreach(var member in injectionMembers)
             {
-                if(member.Member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                if(member.Member is not PropertyOrFieldInjectionData propertyOrField)
                     continue;
 
-                if(member.Dependency is null)
-                    throw new InvalidOperationException($"Missing resolved dependency for decorator member '{member.Member.Name}'.");
+                if(member.Dependency is not { } dependency)
+                    throw new InvalidOperationException($"Missing resolved dependency for decorator member '{propertyOrField.Name}'.");
 
                 if(!hasPropertyAssignments)
                 {
@@ -349,7 +349,7 @@ partial class IocSourceGenerator
                     writer.Indentation++;
                 }
 
-                writer.WriteLine($"{member.Member.Name} = {member.Dependency.FormatExpression(member.Member.IsNullable)},");
+                writer.WriteLine($"{propertyOrField.Name} = {dependency.FormatExpression(propertyOrField.IsNullable)},");
             }
 
             if(hasPropertyAssignments)
@@ -373,8 +373,7 @@ partial class IocSourceGenerator
 
         private static string BuildMethodArguments(ResolvedInjectionMember member, string? registrationKey)
         {
-            var parameters = member.Member.Parameters;
-            if(parameters is null or { Length: 0 })
+            if(member.Member is not MethodInjectionData { Parameters: { Length: > 0 } parameters })
                 return "";
 
             var args = new string[parameters.Length];

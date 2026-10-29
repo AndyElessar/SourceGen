@@ -68,14 +68,14 @@ partial class IocSourceGenerator
     {
         List<string> preProps = [];
         int pfIdxCounter = 0;
-        foreach(var m in injectionMembers)
+        foreach(var member in injectionMembers)
         {
-            if(m.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+            if(member is not PropertyOrFieldInjectionData m)
                 continue;
 
             var varN = $"{instanceVarName}_p{pfIdxCounter}";
             var mt = m.Type;
-            var mtName = mt is null ? "object" : (memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name);
+            var mtName = memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name;
             bool hasNonNullDefault = m.HasDefaultValue && !m.DefaultValueIsNull;
             ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue, asyncInitServiceTypeNames);
             preProps.Add($"{m.Name} = {varN}");
@@ -132,12 +132,12 @@ partial class IocSourceGenerator
         ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
     {
         var resolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
-        foreach(var method in injectionMembers)
+        foreach(var member in injectionMembers)
         {
-            if(method.MemberType != targetType)
+            if(member is not MethodInjectionData method || method.MemberType != targetType)
                 continue;
 
-            var mParams = method.Parameters ?? [];
+            var mParams = method.Parameters;
             var mVars = new string?[mParams.Length];
             var mNames = new string[mParams.Length];
             int mi = 0;

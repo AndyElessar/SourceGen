@@ -128,13 +128,16 @@ partial class IocSourceGenerator
 
         foreach(var member in members)
         {
-            if(member.Type is not null)
-                ScanTypeForFuncNeeds(member.Type, neededFuncTypes);
-
-            if(member.Parameters is not null)
+            switch(member)
             {
-                foreach(var param in member.Parameters)
-                    ScanTypeForFuncNeeds(param.Type, neededFuncTypes);
+                case PropertyOrFieldInjectionData propertyOrField:
+                    ScanTypeForFuncNeeds(propertyOrField.Type, neededFuncTypes);
+                    break;
+
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                        ScanTypeForFuncNeeds(param.Type, neededFuncTypes);
+                    break;
             }
         }
     }
@@ -222,15 +225,12 @@ partial class IocSourceGenerator
 
         var propertyInits = new List<string>();
         var propertyFieldIndex = 0;
-        foreach(var member in entry.Registration.InjectionMembers)
+        foreach(var injectionMember in entry.Registration.InjectionMembers)
         {
-            if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+            if(injectionMember is not PropertyOrFieldInjectionData member)
                 continue;
 
             var memberType = member.Type;
-            if(memberType is null)
-                continue;
-
             var matchedArg = TryConsumeMatchingFuncInputArg(memberType.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
             if(matchedArg is not null)
             {
@@ -251,12 +251,12 @@ partial class IocSourceGenerator
         writer.WriteLine($"var s0 = {constructorInvocation};");
 
         var methodParamIndex = 0;
-        foreach(var method in entry.Registration.InjectionMembers)
+        foreach(var member in entry.Registration.InjectionMembers)
         {
-            if(method.MemberType != InjectionMemberType.Method)
+            if(member is not MethodInjectionData { IsAsync: false } method)
                 continue;
 
-            var methodParams = method.Parameters ?? [];
+            var methodParams = method.Parameters;
             var methodEntries = new List<(string Name, string? Value)>(methodParams.Length);
             foreach(var param in methodParams)
             {

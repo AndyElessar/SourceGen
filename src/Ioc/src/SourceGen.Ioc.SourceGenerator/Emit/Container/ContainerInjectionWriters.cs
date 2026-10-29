@@ -5,23 +5,25 @@ partial class IocSourceGenerator
     /// <summary>
     /// Categorizes injection members into properties/fields and methods.
     /// </summary>
-    private static (List<InjectionMemberData>? Properties, List<InjectionMemberData>? Methods) CategorizeInjectionMembers(
+    private static (List<PropertyOrFieldInjectionData>? Properties, List<MethodInjectionData>? Methods) CategorizeInjectionMembers(
         ImmutableEquatableArray<InjectionMemberData> injectionMembers)
     {
-        List<InjectionMemberData>? properties = null;
-        List<InjectionMemberData>? methods = null;
+        List<PropertyOrFieldInjectionData>? properties = null;
+        List<MethodInjectionData>? methods = null;
 
         foreach(var member in injectionMembers)
         {
-            if(member.MemberType is InjectionMemberType.Property or InjectionMemberType.Field)
+            switch(member)
             {
-                properties ??= [];
-                properties.Add(member);
-            }
-            else if(member.MemberType == InjectionMemberType.Method)
-            {
-                methods ??= [];
-                methods.Add(member);
+                case PropertyOrFieldInjectionData propertyOrField:
+                    properties ??= [];
+                    properties.Add(propertyOrField);
+                    break;
+
+                case MethodInjectionData { IsAsync: false } method:
+                    methods ??= [];
+                    methods.Add(method);
+                    break;
             }
         }
 

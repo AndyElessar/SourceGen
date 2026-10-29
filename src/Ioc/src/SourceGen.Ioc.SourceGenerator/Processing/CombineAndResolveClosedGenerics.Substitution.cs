@@ -409,28 +409,30 @@ partial class IocSourceGenerator
         InjectionMemberData member,
         Dictionary<string, string> typeArgMap)
     {
-        // For properties and fields, substitute the member type
-        TypeData? newType = null;
-        if(member.Type is not null)
+        switch(member)
         {
-            var substitutedType = SubstituteTypeData(member.Type, typeArgMap);
-            newType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
-        }
-
-        // For methods, substitute each parameter type
-        ImmutableEquatableArray<ParameterData>? newParams = null;
-        if(member.Parameters is not null && member.Parameters.Length > 0)
-        {
-            var paramList = new List<ParameterData>(member.Parameters.Length);
-            foreach(var param in member.Parameters)
+            // For properties and fields, substitute the member type
+            case PropertyOrFieldInjectionData propertyOrField:
             {
-                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
-                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
-                paramList.Add(param with { Type = newParamType });
+                var substitutedType = SubstituteTypeData(propertyOrField.Type, typeArgMap);
+                return propertyOrField with { Type = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false) };
             }
-            newParams = paramList.ToImmutableEquatableArray();
-        }
 
-        return member with { Type = newType, Parameters = newParams };
+            // For methods, substitute each parameter type
+            case MethodInjectionData { Parameters.Length: > 0 } method:
+            {
+                var paramList = new List<ParameterData>(method.Parameters.Length);
+                foreach(var param in method.Parameters)
+                {
+                    var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
+                    var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
+                    paramList.Add(param with { Type = newParamType });
+                }
+                return method with { Parameters = paramList.ToImmutableEquatableArray() };
+            }
+
+            default:
+                return member;
+        }
     }
 }
