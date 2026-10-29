@@ -1,5 +1,3 @@
-using static SourceGen.Ioc.Constants;
-
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
