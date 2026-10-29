@@ -147,8 +147,9 @@ partial class IocSourceGenerator
 
                 var methodParams = member.Parameters;
                 var methodEntries = new List<(string Name, string? Value)>(methodParams.Length);
-                foreach(var param in methodParams)
+                for(var i = 0; i < methodParams.Length; i++)
                 {
+                    var param = methodParams[i];
                     var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                     if(matchedArg is not null)
                     {
@@ -156,13 +157,13 @@ partial class IocSourceGenerator
                         continue;
                     }
 
-                    if(injectionMember.Dependency is null)
+                    if(i >= injectionMember.ParameterDependencies.Length)
                     {
                         throw new InvalidOperationException($"Missing resolved dependency for method parameter '{param.Name}' in member '{member.Name}'.");
                     }
 
                     var paramVar = $"s0_m{methodIndex}";
-                    var expr = injectionMember.Dependency.FormatExpression(param.IsOptional);
+                    var expr = injectionMember.ParameterDependencies[i].FormatExpression(param.IsOptional);
                     statements.Add($"var {paramVar} = {expr};");
                     methodEntries.Add((param.Name, paramVar));
                     methodIndex++;

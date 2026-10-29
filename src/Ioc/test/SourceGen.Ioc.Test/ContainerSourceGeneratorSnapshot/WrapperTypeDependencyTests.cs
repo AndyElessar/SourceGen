@@ -245,6 +245,55 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task FuncDependency_WithMultiParamFunc_AndMultiParameterInjectionMethod_ResolvesEachParameter()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+            public interface ILogger { }
+            public interface IClock { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ILogger)])]
+            public class Logger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IClock)])]
+            public class Clock : IClock { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IService)])]
+            public class MyService(string name) : IService
+            {
+                public string Name { get; } = name;
+
+                [IocInject]
+                public void Initialize(ILogger logger, IClock clock) { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(Func<string, IService> serviceFactory)
+            {
+                public Func<string, IService> ServiceFactory { get; } = serviceFactory;
+            }
+
+            [IocDiscover<Consumer>]
+            [IocDiscover<IService>]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task FuncDependency_WithMultipleInputParameters_UsesFirstUnusedTypeMatches()
     {
         const string source = """
