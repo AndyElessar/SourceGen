@@ -190,7 +190,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:0b37eb6b2894bb3a7ffc8878f68549445e28922a158b6336b1b9310d836c9fd2
+  content_hash: sha256:8138fea20ab4704897cd2371619e9c62b62c39a5526f72614e49fbd9dae14716
 - kind: project-relative
   target: claude
   value: .claude/rules/csharp-tunit.md
@@ -379,7 +379,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:181d206f1893337f2ed9b6a8698d4eee77174f123720a402122e152fd3d9c949
+  content_hash: sha256:e98a1b0f8d8ee0d55f14e7bc27e05a01ddef76f51e542b667aa336d9401828e9
 - kind: project-relative
   target: copilot
   value: .github/instructions/csharp-tunit.instructions.md
@@ -398,7 +398,6 @@ deployments:
   - .
   active_owner: .
   content_hash: sha256:836a0c44076d50f2adaed3cc20e89f2c3101a94cb497574ceaa63e58400b0191
-mcp_target_servers: {}
 local_deployed_files:
 - .agents/skills/sourcegen-ci-workflows
 - .agents/skills/sourcegen-ci-workflows/SKILL.md
@@ -449,7 +448,7 @@ local_deployed_file_hashes:
   .agents/skills/sourcegen-release-commands/scripts/release.ps1: sha256:e3da02105e660fe07e0ad61f7f9cfdd74e8f8716d0d125c16a36a225b76eebff
   .agents/skills/sourcegen-spec-writing/SKILL.md: sha256:1e98016a752bcd15afc66467a1a551934a325dba00cd641637e2d2e9903ab4de
   .agents/skills/sourcegen-spec-writing/references/rfc2119.md: sha256:1dca065f52260ad5dab6187cdc37b062aba412cefee09d0c7fda75fedca67046
-  .claude/rules/csharp-source-generator.md: sha256:0b37eb6b2894bb3a7ffc8878f68549445e28922a158b6336b1b9310d836c9fd2
+  .claude/rules/csharp-source-generator.md: sha256:8138fea20ab4704897cd2371619e9c62b62c39a5526f72614e49fbd9dae14716
   .claude/rules/csharp-tunit.md: sha256:856cc30fe3516fbd453867d4bf50003212bb63437bc67d9433f1849da79cee26
   .claude/rules/csharp.md: sha256:f07c8f93ed44565f2969a18692647cf25e0f9c890c2c1d4e2bc50bac993daf43
   .claude/skills/sourcegen-ci-workflows/SKILL.md: sha256:7622edad637a39a5b3667a1dc94c119ee6e4050daa147b57b7aa4e890133e01d
@@ -462,6 +461,6 @@ local_deployed_file_hashes:
   .claude/skills/sourcegen-release-commands/scripts/release.ps1: sha256:e3da02105e660fe07e0ad61f7f9cfdd74e8f8716d0d125c16a36a225b76eebff
   .claude/skills/sourcegen-spec-writing/SKILL.md: sha256:1e98016a752bcd15afc66467a1a551934a325dba00cd641637e2d2e9903ab4de
   .claude/skills/sourcegen-spec-writing/references/rfc2119.md: sha256:1dca065f52260ad5dab6187cdc37b062aba412cefee09d0c7fda75fedca67046
-  .github/instructions/csharp-source-generator.instructions.md: sha256:181d206f1893337f2ed9b6a8698d4eee77174f123720a402122e152fd3d9c949
+  .github/instructions/csharp-source-generator.instructions.md: sha256:e98a1b0f8d8ee0d55f14e7bc27e05a01ddef76f51e542b667aa336d9401828e9
   .github/instructions/csharp-tunit.instructions.md: sha256:4e50991bcab08d56cc708ff8d8cc22d597612eb03795e978f34057c73a462b9c
   .github/instructions/csharp.instructions.md: sha256:836a0c44076d50f2adaed3cc20e89f2c3101a94cb497574ceaa63e58400b0191
