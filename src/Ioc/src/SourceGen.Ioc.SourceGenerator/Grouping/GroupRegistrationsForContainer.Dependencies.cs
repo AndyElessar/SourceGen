@@ -48,19 +48,16 @@ partial class IocSourceGenerator
 
         foreach(var member in injectionMembers)
         {
-            ResolvedDependency? dependency = null;
-            ImmutableEquatableArray<ResolvedDependency> parameterDependencies = [];
-
             switch(member)
             {
-                case PropertyOrFieldInjectionData { Type.Name: IServiceProviderTypeName or IServiceProviderGlobalTypeName }:
-                    dependency = new ServiceProviderSelfDependency();
+                case PropertyOrFieldInjectionData { Type.Name: IServiceProviderTypeName or IServiceProviderGlobalTypeName } serviceProvider:
+                    resolvedMembers.Add(new ResolvedPropertyOrFieldInjection(serviceProvider, new ServiceProviderSelfDependency()));
                     break;
 
                 case PropertyOrFieldInjectionData propertyOrField:
                     // A member with a non-null initializer keeps it when the service is not registered, like the Register output
                     var hasNonNullDefault = propertyOrField.HasDefaultValue && !propertyOrField.DefaultValueIsNull;
-                    dependency = ResolveServiceDependencyForContainerEntryModel(
+                    var dependency = ResolveServiceDependencyForContainerEntryModel(
                         propertyOrField.Type,
                         propertyOrField.Key,
                         propertyOrField.IsNullable || hasNonNullDefault,
@@ -68,16 +65,17 @@ partial class IocSourceGenerator
                         collectionRegistrations,
                         wrapperFields,
                         hasNonNullDefault ? propertyOrField.DefaultValue : null);
+                    resolvedMembers.Add(new ResolvedPropertyOrFieldInjection(propertyOrField, dependency));
                     break;
 
                 case MethodInjectionData method:
                 {
-                    var methodParameters = method.Parameters;
-                    if(methodParameters.Length > 0)
+                    ImmutableEquatableArray<ResolvedDependency> parameterDependencies = [];
+                    if(method.Parameters.Length > 0)
                     {
-                        var resolvedParameters = new List<ResolvedDependency>(methodParameters.Length);
+                        var resolvedParameters = new List<ResolvedDependency>(method.Parameters.Length);
 
-                        foreach(var parameter in methodParameters)
+                        foreach(var parameter in method.Parameters)
                         {
                             resolvedParameters.Add(ResolveParameterDependencyForContainerEntryModel(
                                 parameter,
@@ -89,17 +87,12 @@ partial class IocSourceGenerator
                         }
 
                         parameterDependencies = resolvedParameters.ToImmutableEquatableArray();
-                        if(parameterDependencies.Length == 1)
-                        {
-                            dependency = parameterDependencies[0];
-                        }
                     }
 
+                    resolvedMembers.Add(new ResolvedMethodInjection(method, parameterDependencies));
                     break;
                 }
             }
-
-            resolvedMembers.Add(new ResolvedInjectionMember(member, dependency, parameterDependencies));
         }
 
         return resolvedMembers.ToImmutableEquatableArray();

@@ -1,5 +1,3 @@
-using InjectionMemberModel = SourceGen.Ioc.InjectionMemberData;
-
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
@@ -110,7 +108,7 @@ partial class IocSourceGenerator
             var propertyIndex = 0;
             foreach(var injectionMember in InjectionMembers)
             {
-                if(injectionMember.Member is not PropertyOrFieldInjectionData member)
+                if(injectionMember is not ResolvedPropertyOrFieldInjection { PropertyOrField: var member } resolved)
                     continue;
 
                 var memberType = member.Type;
@@ -121,13 +119,8 @@ partial class IocSourceGenerator
                     continue;
                 }
 
-                if(injectionMember.Dependency is null)
-                {
-                    throw new InvalidOperationException($"Missing resolved dependency for injection member '{member.Name}'.");
-                }
-
                 var memberVar = $"s0_p{propertyIndex}";
-                var expr = injectionMember.Dependency.FormatExpression(member.IsNullable);
+                var expr = resolved.Dependency.FormatExpression(member.IsNullable);
                 statements.Add($"var {memberVar} = {expr};");
                 propertyInits.Add($"{member.Name} = {memberVar}");
                 propertyIndex++;
@@ -142,7 +135,7 @@ partial class IocSourceGenerator
             var methodIndex = 0;
             foreach(var injectionMember in InjectionMembers)
             {
-                if(injectionMember.Member is not MethodInjectionData { IsAsync: false } member)
+                if(injectionMember is not ResolvedMethodInjection { Method: { IsAsync: false } member } resolved)
                     continue;
 
                 var methodParams = member.Parameters;
@@ -157,13 +150,8 @@ partial class IocSourceGenerator
                         continue;
                     }
 
-                    if(i >= injectionMember.ParameterDependencies.Length)
-                    {
-                        throw new InvalidOperationException($"Missing resolved dependency for method parameter '{param.Name}' in member '{member.Name}'.");
-                    }
-
                     var paramVar = $"s0_m{methodIndex}";
-                    var expr = injectionMember.ParameterDependencies[i].FormatExpression(param.IsOptional);
+                    var expr = resolved.ParameterDependencies[i].FormatExpression(param.IsOptional);
                     statements.Add($"var {paramVar} = {expr};");
                     methodEntries.Add((param.Name, paramVar));
                     methodIndex++;
@@ -365,10 +353,24 @@ partial class IocSourceGenerator
         ResolvedDependency Dependency,
         bool IsOptional);
 
-    private readonly record struct ResolvedInjectionMember(
-        InjectionMemberModel Member,
-        ResolvedDependency? Dependency,
-        ImmutableEquatableArray<ResolvedDependency> ParameterDependencies);
+    /// <summary>
+    /// An injection member with its dependencies resolved against the container.
+    /// </summary>
+    private closed record class ResolvedInjectionMember;
+
+    /// <summary>
+    /// A property or field with the dependency assigned to it.
+    /// </summary>
+    private sealed record class ResolvedPropertyOrFieldInjection(
+        PropertyOrFieldInjectionData PropertyOrField,
+        ResolvedDependency Dependency) : ResolvedInjectionMember;
+
+    /// <summary>
+    /// A method with the dependency resolved for each of its parameters, in parameter order.
+    /// </summary>
+    private sealed record class ResolvedMethodInjection(
+        MethodInjectionData Method,
+        ImmutableEquatableArray<ResolvedDependency> ParameterDependencies) : ResolvedInjectionMember;
 
     private sealed record class ResolvedDecorator(
         ServiceRegistrationModel Decorator,

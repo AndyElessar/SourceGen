@@ -123,20 +123,19 @@ partial class IocSourceGenerator
         {
             var typeDeclaration = Decorators.Length > 0 ? Registration.ServiceType.Name : "var";
 
-            var properties = new List<ResolvedInjectionMember>();
-            var methods = new List<ResolvedInjectionMember>();
+            var properties = new List<ResolvedPropertyOrFieldInjection>();
+            var methods = new List<ResolvedMethodInjection>();
 
             foreach(var member in InjectionMembers)
             {
-                switch(member.Member.MemberType)
+                switch(member)
                 {
-                    case InjectionMemberType.Property:
-                    case InjectionMemberType.Field:
-                        properties.Add(member);
+                    case ResolvedPropertyOrFieldInjection propertyOrField:
+                        properties.Add(propertyOrField);
                         break;
 
-                    case InjectionMemberType.Method:
-                        methods.Add(member);
+                    case ResolvedMethodInjection { Method.IsAsync: false } method:
+                        methods.Add(method);
                         break;
                 }
             }
@@ -146,7 +145,7 @@ partial class IocSourceGenerator
             foreach(var method in methods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"instance.{method.Member.Name}({methodArgs});");
+                writer.WriteLine($"instance.{method.Method.Name}({methodArgs});");
             }
         }
 
@@ -207,25 +206,24 @@ partial class IocSourceGenerator
                 return;
             }
 
-            var properties = new List<ResolvedInjectionMember>();
-            var syncMethods = new List<ResolvedInjectionMember>();
-            var asyncMethods = new List<ResolvedInjectionMember>();
+            var properties = new List<ResolvedPropertyOrFieldInjection>();
+            var syncMethods = new List<ResolvedMethodInjection>();
+            var asyncMethods = new List<ResolvedMethodInjection>();
 
             foreach(var member in InjectionMembers)
             {
-                switch(member.Member.MemberType)
+                switch(member)
                 {
-                    case InjectionMemberType.Property:
-                    case InjectionMemberType.Field:
-                        properties.Add(member);
+                    case ResolvedPropertyOrFieldInjection propertyOrField:
+                        properties.Add(propertyOrField);
                         break;
 
-                    case InjectionMemberType.Method:
-                        syncMethods.Add(member);
+                    case ResolvedMethodInjection { Method.IsAsync: false } method:
+                        syncMethods.Add(method);
                         break;
 
-                    case InjectionMemberType.AsyncMethod:
-                        asyncMethods.Add(member);
+                    case ResolvedMethodInjection method:
+                        asyncMethods.Add(method);
                         break;
                 }
             }
@@ -250,13 +248,13 @@ partial class IocSourceGenerator
             foreach(var method in syncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"{injectionVar}.{method.Member.Name}({methodArgs});");
+                writer.WriteLine($"{injectionVar}.{method.Method.Name}({methodArgs});");
             }
 
             foreach(var method in asyncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"await {injectionVar}.{method.Member.Name}({methodArgs}).ConfigureAwait(false);");
+                writer.WriteLine($"await {injectionVar}.{method.Method.Name}({methodArgs}).ConfigureAwait(false);");
             }
 
             if(hasDecorators)
@@ -289,7 +287,7 @@ partial class IocSourceGenerator
             string variableName,
             string typeDeclaration,
             ImmutableEquatableArray<ResolvedConstructorParameter> constructorParameters,
-            List<ResolvedInjectionMember> propertyMembers)
+            List<ResolvedPropertyOrFieldInjection> propertyMembers)
         {
             var args = constructorParameters.Length == 0
                 ? ""
@@ -305,11 +303,8 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
 
-            foreach(var member in propertyMembers)
+            foreach(var (propertyOrField, dependency) in propertyMembers)
             {
-                if(member is not { Member: PropertyOrFieldInjectionData propertyOrField, Dependency: { } dependency })
-                    throw new InvalidOperationException($"Missing resolved dependency for injection member '{member.Member.Name}'.");
-
                 writer.WriteLine($"{propertyOrField.Name} = {dependency.FormatExpression(propertyOrField.IsNullable)},");
             }
 
@@ -335,11 +330,8 @@ partial class IocSourceGenerator
             var hasPropertyAssignments = false;
             foreach(var member in injectionMembers)
             {
-                if(member.Member is not PropertyOrFieldInjectionData propertyOrField)
+                if(member is not ResolvedPropertyOrFieldInjection(var propertyOrField, var dependency))
                     continue;
-
-                if(member.Dependency is not { } dependency)
-                    throw new InvalidOperationException($"Missing resolved dependency for decorator member '{propertyOrField.Name}'.");
 
                 if(!hasPropertyAssignments)
                 {
@@ -362,18 +354,20 @@ partial class IocSourceGenerator
                 writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString});");
             }
 
+            // Decorators do not support async injection methods
             foreach(var member in injectionMembers)
             {
-                if(member.Member.MemberType is InjectionMemberType.Method)
+                if(member is ResolvedMethodInjection { Method.IsAsync: false } method)
                 {
-                    writer.WriteLine($"{variableName}.{member.Member.Name}({BuildMethodArguments(member, registrationKey)});");
+                    writer.WriteLine($"{variableName}.{method.Method.Name}({BuildMethodArguments(method, registrationKey)});");
                 }
             }
         }
 
-        private static string BuildMethodArguments(ResolvedInjectionMember member, string? registrationKey)
+        private static string BuildMethodArguments(ResolvedMethodInjection member, string? registrationKey)
         {
-            if(member.Member is not MethodInjectionData { Parameters: { Length: > 0 } parameters })
+            var parameters = member.Method.Parameters;
+            if(parameters.Length == 0)
                 return "";
 
             var args = new string[parameters.Length];
@@ -395,19 +389,7 @@ partial class IocSourceGenerator
                     continue;
                 }
 
-                if(parameterDependencies.Length > i)
-                {
-                    args[i] = parameterDependencies[i].FormatExpression(parameter.IsOptional);
-                    continue;
-                }
-
-                if(parameters.Length == 1 && member.Dependency is not null)
-                {
-                    args[i] = member.Dependency.FormatExpression(parameter.IsOptional);
-                    continue;
-                }
-
-                throw new InvalidOperationException($"Missing resolved dependency for injection method parameter '{parameter.Name}' in member '{member.Member.Name}'.");
+                args[i] = parameterDependencies[i].FormatExpression(parameter.IsOptional);
             }
 
             return string.Join(", ", args);
