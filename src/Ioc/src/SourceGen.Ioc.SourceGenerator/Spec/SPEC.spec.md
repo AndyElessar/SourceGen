@@ -95,7 +95,7 @@ Both Register and Container pipelines pre-compute a set of "entry" instances dur
 | Register | `RegisterEntry` | 7 (`Simple`, `Instance`, `Forwarding`, `Factory`, `Injection`, `AsyncInjection`, `Decorator`) + 3 wrapper structs (`Lazy`, `Func`, `Kvp`RegistrationEntry) | `WriteRegistration(SourceWriter, RegisterWriteContext)` |
 | Container | `ContainerEntry` | 10 (6 service via `ServiceContainerEntry`, 3 wrapper, 1 collection) | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`, `WriteLocalResolverEntries` |
 
-Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
+Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry*.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
 
 ---
 
