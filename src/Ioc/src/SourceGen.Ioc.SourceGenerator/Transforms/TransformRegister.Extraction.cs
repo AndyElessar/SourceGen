@@ -237,18 +237,18 @@ partial class IocSourceGenerator
     /// </summary>
     private static bool IsNullExpression(ExpressionSyntax expression)
     {
-        // Direct null literal
+        // Direct null or default literal
         if(expression is LiteralExpressionSyntax literal &&
-           literal.Kind() == SyntaxKind.NullLiteralExpression)
+           literal.Kind() is SyntaxKind.NullLiteralExpression or SyntaxKind.DefaultLiteralExpression)
         {
             return true;
         }
 
-        // Null-forgiving expression: null!
+        // Null-forgiving expression: null! or default!
         if(expression is PostfixUnaryExpressionSyntax postfix &&
            postfix.Kind() == SyntaxKind.SuppressNullableWarningExpression &&
            postfix.Operand is LiteralExpressionSyntax innerLiteral &&
-           innerLiteral.Kind() == SyntaxKind.NullLiteralExpression)
+           innerLiteral.Kind() is SyntaxKind.NullLiteralExpression or SyntaxKind.DefaultLiteralExpression)
         {
             return true;
         }
@@ -273,7 +273,7 @@ partial class IocSourceGenerator
                     p.Type.GetTypeData(),
                     IsNullable: p.NullableAnnotation == NullableAnnotation.Annotated,
                     HasDefaultValue: p.HasExplicitDefaultValue,
-                    DefaultValue: p.HasExplicitDefaultValue ? ToDefaultValueCodeString(p.ExplicitDefaultValue) : null,
+                    DefaultValue: p.HasExplicitDefaultValue ? ToDefaultValueCodeString(p.ExplicitDefaultValue, p.Type) : null,
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: hasServiceKeyAttribute,

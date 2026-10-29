@@ -30,12 +30,16 @@ partial class IocSourceGenerator
             return;
         }
 
-        if(hasNonNullDefault)
+        // The service provider itself is passed directly, like an IServiceProvider parameter
+        if(memberTypeName is IServiceProviderTypeName or IServiceProviderGlobalTypeName)
         {
-            var defExpr = defaultValue ?? "default";
-            var methodName = GetServiceResolutionMethod(serviceKey, isOptional: true);
-            var svcCall = BuildServiceCall(methodName, memberTypeName, serviceKey);
-            writer.WriteLine($"var {paramVar} = {svcCall} ?? {defExpr};");
+            writer.WriteLine($"var {paramVar} = sp;");
+            return;
+        }
+
+        if(hasNonNullDefault && defaultValue is not null)
+        {
+            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(memberTypeName, serviceKey, defaultValue)};");
             return;
         }
 
@@ -63,16 +67,14 @@ partial class IocSourceGenerator
         }
 
         var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
-        if(param.HasDefaultValue)
+        if(param.HasDefaultValue && param.GetFallbackValue(resolvedTypeName) is { } fallbackValue)
         {
-            var defExpr = param.DefaultValue ?? "default";
-            var optionalCall = BuildServiceCall(GetServiceResolutionMethod(methodKey, isOptional: true), resolvedTypeName, methodKey);
-            writer.WriteLine($"var {paramVar} = {optionalCall} ?? {defExpr};");
+            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(resolvedTypeName, methodKey, fallbackValue)};");
             return paramVar;
         }
 
-        var requiredCall = BuildServiceCall(GetServiceResolutionMethod(methodKey, isOptional: false), resolvedTypeName, methodKey);
-        writer.WriteLine($"var {paramVar} = {requiredCall};");
+        var methodName = GetServiceResolutionMethod(methodKey, isOptional: param.HasDefaultValue);
+        writer.WriteLine($"var {paramVar} = {BuildServiceCall(methodName, resolvedTypeName, methodKey)}{(param.HasDefaultValue ? " ?? default" : "")};");
         return paramVar;
     }
 
@@ -123,17 +125,14 @@ partial class IocSourceGenerator
         }
 
         var isOptional = param.HasDefaultValue || param.IsOptional;
-        var methodName = GetServiceResolutionMethod(param.ServiceKey, isOptional);
-        var svcCall = BuildServiceCall(methodName, paramTypeName, param.ServiceKey);
-
-        if(isOptional)
+        if(isOptional && param.GetFallbackValue(paramTypeName) is { } fallbackValue)
         {
-            var defExpr = param.HasDefaultValue ? (param.DefaultValue ?? "default") : "default";
-            writer.WriteLine($"var {paramVar} = {svcCall} ?? {defExpr};");
+            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(paramTypeName, param.ServiceKey, fallbackValue)};");
             return paramVar;
         }
 
-        writer.WriteLine($"var {paramVar} = {svcCall};");
+        var methodName = GetServiceResolutionMethod(param.ServiceKey, isOptional);
+        writer.WriteLine($"var {paramVar} = {BuildServiceCall(methodName, paramTypeName, param.ServiceKey)}{(isOptional ? " ?? default" : "")};");
         return paramVar;
     }
 
@@ -324,6 +323,17 @@ partial class IocSourceGenerator
         serviceKey is not null
             ? $"sp.{methodName}<{typeName}>({serviceKey})"
             : $"sp.{methodName}<{typeName}>()";
+
+    /// <summary>
+    /// Builds <c>sp.GetService(typeof(T)) switch { T service => service, _ => fallback }</c>, which returns
+    /// <paramref name="fallbackValue"/> for an unregistered service. Unlike <c>sp.GetService&lt;T&gt;() ?? fallback</c>, it
+    /// compiles for value types, which GetService&lt;T&gt; returns as <c>default</c>; the fallback is typed by the
+    /// <c>T</c> arm, so target-typed initializers such as <c>new()</c> and <c>[]</c> create a <c>T</c>.
+    /// </summary>
+    private static string BuildOptionalServiceCallWithFallback(string typeName, string? serviceKey, string fallbackValue) =>
+        serviceKey is not null
+            ? $"sp.{GetKeyedService}(typeof({typeName}), {serviceKey}) switch {{ {GetPatternTypeName(typeName)} service => service, _ => {fallbackValue} }}"
+            : $"sp.{GetService}(typeof({typeName})) switch {{ {GetPatternTypeName(typeName)} service => service, _ => {fallbackValue} }}";
 
     /// <summary>
     /// Attempts to resolve common parameter cases and emit any required variable declarations.

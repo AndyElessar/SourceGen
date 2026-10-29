@@ -35,10 +35,7 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
-        var resolveCall = registration.Key is not null
-            ? $"sp.{methodName}<{registration.ImplementationType.Name}>(key)"
-            : $"sp.{methodName}<{registration.ImplementationType.Name}>()";
-        writer.WriteLine($"var s0 = {resolveCall};");
+        writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({(registration.Key is not null ? "key" : "")});");
 
         var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
         writer.WriteLine($"return {outermostVar};");

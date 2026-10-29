@@ -27,7 +27,10 @@ public class Handler : IHandler;
 public class LoggingDecorator(IHandler inner, ILogger logger) : IHandler;
 public class CachingDecorator(IHandler inner, ICache cache) : IHandler;
 
-[IocContainer]
+public interface ILogger;
+public interface ICache;
+
+[IocContainer(UseSwitchStatement = true)]
 public partial class AppContainer;
 #endregion
 

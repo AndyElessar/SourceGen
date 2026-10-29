@@ -461,9 +461,7 @@ partial class IocSourceGenerator
                 }
 
                 string args = BuildArgumentListFromEntries(entries);
-                writer.WriteLine(useAwait
-                    ? $"await s0.{methodName}({args});"
-                    : $"s0.{methodName}({args});");
+                writer.WriteLine($"{(useAwait ? "await " : "")}s0.{methodName}({args});");
             }
         }
     }

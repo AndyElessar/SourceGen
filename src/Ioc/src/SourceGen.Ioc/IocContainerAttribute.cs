@@ -11,7 +11,7 @@ public sealed class IocContainerAttribute : Attribute
 {
     /// <summary>
     /// Gets a value indicating whether the container should be able to resolve services from external IServiceProvider
-    /// and implement IServiceProviderFactory&lt;IServiceCollection&gt;.
+    /// and generate a nested ServiceProviderFactory type that implements IServiceProviderFactory&lt;IServiceCollection&gt;.
     /// </summary>
     public bool IntegrateServiceProvider { get; init; } = true;
 

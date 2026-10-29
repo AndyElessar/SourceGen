@@ -11,7 +11,7 @@ When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`
 ### Factory Method Parameter Analysis
 
 - If parameter type is `IServiceProvider`: Pass the service provider directly
-- If parameter has `[ServiceKey]` attribute and registration has a Key: Pass the Key value
+- If parameter has `[ServiceKey]` attribute: Pass the registration's Key value, or `default!` when the registration has no Key
 - Other parameters: Resolve from the service provider, using the same rules as `[IocInject]` method parameters
 - Arguments MUST be passed in the factory method's parameter declaration order, wherever the `IServiceProvider` and `[ServiceKey]` parameters appear (e.g., `Create(ILogger logger, IServiceProvider sp)` is called as `Create(logger, sp)`)
 
@@ -21,7 +21,7 @@ When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`
 #region Define:
 public interface IMyService;
 
-[IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Get))]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Get))]
 internal sealed class MyService : IMyService;
 
 public sealed class MyServiceFactory
@@ -30,13 +30,15 @@ public sealed class MyServiceFactory
   // Parameter IServiceProvider is optional
   public static IMyService Get(IServiceProvider sp)
   {
-    //...
+    return new MyService();
   }
 }
 #endregion
 
 #region Generate:
-services.AddSingleton<IMyService>(sp => MyServiceFactory.Get(sp));
+// The implementation type itself is also registered through the factory, cast to it
+services.AddSingleton<MyService>((IServiceProvider sp) => (MyService)MyServiceFactory.Get(sp));
+services.AddSingleton<IMyService>((IServiceProvider sp) => MyServiceFactory.Get(sp));
 #endregion
 ```
 
@@ -46,7 +48,7 @@ services.AddSingleton<IMyService>(sp => MyServiceFactory.Get(sp));
 #region Define:
 public interface IMyService;
 
-[IocRegister(ServiceTypes = [typeof(IMyService)], Key = "MyKey", Factory = nameof(MyServiceFactory.Create))]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "MyKey", Factory = nameof(MyServiceFactory.Create))]
 internal sealed class MyService : IMyService;
 
 public sealed class MyServiceFactory
@@ -60,7 +62,8 @@ public sealed class MyServiceFactory
 #endregion
 
 #region Generate:
-services.AddKeyedSingleton<IMyService>("MyKey", (sp, key) => MyServiceFactory.Create(sp, "MyKey"));
+services.AddKeyedSingleton<MyService>("MyKey", (IServiceProvider sp, object? key) => (MyService)MyServiceFactory.Create(sp, "MyKey"));
+services.AddKeyedSingleton<IMyService>("MyKey", (IServiceProvider sp, object? key) => MyServiceFactory.Create(sp, "MyKey"));
 #endregion
 ```
 
@@ -70,7 +73,7 @@ services.AddKeyedSingleton<IMyService>("MyKey", (sp, key) => MyServiceFactory.Cr
 #region Define:
 public interface IMyService;
 
-[IocRegister(ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Create))]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Factory = nameof(MyServiceFactory.Create))]
 internal sealed class MyService : IMyService;
 
 public sealed class MyServiceFactory
@@ -83,7 +86,8 @@ public sealed class MyServiceFactory
 #endregion
 
 #region Generate:
-services.AddSingleton<IMyService>(sp => MyServiceFactory.Create());
+services.AddSingleton<MyService>((IServiceProvider sp) => (MyService)MyServiceFactory.Create());
+services.AddSingleton<IMyService>((IServiceProvider sp) => MyServiceFactory.Create());
 #endregion
 ```
 
@@ -139,10 +143,12 @@ public static class SpecialHandlerFactory
 
 #region Generate:
 // MyHandlerImpl uses Factory from DefaultSettings
-services.AddScoped<IMyHandler>(sp => HandlerFactory.Create(sp));
+services.AddScoped<MyHandlerImpl>((IServiceProvider sp) => (MyHandlerImpl)HandlerFactory.Create(sp));
+services.AddScoped<IMyHandler>((IServiceProvider sp) => HandlerFactory.Create(sp));
 
 // SpecialHandler uses its own explicit Factory
-services.AddScoped<IMyHandler>(sp => SpecialHandlerFactory.Create(sp));
+services.AddScoped<SpecialHandler>((IServiceProvider sp) => (SpecialHandler)SpecialHandlerFactory.Create(sp));
+services.AddScoped<IMyHandler>((IServiceProvider sp) => SpecialHandlerFactory.Create(sp));
 #endregion
 ```
 
@@ -150,9 +156,13 @@ services.AddScoped<IMyHandler>(sp => SpecialHandlerFactory.Create(sp));
 
 ```csharp
 #region Define:
+public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
 public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TRequest, TResponse>;
 
-[assembly: IocRegisterDefaults<IRequestHandler<,>>(
+public sealed record QueryRequest : IRequest<QueryRequest, QueryResponse>;
+public sealed record QueryResponse;
+
+[assembly: IocRegisterDefaults(typeof(IRequestHandler<,>),
     ServiceLifetime.Singleton,
     Factory = nameof(HandlerFactory.CreateHandler))]
 
@@ -163,6 +173,7 @@ public static class HandlerFactory
         // Factory for all IRequestHandler implementations
         // Note: For generic handlers, factory typically creates the concrete handler
         // and returns it as the interface type
+        return new QueryHandler();
     }
 }
 
@@ -174,7 +185,9 @@ public class QueryHandler : IRequestHandler<QueryRequest, QueryResponse>
 #endregion
 
 #region Generate:
-services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>(sp => HandlerFactory.CreateHandler(sp, null));
+// The registration has no Key, so the [ServiceKey] parameter gets default; the object result is cast to the service type
+services.AddSingleton<QueryHandler>((IServiceProvider sp) => (QueryHandler)HandlerFactory.CreateHandler(sp, default!));
+services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>((IServiceProvider sp) => (IRequestHandler<QueryRequest, QueryResponse>)HandlerFactory.CreateHandler(sp, default!));
 #endregion
 ```
 
@@ -186,7 +199,7 @@ When `Instance` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute
 #region Define:
 public interface IMyService;
 
-[IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(Default))]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Instance = nameof(Default))]
 internal sealed class MyService : IMyService
 {
     // Must be static
@@ -196,6 +209,7 @@ internal sealed class MyService : IMyService
 
 #region Generate:
 // When specify Instance, only allow AddSingleton or AddKeyedSingleton
+services.AddSingleton<MyService>(MyService.Default);
 services.AddSingleton<IMyService>(MyService.Default);
 #endregion
 ```

@@ -16,7 +16,8 @@
     <ProjectReference Include="..\..\..\src\Ioc\src\SourceGen.Ioc.SourceGenerator\SourceGen.Ioc.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\IocSample.Shared\IocSample.Shared.csproj" />
 
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" VersionOverride="11.0.0-rc.3.26522.148" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="11.0.0-rc.3.26522.148" />
   </ItemGroup>
 
   <ItemGroup>

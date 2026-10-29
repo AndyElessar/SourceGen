@@ -18,17 +18,14 @@ partial class IocSourceGenerator
     {
         public void WriteRegistration(SourceWriter writer)
         {
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>";
-            var lifetime = Lifetime.Name;
-            var resolveCall = $"sp.{GetRequiredKeyedService}<{ValueTypeName}>({KeyExpr})";
-
             // KeyValuePair<K,V> is a struct, so we cannot use AddSingleton<TService> (class constraint).
             // Use ServiceDescriptor directly with a factory that boxes the struct.
+            // The + of interpolated strings binds to the handler as one interpolated string
             writer.WriteLine(
                 $"services.Add(new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(" +
-                $"typeof({kvpTypeName}), " +
-                $"({IServiceProviderGlobalTypeName} sp) => (object)new {kvpTypeName}({KeyExpr}, {resolveCall}), " +
-                $"global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.{lifetime}));");
+                $"typeof(global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>), " +
+                $"({IServiceProviderGlobalTypeName} sp) => (object)new global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>({KeyExpr}, sp.{GetRequiredKeyedService}<{ValueTypeName}>({KeyExpr})), " +
+                $"global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.{Lifetime.Name}));");
         }
     }
 

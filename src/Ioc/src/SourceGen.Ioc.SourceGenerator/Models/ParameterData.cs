@@ -32,4 +32,15 @@ internal sealed record class ParameterData(
     /// Whether the default value is null. Only meaningful when HasDefaultValue is true.
     /// </summary>
     public bool DefaultValueIsNull => HasDefaultValue && DefaultValue is null;
+
+    /// <summary>
+    /// The value an unregistered optional parameter gets when it needs the untyped form
+    /// <c>(T)(GetService(typeof(T)) ?? value)</c>, which also compiles for value types: the explicit default value, or
+    /// <c>default(T)!</c> for a non-nullable parameter that defaults to <c>null</c> or <c>default</c> (such as a struct).
+    /// Otherwise <see langword="null"/>, and the typed form <c>GetService&lt;T&gt;() ?? default</c> is used.
+    /// </summary>
+    /// <param name="typeName">The parameter type name as emitted, which differs from <see cref="Type"/> when type parameters are substituted.</param>
+    public string? GetFallbackValue(string typeName) => HasDefaultValue
+        ? DefaultValue ?? (IsNullable ? null : $"default({typeName})!")
+        : null;
 }

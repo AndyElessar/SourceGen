@@ -18,6 +18,15 @@ public partial class SharedModule1;
 public partial class SharedModule2;
 
 // In main application
+public interface ILocalService1;
+public interface ILocalService2;
+
+[IocRegister<ILocalService1>(ServiceLifetime.Scoped)]
+public class LocalService1 : ILocalService1;
+
+[IocRegister<ILocalService2>(ServiceLifetime.Scoped)]
+public class LocalService2 : ILocalService2;
+
 [IocImportModule<SharedModule1>]
 [IocImportModule<SharedModule2>]
 [IocContainer]
@@ -54,18 +63,17 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         __Resolver(typeof(IServiceProvider), static c => c),
         __Resolver(typeof(IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::AppContainer), static c => c),
+        __Resolver(typeof(global::LocalService1), static c => c.GetLocalService1()),
         __Resolver(typeof(global::ILocalService1), static c => c.GetLocalService1()),
+        __Resolver(typeof(global::LocalService2), static c => c.GetLocalService2()),
         __Resolver(typeof(global::ILocalService2), static c => c.GetLocalService2()),
-        // ... more local services
     ];
 
-    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = 
-        global::SharedModule1.Resolvers.Select(static kvp => 
-                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
-            .Concat(global::SharedModule2.Resolvers.Select(static kvp => 
-                new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
-            .Concat(_localResolvers)
-            .ToFrozenDictionary();
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers =
+        global::SharedModule1.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
+        .Concat(global::SharedModule2.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
+        .Concat(_localResolvers)
+        .ToFrozenDictionary();
     // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. This initializer references imported module Resolvers and _localResolvers; if reversed, _localResolvers would be null when _serviceResolvers initializes.
 
     #region IIocContainer

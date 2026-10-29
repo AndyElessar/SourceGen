@@ -27,6 +27,8 @@ When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `I
 
 ```csharp
 #region Define:
+public interface IHandler { }
+
 [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "h1")]
 public class Handler1 : IHandler { }
 
@@ -39,22 +41,19 @@ public class Registry(IDictionary<string, IHandler> handlers) { }
 
 #region Generate:
 services.AddKeyedSingleton<Handler1, Handler1>("h1");
-services.AddKeyedSingleton<IHandler>("h1", (sp, key) => sp.GetRequiredKeyedService<Handler1>(key));
+services.AddKeyedSingleton<IHandler>("h1", (IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<Handler1>(key));
 services.AddKeyedScoped<Handler2, Handler2>("h2");
-services.AddKeyedScoped<IHandler>("h2", (sp, key) => sp.GetRequiredKeyedService<Handler2>(key));
-services.AddSingleton<Registry>((sp) =>
+services.AddKeyedScoped<IHandler>("h2", (IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<Handler2>(key));
+services.AddSingleton<Registry>((IServiceProvider sp) =>
 {
     var p0 = sp.GetServices<KeyValuePair<string, IHandler>>().ToDictionary();
-    return new Registry(p0);
+    var s0 = new Registry(p0);
+    return s0;
 });
 
 // KeyValuePair registrations for keyed services
-services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
-    (sp) => (object)new KeyValuePair<string, IHandler>("h1", sp.GetRequiredKeyedService<IHandler>("h1")),
-    ServiceLifetime.Singleton));
-services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>),
-    (sp) => (object)new KeyValuePair<string, IHandler>("h2", sp.GetRequiredKeyedService<IHandler>("h2")),
-    ServiceLifetime.Scoped));
+services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>), (IServiceProvider sp) => (object)new KeyValuePair<string, IHandler>("h1", sp.GetRequiredKeyedService<IHandler>("h1")), ServiceLifetime.Singleton));
+services.Add(new ServiceDescriptor(typeof(KeyValuePair<string, IHandler>), (IServiceProvider sp) => (object)new KeyValuePair<string, IHandler>("h2", sp.GetRequiredKeyedService<IHandler>("h2")), ServiceLifetime.Scoped));
 #endregion
 ```
 

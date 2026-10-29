@@ -136,14 +136,28 @@ internal static partial class RoslynExtensions
     /// Converts a parameter's explicit default value to its C# code representation.
     /// </summary>
     /// <param name="value">The default value object from IParameterSymbol.ExplicitDefaultValue.</param>
+    /// <param name="type">The parameter type. An enum default value is its underlying constant, so it is cast to the enum type.</param>
     /// <returns>The C# code string representing the default value, or null if the value is null.</returns>
-    public static string? ToDefaultValueCodeString(object? value)
+    public static string? ToDefaultValueCodeString(object? value, ITypeSymbol type)
     {
         if(value is null)
         {
             return null;
         }
 
+        var enumType = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
+            ? nullable.TypeArguments[0]
+            : type;
+        if(enumType.TypeKind == TypeKind.Enum)
+        {
+            return $"({enumType.FullyQualifiedName})({ToDefaultValueCodeString(value)})";
+        }
+
+        return ToDefaultValueCodeString(value);
+    }
+
+    private static string ToDefaultValueCodeString(object value)
+    {
         return value switch
         {
             string s => $"\"{s.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",

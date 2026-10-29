@@ -25,12 +25,9 @@ partial class IocSourceGenerator
             writer.WriteLine();
         }
 
-        // Get interface list
-        var interfaces = GetContainerInterfaces(container, canGenerateServiceProviderFactory);
-
         // Write class declaration
         writer.WriteLine(GeneratedCodeAttribute);
-        writer.WriteLine($"partial class {container.ClassName} : {string.Join(", ", interfaces)}");
+        writer.WriteLine($"partial class {container.ClassName} : global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>, {FixedContainerInterfaces}");
         writer.WriteLine("{");
         writer.Indentation++;
 
@@ -67,10 +64,10 @@ partial class IocSourceGenerator
         // Write IIocContainer implementation
         WriteIIocContainerImplementation(writer, container, groups, effectiveUseSwitchStatement);
 
-        // Write IServiceProviderFactory implementation (if DI package is available)
+        // Write the nested ServiceProviderFactory type (if DI package is available)
         if(canGenerateServiceProviderFactory)
         {
-            WriteIServiceProviderFactoryImplementation(writer, container);
+            WriteServiceProviderFactory(writer, container);
         }
 
         // Write Disposal implementation
@@ -104,31 +101,19 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
     }
 
-    private static readonly string[] _FixedContainerInterfaces = [
-        "global::System.IServiceProvider",
-        "global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider",
-        "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService",
-        "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService",
-        "global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService",
-        "global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory",
-        "global::Microsoft.Extensions.DependencyInjection.IServiceScope",
-        "global::System.IDisposable",
-        "global::System.IAsyncDisposable"
-    ];
-
     /// <summary>
-    /// Builds the list of interfaces the container should implement.
+    /// Interfaces every container implements after <c>IIocContainer&lt;T&gt;</c>.
     /// </summary>
-    private static IEnumerable<string> GetContainerInterfaces(ContainerModel container, bool canGenerateServiceProviderFactory)
-    {
-        yield return $"global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>";
-
-        foreach(var i in _FixedContainerInterfaces)
-            yield return i;
-
-        if(canGenerateServiceProviderFactory)
-            yield return "global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>";
-    }
+    private const string FixedContainerInterfaces =
+        "global::System.IServiceProvider, "
+        + "global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, "
+        + "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, "
+        + "global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, "
+        + "global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, "
+        + "global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, "
+        + "global::Microsoft.Extensions.DependencyInjection.IServiceScope, "
+        + "global::System.IDisposable, "
+        + "global::System.IAsyncDisposable";
 
     /// <summary>
     /// Writes container fields (fallback provider, service storage, locks, etc.).
@@ -185,25 +170,33 @@ partial class IocSourceGenerator
         // When there are decorators, field type is ServiceType (interface), otherwise ImplementationType
         var typeName = hasDecorators ? reg.ServiceType.Name : reg.ImplementationType.Name;
 
-        writer.WriteLine(isEager
-            ? $"private {typeName} {fieldName} = null!;"
-            : $"private {typeName}? {fieldName};");
-
         if(isEager)
+        {
+            writer.WriteLine($"private {typeName} {fieldName} = null!;");
             return;
+        }
 
-        // SpinLock must NOT be readonly because Enter/Exit mutate it
-        var syncFieldDeclaration = strategy switch
-        {
-            ThreadSafeStrategy.Lock => $"private readonly global::System.Threading.Lock {fieldName}Lock = new();",
-            ThreadSafeStrategy.SemaphoreSlim => $"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);",
-            ThreadSafeStrategy.SpinLock => $"private global::System.Threading.SpinLock {fieldName}SpinLock = new(false);",
-            _ => null
-        };
+        writer.WriteLine($"private {typeName}? {fieldName};");
+        WriteSyncField(writer, strategy, fieldName);
+    }
 
-        if(syncFieldDeclaration is not null)
+    /// <summary>
+    /// Writes the synchronization field guarding <paramref name="fieldName"/> for <paramref name="strategy"/>.
+    /// </summary>
+    private static void WriteSyncField(SourceWriter writer, ThreadSafeStrategy strategy, string fieldName)
+    {
+        switch(strategy)
         {
-            writer.WriteLine(syncFieldDeclaration);
+            case ThreadSafeStrategy.Lock:
+                writer.WriteLine($"private readonly global::System.Threading.Lock {fieldName}Lock = new();");
+                break;
+            case ThreadSafeStrategy.SemaphoreSlim:
+                writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);");
+                break;
+            case ThreadSafeStrategy.SpinLock:
+                // SpinLock must NOT be readonly because Enter/Exit mutate it
+                writer.WriteLine($"private global::System.Threading.SpinLock {fieldName}SpinLock = new(false);");
+                break;
         }
     }
 

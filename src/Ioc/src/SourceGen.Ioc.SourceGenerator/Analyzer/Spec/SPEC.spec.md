@@ -286,6 +286,7 @@ Report when `ServiceKeyAttribute` is mark on parameter, but there is no specifie
 
 - Checks whether the service registration has a `Key` specified.
 - Checks constructor and `[Inject]` method parameters marked with `[ServiceKey]`.
+- Checks the parameters marked with `[ServiceKey]` of the registration's own `Factory` method (the generator passes `default` for them). The `Factory` of `IocRegisterDefaultsAttribute` is not checked, because it is shared by keyed and non-keyed registrations; the diagnostic is reported on the `Factory` argument.
 - Reports when `[ServiceKey]` is used but the registration has no Key specified.
 
 ---
@@ -639,7 +640,7 @@ Report when an explicit service type of `[IocRegister]`/`[IocRegister<T>]`/`[Ioc
 - Checks service types from `ServiceTypes` and from generic attribute type arguments (type-level and assembly-level registrations).
 - Reports when:
   - The implementation is an open generic type but the service type is not.
-  - The implementation is not an open generic type but the service type is.
+  - The implementation is not an open generic type, the service type is, and the implementation does not implement or inherit any closed form of it. A closed implementation that does is registered as each such closed form (see [Basic Registration](../../Spec/Register.Basic.spec.md#feature-basic-registration)).
   - Both are open generic, the service type is not the implementation itself, and the implementation does not implement or inherit any form of the service type.
 - Does not report when the implementation implements the open service type with reordered or partly closed type arguments (for example `Handler<TResponse, TRequest> : IHandler<TRequest, TResponse>` or `TextHandler<T> : IHandler<T, string>`). Only the open generic registration is skipped in that case; discovered closed service types are still registered through type argument mapping (see [Generic Registration](../../Spec/Register.Generics.spec.md#type-argument-mapping)).
 - Service types implicitly added by `RegisterAllInterfaces`/`RegisterAllBaseClasses` are not reported.

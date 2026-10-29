@@ -24,25 +24,16 @@ partial class IocSourceGenerator
     /// </summary>
     /// <param name="FuncServiceTypeName">The full Func service type name (e.g. Func&lt;string, IService&gt;).</param>
     /// <param name="InnerServiceTypeName">The fully-qualified return service type name.</param>
-    /// <param name="ImplementationTypeName">The fully-qualified implementation type name.</param>
-    /// <param name="Lifetime">The service lifetime matching the inner service.</param>
-    /// <param name="ImplementationTypeConstructorParams">The implementation constructor parameters.</param>
-    /// <param name="ImplementationTypeInjectionMembers">The implementation injection members.</param>
     /// <param name="InputTypes">The Func input type parameters.</param>
-    /// <param name="Key">The key of a keyed source registration, which the Func is registered under; otherwise <see langword="null"/>.</param>
-    /// <param name="ResolveCall">The expression resolving the source registration's instance (parameterless Func only).</param>
-    /// <param name="Registration">The source registration, whose decorators a Func with input parameters applies.</param>
+    /// <param name="Registration">
+    /// The source registration: its lifetime and key (the Func is registered under the same ones), and the
+    /// implementation type, injection members and decorators that a Func with input parameters constructs and applies.
+    /// </param>
     /// <param name="Tags">The tags inherited from the source registration.</param>
     private readonly partial record struct FuncRegistrationEntry(
         string FuncServiceTypeName,
         string InnerServiceTypeName,
-        string ImplementationTypeName,
-        ServiceLifetime Lifetime,
-        ImmutableEquatableArray<ParameterData>? ImplementationTypeConstructorParams,
-        ImmutableEquatableArray<InjectionMemberData> ImplementationTypeInjectionMembers,
         ImmutableEquatableArray<TypeParameter> InputTypes,
-        string? Key,
-        string ResolveCall,
         ServiceRegistrationModel Registration,
         ImmutableEquatableArray<string> Tags);
 

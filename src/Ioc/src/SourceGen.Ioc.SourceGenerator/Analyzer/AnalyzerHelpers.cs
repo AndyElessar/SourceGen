@@ -337,14 +337,23 @@ internal static class AnalyzerHelpers
         if(isOpenImplementation && !isOpenServiceType)
             return "an open generic implementation requires an open generic service type";
 
-        if(!isOpenImplementation && isOpenServiceType)
-            return "a closed implementation cannot be registered as an open generic service type";
-
         if(!isOpenServiceType)
             return null;
 
         var implementationDefinition = implementationType.OriginalDefinition;
         var serviceDefinition = serviceType.OriginalDefinition;
+
+        // A closed implementation is registered as each closed form of the open service type it implements or inherits
+        if(!isOpenImplementation)
+        {
+            foreach(var candidate in EnumerateImplicitServiceTypes(implementationType))
+            {
+                if(SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, serviceDefinition))
+                    return null;
+            }
+
+            return "the closed implementation does not implement or inherit any form of the open generic service type";
+        }
         if(SymbolEqualityComparer.Default.Equals(implementationDefinition, serviceDefinition))
             return null;
 

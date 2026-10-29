@@ -49,17 +49,19 @@ public class MyServiceDecorator2(ILogger<MyServiceDecorator2> logger, IMyService
 #endregion
 
 #region Generate:
-service.AddSingleton<MyService>();
-service.AddKeyedSingleton<IMyService>("SourceGen.Ioc.Decorated:IMyService|MyService", (IServiceProvider sp, object? key) =>
+services.AddSingleton<MyService, MyService>();
+services.AddKeyedSingleton<IMyService>("SourceGen.Ioc.Decorated:IMyService|MyService", (IServiceProvider sp, object? key) =>
 {
     var s0 = sp.GetRequiredService<MyService>();
-    var s1_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator2>>();
-    var s1 = new MyServiceDecorator2(s1_p1, s0);
-    var s2_p1 = sp.GetRequiredService<ILogger<MyServiceDecorator>>();
-    var s2 = new MyServiceDecorator(s2_p1, s1);
+    var s1_p0 = sp.GetRequiredService<ILogger<MyServiceDecorator2>>();
+    var s1 = new MyServiceDecorator2(s1_p0, s0);
+    var s2_p0 = sp.GetRequiredService<ILogger<MyServiceDecorator>>();
+    var s2 = new MyServiceDecorator(s2_p0, s1);
     return s2;
 });
-service.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredKeyedService<IMyService>("SourceGen.Ioc.Decorated:IMyService|MyService"));
+services.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredKeyedService<IMyService>("SourceGen.Ioc.Decorated:IMyService|MyService"));
+// [IocRegister] on the decorator also registers the decorator itself
+services.AddTransient<MyServiceDecorator, MyServiceDecorator>();
 #endregion
 ```
 
@@ -137,17 +139,15 @@ internal sealed class HandlerDecorator2<TRequest, TResponse>(
 #endregion
 
 #region Generate:
-services.AddKeyedSingleton<IRequestHandler<TestRequest, List<string>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest, List<string>>|TestHandler", (IServiceProvider sp, object? key) =>
+services.AddKeyedSingleton<IRequestHandler<TestRequest, List<string>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest, System.Collections.Generic.List<string>>|TestHandler", (IServiceProvider sp, object? key) =>
 {
     var s0 = sp.GetRequiredService<TestHandler>();
-
     var s1 = new HandlerDecorator2<TestRequest, List<string>>(s0);
-
     var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest, List<string>>>>();
     var s2 = new HandlerDecorator1<TestRequest, List<string>>(s1, s2_p0);
     return s2;
 });
-services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<TestRequest, List<string>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest, List<string>>|TestHandler"));
+services.AddSingleton<IRequestHandler<TestRequest, List<string>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<TestRequest, List<string>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest, System.Collections.Generic.List<string>>|TestHandler"));
 #endregion
 ```
 

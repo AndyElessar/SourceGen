@@ -44,6 +44,35 @@ public class PartialAccessorTests
     }
 
     [Test]
+    public async Task PartialMethod_TaskOfSynchronousService_ReturnsCompletedTask()
+    {
+        // Only an async-init service is awaited; a synchronous service is wrapped without the 'async' modifier
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocContainer]
+            public partial class TestContainer
+            {
+                public partial global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetMyServiceAsync();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task PartialProperty_ResolvesRegisteredService()
     {
         const string source = """

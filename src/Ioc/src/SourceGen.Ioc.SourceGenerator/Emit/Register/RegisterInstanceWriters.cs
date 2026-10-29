@@ -191,9 +191,7 @@ partial class IocSourceGenerator
             }
 
             var args = BuildArgumentListFromEntries(entries);
-            writer.WriteLine(useAwait
-                ? $"await {instanceVarName}.{mName}({args});"
-                : $"{instanceVarName}.{mName}({args});");
+            writer.WriteLine($"{(useAwait ? "await " : "")}{instanceVarName}.{mName}({args});");
         }
     }
 }

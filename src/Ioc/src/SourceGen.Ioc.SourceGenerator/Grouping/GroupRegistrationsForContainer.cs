@@ -97,16 +97,25 @@ partial class IocSourceGenerator
     [
         "GetService", "GetRequiredService", "GetKeyedService", "GetRequiredKeyedService", "GetServices", "GetKeyedServices",
         "GetFallbackServiceProvider", "GetType", "GetHashCode",
-        "CreateScope", "CreateAsyncScope", "CreateBuilder", "CreateServiceProvider", "CreateFallbackScope",
+        "CreateScope", "CreateAsyncScope", "CreateFallbackScope", "ServiceProviderFactory",
         "CreateControllerFactory", "CreateComponentFactory", "CreateComponentPropertyInjector",
         "_root", "_disposed", "_isRootScope", "_fallbackProvider", "_ownedFallbackProvider", "_fallbackScope",
         "_localResolvers", "_serviceResolvers", "_controllerFactoryCache", "_componentFactoryCache", "_propertyActivatorCache",
     ];
 
-    private static HashSet<string> GetReservedNames(ContainerModel container)
+    private static ReservedMemberNames GetReservedNames(ContainerModel container)
     {
-        var reservedNames = new HashSet<string>(GeneratedMemberNames, StringComparer.Ordinal);
-        reservedNames.UnionWith(container.MemberNames);
+        var reservedNames = new ReservedMemberNames();
+        foreach(var name in GeneratedMemberNames)
+        {
+            reservedNames.Add(name);
+        }
+
+        foreach(var name in container.MemberNames)
+        {
+            reservedNames.Add(name);
+        }
+
         foreach(var module in container.ImportedModules)
         {
             reservedNames.Add(GetModuleFieldName(module.Name));
@@ -116,25 +125,79 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Gets whether a resolver method name, or a method derived from it (<c>Create…</c>, <c>…Async</c>), is reserved.
+    /// Reserved member names, checked without building candidate names: each reserved name also reserves the
+    /// resolver and field names that would derive it, so a check is a single set lookup.
     /// </summary>
-    private static bool IsReservedResolverName(string methodName, HashSet<string> reservedNames)
+    private sealed class ReservedMemberNames
     {
-        var createName = GetCreateMethodName(methodName);
-        return reservedNames.Contains(methodName)
-            || reservedNames.Contains(createName)
-            || reservedNames.Contains(GetAsyncResolverMethodName(methodName))
-            || reservedNames.Contains(GetAsyncResolverMethodName(createName));
-    }
+        private static readonly string[] SynchronizationFieldSuffixes = ["Lock", "Semaphore", "SpinLock"];
 
-    /// <summary>
-    /// Gets whether a service field name, or a synchronization field derived from it, is reserved.
-    /// </summary>
-    private static bool IsReservedFieldName(string fieldName, HashSet<string> reservedNames) =>
-        reservedNames.Contains(fieldName)
-        || reservedNames.Contains($"{fieldName}Lock")
-        || reservedNames.Contains($"{fieldName}Semaphore")
-        || reservedNames.Contains($"{fieldName}SpinLock");
+        private readonly HashSet<string> resolverNames = new(StringComparer.Ordinal);
+        private readonly HashSet<string> fieldNames = new(StringComparer.Ordinal);
+
+        public void Add(string name)
+        {
+            // A resolver method M is taken by M, its Create method, and their Async variants
+            AddResolverName(name);
+            if(TryRemoveSuffix(name, "Async", out var syncName))
+            {
+                AddResolverName(syncName);
+            }
+
+            // A field F is taken by F and its synchronization fields
+            fieldNames.Add(name);
+            foreach(var suffix in SynchronizationFieldSuffixes)
+            {
+                if(TryRemoveSuffix(name, suffix, out var fieldName))
+                {
+                    fieldNames.Add(fieldName);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets whether a resolver method name, or a method derived from it (<c>Create…</c>, <c>…Async</c>), is reserved.
+        /// </summary>
+        public bool IsReservedResolverName(string methodName) => resolverNames.Contains(methodName);
+
+        /// <summary>
+        /// Gets whether a service field name, or a synchronization field derived from it, is reserved.
+        /// </summary>
+        public bool IsReservedFieldName(string fieldName) => fieldNames.Contains(fieldName);
+
+        /// <summary>
+        /// Adds <paramref name="name"/> and the resolver method names whose Create method (see <see cref="GetCreateMethodName"/>) it is.
+        /// </summary>
+        private void AddResolverName(string name)
+        {
+            resolverNames.Add(name);
+
+            // "Get{X}" creates with "Create{X}"
+            if(name.Length > 6 && name.StartsWith("Create", StringComparison.Ordinal))
+            {
+                resolverNames.Add("Get" + name[6..]);
+            }
+
+            // Any other method M creates with "{M}_Create"
+            if(TryRemoveSuffix(name, "_Create", out var methodName)
+                && !(methodName.Length > 3 && methodName.StartsWith("Get", StringComparison.Ordinal)))
+            {
+                resolverNames.Add(methodName);
+            }
+        }
+
+        private static bool TryRemoveSuffix(string name, string suffix, out string result)
+        {
+            if(name.Length > suffix.Length && name.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                result = name[..^suffix.Length];
+                return true;
+            }
+
+            result = name;
+            return false;
+        }
+    }
 
     /// <summary>
     /// Converts explicit RegistrationData to ServiceRegistrationModel for container generation.
@@ -169,7 +232,7 @@ partial class IocSourceGenerator
         IocFeatures features,
         ThreadSafeStrategy threadSafeStrategy,
         EagerResolveOptions eagerResolveOptions,
-        HashSet<string> reservedNames,
+        ReservedMemberNames reservedNames,
         ImmutableEquatableArray<string> requestedCollectionServiceTypes)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
@@ -195,9 +258,17 @@ partial class IocSourceGenerator
         var hasKeyedServices = false;
 
         // Member names use short type names; collisions among the registered types are detected up front
-        var names = new ContainerNames(registrations
-            .Where(static r => !r.IsOpenGeneric)
-            .SelectMany(static r => new[] { GetNamingTypeName(r.ImplementationType), r.ServiceType.Name }));
+        var typeNames = new List<string>(registrations.Length * 2);
+        foreach(var reg in registrations)
+        {
+            if(!reg.IsOpenGeneric)
+            {
+                typeNames.Add(GetNamingTypeName(reg.ImplementationType));
+                typeNames.Add(reg.ServiceType.Name);
+            }
+        }
+
+        var names = new ContainerNames(typeNames);
 
         foreach(var reg in registrations)
         {
@@ -474,18 +545,27 @@ partial class IocSourceGenerator
     private static ServiceLookupEntry CreateServiceLookupEntry(
         ServiceRegistrationModel reg,
         EagerResolveOptions eagerResolveOptions,
-        HashSet<string> reservedNames,
+        ReservedMemberNames reservedNames,
         ContainerNames names)
     {
         var (fieldName, methodName) = ComputeServiceNames(reg, names);
+        return CreateServiceLookupEntry(reg, methodName, fieldName, eagerResolveOptions, reservedNames);
+    }
 
+    private static ServiceLookupEntry CreateServiceLookupEntry(
+        ServiceRegistrationModel reg,
+        string methodName,
+        string fieldName,
+        EagerResolveOptions eagerResolveOptions,
+        ReservedMemberNames reservedNames)
+    {
         // Avoid naming conflicts with user-declared and generated infrastructure members
-        if(IsReservedResolverName(methodName, reservedNames))
+        if(reservedNames.IsReservedResolverName(methodName))
         {
             methodName = $"{methodName}_Resolve";
         }
 
-        if(IsReservedFieldName(fieldName, reservedNames))
+        if(reservedNames.IsReservedFieldName(fieldName))
         {
             fieldName = $"{fieldName}_Resolve";
         }
@@ -512,22 +592,16 @@ partial class IocSourceGenerator
         ServiceRegistrationModel reg,
         ServiceLookupEntry inner,
         EagerResolveOptions eagerResolveOptions,
-        HashSet<string> reservedNames,
+        ReservedMemberNames reservedNames,
         ContainerNames names)
     {
-        var entry = CreateServiceLookupEntry(reg, eagerResolveOptions, reservedNames, names);
         var safeServiceType = names.Get(reg.ServiceType.Name);
-        var methodName = $"{inner.ResolverMethodName}_As_{safeServiceType}";
-        if(IsReservedResolverName(methodName, reservedNames))
-        {
-            methodName = $"{methodName}_Resolve";
-        }
-
-        var fieldName = $"{inner.FieldName}_As_{safeServiceType}";
-        if(IsReservedFieldName(fieldName, reservedNames))
-        {
-            fieldName = $"{fieldName}_Resolve";
-        }
+        var entry = CreateServiceLookupEntry(
+            reg,
+            $"{inner.ResolverMethodName}_As_{safeServiceType}",
+            $"{inner.FieldName}_As_{safeServiceType}",
+            eagerResolveOptions,
+            reservedNames);
 
         // Transient async-init services only have a creation method (no cached resolver)
         var innerResolverMethodName = !inner.IsAsyncInit
@@ -536,12 +610,7 @@ partial class IocSourceGenerator
                 ? GetAsyncCreateMethodName(inner.ResolverMethodName)
                 : GetAsyncResolverMethodName(inner.ResolverMethodName);
 
-        return entry with
-        {
-            ResolverMethodName = methodName,
-            FieldName = fieldName,
-            InnerResolverMethodName = innerResolverMethodName
-        };
+        return entry with { InnerResolverMethodName = innerResolverMethodName };
     }
 
     /// <summary>
@@ -711,7 +780,10 @@ partial class IocSourceGenerator
 
         if(reg.Lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
         {
-            if(cached.IsEager)
+            // Only eager singletons are always created in a constructor (the root's) before any other thread can
+            // resolve them. Eager scoped services are created in scope constructors, but the root creates them on
+            // demand, so they keep the synchronized shape.
+            if(cached.IsEager && reg.Lifetime == ServiceLifetime.Singleton)
             {
                 return new EagerContainerEntry(
                     reg,
@@ -726,6 +798,7 @@ partial class IocSourceGenerator
                 reg,
                 cached.ResolverMethodName,
                 cached.FieldName!,
+                cached.IsEager,
                 threadSafeStrategy,
                 constructorParameters,
                 injectionMembers,
@@ -828,14 +901,21 @@ partial class IocSourceGenerator
 
             switch(member.MemberType)
             {
+                case InjectionMemberType.Property or InjectionMemberType.Field when member.Type?.Name is IServiceProviderTypeName or IServiceProviderGlobalTypeName:
+                    dependency = new ServiceProviderSelfDependency();
+                    break;
+
                 case InjectionMemberType.Property or InjectionMemberType.Field when member.Type is not null:
+                    // A member with a non-null initializer keeps it when the service is not registered, like the Register output
+                    var hasNonNullDefault = member.HasDefaultValue && !member.DefaultValueIsNull;
                     dependency = ResolveServiceDependencyForContainerEntryModel(
                         member.Type,
                         member.Key,
-                        member.IsNullable,
+                        member.IsNullable || hasNonNullDefault,
                         serviceLookup,
                         collectionRegistrations,
-                        wrapperFields);
+                        wrapperFields,
+                        hasNonNullDefault ? member.DefaultValue : null);
                     break;
 
                 case InjectionMemberType.Method or InjectionMemberType.AsyncMethod:
@@ -900,7 +980,8 @@ partial class IocSourceGenerator
                         parameter.IsOptional,
                         serviceLookup,
                         collectionRegistrations,
-                        wrapperFields);
+                        wrapperFields,
+                        parameter.GetFallbackValue(parameter.Type.Name));
 
                     resolvedParameters.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
                 }
@@ -1045,16 +1126,19 @@ partial class IocSourceGenerator
             parameter.IsOptional,
             serviceLookup,
             collectionRegistrations,
-            wrapperFields);
+            wrapperFields,
+            parameter.GetFallbackValue(parameter.Type.Name));
     }
 
+    /// <param name="fallbackValue">The value of an optional dependency the provider does not resolve, or <see langword="null"/> for <c>null</c>.</param>
     private static ResolvedDependency ResolveServiceDependencyForContainerEntryModel(
         TypeData type,
         string? key,
         bool isOptional,
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
-        WrapperFieldLookup wrapperFields)
+        WrapperFieldLookup wrapperFields,
+        string? fallbackValue = null)
     {
         if(type is CollectionWrapperTypeData collectionType)
         {
@@ -1120,7 +1204,7 @@ partial class IocSourceGenerator
             return new DirectServiceDependency(cached.ResolverMethodName);
         }
 
-        return new FallbackProviderDependency(type.Name, key, isOptional);
+        return new FallbackProviderDependency(type.Name, key, isOptional, fallbackValue);
     }
 
     private static ResolvedDependency ResolveWrapperDependencyForContainerEntryModel(

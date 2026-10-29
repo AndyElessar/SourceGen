@@ -15,12 +15,15 @@ partial class IocSourceGenerator
     {
         public void WriteRegistration(SourceWriter writer)
         {
-            var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
             var lifetime = Lifetime.Name;
-            var newLazy = $"new {wrapperTypeName}(() => {ResolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
-            writer.WriteLine(Key is not null
-                ? $"services.AddKeyed{lifetime}<{wrapperTypeName}>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) => {newLazy});"
-                : $"services.Add{lifetime}<{wrapperTypeName}>(({IServiceProviderGlobalTypeName} sp) => {newLazy});");
+            if(Key is not null)
+            {
+                writer.WriteLine($"services.AddKeyed{lifetime}<global::System.Lazy<{InnerServiceTypeName}>>({Key}, ({IServiceProviderGlobalTypeName} sp, object? key) => new global::System.Lazy<{InnerServiceTypeName}>(() => {ResolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));");
+            }
+            else
+            {
+                writer.WriteLine($"services.Add{lifetime}<global::System.Lazy<{InnerServiceTypeName}>>(({IServiceProviderGlobalTypeName} sp) => new global::System.Lazy<{InnerServiceTypeName}>(() => {ResolveCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));");
+            }
         }
     }
 
@@ -42,7 +45,7 @@ partial class IocSourceGenerator
             return [];
 
         var entries = new List<LazyRegistrationEntry>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var addedKeys = new HashSet<(string ServiceType, string ImplementationType, string? Key)>();
 
         foreach(var regWithTags in registrations)
         {
@@ -50,8 +53,7 @@ partial class IocSourceGenerator
             if(!neededTypes.Contains(reg.ServiceType.Name) || reg.IsOpenGeneric)
                 continue;
 
-            var entryKey = $"{reg.ServiceType.Name}|{reg.ImplementationType.Name}|{reg.Key}";
-            if(!addedKeys.Add(entryKey))
+            if(!addedKeys.Add((reg.ServiceType.Name, reg.ImplementationType.Name, reg.Key)))
                 continue;
 
             entries.Add(new LazyRegistrationEntry(

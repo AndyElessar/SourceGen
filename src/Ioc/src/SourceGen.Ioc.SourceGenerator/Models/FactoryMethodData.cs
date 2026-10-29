@@ -29,7 +29,7 @@ internal sealed record class FactoryMethodData(
     /// Orders factory invocation arguments by the factory method's parameter positions.
     /// </summary>
     /// <param name="serviceProvider">The expression passed to the IServiceProvider parameter.</param>
-    /// <param name="key">The expression passed to the [ServiceKey] parameter, or null to omit it when the registration has no key.</param>
+    /// <param name="key">The expression passed to the [ServiceKey] parameter, or null when the registration has no key; the parameter then gets <c>default!</c>.</param>
     /// <param name="additionalArguments">The resolved arguments for <see cref="AdditionalParameters"/>, in the same order.</param>
     public List<string> OrderArguments(string serviceProvider, string? key, IReadOnlyList<string> additionalArguments)
     {
@@ -44,10 +44,8 @@ internal sealed record class FactoryMethodData(
             }
             else if(position == KeyPosition)
             {
-                if(key is not null)
-                {
-                    arguments.Add(key);
-                }
+                // A non-keyed registration has no key; default compiles for any parameter type
+                arguments.Add(key ?? "default!");
             }
             else
             {

@@ -23,8 +23,8 @@ namespace TestAssembly
         {
             if (!tags.Any())
             {
-                services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) => (global::TestNamespace.MyService)global::TestNamespace.MyServiceFactory.Create(sp));
-                services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => global::TestNamespace.MyServiceFactory.Create(sp));
+                services.AddSingleton<global::TestNamespace.MyService>((global::System.IServiceProvider sp) => (global::TestNamespace.MyService)global::TestNamespace.MyServiceFactory.Create(sp, default!));
+                services.AddSingleton<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => global::TestNamespace.MyServiceFactory.Create(sp, default!));
             }
 
             return services;

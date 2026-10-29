@@ -8,6 +8,31 @@ namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 public class InjectAttributeTests
 {
     [Test]
+    public async Task InjectAttribute_ServiceProviderProperty_PassesProviderDirectly()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class MyService
+            {
+                [IocInject]
+                public IServiceProvider ServiceProvider { get; set; } = default!;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task InjectAttribute_PropertyInjection_GeneratesFactoryMethod()
     {
         const string source = """

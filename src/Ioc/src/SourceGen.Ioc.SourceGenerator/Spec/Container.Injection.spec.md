@@ -4,6 +4,8 @@
 
 The container supports all injection patterns including constructor parameters, properties, synchronous methods, awaited async methods, and optional parameters, consistent with the registration generator.
 
+An optional dependency that the container does not register falls back to its `IServiceProvider` methods and MUST get the same default value as in the Register output (see [Optional Parameter Handling](Register.Injection.spec.md#optional-parameter-handling-constructor-and-method-parameters)): `GetService(typeof(T)) switch { T service => service, _ => defaultValue }`, or `GetService(typeof(T)) as T` when the default value is `null` for a nullable type.
+
 ## Injection Support
 
 Support for all injection patterns consistent with Registration generator:
@@ -45,11 +47,11 @@ partial class AppContainer
 {
     // Field and lock for complex initialization (property/method injection)
     private global::MyService? _myService;
-    private readonly Lock _myServiceLock = new();
-    private global::MyService GetMyService()
-    {
-        if(_myService is not null) return _myService;
+    private readonly global::System.Threading.Lock _myServiceLock = new();
+    private global::MyService GetMyService() => _myService ?? CreateMyService();
 
+    private global::MyService CreateMyService()
+    {
         lock(_myServiceLock)
         {
             if(_myService is not null) return _myService;
@@ -181,7 +183,7 @@ partial class AppContainer
 
     private async global::System.Threading.Tasks.Task<global::FooBar> CreateFooBarAsync()
     {
-        var instance = new global::FooBar
+        var instance = new global::FooBar()
         {
             Logger = (global::ILogger)GetRequiredService(typeof(global::ILogger)),
         };

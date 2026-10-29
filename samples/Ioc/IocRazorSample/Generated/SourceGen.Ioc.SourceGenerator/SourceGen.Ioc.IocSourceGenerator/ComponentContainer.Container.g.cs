@@ -17,8 +17,8 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 namespace IocRazorSample;
 
-[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.187")]
-partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::IocRazorSample.ComponentContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
+[global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
+partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::IocRazorSample.ComponentContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
     private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;
@@ -238,20 +238,26 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
 
     #region IServiceProviderFactory<IServiceCollection>
 
-    /// <summary>
-    /// Creates a new container builder (returns the same IServiceCollection).
-    /// </summary>
-    public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
-
     private object? _ownedFallbackProvider;
 
     /// <summary>
-    /// Creates the service provider from the built IServiceCollection.
+    /// Builds a <see cref="ComponentContainer"/> from an IServiceCollection, which becomes its fallback service provider.
     /// </summary>
-    public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
+    public sealed class ServiceProviderFactory : global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
     {
-        var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new ComponentContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        /// <summary>
+        /// Creates a new container builder (returns the same IServiceCollection).
+        /// </summary>
+        public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
+
+        /// <summary>
+        /// Creates the service provider from the built IServiceCollection.
+        /// </summary>
+        public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
+        {
+            var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
+            return new ComponentContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        }
     }
 
     #endregion
@@ -331,13 +337,79 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
 
     #endregion
 
+    #region IComponentPropertyActivator
+
+    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent>> _propertyActivatorCache = new();
+
+    global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> global::Microsoft.AspNetCore.Components.IComponentPropertyActivator.GetActivator(
+        [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)
+    {
+        if (!_propertyActivatorCache.TryGetValue(componentType, out var activator))
+        {
+            activator = _serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(componentType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))
+                ? static (_, _) => { }
+                : CreateComponentPropertyInjector(componentType);
+            _propertyActivatorCache.TryAdd(componentType, activator);
+        }
+        return activator;
+    }
+
+    private static global::System.Action<global::System.IServiceProvider, global::Microsoft.AspNetCore.Components.IComponent> CreateComponentPropertyInjector(
+        [global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)] global::System.Type componentType)
+    {
+        const global::System.Reflection.BindingFlags flags = global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic;
+        global::System.Collections.Generic.List<(global::System.Reflection.PropertyInfo Property, object? Key)>? injectables = null;
+
+        for (var type = componentType; type is not null; type = type.BaseType)
+        {
+            foreach (var property in type.GetProperties(flags))
+            {
+                if (property.DeclaringType != type) continue;
+                var injectAttr = property.GetCustomAttributes(true)
+                    .FirstOrDefault(a => a.GetType().Name is "InjectAttribute" or "IocInjectAttribute");
+                if (injectAttr is null) continue;
+
+                var keyProp = injectAttr.GetType().GetProperty("Key");
+                var key = keyProp?.GetValue(injectAttr);
+                injectables ??= new();
+                injectables.Add((property, key));
+            }
+        }
+
+        if (injectables is null) return static (_, _) => { };
+
+        return (serviceProvider, component) =>
+        {
+            foreach (var (property, serviceKey) in injectables)
+            {
+                object? value;
+                if (serviceKey is not null)
+                {
+                    if (serviceProvider is not global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyedProvider)
+                    {
+                        throw new global::System.InvalidOperationException($"Cannot provide a value for property '{property.Name}' on type '{componentType.FullName}'. The service provider does not implement 'IKeyedServiceProvider'.");
+                    }
+                    value = keyedProvider.GetRequiredKeyedService(property.PropertyType, serviceKey);
+                }
+                else
+                {
+                    value = serviceProvider.GetService(property.PropertyType) ?? throw new global::System.InvalidOperationException($"Cannot provide a value for property '{property.Name}' on type '{componentType.FullName}'. There is no registered service of type '{property.PropertyType}'.");
+                }
+                property.SetValue(component, value);
+            }
+        };
+    }
+
+    #endregion
+
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4.187")]
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
     internal static class __HotReloadHandler
     {
         public static void ClearCache(global::System.Type[]? _)
         {
             _componentFactoryCache.Clear();
+            _propertyActivatorCache.Clear();
         }
     }
 }

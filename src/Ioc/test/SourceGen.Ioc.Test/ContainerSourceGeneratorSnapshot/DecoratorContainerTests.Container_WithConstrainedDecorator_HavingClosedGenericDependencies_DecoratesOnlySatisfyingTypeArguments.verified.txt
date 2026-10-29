@@ -16,7 +16,7 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 namespace TestNamespace;
 
 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNamespace.TestContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
+partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNamespace.TestContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
     private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;
@@ -286,20 +286,26 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region IServiceProviderFactory<IServiceCollection>
 
-    /// <summary>
-    /// Creates a new container builder (returns the same IServiceCollection).
-    /// </summary>
-    public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
-
     private object? _ownedFallbackProvider;
 
     /// <summary>
-    /// Creates the service provider from the built IServiceCollection.
+    /// Builds a <see cref="TestContainer"/> from an IServiceCollection, which becomes its fallback service provider.
     /// </summary>
-    public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
+    public sealed class ServiceProviderFactory : global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
     {
-        var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
-        return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        /// <summary>
+        /// Creates a new container builder (returns the same IServiceCollection).
+        /// </summary>
+        public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
+
+        /// <summary>
+        /// Creates the service provider from the built IServiceCollection.
+        /// </summary>
+        public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
+        {
+            var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
+            return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        }
     }
 
     #endregion

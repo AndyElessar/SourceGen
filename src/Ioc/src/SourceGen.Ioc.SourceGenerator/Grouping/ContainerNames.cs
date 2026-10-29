@@ -13,13 +13,24 @@ partial class IocSourceGenerator
         private const int MaxLength = 80;
         private const int TruncatedLength = 60;
 
-        private readonly Dictionary<string, string> nameByTypeName = new(StringComparer.Ordinal);
-        private readonly HashSet<string> usedNames = new(StringComparer.Ordinal);
+        private const string GlobalPrefix = "global::";
+
+        private readonly Dictionary<string, string> nameByTypeName;
+
+        // Built on the first type not known up front, since most containers name only known types
+        private HashSet<string>? usedNames;
+
+        // Reused by GetShortName
+        private char[] buffer = new char[128];
 
         /// <param name="typeNames">The type names known up front; the ones whose short names collide all get a hash suffix.</param>
-        public ContainerNames(IEnumerable<string> typeNames)
+        public ContainerNames(List<string> typeNames)
         {
-            var typeNameByShortName = new Dictionary<string, string?>(StringComparer.Ordinal);
+            nameByTypeName = new(typeNames.Count, StringComparer.Ordinal);
+
+            // Whether each short name belongs to more than one type
+            var isSharedByShortName = new Dictionary<string, bool>(typeNames.Count, StringComparer.Ordinal);
+            var hasSharedShortNames = false;
             foreach(var typeName in typeNames)
             {
                 if(nameByTypeName.ContainsKey(typeName))
@@ -28,29 +39,27 @@ partial class IocSourceGenerator
                 var shortName = GetShortName(typeName);
                 nameByTypeName[typeName] = shortName;
 
-                if(!typeNameByShortName.TryGetValue(shortName, out var existing))
+                if(isSharedByShortName.ContainsKey(shortName))
                 {
-                    typeNameByShortName[shortName] = typeName;
+                    isSharedByShortName[shortName] = true;
+                    hasSharedShortNames = true;
                 }
-                else if(existing is not null)
+                else
                 {
-                    // Collision: mark the short name as shared (null)
-                    typeNameByShortName[shortName] = null;
+                    isSharedByShortName[shortName] = false;
                 }
             }
+
+            if(!hasSharedShortNames)
+                return;
 
             foreach(var typeName in nameByTypeName.Keys.ToArray())
             {
                 var shortName = nameByTypeName[typeName];
-                if(typeNameByShortName[shortName] is null)
+                if(isSharedByShortName[shortName])
                 {
                     nameByTypeName[typeName] = AppendHash(shortName, typeName);
                 }
-            }
-
-            foreach(var name in nameByTypeName.Values)
-            {
-                usedNames.Add(name);
             }
         }
 
@@ -62,6 +71,8 @@ partial class IocSourceGenerator
         {
             if(nameByTypeName.TryGetValue(typeName, out var name))
                 return name;
+
+            usedNames ??= new HashSet<string>(nameByTypeName.Values, StringComparer.Ordinal);
 
             name = GetShortName(typeName);
             if(!usedNames.Add(name))
@@ -93,22 +104,39 @@ partial class IocSourceGenerator
         /// Converts a type name to an identifier from its simple names: <c>global::A.B.Foo&lt;global::A.Bar, int&gt;</c>
         /// becomes <c>Foo_Bar_int</c>. Names longer than <see cref="MaxLength"/> are truncated and get a hash suffix.
         /// </summary>
-        private static string GetShortName(string typeName)
+        private string GetShortName(string typeName)
         {
-            var source = typeName.Replace("global::", "");
-            var buffer = new char[source.Length + 1];
+            if(buffer.Length <= typeName.Length)
+            {
+                buffer = new char[Math.Max(typeName.Length + 1, buffer.Length * 2)];
+            }
+
             var length = 0;
             var segmentStart = 0;
             var lastWasSeparator = false;
 
-            if(source.Length > 0 && char.IsDigit(source[0]))
+            // "global::" is skipped wherever it occurs, also in generic arguments
+            var start = 0;
+            while(IsGlobalPrefixAt(typeName, start))
+            {
+                start += GlobalPrefix.Length;
+            }
+
+            if(start < typeName.Length && char.IsDigit(typeName[start]))
             {
                 buffer[length++] = '_';
                 segmentStart = length;
             }
 
-            foreach(var ch in source)
+            for(var i = start; i < typeName.Length; i++)
             {
+                if(IsGlobalPrefixAt(typeName, i))
+                {
+                    i += GlobalPrefix.Length - 1;
+                    continue;
+                }
+
+                var ch = typeName[i];
                 if(char.IsLetterOrDigit(ch) || ch == '_')
                 {
                     buffer[length++] = ch;
@@ -139,11 +167,14 @@ partial class IocSourceGenerator
             if(length == 0)
                 return "Generated";
 
-            var shortName = new string(buffer, 0, length);
-            return shortName.Length > MaxLength
-                ? AppendHash(shortName.Substring(0, TruncatedLength), typeName)
-                : shortName;
+            return length > MaxLength
+                ? AppendHash(new string(buffer, 0, TruncatedLength), typeName)
+                : new string(buffer, 0, length);
         }
+
+        private static bool IsGlobalPrefixAt(string typeName, int index) =>
+            index + GlobalPrefix.Length <= typeName.Length
+            && string.CompareOrdinal(typeName, index, GlobalPrefix, 0, GlobalPrefix.Length) == 0;
 
         /// <summary>
         /// Appends the FNV-1a hash of <paramref name="typeName"/> (deterministic, unlike <see cref="string.GetHashCode()"/>).

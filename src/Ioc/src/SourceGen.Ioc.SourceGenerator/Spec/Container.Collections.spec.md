@@ -24,7 +24,7 @@ Support for collection resolution when multiple implementations are registered f
 |`IReadOnlyList<T>`|Returns array|Supports indexer access|
 |`T[]`|Returns array|Native array type|
 
-> **Note**: Collection resolution only generates for service types with multiple distinct implementations (excluding self-registrations).
+> **Note**: Collection resolution only generates for service types with multiple distinct implementations (excluding self-registrations), or with a single implementation that a dependency or an `IServiceProvider` invocation requests as a collection.
 
 ```csharp
 #region Define:
@@ -45,72 +45,57 @@ partial class AppContainer
 {
     #region Service Resolution
 
-    private global::Plugin1? _plugin1;
-    private readonly SemaphoreSlim _plugin1Semaphore = new(1, 1);
-    private global::Plugin1 GetPlugin1()
+    // Eager singletons (the default EagerResolveOptions)
+    private global::Plugin1 _plugin1 = null!;
+    private global::Plugin1 GetPlugin1() => _plugin1 ?? CreatePlugin1();
+
+    private global::Plugin1 CreatePlugin1()
     {
-        if (_plugin1 is not null) return _plugin1;
+        var instance = new global::Plugin1();
 
-        _plugin1Semaphore.Wait();
-        try
-        {
-            if (_plugin1 is not null) return _plugin1;
-
-            var instance = new global::Plugin1();
-            _plugin1 = instance;
-            return instance;
-        }
-        finally
-        {
-            _plugin1Semaphore.Release();
-        }
+        _plugin1 = instance;
+        return instance;
     }
 
-    private global::Plugin2? _plugin2;
-    private readonly SemaphoreSlim _plugin2Semaphore = new(1, 1);
-    private global::Plugin2 GetPlugin2()
+    private global::Plugin2 _plugin2 = null!;
+    private global::Plugin2 GetPlugin2() => _plugin2 ?? CreatePlugin2();
+
+    private global::Plugin2 CreatePlugin2()
     {
-        if (_plugin2 is not null) return _plugin2;
+        var instance = new global::Plugin2();
 
-        _plugin2Semaphore.Wait();
-        try
-        {
-            if (_plugin2 is not null) return _plugin2;
-
-            var instance = new global::Plugin2();
-            _plugin2 = instance;
-            return instance;
-        }
-        finally
-        {
-            _plugin2Semaphore.Release();
-        }
+        _plugin2 = instance;
+        return instance;
     }
 
-    // Collection resolver for IEnumerable<IPlugin>
-    private global::System.Collections.Generic.IEnumerable<global::IPlugin> GetAllIPlugin() =>
-    [
-        GetPlugin1(),
-        GetPlugin2(),
-    ];
-
-    // Array resolver for IReadOnlyCollection<T>, IReadOnlyList<T>, T[]
+    // One array resolver serves IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T> and T[]
     private global::IPlugin[] GetAllIPluginArray() =>
-    [
-        GetPlugin1(),
-        GetPlugin2(),
-    ];
+        [
+            GetPlugin1(),
+            GetPlugin2(),
+        ];
 
     #endregion
 
     // Registered in _localResolvers
     private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
     [
+        // ...built-in services...
         __Resolver(typeof(global::Plugin1), static c => c.GetPlugin1()),
-        __Resolver(typeof(global::IPlugin), static c => c.GetPlugin1()),
+        // A single IPlugin resolves the last registration
+        __Resolver(typeof(global::IPlugin), static c => c.GetPlugin2()),
         __Resolver(typeof(global::Plugin2), static c => c.GetPlugin2()),
-        // IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T> and T[]
         ..__CollectionResolvers<global::IPlugin>(static c => c.GetAllIPluginArray()),
+    ];
+
+    private static __IocResolver[] __CollectionResolvers<T>(Func<global::AppContainer, object> resolver) =>
+    [
+        __Resolver(typeof(IEnumerable<T>), resolver),
+        __Resolver(typeof(IReadOnlyCollection<T>), resolver),
+        __Resolver(typeof(ICollection<T>), resolver),
+        __Resolver(typeof(IReadOnlyList<T>), resolver),
+        __Resolver(typeof(IList<T>), resolver),
+        __Resolver(typeof(T[]), resolver),
     ];
 }
 #endregion
@@ -179,9 +164,15 @@ partial class AppContainer
     private readonly global::System.Lazy<global::IMyService> _lazy_IMyService_myService;
     private readonly global::System.Func<global::IMyService> _func_IMyService_myService;
 
-    private global::Consumer GetConsumer()
+    // Consumer is an eager singleton (the default EagerResolveOptions)
+    private global::Consumer _consumer = null!;
+    private global::Consumer GetConsumer() => _consumer ?? CreateConsumer();
+
+    private global::Consumer CreateConsumer()
     {
         var instance = new global::Consumer(_lazy_IMyService_myService, _func_IMyService_myService);
+
+        _consumer = instance;
         return instance;
     }
 }
@@ -208,10 +199,26 @@ When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `I
        => [GetKvp_string_IHandler__h1_(), GetKvp_string_IHandler__h2_()];
    ```
 
-3. **`_localResolvers` entries** — For `IEnumerable<KVP>`, `IReadOnlyCollection<KVP>`, `IReadOnlyList<KVP>`, and `KVP[]`:
+3. **Dictionary resolver method** — Builds a `Dictionary<K, V>` from the same entries:
 
    ```csharp
-   __Resolver(typeof(IEnumerable<KeyValuePair<string, IHandler>>), static c => c.GetAllKvp_string_IHandler_Array()),
+   private Dictionary<string, IHandler> GetAllKvp_string_IHandler_Dictionary() =>
+       new Dictionary<string, IHandler>()
+       {
+           ["h1"] = GetHandler1__h1_(),
+           ["h2"] = GetHandler2__h2_(),
+       };
+   ```
+
+4. **`_localResolvers` entries** — `IReadOnlyList<KVP>`, `IList<KVP>` and `KVP[]` use the array resolver; `IEnumerable<KVP>`, `IReadOnlyCollection<KVP>`, `ICollection<KVP>` and the dictionary interfaces use the dictionary resolver:
+
+   ```csharp
+   __Resolver(typeof(IEnumerable<KeyValuePair<string, IHandler>>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+   __Resolver(typeof(IReadOnlyList<KeyValuePair<string, IHandler>>), static c => c.GetAllKvp_string_IHandler_Array()),
+   __Resolver(typeof(KeyValuePair<string, IHandler>[]), static c => c.GetAllKvp_string_IHandler_Array()),
+   __Resolver(typeof(IReadOnlyDictionary<string, IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+   __Resolver(typeof(IDictionary<string, IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+   __Resolver(typeof(Dictionary<string, IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
    ```
 
 ## See Also

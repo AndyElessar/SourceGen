@@ -106,14 +106,12 @@ partial class IocSourceGenerator
             registration.ImplementationType
         };
         var addedTypeNames = new HashSet<string>(StringComparer.Ordinal) { registration.ImplementationType.Name };
+        var isClosedImplementation = registration.ImplementationType is not GenericTypeData { IsOpenGeneric: true };
 
         // Add explicit service types from registration
         foreach(var st in registration.ServiceTypes)
         {
-            if(addedTypeNames.Add(st.Name))
-            {
-                serviceTypesToRegister.Add(st);
-            }
+            AddExplicitServiceType(st);
         }
 
         // Add service types from default settings
@@ -121,10 +119,7 @@ partial class IocSourceGenerator
         {
             foreach(var st in additionalServiceTypesFromDefaults)
             {
-                if(addedTypeNames.Add(st.Name))
-                {
-                    serviceTypesToRegister.Add(st);
-                }
+                AddExplicitServiceType(st);
             }
         }
 
@@ -178,6 +173,38 @@ partial class IocSourceGenerator
             tags,
             openGenericEntries,
             closedGenericDependencies);
+
+        // A closed implementation is registered as each closed form of an open generic service type that it implements
+        // or inherits (e.g. typeof(IHandler<>) for Handler : IHandler<string>). Without such a form, the open type is
+        // kept and skipped as invalid (SGIOC032).
+        void AddExplicitServiceType(TypeData serviceType)
+        {
+            if(isClosedImplementation && serviceType is GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } openServiceType)
+            {
+                var closed = false;
+                foreach(var candidate in registration.AllInterfaces.Concat(registration.AllBaseClasses))
+                {
+                    if(candidate is GenericTypeData { IsOpenGeneric: false } closedCandidate
+                        && closedCandidate.GenericArity == openServiceType.GenericArity
+                        && closedCandidate.NameWithoutGeneric == openServiceType.NameWithoutGeneric)
+                    {
+                        closed = true;
+                        if(addedTypeNames.Add(closedCandidate.Name))
+                        {
+                            serviceTypesToRegister.Add(closedCandidate);
+                        }
+                    }
+                }
+
+                if(closed)
+                    return;
+            }
+
+            if(addedTypeNames.Add(serviceType.Name))
+            {
+                serviceTypesToRegister.Add(serviceType);
+            }
+        }
     }
 
     /// <summary>

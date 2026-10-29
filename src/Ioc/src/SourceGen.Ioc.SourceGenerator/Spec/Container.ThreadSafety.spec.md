@@ -241,7 +241,7 @@ Each strategy generates different synchronization fields:
 |`SpinLock`|`private T? _field;`|`private SpinLock _fieldSpinLock = new(false);` (not readonly)|No (value type)|
 |`CompareExchange`|`private T? _field;`|None|No|
 
-> **Note**: Eager services use non-nullable fields (`private T _field;`) without synchronization fields, as they are initialized in the constructor.
+> **Note**: Eager singletons use non-nullable fields (`private T _field;`) without synchronization fields, as the root constructor creates them before the container can be used from other threads. Eager scoped services MUST keep the synchronized shape above: scope constructors create them, but the root creates them on demand, possibly from several threads.
 
 ## Scope Constructor Behavior
 

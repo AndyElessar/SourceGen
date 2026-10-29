@@ -104,7 +104,7 @@ internal static partial class TransformExtensions
                 var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
 
                 // Get the C# code representation of the default value
-                var defaultValue = hasDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue) : null;
+                var defaultValue = hasDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue, param.Type) : null;
 
                 parameters.Add(new ParameterData(
                     param.Name,

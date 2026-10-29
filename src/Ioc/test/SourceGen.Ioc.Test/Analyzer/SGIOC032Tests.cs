@@ -30,8 +30,9 @@ public class SGIOC032Tests
     }
 
     [Test]
-    public async Task SGIOC032_ClosedImplementation_WithOpenServiceType_ReportsDiagnostic()
+    public async Task SGIOC032_ClosedImplementation_WithImplementedOpenServiceType_NoDiagnostic()
     {
+        // The closed implementation is registered as IRepository<int>
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -42,6 +43,28 @@ public class SGIOC032Tests
 
             [IocRegister(ServiceTypes = [typeof(IRepository<>)])]
             public class IntRepository : IRepository<int> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc032 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC032);
+
+        await Assert.That(sgioc032).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC032_ClosedImplementation_WithUnimplementedOpenServiceType_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { }
+            public interface IOther { }
+
+            [IocRegister(ServiceTypes = [typeof(IRepository<>)])]
+            public class OtherService : IOther { }
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);

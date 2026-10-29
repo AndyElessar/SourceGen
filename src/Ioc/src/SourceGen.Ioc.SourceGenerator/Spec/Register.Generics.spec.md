@@ -24,6 +24,10 @@ public sealed class Logger<T> : ILogger<T>
 }
 
 public interface IRequest<TSelf, TResponse> where TSelf : IRequest<TSelf, TResponse>;
+public interface IUnitOfWorkFactory
+{
+    List<T> Query<T>(Guid pk);
+}
 
 [IocRegisterDefaults(
     typeof(IRequestHandler<,>),
@@ -97,17 +101,23 @@ internal sealed class ViewModel(IRequestHandler<TestRequest<TestEntity>, List<Te
 #endregion
 
 #region Generate:
-services.AddSingleton<TestHandler<TestEntity>>();
-services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) =>
+// ...open generic registrations...
+
+// Closed generic registration discovered from ViewModel's constructor; decorated like other registrations (see Register.Decorators)
+services.AddSingleton<TestHandler<TestEntity>, TestHandler<TestEntity>>();
+services.AddKeyedSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest<TestEntity>, System.Collections.Generic.List<TestEntity>>|TestHandler<TestEntity>", (IServiceProvider sp, object? key) =>
 {
     var s0 = sp.GetRequiredService<TestHandler<TestEntity>>();
-
     var s1 = new HandlerDecorator2<TestRequest<TestEntity>, List<TestEntity>>(s0);
-
     var s2_p0 = sp.GetRequiredService<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
     var s2 = new HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>(s1, s2_p0);
     return s2;
 });
+services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest<TestEntity>, System.Collections.Generic.List<TestEntity>>|TestHandler<TestEntity>"));
+
+// The decorator's ILogger<HandlerDecorator1<...>> dependency is also closed from the open generic Logger<T>
+services.AddSingleton<Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>, Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
+services.AddSingleton<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>((IServiceProvider sp) => sp.GetRequiredService<Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>());
 #endregion
 ```
 
@@ -138,7 +148,7 @@ public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<
 
 public sealed record TestRequest<T> : IRequest<TestRequest<T>, List<T>>;
 
-[IocRegister]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRequestHandler<,>)])]
 public class TestRequestHandler<T> : IRequestHandler<TestRequest<T>, List<T>>;
 
 public class ViewModel
@@ -149,17 +159,16 @@ public class ViewModel
     // [IocDiscover<IRequestHandler<TestRequest<string>, List<string>>>]
     public void DoAction()
     {
-    var response = Mediator.Send(new TestRequest<string>());
+        // e.g. mediator.Send(new TestRequest<string>()) resolves IRequestHandler<TestRequest<string>, List<string>> at runtime
     }
 }
 #endregion
 
 #region Generate:
-services.AddSingleton<IRequestHandler<TestRequest<string>, List<string>>>((IServiceProvider sp) =>
-{
-    var s0 = sp.GetRequiredService<TestRequestHandler<string>>();
-    return s0;
-});
+services.AddSingleton(typeof(TestRequestHandler<>), typeof(TestRequestHandler<>));
+// The open IRequestHandler<,> registration is skipped (TestRequest<T> is not a type parameter); the discovered closed type is registered
+services.AddSingleton<TestRequestHandler<string>, TestRequestHandler<string>>();
+services.AddSingleton<IRequestHandler<TestRequest<string>, List<string>>>((IServiceProvider sp) => sp.GetRequiredService<TestRequestHandler<string>>());
 #endregion
 ```
 
@@ -223,8 +232,9 @@ public sealed class App { }
 // Type mapping: Task<Entity> matches Task<int> template
 // → int placeholder maps to Entity
 // → T = Entity
-services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
-    (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>());
+services.AddSingleton(typeof(Handler<>), typeof(Handler<>));
+services.AddSingleton<Handler<Entity>, Handler<Entity>>();
+services.AddSingleton<IRequestHandler<Task<Entity>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>());
 #endregion
 ```
 
@@ -265,8 +275,9 @@ public sealed class App { }
 // Type mapping:
 // - Task<Entity> matches Task<int> → int = Entity → T1 = Entity
 // - List<Dto> matches List<decimal> → decimal = Dto → T2 = Dto
-services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
-    (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>());
+services.AddSingleton(typeof(Handler<,>), typeof(Handler<,>));
+services.AddSingleton<Handler<Entity, Dto>, Handler<Entity, Dto>>();
+services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>());
 #endregion
 ```
 
@@ -292,6 +303,8 @@ public static class FactoryContainer
         => new Handler<T1, T2>();
 }
 
+public class Handler<T1, T2> : IRequestHandler<Task<T2>, List<T1>> { }
+
 public class Entity { }
 public class Dto { }
 
@@ -305,8 +318,7 @@ public sealed class App { }
 // - Task<Entity> matches Task<int> → int = Entity → T2 = Entity
 // - List<Dto> matches List<decimal> → decimal = Dto → T1 = Dto
 // Note: Create<T1, T2> so call is Create<Dto, Entity>
-services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>(sp =>
-    (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>());
+services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>());
 #endregion
 ```
 
@@ -326,6 +338,8 @@ public static class FactoryContainer
         => new Handler<T>(sp);
 }
 
+public class Handler<T>(IServiceProvider sp) : IRequestHandler<Task<T>> { }
+
 public class Entity { }
 
 [IocDiscover<IRequestHandler<Task<Entity>>>]
@@ -334,8 +348,7 @@ public sealed class App { }
 
 #region Generate:
 // Factory method receives IServiceProvider
-services.AddSingleton<IRequestHandler<Task<Entity>>>(sp =>
-    (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp));
+services.AddSingleton<IRequestHandler<Task<Entity>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp));
 #endregion
 ```
 
@@ -358,6 +371,9 @@ public static class FactoryContainer
         => throw new NotImplementedException();
 }
 
+[IocRegister]
+public class Handler<T1, T2> : IRequestHandler<Task<T1>, List<T2>> { }
+
 public class Entity { }
 public class Dto { }
 
@@ -368,6 +384,7 @@ public sealed class App { }
 #region Generate:
 // NO factory registration is generated because placeholders are not unique
 // Only the implementation type itself is registered
+services.AddSingleton(typeof(Handler<,>), typeof(Handler<,>));
 services.AddSingleton<Handler<Entity, Dto>, Handler<Entity, Dto>>();
 #endregion
 ```

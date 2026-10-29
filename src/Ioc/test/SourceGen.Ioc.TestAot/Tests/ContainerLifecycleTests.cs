@@ -89,7 +89,7 @@ public sealed class ContainerLifecycleTests
     {
         var services = new ServiceCollection();
         services.AddScoped<LifecycleExternalService>();
-        var container = (FallbackScopeContainer)new FallbackScopeContainer().CreateServiceProvider(services);
+        var container = (FallbackScopeContainer)new FallbackScopeContainer.ServiceProviderFactory().CreateServiceProvider(services);
 
         LifecycleExternalService fromScope1;
         using(var scope1 = container.CreateScope())
@@ -143,7 +143,7 @@ public sealed class ContainerLifecycleTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<LifecycleExternalService>();
-        var container = (FallbackScopeContainer)new FallbackScopeContainer().CreateServiceProvider(services);
+        var container = (FallbackScopeContainer)new FallbackScopeContainer.ServiceProviderFactory().CreateServiceProvider(services);
 
         var external = (LifecycleExternalService)container.GetRequiredService(typeof(LifecycleExternalService));
 
@@ -173,7 +173,7 @@ public sealed class ContainerLifecycleTests
         var services = new ServiceCollection();
         services.AddSingleton<LifecycleExternalService>();
         services.AddKeyedSingleton<LifecycleExternalService>("keyed");
-        using var container = (FallbackScopeContainer)new FallbackScopeContainer().CreateServiceProvider(services);
+        using var container = (FallbackScopeContainer)new FallbackScopeContainer.ServiceProviderFactory().CreateServiceProvider(services);
 
         var service = container.GetRequiredService(typeof(LifecycleExternalService));
         var keyedService = container.GetRequiredKeyedService(typeof(LifecycleExternalService), "keyed");
@@ -189,7 +189,7 @@ public sealed class ContainerLifecycleTests
     [Test]
     public async Task GenericResolution_ServiceMissingEverywhere_RequiredThrowsAndOptionalReturnsEmpty()
     {
-        using var container = (FallbackScopeContainer)new FallbackScopeContainer().CreateServiceProvider(new ServiceCollection());
+        using var container = (FallbackScopeContainer)new FallbackScopeContainer.ServiceProviderFactory().CreateServiceProvider(new ServiceCollection());
 
         await Assert.That(container.GetService<LifecycleExternalService>()).IsNull();
         await Assert.That(container.GetKeyedService<LifecycleExternalService>("missing")).IsNull();

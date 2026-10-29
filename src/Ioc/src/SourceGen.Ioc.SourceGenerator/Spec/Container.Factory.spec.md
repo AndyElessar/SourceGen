@@ -11,7 +11,9 @@ Support for custom factory methods and static instances in containers. Factory r
 
 ```csharp
 #region Define:
+public interface IConfig { string ConnectionString { get; } }
 public interface IConnection;
+public sealed class Connection(string connectionString) : IConnection;
 
 public static class ConnectionFactory
 {
@@ -37,52 +39,52 @@ partial class AppContainer
     {
         _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
-        // Copy only factory-based singleton fields from parent
+        // Copy only factory-based singleton fields from parent (an eager singleton by default)
         // Instance registrations don't have fields, no need to copy
-        _connection = parent._connection;
+        _iConnection_ConnectionFactory_Create = parent._iConnection_ConnectionFactory_Create;
     }
 
     #region Service Resolution
 
-    // Factory registration (Singleton) - uses field for caching
-    private global::IConnection? _connection;
-    private readonly SemaphoreSlim _connectionSemaphore = new(1, 1);
-    private global::IConnection GetConnection()
+    // Factory registration (Singleton) - uses field for caching; members are named after the service type and factory
+    private global::IConnection _iConnection_ConnectionFactory_Create = null!;
+    private global::IConnection GetIConnection_ConnectionFactory_Create() => _iConnection_ConnectionFactory_Create ?? CreateIConnection_ConnectionFactory_Create();
+
+    private global::IConnection CreateIConnection_ConnectionFactory_Create()
     {
-        if (_connection is not null) return _connection;
+        var instance = (global::IConnection)global::ConnectionFactory.Create(this);
 
-        _connectionSemaphore.Wait();
-        try
-        {
-            if (_connection is not null) return _connection;
-
-            var instance = (global::IConnection)global::ConnectionFactory.Create(this);
-            _connection = instance;
-            return instance;
-        }
-        finally
-        {
-            _connectionSemaphore.Release();
-        }
+        _iConnection_ConnectionFactory_Create = instance;
+        return instance;
     }
 
-    // Instance registration - directly returns the static instance, no field needed
-    // The instance is externally managed and will NOT be disposed by the container
-    private global::IConnection GetDefaultConnection() => global::ConnectionFactory.Default;
-
     #endregion
+
+    // Instance registration - the resolver entry returns the static instance directly, no field or resolver method
+    // The instance is externally managed and will NOT be disposed by the container
+    private static readonly KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>[] _localResolvers =
+    [
+        // ...built-in services...
+        __Resolver(typeof(global::IConnection), static c => c.GetIConnection_ConnectionFactory_Create()),
+        __KeyedResolver(typeof(global::IConnection), "default", static _ => global::ConnectionFactory.Default),
+    ];
 
     #region Disposal
 
     public void Dispose()
     {
-        if(Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        if(!_isRootScope) return;
+        if(!_isRootScope)
+        {
+            DisposeService(_fallbackScope);
+            return;
+        }
 
         // Only dispose factory-created instances
         // Instance registrations are NOT disposed (externally managed)
-        DisposeService(_connection);
+        DisposeService(_iConnection_ConnectionFactory_Create);
+        DisposeService(_ownedFallbackProvider);
     }
 
     #endregion

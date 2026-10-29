@@ -1,9 +1,12 @@
-﻿using IocSample.Shared;
+using IocSample.Shared;
 
 var services = new ServiceCollection();
 
+// Tagged registrations only add services with a matching tag, so also register the untagged ones
 services
+    .AddShared()
     .AddShared("Mediator")
+    .AddIocSample()
     .AddIocSample("Mediator");
 
 var sp = services.BuildServiceProvider();
@@ -12,7 +15,8 @@ Test(sp);
 
 Console.WriteLine();
 Console.WriteLine("Use SourceGen.Ioc");
-Test(new Module().CreateServiceProvider(services));
+using var module = (Module)new Module.ServiceProviderFactory().CreateServiceProvider(services);
+Test(module);
 
 static void Test(IServiceProvider sp)
 {

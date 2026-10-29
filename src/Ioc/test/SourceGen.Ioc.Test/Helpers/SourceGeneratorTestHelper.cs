@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -12,7 +13,7 @@ namespace SourceGen.Ioc.Test.Helpers;
 /// </summary>
 /// <param name="Result">The generator run result containing generated sources.</param>
 /// <param name="OutputCompilation">The compilation after the generator has run, including generated sources.</param>
-public readonly record struct GeneratorTestResult(GeneratorRunResult Result, Compilation OutputCompilation)
+public readonly partial record struct GeneratorTestResult(GeneratorRunResult Result, Compilation OutputCompilation)
 {
     /// <summary>
     /// Gets all generated source texts from the generator run result.
@@ -62,21 +63,39 @@ public readonly record struct GeneratorTestResult(GeneratorRunResult Result, Com
     }
 
     /// <summary>
-    /// Verifies that every top-level generated type has <c>[GeneratedCode]</c>.
+    /// Verifies that every top-level generated type has <c>[GeneratedCode]</c>, with a <c>major.minor.patch</c> version
+    /// that does not include the git height.
     /// </summary>
     private async Task VerifyGeneratedCodeAttributesAsync()
     {
-        var missing = Result.GeneratedSources
+        var topLevelTypes = Result.GeneratedSources
             .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes()
                 .OfType<BaseTypeDeclarationSyntax>()
                 .Where(type => !type.Ancestors().OfType<BaseTypeDeclarationSyntax>().Any())
-                .Where(type => !type.AttributeLists.Any(l => l.Attributes.Any(a => a.Name.ToString().EndsWith("GeneratedCode", StringComparison.Ordinal))))
-                .Select(type => $"{source.HintName}: {type.Identifier}"))
+                .Select(type => (source.HintName, Type: type, Attribute: type.AttributeLists
+                    .SelectMany(static l => l.Attributes)
+                    .FirstOrDefault(static a => a.Name.ToString().EndsWith("GeneratedCode", StringComparison.Ordinal)))))
+            .ToArray();
+
+        var missing = topLevelTypes
+            .Where(static t => t.Attribute is null)
+            .Select(static t => $"{t.HintName}: {t.Type.Identifier}")
             .ToArray();
 
         await Assert.That(missing).IsEmpty()
             .Because($"Generated types without [GeneratedCode]:{Environment.NewLine}{string.Join(Environment.NewLine, missing)}");
+
+        var invalidVersions = topLevelTypes
+            .Where(static t => t.Attribute?.ArgumentList is { Arguments: [_, var version] }
+                && !VersionRegex.IsMatch(version.ToString()))
+            .Select(static t => $"{t.HintName}: {t.Type.Identifier} {t.Attribute}")
+            .ToArray();
+
+        await Assert.That(invalidVersions).IsEmpty()
+            .Because($"[GeneratedCode] versions that are not major.minor.patch:{Environment.NewLine}{string.Join(Environment.NewLine, invalidVersions)}");
     }
+    [GeneratedRegex("""^"\d+\.\d+\.\d+"$""")]
+    private static partial Regex VersionRegex { get; }
 
     /// <summary>
     /// Verifies that the generated code has no warnings when compiled with nullable warnings enabled.

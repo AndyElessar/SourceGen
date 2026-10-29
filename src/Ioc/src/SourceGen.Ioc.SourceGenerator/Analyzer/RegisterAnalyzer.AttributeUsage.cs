@@ -156,12 +156,61 @@ public sealed partial class RegisterAnalyzer
         if (!isDefaultsAttribute)
         {
             AnalyzeNameofMemberOnSyntax(context, argumentList, location, "Instance");
+
+            // SGIOC014: [ServiceKey] factory parameter without a Key. A defaults Factory is shared by keyed and
+            // non-keyed registrations, so only a registration's own Factory is checked.
+            AnalyzeFactoryServiceKeyWithoutKey(context, argumentList);
         }
 
         // SGIOC023 + SGIOC024: Validate InjectMembers elements - only for IoCRegisterFor attributes
         if (!isDefaultsAttribute)
         {
             AnalyzeInjectMembersOnAttribute(context, argumentList, (analyzerContext.Features & IocFeatures.AsyncMethodInject) != 0);
+        }
+    }
+
+    /// <summary>
+    /// SGIOC014: Reports [ServiceKey] parameters of the registration's Factory method when the registration has no Key.
+    /// The generator passes <c>default</c> for them.
+    /// </summary>
+    private static void AnalyzeFactoryServiceKeyWithoutKey(
+        SyntaxNodeAnalysisContext context,
+        AttributeArgumentListSyntax argumentList)
+    {
+        AttributeArgumentSyntax? factoryArgument = null;
+        ExpressionSyntax? factoryNameof = null;
+        foreach (var argument in argumentList.Arguments)
+        {
+            switch (argument.NameEquals?.Name.Identifier.Text)
+            {
+                case "Key":
+                    return;
+                case "Factory"
+                    when argument.Expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" } } invocation
+                        && invocation.ArgumentList.Arguments.Count == 1:
+                    factoryArgument = argument;
+                    factoryNameof = invocation.ArgumentList.Arguments[0].Expression;
+                    break;
+            }
+        }
+
+        if (factoryArgument is null || factoryNameof is null)
+            return;
+
+        var symbolInfo = context.SemanticModel.GetSymbolInfo(factoryNameof, context.CancellationToken);
+        if ((symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is not IMethodSymbol factory)
+            return;
+
+        // Reported on the Factory argument: the factory method may be declared in another file or assembly
+        foreach (var parameter in factory.Parameters)
+        {
+            var hasServiceKey = parameter.GetAttributes().Any(static attr =>
+                attr.AttributeClass?.Name == "ServiceKeyAttribute"
+                && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection");
+            if (hasServiceKey)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ServiceKeyNotRegistered, factoryArgument.GetLocation(), parameter.Name));
+            }
         }
     }
 

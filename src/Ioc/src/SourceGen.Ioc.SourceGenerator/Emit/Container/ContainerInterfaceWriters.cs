@@ -314,9 +314,10 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer, bool integrateServiceProvider)
     {
-        // Fallback lookups used on a dictionary miss (null when the container is standalone)
-        string? fallback = integrateServiceProvider ? "GetFallbackServiceProvider()" : null;
-        string? keyedFallback = integrateServiceProvider ? "(GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)" : null;
+        // Fallback lookups used on a dictionary miss (only when the container integrates a service provider).
+        // They are constants, so each miss expression below is a constant string as well.
+        const string fallback = "GetFallbackServiceProvider()";
+        const string keyedFallback = "(GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)";
 
         // GetService<T>
         WriteGenericResolveMethod(writer,
@@ -324,7 +325,7 @@ partial class IocSourceGenerator
             keyed: false,
             "typeof(T)",
             "? resolver(this) as T",
-            fallback is null ? ": null;" : $": {fallback}?.GetService(typeof(T)) as T;");
+            integrateServiceProvider ? $": {fallback}?.GetService(typeof(T)) as T;" : ": null;");
 
         // GetRequiredService<T>
         const string notFound = "throw new global::System.InvalidOperationException($\"No service for type '{typeof(T)}' has been registered.\")";
@@ -333,7 +334,7 @@ partial class IocSourceGenerator
             keyed: false,
             "typeof(T)",
             "? (T)resolver(this)",
-            fallback is null ? $": {notFound};" : $": (T)({fallback}?.GetService(typeof(T)) ?? {notFound});");
+            integrateServiceProvider ? $": (T)({fallback}?.GetService(typeof(T)) ?? {notFound});" : $": {notFound};");
 
         // GetServices<T>
         WriteGenericResolveMethod(writer,
@@ -341,7 +342,7 @@ partial class IocSourceGenerator
             keyed: false,
             "typeof(global::System.Collections.Generic.IEnumerable<T>)",
             "? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)",
-            fallback is null ? ": [];" : $": {fallback}?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];");
+            integrateServiceProvider ? $": {fallback}?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];" : ": [];");
 
         // GetKeyedService<T>
         WriteGenericResolveMethod(writer,
@@ -349,7 +350,7 @@ partial class IocSourceGenerator
             keyed: true,
             "typeof(T)",
             "? resolver(this) as T",
-            keyedFallback is null ? ": null;" : $": {keyedFallback}?.GetKeyedService(typeof(T), serviceKey) as T;");
+            integrateServiceProvider ? $": {keyedFallback}?.GetKeyedService(typeof(T), serviceKey) as T;" : ": null;");
 
         // GetRequiredKeyedService<T>
         const string keyedNotFound = "throw new global::System.InvalidOperationException($\"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.\")";
@@ -358,7 +359,7 @@ partial class IocSourceGenerator
             keyed: true,
             "typeof(T)",
             "? (T)resolver(this)",
-            keyedFallback is null ? $": {keyedNotFound};" : $": (T)({keyedFallback}?.GetKeyedService(typeof(T), serviceKey) ?? {keyedNotFound});");
+            integrateServiceProvider ? $": (T)({keyedFallback}?.GetKeyedService(typeof(T), serviceKey) ?? {keyedNotFound});" : $": {keyedNotFound};");
 
         // GetKeyedServices<T>
         WriteGenericResolveMethod(writer,
@@ -366,7 +367,7 @@ partial class IocSourceGenerator
             keyed: true,
             "typeof(global::System.Collections.Generic.IEnumerable<T>)",
             "? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)",
-            keyedFallback is null ? ": [];" : $": {keyedFallback}?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];");
+            integrateServiceProvider ? $": {keyedFallback}?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];" : ": [];");
     }
 
     private static void WriteGenericResolveMethod(
@@ -547,11 +548,7 @@ partial class IocSourceGenerator
             if(kvp.Value is not ServiceContainerEntry entry)
                 continue;
 
-            var serviceType = kvp.Key.ServiceType;
-            var exposedServiceType = entry.GetExposedServiceType(serviceType);
-            writer.WriteLine(kvp.Key.Key is { } key
-                ? $"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, {entry.FormatResolverLambda(serviceType)}),"
-                : $"{ResolverEntryMethodName}(typeof({exposedServiceType}), {entry.FormatResolverLambda(serviceType)}),");
+            WriteLocalResolverEntry(writer, entry, kvp.Key.ServiceType, kvp.Key.Key);
         }
 
         // Add IEnumerable<T>, IReadOnlyCollection<T>, ICollection<T>, IReadOnlyList<T>, IList<T>, T[] entries for collection service types
@@ -559,7 +556,7 @@ partial class IocSourceGenerator
         {
             if(entry is CollectionContainerEntry collection)
             {
-                writer.WriteLine(FormatCollectionResolverEntries(collection.ElementServiceTypeName, $"static c => c.{collection.ArrayMethodName}()"));
+                WriteCollectionResolverEntries(writer, collection.ElementServiceTypeName, collection.ArrayMethodName);
             }
         }
 
@@ -587,17 +584,10 @@ partial class IocSourceGenerator
                 foreach(var module in container.ImportedModules)
                 {
                     var fieldName = GetModuleFieldName(module.Name);
-                    var source = $"{module.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName})))";
 
-                    if(isFirst)
-                    {
-                        writer.WriteLine(source);
-                        isFirst = false;
-                    }
-                    else
-                    {
-                        writer.WriteLine($".Concat({source})");
-                    }
+                    // Every module after the first is appended with .Concat(...)
+                    writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{module.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))){(isFirst ? "" : ")")}");
+                    isFirst = false;
                 }
 
                 writer.WriteLine(".Concat(_localResolvers)");
@@ -616,21 +606,29 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes IServiceProviderFactory implementation.
+    /// Writes the nested ServiceProviderFactory type, which implements IServiceProviderFactory.
+    /// A separate type is used so that no container instance (and no eager service) is created just to build one.
     /// </summary>
-    private static void WriteIServiceProviderFactoryImplementation(SourceWriter writer, ContainerModel container)
+    private static void WriteServiceProviderFactory(SourceWriter writer, ContainerModel container)
     {
         writer.WriteLine("#region IServiceProviderFactory<IServiceCollection>");
         writer.WriteLine();
+
+        // Provider built by ServiceProviderFactory.CreateServiceProvider is owned (and disposed) by the returned container
+        writer.WriteLine("private object? _ownedFallbackProvider;");
+        writer.WriteLine();
+
+        writer.WriteLine("/// <summary>");
+        writer.WriteLine($"/// Builds a <see cref=\"{container.ClassName}\"/> from an IServiceCollection, which becomes its fallback service provider.");
+        writer.WriteLine("/// </summary>");
+        writer.WriteLine("public sealed class ServiceProviderFactory : global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>");
+        writer.WriteLine("{");
+        writer.Indentation++;
 
         writer.WriteLine("/// <summary>");
         writer.WriteLine("/// Creates a new container builder (returns the same IServiceCollection).");
         writer.WriteLine("/// </summary>");
         writer.WriteLine("public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;");
-        writer.WriteLine();
-
-        // Provider built by CreateServiceProvider is owned (and disposed) by the returned container
-        writer.WriteLine("private object? _ownedFallbackProvider;");
         writer.WriteLine();
 
         writer.WriteLine("/// <summary>");
@@ -641,6 +639,9 @@ partial class IocSourceGenerator
         writer.Indentation++;
         writer.WriteLine("var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);");
         writer.WriteLine($"return new {container.ClassName}(fallbackProvider) {{ _ownedFallbackProvider = fallbackProvider }};");
+        writer.Indentation--;
+        writer.WriteLine("}");
+
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -997,7 +998,7 @@ partial class IocSourceGenerator
         // Fallback scope last: container services may depend on its services
         if(container.IntegrateServiceProvider)
         {
-            writer.WriteLine(FormatDisposeCall("_fallbackScope", isAsync));
+            WriteDisposeCall(writer, "_fallbackScope", isAsync);
         }
 
         writer.WriteLine("return;");
@@ -1012,7 +1013,7 @@ partial class IocSourceGenerator
 
         if(ownsFallbackProvider)
         {
-            writer.WriteLine(FormatDisposeCall("_ownedFallbackProvider", isAsync));
+            WriteDisposeCall(writer, "_ownedFallbackProvider", isAsync);
         }
     }
 
@@ -1041,19 +1042,31 @@ partial class IocSourceGenerator
         foreach(var module in modules)
         {
             var fieldName = GetModuleFieldName(module.Name);
-            writer.WriteLine(isAsync
-                ? $"await {fieldName}.DisposeAsync().ConfigureAwait(false);"
-                : $"{fieldName}.Dispose();");
+            if(isAsync)
+            {
+                writer.WriteLine($"await {fieldName}.DisposeAsync().ConfigureAwait(false);");
+            }
+            else
+            {
+                writer.WriteLine($"{fieldName}.Dispose();");
+            }
         }
     }
 
     /// <summary>
-    /// Formats a sync or async disposal statement for a service, scope, or provider field.
+    /// Writes a sync or async disposal statement for a service, scope, or provider field.
     /// </summary>
-    private static string FormatDisposeCall(string target, bool isAsync) =>
-        isAsync
-            ? $"await DisposeServiceAsync({target}).ConfigureAwait(false);"
-            : $"DisposeService({target});";
+    private static void WriteDisposeCall(SourceWriter writer, string target, bool isAsync)
+    {
+        if(isAsync)
+        {
+            writer.WriteLine($"await DisposeServiceAsync({target}).ConfigureAwait(false);");
+        }
+        else
+        {
+            writer.WriteLine($"DisposeService({target});");
+        }
+    }
 
     /// <summary>
     /// Writes the static helper methods for disposal.
@@ -1178,11 +1191,44 @@ partial class IocSourceGenerator
     private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
 
     /// <summary>
-    /// Formats the spread of the <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
-    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>T[]</c> resolver entries for <paramref name="elementType"/>.
+    /// Writes the <c>_localResolvers</c> entry resolving <paramref name="serviceType"/> (with <paramref name="key"/> when keyed) through <paramref name="entry"/>.
     /// </summary>
-    private static string FormatCollectionResolverEntries(string elementType, string resolverLambda) =>
-        $"..{CollectionResolverEntriesMethodName}<{elementType}>({resolverLambda}),";
+    private static void WriteLocalResolverEntry(SourceWriter writer, ServiceContainerEntry entry, string serviceType, string? key)
+    {
+        var exposedServiceType = entry.GetExposedServiceType(serviceType);
+
+        // The common lambda is written directly instead of being formatted first
+        if(entry.HasResolverMethodLambda)
+        {
+            if(key is not null)
+            {
+                writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, static c => c.{entry.ResolverMethodName}()),");
+            }
+            else
+            {
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof({exposedServiceType}), static c => c.{entry.ResolverMethodName}()),");
+            }
+
+            return;
+        }
+
+        if(key is not null)
+        {
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof({exposedServiceType}), {key}, {entry.FormatResolverLambda(serviceType)}),");
+        }
+        else
+        {
+            writer.WriteLine($"{ResolverEntryMethodName}(typeof({exposedServiceType}), {entry.FormatResolverLambda(serviceType)}),");
+        }
+    }
+
+    /// <summary>
+    /// Writes the spread of the <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
+    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>T[]</c> resolver entries for <paramref name="elementType"/>,
+    /// all resolved through the <paramref name="arrayMethodName"/> array resolver.
+    /// </summary>
+    private static void WriteCollectionResolverEntries(SourceWriter writer, string elementType, string arrayMethodName) =>
+        writer.WriteLine($"..{CollectionResolverEntriesMethodName}<{elementType}>(static c => c.{arrayMethodName}()),");
 
     /// <summary>
     /// Writes the helpers that build resolver entries, so each entry in <c>_localResolvers</c> stays short.
