@@ -1,9 +1,12 @@
-﻿using IocSample.Shared;
+using IocSample.Shared;
 
 var services = new ServiceCollection();
 
+// Tagged registrations only add services with a matching tag, so also register the untagged ones
 services
+    .AddShared()
     .AddShared("Mediator")
+    .AddIocSample()
     .AddIocSample("Mediator");
 
 var sp = services.BuildServiceProvider();
@@ -12,7 +15,9 @@ Test(sp);
 
 Console.WriteLine();
 Console.WriteLine("Use SourceGen.Ioc");
-Test(new Module().CreateServiceProvider(services));
+// Module() eagerly creates singletons whose ILogger<T> only the fallback provider can supply
+using var module = new Module(sp);
+Test(module);
 
 static void Test(IServiceProvider sp)
 {

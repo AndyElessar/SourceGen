@@ -12,7 +12,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="$(RoslynVersion)" />
     <!-- Build Infra & Packaging -->
     <PackageVersion Include="PolySharp" Version="1.16.0" />
-    <PackageVersion Include="PolyType.Roslyn" Version="2.0.0-rc.2" />
+    <PackageVersion Include="PolyType.Roslyn" Version="2.0.0-rc.3" />
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.1.118" />
     <!-- Testing dependencies -->
@@ -21,14 +21,14 @@
     <PackageVersion Include="Verify.TUnit" Version="32.0.1" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
     <!-- Tool -->
     <PackageVersion Include="System.IO.Abstractions" Version="22.3.0" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
     <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.7.13" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
     <!-- Samples -->
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
   </ItemGroup>
 </Project>
