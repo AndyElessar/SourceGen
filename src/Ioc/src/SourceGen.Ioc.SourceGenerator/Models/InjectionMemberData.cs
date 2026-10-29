@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Represents a member (property, field, or method) that should be populated by dependency injection.

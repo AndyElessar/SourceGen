@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Represents type information including its name and hierarchical injection metadata.
@@ -458,11 +458,6 @@ internal sealed record class TaskTypeData(
         IsNestedOpenGeneric, TypeParameters,
         ConstructorParameters, HasInjectConstructor, InjectionMembers,
         AllInterfaces, AllBaseClasses);
-
-/// <summary>
-/// Wrapper classification result containing wrapper kind and extracted element type.
-/// </summary>
-internal readonly record struct WrapperInfo(WrapperKind Kind, INamedTypeSymbol? ElementType);
 
 /// <summary>
 /// Represents the kind of wrapper for DI injection purposes.

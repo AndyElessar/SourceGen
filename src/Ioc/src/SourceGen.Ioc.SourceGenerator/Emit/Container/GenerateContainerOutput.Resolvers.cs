@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.Constants;
 
 namespace SourceGen.Ioc;
 

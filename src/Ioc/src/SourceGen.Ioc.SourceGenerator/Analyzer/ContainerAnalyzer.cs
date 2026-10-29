@@ -646,7 +646,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             return rootWrapperInfo.ElementType;
 
         // Recursively unwrap generator-supported wrappers with downgrade detection.
-        // Mirrors TransformExtensions.cs downgrade rules (nested Task shapes, collection-at-top).
+        // Mirrors TransformExtensions.TypeData.cs downgrade rules (nested Task shapes, collection-at-top).
         ITypeSymbol current = normalizedReturnType;
         var isAfterCollection = false;
 

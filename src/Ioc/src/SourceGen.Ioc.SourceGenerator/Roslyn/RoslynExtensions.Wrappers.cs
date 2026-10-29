@@ -1,4 +1,9 @@
-namespace SourceGen.Ioc.SourceGenerator;
+namespace SourceGen.Ioc;
+
+/// <summary>
+/// Wrapper classification result containing wrapper kind and extracted element type.
+/// </summary>
+internal readonly record struct WrapperInfo(WrapperKind Kind, INamedTypeSymbol? ElementType);
 
 internal static partial class RoslynExtensions
 {

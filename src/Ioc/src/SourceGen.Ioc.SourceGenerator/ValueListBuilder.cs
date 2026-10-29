@@ -1,6 +1,6 @@
 using System.Buffers;
 
-namespace SourceGen.Ioc.SourceGenerator;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Collects items in a pooled buffer and copies them into an <see cref="ImmutableEquatableArray{T}"/>.

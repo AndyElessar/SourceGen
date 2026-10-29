@@ -1,4 +1,4 @@
-﻿global using System.Collections.Immutable;
+global using System.Collections.Immutable;
 global using System.Diagnostics;
 global using System.Diagnostics.CodeAnalysis;
 global using System.Runtime.CompilerServices;
@@ -8,7 +8,5 @@ global using Microsoft.CodeAnalysis;
 global using Microsoft.CodeAnalysis.CSharp;
 global using Microsoft.CodeAnalysis.CSharp.Syntax;
 global using PolyType.Roslyn;
-global using SourceGen.Ioc.SourceGenerator;
-global using SourceGen.Ioc.SourceGenerator.Models;
-global using static SourceGen.Ioc.SourceGenerator.RoslynExtensions;
-global using static SourceGen.Ioc.SourceGenerator.Roslyn.TypeParameterSubstitution;
+global using static SourceGen.Ioc.RoslynExtensions;
+global using static SourceGen.Ioc.TypeParameterSubstitution;

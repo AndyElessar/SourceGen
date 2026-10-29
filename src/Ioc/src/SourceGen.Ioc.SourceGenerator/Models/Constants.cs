@@ -1,6 +1,6 @@
-﻿using System.Reflection;
+using System.Reflection;
 
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 internal static class Constants
 {

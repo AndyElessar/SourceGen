@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Represents the result of transforming an IoCRegisterDefaultsAttribute.

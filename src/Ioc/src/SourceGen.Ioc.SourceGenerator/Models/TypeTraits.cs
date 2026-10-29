@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Traits of a type argument that decide whether it satisfies the <c>class</c>, <c>struct</c>, <c>unmanaged</c>, and

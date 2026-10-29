@@ -1,9 +1,14 @@
-using InjectionMemberModel = SourceGen.Ioc.SourceGenerator.Models.InjectionMemberData;
+using InjectionMemberModel = SourceGen.Ioc.InjectionMemberData;
 
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
+    private abstract record class ResolvedDependency
+    {
+        public abstract string FormatExpression(bool isOptional);
+    }
+
     private sealed record class DirectServiceDependency(string ResolverMethodName) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)

@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Represents a service registration for dependency injection.
