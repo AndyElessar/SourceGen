@@ -32,6 +32,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 - Edit benchmarks always start from the same previously run driver and apply the edited compilation. The returned driver is not reused, so they do not accidentally measure a no-op cached run.
 - Setup validates the compilation and generated output that each benchmark measures (initial for `Cold`, `ColdOverhead` and `Rerun`, the edited compilation for the edit benchmarks) outside the timed operation. The edited compilation's semantic caches are warmed during setup.
+- `Cold` and `ColdOverhead` run one operation per iteration, after BenchmarkDotNet's forced GC, through an iteration setup. A cold operation allocates up to tens of MB, so with a pilot-chosen operation count, two runs could choose different counts and fit a different number of GCs inside an iteration, which changes the time and allocations per operation.
 - MemoryDiagnoser reports managed allocations per operation, not retained heap size.
 - These synthetic workloads isolate generator costs; they do not measure total build or IDE latency.
 
@@ -51,6 +52,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 - Each operation calls `CompilationWithAnalyzers.GetAnalyzerDiagnosticsAsync` on the same compilation. Roslyn analyzes a copy of it, so every result includes the binding that the analyzer actions trigger. Subtract `AnalyzerOverhead` to estimate the analyzer's own cost.
 - Analysis is sequential (`concurrentAnalysis: false`) so results do not depend on the runner's core count.
+- Like `Cold`, every analyzer benchmark runs one operation per iteration, after BenchmarkDotNet's forced GC.
 - The analyzed compilation does not include generator output. Analysis binds every syntax tree, and binding the generated container of the `Wrappers` scenario at `Count = 500` takes over a minute per operation, which would hide the analyzer's own cost and exceed the CI timeout.
 - Setup fails if an analyzer throws or reports an error.
 
@@ -71,7 +73,9 @@ Compare the two runs:
 dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --compare "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before\results" "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-after\results" "$env:TEMP\generator-comparison.md" 5
 ```
 
-The comparison mode reads BenchmarkDotNet JSON reports or a directory containing them, and writes a Markdown table. A base path that does not exist reports the second run without a baseline. It exits with code 1 when allocated bytes increase by more than the threshold percentage, a benchmark in the first run is missing from the second, or a benchmark in the second run failed or has no allocation data. A time change above the threshold is reported only when the 99.9% confidence intervals do not overlap. Also review the errors and standard deviations in the CSV reports rather than only the means.
+The comparison mode reads BenchmarkDotNet JSON reports or a directory containing them, and writes a Markdown table. A base path that does not exist reports the second run without a baseline. It exits with code 1 when allocated bytes increase by more than the threshold percentage, a benchmark in the first run is missing from the second, or a benchmark in the second run failed or has no allocation data. A time change above the threshold is reported only when the 99.9% confidence intervals do not overlap.
+
+Time changes are adjusted for drift between the two runs. For each benchmark class, the drift is the median head/base mean time ratio of its `*Overhead` benchmarks (`ColdOverhead`, `AnalyzerOverhead`), which do the same Roslyn work without the IoC generator or analyzers. The second run's mean and confidence interval are divided by that ratio before they are compared, and the table's footnote lists the drift of each class. A class without an overhead benchmark in both runs, such as `GeneratedCodeBenchmarks`, is not adjusted. Allocations are never adjusted. Also review the errors and standard deviations in the CSV reports rather than only the means.
 
 Options after the threshold:
 
@@ -102,7 +106,7 @@ Each run measures the base and the head in the same job, on the same runner, and
 | Push to `main`, manual run | The first parent of the measured commit | The measured commit |
 
 - The base is checked out into a separate worktree and built and run with its own harness and SDK, so benchmarks that the base does not have yet, such as newly added ones, are reported as "No baseline" and do not fail the job. The same applies to all benchmarks when the base has no harness, or its SDK setup, build or benchmark run fails; the head is still measured. Reports of a failed base run are moved to `base/failed-results` so they are not compared.
-- The base runs before the head. Both share the runner, but neighbouring load can still change during the run, so time changes only produce warnings.
+- The base runs before the head. Both share the runner, but neighbouring load can still change during the run, so time changes are adjusted by the drift of the overhead benchmarks (see above) and only produce warnings.
 - The job fails when allocated bytes increase by more than 5% (10% for `AnalyzerBenchmarks`), a base benchmark is missing from the head, or a head result failed or has no allocation data. Analyzer allocations vary by up to about 4% between identical runs because of Roslyn's analysis driver, even for `AnalyzerOverhead`, while generator allocations vary by less than 0.1%.
 - The comparison is written to the job summary, followed by the BenchmarkDotNet reports of both runs. All BenchmarkDotNet output is uploaded as the `ioc-generator-benchmark-<run id>` artifact for 7 days, with the runs in `base/` and `head/`.
 - For pull requests, [ioc.benchmark.generator.comment.yml](../../../../.github/workflows/ioc.benchmark.generator.comment.yml) creates or updates a single comment with the comparison. It runs from the default branch through `workflow_run`, so pull request code never receives a write token.

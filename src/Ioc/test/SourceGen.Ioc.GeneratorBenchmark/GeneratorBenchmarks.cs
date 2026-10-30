@@ -25,6 +25,13 @@ public class GeneratorBenchmarks
         GeneratorBenchmarkInput.Validate(driver, output);
     }
 
+    // An iteration setup makes BenchmarkDotNet run one operation per iteration, after its forced GC, instead of a pilot-chosen count.
+    // A cold operation allocates up to tens of MB, so a varying count changes how many GCs land inside an iteration.
+    [IterationSetup(Targets = [nameof(Cold), nameof(ColdOverhead)])]
+    public void StartColdIteration()
+    {
+    }
+
     [GlobalSetup(Target = nameof(Rerun))]
     public void SetupRerun()
     {
