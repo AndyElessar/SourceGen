@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 
 namespace SourceGen.Ioc;
 
@@ -8,86 +9,64 @@ namespace SourceGen.Ioc;
 /// </summary>
 public sealed partial class RegisterAnalyzer
 {
-    private static ImmutableHashSet<SyntaxTree> CollectAssemblyLevelRegistrations(
+    /// <summary>
+    /// An assembly-level IoCRegisterFor attribute, bound and parsed once at compilation start.
+    /// </summary>
+    private readonly record struct AssemblyRegistration(
+        AttributeData Attribute,
+        INamedTypeSymbol TargetType,
+        string? Key,
+        List<INamedTypeSymbol> ExplicitServiceTypes);
+
+    /// <summary>
+    /// Registers the assembly-level IoCRegisterFor attributes and indexes them by their syntax,
+    /// so the attribute syntax action reports their diagnostics without binding them again.
+    /// </summary>
+    private static Dictionary<(SyntaxTree Tree, TextSpan Span), AssemblyRegistration> CollectAssemblyLevelRegistrations(
         Compilation compilation,
         AnalyzerContext analyzerContext,
         CancellationToken cancellationToken)
     {
-        var syntaxTreesBuilder = ImmutableHashSet.CreateBuilder<SyntaxTree>();
+        var registrations = new Dictionary<(SyntaxTree Tree, TextSpan Span), AssemblyRegistration>();
 
         foreach(var (attribute, targetType) in AnalyzerHelpers.EnumerateAssemblyLevelRegisterForAttributes(
             compilation, analyzerContext.AttributeSymbols, cancellationToken))
         {
-            // Track which syntax tree contains this attribute
+            var (key, _, keyTypeSymbol) = attribute.GetKeyInfo();
+            var explicitServiceTypes = AnalyzerHelpers.GetExplicitServiceTypes(attribute);
+
             var syntaxReference = attribute.ApplicationSyntaxReference;
-            if(syntaxReference?.SyntaxTree is { } syntaxTree)
+            if(syntaxReference is not null)
             {
-                syntaxTreesBuilder.Add(syntaxTree);
+                registrations[(syntaxReference.SyntaxTree, syntaxReference.Span)] = new(attribute, targetType, key, explicitServiceTypes);
             }
 
-            // Skip invalid types
-            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
-                continue;
-            if(targetType.DeclaredAccessibility is Accessibility.Private)
-                continue;
-
             var location = syntaxReference?.GetSyntax(cancellationToken).GetLocation();
-
-            var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
-            var lifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
-
-            // Get key type for SGIOC013/SGIOC014 analysis
-            var (key, _, keyTypeSymbol) = attribute.GetKeyInfo();
-
-            // Check for Factory and Instance (used by ServiceInfo)
-            var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
-
-            var assemblyServiceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(
-                targetType, attribute).ToList();
-            RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, key is not null, hasFactory, hasInstance, assemblyServiceTypes);
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
         }
 
-        return syntaxTreesBuilder.ToImmutable();
-    }
-
-    private static void AnalyzeAssemblyLevelRegistrations(
-        SemanticModelAnalysisContext context,
-        AnalyzerContext analyzerContext,
-        ImmutableHashSet<SyntaxTree> assemblyAttributeSyntaxTrees)
-    {
-        // Only analyze if this syntax tree contains assembly-level attributes
-        if(!assemblyAttributeSyntaxTrees.Contains(context.SemanticModel.SyntaxTree))
-            return;
-
-        foreach(var (attribute, targetType) in AnalyzerHelpers.EnumerateAssemblyLevelRegisterForAttributes(
-            context.SemanticModel.Compilation, analyzerContext.AttributeSymbols, context.CancellationToken))
-        {
-            // Only process attributes from the current syntax tree
-            var syntaxReference = attribute.ApplicationSyntaxReference;
-            if(syntaxReference?.SyntaxTree != context.SemanticModel.SyntaxTree)
-                continue;
-
-            var location = syntaxReference.GetSyntax(context.CancellationToken).GetLocation();
-
-            // Pre-compute fully qualified type name for SGIOC011 check
-            var fullyQualifiedTypeName = targetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-            // SGIOC001: Check if target type is private or abstract
-            AnalyzeInvalidAttributeUsage(context, targetType, location);
-
-            // SGIOC009: Check Instance requires Singleton lifetime
-            AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
-
-            // SGIOC011: Check for duplicated registrations (same implementation type and key)
-            AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
-
-            // SGIOC032: Check explicit service types that would be skipped
-            AnalyzeIncompatibleServiceTypes(context.ReportDiagnostic, attribute, targetType, location);
-        }
+        return registrations;
     }
 
     /// <summary>
-    /// First pass: collect services and do immediate validation (SGIOC001).
+    /// SGIOC001, SGIOC009, SGIOC011 and SGIOC032 for an assembly-level IoCRegisterFor attribute.
+    /// </summary>
+    private static void AnalyzeAssemblyLevelRegistration(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        AssemblyRegistration registration,
+        Location location)
+        => AnalyzeRegistrationAttribute(
+            reportDiagnostic,
+            analyzerContext,
+            registration.Attribute,
+            registration.TargetType,
+            registration.Key,
+            registration.ExplicitServiceTypes,
+            location);
+
+    /// <summary>
+    /// First pass: collect services and do immediate validation (SGIOC001, SGIOC009, SGIOC011, SGIOC032).
     /// Dependency analysis (SGIOC002, SGIOC003-005) is deferred to CompilationEnd.
     /// </summary>
     private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
@@ -121,59 +100,93 @@ public sealed partial class RegisterAnalyzer
             var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
                 ?? typeSymbol.Locations.FirstOrDefault();
 
-            // Pre-compute fully qualified type name for SGIOC011 check
-            var fullyQualifiedTypeName = targetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-            // SGIOC001: Check if target type is private or abstract
-            AnalyzeInvalidAttributeUsage(context, targetType, location);
-
-            // SGIOC009: Check Instance requires Singleton lifetime
-            AnalyzeInstanceLifetime(context.ReportDiagnostic, attribute, location);
-
-            // SGIOC011: Check for duplicated registrations (same implementation type and key)
-            AnalyzeDuplicatedRegistration(context.ReportDiagnostic, analyzerContext, attribute, targetType, fullyQualifiedTypeName, location);
-
-            // SGIOC032: Check explicit service types that would be skipped
-            AnalyzeIncompatibleServiceTypes(context.ReportDiagnostic, attribute, targetType, location);
-
-            // Skip registration if type is invalid
-            if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
-                continue;
-            if(targetType.DeclaredAccessibility is Accessibility.Private)
-                continue;
-
-            // Get lifetime of current service (considering default settings)
-            var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
-            var currentLifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
-
-            // Get key type for SGIOC013/SGIOC014 analysis
+            // Parsed once for the immediate checks and the registration
             var (key, _, keyTypeSymbol) = attribute.GetKeyInfo();
+            var explicitServiceTypes = AnalyzerHelpers.GetExplicitServiceTypes(attribute);
 
-            // Check for Factory and Instance (used by ServiceInfo)
-            var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
+            AnalyzeRegistrationAttribute(context.ReportDiagnostic, analyzerContext, attribute, targetType, key, explicitServiceTypes, location);
 
             // Register service with index for faster lookup
             // Dependency analysis will be done in CompilationEnd after all services are collected
-            var serviceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(
-                targetType, attribute).ToList();
-            RegisterServiceWithIndex(analyzerContext, targetType, currentLifetime, location, key, keyTypeSymbol, key is not null, hasFactory, hasInstance, serviceTypes);
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
         }
+    }
+
+    /// <summary>
+    /// The checks that run for every registration attribute, type-level or assembly-level.
+    /// </summary>
+    private static void AnalyzeRegistrationAttribute(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        string? key,
+        List<INamedTypeSymbol> explicitServiceTypes,
+        Location? location)
+    {
+        // SGIOC001: Check if target type is private or abstract
+        AnalyzeInvalidAttributeUsage(reportDiagnostic, targetType, location);
+
+        // SGIOC009: Check Instance requires Singleton lifetime
+        AnalyzeInstanceLifetime(reportDiagnostic, attribute, location);
+
+        // SGIOC011: Check for duplicated registrations (same implementation type and key)
+        AnalyzeDuplicatedRegistration(reportDiagnostic, analyzerContext, attribute, targetType, key, location);
+
+        // SGIOC032: Check explicit service types that would be skipped
+        AnalyzeIncompatibleServiceTypes(reportDiagnostic, explicitServiceTypes, targetType, location);
+    }
+
+    /// <summary>
+    /// Records a registration of a valid target type for the CompilationEnd analyses.
+    /// </summary>
+    private static void RegisterService(
+        AnalyzerContext analyzerContext,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        string? key,
+        ITypeSymbol? keyTypeSymbol,
+        List<INamedTypeSymbol> explicitServiceTypes,
+        Location? location)
+    {
+        // Skip registration if type is invalid
+        if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
+            return;
+        if(targetType.DeclaredAccessibility is Accessibility.Private)
+            return;
+
+        // Get lifetime of current service (considering default settings)
+        var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
+        var lifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
+
+        // Check for Factory and Instance (used by ServiceInfo)
+        var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
+
+        var serviceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes);
+        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, serviceTypes);
     }
 
     /// <summary>
     /// Resolves key type symbols for KeyType.Csharp registrations using AttributeSyntax + SemanticModel.
     /// This runs in RegisterSyntaxNodeAction to avoid RS1030 (no Compilation.GetSemanticModel calls).
     /// </summary>
+    /// <param name="attributeData">The attribute data when it is already known, as for assembly-level registrations.</param>
     private static void ResolveCsharpKeyTypes(
         SyntaxNodeAnalysisContext context,
         AttributeSyntax attributeSyntax,
         INamedTypeSymbol attributeClass,
+        AttributeData? attributeData,
         AnalyzerContext analyzerContext)
     {
         if(!AnalyzerHelpers.IsIoCRegistrationAttribute(attributeClass, analyzerContext.AttributeSymbols))
             return;
 
-        var attributeData = GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
+        // KeyType can only be set as a named argument and defaults to Value, so skip the AttributeData lookup
+        // (a scan of all assembly attributes for assembly-level registrations) when it is absent
+        if(!HasNamedArgument(attributeSyntax, "KeyType"))
+            return;
+
+        attributeData ??= GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
         if(attributeData is null)
             return;
 
@@ -192,6 +205,20 @@ public sealed partial class RegisterAnalyzer
             return;
 
         analyzerContext.ResolvedCsharpKeyTypes[(targetType, attributeSyntax.GetLocation())] = resolvedKeyType;
+    }
+
+    private static bool HasNamedArgument(AttributeSyntax attributeSyntax, string name)
+    {
+        if(attributeSyntax.ArgumentList is not { } argumentList)
+            return false;
+
+        foreach(var argument in argumentList.Arguments)
+        {
+            if(argument.NameEquals?.Name.Identifier.Text == name)
+                return true;
+        }
+
+        return false;
     }
 
     private static AttributeData? GetAttributeDataFromSyntax(
@@ -272,32 +299,31 @@ public sealed partial class RegisterAnalyzer
         INamedTypeSymbol targetType,
         ServiceLifetime lifetime,
         Location? location,
-        string? serviceKey = null,
-        ITypeSymbol? keyTypeSymbol = null,
-        bool hasKey = false,
-        bool hasFactory = false,
-        bool hasInstance = false,
-        IReadOnlyCollection<INamedTypeSymbol>? registrationServiceTypes = null)
+        string? serviceKey,
+        ITypeSymbol? keyTypeSymbol,
+        bool hasFactory,
+        bool hasInstance,
+        IEnumerable<INamedTypeSymbol> registrationServiceTypes)
     {
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance);
+        ImmutableArray<ServiceSymbolKey> registrations = [.. registrationServiceTypes.Select(serviceType => new ServiceSymbolKey(serviceType, serviceKey))];
 
-        if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
+        // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
+        // attributes targeting the same impl type with different keys). Record the additional
+        // (service type, key) pairs on the existing entry so SGIOC030 analysis sees all registrations.
+        if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
         {
-            // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
-            // attributes targeting the same impl type with different keys). Record the additional
-            // (service type, key) pairs on the existing entry so SGIOC030 analysis sees all registrations.
-            if(registrationServiceTypes is not null
-                && analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
-            {
-                foreach(var st in registrationServiceTypes)
-                    existingInfo.AllRegistrations.Add(new(st, serviceKey));
-            }
+            existingInfo.AddRegistrations(registrations);
             return;
         }
 
-        if(registrationServiceTypes is not null)
-            foreach(var st in registrationServiceTypes)
-                serviceInfo.AllRegistrations.Add(new(st, serviceKey));
+        var hasKey = serviceKey is not null;
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations);
+        if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
+        {
+            // Another registration of the type was added concurrently
+            analyzerContext.RegisteredServices[targetType].AddRegistrations(registrations);
+            return;
+        }
 
         // Only build type index for non-keyed services.
         // Keyed services are resolved by key + type, not by type alone,
@@ -413,40 +439,40 @@ public sealed partial class RegisterAnalyzer
         // Check default settings for matching interfaces
         foreach(var iface in targetType.AllInterfaces)
         {
-            var ifaceTypeData = iface.GetTypeData();
-
-            // Try exact match first
-            if(defaultSettings.TryGetExactMatches(ifaceTypeData.Name, out var exactIndex))
-                return defaultSettings[exactIndex].Lifetime;
-
-            // Try generic match (e.g., IGenericTest<> matches IGenericTest<T>)
-            if(iface.IsGenericType
-                && ifaceTypeData is GenericTypeData genericInterfaceTypeData
-                && defaultSettings.TryGetGenericMatches(genericInterfaceTypeData.NameWithoutGeneric, genericInterfaceTypeData.GenericArity, out var genericIndex))
-                return defaultSettings[genericIndex].Lifetime;
+            if(TryGetDefaultSettingsIndex(analyzerContext, iface, out var index))
+                return defaultSettings[index].Lifetime;
         }
 
         // Check default settings for matching base classes
         var baseType = targetType.BaseType;
         while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
         {
-            var baseTypeData = baseType.GetTypeData();
-
-            // Try exact match first
-            if(defaultSettings.TryGetExactMatches(baseTypeData.Name, out var exactIndex))
-                return defaultSettings[exactIndex].Lifetime;
-
-            // Try generic match for base classes
-            if(baseType.IsGenericType
-                && baseTypeData is GenericTypeData genericBaseTypeData
-                && defaultSettings.TryGetGenericMatches(genericBaseTypeData.NameWithoutGeneric, genericBaseTypeData.GenericArity, out var genericIndex))
-                return defaultSettings[genericIndex].Lifetime;
+            if(TryGetDefaultSettingsIndex(analyzerContext, baseType, out var index))
+                return defaultSettings[index].Lifetime;
 
             baseType = baseType.BaseType;
         }
 
         // Default lifetime is Transient (as defined in TryGetLifetime)
         return explicitLifetime;
+    }
+
+    /// <summary>
+    /// Finds the default settings for a service type by exact name, then by generic name and arity
+    /// (e.g., <c>IGenericTest&lt;&gt;</c> matches <c>IGenericTest&lt;T&gt;</c>). Uses the same names as
+    /// the generator's <c>GetTypeData</c> without building the type data.
+    /// </summary>
+    private static bool TryGetDefaultSettingsIndex(AnalyzerContext analyzerContext, INamedTypeSymbol type, out int index)
+    {
+        var defaultSettings = analyzerContext.DefaultSettings;
+        var name = analyzerContext.TypeNames.GetOrAdd(type, static type => type.BuildTypeName());
+
+        if(defaultSettings.TryGetExactMatches(name, out index))
+            return true;
+
+        // Error types have no generic type data
+        return type is { IsGenericType: true, TypeKind: not TypeKind.Error }
+            && defaultSettings.TryGetGenericMatches(TransformExtensions.GetNameWithoutGeneric(name), type.Arity, out index);
     }
 
     private readonly struct SymbolLocationComparer : IEqualityComparer<(INamedTypeSymbol Type, Location? Location)>
@@ -456,6 +482,19 @@ public sealed partial class RegisterAnalyzer
 
         public int GetHashCode((INamedTypeSymbol Type, Location? Location) obj)
             => unchecked((SymbolEqualityComparer.Default.GetHashCode(obj.Type) * 397) ^ (obj.Location?.GetHashCode() ?? 0));
+    }
+
+    private readonly struct RegistrationKeyComparer : IEqualityComparer<(INamedTypeSymbol Type, string? Key, string Tag)>
+    {
+        public bool Equals((INamedTypeSymbol Type, string? Key, string Tag) x, (INamedTypeSymbol Type, string? Key, string Tag) y)
+            => SymbolEqualityComparer.Default.Equals(x.Type, y.Type)
+                && StringComparer.Ordinal.Equals(x.Key, y.Key)
+                && StringComparer.Ordinal.Equals(x.Tag, y.Tag);
+
+        public int GetHashCode((INamedTypeSymbol Type, string? Key, string Tag) obj)
+            => unchecked((((SymbolEqualityComparer.Default.GetHashCode(obj.Type) * 397)
+                ^ StringComparer.Ordinal.GetHashCode(obj.Key ?? string.Empty)) * 397)
+                ^ StringComparer.Ordinal.GetHashCode(obj.Tag));
     }
 
     private sealed class AnalyzerContext(
@@ -498,7 +537,7 @@ public sealed partial class RegisterAnalyzer
         /// Services without tags use an empty string tag for comparison.
         /// Value is the first registration location for diagnostic reporting.
         /// </summary>
-        public ConcurrentDictionary<(string TypeName, string? Key, string Tag), Location?> RegistrationKeys { get; } = [];
+        public ConcurrentDictionary<(INamedTypeSymbol Type, string? Key, string Tag), Location?> RegistrationKeys { get; } = new(new RegistrationKeyComparer());
 
         /// <summary>
         /// Stores resolved key type symbols for KeyType.Csharp registrations where nameof() was used.
@@ -506,6 +545,11 @@ public sealed partial class RegisterAnalyzer
         /// Key: (TargetType, AttributeLocation) to handle multiple registrations on the same type.
         /// </summary>
         public ConcurrentDictionary<(INamedTypeSymbol Type, Location? Location), ITypeSymbol> ResolvedCsharpKeyTypes { get; } = new(new SymbolLocationComparer());
+
+        /// <summary>
+        /// Type names used to match default settings, cached because registrations share interfaces and base classes.
+        /// </summary>
+        public ConcurrentDictionary<INamedTypeSymbol, string> TypeNames { get; } = new(SymbolEqualityComparer.Default);
 
         /// <summary>
         /// Enabled generation features parsed from SourceGenIocFeatures.
@@ -518,11 +562,6 @@ public sealed partial class RegisterAnalyzer
         public INamedTypeSymbol Type { get; }
         public ServiceLifetime Lifetime { get; }
         public Location? Location { get; }
-
-        /// <summary>
-        /// Pre-computed fully qualified type name to avoid repeated ToDisplayString calls.
-        /// </summary>
-        public string FullyQualifiedName { get; }
 
         /// <summary>
         /// The registration key string, or null if the service is unkeyed.
@@ -555,7 +594,9 @@ public sealed partial class RegisterAnalyzer
         /// where <see cref="RegisteredServices"/> only stores the first entry per implementation type.
         /// Used by SGIOC030 analysis to correctly identify all async-init-only service type/key pairs.
         /// </summary>
-        public ConcurrentBag<ServiceSymbolKey> AllRegistrations { get; } = [];
+        public ImmutableArray<ServiceSymbolKey> AllRegistrations => _allRegistrations;
+
+        private ImmutableArray<ServiceSymbolKey> _allRegistrations;
 
         /// <summary>
         /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
@@ -571,16 +612,17 @@ public sealed partial class RegisterAnalyzer
             INamedTypeSymbol type,
             ServiceLifetime lifetime,
             Location? location,
-            string? serviceKey = null,
-            ITypeSymbol? keyTypeSymbol = null,
-            bool hasKey = false,
-            bool hasFactory = false,
-            bool hasInstance = false)
+            string? serviceKey,
+            ITypeSymbol? keyTypeSymbol,
+            bool hasKey,
+            bool hasFactory,
+            bool hasInstance,
+            ImmutableArray<ServiceSymbolKey> registrations)
         {
             Type = type;
             Lifetime = lifetime;
             Location = location;
-            FullyQualifiedName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            _allRegistrations = registrations;
             ServiceKey = serviceKey;
             KeyTypeSymbol = keyTypeSymbol;
             HasKey = hasKey;
@@ -593,5 +635,11 @@ public sealed partial class RegisterAnalyzer
             // Cache injected members
             InjectedMembers = [.. type.GetInjectedMembers()];
         }
+
+        /// <summary>
+        /// Adds the (service type, key) pairs of another registration of this implementation type.
+        /// </summary>
+        public void AddRegistrations(ImmutableArray<ServiceSymbolKey> registrations)
+            => ImmutableInterlocked.Update(ref _allRegistrations, static (current, added) => current.AddRange(added), registrations);
     }
 }

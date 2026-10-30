@@ -404,4 +404,26 @@ public class SGIOC011Tests
 
         await Assert.That(sgioc011).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC011_AssemblyLevelRegisterFor_SameType_ReportsDiagnosticOnSecondAttribute()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyService))]
+            [assembly: IocRegisterFor(typeof(TestNamespace.MyService))]
+
+            namespace TestNamespace;
+
+            public class MyService { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
+
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].Location.GetLineSpan().StartLinePosition.Line).IsEqualTo(4);
+    }
 }

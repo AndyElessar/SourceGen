@@ -9,7 +9,9 @@ public class GeneratorBenchmarks
     [Params(100, 500)]
     public int Count { get; set; }
 
-    [ParamsAllValues]
+    // StrictContainers is analyzer-only: its generator path is covered by the other container scenarios.
+    [Params(GeneratorScenario.DependencyChain, GeneratorScenario.Wrappers, GeneratorScenario.DuplicateInvocation,
+        GeneratorScenario.DisabledContainer, GeneratorScenario.RegisterFor, GeneratorScenario.Realistic)]
     public GeneratorScenario Scenario { get; set; }
 
     private GeneratorBenchmarkInput input = null!;

@@ -21,7 +21,8 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 4. Early exit if no registration attributes present
 5. Build concurrent state: `RegisteredServices`, `ServiceTypeIndex`, `DuplicatedDefaults`, `SeenDefaultTargetTypes`, `DefaultSettingsMap`
 6. Construct `AnalyzerContext`
-7. Pre-collect assembly-level `IocRegisterFor` attributes
+7. Pre-collect assembly-level `IocRegisterFor` attributes, indexed by their syntax (tree and span) for the attribute syntax action
+8. Build `IocAttributeNameFilter` from the IoC attribute names
 
 #### Registered Actions
 
@@ -31,11 +32,13 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | Symbol (NamedType) | `AnalyzeTypeLevelDefaultsAttribute` | Validate duplicate type-level defaults | SGIOC012 |
 | Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
+| Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
+| SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
-| SemanticModel | `AnalyzeAssemblyLevelRegistrations` | Assembly-level register-for IDE squiggles | SGIOC001, 009, 011, 032 |
 | CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030, 033 |
+
+Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
 #### CompilationEnd: AnalyzeAllDependencies
 
@@ -48,10 +51,11 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | File | Responsibility |
 | :--- | :------------- |
 | `RegisterAnalyzer.ServiceCollection.cs` | `AnalyzerContext`, `ServiceInfo`, service collection/indexing, defaults, assembly-level scan |
+| `IocAttributeNameFilter.cs` | Syntactic attribute name pre-check for the attribute syntax action |
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration/defaults detection (SGIOC011, 012) |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
-| `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis |
+| `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |
 
 ### ContainerAnalyzer
 
@@ -72,10 +76,13 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | CompilationEnd | `AnalyzeContainerDependencies` | Async accessor contracts, container dependency resolvability | SGIOC018, 021, 027, 029 |
 | CompilationEnd | `AnalyzeCircularImports` | Module import cycle detection via DFS | SGIOC025 |
 
+The two named type handlers run in one registered action.
+
 #### CompilationEnd: AnalyzeContainerDependencies
 
+Setup: `BuildAsyncInitServiceKeys` builds the (service type, key) pairs with an async-init implementation once (empty when `AsyncMethodInject` is disabled)
 Pass 1 (all containers): `AnalyzeAsyncPartialAccessors` → SGIOC027 (sync accessor on async-init), SGIOC029 (unsupported async return)
-Pass 2 (IntegrateServiceProvider=false only): `AnalyzeContainerServiceDependencies` (SGIOC018), `AnalyzePartialAccessorDependencies` (SGIOC021)
+Pass 2 (IntegrateServiceProvider=false only): `CollectUnresolvedDependencies` runs once, then each container reports them (SGIOC018) and runs `AnalyzePartialAccessorDependencies` (SGIOC021)
 
 ### Diagnostic Coverage
 
@@ -304,7 +311,7 @@ Report when a `KeyValuePair<K, V>` is injected but the registered key type of `V
   - `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`
   - Collection types wrapping `KeyValuePair<K, V>`: `IEnumerable<KeyValuePair<K, V>>`, `IReadOnlyCollection<KeyValuePair<K, V>>`, `ICollection<KeyValuePair<K, V>>`, `IReadOnlyList<KeyValuePair<K, V>>`, `IList<KeyValuePair<K, V>>`, `KeyValuePair<K, V>[]`
 - For each detected key-value parameter with key type `K` and value type `V`:
-  - Iterates all registered services to find those with `HasKey = true` and whose `Type` implements interface `V`, has `V` as a base class, or equals `V`.
+  - Finds the registered services with `HasKey = true` whose `Type` implements interface `V`, has `V` as a base class, or equals `V`, using an index of keyed registrations by every type they are assignable to (built once per compilation on first use).
   - If at least one keyed registration for `V` exists but **none** have a key type compatible with `K`, reports the diagnostic.
 - Key type compatibility rules:
   - `K = object` is always compatible with any key type (no diagnostic).
@@ -368,8 +375,9 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 **Analysis:**
 
 - Applies only when `[IocContainer(IntegrateServiceProvider = false)]` is used.
-- Analyzes all registered services in the container scope.
-- For each service's dependencies:
+- Analyzes every registered implementation type. Service types that are only exposed by a registration (interfaces, base classes from `RegisterAllBaseClasses`, explicit `ServiceTypes`) are NOT analyzed as implementations, because the generator only constructs the implementation type and injects the members declared on it.
+- The unresolved dependencies are collected once per compilation and reported for each container with `IntegrateServiceProvider = false`.
+- For each implementation type's dependencies:
   - Constructor parameters: Checks if the dependency type is registered in the container.
   - Properties/Fields with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.
   - Method parameters with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.

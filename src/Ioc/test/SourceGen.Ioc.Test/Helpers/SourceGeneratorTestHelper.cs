@@ -422,6 +422,22 @@ public static class SourceGeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs the analyzer on several source files, one syntax tree per file, and returns the diagnostics.
+    /// </summary>
+    /// <param name="sources">The source code of each file.</param>
+    public static async Task<ImmutableArray<Diagnostic>> RunAnalyzerOnFilesAsync<TAnalyzer>(params string[] sources)
+        where TAnalyzer : DiagnosticAnalyzer, new()
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            sources.Select(static (source, i) => CSharpSyntaxTree.ParseText(source, ParseOptions, $"File{i}.cs")),
+            BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        return await compilation.WithAnalyzers([new TAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+    }
+
+    /// <summary>
     /// Gets diagnostics with a specific ID.
     /// </summary>
     public static IEnumerable<Diagnostic> GetDiagnosticsById(ImmutableArray<Diagnostic> diagnostics, string diagnosticId)

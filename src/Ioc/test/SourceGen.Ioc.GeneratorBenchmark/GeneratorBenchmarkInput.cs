@@ -14,7 +14,9 @@ public enum GeneratorScenario
     DuplicateInvocation,
     DisabledContainer,
     RegisterFor,
-    Realistic
+    Realistic,
+    /// <summary>Containers without <c>IServiceProvider</c> fallback whose partial accessors cover every service, with async-init services.</summary>
+    StrictContainers
 }
 
 /// <summary>
@@ -49,6 +51,7 @@ public sealed class GeneratorBenchmarkInput
     private static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
         .WithPreprocessorSymbols("SOURCEGEN", "NET7_0_OR_GREATER");
     private static readonly ImmutableArray<MetadataReference> References = CreateReferences();
+    private const int StrictContainerCount = 4;
     private readonly GeneratorScenario scenario;
     private readonly int count;
     private readonly string call;
@@ -82,12 +85,21 @@ public sealed class GeneratorBenchmarkInput
         {
             all.Add(Parse("[IocRegister] public class Generic<T>;", "Generic.cs"));
         }
-        if(scenario is not (GeneratorScenario.DuplicateInvocation or GeneratorScenario.RegisterFor))
+        if(scenario == GeneratorScenario.StrictContainers)
+        {
+            all.Add(Parse(StrictContainers(), "Containers.cs"));
+        }
+        else if(scenario is not (GeneratorScenario.DuplicateInvocation or GeneratorScenario.RegisterFor))
         {
             all.Add(Parse("[IocContainer] public partial class Container;", "Container.cs"));
         }
         trees = [.. all];
-        options = new OptionsProvider(scenario == GeneratorScenario.DisabledContainer ? "Register" : null);
+        options = new OptionsProvider(scenario switch
+        {
+            GeneratorScenario.DisabledContainer => "Register",
+            GeneratorScenario.StrictContainers => "Register,Container,PropertyInject,MethodInject,AsyncMethodInject",
+            _ => null
+        });
         Initial = CreateCompilation();
     }
 
@@ -143,6 +155,11 @@ public sealed class GeneratorBenchmarkInput
         if(scenario == GeneratorScenario.Realistic)
         {
             AppendRealisticUnit(source, i, extraDependency);
+            return source.ToString();
+        }
+        if(scenario == GeneratorScenario.StrictContainers)
+        {
+            AppendStrictContainerUnit(source, i, extraDependency);
             return source.ToString();
         }
 
@@ -258,6 +275,61 @@ public sealed class GeneratorBenchmarkInput
                     """);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Appends one unit for containers without <c>IServiceProvider</c> fallback: a service registered as its interface that depends
+    /// on an earlier unit. Every fifth service has an async inject method, so only <c>Task</c> partial accessors resolve it
+    /// and no service depends on it.
+    /// </summary>
+    private static void AppendStrictContainerUnit(StringBuilder source, int i, bool extraDependency)
+    {
+        List<string> parameters = [];
+        if(i > 0)
+        {
+            parameters.Add($"IService{(IsAsyncInitUnit(i - 1) ? i - 2 : i - 1)} dependency");
+        }
+        if(extraDependency)
+        {
+            parameters.Add("IService0 extra");
+        }
+        source.AppendLine($$"""
+            public interface IService{{i}};
+            [IocRegister(ServiceTypes = [typeof(IService{{i}})])]
+            public sealed class Service{{i}}({{string.Join(", ", parameters)}}) : IService{{i}}
+            {
+            """);
+        if(IsAsyncInitUnit(i))
+        {
+            source.AppendLine("    [IocInject] public System.Threading.Tasks.Task InitializeAsync() => System.Threading.Tasks.Task.CompletedTask;");
+        }
+        source.AppendLine("}");
+    }
+
+    private static bool IsAsyncInitUnit(int i) => i % 5 == 4;
+
+    /// <summary>
+    /// Declares containers without <c>IServiceProvider</c> fallback, each with a partial accessor for every service.
+    /// </summary>
+    private string StrictContainers()
+    {
+        var source = new StringBuilder(Usings);
+        for(var container = 0; container < StrictContainerCount; container++)
+        {
+            source.AppendLine($$"""
+                [IocContainer(IntegrateServiceProvider = false)]
+                public partial class StrictContainer{{container}}
+                {
+                """);
+            for(var i = 0; i < count; i++)
+            {
+                source.AppendLine(IsAsyncInitUnit(i)
+                    ? $"    public partial System.Threading.Tasks.Task<IService{i}> GetService{i}Async();"
+                    : $"    public partial IService{i} GetService{i}();");
+            }
+            source.AppendLine("}");
+        }
+        return source.ToString();
     }
 
     private string Registrations(bool added)

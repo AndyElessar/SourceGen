@@ -15,12 +15,13 @@ Each scenario is built as one syntax tree per service unit (`Service{i}.cs`), pl
 | DisabledContainer | Same triples and container as Wrappers, with only Register output enabled |
 | RegisterFor | N assembly-level registration attributes in one `Registrations.cs`, as projects usually keep them, for N service files |
 | Realistic | N units of a mixed project, plus one container (see below) |
+| StrictContainers | N services registered as their interfaces in a dependency chain, every fifth with an async inject method, plus four `IntegrateServiceProvider = false` containers in `Containers.cs`, each with a partial accessor for every service (`Task<T>` for the async ones). `AsyncMethodInject` is enabled. Analyzer benchmarks only |
 
 Each `Realistic` unit declares a two-level interface hierarchy and a request type, and every tenth unit an open generic handler. Its service cycles through five kinds: a plain service whose constructor takes a keyed service, a closed handler and `Lazy`/`Func`/`IEnumerable` wrappers; a factory method that looks up a closed handler through `IServiceProvider`; a decorated service with `[IocDiscover]`; a keyed service with `RegisterAllInterfaces`; and a tagged service with property and method injection whose lifetime comes from `[IocRegisterDefaults]`. Services depend only on earlier units. `[IocImportModule]` is not covered because it needs a second assembly.
 
 ## Generator benchmarks
 
-`ColdGeneratorBenchmarks` contains `Cold` and `ColdOverhead`; `GeneratorBenchmarks` contains the incremental benchmarks.
+`ColdGeneratorBenchmarks` contains `Cold` and `ColdOverhead`; `GeneratorBenchmarks` contains the incremental benchmarks. Both run every scenario except `StrictContainers`.
 
 | Benchmark | Operation |
 | --- | --- |
@@ -40,15 +41,15 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 ## Generated code benchmarks
 
-`GeneratedCodeBenchmarks` emits each scenario's compilation at `Count = 100` without (`Compile`) and with (`CompileGenerated`) the generated sources. The difference estimates how much the generated code adds to the user's build. Every operation compiles a fresh compilation. Larger workloads take minutes per operation, so the class only has `Count = 100` and CI, which runs `Count = 500`, skips it.
+`GeneratedCodeBenchmarks` emits each scenario's compilation (except `StrictContainers`) at `Count = 100` without (`Compile`) and with (`CompileGenerated`) the generated sources. The difference estimates how much the generated code adds to the user's build. Every operation compiles a fresh compilation. Larger workloads take minutes per operation, so the class only has `Count = 100` and CI, which runs `Count = 500`, skips it.
 
 ## Analyzer benchmarks
 
-`AnalyzerBenchmarks` runs `RegisterAnalyzer` and `ContainerAnalyzer` separately on the source of the `DependencyChain`, `Wrappers`, `RegisterFor` and `Realistic` scenarios, using the same `Count` values.
+`AnalyzerBenchmarks` runs `RegisterAnalyzer` and `ContainerAnalyzer` separately on the source of the `DependencyChain`, `Wrappers`, `RegisterFor`, `Realistic` and `StrictContainers` scenarios, using the same `Count` values. `Wrappers` injects a `Dictionary` of keyed services into every consumer (SGIOC015), `RegisterFor` has N assembly-level registrations, and `StrictContainers` covers the checks that only run for containers without fallback (SGIOC018/021) and for async-init services (SGIOC027/029).
 
 | Benchmark | Analyzer |
 | --- | --- |
-| AnalyzerOverhead | A no-op analyzer that registers the same action kinds (symbol, attribute syntax, semantic model, compilation end) with empty callbacks |
+| AnalyzerOverhead | A no-op analyzer that registers the action kinds of the IoC analyzers (symbol, attribute syntax, compilation end) with empty callbacks. It also registers a semantic model action, which `RegisterAnalyzer` used for assembly-level registrations, so its cost stays comparable with earlier versions |
 | RegisterAnalyzer | `RegisterAnalyzer` |
 | ContainerAnalyzer | `ContainerAnalyzer` |
 
@@ -61,6 +62,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 ## Reproduce a comparison
 
 Run from the repository root. Do not run builds or tests concurrently with measurements.
+BenchmarkDotNet finds the benchmark project by searching from the current directory, not from `--project`, so when the base is a separate checkout or worktree, run its command from that checkout's root; otherwise both runs measure the same code.
 Use the same machine, SDK, runtime, environment and benchmark arguments for both versions.
 
 ```powershell

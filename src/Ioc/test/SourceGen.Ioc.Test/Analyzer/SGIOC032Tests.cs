@@ -175,4 +175,27 @@ public class SGIOC032Tests
 
         await Assert.That(sgioc032).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC032_AssemblyLevelRegisterFor_OpenImplementation_WithClosedServiceType_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Repository<>), ServiceTypes = [typeof(TestNamespace.IRepository<int>)])]
+
+            namespace TestNamespace;
+
+            public interface IRepository<T> { }
+
+            public class Repository<T> : IRepository<T> { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc032 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC032).ToList();
+
+        await Assert.That(sgioc032).Count().IsEqualTo(1);
+        await Assert.That(sgioc032[0].Location.GetLineSpan().StartLinePosition.Line).IsEqualTo(3);
+    }
 }

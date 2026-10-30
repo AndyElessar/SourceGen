@@ -374,5 +374,111 @@ public class SGIOC018Tests
 
         await Assert.That(sgioc018).Count().IsEqualTo(0);
     }
+
+    [Test]
+    [Arguments("RegisterAllBaseClasses = true")]
+    [Arguments("typeof(HandlerBase)")]
+    public async Task SGIOC018_BaseClassServiceTypeConstructor_NoDiagnostic(string registration)
+    {
+        // The generator only calls the implementation constructor; the base constructor arguments come from it.
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public sealed class HandlerOptions { }
+
+            public class HandlerBase
+            {
+                public HandlerBase(HandlerOptions options) { }
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, {{registration}})]
+            public class MyHandler : HandlerBase
+            {
+                public MyHandler() : base(new HandlerOptions()) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018");
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_BaseClassServiceTypeInjectedProperty_NoDiagnostic()
+    {
+        // The generator only injects members declared on the implementation type.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IUnregistered { }
+
+            public abstract class HandlerBase
+            {
+                [IocInject]
+                public IUnregistered Dependency { get; set; } = null!;
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, RegisterAllBaseClasses = true)]
+            public class MyHandler : HandlerBase { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018");
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_MultipleContainersWithIntegrateServiceProviderFalse_ReportsDiagnosticForEachContainer()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IUnregisteredService { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class MyService
+            {
+                public MyService(IUnregisteredService unregistered) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class FirstContainer { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class SecondContainer { }
+
+            [IocContainer]
+            public partial class FallbackContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var messages = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")
+            .Select(static d => d.GetMessage())
+            .OrderBy(static m => m, StringComparer.Ordinal)
+            .ToList();
+
+        await Assert.That(messages).IsEquivalentTo(
+        [
+            "Unable to resolve service 'IUnregisteredService' for container 'FirstContainer'",
+            "Unable to resolve service 'IUnregisteredService' for container 'SecondContainer'"
+        ]);
+    }
 }
 

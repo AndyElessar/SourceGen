@@ -51,7 +51,8 @@ public sealed class AnalyzerBenchmarkInput
         => throw new InvalidOperationException($"{analyzer.GetType().Name} threw: {diagnostic}", exception);
 
     /// <summary>
-    /// Registers the same action kinds as the IoC analyzers with empty callbacks.
+    /// Registers the same action kinds as the IoC analyzers with empty callbacks. The semantic model action is no longer
+    /// used by them but keeps the overhead comparable with versions that used it.
     /// </summary>
     // Passed directly to WithAnalyzers and never loaded as a compiler extension, so it needs no [DiagnosticAnalyzer] registration.
 #pragma warning disable RS1001

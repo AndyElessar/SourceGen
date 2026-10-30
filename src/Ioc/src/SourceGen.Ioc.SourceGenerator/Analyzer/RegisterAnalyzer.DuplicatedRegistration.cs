@@ -83,11 +83,10 @@ public sealed partial class RegisterAnalyzer
         AnalyzerContext analyzerContext,
         AttributeData attribute,
         INamedTypeSymbol targetType,
-        string fullyQualifiedTypeName,
+        string? key,
         Location? location)
     {
-        // Get the registration key and tags from the attribute
-        var (key, _, _) = attribute.GetKeyInfo();
+        // Get the registration tags from the attribute
         var tags = attribute.GetTags();
 
         // Build effective tags list using helper method
@@ -97,7 +96,7 @@ public sealed partial class RegisterAnalyzer
         var hasDuplicate = false;
         foreach (var tag in effectiveTags)
         {
-            var registrationKey = (fullyQualifiedTypeName, key, tag);
+            var registrationKey = (targetType, key, tag);
 
             // Try to add; if already exists, mark as duplicate
             if (!analyzerContext.RegistrationKeys.TryAdd(registrationKey, location))
