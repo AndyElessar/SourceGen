@@ -22,6 +22,13 @@ public class AnalyzerBenchmarks
         input.Validate();
     }
 
+    // An iteration setup makes BenchmarkDotNet run one operation per iteration, after its forced GC, instead of a pilot-chosen count.
+    // An operation allocates tens of MB, so a varying count changes how many GCs land inside an iteration, which shifts both time and allocations.
+    [IterationSetup]
+    public void StartIteration()
+    {
+    }
+
     // Every operation analyzes a fresh analysis compilation, so each result includes the binding the analyzer actions trigger.
     // AnalyzerOverhead runs the same kinds of actions with empty callbacks; subtract it to estimate the analyzer's own cost.
     [Benchmark]
