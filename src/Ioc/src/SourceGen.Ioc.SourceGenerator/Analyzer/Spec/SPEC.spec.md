@@ -51,7 +51,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration/defaults detection (SGIOC011, 012) |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
-| `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis |
+| `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |
 
 ### ContainerAnalyzer
 
@@ -74,8 +74,9 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 
 #### CompilationEnd: AnalyzeContainerDependencies
 
+Setup: `BuildAsyncInitServiceKeys` builds the (service type, key) pairs with an async-init implementation once (empty when `AsyncMethodInject` is disabled)
 Pass 1 (all containers): `AnalyzeAsyncPartialAccessors` → SGIOC027 (sync accessor on async-init), SGIOC029 (unsupported async return)
-Pass 2 (IntegrateServiceProvider=false only): `AnalyzeContainerServiceDependencies` (SGIOC018), `AnalyzePartialAccessorDependencies` (SGIOC021)
+Pass 2 (IntegrateServiceProvider=false only): `CollectUnresolvedDependencies` runs once, then each container reports them (SGIOC018) and runs `AnalyzePartialAccessorDependencies` (SGIOC021)
 
 ### Diagnostic Coverage
 
@@ -304,7 +305,7 @@ Report when a `KeyValuePair<K, V>` is injected but the registered key type of `V
   - `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`
   - Collection types wrapping `KeyValuePair<K, V>`: `IEnumerable<KeyValuePair<K, V>>`, `IReadOnlyCollection<KeyValuePair<K, V>>`, `ICollection<KeyValuePair<K, V>>`, `IReadOnlyList<KeyValuePair<K, V>>`, `IList<KeyValuePair<K, V>>`, `KeyValuePair<K, V>[]`
 - For each detected key-value parameter with key type `K` and value type `V`:
-  - Iterates all registered services to find those with `HasKey = true` and whose `Type` implements interface `V`, has `V` as a base class, or equals `V`.
+  - Finds the registered services with `HasKey = true` whose `Type` implements interface `V`, has `V` as a base class, or equals `V`, using an index of keyed registrations by every type they are assignable to (built once per compilation on first use).
   - If at least one keyed registration for `V` exists but **none** have a key type compatible with `K`, reports the diagnostic.
 - Key type compatibility rules:
   - `K = object` is always compatible with any key type (no diagnostic).
@@ -368,8 +369,9 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 **Analysis:**
 
 - Applies only when `[IocContainer(IntegrateServiceProvider = false)]` is used.
-- Analyzes all registered services in the container scope.
-- For each service's dependencies:
+- Analyzes every registered implementation type. Service types that are only exposed by a registration (interfaces, base classes from `RegisterAllBaseClasses`, explicit `ServiceTypes`) are NOT analyzed as implementations, because the generator only constructs the implementation type and injects the members declared on it.
+- The unresolved dependencies are collected once per compilation and reported for each container with `IntegrateServiceProvider = false`.
+- For each implementation type's dependencies:
   - Constructor parameters: Checks if the dependency type is registered in the container.
   - Properties/Fields with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.
   - Method parameters with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.

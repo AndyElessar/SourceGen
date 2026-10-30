@@ -480,4 +480,69 @@ public class SGIOC015Tests
         await Assert.That(sgioc015).Count().IsEqualTo(1);
         await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int").And.Contains("IService");
     }
+
+    [Test]
+    public async Task SGIOC015_KVP_BaseClassValueType_MismatchedKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public abstract class ServiceBase { }
+
+            public class IntermediateService : ServiceBase { }
+
+            [IocRegister(Key = "Key1")]
+            public class ServiceA : IntermediateService { }
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<int, ServiceBase> kvp)
+            {
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015").ToList();
+
+        await Assert.That(sgioc015).Count().IsEqualTo(1);
+        await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int").And.Contains("ServiceBase");
+    }
+
+    [Test]
+    public async Task SGIOC015_KVP_AssemblyLevelCsharpKeyType_Nameof_MismatchedKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.ServiceB), ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IService)])]
+            [assembly: IocRegisterFor(typeof(TestNamespace.ServiceA), ServiceLifetime.Singleton, ServiceTypes = [typeof(TestNamespace.IService)], Key = nameof(TestNamespace.ServiceA.ServiceKey), KeyType = KeyType.Csharp)]
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            public class ServiceA : IService
+            {
+                public static Guid ServiceKey => Guid.Empty;
+            }
+
+            public class ServiceB : IService { }
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<int, IService> kvp)
+            {
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015").ToList();
+
+        await Assert.That(sgioc015).Count().IsEqualTo(1);
+        await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int").And.Contains("IService");
+    }
 }

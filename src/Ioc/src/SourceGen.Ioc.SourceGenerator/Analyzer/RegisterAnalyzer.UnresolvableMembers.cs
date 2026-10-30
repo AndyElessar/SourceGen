@@ -104,6 +104,7 @@ public sealed partial class RegisterAnalyzer
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
         AnalyzerContext analyzerContext,
+        KeyedServiceIndex keyedServiceIndex,
         CancellationToken cancellationToken)
     {
         // Skip services with Factory or Instance — they handle their own resolution
@@ -114,7 +115,7 @@ public sealed partial class RegisterAnalyzer
         var constructor = serviceInfo.Constructor;
         if (constructor is not null)
         {
-            AnalyzeKvpParametersInMethod(reportDiagnostic, constructor.Parameters, analyzerContext, cancellationToken);
+            AnalyzeKvpParametersInMethod(reportDiagnostic, constructor.Parameters, analyzerContext, keyedServiceIndex, cancellationToken);
         }
 
         // Check [Inject] method parameters and property/field types
@@ -125,13 +126,13 @@ public sealed partial class RegisterAnalyzer
             switch (member)
             {
                 case IMethodSymbol method:
-                    AnalyzeKvpParametersInMethod(reportDiagnostic, method.Parameters, analyzerContext, cancellationToken);
+                    AnalyzeKvpParametersInMethod(reportDiagnostic, method.Parameters, analyzerContext, keyedServiceIndex, cancellationToken);
                     break;
                 case IPropertySymbol property:
-                    AnalyzeKvpType(reportDiagnostic, property.Type, property.Name, property.Locations.FirstOrDefault(), analyzerContext, cancellationToken);
+                    AnalyzeKvpType(reportDiagnostic, property.Type, property.Name, property.Locations.FirstOrDefault(), analyzerContext, keyedServiceIndex, cancellationToken);
                     break;
                 case IFieldSymbol field:
-                    AnalyzeKvpType(reportDiagnostic, field.Type, field.Name, field.Locations.FirstOrDefault(), analyzerContext, cancellationToken);
+                    AnalyzeKvpType(reportDiagnostic, field.Type, field.Name, field.Locations.FirstOrDefault(), analyzerContext, keyedServiceIndex, cancellationToken);
                     break;
             }
         }
@@ -145,6 +146,7 @@ public sealed partial class RegisterAnalyzer
         Action<Diagnostic> reportDiagnostic,
         ImmutableArray<IParameterSymbol> parameters,
         AnalyzerContext analyzerContext,
+        KeyedServiceIndex keyedServiceIndex,
         CancellationToken cancellationToken)
     {
         foreach (var param in parameters)
@@ -159,7 +161,7 @@ public sealed partial class RegisterAnalyzer
                 continue;
             }
 
-            AnalyzeKvpType(reportDiagnostic, param.Type, param.Name, param.Locations.FirstOrDefault(), analyzerContext, cancellationToken);
+            AnalyzeKvpType(reportDiagnostic, param.Type, param.Name, param.Locations.FirstOrDefault(), analyzerContext, keyedServiceIndex, cancellationToken);
         }
     }
 
@@ -173,6 +175,7 @@ public sealed partial class RegisterAnalyzer
         string memberName,
         Location? location,
         AnalyzerContext analyzerContext,
+        KeyedServiceIndex keyedServiceIndex,
         CancellationToken cancellationToken)
     {
         if (!TryExtractKvpKeyAndValueTypes(type, out var keyType, out var valueType))
@@ -186,18 +189,8 @@ public sealed partial class RegisterAnalyzer
         var hasAnyKeyedService = false;
         var hasCompatibleKeyType = false;
 
-        foreach (var kvp in analyzerContext.RegisteredServices)
+        foreach (var candidateInfo in keyedServiceIndex.GetCandidates(valueType, cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var candidateInfo = kvp.Value;
-            if (!candidateInfo.HasKey)
-                continue;
-
-            // Check if the candidate service type is assignable to V
-            if (!IsAssignable(valueType, candidateInfo.Type))
-                continue;
-
             hasAnyKeyedService = true;
 
             // KeyTypeSymbol is null for KeyType.Csharp in symbol collection phase.
@@ -321,5 +314,82 @@ public sealed partial class RegisterAnalyzer
         keyType = namedType.TypeArguments[0];
         valueType = namedType.TypeArguments[1];
         return true;
+    }
+
+    /// <summary>
+    /// Keyed registrations indexed by every type they are assignable to (the implementation type, its interfaces,
+    /// and its base classes), built on first use so each key-value dependency does not scan all registrations.
+    /// Matches <see cref="IsAssignable"/> with the value type as the target.
+    /// </summary>
+    private sealed class KeyedServiceIndex(AnalyzerContext analyzerContext)
+    {
+        private Dictionary<ITypeSymbol, List<ServiceInfo>>? _byAssignableType;
+        private List<ServiceInfo>? _all;
+
+        private static readonly List<ServiceInfo> s_noCandidates = [];
+
+        /// <summary>
+        /// Gets the keyed registrations assignable to <paramref name="valueType"/>. The returned list must not be modified.
+        /// </summary>
+        public List<ServiceInfo> GetCandidates(ITypeSymbol valueType, CancellationToken cancellationToken)
+        {
+            if (_byAssignableType is null || _all is null)
+                Build(cancellationToken);
+
+            // Every type is assignable to object
+            if (valueType.SpecialType is SpecialType.System_Object)
+                return _all!;
+
+            if (_byAssignableType!.TryGetValue(valueType, out var candidates))
+                return candidates;
+
+            // Nullable<T> accepts exactly T
+            if (valueType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T, TypeArguments: [INamedTypeSymbol underlyingType] }
+                && analyzerContext.RegisteredServices.TryGetValue(underlyingType, out var underlyingInfo)
+                && underlyingInfo.HasKey)
+            {
+                return [underlyingInfo];
+            }
+
+            return s_noCandidates;
+        }
+
+        private void Build(CancellationToken cancellationToken)
+        {
+            var byAssignableType = new Dictionary<ITypeSymbol, List<ServiceInfo>>(SymbolEqualityComparer.Default);
+            var all = new List<ServiceInfo>();
+
+            foreach (var kvp in analyzerContext.RegisteredServices)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var info = kvp.Value;
+                if (!info.HasKey)
+                    continue;
+
+                all.Add(info);
+                Add(info.Type, info);
+
+                foreach (var iface in info.Type.AllInterfaces)
+                    Add(iface, info);
+
+                for (var baseType = info.Type.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
+                    Add(baseType, info);
+            }
+
+            _byAssignableType = byAssignableType;
+            _all = all;
+
+            void Add(ITypeSymbol type, ServiceInfo info)
+            {
+                if (!byAssignableType.TryGetValue(type, out var list))
+                {
+                    list = [];
+                    byAssignableType[type] = list;
+                }
+
+                list.Add(info);
+            }
+        }
     }
 }

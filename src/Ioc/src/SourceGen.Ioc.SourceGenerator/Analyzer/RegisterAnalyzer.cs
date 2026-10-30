@@ -459,6 +459,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var pathStack = new Stack<INamedTypeSymbol>();
         var graph = new DependencyGraph(analyzerContext);
+        var keyedServiceIndex = new KeyedServiceIndex(analyzerContext);
 
         foreach(var kvp in analyzerContext.RegisteredServices)
         {
@@ -470,7 +471,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
 
             // SGIOC015: Analyze KeyValuePair/Dictionary key type mismatches
-            AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, context.CancellationToken);
+            AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, keyedServiceIndex, context.CancellationToken);
 
             // SGIOC033: Func factories with arguments ignore Singleton/Scoped lifetimes
             AnalyzeFuncWithArgumentsLifetime(context.ReportDiagnostic, serviceInfo, analyzerContext, context.CancellationToken);

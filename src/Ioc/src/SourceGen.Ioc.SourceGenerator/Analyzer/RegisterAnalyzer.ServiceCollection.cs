@@ -173,6 +173,11 @@ public sealed partial class RegisterAnalyzer
         if(!AnalyzerHelpers.IsIoCRegistrationAttribute(attributeClass, analyzerContext.AttributeSymbols))
             return;
 
+        // KeyType can only be set as a named argument and defaults to Value, so skip the AttributeData lookup
+        // (a scan of all assembly attributes for assembly-level registrations) when it is absent
+        if(!HasNamedArgument(attributeSyntax, "KeyType"))
+            return;
+
         var attributeData = GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
         if(attributeData is null)
             return;
@@ -192,6 +197,20 @@ public sealed partial class RegisterAnalyzer
             return;
 
         analyzerContext.ResolvedCsharpKeyTypes[(targetType, attributeSyntax.GetLocation())] = resolvedKeyType;
+    }
+
+    private static bool HasNamedArgument(AttributeSyntax attributeSyntax, string name)
+    {
+        if(attributeSyntax.ArgumentList is not { } argumentList)
+            return false;
+
+        foreach(var argument in argumentList.Arguments)
+        {
+            if(argument.NameEquals?.Name.Identifier.Text == name)
+                return true;
+        }
+
+        return false;
     }
 
     private static AttributeData? GetAttributeDataFromSyntax(
