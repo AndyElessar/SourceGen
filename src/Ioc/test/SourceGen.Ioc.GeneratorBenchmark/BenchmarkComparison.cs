@@ -26,13 +26,14 @@ internal static class BenchmarkComparison
             throw new InvalidOperationException($"No benchmark results were found in '{headPath}'.");
         }
 
+        var drift = Drift(baseline, head);
         Row[] rows = [.. baseline.Measurements.Keys.Union(head.Measurements.Keys)
             .OrderBy(static key => key.Parameters, StringComparer.Ordinal)
             .ThenBy(static key => key.Method, StringComparer.Ordinal)
-            .Select(key => Classify(key, baseline.Measurements.GetValueOrDefault(key), head.Measurements.GetValueOrDefault(key), acceptRegressions, thresholdPercent, allocationThresholds))];
+            .Select(key => Classify(key, baseline.Measurements.GetValueOrDefault(key), head.Measurements.GetValueOrDefault(key), acceptRegressions, thresholdPercent, allocationThresholds, drift))];
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-        File.WriteAllText(outputPath, Format(rows, thresholdPercent, allocationThresholds, baseline.Host, head.Host));
+        File.WriteAllText(outputPath, Format(rows, thresholdPercent, allocationThresholds, drift, baseline.Host, head.Host));
         if(Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
         {
             WriteAnnotations(rows);
@@ -87,8 +88,27 @@ internal static class BenchmarkComparison
         return new(measurements, host);
     }
 
+    /// <summary>
+    /// Estimates how much the runner slowed down or sped up between the base and head runs, per benchmark class,
+    /// as the median head/base mean time ratio of the class's <c>*Overhead</c> benchmarks.
+    /// </summary>
+    /// <remarks>
+    /// Overhead benchmarks do the same Roslyn work without the IoC generator or analyzers, so a change in their time
+    /// comes from the environment, which shifts every benchmark of the class that ran after the base run.
+    /// </remarks>
+    private static Dictionary<string, double> Drift(Report baseline, Report head) => head.Measurements
+        .Where(static pair => pair.Key.Method.EndsWith("Overhead", StringComparison.Ordinal) && !pair.Value.Failed)
+        .Select(pair => (pair.Value.Type, Head: pair.Value.Mean, Base: baseline.Measurements.GetValueOrDefault(pair.Key)?.Mean ?? double.NaN))
+        .Where(static ratio => ratio.Base > 0)
+        .GroupBy(static ratio => ratio.Type, static ratio => ratio.Head / ratio.Base, StringComparer.Ordinal)
+        .ToDictionary(static group => group.Key, static group => Median([.. group.Order()]), StringComparer.Ordinal);
+
+    private static double Median(double[] sorted) => sorted.Length % 2 == 1
+        ? sorted[sorted.Length / 2]
+        : (sorted[(sorted.Length / 2) - 1] + sorted[sorted.Length / 2]) / 2;
+
     private static Row Classify((string Parameters, string Method) key, Measurement? baseline, Measurement? head, bool acceptRegressions,
-        double threshold, IReadOnlyDictionary<string, double> allocationThresholds)
+        double threshold, IReadOnlyDictionary<string, double> allocationThresholds, IReadOnlyDictionary<string, double> drift)
     {
         if(head is null || head.Failed)
         {
@@ -108,7 +128,9 @@ internal static class BenchmarkComparison
             return new(key.Parameters, key.Method, baseline, head, double.NaN, double.NaN, Status.NoBaseline);
         }
 
-        var time = Change(baseline.Mean, head.Mean);
+        // Head times are divided by the class's drift, so the comparison shows the change the code made rather than the runner.
+        var factor = drift.GetValueOrDefault(head.Type, 1);
+        var time = Change(baseline.Mean, head.Mean / factor);
         if(baseline.Allocated is not { } baselineBytes)
         {
             var status = acceptRegressions ? Status.Accepted : Status.MissingAllocation;
@@ -119,8 +141,8 @@ internal static class BenchmarkComparison
         var allocationThreshold = allocationThresholds.GetValueOrDefault(head.Type, threshold);
 
         // Comparisons with NaN are false, so a missing confidence interval never flags a time change.
-        var slower = time > threshold && head.Lower > baseline.Upper;
-        var faster = time < -threshold && head.Upper < baseline.Lower;
+        var slower = time > threshold && head.Lower / factor > baseline.Upper;
+        var faster = time < -threshold && head.Upper / factor < baseline.Lower;
         var result = (allocation > allocationThreshold, slower, faster || allocation < -allocationThreshold) switch
         {
             (true, _, _) when acceptRegressions => Status.Accepted,
@@ -140,7 +162,7 @@ internal static class BenchmarkComparison
     };
 
     private static string Format(IReadOnlyList<Row> rows, double threshold, IReadOnlyDictionary<string, double> allocationThresholds,
-        Host? baselineHost, Host? headHost)
+        IReadOnlyDictionary<string, double> drift, Host? baselineHost, Host? headHost)
     {
         var builder = new StringBuilder();
         builder.AppendLine(string.Join(" · ", rows
@@ -160,6 +182,14 @@ internal static class BenchmarkComparison
             .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
             .Select(static pair => Invariant($" ({pair.Value}% for `{pair.Key}`)")));
         builder.Append(Invariant($"Allocated is managed memory per operation. An allocation increase above {threshold}%{overrides} fails the check unless it is accepted. A time change above {threshold}% is reported only when the 99.9% confidence intervals do not overlap, and never fails the check because shared runners are noisy."));
+        if(drift.Count > 0)
+        {
+            var drifts = string.Join(", ", drift
+                .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+                .Select(static pair => Invariant($"{FormatChange((pair.Value - 1) * 100)} for `{pair.Key}`")));
+            builder.Append(Invariant($" Δ time and the confidence intervals are adjusted for runner drift: head times are divided by the median time change of each class's `*Overhead` benchmarks, which do the same Roslyn work without the IoC generator or analyzers ({drifts})."));
+        }
+
         if(rows.Any(static row => row.Status is Status.Accepted))
         {
             builder.Append(" Accepted results are allocation regressions or removed benchmarks that the change explicitly accepts.");
