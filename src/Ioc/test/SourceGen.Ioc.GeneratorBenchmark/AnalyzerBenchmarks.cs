@@ -4,7 +4,10 @@ using Microsoft.CodeAnalysis;
 
 namespace SourceGen.Ioc.GeneratorBenchmark;
 
+// An operation allocates tens of MB, so a pilot-chosen operation count would change how many GCs land inside an iteration,
+// which shifts time and allocations between runs. A fixed count keeps runs comparable and still averages several operations.
 [MemoryDiagnoser]
+[InvocationCount(4)]
 public class AnalyzerBenchmarks
 {
     [Params(100, 500)]
@@ -20,13 +23,6 @@ public class AnalyzerBenchmarks
     {
         input = new AnalyzerBenchmarkInput(Scenario, Count);
         input.Validate();
-    }
-
-    // An iteration setup makes BenchmarkDotNet run one operation per iteration, after its forced GC, instead of a pilot-chosen count.
-    // An operation allocates tens of MB, so a varying count changes how many GCs land inside an iteration, which shifts both time and allocations.
-    [IterationSetup]
-    public void StartIteration()
-    {
     }
 
     // Every operation analyzes a fresh analysis compilation, so each result includes the binding the analyzer actions trigger.

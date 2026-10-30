@@ -20,6 +20,8 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 ## Generator benchmarks
 
+`ColdGeneratorBenchmarks` contains `Cold` and `ColdOverhead`; `GeneratorBenchmarks` contains the incremental benchmarks.
+
 | Benchmark | Operation |
 | --- | --- |
 | Cold | A fresh compilation and driver for every operation. Parsing source text and loading metadata references are excluded. |
@@ -32,7 +34,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 - Edit benchmarks always start from the same previously run driver and apply the edited compilation. The returned driver is not reused, so they do not accidentally measure a no-op cached run.
 - Setup validates the compilation and generated output that each benchmark measures (initial for `Cold`, `ColdOverhead` and `Rerun`, the edited compilation for the edit benchmarks) outside the timed operation. The edited compilation's semantic caches are warmed during setup.
-- `Cold` and `ColdOverhead` run one operation per iteration, after BenchmarkDotNet's forced GC, through an iteration setup. A cold operation allocates up to tens of MB, so with a pilot-chosen operation count, two runs could choose different counts and fit a different number of GCs inside an iteration, which changes the time and allocations per operation.
+- `Cold` and `ColdOverhead` run a fixed 4 operations per iteration (`[InvocationCount(4)]`). A cold operation allocates up to tens of MB, so with a pilot-chosen operation count, two runs could choose different counts and fit a different number of GCs inside an iteration, which changes the time and allocations per operation. The incremental benchmarks take 0.2 to 50 ms per operation and keep the pilot-chosen count.
 - MemoryDiagnoser reports managed allocations per operation, not retained heap size.
 - These synthetic workloads isolate generator costs; they do not measure total build or IDE latency.
 
@@ -52,7 +54,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 - Each operation calls `CompilationWithAnalyzers.GetAnalyzerDiagnosticsAsync` on the same compilation. Roslyn analyzes a copy of it, so every result includes the binding that the analyzer actions trigger. Subtract `AnalyzerOverhead` to estimate the analyzer's own cost.
 - Analysis is sequential (`concurrentAnalysis: false`) so results do not depend on the runner's core count.
-- Like `Cold`, every analyzer benchmark runs one operation per iteration, after BenchmarkDotNet's forced GC.
+- Like `Cold`, every analyzer benchmark runs a fixed 4 operations per iteration.
 - The analyzed compilation does not include generator output. Analysis binds every syntax tree, and binding the generated container of the `Wrappers` scenario at `Count = 500` takes over a minute per operation, which would hide the analyzer's own cost and exceed the CI timeout.
 - Setup fails if an analyzer throws or reports an error.
 

@@ -68,5 +68,5 @@ if(args is ["--verify", var path])
     static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }
 
-BenchmarkSwitcher.FromTypes([typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks), typeof(GeneratedCodeBenchmarks)]).Run(args);
+BenchmarkSwitcher.FromTypes([typeof(ColdGeneratorBenchmarks), typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks), typeof(GeneratedCodeBenchmarks)]).Run(args);
 return 0;
