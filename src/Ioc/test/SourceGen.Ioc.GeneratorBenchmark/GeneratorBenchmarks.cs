@@ -17,21 +17,6 @@ public class GeneratorBenchmarks
     private Compilation edited = null!;
 
     // Validating a large output compilation can take minutes, so each setup validates only the output its benchmark measures.
-    [GlobalSetup(Targets = [nameof(Cold), nameof(ColdOverhead)])]
-    public void SetupCold()
-    {
-        input = new GeneratorBenchmarkInput(Scenario, Count);
-        var driver = input.CreateDriver().RunGeneratorsAndUpdateCompilation(input.Initial, out var output, out _);
-        GeneratorBenchmarkInput.Validate(driver, output);
-    }
-
-    // An iteration setup makes BenchmarkDotNet run one operation per iteration, after its forced GC, instead of a pilot-chosen count.
-    // A cold operation allocates up to tens of MB, so a varying count changes how many GCs land inside an iteration.
-    [IterationSetup(Targets = [nameof(Cold), nameof(ColdOverhead)])]
-    public void StartColdIteration()
-    {
-    }
-
     [GlobalSetup(Target = nameof(Rerun))]
     public void SetupRerun()
     {
@@ -51,13 +36,6 @@ public class GeneratorBenchmarks
 
     [GlobalSetup(Target = nameof(EditDefaults))]
     public void SetupEditDefaults() => SetupEdited(GeneratorEdit.Defaults);
-
-    [Benchmark]
-    public GeneratorDriver Cold() => input.CreateDriver().RunGenerators(input.CreateCompilation());
-
-    // Subtract from Cold to estimate the generator's own cost.
-    [Benchmark]
-    public GeneratorDriver ColdOverhead() => input.CreateOverheadDriver().RunGenerators(input.CreateCompilation());
 
     // Runs the warm driver again on the same compilation: the lower bound of an incremental run.
     [Benchmark]
