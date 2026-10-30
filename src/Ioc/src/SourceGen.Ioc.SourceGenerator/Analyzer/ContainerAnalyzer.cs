@@ -174,11 +174,13 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
 
         // SGIOC019: Check for partial modifier and static modifier on container classes
-        // Also collect containers with IntegrateServiceProvider = false for SGIOC018
-        context.RegisterSymbolAction(ctx => AnalyzeContainerClass(ctx, analyzerContext), SymbolKind.NamedType);
-
-        // Collect all registered services for SGIOC018 analysis
-        context.RegisterSymbolAction(ctx => CollectRegisteredServices(ctx, analyzerContext), SymbolKind.NamedType);
+        // Also collect containers with IntegrateServiceProvider = false for SGIOC018,
+        // and all registered services for SGIOC018 analysis
+        context.RegisterSymbolAction(ctx =>
+        {
+            AnalyzeContainerClass(ctx, analyzerContext);
+            CollectRegisteredServices(ctx, analyzerContext);
+        }, SymbolKind.NamedType);
 
         // SGIOC018: Analyze dependencies at compilation end
         context.RegisterCompilationEndAction(ctx => AnalyzeContainerDependencies(ctx, analyzerContext));
@@ -196,8 +198,15 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             return;
 
         // Check if the type has IocContainerAttribute
-        var containerAttribute = typeSymbol.GetAttributes()
-            .FirstOrDefault(attr => AnalyzerHelpers.IsAttributeMatch(attr.AttributeClass, analyzerContext.AttributeSymbols.IocContainerAttribute));
+        AttributeData? containerAttribute = null;
+        foreach(var attr in typeSymbol.GetAttributes())
+        {
+            if(AnalyzerHelpers.IsAttributeMatch(attr.AttributeClass, analyzerContext.AttributeSymbols.IocContainerAttribute))
+            {
+                containerAttribute = attr;
+                break;
+            }
+        }
 
         if(containerAttribute is null)
             return;

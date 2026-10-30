@@ -502,4 +502,74 @@ public class SGIOC008Tests
     }
 
     #endregion
+
+    #region Attribute Name Forms
+
+    [Test]
+    [Arguments("", "SourceGen.Ioc.IocRegister")]
+    [Arguments("", "global::SourceGen.Ioc.IocRegisterAttribute")]
+    [Arguments("using Reg = SourceGen.Ioc.IocRegisterAttribute;", "Reg")]
+    [Arguments("using RegAttribute = SourceGen.Ioc.IocRegisterAttribute;", "Reg")]
+    [Arguments("using Ioc = SourceGen.Ioc;", "Ioc::IocRegister")]
+    public async Task SGIOC008_Factory_QualifiedOrAliasedAttributeName_ReportsDiagnostic(string alias, string attributeName)
+    {
+        var source = $$"""
+            using System;
+            {{alias}}
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [{{attributeName}}(Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public class MyServiceFactory
+            {
+                public IMyService Create(IServiceProvider sp) => new MyService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+
+        await Assert.That(sgioc008).Count().IsEqualTo(1);
+        await Assert.That(sgioc008[0].GetMessage()).Contains("Create").And.Contains("not static");
+    }
+
+    [Test]
+    public async Task SGIOC008_Factory_AliasDeclaredInNamespaceOfAnotherFile_ReportsDiagnostic()
+    {
+        const string aliasSource = """
+            global using GlobalReg = SourceGen.Ioc.IocRegisterAttribute;
+            """;
+        const string source = """
+            using System;
+
+            namespace TestNamespace
+            {
+                using LocalReg = SourceGen.Ioc.IocRegisterAttribute;
+
+                public interface IMyService { }
+
+                [LocalReg(Factory = nameof(MyServiceFactory.Create))]
+                public class MyService : IMyService { }
+
+                [GlobalReg(Factory = nameof(MyServiceFactory.Create))]
+                public class OtherService : IMyService { }
+
+                public class MyServiceFactory
+                {
+                    public IMyService Create(IServiceProvider sp) => new MyService();
+                }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerOnFilesAsync<RegisterAnalyzer>(aliasSource, source);
+        var sgioc008 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC008").ToList();
+
+        await Assert.That(sgioc008).Count().IsEqualTo(2);
+    }
+
+    #endregion
 }

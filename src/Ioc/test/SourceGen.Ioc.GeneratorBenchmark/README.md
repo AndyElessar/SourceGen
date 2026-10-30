@@ -49,7 +49,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 | Benchmark | Analyzer |
 | --- | --- |
-| AnalyzerOverhead | A no-op analyzer that registers the same action kinds (symbol, attribute syntax, semantic model, compilation end) with empty callbacks |
+| AnalyzerOverhead | A no-op analyzer that registers the action kinds of the IoC analyzers (symbol, attribute syntax, compilation end) with empty callbacks. It also registers a semantic model action, which `RegisterAnalyzer` used for assembly-level registrations, so its cost stays comparable with earlier versions |
 | RegisterAnalyzer | `RegisterAnalyzer` |
 | ContainerAnalyzer | `ContainerAnalyzer` |
 

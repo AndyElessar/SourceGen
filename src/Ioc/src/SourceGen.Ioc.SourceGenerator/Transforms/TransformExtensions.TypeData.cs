@@ -2,7 +2,7 @@ namespace SourceGen.Ioc;
 
 internal static partial class TransformExtensions
 {
-    private static string GetNameWithoutGeneric(string typeName)
+    internal static string GetNameWithoutGeneric(string typeName)
     {
         int angleIndex = typeName.IndexOf('<');
         return angleIndex > 0 ? typeName[..angleIndex] : typeName;

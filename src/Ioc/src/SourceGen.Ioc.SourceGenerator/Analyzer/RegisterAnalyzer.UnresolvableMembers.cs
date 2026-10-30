@@ -55,9 +55,7 @@ public sealed partial class RegisterAnalyzer
 
             // Check if parameter has [ServiceKey] attribute
             var serviceKeyAttribute = param.GetAttributes()
-                .FirstOrDefault(attr =>
-                    attr.AttributeClass?.Name == "ServiceKeyAttribute"
-                    && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection");
+                .FirstOrDefault(static attr => AnalyzerHelpers.IsServiceKeyAttribute(attr.AttributeClass));
 
             if (serviceKeyAttribute is null)
                 continue;
@@ -154,9 +152,7 @@ public sealed partial class RegisterAnalyzer
             cancellationToken.ThrowIfCancellationRequested();
 
             // Skip parameters with [FromKeyedServices] — those resolve specific keyed services
-            if (param.GetAttributes().Any(static attr =>
-                attr.AttributeClass?.Name == "FromKeyedServicesAttribute"
-                && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection"))
+            if (param.GetAttributes().Any(static attr => AnalyzerHelpers.IsFromKeyedServicesAttribute(attr.AttributeClass)))
             {
                 continue;
             }
@@ -258,40 +254,36 @@ public sealed partial class RegisterAnalyzer
             return false;
 
         var originalDef = namedType.OriginalDefinition;
-        var fullName = originalDef.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-        // Direct KeyValuePair<K, V>
-        if (fullName is "global::System.Collections.Generic.KeyValuePair<TKey, TValue>")
-        {
-            keyType = namedType.TypeArguments[0];
-            valueType = namedType.TypeArguments[1];
-            return true;
-        }
-
-        // Dictionary types: IDictionary<K, V>, IReadOnlyDictionary<K, V>, Dictionary<K, V>
-        if (fullName is "global::System.Collections.Generic.IDictionary<TKey, TValue>"
-            or "global::System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>"
-            or "global::System.Collections.Generic.Dictionary<TKey, TValue>")
-        {
-            keyType = namedType.TypeArguments[0];
-            valueType = namedType.TypeArguments[1];
-            return true;
-        }
 
         // Collection types wrapping KeyValuePair<K, V>:
         // IEnumerable<KVP>, IReadOnlyCollection<KVP>, ICollection<KVP>, IReadOnlyList<KVP>, IList<KVP>
-        if (namedType.TypeArguments.Length == 1
-            && fullName is "global::System.Collections.Generic.IEnumerable<T>"
-            or "global::System.Collections.Generic.IReadOnlyCollection<T>"
-            or "global::System.Collections.Generic.ICollection<T>"
-            or "global::System.Collections.Generic.IReadOnlyList<T>"
-            or "global::System.Collections.Generic.IList<T>")
+        if (originalDef.SpecialType is SpecialType.System_Collections_Generic_IEnumerable_T
+            or SpecialType.System_Collections_Generic_IReadOnlyCollection_T
+            or SpecialType.System_Collections_Generic_ICollection_T
+            or SpecialType.System_Collections_Generic_IReadOnlyList_T
+            or SpecialType.System_Collections_Generic_IList_T)
         {
             return TryExtractFromKeyValuePairType(namedType.TypeArguments[0], out keyType, out valueType);
         }
 
-        return false;
+        // Direct KeyValuePair<K, V>
+        // Dictionary types: IDictionary<K, V>, IReadOnlyDictionary<K, V>, Dictionary<K, V>
+        if (originalDef.MetadataName is not ("KeyValuePair`2" or "IDictionary`2" or "IReadOnlyDictionary`2" or "Dictionary`2")
+            || !IsCollectionsGenericTopLevelType(originalDef))
+        {
+            return false;
+        }
+
+        keyType = namedType.TypeArguments[0];
+        valueType = namedType.TypeArguments[1];
+        return true;
     }
+
+    /// <summary>
+    /// Checks that a type is declared directly in <c>System.Collections.Generic</c>, without allocating a display string.
+    /// </summary>
+    private static bool IsCollectionsGenericTopLevelType(INamedTypeSymbol type)
+        => type.ContainingType is null && IsSystemCollectionsGenericNamespace(type.ContainingNamespace);
 
     /// <summary>
     /// Tries to extract K and V from a KeyValuePair&lt;K, V&gt; type.
@@ -304,12 +296,11 @@ public sealed partial class RegisterAnalyzer
         keyType = null;
         valueType = null;
 
-        if (type is not INamedTypeSymbol namedType || !namedType.IsGenericType)
+        if (type is not INamedTypeSymbol { IsGenericType: true, OriginalDefinition: { MetadataName: "KeyValuePair`2" } originalDef } namedType
+            || !IsCollectionsGenericTopLevelType(originalDef))
+        {
             return false;
-
-        var fullName = namedType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (fullName is not "global::System.Collections.Generic.KeyValuePair<TKey, TValue>")
-            return false;
+        }
 
         keyType = namedType.TypeArguments[0];
         valueType = namedType.TypeArguments[1];

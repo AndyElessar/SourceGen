@@ -6,27 +6,44 @@ namespace SourceGen.Ioc;
 internal static class AnalyzerHelpers
 {
     /// <summary>
-    /// Well-known service types that can always be resolved from the DI container.
-    /// These types are provided by the runtime and do not need explicit registration.
-    /// </summary>
-    private static readonly ImmutableHashSet<string> WellKnownServiceTypes =
-    [
-        "global::System.IServiceProvider",
-        "global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory",
-        "global::Microsoft.Extensions.DependencyInjection.IServiceScope",
-        "global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider"
-    ];
-
-    /// <summary>
-    /// Checks if the type is a well-known service type that can always be resolved.
+    /// Checks if the type is a well-known service type that can always be resolved:
+    /// <c>System.IServiceProvider</c>, or <c>IServiceScopeFactory</c>, <c>IServiceScope</c> or <c>IKeyedServiceProvider</c>
+    /// from <c>Microsoft.Extensions.DependencyInjection</c>. These types are provided by the runtime and do not need explicit registration.
     /// </summary>
     /// <param name="typeSymbol">The type symbol to check.</param>
     /// <returns>True if the type is a well-known service type; otherwise, false.</returns>
     public static bool IsWellKnownServiceType(ITypeSymbol typeSymbol)
-    {
-        var fullName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        return WellKnownServiceTypes.Contains(fullName);
-    }
+        => typeSymbol is INamedTypeSymbol { Arity: 0, ContainingType: null } namedType
+            && namedType.Name switch
+            {
+                "IServiceProvider" => IsSystemNamespace(namedType.ContainingNamespace),
+                "IServiceScopeFactory" or "IServiceScope" or "IKeyedServiceProvider" => IsInMicrosoftExtensionsDependencyInjection(namedType),
+                _ => false
+            };
+
+    /// <summary>
+    /// Checks if the attribute class is <c>Microsoft.Extensions.DependencyInjection.ServiceKeyAttribute</c>.
+    /// </summary>
+    public static bool IsServiceKeyAttribute(INamedTypeSymbol? attributeClass)
+        => attributeClass is { Name: "ServiceKeyAttribute" } && IsInMicrosoftExtensionsDependencyInjection(attributeClass);
+
+    /// <summary>
+    /// Checks if the attribute class is <c>Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute</c>.
+    /// </summary>
+    public static bool IsFromKeyedServicesAttribute(INamedTypeSymbol? attributeClass)
+        => attributeClass is { Name: "FromKeyedServicesAttribute" } && IsInMicrosoftExtensionsDependencyInjection(attributeClass);
+
+    /// <summary>
+    /// Checks if the attribute class is <c>SourceGen.Ioc.IocGenericFactoryAttribute</c>.
+    /// </summary>
+    public static bool IsIocGenericFactoryAttribute(INamedTypeSymbol? attributeClass)
+        => attributeClass is
+        {
+            Name: "IocGenericFactoryAttribute",
+            Arity: 0,
+            ContainingType: null,
+            ContainingNamespace: { Name: "Ioc", ContainingNamespace: { Name: "SourceGen", ContainingNamespace.IsGlobalNamespace: true } }
+        };
 
     /// <summary>
     /// Checks if a service type can always be resolved (well-known types only).
@@ -203,8 +220,7 @@ internal static class AnalyzerHelpers
             if(attrClass is null)
                 continue;
 
-            if(attrClass.Name == "FromKeyedServicesAttribute"
-                && attrClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+            if(IsFromKeyedServicesAttribute(attrClass))
             {
                 if(attribute.ConstructorArguments.Length > 0)
                 {
@@ -233,6 +249,16 @@ internal static class AnalyzerHelpers
     public static IEnumerable<INamedTypeSymbol> EnumerateRegisteredServiceTypes(
         INamedTypeSymbol implementationType,
         AttributeData attribute)
+        => EnumerateRegisteredServiceTypes(implementationType, attribute, GetExplicitServiceTypes(attribute));
+
+    /// <summary>
+    /// Enumerates the service types exposed by a registration attribute, with its explicit service types already parsed
+    /// by <see cref="GetExplicitServiceTypes"/>.
+    /// </summary>
+    public static IEnumerable<INamedTypeSymbol> EnumerateRegisteredServiceTypes(
+        INamedTypeSymbol implementationType,
+        AttributeData attribute,
+        List<INamedTypeSymbol> explicitServiceTypes)
     {
         yield return implementationType;
 
@@ -240,10 +266,7 @@ internal static class AnalyzerHelpers
         if(attrClass is null)
             yield break;
 
-        foreach(var serviceType in attribute.GetServiceTypeSymbolsFromGenericAttribute())
-            yield return serviceType;
-
-        foreach(var serviceType in attribute.GetServiceTypeSymbols())
+        foreach(var serviceType in explicitServiceTypes)
             yield return serviceType;
 
         var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
@@ -264,6 +287,13 @@ internal static class AnalyzerHelpers
             baseType = baseType.BaseType;
         }
     }
+
+    /// <summary>
+    /// Gets the service types listed by a registration attribute: its generic type arguments, then its <c>ServiceTypes</c>
+    /// (or constructor service types).
+    /// </summary>
+    public static List<INamedTypeSymbol> GetExplicitServiceTypes(AttributeData attribute)
+        => [.. attribute.GetServiceTypeSymbolsFromGenericAttribute(), .. attribute.GetServiceTypeSymbols()];
 
     /// <summary>
     /// Returns why a generic factory type mapping cannot fill every factory method type parameter,
@@ -414,7 +444,7 @@ internal static class AnalyzerHelpers
     /// </summary>
     public static bool IsNonGenericTaskType(ITypeSymbol? type)
         => UnwrapNullableValueType(type) is INamedTypeSymbol { Arity: 0, Name: "Task" } named
-            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+            && IsSystemThreadingTasksNamespace(named.ContainingNamespace);
 
     /// <summary>
     /// Unwraps Nullable&lt;T&gt; to T for value-type async wrapper analysis.
@@ -456,10 +486,8 @@ internal static class AnalyzerHelpers
         if(IsNonGenericTaskType(type))
             return true;
 
-        if(type is not INamedTypeSymbol { Name: "ValueTask", Arity: 0 } named)
-            return false;
-
-        return named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+        return type is INamedTypeSymbol { Name: "ValueTask", Arity: 0 } named
+            && IsSystemThreadingTasksNamespace(named.ContainingNamespace);
     }
 
     /// <summary>
@@ -574,8 +602,6 @@ internal static class AnalyzerHelpers
             if(attrClass is null)
                 continue;
 
-            var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
-
             // [IocInject] or [Inject] with Key - check if it has a key
             if(attrClass.IsInject)
             {
@@ -585,11 +611,8 @@ internal static class AnalyzerHelpers
             }
 
             // [ServiceKey] - injects the registration key
-            if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
-                return true;
-
             // [FromKeyedServices] - MS.DI handles this automatically
-            if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+            if(IsServiceKeyAttribute(attrClass) || IsFromKeyedServicesAttribute(attrClass))
                 return true;
         }
 
@@ -640,18 +663,10 @@ internal static class AnalyzerHelpers
             if(attrClass is null)
                 continue;
 
-            var attrNamespace = attrClass.ContainingNamespace?.ToDisplayString();
-
             // [IocInject] or [Inject] - user explicitly handles this
-            if(attrClass.IsInject)
-                return true;
-
             // [ServiceKey] - injects the registration key
-            if(attrClass.Name == "ServiceKeyAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
-                return true;
-
             // [FromKeyedServices] - MS.DI handles this automatically
-            if(attrClass.Name == "FromKeyedServicesAttribute" && attrNamespace == "Microsoft.Extensions.DependencyInjection")
+            if(attrClass.IsInject || IsServiceKeyAttribute(attrClass) || IsFromKeyedServicesAttribute(attrClass))
                 return true;
         }
 

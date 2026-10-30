@@ -30,8 +30,7 @@ public sealed partial class RegisterAnalyzer
                 if (attrClass is null)
                     continue;
 
-                if (attrClass.Name == "FromKeyedServicesAttribute"
-                    && attrClass.ContainingNamespace.ToDisplayString() == "Microsoft.Extensions.DependencyInjection")
+                if (AnalyzerHelpers.IsFromKeyedServicesAttribute(attrClass))
                 {
                     hasFromKeyedServices = true;
                 }
@@ -204,9 +203,7 @@ public sealed partial class RegisterAnalyzer
         // Reported on the Factory argument: the factory method may be declared in another file or assembly
         foreach (var parameter in factory.Parameters)
         {
-            var hasServiceKey = parameter.GetAttributes().Any(static attr =>
-                attr.AttributeClass?.Name == "ServiceKeyAttribute"
-                && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection");
+            var hasServiceKey = parameter.GetAttributes().Any(static attr => AnalyzerHelpers.IsServiceKeyAttribute(attr.AttributeClass));
             if (hasServiceKey)
             {
                 context.ReportDiagnostic(Diagnostic.Create(ServiceKeyNotRegistered, factoryArgument.GetLocation(), parameter.Name));
@@ -301,7 +298,7 @@ public sealed partial class RegisterAnalyzer
                 var hasIocGenericFactory = false;
                 foreach (var attr in methodSymbol.GetAttributes())
                 {
-                    if (attr.AttributeClass?.ToDisplayString() == Constants.IocGenericFactoryAttributeFullName)
+                    if (AnalyzerHelpers.IsIocGenericFactoryAttribute(attr.AttributeClass))
                     {
                         hasIocGenericFactory = true;
                         break;
@@ -394,7 +391,7 @@ public sealed partial class RegisterAnalyzer
         AttributeData? genericFactoryAttr = null;
         foreach (var attr in methodSymbol.GetAttributes())
         {
-            if (attr.AttributeClass?.ToDisplayString() == Constants.IocGenericFactoryAttributeFullName)
+            if (AnalyzerHelpers.IsIocGenericFactoryAttribute(attr.AttributeClass))
             {
                 genericFactoryAttr = attr;
                 break;
@@ -499,11 +496,11 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static void AnalyzeIncompatibleServiceTypes(
         Action<Diagnostic> reportDiagnostic,
-        AttributeData attribute,
+        List<INamedTypeSymbol> explicitServiceTypes,
         INamedTypeSymbol targetType,
         Location? location)
     {
-        foreach (var serviceType in attribute.GetServiceTypeSymbolsFromGenericAttribute().Concat(attribute.GetServiceTypeSymbols()))
+        foreach (var serviceType in explicitServiceTypes)
         {
             var reason = AnalyzerHelpers.GetServiceTypeIncompatibilityReason(targetType, serviceType);
             if (reason is null)
@@ -517,12 +514,6 @@ public sealed partial class RegisterAnalyzer
                 reason));
         }
     }
-
-    private static void AnalyzeInvalidAttributeUsage(SymbolAnalysisContext context, INamedTypeSymbol targetType, Location? location)
-        => AnalyzeInvalidAttributeUsage(context.ReportDiagnostic, targetType, location);
-
-    private static void AnalyzeInvalidAttributeUsage(SemanticModelAnalysisContext context, INamedTypeSymbol targetType, Location? location)
-        => AnalyzeInvalidAttributeUsage(context.ReportDiagnostic, targetType, location);
 
     private static void AnalyzeInvalidAttributeUsage(Action<Diagnostic> reportDiagnostic, INamedTypeSymbol targetType, Location? location)
     {
@@ -729,7 +720,7 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static bool IsNonGenericTaskType(ITypeSymbol? type)
         => type is INamedTypeSymbol { Arity: 0, Name: "Task" } named
-            && named.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks";
+            && IsSystemThreadingTasksNamespace(named.ContainingNamespace);
 
     private static ExpressionSyntax[]? GetInjectMembersElements(ExpressionSyntax expression)
         => expression switch

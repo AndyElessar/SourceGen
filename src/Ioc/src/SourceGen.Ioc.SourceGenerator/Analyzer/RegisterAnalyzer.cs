@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 
 namespace SourceGen.Ioc;
 
@@ -389,53 +390,84 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             features);
 
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
-        var assemblyAttributeSyntaxTrees = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
+        var assemblyRegistrations = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
+        var attributeNameFilter = new IocAttributeNameFilter(
+            context.Compilation,
+            attributeSymbols.IocRegisterAttribute,
+            attributeSymbols.IocRegisterAttribute_T1,
+            attributeSymbols.IocRegisterForAttribute,
+            attributeSymbols.IocRegisterForAttribute_T1,
+            attributeSymbols.IocRegisterDefaultsAttribute,
+            attributeSymbols.IocRegisterDefaultsAttribute_T1);
 
-        // First pass: collect services and do immediate validation (SGIOC001)
-        context.RegisterSymbolAction(ctx => CollectAndValidateNamedType(ctx, analyzerContext), SymbolKind.NamedType);
+        // First pass: collect services and do immediate validation (SGIOC001, 009, 011, 032),
+        // and SGIOC012 for IoCRegisterDefaultsAttribute on types (class, struct, interface)
+        context.RegisterSymbolAction(ctx =>
+        {
+            CollectAndValidateNamedType(ctx, analyzerContext);
+            AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext);
+        }, SymbolKind.NamedType);
 
-        // SGIOC012: Analyze IoCRegisterDefaultsAttribute on types (class, struct, interface)
-        context.RegisterSymbolAction(ctx => AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext), SymbolKind.NamedType);
+        // SGIOC007 + SGIOC022 + SGIOC028: Analyze InjectAttribute usage and feature gating on members
+        context.RegisterSymbolAction(ctx => AnalyzeInjectAttribute(ctx, analyzerContext), SymbolKind.Property, SymbolKind.Field);
 
-        // SGIOC007 + SGIOC022: Analyze InjectAttribute usage and feature gating on members
-        context.RegisterSymbolAction(ctx => AnalyzeInjectAttribute(ctx, analyzerContext), SymbolKind.Property, SymbolKind.Field, SymbolKind.Method);
+        // Methods: SGIOC007/022/028 InjectAttribute usage, SGIOC006 duplicated keyed service attributes on parameters,
+        // and SGIOC016/017 [IocGenericFactory] mappings
+        context.RegisterSymbolAction(ctx =>
+        {
+            AnalyzeInjectAttribute(ctx, analyzerContext);
+            AnalyzeDuplicatedKeyedServiceAttributes(ctx);
+            AnalyzeIocGenericFactoryAttribute(ctx);
+        }, SymbolKind.Method);
 
-        // SGIOC006: Analyze duplicated keyed service attributes on parameters
-        context.RegisterSymbolAction(AnalyzeDuplicatedKeyedServiceAttributes, SymbolKind.Method);
-
-        // SGIOC008/010/023/024 + nameof() key type resolution for KeyType.Csharp registrations.
+        // SGIOC008/010/023/024 + nameof() key type resolution for KeyType.Csharp registrations,
+        // and SGIOC001/009/011/032 for assembly-level IoCRegisterFor attributes.
         // Using RegisterSyntaxNodeAction to avoid RS1030 warning (do not use Compilation.GetSemanticModel)
-        context.RegisterSyntaxNodeAction(ctx => AnalyzeIocAttributeSyntax(ctx, analyzerContext), SyntaxKind.Attribute);
-
-        // SGIOC017: Analyze [IocGenericFactory] attribute for duplicated placeholder types
-        context.RegisterSymbolAction(AnalyzeIocGenericFactoryAttribute, SymbolKind.Method);
-
-        // Analyze assembly-level IoCRegisterFor attributes using SemanticModelAction for IDE squiggles
-        context.RegisterSemanticModelAction(ctx => AnalyzeAssemblyLevelRegistrations(ctx, analyzerContext, assemblyAttributeSyntaxTrees));
+        context.RegisterSyntaxNodeAction(ctx => AnalyzeIocAttributeSyntax(ctx, analyzerContext, assemblyRegistrations, attributeNameFilter), SyntaxKind.Attribute);
 
         // Second pass: analyze dependencies after all services are collected (SGIOC002, SGIOC003-005)
         context.RegisterCompilationEndAction(ctx => AnalyzeAllDependencies(ctx, analyzerContext));
     }
 
     /// <summary>
-    /// Binds each attribute once and dispatches to the IoC attribute syntax analyses.
+    /// Binds each attribute that can be an IoC attribute once and dispatches to the IoC attribute syntax analyses.
+    /// Assembly-level IoCRegisterFor attributes were bound at compilation start, so they are not bound again.
     /// </summary>
     private static void AnalyzeIocAttributeSyntax(
         SyntaxNodeAnalysisContext context,
-        AnalyzerContext analyzerContext)
+        AnalyzerContext analyzerContext,
+        Dictionary<(SyntaxTree Tree, TextSpan Span), AssemblyRegistration> assemblyRegistrations,
+        IocAttributeNameFilter attributeNameFilter)
     {
         if(context.Node is not AttributeSyntax attributeSyntax)
             return;
 
-        var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
-        if(attributeSymbol is not IMethodSymbol { ContainingType: { } attributeClass })
-            return;
+        INamedTypeSymbol attributeClass;
+        AttributeData? attributeData = null;
+        if(assemblyRegistrations.TryGetValue((attributeSyntax.SyntaxTree, attributeSyntax.Span), out var assemblyRegistration))
+        {
+            AnalyzeAssemblyLevelRegistration(context.ReportDiagnostic, analyzerContext, assemblyRegistration, attributeSyntax.GetLocation());
+            attributeData = assemblyRegistration.Attribute;
+            attributeClass = attributeData.AttributeClass!;
+        }
+        else
+        {
+            // Binding every attribute in the compilation dominates this action, so skip names that cannot be IoC attributes
+            if(!attributeNameFilter.MayBeIocAttribute(attributeSyntax, context.CancellationToken))
+                return;
 
-        if(!AnalyzerHelpers.IsAnyIoCAttribute(attributeClass, analyzerContext.AttributeSymbols))
-            return;
+            var attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax, context.CancellationToken).Symbol;
+            if(attributeSymbol is not IMethodSymbol { ContainingType: { } boundAttributeClass })
+                return;
+
+            if(!AnalyzerHelpers.IsAnyIoCAttribute(boundAttributeClass, analyzerContext.AttributeSymbols))
+                return;
+
+            attributeClass = boundAttributeClass;
+        }
 
         AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, analyzerContext);
-        ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, analyzerContext);
+        ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
     }
 
     /// <summary>
@@ -681,9 +713,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         if(AnalyzerHelpers.IsWellKnownServiceType(parameter.Type))
             return true;
 
-        return parameter.GetAttributes().Any(static attr =>
-            attr.AttributeClass?.Name == "ServiceKeyAttribute"
-            && attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Microsoft.Extensions.DependencyInjection");
+        return parameter.GetAttributes().Any(static attr => AnalyzerHelpers.IsServiceKeyAttribute(attr.AttributeClass));
     }
 
     private static IocFeatures ParseIocFeatures(AnalyzerOptions options)
