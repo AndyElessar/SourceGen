@@ -13,7 +13,7 @@ public class AnalyzerBenchmarks
     [Params(100, 500)]
     public int Count { get; set; }
 
-    [Params(GeneratorScenario.DependencyChain, GeneratorScenario.Wrappers, GeneratorScenario.RegisterFor, GeneratorScenario.Realistic)]
+    [Params(GeneratorScenario.DependencyChain, GeneratorScenario.Wrappers, GeneratorScenario.RegisterFor, GeneratorScenario.Realistic, GeneratorScenario.StrictContainers)]
     public GeneratorScenario Scenario { get; set; }
 
     private AnalyzerBenchmarkInput input = null!;

@@ -13,6 +13,7 @@ public class GeneratorPerformanceTests
     [Arguments(GeneratorScenario.DisabledContainer)]
     [Arguments(GeneratorScenario.RegisterFor)]
     [Arguments(GeneratorScenario.Realistic)]
+    [Arguments(GeneratorScenario.StrictContainers)]
     public async Task Generator_UnrelatedOrDuplicateEdit_CachesRegistrations(GeneratorScenario scenario)
     {
         var input = new GeneratorBenchmarkInput(scenario, 20);
@@ -131,6 +132,7 @@ public class GeneratorPerformanceTests
     [Arguments(GeneratorScenario.Wrappers)]
     [Arguments(GeneratorScenario.RegisterFor)]
     [Arguments(GeneratorScenario.Realistic)]
+    [Arguments(GeneratorScenario.StrictContainers)]
     public async Task Analyzer_BenchmarkScenario_RunsWithoutErrors(GeneratorScenario scenario)
     {
         var input = new AnalyzerBenchmarkInput(scenario, 20);
