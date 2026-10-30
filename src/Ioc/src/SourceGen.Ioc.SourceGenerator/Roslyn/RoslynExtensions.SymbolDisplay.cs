@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Extension methods for Roslyn symbol manipulation.

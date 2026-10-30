@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Represents default settings for service registration.

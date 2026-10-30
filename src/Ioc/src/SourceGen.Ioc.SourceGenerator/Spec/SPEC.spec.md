@@ -65,23 +65,24 @@ The container branch splits on `ContainerModel.ExplicitOnly`:
 src/SourceGen.Ioc.SourceGenerator/
 ├── IocSourceGenerator.cs                     # Initialize() — pipeline wiring
 ├── IocSourceGenerator.ConfigProviders.cs     # MSBuild / Compilation / default-lifetime helpers
-├── Constants.cs (in Models/)
-├── RoslynExtensions.cs · GlobalUsings.cs
-├── Transforms/   — Stage 1: attribute symbol → data model (+ TransformExtensions.cs helpers)
+├── GlobalUsings.cs · ValueListBuilder.cs · ClosedHierarchyPolyfills.cs
+├── Roslyn/       — symbol helpers (RoslynExtensions.*.cs, TypeParameterSubstitution, WrapperInfo)
+├── Transforms/   — Stage 1: attribute symbol → data model (Transform*.cs + TransformExtensions.*.cs helpers)
 ├── Processing/   — Stage 3 + part of Stage 4 (ProcessSingleRegistration, CombineAndResolveClosedGenerics)
-├── Grouping/     — Stage 4 grouping (GroupRegistrationsForRegister, GroupRegistrationsForContainer)
+├── Grouping/     — Stage 4 grouping (GroupRegistrationsForRegister, GroupRegistrationsForContainer,
+│                   ContainerWrapperEntries, ContainerNames, grouping models)
 ├── Emit/
 │   ├── Shared/    (CodeGenHelpers, SourceWriterExtensions, FeatureFilterHelper)
-│   ├── Register/  (GenerateRegisterOutput + RegisterOutputModel + RegisterEntry hierarchy + wrapper helpers)
-│   └── Container/ (GenerateContainerOutput + ContainerEntry hierarchy + ResolvedDependency + injection/interface/async helpers)
-├── Models/       — pipeline-shared immutable data models
+│   ├── Register/  (GenerateRegisterOutput + RegisterEntry hierarchy + Lazy/Func/Kvp wrapper registrations)
+│   └── Container/ (GenerateContainerOutput + ContainerEntry hierarchy + ResolvedDependencies + interface/async helpers)
+├── Models/       — pipeline-shared immutable data models + Constants
 ├── Analyzer/     — diagnostic analyzers (separate concern; see Analyzer/Spec/SPEC.spec.md)
 └── Spec/         — this file + per-feature specs
 ```
 
 > **Framework requirements** — The generator assembly targets `netstandard2.0`. Generated code and consumer projects require `.NET 10` (the `SourceGen.Ioc` runtime library targets `net10.0`).
 
-All files outside `Analyzer/` are `partial class IocSourceGenerator` in namespace `SourceGen.Ioc`. Models use namespace `SourceGen.Ioc.SourceGenerator.Models`.
+All types use namespace `SourceGen.Ioc` (except the compiler polyfill in `ClosedHierarchyPolyfills.cs`). Pipeline stages in `Transforms/`, `Processing/`, `Grouping/` and `Emit/` are `partial class IocSourceGenerator`; models, Roslyn helpers and `TransformExtensions` are top-level `internal` types.
 
 ---
 
@@ -94,7 +95,7 @@ Both Register and Container pipelines pre-compute a set of "entry" instances dur
 | Register | `RegisterEntry` | 7 (`Simple`, `Instance`, `Forwarding`, `Factory`, `Injection`, `AsyncInjection`, `Decorator`) + 3 wrapper structs (`Lazy`, `Func`, `Kvp`RegistrationEntry) | `WriteRegistration(SourceWriter, RegisterWriteContext)` |
 | Container | `ContainerEntry` | 10 (6 service via `ServiceContainerEntry`, 3 wrapper, 1 collection) | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`, `WriteLocalResolverEntries` |
 
-Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry.cs` and `Emit/Container/ResolvedDependency.cs` for the full tables.
+Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry*.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
 
 ---
 
@@ -110,9 +111,9 @@ All under `Models/` unless noted; all immutable with value equality.
 | `BasicRegistrationResult` | Cacheable Stage 3 intermediate |
 | `ServiceRegistrationModel` / `ServiceRegistrationWithTags` | Stage 4 registration record (+ tags) |
 | `ContainerModel` | `[IocContainer]` input |
-| `ContainerWithGroups` | Container + pre-grouped `ContainerRegistrationGroups` |
-| `ContainerRegistrationGroups` | Grouped `ContainerEntry` arrays + `LastWinsByServiceType` lookup |
-| `RegisterOutputModel` (`Emit/Register/`) | Top-level Register output model with per-tag `RegisterTagGroup` |
+| `ContainerWithGroups` (`Grouping/`) | Container + pre-grouped `ContainerRegistrationGroups` |
+| `ContainerRegistrationGroups` (`Grouping/`) | Grouped `ContainerEntry` arrays + `LastWinsByServiceType` lookup |
+| `RegisterOutputModel` (`Grouping/`) | Top-level Register output model with per-tag `RegisterTagGroup` |
 | `MsBuildProperties` | `RootNamespace`, `CustomIocName`, `Features` |
 | `IocFeatures` | Feature-flag enum (`Register`, `Container`, `PropertyInject`, `FieldInject`, `MethodInject`, `AsyncMethodInject`) |
 | `TypeData` and subtypes (`SimpleTypeData`, `GenericTypeData`, `WrapperTypeData` family) | Closed type representation including wrapper-kind hierarchy (see [Wrapper kinds](#wrapper-kinds)) |

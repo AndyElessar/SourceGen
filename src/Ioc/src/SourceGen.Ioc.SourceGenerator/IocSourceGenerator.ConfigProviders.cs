@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc;
+namespace SourceGen.Ioc;
 
 // Helpers that read MSBuild / AnalyzerConfig / Compilation inputs into pipeline-friendly providers.
 // Extracted from Initialize() to keep the orchestrator focused on pipeline wiring.

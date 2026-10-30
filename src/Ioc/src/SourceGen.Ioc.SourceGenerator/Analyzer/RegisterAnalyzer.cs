@@ -499,9 +499,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private static ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
+    private static ImmutableHashSet<ServiceSymbolKey> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
     {
-        var serviceTypeStates = new Dictionary<(INamedTypeSymbol ServiceType, string? Key), (bool HasAsync, bool HasSync)>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+        var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync)>();
 
         foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
         {
@@ -511,7 +511,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             // available. This correctly handles assembly-level registrations where multiple IocRegisterFor
             // attributes target the same impl type with different keys — the second and subsequent
             // registrations are not stored in RegisteredServices but are recorded in AllRegistrations.
-            IEnumerable<(INamedTypeSymbol ServiceType, string? Key)> serviceTypes =
+            IEnumerable<ServiceSymbolKey> serviceTypes =
                 serviceInfo.AllRegistrations.IsEmpty
                     ? CollectRegisteredServiceTypesForAnalysis(serviceInfo, analyzerContext.AttributeSymbols)
                     : serviceInfo.AllRegistrations;
@@ -525,7 +525,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        var asyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder<(INamedTypeSymbol ServiceType, string? Key)>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+        var asyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder<ServiceSymbolKey>();
         foreach(var kvp in serviceTypeStates)
         {
             var serviceType = kvp.Key;
@@ -537,11 +537,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         return asyncOnlyServiceTypes.ToImmutable();
     }
 
-    private static HashSet<(INamedTypeSymbol ServiceType, string? Key)> CollectRegisteredServiceTypesForAnalysis(
+    private static HashSet<ServiceSymbolKey> CollectRegisteredServiceTypesForAnalysis(
         ServiceInfo serviceInfo,
         IocAttributeSymbols attributeSymbols)
     {
-        var serviceTypes = new HashSet<(INamedTypeSymbol ServiceType, string? Key)>(AnalyzerHelpers.ServiceTypeAndKeyComparer);
+        var serviceTypes = new HashSet<ServiceSymbolKey>();
         var hasRegistrationAttribute = false;
 
         var implementationType = serviceInfo.Type;
@@ -556,7 +556,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             var (serviceKey, _, _) = attribute.GetKeyInfo();
             foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(implementationType, attribute))
             {
-                serviceTypes.Add((serviceType, serviceKey));
+                serviceTypes.Add(new(serviceType, serviceKey));
             }
         }
 
@@ -564,7 +564,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         {
             foreach(var serviceType in AnalyzerHelpers.EnumerateImplicitServiceTypes(implementationType))
             {
-                serviceTypes.Add((serviceType, serviceInfo.ServiceKey));
+                serviceTypes.Add(new(serviceType, serviceInfo.ServiceKey));
             }
         }
 
@@ -574,7 +574,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeSyncDependenciesOnAsyncInitServices(
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
-        ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> asyncInitOnlyServiceTypes,
+        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken)
     {
         if(serviceInfo.Constructor is not null)
@@ -628,7 +628,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeParameterDependenciesOnAsyncInitServices(
         Action<Diagnostic> reportDiagnostic,
         ImmutableArray<IParameterSymbol> parameters,
-        ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> asyncInitOnlyServiceTypes,
+        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken)
     {
         foreach(var parameter in parameters)
@@ -654,7 +654,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ITypeSymbol dependencyType,
         Location? location,
         string? serviceKey,
-        ImmutableHashSet<(INamedTypeSymbol ServiceType, string? Key)> asyncInitOnlyServiceTypes)
+        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes)
     {
         if(AnalyzerHelpers.TryGetAsyncWrapperElementType(dependencyType) is not null)
             return;
@@ -662,7 +662,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         if(dependencyType.WithNullableAnnotation(NullableAnnotation.NotAnnotated) is not INamedTypeSymbol namedDependencyType)
             return;
 
-        if(!asyncInitOnlyServiceTypes.Contains((namedDependencyType, serviceKey)))
+        if(!asyncInitOnlyServiceTypes.Contains(new(namedDependencyType, serviceKey)))
             return;
 
         reportDiagnostic(Diagnostic.Create(

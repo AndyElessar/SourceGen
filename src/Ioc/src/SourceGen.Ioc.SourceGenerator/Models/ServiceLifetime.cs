@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 internal enum ServiceLifetime
 {

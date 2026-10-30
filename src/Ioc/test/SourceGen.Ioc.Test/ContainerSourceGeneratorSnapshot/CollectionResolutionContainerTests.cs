@@ -29,7 +29,6 @@ public class CollectionResolutionContainerTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
             public class Plugin3 : IPlugin { }
 
-            [IocDiscover<IEnumerable<IPlugin>>]
             [IocContainer]
             public partial class TestContainer { }
             """;
@@ -59,10 +58,6 @@ public class CollectionResolutionContainerTests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)])]
             public class Handler2 : IHandler { }
 
-            [IocDiscover<IEnumerable<IHandler>>]
-            [IocDiscover<IReadOnlyCollection<IHandler>>]
-            [IocDiscover<IReadOnlyList<IHandler>>]
-            [IocDiscover<IHandler[]>]
             [IocContainer]
             public partial class TestContainer { }
             """;
@@ -96,7 +91,6 @@ public class CollectionResolutionContainerTests
             [IocRegisterFor<string>(ServiceLifetime.Singleton, Instance = nameof(ConnectionStrings.Backup))]
             public class Marker { }
 
-            [IocDiscover<IEnumerable<string>>]
             [IocContainer]
             public partial class TestContainer { }
             """;

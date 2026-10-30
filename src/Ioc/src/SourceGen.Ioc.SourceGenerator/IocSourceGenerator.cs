@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc;
+namespace SourceGen.Ioc;
 
 /// <summary>
 /// Incremental source generator that processes <c>IocRegister*</c>, <c>IocContainer</c>, <c>IocImportModule</c>,

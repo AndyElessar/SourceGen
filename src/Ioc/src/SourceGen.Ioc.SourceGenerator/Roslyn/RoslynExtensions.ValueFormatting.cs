@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace SourceGen.Ioc.SourceGenerator;
+namespace SourceGen.Ioc;
 
 internal static partial class RoslynExtensions
 {

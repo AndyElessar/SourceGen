@@ -118,6 +118,7 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
 |:--------|:----------------|
 |Method has `[IocInject]`/`[Inject]`, is an ordinary instance method, returns non-generic `Task`, and `AsyncMethodInject` is enabled|MUST classify the member as `InjectionMemberType.AsyncMethod`.|
 |Method has `[IocInject]`/`[Inject]` and returns `void`|MUST continue to classify the member as `InjectionMemberType.Method`.|
+|Method is declared on a decorator|MUST classify the member as `InjectionMemberType.Method`, also when it returns `Task`: decorators do not support async method injection.|
 |Method returns `Task<T>`|MUST NOT classify the member as async method injection. `Task<T>` is not a supported injection-method return type.|
 |Method returns `ValueTask` or `ValueTask<T>`|MUST NOT classify the member as async method injection.|
 |Method returns `Task` but `AsyncMethodInject` is disabled|The generator MUST treat the member as feature-gated; the analyzer owns the user-facing warning via `SGIOC022`.|

@@ -1,6 +1,6 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
-internal sealed record MsBuildProperties(
+internal sealed record class MsBuildProperties(
     string? RootNamespace,
     string? CustomIocName,
     IocFeatures Features);

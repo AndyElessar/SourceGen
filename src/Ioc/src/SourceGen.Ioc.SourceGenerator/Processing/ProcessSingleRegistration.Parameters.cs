@@ -60,19 +60,20 @@ partial class IocSourceGenerator
         // Collect from injection members (properties, fields, methods with [Inject] attribute)
         foreach(var member in injectionMembers)
         {
-            // For properties and fields, check the member type
-            if(member.Type is not null)
+            switch(member)
             {
-                CollectClosedGenericDependencyFromType(member.Type, dependencies, addedKeys);
-            }
+                // For properties and fields, check the member type
+                case PropertyOrFieldInjectionData propertyOrField:
+                    CollectClosedGenericDependencyFromType(propertyOrField.Type, dependencies, addedKeys);
+                    break;
 
-            // For methods, check each parameter type
-            if(member.Parameters is not null)
-            {
-                foreach(var param in member.Parameters)
-                {
-                    CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
-                }
+                // For methods, check each parameter type
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                    {
+                        CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                    }
+                    break;
             }
         }
 
@@ -106,19 +107,20 @@ partial class IocSourceGenerator
                 {
                     foreach(var member in decorator.InjectionMembers)
                     {
-                        // For properties and fields, check the member type
-                        if(member.Type is not null)
+                        switch(member)
                         {
-                            CollectClosedGenericDependencyFromType(member.Type, dependencies, addedKeys);
-                        }
+                            // For properties and fields, check the member type
+                            case PropertyOrFieldInjectionData propertyOrField:
+                                CollectClosedGenericDependencyFromType(propertyOrField.Type, dependencies, addedKeys);
+                                break;
 
-                        // For methods, check each parameter type
-                        if(member.Parameters is not null)
-                        {
-                            foreach(var param in member.Parameters)
-                            {
-                                CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
-                            }
+                            // For methods, check each parameter type
+                            case MethodInjectionData method:
+                                foreach(var param in method.Parameters)
+                                {
+                                    CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                                }
+                                break;
                         }
                     }
                 }

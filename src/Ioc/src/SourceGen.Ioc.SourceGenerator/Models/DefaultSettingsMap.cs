@@ -1,6 +1,6 @@
-﻿using System.Collections;
+using System.Collections;
 
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 internal sealed class DefaultSettingsMap : IReadOnlyList<DefaultSettingsModel>, IEquatable<DefaultSettingsMap>
 {

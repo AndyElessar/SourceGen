@@ -1,9 +1,12 @@
-using InjectionMemberModel = SourceGen.Ioc.SourceGenerator.Models.InjectionMemberData;
-
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
+    private closed record class ResolvedDependency
+    {
+        public abstract string FormatExpression(bool isOptional);
+    }
+
     private sealed record class DirectServiceDependency(string ResolverMethodName) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
@@ -105,14 +108,10 @@ partial class IocSourceGenerator
             var propertyIndex = 0;
             foreach(var injectionMember in InjectionMembers)
             {
-                var member = injectionMember.Member;
-                if(member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                if(injectionMember is not ResolvedPropertyOrFieldInjection { PropertyOrField: var member } resolved)
                     continue;
 
                 var memberType = member.Type;
-                if(memberType is null)
-                    continue;
-
                 var matchedArg = TryConsumeMatchingFuncInputArg(memberType.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                 if(matchedArg is not null)
                 {
@@ -120,13 +119,8 @@ partial class IocSourceGenerator
                     continue;
                 }
 
-                if(injectionMember.Dependency is null)
-                {
-                    throw new InvalidOperationException($"Missing resolved dependency for injection member '{member.Name}'.");
-                }
-
                 var memberVar = $"s0_p{propertyIndex}";
-                var expr = injectionMember.Dependency.FormatExpression(member.IsNullable);
+                var expr = resolved.Dependency.FormatExpression(member.IsNullable);
                 statements.Add($"var {memberVar} = {expr};");
                 propertyInits.Add($"{member.Name} = {memberVar}");
                 propertyIndex++;
@@ -141,14 +135,14 @@ partial class IocSourceGenerator
             var methodIndex = 0;
             foreach(var injectionMember in InjectionMembers)
             {
-                var member = injectionMember.Member;
-                if(member.MemberType != InjectionMemberType.Method)
+                if(injectionMember is not ResolvedMethodInjection { Method: { IsAsync: false } member } resolved)
                     continue;
 
-                var methodParams = member.Parameters ?? [];
+                var methodParams = member.Parameters;
                 var methodEntries = new List<(string Name, string? Value)>(methodParams.Length);
-                foreach(var param in methodParams)
+                for(var i = 0; i < methodParams.Length; i++)
                 {
+                    var param = methodParams[i];
                     var matchedArg = TryConsumeMatchingFuncInputArg(param.Type.Name, inputArgNames, inputArgTypeNames, inputArgUsed);
                     if(matchedArg is not null)
                     {
@@ -156,13 +150,8 @@ partial class IocSourceGenerator
                         continue;
                     }
 
-                    if(injectionMember.Dependency is null)
-                    {
-                        throw new InvalidOperationException($"Missing resolved dependency for method parameter '{param.Name}' in member '{member.Name}'.");
-                    }
-
                     var paramVar = $"s0_m{methodIndex}";
-                    var expr = injectionMember.Dependency.FormatExpression(param.IsOptional);
+                    var expr = resolved.ParameterDependencies[i].FormatExpression(param.IsOptional);
                     statements.Add($"var {paramVar} = {expr};");
                     methodEntries.Add((param.Name, paramVar));
                     methodIndex++;
@@ -207,27 +196,6 @@ partial class IocSourceGenerator
 
             var inputTypeList = string.Join(", ", inputParameters.Select(static p => p.Type.Name));
             return $"global::System.Func<{inputTypeList}, {returnTypeName}>";
-        }
-
-        private static string? TryConsumeMatchingFuncInputArg(
-            string requestedTypeName,
-            string[] inputArgNames,
-            string[] inputArgTypeNames,
-            bool[] inputArgUsed)
-        {
-            for(var i = 0; i < inputArgTypeNames.Length; i++)
-            {
-                if(inputArgUsed[i])
-                    continue;
-
-                if(!string.Equals(inputArgTypeNames[i], requestedTypeName, StringComparison.Ordinal))
-                    continue;
-
-                inputArgUsed[i] = true;
-                return inputArgNames[i];
-            }
-
-            return null;
         }
     }
 
@@ -385,10 +353,24 @@ partial class IocSourceGenerator
         ResolvedDependency Dependency,
         bool IsOptional);
 
-    private readonly record struct ResolvedInjectionMember(
-        InjectionMemberModel Member,
-        ResolvedDependency? Dependency,
-        ImmutableEquatableArray<ResolvedDependency> ParameterDependencies);
+    /// <summary>
+    /// An injection member with its dependencies resolved against the container.
+    /// </summary>
+    private closed record class ResolvedInjectionMember;
+
+    /// <summary>
+    /// A property or field with the dependency assigned to it.
+    /// </summary>
+    private sealed record class ResolvedPropertyOrFieldInjection(
+        PropertyOrFieldInjectionData PropertyOrField,
+        ResolvedDependency Dependency) : ResolvedInjectionMember;
+
+    /// <summary>
+    /// A method with the dependency resolved for each of its parameters, in parameter order.
+    /// </summary>
+    private sealed record class ResolvedMethodInjection(
+        MethodInjectionData Method,
+        ImmutableEquatableArray<ResolvedDependency> ParameterDependencies) : ResolvedInjectionMember;
 
     private sealed record class ResolvedDecorator(
         ServiceRegistrationModel Decorator,

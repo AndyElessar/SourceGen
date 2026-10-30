@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.Constants;
 
 namespace SourceGen.Ioc;
 
@@ -241,7 +241,7 @@ partial class IocSourceGenerator
         // Handle Task<T> return types — route through the async resolver.
         if(TryExtractTaskInnerType(serviceType, out var innerTypeName))
         {
-            if(groups.LastWinsByServiceType.TryGetValue((innerTypeName, key), out var entry))
+            if(groups.LastWinsByServiceType.TryGetValue(new(innerTypeName, key), out var entry))
             {
                 switch(entry)
                 {
@@ -266,7 +266,7 @@ partial class IocSourceGenerator
         }
 
         // Try to find direct resolver in this container
-        if(groups.LastWinsByServiceType.TryGetValue((serviceType, key), out var directEntry))
+        if(groups.LastWinsByServiceType.TryGetValue(new(serviceType, key), out var directEntry))
         {
             switch(directEntry)
             {

@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Roslyn;
+namespace SourceGen.Ioc;
 
 internal static class TypeParameterSubstitution
 {

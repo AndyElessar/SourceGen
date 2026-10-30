@@ -1,4 +1,4 @@
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 internal static partial class TransformExtensions
 {
@@ -20,7 +20,7 @@ internal static partial class TransformExtensions
     /// </remarks>
     private static readonly ConditionalWeakTable<INamedTypeSymbol, TypeArgHierarchy> MetadataTypeArgHierarchy = new();
 
-    private sealed record TypeArgHierarchy(
+    private sealed record class TypeArgHierarchy(
         TypeTraits Traits,
         ImmutableEquatableArray<TypeData>? AllInterfaces,
         ImmutableEquatableArray<TypeData>? AllBaseClasses);

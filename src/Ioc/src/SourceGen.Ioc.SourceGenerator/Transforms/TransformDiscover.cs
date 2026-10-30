@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc;
+namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {

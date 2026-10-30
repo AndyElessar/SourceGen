@@ -3,6 +3,16 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
+    /// Top-level output model for register source generation.
+    /// </summary>
+    private sealed record class RegisterOutputModel(
+        string MethodBaseName,
+        string RootNamespace,
+        string AssemblyName,
+        ImmutableEquatableArray<RegisterTagGroup> TagGroups,
+        ImmutableEquatableSet<string>? AsyncInitServiceTypes);
+
+    /// <summary>
     /// Tag-grouped register output data including registrations and wrapper entries.
     /// </summary>
     private sealed record class RegisterTagGroup(

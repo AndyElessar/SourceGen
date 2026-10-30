@@ -1,4 +1,4 @@
-using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.Constants;
 
 namespace SourceGen.Ioc;
 
@@ -13,7 +13,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Base model for a single registration entry that can write itself.
     /// </summary>
-    private abstract record class RegisterEntry(ServiceRegistrationModel Registration)
+    private closed record class RegisterEntry(ServiceRegistrationModel Registration)
     {
         public abstract void WriteRegistration(SourceWriter writer, RegisterWriteContext context);
     }
@@ -297,9 +297,9 @@ partial class IocSourceGenerator
 
         public ImmutableEquatableArray<ParameterData> ConstructorParameters { get; }
 
-        public ImmutableEquatableArray<InjectionMemberData> PropertyInjectionMembers { get; }
+        public ImmutableEquatableArray<PropertyOrFieldInjectionData> PropertyInjectionMembers { get; }
 
-        public ImmutableEquatableArray<InjectionMemberData> MethodInjectionMembers { get; }
+        public ImmutableEquatableArray<MethodInjectionData> MethodInjectionMembers { get; }
 
         public InjectionRegisterEntry(ServiceRegistrationModel registration)
             : base(registration)
@@ -314,6 +314,34 @@ partial class IocSourceGenerator
             var (properties, methods) = CategorizeInjectionMembers(registration.InjectionMembers);
             PropertyInjectionMembers = properties?.ToImmutableEquatableArray() ?? [];
             MethodInjectionMembers = methods?.ToImmutableEquatableArray() ?? [];
+        }
+
+        /// <summary>
+        /// Categorizes injection members into properties/fields and synchronous methods.
+        /// </summary>
+        private static (List<PropertyOrFieldInjectionData>? Properties, List<MethodInjectionData>? Methods) CategorizeInjectionMembers(
+            ImmutableEquatableArray<InjectionMemberData> injectionMembers)
+        {
+            List<PropertyOrFieldInjectionData>? properties = null;
+            List<MethodInjectionData>? methods = null;
+
+            foreach(var member in injectionMembers)
+            {
+                switch(member)
+                {
+                    case PropertyOrFieldInjectionData propertyOrField:
+                        properties ??= [];
+                        properties.Add(propertyOrField);
+                        break;
+
+                    case MethodInjectionData { IsAsync: false } method:
+                        methods ??= [];
+                        methods.Add(method);
+                        break;
+                }
+            }
+
+            return (properties, methods);
         }
 
         public override void WriteRegistration(SourceWriter writer, RegisterWriteContext context)
@@ -334,7 +362,7 @@ partial class IocSourceGenerator
         internal void WriteInjectionBody(
             SourceWriter writer,
             RegisterWriteContext context,
-            ImmutableEquatableArray<InjectionMemberData>? asyncMethodInjectionMembers)
+            ImmutableEquatableArray<MethodInjectionData>? asyncMethodInjectionMembers)
         {
             var constructorParamEntries = new List<(string Name, string? Value)>(ConstructorParameters.Length);
 
@@ -359,7 +387,7 @@ partial class IocSourceGenerator
                 var member = PropertyInjectionMembers[i];
                 var memberVarName = $"s0_p{i}";
                 var memberType = member.Type;
-                var memberTypeName = memberType is null ? "object" : memberType.Name;
+                var memberTypeName = memberType.Name;
                 bool hasNonNullDefault = member.HasDefaultValue && !member.DefaultValueIsNull;
 
                 ResolveMemberValue(
@@ -401,7 +429,7 @@ partial class IocSourceGenerator
 
         private List<(string MethodName, string?[] ParamVars, string[] ParamNames)> ResolveMethodResolutions(
             SourceWriter writer,
-            ImmutableEquatableArray<InjectionMemberData> methodMembers,
+            ImmutableEquatableArray<MethodInjectionData> methodMembers,
             ref int memberParamIndex,
             RegisterWriteContext context)
         {
@@ -409,7 +437,7 @@ partial class IocSourceGenerator
 
             foreach(var method in methodMembers)
             {
-                var parameters = method.Parameters ?? [];
+                var parameters = method.Parameters;
                 var paramVars = new string?[parameters.Length];
                 var paramNames = new string[parameters.Length];
 
@@ -477,7 +505,7 @@ partial class IocSourceGenerator
 
         public string TaskImplementationTypeName { get; }
 
-        public ImmutableEquatableArray<InjectionMemberData> AsyncMethodInjectionMembers { get; }
+        public ImmutableEquatableArray<MethodInjectionData> AsyncMethodInjectionMembers { get; }
 
         public AsyncInjectionRegisterEntry(ServiceRegistrationModel registration)
             : base(registration)
@@ -486,7 +514,8 @@ partial class IocSourceGenerator
             TaskServiceTypeName = $"global::System.Threading.Tasks.Task<{registration.ServiceType.Name}>";
             TaskImplementationTypeName = $"global::System.Threading.Tasks.Task<{registration.ImplementationType.Name}>";
             AsyncMethodInjectionMembers = registration.InjectionMembers
-                .Where(static member => member.MemberType == InjectionMemberType.AsyncMethod)
+                .OfType<MethodInjectionData>()
+                .Where(static member => member.IsAsync)
                 .ToImmutableEquatableArray();
         }
 

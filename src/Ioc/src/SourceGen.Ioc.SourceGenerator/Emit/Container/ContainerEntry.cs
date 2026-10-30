@@ -1,4 +1,4 @@
-using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.Constants;
 
 namespace SourceGen.Ioc;
 
@@ -11,7 +11,7 @@ partial class IocSourceGenerator
     private static string GetResolvedTypeName(ServiceRegistrationModel registration) =>
         registration.Decorators.Length > 0 ? registration.ServiceType.Name : registration.ImplementationType.Name;
 
-    internal closed record class ContainerEntry
+    private closed record class ContainerEntry
     {
         public virtual void WriteField(SourceWriter writer)
         {
@@ -123,20 +123,19 @@ partial class IocSourceGenerator
         {
             var typeDeclaration = Decorators.Length > 0 ? Registration.ServiceType.Name : "var";
 
-            var properties = new List<ResolvedInjectionMember>();
-            var methods = new List<ResolvedInjectionMember>();
+            var properties = new List<ResolvedPropertyOrFieldInjection>();
+            var methods = new List<ResolvedMethodInjection>();
 
             foreach(var member in InjectionMembers)
             {
-                switch(member.Member.MemberType)
+                switch(member)
                 {
-                    case InjectionMemberType.Property:
-                    case InjectionMemberType.Field:
-                        properties.Add(member);
+                    case ResolvedPropertyOrFieldInjection propertyOrField:
+                        properties.Add(propertyOrField);
                         break;
 
-                    case InjectionMemberType.Method:
-                        methods.Add(member);
+                    case ResolvedMethodInjection { Method.IsAsync: false } method:
+                        methods.Add(method);
                         break;
                 }
             }
@@ -146,7 +145,7 @@ partial class IocSourceGenerator
             foreach(var method in methods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"instance.{method.Member.Name}({methodArgs});");
+                writer.WriteLine($"instance.{method.Method.Name}({methodArgs});");
             }
         }
 
@@ -207,25 +206,24 @@ partial class IocSourceGenerator
                 return;
             }
 
-            var properties = new List<ResolvedInjectionMember>();
-            var syncMethods = new List<ResolvedInjectionMember>();
-            var asyncMethods = new List<ResolvedInjectionMember>();
+            var properties = new List<ResolvedPropertyOrFieldInjection>();
+            var syncMethods = new List<ResolvedMethodInjection>();
+            var asyncMethods = new List<ResolvedMethodInjection>();
 
             foreach(var member in InjectionMembers)
             {
-                switch(member.Member.MemberType)
+                switch(member)
                 {
-                    case InjectionMemberType.Property:
-                    case InjectionMemberType.Field:
-                        properties.Add(member);
+                    case ResolvedPropertyOrFieldInjection propertyOrField:
+                        properties.Add(propertyOrField);
                         break;
 
-                    case InjectionMemberType.Method:
-                        syncMethods.Add(member);
+                    case ResolvedMethodInjection { Method.IsAsync: false } method:
+                        syncMethods.Add(method);
                         break;
 
-                    case InjectionMemberType.AsyncMethod:
-                        asyncMethods.Add(member);
+                    case ResolvedMethodInjection method:
+                        asyncMethods.Add(method);
                         break;
                 }
             }
@@ -250,13 +248,13 @@ partial class IocSourceGenerator
             foreach(var method in syncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"{injectionVar}.{method.Member.Name}({methodArgs});");
+                writer.WriteLine($"{injectionVar}.{method.Method.Name}({methodArgs});");
             }
 
             foreach(var method in asyncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"await {injectionVar}.{method.Member.Name}({methodArgs}).ConfigureAwait(false);");
+                writer.WriteLine($"await {injectionVar}.{method.Method.Name}({methodArgs}).ConfigureAwait(false);");
             }
 
             if(hasDecorators)
@@ -289,7 +287,7 @@ partial class IocSourceGenerator
             string variableName,
             string typeDeclaration,
             ImmutableEquatableArray<ResolvedConstructorParameter> constructorParameters,
-            List<ResolvedInjectionMember> propertyMembers)
+            List<ResolvedPropertyOrFieldInjection> propertyMembers)
         {
             var args = constructorParameters.Length == 0
                 ? ""
@@ -305,12 +303,9 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
 
-            foreach(var member in propertyMembers)
+            foreach(var (propertyOrField, dependency) in propertyMembers)
             {
-                if(member.Dependency is null)
-                    throw new InvalidOperationException($"Missing resolved dependency for injection member '{member.Member.Name}'.");
-
-                writer.WriteLine($"{member.Member.Name} = {member.Dependency.FormatExpression(member.Member.IsNullable)},");
+                writer.WriteLine($"{propertyOrField.Name} = {dependency.FormatExpression(propertyOrField.IsNullable)},");
             }
 
             writer.Indentation--;
@@ -335,11 +330,8 @@ partial class IocSourceGenerator
             var hasPropertyAssignments = false;
             foreach(var member in injectionMembers)
             {
-                if(member.Member.MemberType is not (InjectionMemberType.Property or InjectionMemberType.Field))
+                if(member is not ResolvedPropertyOrFieldInjection(var propertyOrField, var dependency))
                     continue;
-
-                if(member.Dependency is null)
-                    throw new InvalidOperationException($"Missing resolved dependency for decorator member '{member.Member.Name}'.");
 
                 if(!hasPropertyAssignments)
                 {
@@ -349,7 +341,7 @@ partial class IocSourceGenerator
                     writer.Indentation++;
                 }
 
-                writer.WriteLine($"{member.Member.Name} = {member.Dependency.FormatExpression(member.Member.IsNullable)},");
+                writer.WriteLine($"{propertyOrField.Name} = {dependency.FormatExpression(propertyOrField.IsNullable)},");
             }
 
             if(hasPropertyAssignments)
@@ -362,19 +354,20 @@ partial class IocSourceGenerator
                 writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString});");
             }
 
+            // Decorators do not support async injection methods
             foreach(var member in injectionMembers)
             {
-                if(member.Member.MemberType is InjectionMemberType.Method)
+                if(member is ResolvedMethodInjection { Method.IsAsync: false } method)
                 {
-                    writer.WriteLine($"{variableName}.{member.Member.Name}({BuildMethodArguments(member, registrationKey)});");
+                    writer.WriteLine($"{variableName}.{method.Method.Name}({BuildMethodArguments(method, registrationKey)});");
                 }
             }
         }
 
-        private static string BuildMethodArguments(ResolvedInjectionMember member, string? registrationKey)
+        private static string BuildMethodArguments(ResolvedMethodInjection member, string? registrationKey)
         {
-            var parameters = member.Member.Parameters;
-            if(parameters is null or { Length: 0 })
+            var parameters = member.Method.Parameters;
+            if(parameters.Length == 0)
                 return "";
 
             var args = new string[parameters.Length];
@@ -396,743 +389,10 @@ partial class IocSourceGenerator
                     continue;
                 }
 
-                if(parameterDependencies.Length > i)
-                {
-                    args[i] = parameterDependencies[i].FormatExpression(parameter.IsOptional);
-                    continue;
-                }
-
-                if(parameters.Length == 1 && member.Dependency is not null)
-                {
-                    args[i] = member.Dependency.FormatExpression(parameter.IsOptional);
-                    continue;
-                }
-
-                throw new InvalidOperationException($"Missing resolved dependency for injection method parameter '{parameter.Name}' in member '{member.Member.Name}'.");
+                args[i] = parameterDependencies[i].FormatExpression(parameter.IsOptional);
             }
 
             return string.Join(", ", args);
-        }
-    }
-
-    private sealed record class InstanceContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        public override void WriteField(SourceWriter writer)
-        {
-        }
-
-        public override void WriteResolver(SourceWriter writer)
-        {
-        }
-
-        public override string FormatResolveExpression(string serviceType, string receiver) => Registration.Instance!;
-
-        public override string FormatResolverLambda(string serviceType) => $"static _ => {Registration.Instance}";
-
-        public override bool HasResolverMethodLambda => false;
-    }
-
-    /// <summary>
-    /// An eager singleton: the root constructor creates it before the container can be used from other threads,
-    /// so its resolver needs no synchronization, and scopes copy the instance.
-    /// </summary>
-    private sealed record class EagerContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        string FieldName,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        public override void WriteField(SourceWriter writer)
-        {
-            writer.WriteLine($"private {ResolvedTypeName} {FieldName} = null!;");
-        }
-
-        public override void WriteResolver(SourceWriter writer)
-        {
-            var createMethodName = GetCreateMethodName(ResolverMethodName);
-
-            // Tiny fast path (inlinable); creation lives in a separate slow-path method
-            writer.WriteLine($"private {ResolvedTypeName} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
-            writer.WriteLine();
-
-            writer.WriteLine($"private {ResolvedTypeName} {createMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            WriteInstanceCreationWithInjection(writer);
-
-            if(Decorators.Length > 0)
-            {
-                writer.WriteLine();
-                WriteDecoratorApplication(writer);
-            }
-
-            writer.WriteLine();
-            writer.WriteFieldAssignAndReturn(FieldName, "instance");
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-
-        public override bool IsEagerlyInitialized => true;
-
-        public override void WriteEagerInit(SourceWriter writer)
-        {
-            writer.WriteLine($"{ResolverMethodName}();");
-        }
-
-        public override void WriteCopyFromParent(SourceWriter writer)
-        {
-            writer.WriteLine($"{FieldName} = parent.{FieldName};");
-        }
-
-        public override void WriteDisposal(SourceWriter writer, bool isAsync)
-        {
-            WriteDisposeCall(writer, FieldName, isAsync);
-        }
-    }
-
-    /// <param name="IsEager">
-    /// Whether scope constructors create the (scoped) service eagerly. The root still creates it on demand,
-    /// possibly from several threads, so the resolver stays synchronized.
-    /// </param>
-    private sealed record class LazyThreadSafeContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        string FieldName,
-        bool IsEager,
-        ThreadSafeStrategy ThreadSafeStrategy,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        // Scopes never create singletons themselves; the root owns and disposes them
-        public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
-
-        public override bool IsEagerlyInitialized => IsEager;
-
-        public override void WriteEagerInit(SourceWriter writer)
-        {
-            if(IsEager)
-            {
-                writer.WriteLine($"{ResolverMethodName}();");
-            }
-        }
-
-        public override void WriteCopyFromParent(SourceWriter writer)
-        {
-            writer.WriteLine($"{FieldName} = parent.{FieldName};");
-        }
-
-        public override void WriteField(SourceWriter writer)
-        {
-            writer.WriteLine($"private {ResolvedTypeName}? {FieldName};");
-            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
-        }
-
-        public override void WriteResolver(SourceWriter writer)
-        {
-            var createMethodName = GetCreateMethodName(ResolverMethodName);
-
-            // Tiny fast path (inlinable); creation and synchronization live in a separate slow-path method
-            writer.WriteLine($"private {ResolvedTypeName} {ResolverMethodName}() => {FieldName} ?? {createMethodName}();");
-            writer.WriteLine();
-
-            writer.WriteLine($"private {ResolvedTypeName} {createMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            if(DelegatesToRoot)
-            {
-                writer.WriteLine($"if(_root is not null) return _root.{ResolverMethodName}();");
-                writer.WriteLine();
-            }
-
-            Action<SourceWriter> writeResolverBody = ThreadSafeStrategy switch
-            {
-                ThreadSafeStrategy.None => WriteResolverBodyNone,
-                ThreadSafeStrategy.Lock => WriteResolverBodyLock,
-                ThreadSafeStrategy.SemaphoreSlim => WriteResolverBodySemaphoreSlim,
-                ThreadSafeStrategy.SpinLock => WriteResolverBodySpinLock,
-                ThreadSafeStrategy.CompareExchange => WriteResolverBodyCompareExchange,
-                _ => WriteResolverBodyNone
-            };
-
-            writeResolverBody(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-
-        public override void WriteDisposal(SourceWriter writer, bool isAsync)
-        {
-            WriteDisposeCall(writer, FieldName, isAsync);
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
-            {
-                writer.WriteLine($"{FieldName}Semaphore.Dispose();");
-            }
-        }
-
-        private void WriteResolverBodyNone(SourceWriter writer)
-        {
-            WriteInstanceCreationAndAssignment(writer);
-        }
-
-        private void WriteResolverBodyLock(SourceWriter writer)
-        {
-            writer.WriteLine($"lock({FieldName}Lock)");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteEarlyReturnIfNotNull(FieldName);
-            writer.WriteLine();
-
-            WriteInstanceCreationAndAssignment(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-
-        private void WriteResolverBodySemaphoreSlim(SourceWriter writer)
-        {
-            writer.WriteLine($"{FieldName}Semaphore.Wait();");
-            writer.WriteLine("try");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteEarlyReturnIfNotNull(FieldName);
-            writer.WriteLine();
-
-            WriteInstanceCreationAndAssignment(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine("finally");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            writer.WriteLine($"{FieldName}Semaphore.Release();");
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-
-        private void WriteResolverBodySpinLock(SourceWriter writer)
-        {
-            writer.WriteLine("bool lockTaken = false;");
-            writer.WriteLine("try");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"{FieldName}SpinLock.Enter(ref lockTaken);");
-            writer.WriteEarlyReturnIfNotNull(FieldName);
-            writer.WriteLine();
-
-            WriteInstanceCreationAndAssignment(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine("finally");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            writer.WriteLine($"if(lockTaken) {FieldName}SpinLock.Exit();");
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-
-        private void WriteResolverBodyCompareExchange(SourceWriter writer)
-        {
-            WriteInstanceCreationWithInjection(writer);
-
-            if(Decorators.Length > 0)
-            {
-                writer.WriteLine();
-                WriteDecoratorApplication(writer);
-            }
-
-            writer.WriteLine();
-            writer.WriteLine($"var existing = global::System.Threading.Interlocked.CompareExchange(ref {FieldName}, instance, null);");
-            writer.WriteLine("if(existing is not null)");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            // A losing decorator wraps the shared inner instance, so disposing it could dispose that instance too
-            if(InnerResolverMethodName is null)
-            {
-                // Not DisposeService: resolution must not throw for an IAsyncDisposable-only losing instance
-                writer.WriteLine("((object)instance as global::System.IDisposable)?.Dispose();");
-            }
-
-            writer.WriteLine("return existing;");
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine("return instance;");
-        }
-
-        private void WriteInstanceCreationAndAssignment(SourceWriter writer)
-        {
-            WriteInstanceCreationWithInjection(writer);
-
-            if(Decorators.Length > 0)
-            {
-                writer.WriteLine();
-                WriteDecoratorApplication(writer);
-            }
-
-            writer.WriteLine();
-            writer.WriteFieldAssignAndReturn(FieldName, "instance");
-        }
-    }
-
-    private sealed record class TransientContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        public override void WriteResolver(SourceWriter writer)
-        {
-            writer.WriteLine($"private {ResolvedTypeName} {ResolverMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            if(InjectionMembers.Length == 0 && Decorators.Length == 0)
-            {
-                if(Registration.Factory is not null)
-                {
-                    var factory = Registration.Factory;
-                    var args = factory.OrderArguments("this", Registration.Key,
-                        [.. ConstructorParameters.Select(static parameter => parameter.Dependency.FormatExpression(parameter.IsOptional))]);
-
-                    var genericTypeArgs = BuildGenericFactoryTypeArgs(factory, Registration.ServiceType);
-                    var argList = string.Join(", ", args);
-                    if(genericTypeArgs is null)
-                    {
-                        writer.WriteLine($"return ({Registration.ImplementationType.Name}){factory.Path}({argList});");
-                    }
-                    else
-                    {
-                        writer.WriteLine($"return ({Registration.ImplementationType.Name}){factory.Path}<{genericTypeArgs}>({argList});");
-                    }
-                }
-                else
-                {
-                    var ctorArgs = ConstructorParameters.Length == 0
-                        ? ""
-                        : string.Join(", ", ConstructorParameters.Select(static p => p.Dependency.FormatExpression(p.IsOptional)));
-                    writer.WriteLine($"return new {Registration.ImplementationType.Name}({ctorArgs});");
-                }
-
-                writer.Indentation--;
-                writer.WriteLine("}");
-                return;
-            }
-
-            WriteInstanceCreationWithInjection(writer);
-
-            if(Decorators.Length > 0)
-            {
-                writer.WriteLine();
-                WriteDecoratorApplication(writer);
-            }
-
-            writer.WriteLine("return instance;");
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-    }
-
-    /// <summary>
-    /// Base for async-init service entries whose entry method returns <c>Task&lt;T&gt;</c>.
-    /// </summary>
-    private closed record class AsyncServiceContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : ServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        /// <summary>
-        /// Gets the name of the method that callers invoke to obtain the <c>Task&lt;T&gt;</c>.
-        /// </summary>
-        public abstract string AsyncEntryMethodName { get; }
-
-        protected string TaskReturnTypeName => $"global::System.Threading.Tasks.Task<{ResolvedTypeName}>";
-
-        /// <summary>
-        /// Async-init services are exposed as <c>Task&lt;ServiceType&gt;</c> instead of <c>ServiceType</c>,
-        /// because their resolver returns a task.
-        /// </summary>
-        public override string GetExposedServiceType(string serviceType) => $"global::System.Threading.Tasks.Task<{serviceType}>";
-
-        /// <summary>
-        /// Gets whether exposing this entry as <c>Task&lt;serviceType&gt;</c> requires projecting the resolver task,
-        /// because <c>Task&lt;T&gt;</c> is invariant.
-        /// </summary>
-        public bool NeedsTaskProjection(string serviceType) => serviceType != ResolvedTypeName;
-
-        /// <summary>
-        /// Formats the call returning <c>Task&lt;serviceType&gt;</c>.
-        /// </summary>
-        public override string FormatResolveExpression(string serviceType, string receiver)
-        {
-            var call = $"{receiver}{AsyncEntryMethodName}()";
-            return NeedsTaskProjection(serviceType)
-                ? $"{ProjectTaskMethodName}<{serviceType}, {ResolvedTypeName}>({call})"
-                : call;
-        }
-
-        public override bool HasResolverMethodLambda => false;
-
-        protected void WriteCreateMethod(SourceWriter writer)
-        {
-            writer.WriteLine($"private async {TaskReturnTypeName} {GetAsyncCreateMethodName(ResolverMethodName)}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            WriteAsyncInstanceCreationBody(writer);
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-        }
-    }
-
-    private sealed record class AsyncContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        string FieldName,
-        bool IsEager,
-        ThreadSafeStrategy ThreadSafeStrategy,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : AsyncServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        public override string AsyncEntryMethodName => GetAsyncResolverMethodName(ResolverMethodName);
-
-        public override bool IsEagerlyInitialized => IsEager;
-
-        // Scopes never create singletons themselves; the root owns and disposes them
-        public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
-
-        public override void WriteCopyFromParent(SourceWriter writer)
-        {
-            writer.WriteLine($"{FieldName} = parent.{FieldName};");
-        }
-
-        public override void WriteField(SourceWriter writer)
-        {
-            writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
-            {
-                writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {FieldName}Semaphore = new(1, 1);");
-            }
-        }
-
-        public override void WriteResolver(SourceWriter writer)
-        {
-            var createMethodName = GetAsyncCreateMethodName(ResolverMethodName);
-
-            writer.WriteLine($"private async {TaskReturnTypeName} {AsyncEntryMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"if({FieldName} is not null)");
-            writer.Indentation++;
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
-            writer.Indentation--;
-
-            if(DelegatesToRoot)
-            {
-                writer.WriteLine("if(_root is not null)");
-                writer.Indentation++;
-                writer.WriteLine($"return await _root.{AsyncEntryMethodName}().ConfigureAwait(false);");
-                writer.Indentation--;
-            }
-
-            writer.WriteLine();
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
-            {
-                WriteAsyncResolverBodySemaphoreSlim(writer, createMethodName);
-            }
-            else
-            {
-                WriteAsyncResolverBodyNone(writer, createMethodName);
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine();
-
-            WriteCreateMethod(writer);
-        }
-
-        public override void WriteEagerInit(SourceWriter writer)
-        {
-            if(IsEager)
-            {
-                writer.WriteLine($"_ = {AsyncEntryMethodName}();");
-            }
-        }
-
-        public override void WriteDisposal(SourceWriter writer, bool isAsync)
-        {
-            WriteDisposeCall(writer, FieldName, isAsync);
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
-            {
-                writer.WriteLine($"{FieldName}Semaphore.Dispose();");
-            }
-        }
-
-        private void WriteAsyncResolverBodyNone(SourceWriter writer, string createMethodName)
-        {
-            writer.WriteLine($"{FieldName} = {createMethodName}();");
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
-        }
-
-        private void WriteAsyncResolverBodySemaphoreSlim(SourceWriter writer, string createMethodName)
-        {
-            writer.WriteLine($"await {FieldName}Semaphore.WaitAsync().ConfigureAwait(false);");
-            writer.WriteLine("try");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"if({FieldName} is null)");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            writer.WriteLine($"{FieldName} = {createMethodName}();");
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine("finally");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            writer.WriteLine($"{FieldName}Semaphore.Release();");
-            writer.Indentation--;
-            writer.WriteLine("}");
-
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
-        }
-    }
-
-    private sealed record class AsyncTransientContainerEntry(
-        ServiceRegistrationModel Registration,
-        string ResolverMethodName,
-        ImmutableEquatableArray<ResolvedConstructorParameter> ConstructorParameters,
-        ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
-        ImmutableEquatableArray<ResolvedDecorator> Decorators) : AsyncServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
-    {
-        public override string AsyncEntryMethodName => GetAsyncCreateMethodName(ResolverMethodName);
-
-        public override void WriteResolver(SourceWriter writer) => WriteCreateMethod(writer);
-    }
-
-    /// <param name="IsShared">
-    /// Whether one <c>Lazy&lt;T&gt;</c> field is shared by the container (or scope). Transient services are not shared:
-    /// each consumer gets its own <c>Lazy&lt;T&gt;</c> and therefore its own instance, like the Register output.
-    /// </param>
-    /// <param name="CollectionElements">The <c>Lazy&lt;T&gt;[]</c> elements: field names, or inline <c>Lazy&lt;T&gt;</c> creations.</param>
-    internal sealed record class LazyWrapperContainerEntry(
-        string InnerServiceTypeName,
-        string InnerImplTypeName,
-        string FieldName,
-        string InnerResolverMethodName,
-        string? Key,
-        bool IsShared,
-        bool EmitCollectionResolver,
-        string? ArrayMethodName,
-        ImmutableEquatableArray<string> CollectionElements) : ContainerEntry
-    {
-        /// <summary>
-        /// Formats a new <c>Lazy&lt;T&gt;</c> of <paramref name="innerServiceTypeName"/> over <paramref name="resolverCall"/>.
-        /// </summary>
-        public static string FormatNewLazy(string innerServiceTypeName, string resolverCall) =>
-            $"new global::System.Lazy<{innerServiceTypeName}>(() => {resolverCall}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
-
-        public override void WriteField(SourceWriter writer)
-        {
-            if(IsShared)
-            {
-                writer.WriteLine($"private readonly global::System.Lazy<{InnerServiceTypeName}> {FieldName};");
-            }
-        }
-
-        public override void WriteResolver(SourceWriter writer)
-        {
-        }
-
-        public override void WriteInit(SourceWriter writer)
-        {
-            if(IsShared)
-            {
-                writer.WriteLine($"{FieldName} = new global::System.Lazy<{InnerServiceTypeName}>(() => {InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
-            }
-        }
-
-        public override void WriteCollectionResolver(SourceWriter writer)
-        {
-            if(!EmitCollectionResolver)
-            {
-                return;
-            }
-
-            writer.WriteLine($"private global::System.Lazy<{InnerServiceTypeName}>[] {ArrayMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine("[");
-            writer.Indentation++;
-
-            foreach(var element in CollectionElements)
-            {
-                writer.WriteLine($"{element},");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("];");
-            writer.Indentation--;
-        }
-
-        public override void WriteLocalResolverEntries(SourceWriter writer)
-        {
-            if(!EmitCollectionResolver)
-            {
-                return;
-            }
-
-            var wrapperTypeName = $"global::System.Lazy<{InnerServiceTypeName}>";
-
-            if(IsShared)
-            {
-                writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
-            }
-            else
-            {
-                writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => new {wrapperTypeName}(() => c.{InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),");
-            }
-
-            WriteCollectionResolverEntries(writer, wrapperTypeName, ArrayMethodName!);
-        }
-    }
-
-    internal sealed record class FuncWrapperContainerEntry(
-        string InnerServiceTypeName,
-        string InnerImplTypeName,
-        string FieldName,
-        string InnerResolverMethodName,
-        string? Key,
-        bool EmitCollectionResolver,
-        string? ArrayMethodName,
-        ImmutableEquatableArray<string> CollectionFieldNames) : ContainerEntry
-    {
-        public override void WriteField(SourceWriter writer)
-        {
-            writer.WriteLine($"private readonly global::System.Func<{InnerServiceTypeName}> {FieldName};");
-        }
-
-        public override void WriteResolver(SourceWriter writer)
-        {
-        }
-
-        public override void WriteInit(SourceWriter writer)
-        {
-            writer.WriteLine($"{FieldName} = new global::System.Func<{InnerServiceTypeName}>(() => {InnerResolverMethodName}());");
-        }
-
-        public override void WriteCollectionResolver(SourceWriter writer)
-        {
-            if(!EmitCollectionResolver)
-            {
-                return;
-            }
-
-            writer.WriteLine($"private global::System.Func<{InnerServiceTypeName}>[] {ArrayMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine("[");
-            writer.Indentation++;
-
-            foreach(var fieldName in CollectionFieldNames)
-            {
-                writer.WriteLine($"{fieldName},");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("];");
-            writer.Indentation--;
-        }
-
-        public override void WriteLocalResolverEntries(SourceWriter writer)
-        {
-            if(!EmitCollectionResolver)
-            {
-                return;
-            }
-
-            var wrapperTypeName = $"global::System.Func<{InnerServiceTypeName}>";
-
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => c.{FieldName}),");
-            WriteCollectionResolverEntries(writer, wrapperTypeName, ArrayMethodName!);
-        }
-    }
-
-    internal sealed record class KvpWrapperContainerEntry(
-        string KeyTypeName,
-        string ValueTypeName,
-        string KeyExpr,
-        string ResolverMethodName,
-        string KvpResolverMethodName,
-        string ArrayMethodName,
-        string DictionaryMethodName) : ContainerEntry
-    {
-        public override void WriteResolver(SourceWriter writer)
-        {
-            writer.WriteLine($"private global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}> {KvpResolverMethodName}() => new global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>({KeyExpr}, {ResolverMethodName}());");
-        }
-
-        public override void WriteLocalResolverEntries(SourceWriter writer)
-        {
-            var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>";
-
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<{kvpTypeName}>), static c => c.{DictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpTypeName}>), static c => c.{DictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.ICollection<{kvpTypeName}>), static c => c.{DictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<{kvpTypeName}>), static c => c.{ArrayMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IList<{kvpTypeName}>), static c => c.{ArrayMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof({kvpTypeName}[]), static c => c.{ArrayMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyDictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{DictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IDictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{DictionaryMethodName}()),");
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.Dictionary<{KeyTypeName}, {ValueTypeName}>), static c => c.{DictionaryMethodName}()),");
-        }
-    }
-
-    private sealed record class CollectionContainerEntry(
-        string ElementServiceTypeName,
-        string ArrayMethodName,
-        ImmutableEquatableArray<ResolvedDependency> ElementResolvers) : ContainerEntry
-    {
-        public override void WriteResolver(SourceWriter writer)
-        {
-            writer.WriteLine($"private {ElementServiceTypeName}[] {ArrayMethodName}() =>");
-            writer.Indentation++;
-            writer.WriteLine("[");
-            writer.Indentation++;
-
-            foreach(var elementResolver in ElementResolvers)
-            {
-                writer.WriteLine($"{elementResolver.FormatExpression(false)},");
-            }
-
-            writer.Indentation--;
-            writer.WriteLine("];");
-            writer.Indentation--;
         }
     }
 }

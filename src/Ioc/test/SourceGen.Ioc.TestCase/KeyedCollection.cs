@@ -25,6 +25,5 @@ public sealed class ProcessorRegistry(IDictionary<string, IProcessor> processors
 [IocRegisterFor<ProcessorAlpha>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IProcessor)], Key = "alpha")]
 [IocRegisterFor<ProcessorBeta>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IProcessor)], Key = "beta")]
 [IocRegisterFor<ProcessorRegistry>(ServiceLifetime.Transient)]
-[IocDiscover<IDictionary<string, IProcessor>>]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class KeyedCollectionModule;

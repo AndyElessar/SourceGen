@@ -1,4 +1,4 @@
-using static SourceGen.Ioc.SourceGenerator.Models.Constants;
+using static SourceGen.Ioc.Constants;
 
 namespace SourceGen.Ioc;
 
@@ -14,7 +14,12 @@ partial class IocSourceGenerator
     /// <param name="KeyExpr">The key literal expression (e.g., <c>"Key1"</c>).</param>
     /// <param name="Lifetime">The service lifetime matching the keyed value service.</param>
     /// <param name="Tags">The tags inherited from the source registration.</param>
-    private readonly partial record struct KvpRegistrationEntry
+    private readonly record struct KvpRegistrationEntry(
+        string KeyTypeName,
+        string ValueTypeName,
+        string KeyExpr,
+        ServiceLifetime Lifetime,
+        ImmutableEquatableArray<string> Tags)
     {
         public void WriteRegistration(SourceWriter writer)
         {
@@ -108,13 +113,16 @@ partial class IocSourceGenerator
 
         foreach(var member in members)
         {
-            if(member.Type is not null)
-                ScanTypeForKvpNeeds(member.Type, neededPairs);
-
-            if(member.Parameters is not null)
+            switch(member)
             {
-                foreach(var param in member.Parameters)
-                    ScanTypeForKvpNeeds(param.Type, neededPairs);
+                case PropertyOrFieldInjectionData propertyOrField:
+                    ScanTypeForKvpNeeds(propertyOrField.Type, neededPairs);
+                    break;
+
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                        ScanTypeForKvpNeeds(param.Type, neededPairs);
+                    break;
             }
         }
     }
@@ -179,65 +187,5 @@ partial class IocSourceGenerator
             return false;
 
         return string.Equals(registrationKeyValueType.Name, requestedKeyTypeName, StringComparison.Ordinal);
-    }
-
-    private static ImmutableEquatableArray<IocSourceGenerator.KvpWrapperContainerEntry> CreateKvpWrapperContainerEntries(
-        ImmutableEquatableArray<ServiceLookupEntry> singletons,
-        ImmutableEquatableArray<ServiceLookupEntry> scoped,
-        ImmutableEquatableArray<ServiceLookupEntry> transients,
-        IReadOnlyDictionary<(string ServiceType, string? Key), ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
-        ContainerNames names)
-    {
-        var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
-
-        foreach(var lifetime in new[] { singletons, scoped, transients })
-        {
-            foreach(var cached in lifetime)
-            {
-                var reg = cached.Registration;
-                ScanParamsForKvpNeeds(reg.ImplementationType.ConstructorParameters, neededPairs);
-                ScanInjectionMembersForKvpNeeds(reg.InjectionMembers, neededPairs);
-            }
-        }
-
-        if(neededPairs.Count == 0)
-            return [];
-
-        var wrapperEntries = new List<IocSourceGenerator.KvpWrapperContainerEntry>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
-        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
-
-        foreach(var kvp in serviceLookup)
-        {
-            var key = kvp.Key.Key;
-            if(key is null)
-                continue;
-
-            var serviceType = kvp.Key.ServiceType;
-
-            foreach(var (keyTypeName, valueTypeName) in neededByValueType[serviceType])
-            {
-                var cached = kvp.Value[^1];
-                if(!IsKeyTypeCompatible(keyTypeName, cached.Registration.KeyValueType))
-                    continue;
-
-                var entryKey = $"{keyTypeName}|{valueTypeName}|{key}";
-                if(!addedKeys.Add(entryKey))
-                    continue;
-
-                var kvpResolverName = $"GetKvp_{names.Get(keyTypeName)}_{names.Get(valueTypeName)}_{GetSafeIdentifier(key)}";
-
-                wrapperEntries.Add(new KvpWrapperContainerEntry(
-                    keyTypeName,
-                    valueTypeName,
-                    key,
-                    cached.ResolverMethodName,
-                    kvpResolverName,
-                    names.KvpArrayResolver(keyTypeName, valueTypeName),
-                    names.KvpDictionaryResolver(keyTypeName, valueTypeName)));
-            }
-        }
-
-        return wrapperEntries.ToImmutableEquatableArray();
     }
 }

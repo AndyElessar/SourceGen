@@ -1,5 +1,5 @@
 
-namespace SourceGen.Ioc.SourceGenerator.Models;
+namespace SourceGen.Ioc;
 
 [Flags]
 internal enum IocFeatures
