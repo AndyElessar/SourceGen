@@ -26,7 +26,7 @@
     <!-- Tool -->
     <PackageVersion Include="System.IO.Abstractions" Version="22.3.0" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
-    <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.7.13" />
+    <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.8.0" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
     <!-- Samples -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
