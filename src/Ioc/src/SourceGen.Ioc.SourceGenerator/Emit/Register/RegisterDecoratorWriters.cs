@@ -113,12 +113,12 @@ partial class IocSourceGenerator
     /// </summary>
     /// <remarks>
     /// The implementation type identifies the registration among several of one service type, but it is undecorated;
-    /// a decorated registration is resolved through its hidden key, or its own key when keyed.
+    /// a decorated registration is resolved through its hidden key, or its own key when keyed. Decorators are not applied
+    /// to <c>Instance</c> registrations, which have no hidden key.
     /// </remarks>
     private static string GetWrapperResolveCall(ServiceRegistrationModel registration)
     {
-        var hasDecorators = registration.Decorators.Length > 0;
-        return (hasDecorators, registration.Key) switch
+        return (registration.AppliesDecorators, registration.Key) switch
         {
             (true, null) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>({GetDecoratedServiceKey(registration)})",
             (true, _) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>(key)",

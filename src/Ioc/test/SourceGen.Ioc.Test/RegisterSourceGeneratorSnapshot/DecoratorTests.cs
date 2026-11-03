@@ -175,6 +175,44 @@ public class DecoratorTests
     }
 
     [Test]
+    public async Task Decorator_WithInstance_LazyAndFuncResolveUndecoratedInstance()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(
+                Lifetime = ServiceLifetime.Singleton,
+                ServiceTypes = [typeof(IMyService)],
+                Instance = nameof(Default),
+                Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService : IMyService
+            {
+                public static readonly MyService Default = new();
+            }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                private readonly IMyService _inner = inner;
+            }
+
+            [IocRegister]
+            public class Consumer(Lazy<IMyService> lazy, Func<IMyService> factory);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Decorator_ImplementationTypeOnly_NoDecoratorApplied()
     {
         const string source = """

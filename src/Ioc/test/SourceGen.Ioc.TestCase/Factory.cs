@@ -38,6 +38,20 @@ internal sealed class InstanceService : IInstanceService
     public string Name => nameof(InstanceService);
 }
 
+/// <summary>Decorator declared on the instance registration; decorators are not applied to instance registrations.</summary>
+public sealed class InstanceServiceDecorator(IInstanceService inner) : IInstanceService
+{
+    public string Name => $"{nameof(InstanceServiceDecorator)}({inner.Name})";
+}
+
+/// <summary>Consumer resolving the instance registration directly and through Lazy/Func wrappers.</summary>
+public sealed class InstanceServiceConsumer(IInstanceService direct, Lazy<IInstanceService> lazy, Func<IInstanceService> factory)
+{
+    public IInstanceService Direct => direct;
+    public Lazy<IInstanceService> Lazy => lazy;
+    public Func<IInstanceService> Factory => factory;
+}
+
 internal static class FactoryServiceFactory
 {
     public static IFactoryService Create(IFactoryDep dep) =>
@@ -74,6 +88,11 @@ internal static class DecoratedFactoryServiceFactory
     ServiceTypes = [typeof(IDecoratedFactoryService)],
     Factory = nameof(DecoratedFactoryServiceFactory.Create),
     Decorators = [typeof(DecoratedFactoryServiceDecorator)])]
-[IocRegisterFor<InstanceService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IInstanceService)], Instance = nameof(InstanceService.Default))]
+[IocRegisterFor<InstanceService>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IInstanceService)],
+    Instance = nameof(InstanceService.Default),
+    Decorators = [typeof(InstanceServiceDecorator)])]
+[IocRegisterFor<InstanceServiceConsumer>(ServiceLifetime.Transient)]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class FactoryModule;

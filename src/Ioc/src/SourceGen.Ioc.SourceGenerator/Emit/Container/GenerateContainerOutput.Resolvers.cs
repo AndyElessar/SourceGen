@@ -171,7 +171,7 @@ partial class IocSourceGenerator
 
             foreach(var entry in group)
             {
-                writer.WriteLine($"[{entry.KeyExpr}] = {entry.ResolverMethodName}(),");
+                writer.WriteLine($"[{entry.KeyExpr}] = {FormatWrappedResolveCall(entry.ValueInstance, entry.ResolverMethodName, "")},");
             }
 
             writer.Indentation--;

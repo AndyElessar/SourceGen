@@ -2,6 +2,14 @@ namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
+    /// <summary>
+    /// Formats the expression resolving a wrapped registration's instance: its <c>Instance</c> expression, which has no
+    /// resolver method, or a call of its resolver method with <paramref name="receiver"/> (e.g. <c>"c."</c> or <c>""</c>).
+    /// </summary>
+    private static string FormatWrappedResolveCall(string? instance, string resolverMethodName, string receiver) =>
+        instance ?? $"{receiver}{resolverMethodName}()";
+
+    /// <param name="InnerInstance">The <c>Instance</c> expression of an instance registration, which has no resolver method; otherwise <see langword="null"/>.</param>
     /// <param name="IsShared">
     /// Whether one <c>Lazy&lt;T&gt;</c> field is shared by the container (or scope). Transient services are not shared:
     /// each consumer gets its own <c>Lazy&lt;T&gt;</c> and therefore its own instance, like the Register output.
@@ -12,6 +20,7 @@ partial class IocSourceGenerator
         string InnerImplTypeName,
         string FieldName,
         string InnerResolverMethodName,
+        string? InnerInstance,
         string? Key,
         bool IsShared,
         bool EmitCollectionResolver,
@@ -40,7 +49,7 @@ partial class IocSourceGenerator
         {
             if(IsShared)
             {
-                writer.WriteLine($"{FieldName} = new global::System.Lazy<{InnerServiceTypeName}>(() => {InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
+                writer.WriteLine($"{FieldName} = new global::System.Lazy<{InnerServiceTypeName}>(() => {FormatWrappedResolveCall(InnerInstance, InnerResolverMethodName, "")}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);");
             }
         }
 
@@ -81,18 +90,20 @@ partial class IocSourceGenerator
             }
             else
             {
-                writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => new {wrapperTypeName}(() => c.{InnerResolverMethodName}(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),");
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof({wrapperTypeName}), static c => new {wrapperTypeName}(() => {FormatWrappedResolveCall(InnerInstance, InnerResolverMethodName, "c.")}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),");
             }
 
             WriteCollectionResolverEntries(writer, wrapperTypeName, ArrayMethodName!);
         }
     }
 
+    /// <param name="InnerInstance">The <c>Instance</c> expression of an instance registration, which has no resolver method; otherwise <see langword="null"/>.</param>
     private sealed record class FuncWrapperContainerEntry(
         string InnerServiceTypeName,
         string InnerImplTypeName,
         string FieldName,
         string InnerResolverMethodName,
+        string? InnerInstance,
         string? Key,
         bool EmitCollectionResolver,
         string? ArrayMethodName,
@@ -109,7 +120,7 @@ partial class IocSourceGenerator
 
         public override void WriteInit(SourceWriter writer)
         {
-            writer.WriteLine($"{FieldName} = new global::System.Func<{InnerServiceTypeName}>(() => {InnerResolverMethodName}());");
+            writer.WriteLine($"{FieldName} = new global::System.Func<{InnerServiceTypeName}>(() => {FormatWrappedResolveCall(InnerInstance, InnerResolverMethodName, "")});");
         }
 
         public override void WriteCollectionResolver(SourceWriter writer)
@@ -148,18 +159,20 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <param name="ValueInstance">The <c>Instance</c> expression of an instance registration, which has no resolver method; otherwise <see langword="null"/>.</param>
     private sealed record class KvpWrapperContainerEntry(
         string KeyTypeName,
         string ValueTypeName,
         string KeyExpr,
         string ResolverMethodName,
+        string? ValueInstance,
         string KvpResolverMethodName,
         string ArrayMethodName,
         string DictionaryMethodName) : ContainerEntry
     {
         public override void WriteResolver(SourceWriter writer)
         {
-            writer.WriteLine($"private global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}> {KvpResolverMethodName}() => new global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>({KeyExpr}, {ResolverMethodName}());");
+            writer.WriteLine($"private global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}> {KvpResolverMethodName}() => new global::System.Collections.Generic.KeyValuePair<{KeyTypeName}, {ValueTypeName}>({KeyExpr}, {FormatWrappedResolveCall(ValueInstance, ResolverMethodName, "")});");
         }
 
         public override void WriteLocalResolverEntries(SourceWriter writer)

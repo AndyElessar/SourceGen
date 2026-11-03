@@ -720,6 +720,47 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task WrapperDependencies_OnInstanceRegistrations_ResolveInstanceExpression()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IConfiguration { }
+
+            public class Configuration : IConfiguration
+            {
+                public static readonly Configuration Default = new();
+                public static readonly Configuration Backup = new();
+            }
+
+            [IocRegisterFor(typeof(Configuration), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IConfiguration)], Instance = nameof(Configuration.Default))]
+            [IocRegisterFor(typeof(Configuration), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IConfiguration)], Key = "backup", Instance = nameof(Configuration.Backup))]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(
+                IConfiguration direct,
+                Lazy<IConfiguration> lazy,
+                Func<IConfiguration> factory,
+                System.Threading.Tasks.Task<IConfiguration> task,
+                KeyValuePair<string, IConfiguration> entry,
+                IReadOnlyDictionary<string, IConfiguration> dictionary);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task DictionaryDependency_WithKeyedServices_GeneratesKvpResolvers()
     {
         const string source = """
