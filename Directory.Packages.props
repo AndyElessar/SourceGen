@@ -17,7 +17,7 @@
     <PackageVersion Include="StyleCop.Analyzers" Version="1.1.118" />
     <!-- Testing dependencies -->
     <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.3.0" />
-    <PackageVersion Include="TUnit" Version="1.76.0" />
+    <PackageVersion Include="TUnit" Version="1.79.0" />
     <PackageVersion Include="Verify.TUnit" Version="32.0.1" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- SourceGen.Ioc -->
@@ -25,8 +25,8 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
     <!-- Tool -->
     <PackageVersion Include="System.IO.Abstractions" Version="22.3.0" />
-    <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
-    <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.7.13" />
+    <PackageVersion Include="ConsoleAppFramework" Version="5.8.0" />
+    <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.8.0" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
     <!-- Samples -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
