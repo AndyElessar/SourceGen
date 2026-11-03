@@ -170,9 +170,7 @@ partial class IocSourceGenerator
 
             // A decorated registration is split like the Register output: the implementation type resolves the
             // undecorated instance, and the service type wraps that same instance with the decorators.
-            var splitDecorators = effectiveRegistration.Decorators.Length > 0
-                && effectiveRegistration.Instance is null
-                && effectiveRegistration.ImplementationType.Name != effectiveRegistration.ServiceType.Name;
+            var splitDecorators = effectiveRegistration.AppliesDecorators;
 
             // Pre-compute field and method names once, including IsEager flag
             var cached = CreateServiceLookupEntry(
@@ -213,7 +211,7 @@ partial class IocSourceGenerator
             lastWinsLookup[key] = serviceCached;
 
             // Also add implementation type as a service type (for self-registration)
-            if(effectiveRegistration.ImplementationType.Name != effectiveRegistration.ServiceType.Name)
+            if(effectiveRegistration.IsServiceTypeAlias)
             {
                 var implKey = new ServiceTypeKey(effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key);
                 if(!serviceLookup.TryGetValue(implKey, out var implList))

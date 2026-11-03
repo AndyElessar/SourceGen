@@ -95,6 +95,14 @@ Both Register and Container pipelines pre-compute a set of "entry" instances dur
 | Register | `RegisterEntry` | 7 (`Simple`, `Instance`, `Forwarding`, `Factory`, `Injection`, `AsyncInjection`, `Decorator`) + 3 wrapper structs (`Lazy`, `Func`, `Kvp`RegistrationEntry) | `WriteRegistration(SourceWriter, RegisterWriteContext)` |
 | Container | `ContainerEntry` | 10 (6 service via `ServiceContainerEntry`, 3 wrapper, 1 collection) | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`, `WriteLocalResolverEntries` |
 
+The entry hierarchies stay separate: Register emits one MS.DI registration per `ServiceRegistrationModel`, while Container emits one resolver per unique instance with compile-time resolved dependencies and per-container settings. What a registration *means* MUST be decided once, by the extension members in `Models/ServiceRegistrationModelExtensions.cs`, which both groupers use instead of re-deriving it:
+
+| Member | Rule |
+|---|---|
+| `IsServiceTypeAlias` | The service type differs from the implementation type and resolves the implementation type's instance |
+| `IsAsyncInit` | The registration has an async injection method, so it is resolved as `Task<T>` |
+| `AppliesDecorators` | Decorators wrap the instance: closed, non-`Instance` service type alias with decorators; the implementation type stays undecorated |
+
 Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry*.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
 
 ---

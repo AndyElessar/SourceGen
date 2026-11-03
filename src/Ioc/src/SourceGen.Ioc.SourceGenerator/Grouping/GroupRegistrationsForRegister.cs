@@ -70,7 +70,7 @@ partial class IocSourceGenerator
         {
             foreach(var entry in group)
             {
-                if(!entry.Registration.InjectionMembers.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod))
+                if(!entry.Registration.IsAsyncInit)
                     continue;
 
                 asyncInitServiceTypeSet.Add(entry.Registration.ServiceType.Name);
@@ -171,73 +171,63 @@ partial class IocSourceGenerator
 
     private static RegisterEntry? CreateRegisterEntry(ServiceRegistrationModel registration)
     {
-        var serviceTypeName = registration.ServiceType.Name;
-        var implTypeName = registration.ImplementationType.Name;
+        if(registration.IsOpenGeneric)
+        {
+            return new SimpleRegisterEntry(registration);
+        }
 
-        bool hasFactory = registration.Factory is not null && !registration.IsOpenGeneric;
-        bool hasInstance = registration.Instance is not null && !registration.IsOpenGeneric;
-        bool isServiceTypeRegistration = serviceTypeName != implTypeName;
-        bool hasClosedDecorators = registration.Decorators.Length > 0 && isServiceTypeRegistration && !registration.IsOpenGeneric;
-
-        bool hasInjectionMembers = registration.InjectionMembers.Length > 0;
-        bool hasInjectConstructor = registration.ImplementationType.HasInjectConstructor;
-        var constructorParams = registration.ImplementationType.ConstructorParameters;
-        bool hasSpecialConstructorParams = constructorParams?.Any(static p =>
-            p.HasInjectAttribute ||
-            p.Type.NeedsWrapperResolution ||
-            (p.IsNullable && p.Type is LazyTypeData { InstanceType: not WrapperTypeData } or FuncTypeData { ReturnType: not WrapperTypeData }) ||
-            p.HasDefaultValue) == true;
-        bool needsFactoryConstruction = hasInjectionMembers || hasInjectConstructor || hasSpecialConstructorParams;
-        bool hasAsyncInjectionMembers = registration.InjectionMembers.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod);
-        bool shouldForwardServiceType = !registration.IsOpenGeneric && isServiceTypeRegistration;
-
-        // A non-generic factory also creates the implementation type's self-registration, so service types share its
-        // instance (forwarded, or wrapped with decorators) instead of calling the factory again. A generic factory is
-        // closed per service type and not shared with the implementation type, so each service type calls it.
-        bool sharesFactoryInstance = hasFactory
-            && isServiceTypeRegistration
-            && registration.Factory!.TypeParameterCount == 0
-            && !hasAsyncInjectionMembers;
-
-        if(hasFactory && !sharesFactoryInstance)
+        if(registration.Factory is { } factory && !SharesFactoryInstance(registration, factory))
         {
             return new FactoryRegisterEntry(registration);
         }
 
-        if(hasInstance)
+        if(registration.Instance is not null)
         {
-            if(registration.Lifetime == ServiceLifetime.Singleton)
-            {
-                return new InstanceRegisterEntry(registration);
-            }
-
-            return null;
+            return registration.Lifetime == ServiceLifetime.Singleton ? new InstanceRegisterEntry(registration) : null;
         }
 
-        if(hasClosedDecorators)
+        if(registration.AppliesDecorators)
         {
             return new DecoratorRegisterEntry(registration);
         }
 
-        if(shouldForwardServiceType)
+        if(registration.IsServiceTypeAlias)
         {
             return new ForwardingRegisterEntry(registration);
         }
 
-        if(needsFactoryConstruction && !registration.IsOpenGeneric)
+        if(NeedsInjectionConstruction(registration))
         {
-            if(hasAsyncInjectionMembers)
-            {
-                return new AsyncInjectionRegisterEntry(registration);
-            }
-            else
-            {
-                return new InjectionRegisterEntry(registration);
-            }
+            return registration.IsAsyncInit
+                ? new AsyncInjectionRegisterEntry(registration)
+                : new InjectionRegisterEntry(registration);
         }
 
         return new SimpleRegisterEntry(registration);
     }
+
+    /// <summary>
+    /// Gets whether a factory registration's service type shares the instance that the factory creates for the implementation
+    /// type's registration (forwarded, or wrapped with decorators) instead of calling the factory again. A generic factory is
+    /// closed per service type and not shared with the implementation type, so each service type calls it.
+    /// </summary>
+    private static bool SharesFactoryInstance(ServiceRegistrationModel registration, FactoryMethodData factory) =>
+        registration.IsServiceTypeAlias
+        && factory.TypeParameterCount == 0
+        && !registration.IsAsyncInit;
+
+    /// <summary>
+    /// Gets whether the implementation type is constructed in a lambda instead of by <c>services.Add{Lifetime}&lt;TService, TImpl&gt;()</c>:
+    /// injection members, an <c>[IocInject]</c> constructor, or constructor parameters that MS.DI cannot resolve by itself.
+    /// </summary>
+    private static bool NeedsInjectionConstruction(ServiceRegistrationModel registration) =>
+        registration.InjectionMembers.Length > 0
+        || registration.ImplementationType.HasInjectConstructor
+        || registration.ImplementationType.ConstructorParameters?.Any(static p =>
+            p.HasInjectAttribute ||
+            p.Type.NeedsWrapperResolution ||
+            (p.IsNullable && p.Type is LazyTypeData { InstanceType: not WrapperTypeData } or FuncTypeData { ReturnType: not WrapperTypeData }) ||
+            p.HasDefaultValue) == true;
 
     private sealed class TagArrayComparer : IComparer<ImmutableEquatableArray<string>>
     {

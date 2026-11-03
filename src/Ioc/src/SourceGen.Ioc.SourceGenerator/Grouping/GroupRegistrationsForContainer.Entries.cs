@@ -44,7 +44,7 @@ partial class IocSourceGenerator
         // Determine if this registration should be eagerly resolved via EagerResolveOptions.
         // Instance registrations are inherently eager (no field caching needed).
         // Transient services are not supported for eager resolution.
-        var isAsyncInit = HasAsyncInitMembers(reg);
+        var isAsyncInit = reg.IsAsyncInit;
         var isEager = reg.Instance is null && reg.Lifetime switch
         {
             ServiceLifetime.Singleton => (eagerResolveOptions & EagerResolveOptions.Singleton) != 0,
@@ -82,20 +82,6 @@ partial class IocSourceGenerator
                 : GetAsyncResolverMethodName(inner.ResolverMethodName);
 
         return entry with { InnerResolverMethodName = innerResolverMethodName };
-    }
-
-    /// <summary>
-    /// Returns <see langword="true"/> when the registration has at least one
-    /// <see cref="InjectionMemberType.AsyncMethod"/> member, making it an async-init service.
-    /// </summary>
-    private static bool HasAsyncInitMembers(ServiceRegistrationModel reg)
-    {
-        foreach(var m in reg.InjectionMembers)
-        {
-            if(m.MemberType == InjectionMemberType.AsyncMethod)
-                return true;
-        }
-        return false;
     }
 
     private static ImmutableEquatableArray<ContainerEntry> CreateServiceContainerEntries(
