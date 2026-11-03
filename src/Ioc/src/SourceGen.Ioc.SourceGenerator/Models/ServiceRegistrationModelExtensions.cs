@@ -50,5 +50,11 @@ internal static class ServiceRegistrationModelExtensions
             && !registration.IsOpenGeneric
             && registration.Instance is null
             && registration.IsServiceTypeAlias;
+
+        /// <summary>
+        /// Gets whether the service type resolves an instance of its own instead of the implementation type's instance:
+        /// a decorated instance, or the result of a generic factory. The instance is typed as the service type.
+        /// </summary>
+        public bool HasOwnServiceInstance => registration.AppliesDecorators || registration.HasOwnFactoryInstance;
     }
 }

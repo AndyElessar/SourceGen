@@ -230,8 +230,8 @@ partial class IocSourceGenerator
                 return;
             }
 
-            // A service type that does not share the implementation type's instance (see SharesFactoryInstance) registers the
-            // factory result as its own instance, which decorators wrap and Lazy/Func wrappers resolve by its hidden key
+            // A service type that does not share the implementation type's instance (see RegistersOwnServiceInstance) registers
+            // the factory result as its own instance, which decorators wrap and Lazy/Func wrappers resolve by its hidden key
             if(Registration.IsServiceTypeAlias)
             {
                 var hiddenKey = WriteOwnServiceInstanceOpen(writer, Registration, Lifetime);

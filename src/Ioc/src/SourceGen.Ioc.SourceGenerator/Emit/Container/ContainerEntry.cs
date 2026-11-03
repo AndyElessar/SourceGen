@@ -5,13 +5,11 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
-    /// Gets the type returned by a registration's resolver method: the service type when decorators
-    /// wrap the instance or a generic factory creates it for the service type, otherwise the implementation type.
+    /// Gets the type returned by a registration's resolver method: the service type when it has an instance of its own
+    /// (decorated, or created by a generic factory), otherwise the implementation type.
     /// </summary>
     private static string GetResolvedTypeName(ServiceRegistrationModel registration) =>
-        registration.Decorators.Length > 0 || registration.HasOwnFactoryInstance
-            ? registration.ServiceType.Name
-            : registration.ImplementationType.Name;
+        registration.HasOwnServiceInstance ? registration.ServiceType.Name : registration.ImplementationType.Name;
 
     private closed record class ContainerEntry
     {

@@ -103,6 +103,7 @@ The entry hierarchies stay separate: Register emits one MS.DI registration per `
 | `IsAsyncInit` | The registration has an async injection method, so it is resolved as `Task<T>` |
 | `HasOwnFactoryInstance` | A service type alias with a generic factory, which is closed per service type: the factory result is the service type's instance, not the implementation type's |
 | `AppliesDecorators` | Decorators wrap the instance: closed, non-`Instance` service type alias with decorators; the implementation type stays undecorated |
+| `HasOwnServiceInstance` | The service type resolves an instance of its own, typed as the service type: `AppliesDecorators` or `HasOwnFactoryInstance`. Otherwise it resolves the implementation type's instance |
 
 Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry*.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
 

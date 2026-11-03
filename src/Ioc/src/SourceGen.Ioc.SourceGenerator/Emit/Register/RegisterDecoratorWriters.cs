@@ -33,7 +33,7 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Opens the lambda registering a service type's own instance (see <c>HasOwnServiceInstance</c>), whose body creates
+    /// Opens the lambda registering a service type's own instance (see <c>RegistersOwnServiceInstance</c>), whose body creates
     /// the undecorated instance in variable <c>s0</c>, and returns the hidden key it is registered under, or
     /// <see langword="null"/> for a keyed registration, which is registered under its own key.
     /// </summary>
@@ -147,7 +147,7 @@ partial class IocSourceGenerator
     /// </remarks>
     private static string GetWrapperResolveCall(ServiceRegistrationModel registration)
     {
-        return (HasOwnServiceInstance(registration), registration.Key) switch
+        return (RegistersOwnServiceInstance(registration), registration.Key) switch
         {
             (true, null) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>({GetDecoratedServiceKey(registration)})",
             (true, _) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>(key)",
