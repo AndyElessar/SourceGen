@@ -21,6 +21,18 @@ When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`
 - Each other service type MUST forward to the implementation type (`sp.GetRequiredService<MyService>()`, or `sp.GetRequiredKeyedService<MyService>(key)` when keyed), so all service types of a singleton or scoped registration share one instance. This matches the [Container](Container.Factory.spec.md).
 - A service type with `Decorators` MUST wrap that shared instance, using the decorator chain from [Decorators](Register.Decorators.spec.md). Decorators on an `Instance` registration are not applied.
 - A generic factory (`TypeParameterCount > 0`, see [Generic Registration](Register.Generics.spec.md)) is closed per service type, so each service type MUST call it separately. A registration with async injection methods also calls the factory per service type.
+- A factory that returns a type other than the implementation type fails the cast at resolution. When the factory chooses the implementation, the registration targets the service type itself (`[IocRegisterFor<IMyService>(Factory = ...)]`). The target type is then the only registered type, and the factory result is returned without a cast:
+
+```csharp
+[IocRegisterFor<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+public static class MyServiceFactory
+{
+    public static IMyService Create(IServiceProvider sp) => Environment.ProcessorCount > 1 ? new FastService() : new SafeService();
+}
+
+// Generate:
+services.AddSingleton<IMyService>((IServiceProvider sp) => MyServiceFactory.Create(sp));
+```
 
 ### Basic Factory Example
 

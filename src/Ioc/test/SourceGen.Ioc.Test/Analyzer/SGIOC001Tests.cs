@@ -51,6 +51,36 @@ public class SGIOC001Tests
     }
 
     [Test]
+    public async Task SGIOC001_InterfaceTargetTypeWithFactory_ReportsNoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            public class FastService : IMyService { }
+
+            public class SafeService : IMyService { }
+
+            [IocRegisterFor<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp) =>
+                    Environment.ProcessorCount > 1 ? new FastService() : new SafeService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgiocDiagnostics = diagnostics.Where(static d => d.Id.StartsWith("SGIOC", StringComparison.Ordinal)).ToList();
+
+        await Assert.That(sgiocDiagnostics).IsEmpty();
+    }
+
+    [Test]
     public async Task SGIOC001_IocRegisterForAttribute_PrivateTargetType_ReportsDiagnostic()
     {
         // Note: When using IocRegisterForAttribute with typeof(), the type must be accessible

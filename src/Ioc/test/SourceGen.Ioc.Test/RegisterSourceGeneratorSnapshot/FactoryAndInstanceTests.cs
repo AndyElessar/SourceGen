@@ -287,6 +287,37 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    public async Task Factory_RegisteredForServiceTypeOnly_CallsFactoryWithoutCast()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            public class FastService : IMyService { }
+
+            public class SafeService : IMyService { }
+
+            [IocRegisterFor<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp) =>
+                    Environment.ProcessorCount > 1 ? new FastService() : new SafeService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Instance_WithIocRegisterForAttribute_GeneratesSingletonInstanceRegistration()
     {
         const string source = """
