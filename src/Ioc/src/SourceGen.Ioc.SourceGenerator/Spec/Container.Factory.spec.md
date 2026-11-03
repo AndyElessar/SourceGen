@@ -8,6 +8,7 @@ Support for custom factory methods and static instances in containers. Factory r
 
 - **Factory Registration**: Uses field caching for Singleton/Scoped lifetimes to ensure the same instance is returned. Transient factories create a new instance each call.
 - **Instance Registration**: Directly returns the pre-existing static instance without field caching. Instance registrations are externally managed and not disposed by the container.
+  An instance registration has no resolver method, so every dependency on it (direct, `Lazy<T>`, `Func<T>`, `Task<T>`, `KeyValuePair<TKey, T>` and keyed dictionaries) MUST use the instance expression.
 - **Shared instance**: The implementation type and the service types of a factory registration resolve one factory-created instance; decorated service types wrap it (see [Decorators](Container.Decorators.spec.md)). Decorators are not applied to `Instance` registrations. The [Register](Register.Factory.spec.md) output follows the same rules.
 
 ```csharp

@@ -277,11 +277,20 @@ partial class IocSourceGenerator
                     : new DirectServiceDependency(GetAsyncResolverMethodName(cached.ResolverMethodName));
             }
 
-            return new DirectServiceDependency(cached.ResolverMethodName);
+            return CreateDirectDependency(cached);
         }
 
         return new FallbackProviderDependency(type.Name, key, isOptional, fallbackValue);
     }
+
+    /// <summary>
+    /// Creates the dependency resolving <paramref name="cached"/>'s instance: its <c>Instance</c> expression, since instance
+    /// registrations have no resolver method, or a call of its resolver method.
+    /// </summary>
+    private static ResolvedDependency CreateDirectDependency(ServiceLookupEntry cached) =>
+        cached.Registration.Instance is { } instance
+            ? new InstanceExpressionDependency(instance)
+            : new DirectServiceDependency(cached.ResolverMethodName);
 
     private static ResolvedDependency ResolveWrapperDependencyForContainerEntryModel(
         TypeData type,
@@ -311,7 +320,7 @@ partial class IocSourceGenerator
                         // Transient services have no shared Lazy field: each consumer gets its own Lazy, like the Register output
                         if(!inner.IsAsyncInit)
                         {
-                            return new LazyInlineDependency(innerType.Name, new DirectServiceDependency(inner.ResolverMethodName));
+                            return new LazyInlineDependency(innerType.Name, CreateDirectDependency(inner));
                         }
                     }
 
@@ -433,7 +442,7 @@ partial class IocSourceGenerator
                         return new TaskAsyncDependency(asyncMethodName, task.InnerType.Name, GetResolvedTypeName(cached.Registration));
                     }
 
-                    return new TaskFromResultDependency(new DirectServiceDependency(cached.ResolverMethodName), task.InnerType.Name);
+                    return new TaskFromResultDependency(CreateDirectDependency(cached), task.InnerType.Name);
                 }
 
                 return new FallbackProviderDependency(type.Name, key, isOptional);

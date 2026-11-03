@@ -24,7 +24,7 @@ partial class IocSourceGenerator
         if(neededTypes.Count == 0)
             return [];
 
-        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Key, bool IsShared)>();
+        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Instance, string? Key, bool IsShared)>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach(var kvp in serviceLookup)
@@ -46,7 +46,7 @@ partial class IocSourceGenerator
 
                 var fieldName = $"_lazy_{names.Get(serviceType)}{cached.FieldName}";
 
-                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key, reg.Lifetime != ServiceLifetime.Transient));
+                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Instance, reg.Key, reg.Lifetime != ServiceLifetime.Transient));
             }
         }
 
@@ -62,7 +62,7 @@ partial class IocSourceGenerator
                 static g => g
                     .Select(static e => e.IsShared
                         ? e.FieldName
-                        : LazyWrapperContainerEntry.FormatNewLazy(e.InnerServiceTypeName, $"{e.ResolverMethodName}()"))
+                        : LazyWrapperContainerEntry.FormatNewLazy(e.InnerServiceTypeName, FormatWrappedResolveCall(e.Instance, e.ResolverMethodName, "")))
                     .ToImmutableEquatableArray(),
                 StringComparer.Ordinal);
 
@@ -89,6 +89,7 @@ partial class IocSourceGenerator
                 entry.InnerImplTypeName,
                 entry.FieldName,
                 entry.ResolverMethodName,
+                entry.Instance,
                 entry.Key,
                 entry.IsShared,
                 emitCollectionResolver,
@@ -187,7 +188,7 @@ partial class IocSourceGenerator
         if(neededTypes.Count == 0)
             return [];
 
-        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Key)>();
+        var entries = new List<(string InnerServiceTypeName, string InnerImplTypeName, string FieldName, string ResolverMethodName, string? Instance, string? Key)>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach(var kvp in serviceLookup)
@@ -209,7 +210,7 @@ partial class IocSourceGenerator
 
                 var fieldName = $"_func_{names.Get(serviceType)}{cached.FieldName}";
 
-                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Key));
+                entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Instance, reg.Key));
             }
         }
 
@@ -248,6 +249,7 @@ partial class IocSourceGenerator
                 entry.InnerImplTypeName,
                 entry.FieldName,
                 entry.ResolverMethodName,
+                entry.Instance,
                 entry.Key,
                 emitCollectionResolver,
                 emitCollectionResolver ? names.FuncArrayResolver(entry.InnerServiceTypeName) : null,
@@ -308,6 +310,7 @@ partial class IocSourceGenerator
                     valueTypeName,
                     key,
                     cached.ResolverMethodName,
+                    cached.Registration.Instance,
                     kvpResolverName,
                     names.KvpArrayResolver(keyTypeName, valueTypeName),
                     names.KvpDictionaryResolver(keyTypeName, valueTypeName)));

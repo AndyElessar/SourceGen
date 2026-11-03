@@ -67,6 +67,19 @@ public sealed class FactoryAndInstanceTests
         await Assert.That(instance1).IsSameReferenceAs(instance2);
     }
 
+    [Test]
+    public async Task InstanceConsumer_StandaloneContainer_ResolvesInstanceDirectlyAndThroughWrappers()
+    {
+        using var container = new ContainerModule();
+
+        var consumer = container.GetRequiredService<InstanceServiceConsumer>();
+        var instance = container.GetRequiredService<IInstanceService>();
+
+        await Assert.That(consumer.Direct).IsSameReferenceAs(instance);
+        await Assert.That(consumer.Lazy.Value).IsSameReferenceAs(instance);
+        await Assert.That(consumer.Factory()).IsSameReferenceAs(instance);
+    }
+
     #endregion
 
     #region MS.Extensions.DI Integration Tests
