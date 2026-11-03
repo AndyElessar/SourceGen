@@ -83,6 +83,80 @@ public class DecoratorContainerTests
     }
 
     [Test]
+    public async Task Container_WithFactoryAndDecorators_WrapsFactoryCreatedImplementationInstance()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { void Handle(); }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Factory = nameof(HandlerFactory.Create), Decorators = [typeof(LoggingDecorator)])]
+            public class Handler : IHandler
+            {
+                public void Handle() { }
+            }
+
+            public static class HandlerFactory
+            {
+                public static IHandler Create(IServiceProvider sp) => new Handler();
+            }
+
+            public class LoggingDecorator(IHandler inner) : IHandler
+            {
+                public void Handle() => inner.Handle();
+            }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithInstanceAndDecorators_NoDecoratorApplied()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { void Handle(); }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Instance = nameof(Default), Decorators = [typeof(LoggingDecorator)])]
+            public class Handler : IHandler
+            {
+                public static readonly Handler Default = new();
+
+                public void Handle() { }
+            }
+
+            public class LoggingDecorator(IHandler inner) : IHandler
+            {
+                public void Handle() => inner.Handle();
+            }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithDecorators_HavingClosedGenericDependency_GeneratesDirectResolverCalls()
     {
         const string source = """

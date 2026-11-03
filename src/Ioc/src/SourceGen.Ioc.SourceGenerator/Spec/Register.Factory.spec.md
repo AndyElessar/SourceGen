@@ -15,6 +15,13 @@ When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`
 - Other parameters: Resolve from the service provider, using the same rules as `[IocInject]` method parameters
 - Arguments MUST be passed in the factory method's parameter declaration order, wherever the `IServiceProvider` and `[ServiceKey]` parameters appear (e.g., `Create(ILogger logger, IServiceProvider sp)` is called as `Create(logger, sp)`)
 
+### Service Types Share the Factory Instance
+
+- The factory MUST be called only by the implementation type's registration, which casts the result to the implementation type.
+- Each other service type MUST forward to the implementation type (`sp.GetRequiredService<MyService>()`, or `sp.GetRequiredKeyedService<MyService>(key)` when keyed), so all service types of a singleton or scoped registration share one instance. This matches the [Container](Container.Factory.spec.md).
+- A service type with `Decorators` MUST wrap that shared instance, using the decorator chain from [Decorators](Register.Decorators.spec.md). Decorators on an `Instance` registration are not applied.
+- A generic factory (`TypeParameterCount > 0`, see [Generic Registration](Register.Generics.spec.md)) is closed per service type, so each service type MUST call it separately. A registration with async injection methods also calls the factory per service type.
+
 ### Basic Factory Example
 
 ```csharp
@@ -36,9 +43,9 @@ public sealed class MyServiceFactory
 #endregion
 
 #region Generate:
-// The implementation type itself is also registered through the factory, cast to it
+// The implementation type itself is registered through the factory, cast to it; the service type forwards to it
 services.AddSingleton<MyService>((IServiceProvider sp) => (MyService)MyServiceFactory.Get(sp));
-services.AddSingleton<IMyService>((IServiceProvider sp) => MyServiceFactory.Get(sp));
+services.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredService<MyService>());
 #endregion
 ```
 
@@ -63,7 +70,7 @@ public sealed class MyServiceFactory
 
 #region Generate:
 services.AddKeyedSingleton<MyService>("MyKey", (IServiceProvider sp, object? key) => (MyService)MyServiceFactory.Create(sp, "MyKey"));
-services.AddKeyedSingleton<IMyService>("MyKey", (IServiceProvider sp, object? key) => MyServiceFactory.Create(sp, "MyKey"));
+services.AddKeyedSingleton<IMyService>("MyKey", (IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<MyService>(key));
 #endregion
 ```
 
@@ -87,7 +94,7 @@ public sealed class MyServiceFactory
 
 #region Generate:
 services.AddSingleton<MyService>((IServiceProvider sp) => (MyService)MyServiceFactory.Create());
-services.AddSingleton<IMyService>((IServiceProvider sp) => MyServiceFactory.Create());
+services.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredService<MyService>());
 #endregion
 ```
 
@@ -144,11 +151,11 @@ public static class SpecialHandlerFactory
 #region Generate:
 // MyHandlerImpl uses Factory from DefaultSettings
 services.AddScoped<MyHandlerImpl>((IServiceProvider sp) => (MyHandlerImpl)HandlerFactory.Create(sp));
-services.AddScoped<IMyHandler>((IServiceProvider sp) => HandlerFactory.Create(sp));
+services.AddScoped<IMyHandler>((IServiceProvider sp) => sp.GetRequiredService<MyHandlerImpl>());
 
 // SpecialHandler uses its own explicit Factory
 services.AddScoped<SpecialHandler>((IServiceProvider sp) => (SpecialHandler)SpecialHandlerFactory.Create(sp));
-services.AddScoped<IMyHandler>((IServiceProvider sp) => SpecialHandlerFactory.Create(sp));
+services.AddScoped<IMyHandler>((IServiceProvider sp) => sp.GetRequiredService<SpecialHandler>());
 #endregion
 ```
 
@@ -185,9 +192,9 @@ public class QueryHandler : IRequestHandler<QueryRequest, QueryResponse>
 #endregion
 
 #region Generate:
-// The registration has no Key, so the [ServiceKey] parameter gets default; the object result is cast to the service type
+// The registration has no Key, so the [ServiceKey] parameter gets default; the object result is cast to the implementation type
 services.AddSingleton<QueryHandler>((IServiceProvider sp) => (QueryHandler)HandlerFactory.CreateHandler(sp, default!));
-services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>((IServiceProvider sp) => (IRequestHandler<QueryRequest, QueryResponse>)HandlerFactory.CreateHandler(sp, default!));
+services.AddSingleton<IRequestHandler<QueryRequest, QueryResponse>>((IServiceProvider sp) => sp.GetRequiredService<QueryHandler>());
 #endregion
 ```
 

@@ -24,7 +24,7 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddKeyedScoped<global::TestNamespace.MyService>("myKey", (global::System.IServiceProvider sp, object? key) => (global::TestNamespace.MyService)global::TestNamespace.MyServiceFactory.Create(sp));
-                services.AddKeyedScoped<global::TestNamespace.IMyService>("myKey", (global::System.IServiceProvider sp, object? key) => global::TestNamespace.MyServiceFactory.Create(sp));
+                services.AddKeyedScoped<global::TestNamespace.IMyService>("myKey", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key));
             }
 
             return services;

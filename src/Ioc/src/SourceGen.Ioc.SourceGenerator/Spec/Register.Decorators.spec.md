@@ -16,6 +16,8 @@ An open generic decorator's type arguments are found by matching the service typ
 
 A non-keyed decorator chain MUST be registered as a keyed service under the hidden key `"SourceGen.Ioc.Decorated:{ServiceType}|{ImplementationType}"` (type names without `global::`), and the service type MUST be registered as a forwarder to it (`sp.GetRequiredKeyedService<IMyService>(hiddenKey)`). Resolving the service type and the `Lazy<T>` / `Func<T>` wrappers of the registration (see [Injection](Register.Injection.spec.md)) therefore share one decorated instance; resolving the implementation type returns the undecorated instance. A keyed decorator chain is registered under its own key.
 
+The decorator chain wraps the instance resolved from the implementation type, including when that instance comes from a non-generic `Factory` (see [Factory](Register.Factory.spec.md)). Decorators are not applied to `Instance` registrations.
+
 | Decorator | Service type | Closed decorator |
 | :--- | :--- | :--- |
 | `Decorator<TResponse, TRequest> : IHandler<TRequest, TResponse>` | `IHandler<Req, Res>` | `Decorator<Res, Req>` |
