@@ -103,7 +103,7 @@ partial class AppContainer
 
 ## Feature 2: Wrapper Type Resolution
 
-When a constructor parameter or injected member uses a wrapper type (`Lazy<T>`, `Func<T>`, `KeyValuePair<K, V>`), the container generates wrapper resolution that delegates to the container's own resolver methods.
+When a dependency uses a wrapper type (`Lazy<T>`, `Func<T>`, `KeyValuePair<K, V>`), the container generates wrapper resolution that delegates to the container's own resolver methods, or to the instance expression of an `Instance` registration, which has no resolver method. Dependencies are scanned like the Register output (see [Register Injection](Register.Injection.spec.md#wrapper-type-resolution)): factory or constructor parameters, injection members, and decorators' constructor parameters and injection members.
 
 ### Supported Wrapper Types
 

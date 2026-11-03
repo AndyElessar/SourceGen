@@ -31,6 +31,10 @@ Stage 4  Closed-generic resolution + grouping
          CombineAndResolveClosedGenerics → ImmutableEquatableArray<ServiceRegistrationWithTags>
               ├─→ GroupRegistrationsForRegister  → RegisterOutputModel
               └─→ FilterRegistrationsForContainer → GroupRegistrationsForContainer → ContainerWithGroups
+                  (+ collection types requested by IServiceProvider invocations)
+         Both groupers interpret registrations with the shared rules in
+         Models/ServiceRegistrationModelExtensions.cs and scan wrapper/collection
+         demand with Grouping/WrapperDemand.cs (see Architecture pattern below)
               ↓
 Stage 5  Emit
          GenerateRegisterOutput  → {assemblyName}.ServiceRegistration.g.cs
@@ -70,12 +74,13 @@ src/SourceGen.Ioc.SourceGenerator/
 ├── Transforms/   — Stage 1: attribute symbol → data model (Transform*.cs + TransformExtensions.*.cs helpers)
 ├── Processing/   — Stage 3 + part of Stage 4 (ProcessSingleRegistration, CombineAndResolveClosedGenerics)
 ├── Grouping/     — Stage 4 grouping (GroupRegistrationsForRegister, GroupRegistrationsForContainer,
-│                   ContainerWrapperEntries, ContainerNames, grouping models)
+│                   WrapperDemand, ContainerWrapperEntries, ContainerNames, grouping models)
 ├── Emit/
 │   ├── Shared/    (CodeGenHelpers, SourceWriterExtensions, FeatureFilterHelper)
 │   ├── Register/  (GenerateRegisterOutput + RegisterEntry hierarchy + Lazy/Func/Kvp wrapper registrations)
 │   └── Container/ (GenerateContainerOutput + ContainerEntry hierarchy + ResolvedDependencies + interface/async helpers)
 ├── Models/       — pipeline-shared immutable data models + Constants
+│                   + ServiceRegistrationModelExtensions (registration semantics shared by both outputs)
 ├── Analyzer/     — diagnostic analyzers (separate concern; see Analyzer/Spec/SPEC.spec.md)
 └── Spec/         — this file + per-feature specs
 ```
@@ -95,7 +100,7 @@ Both Register and Container pipelines pre-compute a set of "entry" instances dur
 | Register | `RegisterEntry` | 7 (`Simple`, `Instance`, `Forwarding`, `Factory`, `Injection`, `AsyncInjection`, `Decorator`) + 3 wrapper structs (`Lazy`, `Func`, `Kvp`RegistrationEntry) | `WriteRegistration(SourceWriter, RegisterWriteContext)` |
 | Container | `ContainerEntry` | 10 (6 service via `ServiceContainerEntry`, 3 wrapper, 1 collection) | `WriteField`, `WriteResolver`, `WriteEagerInit`, `WriteDisposal`, `WriteInit`, `WriteCollectionResolver`, `WriteLocalResolverEntries` |
 
-The entry hierarchies stay separate: Register emits one MS.DI registration per `ServiceRegistrationModel`, while Container emits one resolver per unique instance with compile-time resolved dependencies and per-container settings. What a registration *means* MUST be decided once, by the extension members in `Models/ServiceRegistrationModelExtensions.cs`, which both groupers use instead of re-deriving it:
+The entry hierarchies stay separate: Register emits the MS.DI registrations of each `ServiceRegistrationModel` (one, or a hidden-key registration plus a forwarder when the service type has its own instance), while Container emits one resolver per unique instance with compile-time resolved dependencies and per-container settings. What a registration *means* MUST be decided once, by the extension members in `Models/ServiceRegistrationModelExtensions.cs`, which both groupers use instead of re-deriving it:
 
 | Member | Rule |
 |---|---|
@@ -105,7 +110,7 @@ The entry hierarchies stay separate: Register emits one MS.DI registration per `
 | `AppliesDecorators` | Decorators wrap the instance: closed, non-`Instance` service type alias with decorators; the implementation type stays undecorated |
 | `HasOwnServiceInstance` | The service type resolves an instance of its own, typed as the service type: `AppliesDecorators` or `HasOwnFactoryInstance`. Otherwise it resolves the implementation type's instance |
 
-Which wrapper and collection types the registrations depend on is scanned once per output by **`WrapperDemand`** (`Grouping/WrapperDemand.cs`), which both groupers use to decide the `Lazy<T>` / `Func<T>` / `KeyValuePair` registrations (Register) or fields and resolvers (Container).
+Which wrapper and collection types the registrations depend on is scanned once per output by **`WrapperDemand`** (`Grouping/WrapperDemand.cs`), from every dependency of a registration (factory or constructor parameters, injection members, decorators), which both groupers use to decide the `Lazy<T>` / `Func<T>` / `KeyValuePair` registrations (Register) or fields, KVP resolvers and collection resolvers (Container). It is a transient grouping helper, not a cached pipeline model.
 
 Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry*.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
 

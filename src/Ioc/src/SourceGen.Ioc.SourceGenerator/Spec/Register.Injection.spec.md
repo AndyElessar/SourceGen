@@ -78,9 +78,11 @@ One `Lazy<T>` / parameterless `Func<T>` registration is emitted per registration
 |Registration of `T`|Wrapper registration|Resolves|
 |---|---|---|
 |Non-keyed|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredService<Impl>()`|
-|Non-keyed, decorated|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredKeyedService<T>("SourceGen.Ioc.Decorated:{T}\|{Impl}")`, the hidden key of the decorator chain (see [Decorators](Register.Decorators.spec.md))|
+|Non-keyed, with its own instance|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredKeyedService<T>("SourceGen.Ioc.Decorated:{T}\|{Impl}")`, the hidden key of the service type's own instance (see [Decorators](Register.Decorators.spec.md) and [Generic factory](Register.Generics.spec.md))|
 |Keyed|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<Impl>(key)`|
-|Keyed, decorated|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
+|Keyed, with its own instance|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
+
+A service type has its own instance when decorators wrap it, or a factory it does not share with the implementation type creates it: a generic factory, or a factory of an async-init registration. An `Instance` registration is never decorated, so its wrappers resolve the implementation type.
 
 A keyed registration MUST NOT emit a non-keyed wrapper registration.
 
