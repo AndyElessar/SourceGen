@@ -71,6 +71,8 @@ When a parameter or member type is a recognized wrapper type, the generator reso
 
 **Direct `Lazy<T>` / `Func<...>`**: Standalone registrations are emitted so wrapper services can be resolved directly from DI. Lifetimes and tags are inherited from the matched inner service `T`.
 
+The wrapper demand (`Lazy<T>`, `Func<...>`, `KeyValuePair<K, V>`, dictionaries and collections) MUST be scanned from every dependency of a registration, the same way for the Register and Container outputs (`Grouping/WrapperDemand.cs`): its factory's parameters (or the implementation type's constructor parameters), its injection members, and its decorators' constructor parameters and injection members.
+
 One `Lazy<T>` / parameterless `Func<T>` registration is emitted per registration of `T`, so `IEnumerable<Lazy<T>>` contains one wrapper per implementation. Each MUST resolve that registration's instance, the same instance as resolving `T`:
 
 |Registration of `T`|Wrapper registration|Resolves|

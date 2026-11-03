@@ -35,26 +35,17 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collects KeyValuePair registration entries needed by consumer dependencies.
-    /// Scans all registrations for KVP/Dictionary/IEnumerable&lt;KVP&gt; dependencies,
-    /// then finds matching keyed services to generate explicit KVP registrations for.
+    /// Collects KeyValuePair registration entries needed by consumer dependencies: the keyed services matching the
+    /// KVP/Dictionary/IEnumerable&lt;KVP&gt; dependencies in <paramref name="neededPairs"/>.
     /// </summary>
     private static List<KvpRegistrationEntry> CollectKeyValuePairEntries(
-        ImmutableEquatableArray<ServiceRegistrationWithTags> registrations)
+        ImmutableEquatableArray<ServiceRegistrationWithTags> registrations,
+        HashSet<(string KeyTypeName, string ValueTypeName)> neededPairs)
     {
-        // Step 1: Scan for (KeyTypeName, ValueTypeName) pairs needed by consumers
-        var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
-        foreach(var regWithTags in registrations)
-        {
-            var reg = regWithTags.Registration;
-            ScanParamsForKvpNeeds(reg.ImplementationType.ConstructorParameters, neededPairs);
-            ScanInjectionMembersForKvpNeeds(reg.InjectionMembers, neededPairs);
-        }
-
         if(neededPairs.Count == 0)
             return [];
 
-        // Step 2: Find keyed registrations matching those value types
+        // Find keyed registrations matching those value types
         var entries = new List<KvpRegistrationEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
         var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
@@ -82,71 +73,6 @@ partial class IocSourceGenerator
         }
 
         return entries;
-    }
-
-    /// <summary>
-    /// Scans constructor parameters for KVP/Dictionary/IEnumerable&lt;KVP&gt; dependencies
-    /// and adds needed (KeyTypeName, ValueTypeName) pairs.
-    /// </summary>
-    private static void ScanParamsForKvpNeeds(
-        ImmutableEquatableArray<ParameterData>? parameters,
-        HashSet<(string KeyTypeName, string ValueTypeName)> neededPairs)
-    {
-        if(parameters is null)
-            return;
-
-        foreach(var param in parameters)
-        {
-            ScanTypeForKvpNeeds(param.Type, neededPairs);
-        }
-    }
-
-    /// <summary>
-    /// Scans injection members for KVP/Dictionary dependencies and adds needed pairs.
-    /// </summary>
-    private static void ScanInjectionMembersForKvpNeeds(
-        ImmutableEquatableArray<InjectionMemberData>? members,
-        HashSet<(string KeyTypeName, string ValueTypeName)> neededPairs)
-    {
-        if(members is null or { Length: 0 })
-            return;
-
-        foreach(var member in members)
-        {
-            switch(member)
-            {
-                case PropertyOrFieldInjectionData propertyOrField:
-                    ScanTypeForKvpNeeds(propertyOrField.Type, neededPairs);
-                    break;
-
-                case MethodInjectionData method:
-                    foreach(var param in method.Parameters)
-                        ScanTypeForKvpNeeds(param.Type, neededPairs);
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Checks if a type is or contains a KeyValuePair/Dictionary dependency
-    /// and adds the (KeyTypeName, ValueTypeName) pair if found.
-    /// </summary>
-    private static void ScanTypeForKvpNeeds(
-        TypeData type,
-        HashSet<(string KeyTypeName, string ValueTypeName)> neededPairs)
-    {
-        switch(type)
-        {
-            case KeyValuePairTypeData kvp:
-                neededPairs.Add((kvp.KeyType.Name, kvp.ValueType.Name));
-                break;
-            case DictionaryTypeData dict:
-                neededPairs.Add((dict.KeyType.Name, dict.ValueType.Name));
-                break;
-            case CollectionWrapperTypeData { ElementType: KeyValuePairTypeData kvp }:
-                neededPairs.Add((kvp.KeyType.Name, kvp.ValueType.Name));
-                break;
-        }
     }
 
     /// <summary>

@@ -68,6 +68,16 @@ public sealed class FactoryAndInstanceTests
     }
 
     [Test]
+    public async Task FactoryWithFuncDependency_StandaloneContainer_ResolvesFuncWrapper()
+    {
+        using var container = new ContainerModule();
+
+        var service = container.GetRequiredService<IWrapperFactoryService>();
+
+        await Assert.That(service.CreateDep()).IsSameReferenceAs(container.GetRequiredService<IFactoryDep>());
+    }
+
+    [Test]
     public async Task InstanceConsumer_StandaloneContainer_ResolvesInstanceDirectlyAndThroughWrappers()
     {
         using var container = new ContainerModule();
@@ -84,6 +94,18 @@ public sealed class FactoryAndInstanceTests
     #endregion
 
     #region MS.Extensions.DI Integration Tests
+
+    [Test]
+    public async Task FactoryWithFuncDependency_MsDi_ResolvesFuncWrapper()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestCase();
+        await using var provider = services.BuildServiceProvider();
+
+        var service = provider.GetRequiredService<IWrapperFactoryService>();
+
+        await Assert.That(service.CreateDep()).IsSameReferenceAs(provider.GetRequiredService<IFactoryDep>());
+    }
 
     [Test]
     public async Task InstanceConsumer_MsDi_ResolvesUndecoratedInstanceDirectlyAndThroughWrappers()

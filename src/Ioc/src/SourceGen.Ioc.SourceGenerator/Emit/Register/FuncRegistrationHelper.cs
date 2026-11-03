@@ -60,16 +60,9 @@ partial class IocSourceGenerator
     /// Collects Func standalone registration entries needed by consumer dependencies.
     /// </summary>
     private static List<FuncRegistrationEntry> CollectFuncEntries(
-        ImmutableEquatableArray<ServiceRegistrationWithTags> registrations)
+        ImmutableEquatableArray<ServiceRegistrationWithTags> registrations,
+        Dictionary<string, FuncTypeData> neededFuncTypes)
     {
-        var neededFuncTypes = new Dictionary<string, FuncTypeData>(StringComparer.Ordinal);
-        foreach(var regWithTags in registrations)
-        {
-            var reg = regWithTags.Registration;
-            ScanParamsForFuncNeeds(reg.ImplementationType.ConstructorParameters, neededFuncTypes);
-            ScanInjectionMembersForFuncNeeds(reg.InjectionMembers, neededFuncTypes);
-        }
-
         if(neededFuncTypes.Count == 0)
             return [];
 
@@ -98,76 +91,6 @@ partial class IocSourceGenerator
         }
 
         return entries;
-    }
-
-    /// <summary>
-    /// Scans constructor parameters for Func dependencies.
-    /// </summary>
-    private static void ScanParamsForFuncNeeds(
-        ImmutableEquatableArray<ParameterData>? parameters,
-        Dictionary<string, FuncTypeData> neededFuncTypes)
-    {
-        if(parameters is null)
-            return;
-
-        foreach(var param in parameters)
-        {
-            ScanTypeForFuncNeeds(param.Type, neededFuncTypes);
-        }
-    }
-
-    /// <summary>
-    /// Scans injection members for Func dependencies.
-    /// </summary>
-    private static void ScanInjectionMembersForFuncNeeds(
-        ImmutableEquatableArray<InjectionMemberData>? members,
-        Dictionary<string, FuncTypeData> neededFuncTypes)
-    {
-        if(members is null or { Length: 0 })
-            return;
-
-        foreach(var member in members)
-        {
-            switch(member)
-            {
-                case PropertyOrFieldInjectionData propertyOrField:
-                    ScanTypeForFuncNeeds(propertyOrField.Type, neededFuncTypes);
-                    break;
-
-                case MethodInjectionData method:
-                    foreach(var param in method.Parameters)
-                        ScanTypeForFuncNeeds(param.Type, neededFuncTypes);
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Checks if a type is or contains a direct Func dependency and tracks the Func type.
-    /// </summary>
-    private static void ScanTypeForFuncNeeds(
-        TypeData type,
-        Dictionary<string, FuncTypeData> neededFuncTypes)
-    {
-        switch(type)
-        {
-            // Nested wrappers are intentionally excluded from standalone field generation. This is a
-            // deliberate pragmatic choice: direct container resolution of nested wrappers (for example,
-            // container.GetService<Lazy<Func<T>>>()) is extremely rare, and constructor injection is
-            // already fully covered by inline construction. Keeping nested wrappers inline avoids
-            // expanding field scanning, naming conventions, and scoped-container infrastructure for all
-            // nested shapes. Nested wrappers also usually do not require cross-consumer instance
-            // sharing, so per-consumer inline instances are semantically correct.
-            case FuncTypeData func when func.ReturnType is not WrapperTypeData:
-                if(!neededFuncTypes.ContainsKey(func.Name))
-                    neededFuncTypes[func.Name] = func;
-                break;
-
-            case CollectionWrapperTypeData { ElementType: FuncTypeData func } when func.ReturnType is not WrapperTypeData:
-                if(!neededFuncTypes.ContainsKey(func.Name))
-                    neededFuncTypes[func.Name] = func;
-                break;
-        }
     }
 
     /// <summary>

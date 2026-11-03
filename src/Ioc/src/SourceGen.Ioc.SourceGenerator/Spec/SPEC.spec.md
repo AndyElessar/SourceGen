@@ -105,6 +105,8 @@ The entry hierarchies stay separate: Register emits one MS.DI registration per `
 | `AppliesDecorators` | Decorators wrap the instance: closed, non-`Instance` service type alias with decorators; the implementation type stays undecorated |
 | `HasOwnServiceInstance` | The service type resolves an instance of its own, typed as the service type: `AppliesDecorators` or `HasOwnFactoryInstance`. Otherwise it resolves the implementation type's instance |
 
+Which wrapper and collection types the registrations depend on is scanned once per output by **`WrapperDemand`** (`Grouping/WrapperDemand.cs`), which both groupers use to decide the `Lazy<T>` / `Func<T>` / `KeyValuePair` registrations (Register) or fields and resolvers (Container).
+
 Container dependency lookups are pre-resolved into the **`ResolvedDependency`** hierarchy (18 subtypes such as `DirectServiceDependency`, `LazyInlineDependency`, `MultiParamFuncDependency`, `KvpInlineDependency`, `FallbackProviderDependency`, …) each implementing `FormatExpression(bool isOptional): string`. See `Emit/Container/ContainerEntry*.cs` and `Emit/Container/ResolvedDependencies.cs` for the full tables.
 
 ---

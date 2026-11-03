@@ -61,9 +61,10 @@ partial class IocSourceGenerator
             group.Add(entry);
         }
 
-        var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations), canonicalTagsCache);
-        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations), canonicalTagsCache);
-        var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations), canonicalTagsCache);
+        var demand = WrapperDemand.Scan(registrations.Select(static r => r.Registration));
+        var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations, demand.LazyServiceTypes), canonicalTagsCache);
+        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations, demand.FuncTypes), canonicalTagsCache);
+        var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations, demand.KvpPairs), canonicalTagsCache);
 
         var asyncInitServiceTypeSet = new HashSet<string>(StringComparer.Ordinal);
         foreach(var group in groupedRegistrations.Values)
