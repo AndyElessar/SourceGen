@@ -301,11 +301,11 @@ partial class IocSourceGenerator
                     var argList = string.Join(", ", args);
                     if(genericTypeArgs is null)
                     {
-                        writer.WriteLine($"return ({Registration.ImplementationType.Name}){factory.Path}({argList});");
+                        writer.WriteLine($"return ({ResolvedTypeName}){factory.Path}({argList});");
                     }
                     else
                     {
-                        writer.WriteLine($"return ({Registration.ImplementationType.Name}){factory.Path}<{genericTypeArgs}>({argList});");
+                        writer.WriteLine($"return ({ResolvedTypeName}){factory.Path}<{genericTypeArgs}>({argList});");
                     }
                 }
                 else

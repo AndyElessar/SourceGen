@@ -10,6 +10,7 @@ Support for custom factory methods and static instances in containers. Factory r
 - **Instance Registration**: Directly returns the pre-existing static instance without field caching. Instance registrations are externally managed and not disposed by the container.
   An instance registration has no resolver method, so every dependency on it (direct, `Lazy<T>`, `Func<T>`, `Task<T>`, `KeyValuePair<TKey, T>` and keyed dictionaries) MUST use the instance expression.
 - **Shared instance**: The implementation type and the service types of a factory registration resolve one factory-created instance; decorated service types wrap it (see [Decorators](Container.Decorators.spec.md)). Decorators are not applied to `Instance` registrations. The [Register](Register.Factory.spec.md) output follows the same rules.
+- **Generic factory**: A generic factory is closed per service type, so its resolver MUST return the service type (casting the factory result to it, not to the implementation type), and the implementation type MUST keep resolving its own registration. Decorated service types wrap the factory result.
 
 ```csharp
 #region Define:

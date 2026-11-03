@@ -32,6 +32,16 @@ internal static class ServiceRegistrationModelExtensions
         }
 
         /// <summary>
+        /// Gets whether a service type alias calls its own factory instead of resolving the implementation type's instance.
+        /// A generic factory is closed per service type, so its result is the service type's instance: it is typed as the
+        /// service type, and the implementation type keeps resolving its own registration.
+        /// </summary>
+        public bool HasOwnFactoryInstance =>
+            registration.Factory is { TypeParameterCount: > 0 }
+            && !registration.IsOpenGeneric
+            && registration.IsServiceTypeAlias;
+
+        /// <summary>
         /// Gets whether the registration's decorators wrap its instance. Decorators apply to closed service type registrations;
         /// the implementation type resolves the undecorated instance, and <c>Instance</c> registrations are not decorated.
         /// </summary>

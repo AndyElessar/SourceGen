@@ -6,10 +6,12 @@ partial class IocSourceGenerator
 {
     /// <summary>
     /// Gets the type returned by a registration's resolver method: the service type when decorators
-    /// wrap the instance, otherwise the implementation type.
+    /// wrap the instance or a generic factory creates it for the service type, otherwise the implementation type.
     /// </summary>
     private static string GetResolvedTypeName(ServiceRegistrationModel registration) =>
-        registration.Decorators.Length > 0 ? registration.ServiceType.Name : registration.ImplementationType.Name;
+        registration.Decorators.Length > 0 || registration.HasOwnFactoryInstance
+            ? registration.ServiceType.Name
+            : registration.ImplementationType.Name;
 
     private closed record class ContainerEntry
     {
@@ -112,7 +114,7 @@ partial class IocSourceGenerator
             if(Registration.Factory is not null)
             {
                 var factoryCall = BuildFactoryCallExpression();
-                writer.WriteLine($"{typeDeclaration} instance = ({Registration.ImplementationType.Name}){factoryCall};");
+                writer.WriteLine($"{typeDeclaration} instance = ({ResolvedTypeName}){factoryCall};");
                 return;
             }
 
@@ -238,7 +240,7 @@ partial class IocSourceGenerator
             if(Registration.Factory is not null)
             {
                 var factoryCall = BuildFactoryCallExpression();
-                writer.WriteLine($"{typeDeclaration} {injectionVar} = ({Registration.ImplementationType.Name}){factoryCall};");
+                writer.WriteLine($"{typeDeclaration} {injectionVar} = ({ResolvedTypeName}){factoryCall};");
             }
             else
             {

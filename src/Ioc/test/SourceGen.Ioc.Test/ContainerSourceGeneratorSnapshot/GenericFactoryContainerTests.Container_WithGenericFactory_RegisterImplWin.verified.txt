@@ -70,12 +70,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> _handler_Entity_TestNamespace_FactoryContainer_Create = null!;
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> GetHandler_Entity_TestNamespace_FactoryContainer_Create() => _handler_Entity_TestNamespace_FactoryContainer_Create ?? CreateHandler_Entity_TestNamespace_FactoryContainer_Create();
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>> _handler_Entity_TestNamespace_FactoryContainer_Create = null!;
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>> GetHandler_Entity_TestNamespace_FactoryContainer_Create() => _handler_Entity_TestNamespace_FactoryContainer_Create ?? CreateHandler_Entity_TestNamespace_FactoryContainer_Create();
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity> CreateHandler_Entity_TestNamespace_FactoryContainer_Create()
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>> CreateHandler_Entity_TestNamespace_FactoryContainer_Create()
     {
-        var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
+        var instance = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>();
 
         _handler_Entity_TestNamespace_FactoryContainer_Create = instance;
         return instance;
@@ -92,28 +92,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> _handler_Entity2_TestNamespace_FactoryContainer_Create = null!;
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> GetHandler_Entity2_TestNamespace_FactoryContainer_Create() => _handler_Entity2_TestNamespace_FactoryContainer_Create ?? CreateHandler_Entity2_TestNamespace_FactoryContainer_Create();
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>> _handler_Entity2_TestNamespace_FactoryContainer_Create = null!;
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>> GetHandler_Entity2_TestNamespace_FactoryContainer_Create() => _handler_Entity2_TestNamespace_FactoryContainer_Create ?? CreateHandler_Entity2_TestNamespace_FactoryContainer_Create();
 
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2> CreateHandler_Entity2_TestNamespace_FactoryContainer_Create()
+    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>> CreateHandler_Entity2_TestNamespace_FactoryContainer_Create()
     {
-        var instance = (global::TestNamespace.Handler<global::TestNamespace.Entity2>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
+        var instance = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity2>();
 
         _handler_Entity2_TestNamespace_FactoryContainer_Create = instance;
         return instance;
     }
-
-    private global::TestNamespace.Handler<global::TestNamespace.Entity>[] GetAllHandler_EntityArray() =>
-        [
-            GetHandler_Entity(),
-            GetHandler_Entity_TestNamespace_FactoryContainer_Create(),
-        ];
-
-    private global::TestNamespace.Handler<global::TestNamespace.Entity2>[] GetAllHandler_Entity2Array() =>
-        [
-            GetHandler_Entity2(),
-            GetHandler_Entity2_TestNamespace_FactoryContainer_Create(),
-        ];
 
     #endregion
 
@@ -280,26 +268,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), static c => c.GetHandler_Entity_TestNamespace_FactoryContainer_Create()),
+        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), static c => c.GetHandler_Entity()),
         __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), static c => c.GetHandler_Entity_TestNamespace_FactoryContainer_Create()),
-        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), static c => c.GetHandler_Entity2_TestNamespace_FactoryContainer_Create()),
+        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity2>), static c => c.GetHandler_Entity2()),
         __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity2>>), static c => c.GetHandler_Entity2_TestNamespace_FactoryContainer_Create()),
-        ..__CollectionResolvers<global::TestNamespace.Handler<global::TestNamespace.Entity>>(static c => c.GetAllHandler_EntityArray()),
-        ..__CollectionResolvers<global::TestNamespace.Handler<global::TestNamespace.Entity2>>(static c => c.GetAllHandler_Entity2Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
-
-    private static __IocResolver[] __CollectionResolvers<T>(global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
-    [
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<T>), resolver),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), resolver),
-        __Resolver(typeof(global::System.Collections.Generic.ICollection<T>), resolver),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),
-        __Resolver(typeof(global::System.Collections.Generic.IList<T>), resolver),
-        __Resolver(typeof(T[]), resolver),
-    ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
