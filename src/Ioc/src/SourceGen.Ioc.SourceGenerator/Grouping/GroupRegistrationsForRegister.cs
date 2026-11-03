@@ -191,7 +191,15 @@ partial class IocSourceGenerator
         bool hasAsyncInjectionMembers = registration.InjectionMembers.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod);
         bool shouldForwardServiceType = !registration.IsOpenGeneric && isServiceTypeRegistration;
 
-        if(hasFactory)
+        // A non-generic factory also creates the implementation type's self-registration, so service types share its
+        // instance (forwarded, or wrapped with decorators) instead of calling the factory again. A generic factory is
+        // closed per service type and not shared with the implementation type, so each service type calls it.
+        bool sharesFactoryInstance = hasFactory
+            && isServiceTypeRegistration
+            && registration.Factory!.TypeParameterCount == 0
+            && !hasAsyncInjectionMembers;
+
+        if(hasFactory && !sharesFactoryInstance)
         {
             return new FactoryRegisterEntry(registration);
         }

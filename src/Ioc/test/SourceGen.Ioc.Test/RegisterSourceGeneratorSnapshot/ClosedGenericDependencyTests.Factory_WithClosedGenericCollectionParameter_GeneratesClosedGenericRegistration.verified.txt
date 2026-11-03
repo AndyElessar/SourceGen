@@ -30,11 +30,7 @@ namespace TestAssembly
                     var f_p0 = sp.GetServices<global::TestNamespace.IHandler<global::TestNamespace.Event>>();
                     return (global::TestNamespace.EventProcessor)global::TestNamespace.EventProcessorFactory.Create(sp, f_p0);
                 });
-                services.AddSingleton<global::TestNamespace.IEventProcessor>((global::System.IServiceProvider sp) =>
-                {
-                    var f_p0 = sp.GetServices<global::TestNamespace.IHandler<global::TestNamespace.Event>>();
-                    return global::TestNamespace.EventProcessorFactory.Create(sp, f_p0);
-                });
+                services.AddSingleton<global::TestNamespace.IEventProcessor>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.EventProcessor>());
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Event>, global::TestNamespace.Handler<global::TestNamespace.Event>>();
                 services.AddSingleton<global::TestNamespace.IHandler<global::TestNamespace.Event>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Event>>());
             }

@@ -28,6 +28,18 @@ public sealed class FactoryAndInstanceTests
     }
 
     [Test]
+    public async Task FactoryWithDecorator_StandaloneContainer_WrapsSharedFactoryInstance()
+    {
+        using var container = new ContainerModule();
+
+        var decorated = container.GetRequiredService<IDecoratedFactoryService>();
+        var implementation = container.GetRequiredService<DecoratedFactoryService>();
+
+        await Assert.That(decorated.Describe()).IsEqualTo("DecoratedFactoryServiceDecorator(DecoratedFactoryService)");
+        await Assert.That(((DecoratedFactoryServiceDecorator)decorated).Inner).IsSameReferenceAs(implementation);
+    }
+
+    [Test]
     public async Task Instance_StandaloneContainer_ReturnsPredefinedInstance()
     {
         // Arrange
@@ -77,6 +89,20 @@ public sealed class FactoryAndInstanceTests
         // Verify the dep was successfully resolved via the generator's factory dep path
         var dep = provider.GetRequiredService<IFactoryDep>();
         await Assert.That(service.DepName).IsEqualTo(dep.Label);
+    }
+
+    [Test]
+    public async Task FactoryWithDecorator_MsDi_WrapsSharedFactoryInstance()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestCase();
+        await using var provider = services.BuildServiceProvider();
+
+        var decorated = provider.GetRequiredService<IDecoratedFactoryService>();
+        var implementation = provider.GetRequiredService<DecoratedFactoryService>();
+
+        await Assert.That(decorated.Describe()).IsEqualTo("DecoratedFactoryServiceDecorator(DecoratedFactoryService)");
+        await Assert.That(((DecoratedFactoryServiceDecorator)decorated).Inner).IsSameReferenceAs(implementation);
     }
 
     [Test]

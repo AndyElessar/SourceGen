@@ -24,7 +24,7 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddTransient<global::TestNamespace.MyService>((global::System.IServiceProvider sp) => TestNamespace.MyServiceFactory.Create(sp));
-                services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => TestNamespace.MyServiceFactory.Create(sp));
+                services.AddTransient<global::TestNamespace.IMyService>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyService>());
             }
 
             return services;

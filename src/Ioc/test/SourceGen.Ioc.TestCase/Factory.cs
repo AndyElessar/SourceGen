@@ -44,8 +44,36 @@ internal static class FactoryServiceFactory
         new FactoryService { CreatedBy = nameof(FactoryServiceFactory), DepName = dep.Label };
 }
 
+/// <summary>Interface for a factory-created service wrapped with a decorator.</summary>
+public interface IDecoratedFactoryService
+{
+    string Describe();
+}
+
+public sealed class DecoratedFactoryService : IDecoratedFactoryService
+{
+    public string Describe() => nameof(DecoratedFactoryService);
+}
+
+public sealed class DecoratedFactoryServiceDecorator(IDecoratedFactoryService inner) : IDecoratedFactoryService
+{
+    public IDecoratedFactoryService Inner => inner;
+
+    public string Describe() => $"{nameof(DecoratedFactoryServiceDecorator)}({inner.Describe()})";
+}
+
+internal static class DecoratedFactoryServiceFactory
+{
+    public static IDecoratedFactoryService Create() => new DecoratedFactoryService();
+}
+
 [IocRegisterFor<FactoryDep>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFactoryDep)])]
 [IocRegisterFor<FactoryService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFactoryService)], Factory = nameof(FactoryServiceFactory.Create))]
+[IocRegisterFor<DecoratedFactoryService>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IDecoratedFactoryService)],
+    Factory = nameof(DecoratedFactoryServiceFactory.Create),
+    Decorators = [typeof(DecoratedFactoryServiceDecorator)])]
 [IocRegisterFor<InstanceService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IInstanceService)], Instance = nameof(InstanceService.Default))]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class FactoryModule;

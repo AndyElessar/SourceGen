@@ -46,6 +46,40 @@ public class FactoryAndInstanceContainerTests
     }
 
     [Test]
+    public async Task Container_WithFactoryRegisteredForServiceTypeOnly_ResolvesFactoryResultAsServiceType()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IConnection { }
+
+            public class PooledConnection : IConnection { }
+
+            public class DirectConnection : IConnection { }
+
+            public static class ConnectionFactory
+            {
+                public static IConnection Create(IServiceProvider sp) =>
+                    Environment.ProcessorCount > 1 ? new PooledConnection() : new DirectConnection();
+            }
+
+            [IocRegisterFor<IConnection>(ServiceLifetime.Singleton, Factory = nameof(ConnectionFactory.Create))]
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithInstanceRegistration_UsesStaticInstance()
     {
         const string source = """

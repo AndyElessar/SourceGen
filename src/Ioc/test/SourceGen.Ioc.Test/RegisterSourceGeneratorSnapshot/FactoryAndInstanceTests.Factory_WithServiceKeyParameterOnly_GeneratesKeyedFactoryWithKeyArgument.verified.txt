@@ -24,7 +24,7 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddKeyedSingleton<global::TestNamespace.MyService>(42, (global::System.IServiceProvider sp, object? key) => (global::TestNamespace.MyService)global::TestNamespace.MyServiceFactory.Create(42));
-                services.AddKeyedSingleton<global::TestNamespace.IMyService>(42, (global::System.IServiceProvider sp, object? key) => global::TestNamespace.MyServiceFactory.Create(42));
+                services.AddKeyedSingleton<global::TestNamespace.IMyService>(42, (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.MyService>(key));
             }
 
             return services;

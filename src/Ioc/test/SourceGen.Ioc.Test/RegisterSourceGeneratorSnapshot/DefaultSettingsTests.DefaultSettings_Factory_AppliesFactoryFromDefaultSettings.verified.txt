@@ -24,7 +24,7 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddScoped<global::TestNamespace.MyHandlerImpl>((global::System.IServiceProvider sp) => (global::TestNamespace.MyHandlerImpl)global::TestNamespace.HandlerFactory.Create(sp));
-                services.AddScoped<global::TestNamespace.IMyHandler>((global::System.IServiceProvider sp) => global::TestNamespace.HandlerFactory.Create(sp));
+                services.AddScoped<global::TestNamespace.IMyHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.MyHandlerImpl>());
             }
 
             return services;

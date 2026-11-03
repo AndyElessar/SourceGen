@@ -24,9 +24,9 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddScoped<global::TestNamespace.DefaultHandler>((global::System.IServiceProvider sp) => (global::TestNamespace.DefaultHandler)global::TestNamespace.DefaultFactory.Create(sp));
-                services.AddScoped<global::TestNamespace.IMyHandler>((global::System.IServiceProvider sp) => global::TestNamespace.DefaultFactory.Create(sp));
+                services.AddScoped<global::TestNamespace.IMyHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.DefaultHandler>());
                 services.AddScoped<global::TestNamespace.SpecialHandler>((global::System.IServiceProvider sp) => (global::TestNamespace.SpecialHandler)global::TestNamespace.SpecialFactory.Create(sp));
-                services.AddScoped<global::TestNamespace.IMyHandler>((global::System.IServiceProvider sp) => global::TestNamespace.SpecialFactory.Create(sp));
+                services.AddScoped<global::TestNamespace.IMyHandler>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.SpecialHandler>());
             }
 
             return services;
