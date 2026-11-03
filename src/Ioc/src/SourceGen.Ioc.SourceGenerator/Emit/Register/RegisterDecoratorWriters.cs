@@ -24,28 +24,55 @@ partial class IocSourceGenerator
     /// </remarks>
     private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
     {
-        var serviceTypeName = registration.ServiceType.Name;
-
-        // A non-keyed chain is registered under a hidden key, so Lazy/Func wrappers can resolve this registration's
-        // decorated instance; the service type forwards to it, sharing the instance. The body still resolves non-keyed.
-        var decoratedServiceKey = registration.Key is null ? GetDecoratedServiceKey(registration) : null;
-        writer.WriteServiceLambdaOpen(lifetime, serviceTypeName, decoratedServiceKey ?? registration.Key);
-
-        writer.WriteLine("{");
-        writer.Indentation++;
+        var hiddenKey = WriteOwnServiceInstanceOpen(writer, registration, lifetime);
 
         var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
         writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({(registration.Key is not null ? "key" : "")});");
 
+        WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, asyncInitServiceTypeNames);
+    }
+
+    /// <summary>
+    /// Opens the lambda registering a service type's own instance (see <c>RegistersOwnServiceInstance</c>), whose body creates
+    /// the undecorated instance in variable <c>s0</c>, and returns the hidden key it is registered under, or
+    /// <see langword="null"/> for a keyed registration, which is registered under its own key.
+    /// </summary>
+    /// <remarks>
+    /// A non-keyed instance is registered under a hidden key, so Lazy/Func wrappers can resolve this registration's instance;
+    /// the service type forwards to it, sharing the instance. The body still resolves non-keyed.
+    /// </remarks>
+    private static string? WriteOwnServiceInstanceOpen(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
+    {
+        var hiddenKey = registration.Key is null ? GetDecoratedServiceKey(registration) : null;
+        writer.WriteServiceLambdaOpen(lifetime, registration.ServiceType.Name, hiddenKey ?? registration.Key);
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        return hiddenKey;
+    }
+
+    /// <summary>
+    /// Closes the lambda opened by <see cref="WriteOwnServiceInstanceOpen"/>: wraps <c>s0</c> with the decorators, returns
+    /// the outermost instance, and forwards the service type to <paramref name="hiddenKey"/>.
+    /// </summary>
+    private static void WriteOwnServiceInstanceClose(
+        SourceWriter writer,
+        ServiceRegistrationModel registration,
+        string lifetime,
+        string? hiddenKey,
+        ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+    {
         var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
         writer.WriteLine($"return {outermostVar};");
 
         writer.Indentation--;
         writer.WriteLine("});");
 
-        if(decoratedServiceKey is not null)
+        if(hiddenKey is not null)
         {
-            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) => sp.{GetRequiredKeyedService}<{serviceTypeName}>({decoratedServiceKey}));");
+            var serviceTypeName = registration.ServiceType.Name;
+            writer.WriteLine($"services.Add{lifetime}<{serviceTypeName}>(({IServiceProviderGlobalTypeName} sp) => sp.{GetRequiredKeyedService}<{serviceTypeName}>({hiddenKey}));");
         }
     }
 
@@ -99,7 +126,8 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Gets the hidden service key (a C# string literal) of a non-keyed decorated registration's decorator chain.
+    /// Gets the hidden service key (a C# string literal) of a non-keyed registration's own service instance: its decorator
+    /// chain, or the result of a factory it does not share.
     /// </summary>
     private static string GetDecoratedServiceKey(ServiceRegistrationModel registration)
     {
@@ -113,12 +141,13 @@ partial class IocSourceGenerator
     /// </summary>
     /// <remarks>
     /// The implementation type identifies the registration among several of one service type, but it is undecorated;
-    /// a decorated registration is resolved through its hidden key, or its own key when keyed. Decorators are not applied
-    /// to <c>Instance</c> registrations, which have no hidden key.
+    /// a registration with an instance of its own (decorated, or created by a factory it does not share) is resolved through
+    /// its hidden key, or its own key when keyed. Decorators are not applied to <c>Instance</c> registrations, which have no
+    /// hidden key.
     /// </remarks>
     private static string GetWrapperResolveCall(ServiceRegistrationModel registration)
     {
-        return (registration.AppliesDecorators, registration.Key) switch
+        return (RegistersOwnServiceInstance(registration), registration.Key) switch
         {
             (true, null) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>({GetDecoratedServiceKey(registration)})",
             (true, _) => $"sp.{GetRequiredKeyedService}<{registration.ServiceType.Name}>(key)",

@@ -25,7 +25,12 @@ namespace TestAssembly
             {
                 services.AddSingleton(typeof(global::TestNamespace.Handler<,>), typeof(global::TestNamespace.Handler<,>));
                 services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Entity, global::TestNamespace.Dto>, global::TestNamespace.Handler<global::TestNamespace.Entity, global::TestNamespace.Dto>>();
-                services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>>((global::System.IServiceProvider sp) => (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Dto, global::TestNamespace.Entity>());
+                services.AddKeyedSingleton<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>>("SourceGen.Ioc.Decorated:TestNamespace.IRequestHandler<System.Threading.Tasks.Task<TestNamespace.Entity>, System.Collections.Generic.List<TestNamespace.Dto>>|TestNamespace.Handler<TestNamespace.Entity, TestNamespace.Dto>", (global::System.IServiceProvider sp, object? key) =>
+                {
+                    var s0 = (global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>)global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Dto, global::TestNamespace.Entity>();
+                    return s0;
+                });
+                services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>>((global::System.IServiceProvider sp) => sp.GetRequiredKeyedService<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>, global::System.Collections.Generic.List<global::TestNamespace.Dto>>>("SourceGen.Ioc.Decorated:TestNamespace.IRequestHandler<System.Threading.Tasks.Task<TestNamespace.Entity>, System.Collections.Generic.List<TestNamespace.Dto>>|TestNamespace.Handler<TestNamespace.Entity, TestNamespace.Dto>"));
             }
 
             return services;

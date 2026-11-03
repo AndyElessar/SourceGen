@@ -230,6 +230,17 @@ partial class IocSourceGenerator
                 return;
             }
 
+            // A service type that does not share the implementation type's instance (see RegistersOwnServiceInstance) registers
+            // the factory result as its own instance, which decorators wrap and Lazy/Func wrappers resolve by its hidden key
+            if(Registration.IsServiceTypeAlias)
+            {
+                var hiddenKey = WriteOwnServiceInstanceOpen(writer, Registration, Lifetime);
+                var arguments = WriteAdditionalParameterResolution(writer, context);
+                writer.WriteLine($"var s0 = {BuildFactoryInvocationExpression(arguments)};");
+                WriteOwnServiceInstanceClose(writer, Registration, Lifetime, hiddenKey, context.AsyncInitServiceTypeNames);
+                return;
+            }
+
             if(AdditionalParameters.Length > 0)
             {
                 WriteRegistrationWithAdditionalParameters(writer, context);
@@ -247,6 +258,19 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
 
+            var resolvedParameterNames = WriteAdditionalParameterResolution(writer, context);
+            var factoryInvocation = BuildFactoryInvocationExpression(resolvedParameterNames);
+            writer.WriteLine($"return {factoryInvocation};");
+
+            writer.Indentation--;
+            writer.WriteLine("});");
+        }
+
+        /// <summary>
+        /// Writes the variables resolving the factory's additional parameters and returns the argument for each.
+        /// </summary>
+        private List<string> WriteAdditionalParameterResolution(SourceWriter writer, RegisterWriteContext context)
+        {
             var resolvedParameterNames = new List<string>(AdditionalParameters.Length);
             foreach(var additionalParam in AdditionalParameters)
             {
@@ -260,11 +284,7 @@ partial class IocSourceGenerator
                 resolvedParameterNames.Add(resolvedName);
             }
 
-            var factoryInvocation = BuildFactoryInvocationExpression(resolvedParameterNames);
-            writer.WriteLine($"return {factoryInvocation};");
-
-            writer.Indentation--;
-            writer.WriteLine("});");
+            return resolvedParameterNames;
         }
 
         private string BuildFactoryInvocationExpression(List<string> additionalArguments)

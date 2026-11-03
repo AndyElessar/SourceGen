@@ -176,7 +176,7 @@ partial class IocSourceGenerator
             return new SimpleRegisterEntry(registration);
         }
 
-        if(registration.Factory is { } factory && !SharesFactoryInstance(registration, factory))
+        if(registration.Factory is not null && !SharesFactoryInstance(registration))
         {
             return new FactoryRegisterEntry(registration);
         }
@@ -208,13 +208,24 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Gets whether a factory registration's service type shares the instance that the factory creates for the implementation
-    /// type's registration (forwarded, or wrapped with decorators) instead of calling the factory again. A generic factory is
-    /// closed per service type and not shared with the implementation type, so each service type calls it.
+    /// type's registration (forwarded, or wrapped with decorators) instead of calling the factory again. A generic factory
+    /// (<c>HasOwnFactoryInstance</c>) and an async-init registration call the factory for the service type itself.
     /// </summary>
-    private static bool SharesFactoryInstance(ServiceRegistrationModel registration, FactoryMethodData factory) =>
+    private static bool SharesFactoryInstance(ServiceRegistrationModel registration) =>
         registration.IsServiceTypeAlias
-        && factory.TypeParameterCount == 0
+        && !registration.HasOwnFactoryInstance
         && !registration.IsAsyncInit;
+
+    /// <summary>
+    /// Gets whether a service type alias registers an instance of its own instead of forwarding to the implementation type:
+    /// <c>HasOwnServiceInstance</c>, or an async-init factory registration, which the Register output cannot forward (the
+    /// implementation type's factory registration is not a <c>Task&lt;T&gt;</c>). The instance is registered under the hidden
+    /// key (see <c>GetDecoratedServiceKey</c>), or the registration's own key, which <c>Lazy&lt;T&gt;</c> / <c>Func&lt;T&gt;</c>
+    /// wrappers resolve.
+    /// </summary>
+    private static bool RegistersOwnServiceInstance(ServiceRegistrationModel registration) =>
+        registration.HasOwnServiceInstance
+        || (registration.Factory is not null && !registration.IsOpenGeneric && registration.IsServiceTypeAlias && registration.IsAsyncInit);
 
     /// <summary>
     /// Gets whether the implementation type is constructed in a lambda instead of by <c>services.Add{Lifetime}&lt;TService, TImpl&gt;()</c>:

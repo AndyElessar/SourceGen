@@ -122,6 +122,50 @@ public class DecoratorContainerTests
     }
 
     [Test]
+    public async Task Container_WithGenericFactoryAndDecorators_WrapsServiceTypeFactoryInstance()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+
+            [IocRegisterDefaults(typeof(IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(FactoryContainer.Create),
+                Decorators = [typeof(LoggingHandler<>)])]
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            public class LoggingHandler<T>(IRequestHandler<T> inner) : IRequestHandler<T> { }
+
+            [IocRegister]
+            public class Handler<T> : IRequestHandler<Task<T>> { }
+
+            public class Entity { }
+
+            [IocRegister]
+            public class Consumer(IRequestHandler<Task<Entity>> handler, Lazy<IRequestHandler<Task<Entity>>> lazy, Handler<Entity> implementation);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithInstanceAndDecorators_NoDecoratorApplied()
     {
         const string source = """

@@ -210,8 +210,9 @@ partial class IocSourceGenerator
             list.Add(serviceCached);
             lastWinsLookup[key] = serviceCached;
 
-            // Also add implementation type as a service type (for self-registration)
-            if(effectiveRegistration.IsServiceTypeAlias)
+            // Also add implementation type as a service type (for self-registration), unless the service type has an instance
+            // of its own from a generic factory: the implementation type resolves its own registration
+            if(effectiveRegistration.IsServiceTypeAlias && !effectiveRegistration.HasOwnFactoryInstance)
             {
                 var implKey = new ServiceTypeKey(effectiveRegistration.ImplementationType.Name, effectiveRegistration.Key);
                 if(!serviceLookup.TryGetValue(implKey, out var implList))

@@ -197,6 +197,8 @@ When a generic factory method is used with open generic service registration, th
 - Each placeholder type should be unique - duplicate placeholders cannot be distinguished and will not generate registration
 - The service type template must match the structure of the open generic service type in the `IocRegisterDefaults`
 - If `[IocGenericFactory]` is missing on a generic factory method, SGIOC016 diagnostic is reported
+- The factory is closed per service type, so its result is the service type's own instance: it MUST be cast to the service type, and the implementation type MUST keep resolving its own (constructed) registration
+- A non-keyed service type's factory instance MUST be registered under the hidden key `"SourceGen.Ioc.Decorated:{ServiceType}|{ImplementationType}"` with the service type forwarding to it, like a decorator chain (see [Decorators](Register.Decorators.spec.md)), so `Lazy<T>` / `Func<T>` wrappers resolve the same instance; `Decorators` wrap the factory result inside that registration
 
 ### Single Type Parameter Example
 
@@ -234,7 +236,12 @@ public sealed class App { }
 // → T = Entity
 services.AddSingleton(typeof(Handler<>), typeof(Handler<>));
 services.AddSingleton<Handler<Entity>, Handler<Entity>>();
-services.AddSingleton<IRequestHandler<Task<Entity>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>());
+services.AddKeyedSingleton<IRequestHandler<Task<Entity>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>>|Handler<Entity>", (IServiceProvider sp, object? key) =>
+{
+    var s0 = (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>();
+    return s0;
+});
+services.AddSingleton<IRequestHandler<Task<Entity>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<Task<Entity>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>>|Handler<Entity>"));
 #endregion
 ```
 
@@ -277,7 +284,12 @@ public sealed class App { }
 // - List<Dto> matches List<decimal> → decimal = Dto → T2 = Dto
 services.AddSingleton(typeof(Handler<,>), typeof(Handler<,>));
 services.AddSingleton<Handler<Entity, Dto>, Handler<Entity, Dto>>();
-services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>());
+services.AddKeyedSingleton<IRequestHandler<Task<Entity>, List<Dto>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>, List<Dto>>|Handler<Entity, Dto>", (IServiceProvider sp, object? key) =>
+{
+    var s0 = (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Entity, Dto>();
+    return s0;
+});
+services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<Task<Entity>, List<Dto>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>, List<Dto>>|Handler<Entity, Dto>"));
 #endregion
 ```
 
@@ -318,7 +330,12 @@ public sealed class App { }
 // - Task<Entity> matches Task<int> → int = Entity → T2 = Entity
 // - List<Dto> matches List<decimal> → decimal = Dto → T1 = Dto
 // Note: Create<T1, T2> so call is Create<Dto, Entity>
-services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>());
+services.AddKeyedSingleton<IRequestHandler<Task<Entity>, List<Dto>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>, List<Dto>>|Handler<Dto, Entity>", (IServiceProvider sp, object? key) =>
+{
+    var s0 = (IRequestHandler<Task<Entity>, List<Dto>>)FactoryContainer.Create<Dto, Entity>();
+    return s0;
+});
+services.AddSingleton<IRequestHandler<Task<Entity>, List<Dto>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<Task<Entity>, List<Dto>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>, List<Dto>>|Handler<Dto, Entity>"));
 #endregion
 ```
 
@@ -348,7 +365,12 @@ public sealed class App { }
 
 #region Generate:
 // Factory method receives IServiceProvider
-services.AddSingleton<IRequestHandler<Task<Entity>>>((IServiceProvider sp) => (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp));
+services.AddKeyedSingleton<IRequestHandler<Task<Entity>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>>|Handler<Entity>", (IServiceProvider sp, object? key) =>
+{
+    var s0 = (IRequestHandler<Task<Entity>>)FactoryContainer.Create<Entity>(sp);
+    return s0;
+});
+services.AddSingleton<IRequestHandler<Task<Entity>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<Task<Entity>>>("SourceGen.Ioc.Decorated:IRequestHandler<Task<Entity>>|Handler<Entity>"));
 #endregion
 ```
 
