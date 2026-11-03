@@ -39,16 +39,9 @@ partial class IocSourceGenerator
     /// Collects Lazy standalone registration entries needed by consumer dependencies.
     /// </summary>
     private static List<LazyRegistrationEntry> CollectLazyEntries(
-        ImmutableEquatableArray<ServiceRegistrationWithTags> registrations)
+        ImmutableEquatableArray<ServiceRegistrationWithTags> registrations,
+        HashSet<string> neededTypes)
     {
-        var neededTypes = new HashSet<string>(StringComparer.Ordinal);
-        foreach(var regWithTags in registrations)
-        {
-            var reg = regWithTags.Registration;
-            ScanParamsForLazyNeeds(reg.ImplementationType.ConstructorParameters, neededTypes);
-            ScanInjectionMembersForLazyNeeds(reg.InjectionMembers, neededTypes);
-        }
-
         if(neededTypes.Count == 0)
             return [];
 
@@ -74,74 +67,6 @@ partial class IocSourceGenerator
         }
 
         return entries;
-    }
-
-    /// <summary>
-    /// Scans constructor parameters for Lazy dependencies.
-    /// </summary>
-    private static void ScanParamsForLazyNeeds(
-        ImmutableEquatableArray<ParameterData>? parameters,
-        HashSet<string> neededTypes)
-    {
-        if(parameters is null)
-            return;
-
-        foreach(var param in parameters)
-        {
-            ScanTypeForLazyNeeds(param.Type, neededTypes);
-        }
-    }
-
-    /// <summary>
-    /// Scans injection members for Lazy dependencies.
-    /// </summary>
-    private static void ScanInjectionMembersForLazyNeeds(
-        ImmutableEquatableArray<InjectionMemberData>? members,
-        HashSet<string> neededTypes)
-    {
-        if(members is null or { Length: 0 })
-            return;
-
-        foreach(var member in members)
-        {
-            switch(member)
-            {
-                case PropertyOrFieldInjectionData propertyOrField:
-                    ScanTypeForLazyNeeds(propertyOrField.Type, neededTypes);
-                    break;
-
-                case MethodInjectionData method:
-                    foreach(var param in method.Parameters)
-                        ScanTypeForLazyNeeds(param.Type, neededTypes);
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Checks if a type is or contains a direct Lazy dependency and tracks the inner service type.
-    /// </summary>
-    private static void ScanTypeForLazyNeeds(
-        TypeData type,
-        HashSet<string> neededTypes)
-    {
-        switch(type)
-        {
-            // Nested wrappers are intentionally excluded from standalone field generation. This is a
-            // deliberate pragmatic choice: direct container resolution of nested wrappers (for example,
-            // container.GetService<Lazy<Func<T>>>()) is extremely rare, and constructor injection is
-            // already fully covered by inline construction. Keeping nested wrappers inline avoids
-            // expanding field scanning, naming conventions, and scoped-container infrastructure for all
-            // nested shapes. Nested wrappers also usually do not require cross-consumer instance
-            // sharing, so per-consumer inline instances are semantically correct.
-            case LazyTypeData lazy when lazy.InstanceType is not WrapperTypeData:
-                neededTypes.Add(lazy.InstanceType.Name);
-                break;
-
-            case CollectionWrapperTypeData { ElementType: LazyTypeData lazy } when lazy.InstanceType is not WrapperTypeData:
-                neededTypes.Add(lazy.InstanceType.Name);
-                break;
-        }
     }
 
     /// <summary>

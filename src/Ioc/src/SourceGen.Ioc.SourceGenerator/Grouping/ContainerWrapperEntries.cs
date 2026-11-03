@@ -3,24 +3,10 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     private static ImmutableEquatableArray<LazyWrapperContainerEntry> CreateLazyWrapperContainerEntries(
-        ImmutableEquatableArray<ServiceLookupEntry> singletons,
-        ImmutableEquatableArray<ServiceLookupEntry> scoped,
-        ImmutableEquatableArray<ServiceLookupEntry> transients,
+        HashSet<string> neededTypes,
         IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
         ContainerNames names)
     {
-        var neededTypes = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach(var lifetime in new[] { singletons, scoped, transients })
-        {
-            foreach(var cached in lifetime)
-            {
-                var reg = cached.Registration;
-                ScanParamsForLazyNeeds(reg.ImplementationType.ConstructorParameters, neededTypes);
-                ScanInjectionMembersForLazyNeeds(reg.InjectionMembers, neededTypes);
-            }
-        }
-
         if(neededTypes.Count == 0)
             return [];
 
@@ -100,91 +86,11 @@ partial class IocSourceGenerator
         return wrapperEntries.ToImmutableEquatableArray();
     }
 
-    /// <summary>
-    /// Scans constructor parameters for single-parameter Func dependencies.
-    /// </summary>
-    private static void ScanParamsForContainerFuncNeeds(
-        ImmutableEquatableArray<ParameterData>? parameters,
-        HashSet<string> neededTypes)
-    {
-        if(parameters is null)
-            return;
-
-        foreach(var param in parameters)
-        {
-            ScanTypeForContainerFuncNeeds(param.Type, neededTypes);
-        }
-    }
-
-    /// <summary>
-    /// Scans injection members for single-parameter Func dependencies.
-    /// </summary>
-    private static void ScanInjectionMembersForContainerFuncNeeds(
-        ImmutableEquatableArray<InjectionMemberData>? members,
-        HashSet<string> neededTypes)
-    {
-        if(members is null or { Length: 0 })
-            return;
-
-        foreach(var member in members)
-        {
-            switch(member)
-            {
-                case PropertyOrFieldInjectionData propertyOrField:
-                    ScanTypeForContainerFuncNeeds(propertyOrField.Type, neededTypes);
-                    break;
-
-                case MethodInjectionData method:
-                    foreach(var param in method.Parameters)
-                        ScanTypeForContainerFuncNeeds(param.Type, neededTypes);
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Tracks Func&lt;T&gt; wrapper needs for container field-backed wrapper resolvers.
-    /// </summary>
-    private static void ScanTypeForContainerFuncNeeds(TypeData type, HashSet<string> neededTypes)
-    {
-        switch(type)
-        {
-            // Nested wrappers are intentionally excluded from standalone field generation. This is a
-            // deliberate pragmatic choice: direct container resolution of nested wrappers (for example,
-            // container.GetService<Lazy<Func<T>>>()) is extremely rare, and constructor injection is
-            // already fully covered by inline construction. Keeping nested wrappers inline avoids
-            // expanding field scanning, naming conventions, and scoped-container infrastructure for all
-            // nested shapes. Nested wrappers also usually do not require cross-consumer instance
-            // sharing, so per-consumer inline instances are semantically correct.
-            case FuncTypeData func when !func.HasInputParameters && func.ReturnType is not WrapperTypeData:
-                neededTypes.Add(func.ReturnType.Name);
-                break;
-
-            case CollectionWrapperTypeData { ElementType: FuncTypeData func } when !func.HasInputParameters && func.ReturnType is not WrapperTypeData:
-                neededTypes.Add(func.ReturnType.Name);
-                break;
-        }
-    }
-
     private static ImmutableEquatableArray<FuncWrapperContainerEntry> CreateFuncWrapperContainerEntries(
-        ImmutableEquatableArray<ServiceLookupEntry> singletons,
-        ImmutableEquatableArray<ServiceLookupEntry> scoped,
-        ImmutableEquatableArray<ServiceLookupEntry> transients,
+        HashSet<string> neededTypes,
         IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
         ContainerNames names)
     {
-        var neededTypes = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach(var lifetime in new[] { singletons, scoped, transients })
-        {
-            foreach(var cached in lifetime)
-            {
-                var reg = cached.Registration;
-                ScanParamsForContainerFuncNeeds(reg.ImplementationType.ConstructorParameters, neededTypes);
-                ScanInjectionMembersForContainerFuncNeeds(reg.InjectionMembers, neededTypes);
-            }
-        }
-
         if(neededTypes.Count == 0)
             return [];
 
@@ -260,24 +166,10 @@ partial class IocSourceGenerator
     }
 
     private static ImmutableEquatableArray<KvpWrapperContainerEntry> CreateKvpWrapperContainerEntries(
-        ImmutableEquatableArray<ServiceLookupEntry> singletons,
-        ImmutableEquatableArray<ServiceLookupEntry> scoped,
-        ImmutableEquatableArray<ServiceLookupEntry> transients,
+        HashSet<(string KeyTypeName, string ValueTypeName)> neededPairs,
         IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
         ContainerNames names)
     {
-        var neededPairs = new HashSet<(string KeyTypeName, string ValueTypeName)>();
-
-        foreach(var lifetime in new[] { singletons, scoped, transients })
-        {
-            foreach(var cached in lifetime)
-            {
-                var reg = cached.Registration;
-                ScanParamsForKvpNeeds(reg.ImplementationType.ConstructorParameters, neededPairs);
-                ScanInjectionMembersForKvpNeeds(reg.InjectionMembers, neededPairs);
-            }
-        }
-
         if(neededPairs.Count == 0)
             return [];
 

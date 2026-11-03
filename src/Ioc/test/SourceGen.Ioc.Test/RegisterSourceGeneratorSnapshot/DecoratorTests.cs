@@ -216,6 +216,50 @@ public class DecoratorTests
     }
 
     [Test]
+    public async Task WrapperDependencies_OfDecoratorsAndFactories_GenerateWrapperRegistrations()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)])]
+            public class Foo : IFoo { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)], Key = "k")]
+            public class KeyedFoo : IFoo { }
+
+            public interface IBar { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IBar)], Decorators = [typeof(BarDecorator)])]
+            public class Bar : IBar { }
+
+            public class BarDecorator(IBar inner, Lazy<IFoo> lazy, IReadOnlyDictionary<string, IFoo> keyed) : IBar { }
+
+            public interface IBaz { }
+
+            public class Baz : IBaz { }
+
+            [IocRegisterFor(typeof(Baz), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IBaz)], Factory = nameof(BazFactory.Create))]
+            public static class BazFactory
+            {
+                public static IBaz Create(Func<IFoo> foo) => new Baz();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Decorator_WithInstance_LazyAndFuncResolveUndecoratedInstance()
     {
         const string source = """

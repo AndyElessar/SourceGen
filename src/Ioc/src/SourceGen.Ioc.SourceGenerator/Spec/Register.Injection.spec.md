@@ -71,14 +71,18 @@ When a parameter or member type is a recognized wrapper type, the generator reso
 
 **Direct `Lazy<T>` / `Func<...>`**: Standalone registrations are emitted so wrapper services can be resolved directly from DI. Lifetimes and tags are inherited from the matched inner service `T`.
 
+The wrapper demand (`Lazy<T>`, `Func<...>`, `KeyValuePair<K, V>`, dictionaries and collections) MUST be scanned from every dependency of a registration, the same way for the Register and Container outputs (`Grouping/WrapperDemand.cs`): its factory's parameters (or the implementation type's constructor parameters), its injection members, and its decorators' constructor parameters and injection members.
+
 One `Lazy<T>` / parameterless `Func<T>` registration is emitted per registration of `T`, so `IEnumerable<Lazy<T>>` contains one wrapper per implementation. Each MUST resolve that registration's instance, the same instance as resolving `T`:
 
 |Registration of `T`|Wrapper registration|Resolves|
 |---|---|---|
 |Non-keyed|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredService<Impl>()`|
-|Non-keyed, decorated|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredKeyedService<T>("SourceGen.Ioc.Decorated:{T}\|{Impl}")`, the hidden key of the decorator chain (see [Decorators](Register.Decorators.spec.md))|
+|Non-keyed, with its own instance|`services.AddXXX<Lazy<T>>(sp => ...)`|`sp.GetRequiredKeyedService<T>("SourceGen.Ioc.Decorated:{T}\|{Impl}")`, the hidden key of the service type's own instance (see [Decorators](Register.Decorators.spec.md) and [Generic factory](Register.Generics.spec.md))|
 |Keyed|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<Impl>(key)`|
-|Keyed, decorated|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
+|Keyed, with its own instance|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
+
+A service type has its own instance when decorators wrap it, or a factory it does not share with the implementation type creates it: a generic factory, or a factory of an async-init registration. An `Instance` registration is never decorated, so its wrappers resolve the implementation type.
 
 A keyed registration MUST NOT emit a non-keyed wrapper registration.
 

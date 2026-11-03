@@ -156,10 +156,12 @@ partial class IocSourceGenerator
         }
 
         var names = new ContainerNames(typeNames);
+        var featureFilteredRegistrations = new List<ServiceRegistrationModel>(registrations.Length);
 
         foreach(var reg in registrations)
         {
             var effectiveRegistration = hasAllInjectionFeatures ? reg : FilterRegistrationForFeatures(reg, features);
+            featureFilteredRegistrations.Add(effectiveRegistration);
 
             if(effectiveRegistration.IsOpenGeneric)
             {
@@ -264,7 +266,9 @@ partial class IocSourceGenerator
         // Async-init services are excluded from collection resolution (only Task<T> can access them).
         var collectionServiceTypes = new List<string>();
         var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<ServiceLookupEntry>>();
-        var requestedCollectionTypes = CollectRequestedCollectionServiceTypes(registrations, requestedCollectionServiceTypes);
+        var demand = WrapperDemand.Scan(featureFilteredRegistrations);
+        var requestedCollectionTypes = demand.CollectionServiceTypes;
+        requestedCollectionTypes.UnionWith(requestedCollectionServiceTypes);
 
         foreach(var kvp in serviceLookup)
         {
@@ -294,9 +298,9 @@ partial class IocSourceGenerator
 
         var serviceLookupEntries = new ServiceLookup(serviceLookup);
 
-        var lazyWrapperEntries = CreateLazyWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
-        var funcWrapperEntries = CreateFuncWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
-        var kvpWrapperEntries = CreateKvpWrapperContainerEntries(singletons, scoped, transients, serviceLookupEntries, names);
+        var lazyWrapperEntries = CreateLazyWrapperContainerEntries(demand.LazyServiceTypes, serviceLookupEntries, names);
+        var funcWrapperEntries = CreateFuncWrapperContainerEntries(demand.GetParameterlessFuncServiceTypes(), serviceLookupEntries, names);
+        var kvpWrapperEntries = CreateKvpWrapperContainerEntries(demand.KvpPairs, serviceLookupEntries, names);
 
         var lazyFieldByResolver = lazyWrapperEntries
             .Where(static e => e.IsShared)

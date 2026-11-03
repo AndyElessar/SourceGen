@@ -52,6 +52,22 @@ public sealed class InstanceServiceConsumer(IInstanceService direct, Lazy<IInsta
     public Func<IInstanceService> Factory => factory;
 }
 
+/// <summary>Service whose factory depends on a <c>Func&lt;T&gt;</c> wrapper that no other registration depends on.</summary>
+public interface IWrapperFactoryService
+{
+    IFactoryDep CreateDep();
+}
+
+internal sealed class WrapperFactoryService(Func<IFactoryDep> depFactory) : IWrapperFactoryService
+{
+    public IFactoryDep CreateDep() => depFactory();
+}
+
+internal static class WrapperFactoryServiceFactory
+{
+    public static IWrapperFactoryService Create(Func<IFactoryDep> depFactory) => new WrapperFactoryService(depFactory);
+}
+
 internal static class FactoryServiceFactory
 {
     public static IFactoryService Create(IFactoryDep dep) =>
@@ -83,6 +99,7 @@ internal static class DecoratedFactoryServiceFactory
 
 [IocRegisterFor<FactoryDep>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFactoryDep)])]
 [IocRegisterFor<FactoryService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFactoryService)], Factory = nameof(FactoryServiceFactory.Create))]
+[IocRegisterFor<WrapperFactoryService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IWrapperFactoryService)], Factory = nameof(WrapperFactoryServiceFactory.Create))]
 [IocRegisterFor<DecoratedFactoryService>(
     ServiceLifetime.Singleton,
     ServiceTypes = [typeof(IDecoratedFactoryService)],
