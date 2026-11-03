@@ -75,6 +75,7 @@ public sealed class FactoryAndInstanceTests
         var consumer = container.GetRequiredService<InstanceServiceConsumer>();
         var instance = container.GetRequiredService<IInstanceService>();
 
+        await Assert.That(instance.Name).IsEqualTo("InstanceService");
         await Assert.That(consumer.Direct).IsSameReferenceAs(instance);
         await Assert.That(consumer.Lazy.Value).IsSameReferenceAs(instance);
         await Assert.That(consumer.Factory()).IsSameReferenceAs(instance);
@@ -83,6 +84,22 @@ public sealed class FactoryAndInstanceTests
     #endregion
 
     #region MS.Extensions.DI Integration Tests
+
+    [Test]
+    public async Task InstanceConsumer_MsDi_ResolvesUndecoratedInstanceDirectlyAndThroughWrappers()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestCase();
+        await using var provider = services.BuildServiceProvider();
+
+        var consumer = provider.GetRequiredService<InstanceServiceConsumer>();
+        var instance = provider.GetRequiredService<IInstanceService>();
+
+        await Assert.That(instance.Name).IsEqualTo("InstanceService");
+        await Assert.That(consumer.Direct).IsSameReferenceAs(instance);
+        await Assert.That(consumer.Lazy.Value).IsSameReferenceAs(instance);
+        await Assert.That(consumer.Factory()).IsSameReferenceAs(instance);
+    }
 
     [Test]
     public async Task Factory_MsDi_ReturnsFactoryCreatedInstance()
