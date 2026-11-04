@@ -54,8 +54,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>? _asyncScopedService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncScopedService>? _asyncScopedServiceTask_As_IAsyncScopedService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> GetAsyncScopedServiceAsync() => _asyncScopedService ??= CreateAsyncScopedServiceAsync();
+
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncScopedService> GetAsyncScopedServiceAsync_As_IAsyncScopedService() => _asyncScopedServiceTask_As_IAsyncScopedService ??= __ProjectTask<global::TestNamespace.IAsyncScopedService, global::TestNamespace.AsyncScopedService>(GetAsyncScopedServiceAsync());
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> CreateAsyncScopedServiceAsync()
     {
@@ -244,7 +247,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>), static c => c.GetAsyncScopedServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncScopedService>), static c => __ProjectTask<global::TestNamespace.IAsyncScopedService, global::TestNamespace.AsyncScopedService>(c.GetAsyncScopedServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncScopedService>), static c => c.GetAsyncScopedServiceAsync_As_IAsyncScopedService()),
         __Resolver(typeof(global::TestNamespace.SyncScopedService), static c => c.GetSyncScopedService()),
         __Resolver(typeof(global::TestNamespace.ISyncScopedService), static c => c.GetSyncScopedService()),
     ];

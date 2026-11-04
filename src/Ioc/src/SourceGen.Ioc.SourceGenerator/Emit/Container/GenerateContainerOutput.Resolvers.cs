@@ -197,20 +197,12 @@ partial class IocSourceGenerator
 
         foreach(var accessor in container.PartialAccessors)
         {
-            var (resolveExpression, isAwaited) = ResolvePartialAccessorExpression(accessor, container, groups);
+            var resolveExpression = ResolvePartialAccessorExpression(accessor, container, groups);
 
             switch(accessor.Kind)
             {
                 case PartialAccessorKind.Method:
-                    // Only an awaited async-init resolver needs the 'async' modifier; other Task<T> accessors return a task
-                    if(isAwaited)
-                    {
-                        writer.WriteLine($"public partial async {accessor.ReturnTypeName} {accessor.Name}() => {resolveExpression};");
-                    }
-                    else
-                    {
-                        writer.WriteLine($"public partial {accessor.ReturnTypeName}{(accessor.IsNullable ? "?" : "")} {accessor.Name}() => {resolveExpression};");
-                    }
+                    writer.WriteLine($"public partial {accessor.ReturnTypeName}{(accessor.IsNullable ? "?" : "")} {accessor.Name}() => {resolveExpression};");
                     break;
 
                 case PartialAccessorKind.Property:
@@ -230,7 +222,7 @@ partial class IocSourceGenerator
     /// Looks up the registration by return type and optional key, with fallback to IServiceProvider.
     /// For <c>Task&lt;T&gt;</c> return types, routes through the async resolver.
     /// </summary>
-    private static (string Expression, bool IsAwaited) ResolvePartialAccessorExpression(
+    private static string ResolvePartialAccessorExpression(
         PartialAccessorData accessor,
         ContainerModel container,
         ContainerRegistrationGroups groups)
@@ -246,11 +238,12 @@ partial class IocSourceGenerator
                 switch(entry)
                 {
                     case AsyncServiceContainerEntry asyncEntry:
-                        return ($"await {asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false)", true);
+                        // The resolver already returns Task<innerType> (cached projection, or __ProjectTask for transients)
+                        return asyncEntry.FormatResolveExpression(innerTypeName, "");
                     case InstanceContainerEntry instanceEntry:
-                        return ($"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})", false);
+                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})";
                     case ServiceContainerEntry serviceEntry:
-                        return ($"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){serviceEntry.ResolverMethodName}())", false);
+                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){serviceEntry.ResolverMethodName}())";
                 }
             }
 
@@ -258,11 +251,11 @@ partial class IocSourceGenerator
             if(container.IntegrateServiceProvider)
             {
                 if(key is not null)
-                    return ($"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})", false);
-                return ($"({serviceType})GetRequiredService(typeof({serviceType}))", false);
+                    return $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})";
+                return $"({serviceType})GetRequiredService(typeof({serviceType}))";
             }
 
-            return ($"""throw new global::System.InvalidOperationException("Service '{innerTypeName}' is not registered.")""", false);
+            return $"""throw new global::System.InvalidOperationException("Service '{innerTypeName}' is not registered.")""";
         }
 
         // Try to find direct resolver in this container
@@ -271,9 +264,9 @@ partial class IocSourceGenerator
             switch(directEntry)
             {
                 case AsyncServiceContainerEntry asyncEntry:
-                    return ($"{asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false).GetAwaiter().GetResult()", false);
+                    return $"{asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false).GetAwaiter().GetResult()";
                 case ServiceContainerEntry serviceEntry:
-                    return (serviceEntry.FormatResolveExpression(serviceType, ""), false);
+                    return serviceEntry.FormatResolveExpression(serviceType, "");
             }
         }
 
@@ -282,20 +275,20 @@ partial class IocSourceGenerator
         {
             if(key is not null)
             {
-                return (accessor.IsNullable
+                return accessor.IsNullable
                     ? $"GetKeyedService(typeof({serviceType}), {key}) as {serviceType}"
-                    : $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})", false);
+                    : $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})";
             }
 
-            return (accessor.IsNullable
+            return accessor.IsNullable
                 ? $"GetService(typeof({serviceType})) as {serviceType}"
-                : $"({serviceType})GetRequiredService(typeof({serviceType}))", false);
+                : $"({serviceType})GetRequiredService(typeof({serviceType}))";
         }
 
         // No resolver found and no fallback: throw (analyzer should have caught this)
-        return (accessor.IsNullable
+        return accessor.IsNullable
             ? "default"
-            : $"""throw new global::System.InvalidOperationException("Service '{serviceType}' is not registered.")""", false);
+            : $"""throw new global::System.InvalidOperationException("Service '{serviceType}' is not registered.")""";
     }
 
     /// <summary>

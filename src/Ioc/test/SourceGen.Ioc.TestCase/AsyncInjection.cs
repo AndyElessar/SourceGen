@@ -47,7 +47,7 @@ internal sealed class AsyncInitService : IAsyncInitService
 [IocContainer(ExplicitOnly = true, ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim, EagerResolveOptions = EagerResolveOptions.None)]
 public sealed partial class AsyncInjectionModule
 {
-    /// <summary>Async accessor — generated as <c>async Task&lt;IAsyncInitService&gt;</c> → awaits the internal resolver.</summary>
+    /// <summary>Async accessor — returns the cached <c>Task&lt;IAsyncInitService&gt;</c> projection of the internal resolver.</summary>
     public partial Task<IAsyncInitService> GetAsyncInitServiceAsync();
 }
 

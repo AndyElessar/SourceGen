@@ -46,6 +46,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _isRootScope = false;
         _root = parent._root ?? parent;
         _asyncService = parent._asyncService;
+        _asyncServiceTask_As_IAsyncService = parent._asyncServiceTask_As_IAsyncService;
         _syncService = parent._syncService;
     }
 
@@ -54,8 +55,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService>? _asyncService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncService>? _asyncServiceTask_As_IAsyncService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService> GetAsyncServiceAsync() => _asyncService ?? _root?.GetAsyncServiceAsync() ?? (_asyncService = CreateAsyncServiceAsync());
+
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncService> GetAsyncServiceAsync_As_IAsyncService() => _asyncServiceTask_As_IAsyncService ?? _root?.GetAsyncServiceAsync_As_IAsyncService() ?? (_asyncServiceTask_As_IAsyncService = __ProjectTask<global::TestNamespace.IAsyncService, global::TestNamespace.AsyncService>(GetAsyncServiceAsync()));
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService> CreateAsyncServiceAsync()
     {
@@ -246,7 +250,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService>), static c => c.GetAsyncServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncService>), static c => __ProjectTask<global::TestNamespace.IAsyncService, global::TestNamespace.AsyncService>(c.GetAsyncServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IAsyncService>), static c => c.GetAsyncServiceAsync_As_IAsyncService()),
         __Resolver(typeof(global::TestNamespace.SyncService), static c => c.GetSyncService()),
         __Resolver(typeof(global::TestNamespace.ISyncService), static c => c.GetSyncService()),
     ];

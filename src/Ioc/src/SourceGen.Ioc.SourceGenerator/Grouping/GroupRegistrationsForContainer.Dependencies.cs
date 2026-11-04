@@ -171,12 +171,33 @@ partial class IocSourceGenerator
     /// <param name="LazyCollectionServiceTypes">Inner service types with a generated <c>Lazy&lt;T&gt;[]</c> resolver.</param>
     /// <param name="FuncCollectionServiceTypes">Inner service types with a generated <c>Func&lt;T&gt;[]</c> resolver.</param>
     /// <param name="Names">The container's member names for type names.</param>
+    /// <param name="ProjectedTasksByResolver">Cached <c>Task&lt;ServiceType&gt;</c> projections of async-init services, by resolver method name.</param>
     private sealed record class WrapperFieldLookup(
         IReadOnlyDictionary<string, string> LazyFieldByResolver,
         IReadOnlyDictionary<string, string> FuncFieldByResolver,
         HashSet<string> LazyCollectionServiceTypes,
         HashSet<string> FuncCollectionServiceTypes,
-        ContainerNames Names);
+        ContainerNames Names,
+        IReadOnlyDictionary<string, ImmutableEquatableArray<ProjectedTask>> ProjectedTasksByResolver)
+    {
+        /// <summary>
+        /// Gets the method returning the cached <c>Task&lt;<paramref name="serviceType"/>&gt;</c> projection of the async-init
+        /// service resolved by <paramref name="resolverMethodName"/>, or <see langword="null"/> when it has none.
+        /// </summary>
+        public string? GetProjectedTaskMethodName(string resolverMethodName, string serviceType)
+        {
+            if(ProjectedTasksByResolver.TryGetValue(resolverMethodName, out var projectedTasks))
+            {
+                foreach(var projected in projectedTasks)
+                {
+                    if(projected.ServiceType == serviceType)
+                        return projected.MethodName;
+                }
+            }
+
+            return null;
+        }
+    }
 
     private static ResolvedDependency ResolveParameterDependencyForContainerEntryModel(
         ParameterData parameter,
@@ -435,6 +456,11 @@ partial class IocSourceGenerator
                     var cached = innerRegistrations[^1];
                     if(cached.IsAsyncInit)
                     {
+                        if(wrapperFields.GetProjectedTaskMethodName(cached.ResolverMethodName, task.InnerType.Name) is { } projectedMethodName)
+                        {
+                            return new DirectServiceDependency(projectedMethodName);
+                        }
+
                         // Transient async-init services only have a creation method (no cached resolver)
                         var asyncMethodName = cached.Registration.Lifetime == ServiceLifetime.Transient
                             ? GetAsyncCreateMethodName(cached.ResolverMethodName)

@@ -47,6 +47,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _root = parent._root ?? parent;
         _syncImpl = parent._syncImpl;
         _asyncImpl = parent._asyncImpl;
+        _asyncImplTask_As_IMyService = parent._asyncImplTask_As_IMyService;
     }
 
     #endregion
@@ -67,8 +68,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>? _asyncImpl;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _asyncImplTask_As_IMyService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> GetAsyncImplAsync() => _asyncImpl ?? _root?.GetAsyncImplAsync() ?? (_asyncImpl = CreateAsyncImplAsync());
+
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetAsyncImplAsync_As_IMyService() => _asyncImplTask_As_IMyService ?? _root?.GetAsyncImplAsync_As_IMyService() ?? (_asyncImplTask_As_IMyService = __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.AsyncImpl>(GetAsyncImplAsync()));
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> CreateAsyncImplAsync()
     {
@@ -246,7 +250,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::TestNamespace.SyncImpl), static c => c.GetSyncImpl()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.AsyncImpl>(c.GetAsyncImplAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => c.GetAsyncImplAsync_As_IMyService()),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>), static c => c.GetAsyncImplAsync()),
     ];
 

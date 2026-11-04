@@ -312,7 +312,8 @@ partial class IocSourceGenerator
             funcFieldByResolver,
             new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
             new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
-            names);
+            names,
+            CreateProjectedTasks(lastWinsLookup, reservedNames, names));
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,
@@ -352,6 +353,78 @@ partial class IocSourceGenerator
             funcWrapperEntries,
             kvpWrapperEntries,
             collectionEntries);
+    }
+
+    /// <summary>
+    /// Creates the cached <c>Task&lt;ServiceType&gt;</c> projections of singleton/scoped async-init services: one for each
+    /// service type that resolves to the service but differs from its resolver's result type (<c>Task&lt;T&gt;</c> is invariant).
+    /// </summary>
+    private static Dictionary<string, ImmutableEquatableArray<ProjectedTask>> CreateProjectedTasks(
+        Dictionary<ServiceTypeKey, ServiceLookupEntry> lastWinsLookup,
+        ReservedMemberNames reservedNames,
+        ContainerNames names)
+    {
+        var projectedTasksByResolver = new Dictionary<string, List<ProjectedTask>>(StringComparer.Ordinal);
+
+        foreach(var kvp in lastWinsLookup)
+        {
+            var cached = kvp.Value;
+            var serviceType = kvp.Key.ServiceType;
+
+            if(!cached.IsAsyncInit
+                || cached.FieldName is null
+                || cached.Registration.Lifetime == ServiceLifetime.Transient
+                || serviceType == GetResolvedTypeName(cached.Registration))
+            {
+                continue;
+            }
+
+            if(!projectedTasksByResolver.TryGetValue(cached.ResolverMethodName, out var projectedTasks))
+            {
+                projectedTasks = [];
+                projectedTasksByResolver[cached.ResolverMethodName] = projectedTasks;
+            }
+
+            if(ContainsProjectedTask(projectedTasks, serviceType))
+            {
+                continue;
+            }
+
+            var safeServiceType = names.Get(serviceType);
+            var fieldName = $"{cached.FieldName}Task_As_{safeServiceType}";
+            var methodName = $"{cached.ResolverMethodName}Async_As_{safeServiceType}";
+
+            if(reservedNames.IsReservedFieldName(fieldName))
+            {
+                fieldName = $"{fieldName}_Resolve";
+            }
+
+            if(reservedNames.IsReservedResolverName(methodName))
+            {
+                methodName = $"{methodName}_Resolve";
+            }
+
+            projectedTasks.Add(new ProjectedTask(serviceType, fieldName, methodName));
+        }
+
+        var result = new Dictionary<string, ImmutableEquatableArray<ProjectedTask>>(projectedTasksByResolver.Count, StringComparer.Ordinal);
+        foreach(var kvp in projectedTasksByResolver)
+        {
+            result[kvp.Key] = kvp.Value.ToImmutableEquatableArray();
+        }
+
+        return result;
+
+        static bool ContainsProjectedTask(List<ProjectedTask> projectedTasks, string serviceType)
+        {
+            foreach(var projected in projectedTasks)
+            {
+                if(projected.ServiceType == serviceType)
+                    return true;
+            }
+
+            return false;
+        }
     }
 
     private static ImmutableEquatableDictionary<ServiceTypeKey, ContainerEntry> CreateLastWinsByServiceType(

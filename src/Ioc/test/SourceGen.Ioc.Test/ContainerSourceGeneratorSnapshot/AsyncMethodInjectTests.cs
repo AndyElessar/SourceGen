@@ -672,7 +672,7 @@ public class AsyncMethodInjectTests
     [Test]
     public async Task AsyncMethodInject_PartialTaskAccessor_GeneratesAsyncMethod()
     {
-        // A partial method returning Task<IMyService> → generated as async + await.
+        // A partial method returning Task<IMyService> → returns the cached Task<IMyService> projection (no async).
         const string source = """
             using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
@@ -840,5 +840,88 @@ public class AsyncMethodInjectTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_TransientPartialTaskAccessor_ReturnsProjectedTaskWithoutAsync()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer
+            {
+                public partial Task<IMyService> GetMyServiceAsync();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        // Transient tasks are never cached, so they are projected per resolution, without an async accessor
+        await Assert.That(generatedSource).Contains("public partial global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetMyServiceAsync() => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(CreateMyService_ResolveAsync());");
+        await Assert.That(generatedSource).DoesNotContain("Task_As_");
+    }
+
+    [Test]
+    [Arguments("InitMyServiceAsync", "InitMyService_ResolveAsync()")]
+    [Arguments("GetMyServiceAsync_As_IMyService", "GetMyServiceAsync_As_IMyService_Resolve()")]
+    public async Task AsyncMethodInject_UserMemberNamedLikeDerivedMethod_GetsResolveSuffix(string userMember, string expectedCall)
+    {
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer
+            {
+                private void {{userMember}}() { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains(expectedCall);
     }
 }

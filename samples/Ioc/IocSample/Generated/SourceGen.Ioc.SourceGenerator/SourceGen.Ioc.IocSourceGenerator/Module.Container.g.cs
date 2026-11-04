@@ -328,6 +328,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency>? _asyncDependency;
     private readonly global::System.Threading.Lock _asyncDependencyLock = new();
+    private global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency>? _asyncDependencyTask_As_IAsyncDependency;
 
     private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> GetAsyncDependencyAsync() => _asyncDependency ?? InitAsyncDependencyAsync();
 
@@ -338,6 +339,8 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
             return _asyncDependency ??= CreateAsyncDependencyAsync();
         }
     }
+
+    private global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency> GetAsyncDependencyAsync_As_IAsyncDependency() => _asyncDependencyTask_As_IAsyncDependency ??= __ProjectTask<global::IocSample.IAsyncDependency, global::IocSample.AsyncDependency>(GetAsyncDependencyAsync());
 
     private async global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> CreateAsyncDependencyAsync()
     {
@@ -399,7 +402,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private global::IocSample.AsyncDependentClass GetAsyncDependentClass()
     {
-        return new global::IocSample.AsyncDependentClass(__ProjectTask<global::IocSample.IAsyncDependency, global::IocSample.AsyncDependency>(GetAsyncDependencyAsync()));
+        return new global::IocSample.AsyncDependentClass(GetAsyncDependencyAsync_As_IAsyncDependency());
     }
 
     private global::IocSample.Basic2 GetBasic2()
@@ -608,7 +611,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     public partial global::IocSample.IKeyed GetKeyEnum() => GetKeyedEnum_IocSample_KeyEnum_Key0();
 
-    public partial async global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency> GetAsyncDependencyTask() => await GetAsyncDependencyAsync().ConfigureAwait(false);
+    public partial global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency> GetAsyncDependencyTask() => GetAsyncDependencyAsync_As_IAsyncDependency();
 
     #endregion
 
@@ -792,7 +795,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         __Resolver(typeof(global::IocSample.DependentClass2), static c => c.GetDependentClass2()),
         __Resolver(typeof(global::IocSample.Consumer), static c => c.GetConsumer()),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency>), static c => c.GetAsyncDependencyAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency>), static c => __ProjectTask<global::IocSample.IAsyncDependency, global::IocSample.AsyncDependency>(c.GetAsyncDependencyAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency>), static c => c.GetAsyncDependencyAsync_As_IAsyncDependency()),
         __Resolver(typeof(global::IocSample.Basic), static c => c.GetBasic_Resolve()),
         __Resolver(typeof(global::IocSample.FactoryService), static c => c.GetFactoryService_IocSample_Factory_Create()),
         __Resolver(typeof(global::IocSample.IFactoryService), static c => c.GetFactoryService2_IocSample_FactoryService2_Create()),

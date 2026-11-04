@@ -3,6 +3,12 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
+    /// A cached <c>Task&lt;ServiceType&gt;</c> projection of an async-init service task, stored in <paramref name="FieldName"/>
+    /// and returned by <paramref name="MethodName"/>.
+    /// </summary>
+    private readonly record struct ProjectedTask(string ServiceType, string FieldName, string MethodName);
+
+    /// <summary>
     /// Base for async-init service entries whose entry method returns <c>Task&lt;T&gt;</c>.
     /// </summary>
     private closed record class AsyncServiceContainerEntry(
@@ -67,6 +73,12 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
         ImmutableEquatableArray<ResolvedDecorator> Decorators) : AsyncServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
     {
+        /// <summary>
+        /// Gets the cached <c>Task&lt;ServiceType&gt;</c> projections of this entry's task, one per service type alias
+        /// that differs from the resolver's result type, so resolving an alias does not project the task again.
+        /// </summary>
+        public ImmutableEquatableArray<ProjectedTask> ProjectedTasks { get; init; } = [];
+
         public override string AsyncEntryMethodName => GetAsyncResolverMethodName(ResolverMethodName);
 
         public override bool IsEagerlyInitialized => IsEager;
@@ -74,15 +86,36 @@ partial class IocSourceGenerator
         // Scopes never create singletons themselves; the root owns and disposes them
         public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
 
+        public override string FormatResolveExpression(string serviceType, string receiver)
+        {
+            foreach(var projected in ProjectedTasks)
+            {
+                if(projected.ServiceType == serviceType)
+                    return $"{receiver}{projected.MethodName}()";
+            }
+
+            return base.FormatResolveExpression(serviceType, receiver);
+        }
+
         public override void WriteCopyFromParent(SourceWriter writer)
         {
             writer.WriteLine($"{FieldName} = parent.{FieldName};");
+
+            foreach(var projected in ProjectedTasks)
+            {
+                writer.WriteLine($"{projected.FieldName} = parent.{projected.FieldName};");
+            }
         }
 
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
             WriteSyncField(writer, ThreadSafeStrategy, FieldName);
+
+            foreach(var projected in ProjectedTasks)
+            {
+                writer.WriteLine($"private global::System.Threading.Tasks.Task<{projected.ServiceType}>? {projected.FieldName};");
+            }
         }
 
         public override void WriteResolver(SourceWriter writer)
@@ -115,7 +148,22 @@ partial class IocSourceGenerator
 
             writer.WriteLine();
 
+            WriteProjectedTaskMethods(writer);
             WriteCreateMethod(writer);
+        }
+
+        // Projections need no synchronization: concurrent first calls may each project the task,
+        // but every projection completes with the same instance.
+        private void WriteProjectedTaskMethods(SourceWriter writer)
+        {
+            foreach(var projected in ProjectedTasks)
+            {
+                if(DelegatesToRoot)
+                    writer.WriteLine($"private global::System.Threading.Tasks.Task<{projected.ServiceType}> {projected.MethodName}() => {projected.FieldName} ?? _root?.{projected.MethodName}() ?? ({projected.FieldName} = {ProjectTaskMethodName}<{projected.ServiceType}, {ResolvedTypeName}>({AsyncEntryMethodName}()));");
+                else
+                    writer.WriteLine($"private global::System.Threading.Tasks.Task<{projected.ServiceType}> {projected.MethodName}() => {projected.FieldName} ??= {ProjectTaskMethodName}<{projected.ServiceType}, {ResolvedTypeName}>({AsyncEntryMethodName}());");
+                writer.WriteLine();
+            }
         }
 
         public override void WriteEagerInit(SourceWriter writer)

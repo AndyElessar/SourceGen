@@ -92,6 +92,17 @@ partial class IocSourceGenerator
                 resolverNames.Add("Get" + name[6..]);
             }
 
+            // "Get{X}" first-initializes async-init services with "Init{X}Async"; any other method M with "{M}_InitAsync"
+            if(name.Length > 4 && name.StartsWith("Init", StringComparison.Ordinal) && TryRemoveSuffix(name[4..], "Async", out var initName))
+            {
+                resolverNames.Add("Get" + initName);
+            }
+
+            if(TryRemoveSuffix(name, "_InitAsync", out var initMethodName))
+            {
+                resolverNames.Add(initMethodName);
+            }
+
             // Any other method M creates with "{M}_Create"
             if(TryRemoveSuffix(name, "_Create", out var methodName)
                 && !(methodName.Length > 3 && methodName.StartsWith("Get", StringComparison.Ordinal)))

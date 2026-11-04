@@ -73,6 +73,21 @@ public sealed class AsyncInjectionTests
     }
 
     [Test]
+    public async Task AsyncInitService_ResolvedAsServiceTypeTask_ReturnsSameCachedTask()
+    {
+        using var fallback = new InjectionModule();
+        await using var module = new AsyncInjectionModule(fallback);
+        using var scope = module.CreateScope();
+
+        var fromAccessor = module.GetAsyncInitServiceAsync();
+        var fromProvider = module.GetRequiredService<Task<IAsyncInitService>>();
+        var fromScope = scope.ServiceProvider.GetRequiredService<Task<IAsyncInitService>>();
+
+        await Assert.That((object)fromProvider).IsSameReferenceAs(fromAccessor);
+        await Assert.That((object)fromScope).IsSameReferenceAs(fromAccessor);
+    }
+
+    [Test]
     public async Task AsyncInitService_CompareExchangeContainer_ConcurrentResolution_InitializesOnce()
     {
         ContendedAsyncInitServiceProbe.Reset();

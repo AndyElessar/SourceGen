@@ -61,6 +61,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _dependency = parent._dependency;
         _keyedDependency__keyed_ = parent._keyedDependency__keyed_;
         _asyncService = parent._asyncService;
+        _asyncServiceTask_As_IAsyncService = parent._asyncServiceTask_As_IAsyncService;
 
         // Initialize Lazy wrapper fields
         _lazy_IDependency_dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
@@ -99,6 +100,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService>? _asyncService;
     private readonly global::System.Threading.Lock _asyncServiceLock = new();
+    private global::System.Threading.Tasks.Task<global::Services.IAsyncService>? _asyncServiceTask_As_IAsyncService;
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService> GetAsyncServiceAsync() => _asyncService ?? _root?.GetAsyncServiceAsync() ?? InitAsyncServiceAsync();
 
@@ -109,6 +111,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return _asyncService ??= CreateAsyncServiceAsync();
         }
     }
+
+    private global::System.Threading.Tasks.Task<global::Services.IAsyncService> GetAsyncServiceAsync_As_IAsyncService() => _asyncServiceTask_As_IAsyncService ?? _root?.GetAsyncServiceAsync_As_IAsyncService() ?? (_asyncServiceTask_As_IAsyncService = __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetAsyncServiceAsync()));
 
     private async global::System.Threading.Tasks.Task<global::Services.AsyncService> CreateAsyncServiceAsync()
     {
@@ -136,7 +140,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::Services.Consumer GetConsumer()
     {
-        return new global::Services.Consumer(_lazy_IDependency_dependency, _func_IDependency_dependency, GetAllIDependencyArray(), GetAllKvp_string_IDependency_Dictionary(), __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(GetAsyncServiceAsync()));
+        return new global::Services.Consumer(_lazy_IDependency_dependency, _func_IDependency_dependency, GetAllIDependencyArray(), GetAllKvp_string_IDependency_Dictionary(), GetAsyncServiceAsync_As_IAsyncService());
     }
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
@@ -354,7 +358,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Services.Scoped), static c => c.GetScoped()),
         __Resolver(typeof(global::Services.IScoped), static c => c.GetScoped()),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.AsyncService>), static c => c.GetAsyncServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), static c => __ProjectTask<global::Services.IAsyncService, global::Services.AsyncService>(c.GetAsyncServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), static c => c.GetAsyncServiceAsync_As_IAsyncService()),
         __Resolver(typeof(global::Services.Consumer), static c => c.GetConsumer()),
         ..__CollectionResolvers<global::Services.IDependency>(static c => c.GetAllIDependencyArray()),
 

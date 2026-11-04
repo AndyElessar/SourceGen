@@ -80,6 +80,8 @@ When a registration contains one or more async inject methods, the container MUS
 |Condition|Required behavior|
 |:--------|:----------------|
 |Registration contains one or more `InjectionMemberType.AsyncMethod` members|The container MUST generate an async resolver path that returns `Task<ImplementationType>`. Service-type aliases MUST project from that resolver as `Task<ServiceType>`: resolver entries (dictionary, switch, and `IsService`) MUST be keyed by `Task<ServiceType>`, never by `ServiceType`. When `ServiceType` differs from the resolver's result type, the entry MUST project the task with the generated `__ProjectTask<TService, TResult>` helper, because `Task<T>` is invariant.|
+|Singleton or scoped async-init service resolved as `Task<ServiceType>` (`ServiceType` differs from the resolver's result type)|The container MUST cache the projected `Task<ServiceType>` in a per-alias field (`{field}Task_As_{ServiceType}`) returned by a non-`async` method (`{resolver}Async_As_{ServiceType}`), so repeated resolutions return the same task without allocating. Resolver entries, `Task<ServiceType>` dependencies, and partial accessors MUST use that method. The projection MUST NOT be synchronized: concurrent first calls MAY each project the task, because every projection completes with the same instance. A singleton projection in a child scope MUST return the root's projection (`_root?.…`), and scopes MUST copy the parent's projection fields.|
+|Transient async-init service resolved as `Task<ServiceType>`|The container MUST project each new task with `__ProjectTask<TService, TResult>` and MUST NOT cache it.|
 |Singleton or scoped async-init registration|The container MUST cache `Task<ImplementationType>` in a field.|
 |Transient async-init registration|The container MUST create a new `Task<ImplementationType>` per resolution and MUST NOT cache it.|
 |Multiple service-type aliases resolve the same implementation, key, and instance/factory identity|The container MUST share a single cached `Task<ImplementationType>` field. The deduplication key MUST be `(ImplementationType, Key, InstanceOrFactory)`. Service type is **not** part of the cache key.|
@@ -153,6 +155,8 @@ partial class AppContainer
 {
     private global::System.Threading.Tasks.Task<global::FooBar>? _fooBar;
     private readonly global::System.Threading.SemaphoreSlim _fooBarSemaphore = new(1, 1);
+    private global::System.Threading.Tasks.Task<global::IFoo>? _fooBarTask_As_IFoo;
+    private global::System.Threading.Tasks.Task<global::IBar>? _fooBarTask_As_IBar;
 
     public AppContainer(global::System.IServiceProvider? fallbackProvider)
     {
@@ -182,6 +186,11 @@ partial class AppContainer
         return await _fooBar.ConfigureAwait(false);
     }
 
+    // Cached projections: Task<T> is invariant, so each alias gets its own Task<ServiceType> once.
+    private global::System.Threading.Tasks.Task<global::IFoo> GetFooBarAsync_As_IFoo() => _fooBarTask_As_IFoo ?? _root?.GetFooBarAsync_As_IFoo() ?? (_fooBarTask_As_IFoo = __ProjectTask<global::IFoo, global::FooBar>(GetFooBarAsync()));
+
+    private global::System.Threading.Tasks.Task<global::IBar> GetFooBarAsync_As_IBar() => _fooBarTask_As_IBar ?? _root?.GetFooBarAsync_As_IBar() ?? (_fooBarTask_As_IBar = __ProjectTask<global::IBar, global::FooBar>(GetFooBarAsync()));
+
     private async global::System.Threading.Tasks.Task<global::FooBar> CreateFooBarAsync()
     {
         var instance = new global::FooBar()
@@ -194,15 +203,16 @@ partial class AppContainer
         return instance;
     }
 
-    public partial async global::System.Threading.Tasks.Task<global::IFoo> GetFooAsync() => await GetFooBarAsync().ConfigureAwait(false);
+    public partial global::System.Threading.Tasks.Task<global::IFoo> GetFooAsync() => GetFooBarAsync_As_IFoo();
 
-    public partial async global::System.Threading.Tasks.Task<global::IBar> GetBarAsync() => await GetFooBarAsync().ConfigureAwait(false);
+    public partial global::System.Threading.Tasks.Task<global::IBar> GetBarAsync() => GetFooBarAsync_As_IBar();
 }
 #endregion
 ```
 
 ```csharp
-// Invalid outcome (must not happen): aliases must not get separate task caches.
+// Invalid outcome (must not happen): aliases must not get separate Task<ImplementationType> caches
+// (only the projected Task<ServiceType> is cached per alias; it wraps the shared task).
 private global::System.Threading.Tasks.Task<global::FooBar>? _fooBar_IFoo;
 private global::System.Threading.Tasks.Task<global::FooBar>? _fooBar_IBar;
 ```
