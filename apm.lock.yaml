@@ -5,7 +5,8 @@ dependencies:
   materialization_repo_url: thomhurst/TUnit
   name: tunit
   host: github.com
-  resolved_commit: be55649946a870b7b2224542189f993344333d8d
+  resolved_commit: adb08b1a5cb4326e3bf4fd1f2e536fbaded1a458
+  resolved_ref: v1.72.16
   version: unknown
   virtual_path: skills/tunit
   is_virtual: true

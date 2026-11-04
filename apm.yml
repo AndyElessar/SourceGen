@@ -10,6 +10,7 @@ dependencies:
   apm:
     - git: https://github.com/thomhurst/TUnit
       path: skills/tunit
+      ref: v1.72.16
   mcp: []
 includes: auto
 scripts: {}
