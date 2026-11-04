@@ -135,10 +135,14 @@ public sealed class GeneratorBenchmarkInput
         optionsProvider: options,
         driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackSteps));
 
-    public static void Validate(GeneratorDriver driver, Compilation output)
+    /// <summary>
+    /// Throws when the generator failed, reported an error or generated nothing, or when <paramref name="output"/> has compile errors.
+    /// </summary>
+    /// <param name="output">The output compilation to check for compile errors, or <see langword="null"/> to skip binding it, which is the expensive part.</param>
+    public static void Validate(GeneratorDriver driver, Compilation? output)
     {
         var result = driver.GetRunResult();
-        var errors = result.Diagnostics.Concat(output.GetDiagnostics())
+        var errors = result.Diagnostics.Concat(output?.GetDiagnostics() ?? [])
             .Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
         if(result.Results.Any(static r => r.Exception is not null) || errors.Length > 0 || result.GeneratedTrees.IsEmpty)
         {
