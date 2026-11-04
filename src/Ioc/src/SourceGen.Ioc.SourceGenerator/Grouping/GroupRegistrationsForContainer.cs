@@ -188,6 +188,7 @@ partial class IocSourceGenerator
             closedEntries.Add((effectiveRegistration, cached));
         }
 
+        AvoidDerivedServiceNames(closedEntries, reservedNames);
         var decoratedNames = hasSplitDecorators ? new DecoratedServiceNames(closedEntries, reservedNames, names) : null;
 
         foreach(var (effectiveRegistration, cached) in closedEntries)
@@ -370,17 +371,57 @@ partial class IocSourceGenerator
     /// <summary>
     /// The member names generated for the container's services and Lazy/Func wrapper fields, so derived names can avoid them.
     /// Only the base names are stored; methods and fields derived from them (<c>Create…</c>, <c>…Async</c>, <c>Init…Async</c>,
-    /// <c>…Lock</c>, …) are matched by stripping the derivation from the checked name, without building candidate names.
+    /// <c>…Lock</c>, …) are matched by stripping the derivation from the checked name, without building candidate names;
+    /// only the <c>CollidesWith…</c> checks of new names build the names derived from them.
     /// </summary>
     private sealed class ServiceMemberNames
     {
         private static readonly string[] SynchronizationFieldSuffixes = ["Lock", "Semaphore", "SpinLock"];
+
+        /// <summary>
+        /// A service field F and its synchronization fields equal those of another service field G when F is G with one of
+        /// these suffixes: G's synchronization fields, or <c>"Spin"</c> since async-init services use <c>…Lock</c> under the
+        /// SpinLock strategy (F + <c>Lock</c> = G + <c>SpinLock</c>).
+        /// </summary>
+        private static readonly string[] ServiceFieldDerivationSuffixes = ["Lock", "Semaphore", "SpinLock", "Spin"];
 
         private readonly HashSet<string> resolverNames = new(StringComparer.Ordinal);
         private readonly HashSet<string> fieldNames = new(StringComparer.Ordinal);
 
         public ServiceMemberNames()
         {
+        }
+
+        public ServiceMemberNames(List<(ServiceRegistrationModel Registration, ServiceLookupEntry Cached)> entries)
+        {
+            foreach(var (_, cached) in entries)
+            {
+                Add(cached);
+            }
+        }
+
+        /// <summary>
+        /// Gets whether any resolver or field name ends like a name derived from another one
+        /// (see <see cref="IsDerivedServiceMethodName"/> and <see cref="IsDerivedServiceFieldName"/>).
+        /// </summary>
+        public static bool HasDerivationSuffix(List<(ServiceRegistrationModel Registration, ServiceLookupEntry Cached)> entries)
+        {
+            foreach(var (_, cached) in entries)
+            {
+                if(cached.ResolverMethodName.EndsWith("Async", StringComparison.Ordinal))
+                    return true;
+
+                if(cached.FieldName is not { } fieldName)
+                    continue;
+
+                foreach(var suffix in ServiceFieldDerivationSuffixes)
+                {
+                    if(fieldName.EndsWith(suffix, StringComparison.Ordinal))
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         public ServiceMemberNames(
@@ -468,6 +509,121 @@ partial class IocSourceGenerator
                 return true;
             return isAsync && syncName.Length > 5 && syncName.EndsWith("_Init", StringComparison.Ordinal) && resolverNames.Contains(syncName[..^5]);
         }
+
+        /// <summary>
+        /// Gets whether the members of a service resolver <paramref name="methodName"/> (<c>Get{X}</c>, <c>Create{X}</c> and
+        /// their async variants) equal those derived from a shorter resolver: <c>Get{Y}Async</c> is <c>Get{X}</c> when X is Y + <c>Async</c>.
+        /// </summary>
+        public bool IsDerivedServiceMethodName(string methodName)
+            => methodName.Length > 5 && methodName.EndsWith("Async", StringComparison.Ordinal) && resolverNames.Contains(methodName[..^5]);
+
+        /// <summary>
+        /// Gets whether a service field <paramref name="fieldName"/> or its synchronization fields equal those of a shorter
+        /// service field (see <see cref="ServiceFieldDerivationSuffixes"/>).
+        /// </summary>
+        public bool IsDerivedServiceFieldName(string fieldName)
+        {
+            foreach(var suffix in ServiceFieldDerivationSuffixes)
+            {
+                if(fieldName.Length > suffix.Length
+                    && fieldName.EndsWith(suffix, StringComparison.Ordinal)
+                    && fieldNames.Contains(fieldName[..^suffix.Length]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Gets whether a new service resolver <paramref name="methodName"/> or a method derived from it equals a generated
+        /// method: either side may be the derived one.
+        /// </summary>
+        public bool CollidesWithServiceMethod(string methodName)
+            => ContainsMethod(methodName) || resolverNames.Contains(GetAsyncResolverMethodName(methodName));
+
+        /// <summary>
+        /// Gets whether a new service field <paramref name="fieldName"/> or one of its synchronization fields equals a
+        /// generated field or synchronization field: either side may be the derived one.
+        /// </summary>
+        public bool CollidesWithServiceField(string fieldName)
+        {
+            if(fieldNames.Contains(fieldName) || IsDerivedServiceFieldName(fieldName))
+                return true;
+
+            foreach(var suffix in ServiceFieldDerivationSuffixes)
+            {
+                if(fieldNames.Contains(fieldName + suffix))
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Appends <c>_Resolve</c> to the resolver and field names of services whose members equal the members derived from
+    /// another service, e.g. the resolver <c>GetFooAsync</c> of <c>FooAsync</c> (the async resolver of async-init <c>Foo</c>),
+    /// or the field <c>_fooLock</c> of <c>FooLock</c> (the lock field of <c>Foo</c>). The longer name gets the suffix, so the
+    /// result does not depend on the registration order. Registrations sharing a name keep sharing the new name.
+    /// </summary>
+    private static void AvoidDerivedServiceNames(
+        List<(ServiceRegistrationModel Registration, ServiceLookupEntry Cached)> entries,
+        ReservedMemberNames reservedNames)
+    {
+        // Most containers have no name ending like a derivation: check that before building the name sets
+        if(!ServiceMemberNames.HasDerivationSuffix(entries))
+            return;
+
+        var memberNames = new ServiceMemberNames(entries);
+        var newMethodNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var newFieldNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for(var i = 0; i < entries.Count; i++)
+        {
+            var (registration, cached) = entries[i];
+
+            if(!newMethodNames.TryGetValue(cached.ResolverMethodName, out var methodName))
+            {
+                methodName = cached.ResolverMethodName;
+                if(memberNames.IsDerivedServiceMethodName(methodName))
+                {
+                    do
+                    {
+                        methodName = $"{methodName}_Resolve";
+                    }
+                    while(reservedNames.IsReservedResolverName(methodName) || memberNames.CollidesWithServiceMethod(methodName));
+
+                    memberNames.AddMethod(methodName);
+                }
+
+                newMethodNames[cached.ResolverMethodName] = methodName;
+            }
+
+            var fieldName = cached.FieldName;
+            if(cached.FieldName is { } oldFieldName && !newFieldNames.TryGetValue(oldFieldName, out fieldName))
+            {
+                fieldName = oldFieldName;
+                if(memberNames.IsDerivedServiceFieldName(fieldName))
+                {
+                    do
+                    {
+                        fieldName = $"{fieldName}_Resolve";
+                    }
+                    while(reservedNames.IsReservedFieldName(fieldName) || memberNames.CollidesWithServiceField(fieldName));
+
+                    memberNames.AddField(fieldName);
+                }
+
+                newFieldNames[oldFieldName] = fieldName;
+            }
+
+            if(methodName != cached.ResolverMethodName || fieldName != cached.FieldName)
+            {
+                entries[i] = (registration, cached with { ResolverMethodName = methodName, FieldName = fieldName });
+            }
+        }
     }
 
     /// <summary>
@@ -476,7 +632,7 @@ partial class IocSourceGenerator
     /// </summary>
     private sealed class DecoratedServiceNames
     {
-        private readonly ServiceMemberNames memberNames = new();
+        private readonly ServiceMemberNames memberNames;
         private readonly Dictionary<(string InnerResolverMethodName, string ServiceType), (string MethodName, string FieldName)> assignedNames = [];
         private readonly ReservedMemberNames reservedNames;
         private readonly ContainerNames names;
@@ -486,13 +642,9 @@ partial class IocSourceGenerator
             ReservedMemberNames reservedNames,
             ContainerNames names)
         {
+            memberNames = new ServiceMemberNames(undecoratedEntries);
             this.reservedNames = reservedNames;
             this.names = names;
-
-            foreach(var (_, cached) in undecoratedEntries)
-            {
-                memberNames.Add(cached);
-            }
         }
 
         public (string MethodName, string FieldName) Get(ServiceLookupEntry inner, string serviceType)
@@ -505,12 +657,13 @@ partial class IocSourceGenerator
             var methodName = $"{inner.ResolverMethodName}_As_{safeServiceType}";
             var fieldName = $"{inner.FieldName}_As_{safeServiceType}";
 
-            while(reservedNames.IsReservedResolverName(methodName) || memberNames.ContainsMethod(methodName))
+            // Decorated entries have Create/async methods and synchronization fields of their own
+            while(reservedNames.IsReservedResolverName(methodName) || memberNames.CollidesWithServiceMethod(methodName))
             {
                 methodName = $"{methodName}_Resolve";
             }
 
-            while(reservedNames.IsReservedFieldName(fieldName) || memberNames.ContainsField(fieldName))
+            while(reservedNames.IsReservedFieldName(fieldName) || memberNames.CollidesWithServiceField(fieldName))
             {
                 fieldName = $"{fieldName}_Resolve";
             }

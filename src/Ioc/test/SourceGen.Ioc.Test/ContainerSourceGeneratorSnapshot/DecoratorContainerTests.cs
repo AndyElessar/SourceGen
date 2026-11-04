@@ -83,12 +83,14 @@ public class DecoratorContainerTests
     }
 
     [Test]
-    [Arguments("TypeName")]
-    [Arguments("Key")]
-    public async Task Container_WithServiceNamedLikeDecoratedEntry_DecoratedEntryGetsResolveSuffix(string collision)
+    [Arguments("TypeName", "GetHandler_As_IHandler_Resolve()")]
+    [Arguments("Key", "GetHandler_As_IHandler_Resolve()")]
+    [Arguments("LockTypeName", "_handler_As_IHandler_ResolveLock")]
+    public async Task Container_WithServiceNamedLikeDecoratedEntry_DecoratedEntryGetsResolveSuffix(string collision, string expectedMember)
     {
-        // Both produce GetHandler_As_IHandler / _handler_As_IHandler, the names derived for the decorated IHandler entry:
-        // a service type named Handler_As_IHandler, or Handler keyed with the expression As.IHandler
+        // A service type named Handler_As_IHandler, or Handler keyed with the expression As.IHandler, produces
+        // GetHandler_As_IHandler / _handler_As_IHandler, the names derived for the decorated IHandler entry;
+        // Handler_As_IHandlerLock produces _handler_As_IHandlerLock, the lock field of the decorated entry
         var (globalUsing, collidingType, containerAttribute) = collision switch
         {
             "TypeName" => (
@@ -96,6 +98,13 @@ public class DecoratorContainerTests
                 """
                 [IocRegister(Lifetime = ServiceLifetime.Scoped)]
                 public class Handler_As_IHandler { }
+                """,
+                ""),
+            "LockTypeName" => (
+                "",
+                """
+                [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+                public class Handler_As_IHandlerLock { }
                 """,
                 ""),
             _ => (
@@ -135,8 +144,7 @@ public class DecoratorContainerTests
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
-        await Assert.That(generatedSource).Contains("GetHandler_As_IHandler_Resolve()");
-        await Assert.That(generatedSource).Contains("_handler_As_IHandler_Resolve");
+        await Assert.That(generatedSource).Contains(expectedMember);
         await Verify(generatedSource).UseParameters(collision);
     }
 
