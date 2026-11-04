@@ -158,6 +158,10 @@ partial class IocSourceGenerator
         var names = new ContainerNames(typeNames);
         var featureFilteredRegistrations = new List<ServiceRegistrationModel>(registrations.Length);
 
+        // The undecorated entries are created first, so the names derived for decorated entries can avoid all of them
+        var closedEntries = new List<(ServiceRegistrationModel Registration, ServiceLookupEntry Cached)>(registrations.Length);
+        var hasSplitDecorators = false;
+
         foreach(var reg in registrations)
         {
             var effectiveRegistration = hasAllInjectionFeatures ? reg : FilterRegistrationForFeatures(reg, features);
@@ -173,6 +177,7 @@ partial class IocSourceGenerator
             // A decorated registration is split like the Register output: the implementation type resolves the
             // undecorated instance, and the service type wraps that same instance with the decorators.
             var splitDecorators = effectiveRegistration.AppliesDecorators;
+            hasSplitDecorators |= splitDecorators;
 
             // Pre-compute field and method names once, including IsEager flag
             var cached = CreateServiceLookupEntry(
@@ -180,11 +185,18 @@ partial class IocSourceGenerator
                 eagerResolveOptions,
                 reservedNames,
                 names);
+            closedEntries.Add((effectiveRegistration, cached));
+        }
+
+        var decoratedNames = hasSplitDecorators ? new DecoratedServiceNames(closedEntries, reservedNames, names) : null;
+
+        foreach(var (effectiveRegistration, cached) in closedEntries)
+        {
             var serviceCached = cached;
 
-            if(splitDecorators)
+            if(effectiveRegistration.AppliesDecorators)
             {
-                serviceCached = CreateDecoratedServiceLookupEntry(effectiveRegistration, cached, eagerResolveOptions, reservedNames, names);
+                serviceCached = CreateDecoratedServiceLookupEntry(effectiveRegistration, cached, eagerResolveOptions, reservedNames, decoratedNames!);
 
                 var decoratedMap = effectiveRegistration.Lifetime switch
                 {
@@ -367,6 +379,10 @@ partial class IocSourceGenerator
         private readonly HashSet<string> resolverNames = new(StringComparer.Ordinal);
         private readonly HashSet<string> fieldNames = new(StringComparer.Ordinal);
 
+        public ServiceMemberNames()
+        {
+        }
+
         public ServiceMemberNames(
             Dictionary<ServiceTypeKey, List<ServiceLookupEntry>> serviceLookup,
             ImmutableEquatableArray<LazyWrapperContainerEntry> lazyWrapperEntries,
@@ -376,11 +392,7 @@ partial class IocSourceGenerator
             {
                 foreach(var cached in registrations)
                 {
-                    resolverNames.Add(cached.ResolverMethodName);
-                    if(cached.FieldName is { } fieldName)
-                    {
-                        fieldNames.Add(fieldName);
-                    }
+                    Add(cached);
                 }
             }
 
@@ -392,6 +404,15 @@ partial class IocSourceGenerator
             foreach(var entry in funcWrapperEntries)
             {
                 fieldNames.Add(entry.FieldName);
+            }
+        }
+
+        public void Add(ServiceLookupEntry cached)
+        {
+            resolverNames.Add(cached.ResolverMethodName);
+            if(cached.FieldName is { } fieldName)
+            {
+                fieldNames.Add(fieldName);
             }
         }
 
@@ -446,6 +467,59 @@ partial class IocSourceGenerator
             if(syncName.Length > 7 && syncName.EndsWith("_Create", StringComparison.Ordinal) && resolverNames.Contains(syncName[..^7]))
                 return true;
             return isAsync && syncName.Length > 5 && syncName.EndsWith("_Init", StringComparison.Ordinal) && resolverNames.Contains(syncName[..^5]);
+        }
+    }
+
+    /// <summary>
+    /// Names of decorated service entries (<c>{inner}_As_{ServiceType}</c>), unique among the members generated for the
+    /// undecorated entries and the other decorated entries. The same inner entry and service type always get the same names.
+    /// </summary>
+    private sealed class DecoratedServiceNames
+    {
+        private readonly ServiceMemberNames memberNames = new();
+        private readonly Dictionary<(string InnerResolverMethodName, string ServiceType), (string MethodName, string FieldName)> assignedNames = [];
+        private readonly ReservedMemberNames reservedNames;
+        private readonly ContainerNames names;
+
+        public DecoratedServiceNames(
+            List<(ServiceRegistrationModel Registration, ServiceLookupEntry Cached)> undecoratedEntries,
+            ReservedMemberNames reservedNames,
+            ContainerNames names)
+        {
+            this.reservedNames = reservedNames;
+            this.names = names;
+
+            foreach(var (_, cached) in undecoratedEntries)
+            {
+                memberNames.Add(cached);
+            }
+        }
+
+        public (string MethodName, string FieldName) Get(ServiceLookupEntry inner, string serviceType)
+        {
+            var key = (inner.ResolverMethodName, serviceType);
+            if(assignedNames.TryGetValue(key, out var assigned))
+                return assigned;
+
+            var safeServiceType = names.Get(serviceType);
+            var methodName = $"{inner.ResolverMethodName}_As_{safeServiceType}";
+            var fieldName = $"{inner.FieldName}_As_{safeServiceType}";
+
+            while(reservedNames.IsReservedResolverName(methodName) || memberNames.ContainsMethod(methodName))
+            {
+                methodName = $"{methodName}_Resolve";
+            }
+
+            while(reservedNames.IsReservedFieldName(fieldName) || memberNames.ContainsField(fieldName))
+            {
+                fieldName = $"{fieldName}_Resolve";
+            }
+
+            memberNames.AddMethod(methodName);
+            memberNames.AddField(fieldName);
+            assigned = (methodName, fieldName);
+            assignedNames[key] = assigned;
+            return assigned;
         }
     }
 

@@ -83,6 +83,64 @@ public class DecoratorContainerTests
     }
 
     [Test]
+    [Arguments("TypeName")]
+    [Arguments("Key")]
+    public async Task Container_WithServiceNamedLikeDecoratedEntry_DecoratedEntryGetsResolveSuffix(string collision)
+    {
+        // Both produce GetHandler_As_IHandler / _handler_As_IHandler, the names derived for the decorated IHandler entry:
+        // a service type named Handler_As_IHandler, or Handler keyed with the expression As.IHandler
+        var (globalUsing, collidingType, containerAttribute) = collision switch
+        {
+            "TypeName" => (
+                "",
+                """
+                [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+                public class Handler_As_IHandler { }
+                """,
+                ""),
+            _ => (
+                "global using As = TestNamespace.HandlerKeys;",
+                """public static class HandlerKeys { public const string IHandler = "keyed"; }""",
+                """[IocRegisterFor(typeof(Handler), Lifetime = ServiceLifetime.Scoped, Key = "As.IHandler", KeyType = KeyType.Csharp)]"""),
+        };
+
+        var source = $$"""
+            {{globalUsing}}
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { void Handle(); }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler)], Decorators = [typeof(LoggingDecorator)])]
+            public class Handler : IHandler
+            {
+                public void Handle() { }
+            }
+
+            public class LoggingDecorator(IHandler inner) : IHandler
+            {
+                public void Handle() => inner.Handle();
+            }
+
+            {{collidingType}}
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            {{containerAttribute}}
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("GetHandler_As_IHandler_Resolve()");
+        await Assert.That(generatedSource).Contains("_handler_As_IHandler_Resolve");
+        await Verify(generatedSource).UseParameters(collision);
+    }
+
+    [Test]
     public async Task Container_WithFactoryAndDecorators_WrapsFactoryCreatedImplementationInstance()
     {
         const string source = """
