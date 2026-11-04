@@ -43,7 +43,7 @@ jobs:
       - name: Restore benchmark project
         run: dotnet restore src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj
 
-      - name: Run ThreadSafeStrategy and RealisticApp benchmarks (NativeAOT)
+      - name: Run ThreadSafeStrategy, RealisticApp and AsyncInit benchmarks (NativeAOT)
         working-directory: src/Ioc/test/SourceGen.Ioc.Benchmark
         run: |
           dotnet run \
@@ -52,7 +52,7 @@ jobs:
             -f net10.0 \
             -- \
             --runtimes nativeaot10.0 \
-            --filter "*ThreadSafeStrategyBenchmark*" "*RealisticAppBenchmark*"
+            --filter "*ThreadSafeStrategyBenchmark*" "*RealisticAppBenchmark*" "*AsyncInitBenchmark*"
 
       - name: Publish benchmark summary
         if: always()
@@ -77,7 +77,7 @@ jobs:
             echo "## NativeAOT Benchmark Summary"
             echo
             echo "- Runtime: \`nativeaot10.0\`"
-            echo "- Filters: \`*ThreadSafeStrategyBenchmark*\`, \`*RealisticAppBenchmark*\`"
+            echo "- Filters: \`*ThreadSafeStrategyBenchmark*\`, \`*RealisticAppBenchmark*\`, \`*AsyncInitBenchmark*\`"
             if [[ -n "$results_dir" ]]; then
               echo "- Results directory: \`$results_dir\`"
             fi
@@ -98,6 +98,7 @@ jobs:
           reports=(
             "$results_dir"/*ThreadSafeStrategyBenchmark*-report-github.md
             "$results_dir"/*RealisticAppBenchmark*-report-github.md
+            "$results_dir"/*AsyncInitBenchmark*-report-github.md
           )
 
           if [[ ${#reports[@]} -eq 0 ]]; then
