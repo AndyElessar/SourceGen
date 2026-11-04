@@ -16,7 +16,7 @@ public interface IAppConfiguration
     string GetSetting(string key);
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IAppConfiguration)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IAppConfiguration)])]
 public sealed class AppConfiguration : IAppConfiguration
 {
     private readonly Dictionary<string, string> _settings = new()
@@ -39,7 +39,7 @@ public interface IAppLogger<TCategory>
     void LogError(string message, Exception? ex = null);
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IAppLogger<>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IAppLogger<>)])]
 public sealed class AppLogger<TCategory> : IAppLogger<TCategory>
 {
     public void LogInfo(string message) { /* Simulate logging */ }
@@ -55,7 +55,7 @@ public interface ICacheService
     void Set<T>(string key, T value, TimeSpan? expiry = null);
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ICacheService)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ICacheService)])]
 public sealed class CacheService : ICacheService
 {
     private readonly Dictionary<string, object> _cache = [];
@@ -77,7 +77,7 @@ public interface IDbContext : IDisposable
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IDbContext)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IDbContext)])]
 public sealed class AppDbContext : IDbContext
 {
     public Guid ConnectionId { get; } = Guid.NewGuid();
@@ -110,7 +110,7 @@ public sealed record Order(int Id, int UserId, decimal Total, DateTime CreatedAt
 /// </summary>
 public sealed record Product(int Id, string Name, decimal Price);
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<User>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<User>)])]
 public sealed class UserRepository(IDbContext dbContext, IAppLogger<UserRepository> logger) : IRepository<User>
 {
     private readonly IDbContext _dbContext = dbContext;
@@ -130,7 +130,7 @@ public sealed class UserRepository(IDbContext dbContext, IAppLogger<UserReposito
     public Task AddAsync(User entity) => Task.CompletedTask;
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<Order>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<Order>)])]
 public sealed class OrderRepository(IDbContext dbContext, IAppLogger<OrderRepository> logger) : IRepository<Order>
 {
     private readonly IDbContext _dbContext = dbContext;
@@ -150,7 +150,7 @@ public sealed class OrderRepository(IDbContext dbContext, IAppLogger<OrderReposi
     public Task AddAsync(Order entity) => Task.CompletedTask;
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<Product>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepository<Product>)])]
 public sealed class ProductRepository(IDbContext dbContext, ICacheService cache) : IRepository<Product>
 {
     private readonly IDbContext _dbContext = dbContext;
@@ -191,7 +191,7 @@ public interface IUserService
     Task<IReadOnlyList<Order>> GetUserOrdersAsync(int userId);
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IUserService)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IUserService)])]
 public sealed class UserService(
     IRepository<User> userRepository,
     IRepository<Order> orderRepository,
@@ -224,7 +224,7 @@ public interface IOrderService
     Task<Order> CreateOrderAsync(int userId, List<int> productIds);
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IOrderService)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IOrderService)])]
 public sealed class OrderService(
     IRepository<Order> orderRepository,
     IRepository<Product> productRepository,
@@ -274,7 +274,7 @@ public interface ICatalogService
     Task<IReadOnlyList<Product>> GetFeaturedProductsAsync();
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ICatalogService)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ICatalogService)])]
 public sealed class CatalogService(
     IRepository<Product> productRepository,
     ICacheService cache,
@@ -319,7 +319,7 @@ public interface IRequestContext
     string? UserId { get; }
 }
 
-[IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestContext)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestContext)])]
 public sealed class RequestContext : IRequestContext
 {
     public Guid RequestId { get; } = Guid.NewGuid();
@@ -344,7 +344,7 @@ public sealed record GetUserRequest(int UserId);
 /// </summary>
 public sealed record GetUserResponse(User? User, IReadOnlyList<Order> Orders);
 
-[IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestHandler<GetUserRequest, GetUserResponse>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestHandler<GetUserRequest, GetUserResponse>)])]
 public sealed class GetUserHandler(
     IUserService userService,
     IRequestContext requestContext,
@@ -377,7 +377,7 @@ public sealed record CreateOrderRequest(int UserId, List<int> ProductIds);
 /// </summary>
 public sealed record CreateOrderResponse(Order Order);
 
-[IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestHandler<CreateOrderRequest, CreateOrderResponse>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestHandler<CreateOrderRequest, CreateOrderResponse>)])]
 public sealed class CreateOrderHandler(
     IOrderService orderService,
     IRequestContext requestContext,
@@ -406,7 +406,7 @@ public sealed record GetProductRequest(int ProductId);
 /// </summary>
 public sealed record GetProductResponse(Product? Product);
 
-[IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestHandler<GetProductRequest, GetProductResponse>)])]
+[IocRegister(Tags = ["Realistic"], Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IRequestHandler<GetProductRequest, GetProductResponse>)])]
 public sealed class GetProductHandler(
     ICatalogService catalogService,
     IRequestContext requestContext,
@@ -429,37 +429,37 @@ public sealed class GetProductHandler(
 
 #region Realistic Benchmark Containers
 
-[IocContainer]
+[IocContainer(IncludeTags = ["Realistic"])]
 public sealed partial class RealisticContainerDefault;
 
 /// <summary>
 /// Realistic container with ThreadSafeStrategy.None for benchmarking.
 /// </summary>
-[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None)]
+[IocContainer(IncludeTags = ["Realistic"], ThreadSafeStrategy = ThreadSafeStrategy.None)]
 public sealed partial class RealisticContainerNone;
 
 /// <summary>
 /// Realistic container with ThreadSafeStrategy.Lock for benchmarking.
 /// </summary>
-[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock)]
+[IocContainer(IncludeTags = ["Realistic"], ThreadSafeStrategy = ThreadSafeStrategy.Lock)]
 public sealed partial class RealisticContainerLock;
 
 /// <summary>
 /// Realistic container with ThreadSafeStrategy.SemaphoreSlim for benchmarking.
 /// </summary>
-[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim)]
+[IocContainer(IncludeTags = ["Realistic"], ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim)]
 public sealed partial class RealisticContainerSemaphoreSlim;
 
 /// <summary>
 /// Realistic container with ThreadSafeStrategy.SpinLock for benchmarking.
 /// </summary>
-[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SpinLock)]
+[IocContainer(IncludeTags = ["Realistic"], ThreadSafeStrategy = ThreadSafeStrategy.SpinLock)]
 public sealed partial class RealisticContainerSpinLock;
 
 /// <summary>
 /// Realistic container with ThreadSafeStrategy.CompareExchange for benchmarking.
 /// </summary>
-[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange)]
+[IocContainer(IncludeTags = ["Realistic"], ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange)]
 public sealed partial class RealisticContainerCompareExchange;
 
 #endregion

@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Import the props file to make SourceGenIocFeatures visible to the generator (simulating PackageReference behavior) -->
+  <Import Project="..\..\src\SourceGen.Ioc\build\SourceGen.Ioc.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <SourceGenIocFeatures>Register,Container,PropertyInject,MethodInject,AsyncMethodInject</SourceGenIocFeatures>
     <!-- BenchmarkDotNet requires Release configuration for accurate results -->
     <Optimize>true</Optimize>
   </PropertyGroup>
