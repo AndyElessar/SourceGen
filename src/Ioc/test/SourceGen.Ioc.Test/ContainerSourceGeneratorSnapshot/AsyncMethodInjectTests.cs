@@ -187,6 +187,7 @@ public class AsyncMethodInjectTests
         await Assert.That(generatedSource).Contains("lock(_myServiceLock)");
         await Assert.That(generatedSource).DoesNotContain("SpinLock");
         await Assert.That(generatedSource).DoesNotContain("Interlocked.CompareExchange(ref _myService");
+        await Verify(generatedSource).UseParameters(strategy);
     }
 
     [Test]
@@ -882,6 +883,7 @@ public class AsyncMethodInjectTests
         // Transient tasks are never cached, so they are projected per resolution, without an async accessor
         await Assert.That(generatedSource).Contains("public partial global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetMyServiceAsync() => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(CreateMyService_ResolveAsync());");
         await Assert.That(generatedSource).DoesNotContain("Task_As_");
+        await Verify(generatedSource);
     }
 
     [Test]
@@ -923,5 +925,6 @@ public class AsyncMethodInjectTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Assert.That(generatedSource).Contains(expectedCall);
+        await Verify(generatedSource).UseParameters(userMember);
     }
 }
