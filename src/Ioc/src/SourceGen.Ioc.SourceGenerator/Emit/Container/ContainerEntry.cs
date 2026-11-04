@@ -62,17 +62,9 @@ partial class IocSourceGenerator
         public virtual bool DelegatesToRoot => false;
 
         /// <summary>
-        /// Gets whether the root constructors allocate this entry's synchronization field: scopes delegate creation
-        /// to the root, so they never use it (see <see cref="WriteRootSyncFieldInit"/>).
+        /// Gets the strategy of the synchronization field this entry declares (<see cref="ThreadSafeStrategy.None"/> when none).
         /// </summary>
-        public virtual bool HasRootOnlySyncField => false;
-
-        /// <summary>
-        /// Writes the root constructor statement allocating this entry's synchronization field.
-        /// </summary>
-        public virtual void WriteRootSyncFieldInit(SourceWriter writer)
-        {
-        }
+        public virtual ThreadSafeStrategy SynchronizationStrategy => ThreadSafeStrategy.None;
     }
 
     private closed record class ServiceContainerEntry(

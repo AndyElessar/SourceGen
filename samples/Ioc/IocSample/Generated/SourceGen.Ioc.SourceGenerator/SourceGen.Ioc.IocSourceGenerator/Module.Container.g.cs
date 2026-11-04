@@ -310,12 +310,12 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     }
 
     private global::IocSample.Default2? _default2;
-    private readonly global::System.Threading.Lock _default2Lock = new();
+    private global::System.Threading.Lock? _default2Lock;
     private global::IocSample.Default2 GetDefault2() => _default2 ?? CreateDefault2();
 
     private global::IocSample.Default2 CreateDefault2()
     {
-        lock(_default2Lock)
+        lock(_default2Lock ?? __CreateLock(ref _default2Lock))
         {
             if(_default2 is not null) return _default2;
 
@@ -327,14 +327,14 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     }
 
     private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency>? _asyncDependency;
-    private readonly global::System.Threading.Lock _asyncDependencyLock = new();
+    private global::System.Threading.Lock? _asyncDependencyLock;
     private global::System.Threading.Tasks.Task<global::IocSample.IAsyncDependency>? _asyncDependencyTask_As_IAsyncDependency;
 
     private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> GetAsyncDependencyAsync() => _asyncDependency ?? InitAsyncDependencyAsync();
 
     private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> InitAsyncDependencyAsync()
     {
-        lock(_asyncDependencyLock)
+        lock(_asyncDependencyLock ?? __CreateLock(ref _asyncDependencyLock))
         {
             return _asyncDependency ??= CreateAsyncDependencyAsync();
         }
@@ -350,12 +350,12 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     }
 
     private global::IocSample.Basic? _basic;
-    private readonly global::System.Threading.Lock _basicLock = new();
+    private global::System.Threading.Lock? _basicLock;
     private global::IocSample.Basic GetBasic_Resolve() => _basic ?? CreateBasic_Resolve();
 
     private global::IocSample.Basic CreateBasic_Resolve()
     {
-        lock(_basicLock)
+        lock(_basicLock ?? __CreateLock(ref _basicLock))
         {
             if(_basic is not null) return _basic;
 
@@ -367,12 +367,12 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     }
 
     private global::IocSample.FactoryService? _factoryService_IocSample_Factory_Create;
-    private readonly global::System.Threading.Lock _factoryService_IocSample_Factory_CreateLock = new();
+    private global::System.Threading.Lock? _factoryService_IocSample_Factory_CreateLock;
     private global::IocSample.FactoryService GetFactoryService_IocSample_Factory_Create() => _factoryService_IocSample_Factory_Create ?? CreateFactoryService_IocSample_Factory_Create();
 
     private global::IocSample.FactoryService CreateFactoryService_IocSample_Factory_Create()
     {
-        lock(_factoryService_IocSample_Factory_CreateLock)
+        lock(_factoryService_IocSample_Factory_CreateLock ?? __CreateLock(ref _factoryService_IocSample_Factory_CreateLock))
         {
             if(_factoryService_IocSample_Factory_Create is not null) return _factoryService_IocSample_Factory_Create;
 
@@ -384,12 +384,12 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     }
 
     private global::IocSample.FactoryService2? _factoryService2_IocSample_FactoryService2_Create;
-    private readonly global::System.Threading.Lock _factoryService2_IocSample_FactoryService2_CreateLock = new();
+    private global::System.Threading.Lock? _factoryService2_IocSample_FactoryService2_CreateLock;
     private global::IocSample.FactoryService2 GetFactoryService2_IocSample_FactoryService2_Create() => _factoryService2_IocSample_FactoryService2_Create ?? CreateFactoryService2_IocSample_FactoryService2_Create();
 
     private global::IocSample.FactoryService2 CreateFactoryService2_IocSample_FactoryService2_Create()
     {
-        lock(_factoryService2_IocSample_FactoryService2_CreateLock)
+        lock(_factoryService2_IocSample_FactoryService2_CreateLock ?? __CreateLock(ref _factoryService2_IocSample_FactoryService2_CreateLock))
         {
             if(_factoryService2_IocSample_FactoryService2_Create is not null) return _factoryService2_IocSample_FactoryService2_Create;
 
@@ -520,6 +520,12 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+    }
 
     private global::IocSample.IBasic[] GetAllIBasicArray() =>
         [

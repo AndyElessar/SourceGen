@@ -38,9 +38,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        // Synchronization of lazily created singletons (scopes delegate creation to the root)
-        _myServiceSemaphore = new(1, 1);
-
     }
 
     private TestContainer(TestContainer parent)
@@ -56,14 +53,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.MyService? _myService;
-    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = null!;
+    private global::System.Threading.SemaphoreSlim? _myServiceSemaphore;
     private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
     private global::TestNamespace.MyService CreateMyService()
     {
         if(_root is not null) return _root.GetMyService();
 
-        _myServiceSemaphore.Wait();
+        (_myServiceSemaphore ?? __CreateSemaphore(ref _myServiceSemaphore)).Wait();
         try
         {
             if(_myService is not null) return _myService;
@@ -75,8 +72,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
         finally
         {
-            _myServiceSemaphore.Release();
+            _myServiceSemaphore!.Release();
         }
+    }
+
+    private static global::System.Threading.SemaphoreSlim __CreateSemaphore(ref global::System.Threading.SemaphoreSlim? field)
+    {
+        var created = new global::System.Threading.SemaphoreSlim(1, 1);
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion
@@ -294,7 +297,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
 
         DisposeService(_myService);
-        _myServiceSemaphore.Dispose();
+        _myServiceSemaphore?.Dispose();
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -309,7 +312,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
 
         await DisposeServiceAsync(_myService).ConfigureAwait(false);
-        _myServiceSemaphore.Dispose();
+        _myServiceSemaphore?.Dispose();
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

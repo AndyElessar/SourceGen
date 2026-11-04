@@ -38,10 +38,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        // Synchronization of lazily created singletons (scopes delegate creation to the root)
-        _dependencySemaphore = new(1, 1);
-        _myServiceSemaphore = new(1, 1);
-
     }
 
     private TestContainer(TestContainer parent)
@@ -59,14 +55,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.Dependency? _dependency;
-    private readonly global::System.Threading.SemaphoreSlim _dependencySemaphore = null!;
+    private global::System.Threading.SemaphoreSlim? _dependencySemaphore;
     private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
     private global::TestNamespace.Dependency CreateDependency()
     {
         if(_root is not null) return _root.GetDependency();
 
-        _dependencySemaphore.Wait();
+        (_dependencySemaphore ?? __CreateSemaphore(ref _dependencySemaphore)).Wait();
         try
         {
             if(_dependency is not null) return _dependency;
@@ -78,19 +74,19 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
         finally
         {
-            _dependencySemaphore.Release();
+            _dependencySemaphore!.Release();
         }
     }
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
-    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = null!;
+    private global::System.Threading.SemaphoreSlim? _myServiceSemaphore;
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myServiceTask_As_IMyService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> InitMyServiceAsync()
     {
-        await _myServiceSemaphore.WaitAsync().ConfigureAwait(false);
+        await (_myServiceSemaphore ?? __CreateSemaphore(ref _myServiceSemaphore)).WaitAsync().ConfigureAwait(false);
         try
         {
             if(_myService is null)
@@ -100,7 +96,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
         finally
         {
-            _myServiceSemaphore.Release();
+            _myServiceSemaphore!.Release();
         }
         return await _myService.ConfigureAwait(false);
     }
@@ -116,6 +112,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private static global::System.Threading.SemaphoreSlim __CreateSemaphore(ref global::System.Threading.SemaphoreSlim? field)
+    {
+        var created = new global::System.Threading.SemaphoreSlim(1, 1);
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+    }
 
     #endregion
 
@@ -333,9 +335,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
 
         DisposeService(_myService);
-        _myServiceSemaphore.Dispose();
+        _myServiceSemaphore?.Dispose();
         DisposeService(_dependency);
-        _dependencySemaphore.Dispose();
+        _dependencySemaphore?.Dispose();
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -350,9 +352,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
 
         await DisposeServiceAsync(_myService).ConfigureAwait(false);
-        _myServiceSemaphore.Dispose();
+        _myServiceSemaphore?.Dispose();
         await DisposeServiceAsync(_dependency).ConfigureAwait(false);
-        _dependencySemaphore.Dispose();
+        _dependencySemaphore?.Dispose();
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 

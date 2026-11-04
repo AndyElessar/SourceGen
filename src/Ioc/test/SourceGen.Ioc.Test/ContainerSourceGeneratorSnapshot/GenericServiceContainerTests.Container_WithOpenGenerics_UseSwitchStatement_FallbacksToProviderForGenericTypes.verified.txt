@@ -55,12 +55,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.Repository<global::TestNamespace.User>? _repository_User;
-    private readonly global::System.Threading.Lock _repository_UserLock = new();
+    private global::System.Threading.Lock? _repository_UserLock;
     private global::TestNamespace.Repository<global::TestNamespace.User> GetRepository_User() => _repository_User ?? CreateRepository_User();
 
     private global::TestNamespace.Repository<global::TestNamespace.User> CreateRepository_User()
     {
-        lock(_repository_UserLock)
+        lock(_repository_UserLock ?? __CreateLock(ref _repository_UserLock))
         {
             if(_repository_User is not null) return _repository_User;
 
@@ -69,6 +69,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _repository_User = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

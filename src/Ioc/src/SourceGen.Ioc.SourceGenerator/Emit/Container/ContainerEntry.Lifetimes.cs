@@ -118,20 +118,12 @@ partial class IocSourceGenerator
             writer.WriteLine($"{FieldName} = parent.{FieldName};");
         }
 
-        public override bool HasRootOnlySyncField => DelegatesToRoot && IsAllocatedSyncStrategy(ThreadSafeStrategy);
-
-        public override void WriteRootSyncFieldInit(SourceWriter writer)
-        {
-            if(HasRootOnlySyncField)
-            {
-                WriteSyncFieldInit(writer, ThreadSafeStrategy, FieldName);
-            }
-        }
+        public override ThreadSafeStrategy SynchronizationStrategy => ThreadSafeStrategy;
 
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {ResolvedTypeName}? {FieldName};");
-            WriteSyncField(writer, ThreadSafeStrategy, FieldName, HasRootOnlySyncField);
+            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
         }
 
         public override void WriteResolver(SourceWriter writer)
@@ -174,7 +166,7 @@ partial class IocSourceGenerator
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
-                writer.WriteLine($"{FieldName}Semaphore.Dispose();");
+                writer.WriteLine($"{FieldName}Semaphore?.Dispose();");
             }
         }
 
@@ -185,7 +177,7 @@ partial class IocSourceGenerator
 
         private void WriteResolverBodyLock(SourceWriter writer)
         {
-            writer.WriteLine($"lock({FieldName}Lock)");
+            writer.WriteLine($"lock({FieldName}Lock ?? {CreateLockMethodName}(ref {FieldName}Lock))");
             writer.WriteLine("{");
             writer.Indentation++;
 
@@ -200,7 +192,8 @@ partial class IocSourceGenerator
 
         private void WriteResolverBodySemaphoreSlim(SourceWriter writer)
         {
-            writer.WriteLine($"{FieldName}Semaphore.Wait();");
+            // No local: the body may contain user expressions (e.g. C# keys) that a local would hide
+            writer.WriteLine($"({FieldName}Semaphore ?? {CreateSemaphoreMethodName}(ref {FieldName}Semaphore)).Wait();");
             writer.WriteLine("try");
             writer.WriteLine("{");
             writer.Indentation++;
@@ -215,7 +208,7 @@ partial class IocSourceGenerator
             writer.WriteLine("finally");
             writer.WriteLine("{");
             writer.Indentation++;
-            writer.WriteLine($"{FieldName}Semaphore.Release();");
+            writer.WriteLine($"{FieldName}Semaphore!.Release();");
             writer.Indentation--;
             writer.WriteLine("}");
         }

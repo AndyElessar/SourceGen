@@ -24,6 +24,7 @@ partial class IocSourceGenerator
         WriteServiceResolverGroup(writer, groups.TransientEntries, writtenMethods, writeField: false);
 
         WriteProjectTaskHelper(writer, groups);
+        WriteSyncFieldHelpers(writer, groups);
 
         foreach(var entry in groups.CollectionEntries)
         {

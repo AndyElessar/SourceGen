@@ -38,10 +38,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        // Synchronization of lazily created singletons (scopes delegate creation to the root)
-        _myServiceLock = new();
-        _myServiceAsync_As_IMyServiceLock = new();
-
     }
 
     private TestContainer(TestContainer parent)
@@ -59,14 +55,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = null!;
+    private global::System.Threading.Lock? _myServiceLock;
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myServiceTask_As_IMyService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> InitMyServiceAsync()
     {
-        lock(_myServiceLock)
+        lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))
         {
             return _myService ??= CreateMyServiceAsync();
         }
@@ -82,14 +78,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.MyServiceAsync_As_IMyService? _myServiceAsync_As_IMyService;
-    private readonly global::System.Threading.Lock _myServiceAsync_As_IMyServiceLock = null!;
+    private global::System.Threading.Lock? _myServiceAsync_As_IMyServiceLock;
     private global::TestNamespace.MyServiceAsync_As_IMyService GetMyServiceAsync_As_IMyService() => _myServiceAsync_As_IMyService ?? CreateMyServiceAsync_As_IMyService();
 
     private global::TestNamespace.MyServiceAsync_As_IMyService CreateMyServiceAsync_As_IMyService()
     {
         if(_root is not null) return _root.GetMyServiceAsync_As_IMyService();
 
-        lock(_myServiceAsync_As_IMyServiceLock)
+        lock(_myServiceAsync_As_IMyServiceLock ?? __CreateLock(ref _myServiceAsync_As_IMyServiceLock))
         {
             if(_myServiceAsync_As_IMyService is not null) return _myServiceAsync_As_IMyService;
 
@@ -102,6 +98,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+    }
 
     #endregion
 

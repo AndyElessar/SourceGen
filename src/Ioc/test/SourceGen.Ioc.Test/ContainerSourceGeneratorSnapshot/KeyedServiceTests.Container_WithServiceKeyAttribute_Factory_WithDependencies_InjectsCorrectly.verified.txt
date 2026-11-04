@@ -65,12 +65,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.KeyedService? _keyedService__myKey_;
-    private readonly global::System.Threading.Lock _keyedService__myKey_Lock = new();
+    private global::System.Threading.Lock? _keyedService__myKey_Lock;
     private global::TestNamespace.KeyedService GetKeyedService__myKey_() => _keyedService__myKey_ ?? CreateKeyedService__myKey_();
 
     private global::TestNamespace.KeyedService CreateKeyedService__myKey_()
     {
-        lock(_keyedService__myKey_Lock)
+        lock(_keyedService__myKey_Lock ?? __CreateLock(ref _keyedService__myKey_Lock))
         {
             if(_keyedService__myKey_ is not null) return _keyedService__myKey_;
 
@@ -79,6 +79,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _keyedService__myKey_ = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

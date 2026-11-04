@@ -50,12 +50,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.Repository<string>? _repository_string;
-    private readonly global::System.Threading.Lock _repository_stringLock = new();
+    private global::System.Threading.Lock? _repository_stringLock;
     private global::TestNamespace.Repository<string> GetRepository_string() => _repository_string ?? CreateRepository_string();
 
     private global::TestNamespace.Repository<string> CreateRepository_string()
     {
-        lock(_repository_stringLock)
+        lock(_repository_stringLock ?? __CreateLock(ref _repository_stringLock))
         {
             if(_repository_string is not null) return _repository_string;
 
@@ -64,6 +64,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _repository_string = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

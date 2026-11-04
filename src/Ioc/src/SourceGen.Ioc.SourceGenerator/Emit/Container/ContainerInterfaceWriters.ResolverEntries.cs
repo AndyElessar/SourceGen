@@ -34,6 +34,8 @@ partial class IocSourceGenerator
     }
 
     private const string ProjectTaskMethodName = "__ProjectTask";
+    private const string CreateLockMethodName = "__CreateLock";
+    private const string CreateSemaphoreMethodName = "__CreateSemaphore";
     private const string ResolverEntryMethodName = "__Resolver";
     private const string KeyedResolverEntryMethodName = "__KeyedResolver";
     private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
@@ -133,6 +135,46 @@ partial class IocSourceGenerator
         writer.WriteLine("=> (TService)(object)(await task.ConfigureAwait(false))!;");
         writer.Indentation--;
         writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes the helpers allocating a <c>Lock</c> / <c>SemaphoreSlim</c> synchronization field on its first use:
+    /// concurrent first callers agree on one instance through <c>Interlocked.CompareExchange</c>.
+    /// </summary>
+    private static void WriteSyncFieldHelpers(SourceWriter writer, ContainerRegistrationGroups groups)
+    {
+        var usesLock = false;
+        var usesSemaphore = false;
+        foreach(var entry in groups.SingletonEntries.Concat(groups.ScopedEntries))
+        {
+            usesLock |= entry.SynchronizationStrategy == ThreadSafeStrategy.Lock;
+            usesSemaphore |= entry.SynchronizationStrategy == ThreadSafeStrategy.SemaphoreSlim;
+        }
+
+        if(usesLock)
+        {
+            writer.WriteLine($"private static global::System.Threading.Lock {CreateLockMethodName}(ref global::System.Threading.Lock? field)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("var created = new global::System.Threading.Lock();");
+            writer.WriteLine("return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+        }
+
+        if(usesSemaphore)
+        {
+            // A losing semaphore is dropped undisposed: without AvailableWaitHandle it holds no unmanaged resource
+            writer.WriteLine($"private static global::System.Threading.SemaphoreSlim {CreateSemaphoreMethodName}(ref global::System.Threading.SemaphoreSlim? field)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("var created = new global::System.Threading.SemaphoreSlim(1, 1);");
+            writer.WriteLine("return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+        }
     }
 
     private static void WriteWrapperLocalResolverEntries(

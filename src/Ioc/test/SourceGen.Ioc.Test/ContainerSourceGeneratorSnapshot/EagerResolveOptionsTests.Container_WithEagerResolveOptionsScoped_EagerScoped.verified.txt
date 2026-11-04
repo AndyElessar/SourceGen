@@ -38,9 +38,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        // Synchronization of lazily created singletons (scopes delegate creation to the root)
-        _singletonServiceLock = new();
-
     }
 
     private TestContainer(TestContainer parent)
@@ -59,14 +56,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.SingletonService? _singletonService;
-    private readonly global::System.Threading.Lock _singletonServiceLock = null!;
+    private global::System.Threading.Lock? _singletonServiceLock;
     private global::TestNamespace.SingletonService GetSingletonService() => _singletonService ?? CreateSingletonService();
 
     private global::TestNamespace.SingletonService CreateSingletonService()
     {
         if(_root is not null) return _root.GetSingletonService();
 
-        lock(_singletonServiceLock)
+        lock(_singletonServiceLock ?? __CreateLock(ref _singletonServiceLock))
         {
             if(_singletonService is not null) return _singletonService;
 
@@ -78,12 +75,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.ScopedService? _scopedService;
-    private readonly global::System.Threading.Lock _scopedServiceLock = new();
+    private global::System.Threading.Lock? _scopedServiceLock;
     private global::TestNamespace.ScopedService GetScopedService() => _scopedService ?? CreateScopedService();
 
     private global::TestNamespace.ScopedService CreateScopedService()
     {
-        lock(_scopedServiceLock)
+        lock(_scopedServiceLock ?? __CreateLock(ref _scopedServiceLock))
         {
             if(_scopedService is not null) return _scopedService;
 
@@ -92,6 +89,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _scopedService = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

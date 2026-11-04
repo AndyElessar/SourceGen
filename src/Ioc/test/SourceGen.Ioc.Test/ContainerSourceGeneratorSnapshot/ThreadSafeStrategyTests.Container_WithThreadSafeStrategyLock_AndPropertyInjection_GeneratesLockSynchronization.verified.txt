@@ -38,10 +38,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
-        // Synchronization of lazily created singletons (scopes delegate creation to the root)
-        _dependencyLock = new();
-        _myServiceLock = new();
-
     }
 
     private TestContainer(TestContainer parent)
@@ -58,14 +54,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.Dependency? _dependency;
-    private readonly global::System.Threading.Lock _dependencyLock = null!;
+    private global::System.Threading.Lock? _dependencyLock;
     private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
     private global::TestNamespace.Dependency CreateDependency()
     {
         if(_root is not null) return _root.GetDependency();
 
-        lock(_dependencyLock)
+        lock(_dependencyLock ?? __CreateLock(ref _dependencyLock))
         {
             if(_dependency is not null) return _dependency;
 
@@ -77,14 +73,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.MyService? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = null!;
+    private global::System.Threading.Lock? _myServiceLock;
     private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
     private global::TestNamespace.MyService CreateMyService()
     {
         if(_root is not null) return _root.GetMyService();
 
-        lock(_myServiceLock)
+        lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))
         {
             if(_myService is not null) return _myService;
 
@@ -96,6 +92,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _myService = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

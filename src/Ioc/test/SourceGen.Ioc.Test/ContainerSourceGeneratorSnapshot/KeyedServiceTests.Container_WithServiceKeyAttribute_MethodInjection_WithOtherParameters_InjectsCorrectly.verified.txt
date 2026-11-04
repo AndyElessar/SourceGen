@@ -65,12 +65,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.MyHandler? _myHandler__myHandler_;
-    private readonly global::System.Threading.Lock _myHandler__myHandler_Lock = new();
+    private global::System.Threading.Lock? _myHandler__myHandler_Lock;
     private global::TestNamespace.MyHandler GetMyHandler__myHandler_() => _myHandler__myHandler_ ?? CreateMyHandler__myHandler_();
 
     private global::TestNamespace.MyHandler CreateMyHandler__myHandler_()
     {
-        lock(_myHandler__myHandler_Lock)
+        lock(_myHandler__myHandler_Lock ?? __CreateLock(ref _myHandler__myHandler_Lock))
         {
             if(_myHandler__myHandler_ is not null) return _myHandler__myHandler_;
 
@@ -80,6 +80,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _myHandler__myHandler_ = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

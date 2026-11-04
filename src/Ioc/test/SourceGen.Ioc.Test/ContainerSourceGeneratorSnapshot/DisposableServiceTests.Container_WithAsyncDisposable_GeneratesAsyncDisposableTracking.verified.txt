@@ -50,12 +50,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.AsyncDisposableService? _asyncDisposableService;
-    private readonly global::System.Threading.Lock _asyncDisposableServiceLock = new();
+    private global::System.Threading.Lock? _asyncDisposableServiceLock;
     private global::TestNamespace.AsyncDisposableService GetAsyncDisposableService() => _asyncDisposableService ?? CreateAsyncDisposableService();
 
     private global::TestNamespace.AsyncDisposableService CreateAsyncDisposableService()
     {
-        lock(_asyncDisposableServiceLock)
+        lock(_asyncDisposableServiceLock ?? __CreateLock(ref _asyncDisposableServiceLock))
         {
             if(_asyncDisposableService is not null) return _asyncDisposableService;
 
@@ -64,6 +64,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _asyncDisposableService = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

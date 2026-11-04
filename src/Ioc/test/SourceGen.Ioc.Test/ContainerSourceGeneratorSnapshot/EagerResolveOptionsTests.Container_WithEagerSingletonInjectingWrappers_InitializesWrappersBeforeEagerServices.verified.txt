@@ -93,12 +93,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.ScopedConsumer? _scopedConsumer;
-    private readonly global::System.Threading.Lock _scopedConsumerLock = new();
+    private global::System.Threading.Lock? _scopedConsumerLock;
     private global::TestNamespace.ScopedConsumer GetScopedConsumer() => _scopedConsumer ?? CreateScopedConsumer();
 
     private global::TestNamespace.ScopedConsumer CreateScopedConsumer()
     {
-        lock(_scopedConsumerLock)
+        lock(_scopedConsumerLock ?? __CreateLock(ref _scopedConsumerLock))
         {
             if(_scopedConsumer is not null) return _scopedConsumer;
 
@@ -107,6 +107,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _scopedConsumer = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     // Lazy wrapper fields
