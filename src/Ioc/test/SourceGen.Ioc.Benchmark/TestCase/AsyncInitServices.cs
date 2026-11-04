@@ -48,10 +48,59 @@ internal sealed class AsyncSession : IAsyncSession
 
 #endregion
 
+#region Padding Services
+
+// Ordinary sync services that bring the container to 15 services (a realistic app size).
+// Without them the resolver table stays below FrozenDictionary's small-collection threshold
+// and lookups take a linear-scan path that real containers do not hit.
+
+public interface IAsyncInitPadding01;
+public interface IAsyncInitPadding02;
+public interface IAsyncInitPadding03;
+public interface IAsyncInitPadding04;
+public interface IAsyncInitPadding05;
+public interface IAsyncInitPadding06;
+public interface IAsyncInitPadding07;
+public interface IAsyncInitPadding08;
+public interface IAsyncInitPadding09;
+public interface IAsyncInitPadding10;
+public interface IAsyncInitPadding11;
+public interface IAsyncInitPadding12;
+public interface IAsyncInitPadding13;
+
+internal sealed class AsyncInitPadding01 : IAsyncInitPadding01;
+internal sealed class AsyncInitPadding02 : IAsyncInitPadding02;
+internal sealed class AsyncInitPadding03 : IAsyncInitPadding03;
+internal sealed class AsyncInitPadding04 : IAsyncInitPadding04;
+internal sealed class AsyncInitPadding05 : IAsyncInitPadding05;
+internal sealed class AsyncInitPadding06 : IAsyncInitPadding06;
+internal sealed class AsyncInitPadding07 : IAsyncInitPadding07;
+internal sealed class AsyncInitPadding08 : IAsyncInitPadding08;
+internal sealed class AsyncInitPadding09 : IAsyncInitPadding09;
+internal sealed class AsyncInitPadding10 : IAsyncInitPadding10;
+internal sealed class AsyncInitPadding11 : IAsyncInitPadding11;
+internal sealed class AsyncInitPadding12 : IAsyncInitPadding12;
+internal sealed class AsyncInitPadding13 : IAsyncInitPadding13;
+
+#endregion
+
 #region Async-init Benchmark Container
 
 [IocRegisterFor<AsyncSettings>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncSettings)])]
 [IocRegisterFor<AsyncSession>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncSession)])]
+[IocRegisterFor<AsyncInitPadding01>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncInitPadding01)])]
+[IocRegisterFor<AsyncInitPadding02>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncInitPadding02)])]
+[IocRegisterFor<AsyncInitPadding03>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncInitPadding03)])]
+[IocRegisterFor<AsyncInitPadding04>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncInitPadding04)])]
+[IocRegisterFor<AsyncInitPadding05>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IAsyncInitPadding05)])]
+[IocRegisterFor<AsyncInitPadding06>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncInitPadding06)])]
+[IocRegisterFor<AsyncInitPadding07>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncInitPadding07)])]
+[IocRegisterFor<AsyncInitPadding08>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncInitPadding08)])]
+[IocRegisterFor<AsyncInitPadding09>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IAsyncInitPadding09)])]
+[IocRegisterFor<AsyncInitPadding10>(ServiceLifetime.Transient, ServiceTypes = [typeof(IAsyncInitPadding10)])]
+[IocRegisterFor<AsyncInitPadding11>(ServiceLifetime.Transient, ServiceTypes = [typeof(IAsyncInitPadding11)])]
+[IocRegisterFor<AsyncInitPadding12>(ServiceLifetime.Transient, ServiceTypes = [typeof(IAsyncInitPadding12)])]
+[IocRegisterFor<AsyncInitPadding13>(ServiceLifetime.Transient, ServiceTypes = [typeof(IAsyncInitPadding13)])]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class AsyncInitContainer
 {
@@ -94,6 +143,19 @@ internal static class AsyncInitMsdiHelper
                 return Init();
             })
             .AddScoped<Task<IAsyncSession>>(static async sp => await sp.GetRequiredService<Task<AsyncSession>>())
+            .AddSingleton<IAsyncInitPadding01, AsyncInitPadding01>()
+            .AddSingleton<IAsyncInitPadding02, AsyncInitPadding02>()
+            .AddSingleton<IAsyncInitPadding03, AsyncInitPadding03>()
+            .AddSingleton<IAsyncInitPadding04, AsyncInitPadding04>()
+            .AddSingleton<IAsyncInitPadding05, AsyncInitPadding05>()
+            .AddScoped<IAsyncInitPadding06, AsyncInitPadding06>()
+            .AddScoped<IAsyncInitPadding07, AsyncInitPadding07>()
+            .AddScoped<IAsyncInitPadding08, AsyncInitPadding08>()
+            .AddScoped<IAsyncInitPadding09, AsyncInitPadding09>()
+            .AddTransient<IAsyncInitPadding10, AsyncInitPadding10>()
+            .AddTransient<IAsyncInitPadding11, AsyncInitPadding11>()
+            .AddTransient<IAsyncInitPadding12, AsyncInitPadding12>()
+            .AddTransient<IAsyncInitPadding13, AsyncInitPadding13>()
             .BuildServiceProvider();
     }
 }
