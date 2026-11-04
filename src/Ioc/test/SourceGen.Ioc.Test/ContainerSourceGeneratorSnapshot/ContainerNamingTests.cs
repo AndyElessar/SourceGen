@@ -127,4 +127,59 @@ public class ContainerNamingTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithServiceNamedLikeDerivedMemberOfAnotherService_AppendsResolveSuffix()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            // _queueLock: the lock field of Queue, and the field of QueueLock
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Queue;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class QueueLock;
+
+            // GetCacheAsync / InitCacheAsync: the async resolver of async-init Cache, and the resolver of CacheAsync
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Cache
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class CacheAsync;
+
+            // CreateClockAsync: the creation method of transient async-init Clock, and of ClockAsync
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Clock
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class ClockAsync;
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+            });
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
 }
