@@ -188,6 +188,7 @@ public class CollectionResolutionContainerTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Assert.That(generatedSource).Contains("private global::TestNamespace.IPlugin[] GetAllIPluginArray() =>");
+        await Verify(generatedSource);
     }
 
     [Test]
@@ -213,5 +214,6 @@ public class CollectionResolutionContainerTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Assert.That(generatedSource).DoesNotContain("GetAllIPluginArray");
+        await Verify(generatedSource);
     }
 }

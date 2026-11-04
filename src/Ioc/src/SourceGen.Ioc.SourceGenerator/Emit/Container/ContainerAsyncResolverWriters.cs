@@ -31,8 +31,20 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Returns the async first-initialization (slow path) method name (e.g. "InitFooBarAsync" from "GetFooBar").
+    /// </summary>
+    private static string GetAsyncInitMethodName(string syncMethodName)
+    {
+        if(syncMethodName.Length > 3 && syncMethodName.StartsWith("Get", StringComparison.Ordinal))
+            return "Init" + syncMethodName[3..] + "Async";
+        return syncMethodName + "_InitAsync";
+    }
+
+    /// <summary>
     /// Returns the effective thread-safety strategy for a registration.
-    /// Async-init services auto-upgrade async-incompatible strategies to <see cref="ThreadSafeStrategy.SemaphoreSlim"/>.
+    /// Async-init services map <see cref="ThreadSafeStrategy.SpinLock"/> and <see cref="ThreadSafeStrategy.CompareExchange"/>
+    /// to <see cref="ThreadSafeStrategy.Lock"/>: the lock body runs user initialization code (unsuitable for spinning),
+    /// and CAS would start duplicate initializations.
     /// </summary>
     private static ThreadSafeStrategy GetEffectiveThreadSafeStrategy(
         ThreadSafeStrategy strategy,
@@ -41,7 +53,7 @@ partial class IocSourceGenerator
         if(!isAsyncInit)
             return strategy;
 
-        return strategy is ThreadSafeStrategy.None ? ThreadSafeStrategy.None : ThreadSafeStrategy.SemaphoreSlim;
+        return strategy is ThreadSafeStrategy.SpinLock or ThreadSafeStrategy.CompareExchange ? ThreadSafeStrategy.Lock : strategy;
     }
 
 }

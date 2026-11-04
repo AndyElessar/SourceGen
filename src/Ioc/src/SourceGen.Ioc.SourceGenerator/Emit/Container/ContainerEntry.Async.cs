@@ -3,6 +3,12 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
+    /// A cached <c>Task&lt;ServiceType&gt;</c> projection of an async-init service task, stored in <paramref name="FieldName"/>
+    /// and returned by <paramref name="MethodName"/>.
+    /// </summary>
+    private readonly record struct ProjectedTask(string ServiceType, string FieldName, string MethodName);
+
+    /// <summary>
     /// Base for async-init service entries whose entry method returns <c>Task&lt;T&gt;</c>.
     /// </summary>
     private closed record class AsyncServiceContainerEntry(
@@ -67,6 +73,12 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers,
         ImmutableEquatableArray<ResolvedDecorator> Decorators) : AsyncServiceContainerEntry(Registration, ResolverMethodName, ConstructorParameters, InjectionMembers, Decorators)
     {
+        /// <summary>
+        /// Gets the cached <c>Task&lt;ServiceType&gt;</c> projections of this entry's task, one per service type alias
+        /// that differs from the resolver's result type, so resolving an alias does not project the task again.
+        /// </summary>
+        public ImmutableEquatableArray<ProjectedTask> ProjectedTasks { get; init; } = [];
+
         public override string AsyncEntryMethodName => GetAsyncResolverMethodName(ResolverMethodName);
 
         public override bool IsEagerlyInitialized => IsEager;
@@ -74,18 +86,35 @@ partial class IocSourceGenerator
         // Scopes never create singletons themselves; the root owns and disposes them
         public override bool DelegatesToRoot => Registration.Lifetime == ServiceLifetime.Singleton;
 
+        public override string FormatResolveExpression(string serviceType, string receiver)
+        {
+            foreach(var projected in ProjectedTasks)
+            {
+                if(projected.ServiceType == serviceType)
+                    return $"{receiver}{projected.MethodName}()";
+            }
+
+            return base.FormatResolveExpression(serviceType, receiver);
+        }
+
         public override void WriteCopyFromParent(SourceWriter writer)
         {
             writer.WriteLine($"{FieldName} = parent.{FieldName};");
+
+            foreach(var projected in ProjectedTasks)
+            {
+                writer.WriteLine($"{projected.FieldName} = parent.{projected.FieldName};");
+            }
         }
 
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
+            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
 
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
+            foreach(var projected in ProjectedTasks)
             {
-                writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {FieldName}Semaphore = new(1, 1);");
+                writer.WriteLine($"private global::System.Threading.Tasks.Task<{projected.ServiceType}>? {projected.FieldName};");
             }
         }
 
@@ -93,39 +122,48 @@ partial class IocSourceGenerator
         {
             var createMethodName = GetAsyncCreateMethodName(ResolverMethodName);
 
-            writer.WriteLine($"private async {TaskReturnTypeName} {AsyncEntryMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"if({FieldName} is not null)");
-            writer.Indentation++;
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
-            writer.Indentation--;
-
-            if(DelegatesToRoot)
+            // Non-async fast path: returns the cached task (or the root's) without allocating a wrapper task.
+            if(ThreadSafeStrategy is ThreadSafeStrategy.Lock or ThreadSafeStrategy.SemaphoreSlim)
             {
-                writer.WriteLine("if(_root is not null)");
-                writer.Indentation++;
-                writer.WriteLine($"return await _root.{AsyncEntryMethodName}().ConfigureAwait(false);");
-                writer.Indentation--;
+                var initMethodName = GetAsyncInitMethodName(ResolverMethodName);
+                if(DelegatesToRoot)
+                    writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ?? _root?.{AsyncEntryMethodName}() ?? {initMethodName}();");
+                else
+                    writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ?? {initMethodName}();");
+                writer.WriteLine();
+
+                if(ThreadSafeStrategy == ThreadSafeStrategy.Lock)
+                    WriteAsyncInitMethodLock(writer, initMethodName, createMethodName);
+                else
+                    WriteAsyncInitMethodSemaphoreSlim(writer, initMethodName, createMethodName);
             }
-
-            writer.WriteLine();
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
+            else if(DelegatesToRoot)
             {
-                WriteAsyncResolverBodySemaphoreSlim(writer, createMethodName);
+                writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ?? _root?.{AsyncEntryMethodName}() ?? ({FieldName} = {createMethodName}());");
             }
             else
             {
-                WriteAsyncResolverBodyNone(writer, createMethodName);
+                writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ??= {createMethodName}();");
             }
 
-            writer.Indentation--;
-            writer.WriteLine("}");
             writer.WriteLine();
 
+            WriteProjectedTaskMethods(writer);
             WriteCreateMethod(writer);
+        }
+
+        // Projections need no synchronization: concurrent first calls may each project the task,
+        // but every projection completes with the same instance.
+        private void WriteProjectedTaskMethods(SourceWriter writer)
+        {
+            foreach(var projected in ProjectedTasks)
+            {
+                if(DelegatesToRoot)
+                    writer.WriteLine($"private global::System.Threading.Tasks.Task<{projected.ServiceType}> {projected.MethodName}() => {projected.FieldName} ?? _root?.{projected.MethodName}() ?? ({projected.FieldName} = {ProjectTaskMethodName}<{projected.ServiceType}, {ResolvedTypeName}>({AsyncEntryMethodName}()));");
+                else
+                    writer.WriteLine($"private global::System.Threading.Tasks.Task<{projected.ServiceType}> {projected.MethodName}() => {projected.FieldName} ??= {ProjectTaskMethodName}<{projected.ServiceType}, {ResolvedTypeName}>({AsyncEntryMethodName}());");
+                writer.WriteLine();
+            }
         }
 
         public override void WriteEagerInit(SourceWriter writer)
@@ -146,14 +184,28 @@ partial class IocSourceGenerator
             }
         }
 
-        private void WriteAsyncResolverBodyNone(SourceWriter writer, string createMethodName)
+        // Non-async: the lock only covers starting the task (CreateXAsync's synchronous prefix), never an await.
+        private void WriteAsyncInitMethodLock(SourceWriter writer, string initMethodName, string createMethodName)
         {
-            writer.WriteLine($"{FieldName} = {createMethodName}();");
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
+            writer.WriteLine($"private {TaskReturnTypeName} {initMethodName}()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine($"lock({FieldName}Lock)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine($"return {FieldName} ??= {createMethodName}();");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.Indentation--;
+            writer.WriteLine("}");
         }
 
-        private void WriteAsyncResolverBodySemaphoreSlim(SourceWriter writer, string createMethodName)
+        private void WriteAsyncInitMethodSemaphoreSlim(SourceWriter writer, string initMethodName, string createMethodName)
         {
+            writer.WriteLine($"private async {TaskReturnTypeName} {initMethodName}()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
             writer.WriteLine($"await {FieldName}Semaphore.WaitAsync().ConfigureAwait(false);");
             writer.WriteLine("try");
             writer.WriteLine("{");
@@ -175,6 +227,9 @@ partial class IocSourceGenerator
             writer.WriteLine("}");
 
             writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
+
+            writer.Indentation--;
+            writer.WriteLine("}");
         }
     }
 

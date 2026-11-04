@@ -46,6 +46,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _isRootScope = false;
         _root = parent._root ?? parent;
         _myService = parent._myService;
+        _myServiceTask_As_IFoo = parent._myServiceTask_As_IFoo;
+        _myServiceTask_As_IBar = parent._myServiceTask_As_IBar;
     }
 
     #endregion
@@ -53,17 +55,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IFoo>? _myServiceTask_As_IFoo;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IBar>? _myServiceTask_As_IBar;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
-    {
-        if(_myService is not null)
-            return await _myService.ConfigureAwait(false);
-        if(_root is not null)
-            return await _root.GetMyServiceAsync().ConfigureAwait(false);
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? (_myService = CreateMyServiceAsync());
 
-        _myService = CreateMyServiceAsync();
-        return await _myService.ConfigureAwait(false);
-    }
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IFoo> GetMyServiceAsync_As_IFoo() => _myServiceTask_As_IFoo ?? _root?.GetMyServiceAsync_As_IFoo() ?? (_myServiceTask_As_IFoo = __ProjectTask<global::TestNamespace.IFoo, global::TestNamespace.MyService>(GetMyServiceAsync()));
+
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IBar> GetMyServiceAsync_As_IBar() => _myServiceTask_As_IBar ?? _root?.GetMyServiceAsync_As_IBar() ?? (_myServiceTask_As_IBar = __ProjectTask<global::TestNamespace.IBar, global::TestNamespace.MyService>(GetMyServiceAsync()));
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {
@@ -241,8 +240,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetMyServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IFoo>), static c => __ProjectTask<global::TestNamespace.IFoo, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IBar>), static c => __ProjectTask<global::TestNamespace.IBar, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IFoo>), static c => c.GetMyServiceAsync_As_IFoo()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IBar>), static c => c.GetMyServiceAsync_As_IBar()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

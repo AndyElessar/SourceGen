@@ -260,6 +260,9 @@ When the same service type and key is registered in more than one place, the **l
 |`SpinLock`|No|Double-checked locking with `SpinLock`.|
 |`CompareExchange`|No|Lock-free compare-and-swap (`Interlocked.CompareExchange`).|
 
+> [!NOTE]
+> Services with [async inject methods](04_Field_Property_Method_Injection.md#async-method-injection) use `Lock` when the container is configured with `SpinLock` or `CompareExchange`, so their initialization never runs twice. Choose `SemaphoreSlim` if concurrent first resolutions should wait asynchronously instead of blocking a thread.
+
 ```csharp
 [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange)]
 public partial class AppContainer;

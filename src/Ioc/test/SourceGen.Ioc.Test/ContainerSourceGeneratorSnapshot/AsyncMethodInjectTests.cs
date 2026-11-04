@@ -69,7 +69,8 @@ public class AsyncMethodInjectTests
     public async Task AsyncMethodInject_SingletonWithAsyncInit_GeneratesAsyncResolver_SemaphoreSlim()
     {
         // A singleton with a single async-init method and SemaphoreSlim strategy should get
-        // a Task<T>? field, a SemaphoreSlim field, and the async routing body uses WaitAsync().
+        // a Task<T>? field, a SemaphoreSlim field, a non-async routing fast path,
+        // and an async first-initialization method that uses WaitAsync().
         const string source = """
             using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
@@ -105,6 +106,88 @@ public class AsyncMethodInjectTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_SingletonWithAsyncInit_GeneratesAsyncResolver_Lock()
+    {
+        // With Lock strategy, the async-init singleton keeps Lock: the non-async first-initialization
+        // method starts the task inside lock(...) without awaiting it.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync(IDependency dep) { }
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    [Arguments("SpinLock")]
+    [Arguments("CompareExchange")]
+    public async Task AsyncMethodInject_SpinLockOrCompareExchange_AsyncInitUsesLock(string strategy)
+    {
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class MyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.{{strategy}}, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("private readonly global::System.Threading.Lock _myServiceLock = new();");
+        await Assert.That(generatedSource).Contains("lock(_myServiceLock)");
+        await Assert.That(generatedSource).DoesNotContain("SpinLock");
+        await Assert.That(generatedSource).DoesNotContain("Interlocked.CompareExchange(ref _myService");
+        await Verify(generatedSource).UseParameters(strategy);
     }
 
     [Test]
@@ -590,7 +673,7 @@ public class AsyncMethodInjectTests
     [Test]
     public async Task AsyncMethodInject_PartialTaskAccessor_GeneratesAsyncMethod()
     {
-        // A partial method returning Task<IMyService> → generated as async + await.
+        // A partial method returning Task<IMyService> → returns the cached Task<IMyService> projection (no async).
         const string source = """
             using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
@@ -758,5 +841,132 @@ public class AsyncMethodInjectTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_TransientPartialTaskAccessor_ReturnsProjectedTaskWithoutAsync()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer
+            {
+                public partial Task<IMyService> GetMyServiceAsync();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        // Transient tasks are never cached, so they are projected per resolution, without an async accessor
+        await Assert.That(generatedSource).Contains("public partial global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetMyServiceAsync() => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(CreateMyService_ResolveAsync());");
+        await Assert.That(generatedSource).DoesNotContain("Task_As_");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    [Arguments("InitMyServiceAsync", "InitMyService_ResolveAsync()")]
+    [Arguments("GetMyServiceAsync_As_IMyService", "GetMyServiceAsync_As_IMyService_Resolve()")]
+    public async Task AsyncMethodInject_UserMemberNamedLikeDerivedMethod_GetsResolveSuffix(string userMember, string expectedCall)
+    {
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer
+            {
+                private void {{userMember}}() { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains(expectedCall);
+        await Verify(generatedSource).UseParameters(userMember);
+    }
+
+    [Test]
+    [Arguments("MyServiceTask_As_IMyService", "_myServiceTask_As_IMyService_Resolve")]
+    [Arguments("MyServiceAsync_As_IMyService", "GetMyServiceAsync_As_IMyService_Resolve()")]
+    public async Task AsyncMethodInject_ServiceNamedLikeProjection_ProjectionGetsResolveSuffix(string serviceName, string expectedMember)
+    {
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class {{serviceName}} { }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains(expectedMember);
+        await Verify(generatedSource).UseParameters(serviceName);
     }
 }

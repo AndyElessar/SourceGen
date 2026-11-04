@@ -12,7 +12,7 @@ Users can declare partial methods or partial properties in the `[IocContainer]` 
 |Partial property|`public partial IMyService MyService { get; }`|`public partial IMyService MyService { get => GetMyService_Resolve(); }`|
 |Nullable (optional)|`public partial IMyService? GetMyService();`|Returns `null` if unresolvable (no throw)|
 |Keyed service|`[IocInject("key")] public partial IMyService GetMyService();`|Resolves service with specified key|
-|Task of an async-init service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial async Task<IMyService> GetMyServiceAsync() => await GetMyServiceAsync_Resolve().ConfigureAwait(false);`|
+|Task of an async-init service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial Task<IMyService> GetMyServiceAsync() => GetMyService_ResolveAsync_As_IMyService();` (no `async` modifier: returns the cached task, or its cached `Task<IMyService>` projection; a transient service returns `__ProjectTask<IMyService, MyService>(CreateMyService_ResolveAsync())`)|
 |Task of a synchronous service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial Task<IMyService> GetMyServiceAsync() => Task.FromResult((IMyService)GetMyService());` (no `async` modifier: only an awaited resolver needs it)|
 
 ## Resolution Rules

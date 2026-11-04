@@ -57,6 +57,48 @@ public sealed class AsyncInjectionTests
         await Assert.That(instance1).IsSameReferenceAs(instance2);
     }
 
+    [Test]
+    public async Task AsyncInitService_ResolvedInScopeBeforeRoot_DelegatesToRootSingleton()
+    {
+        AsyncInitServiceProbe.Reset();
+        using var fallback = new InjectionModule();
+        await using var module = new AsyncInjectionModule(fallback);
+        using var scope = module.CreateScope();
+
+        var fromScope = await scope.ServiceProvider.GetRequiredService<Task<IAsyncInitService>>();
+        var fromRoot = await module.GetAsyncInitServiceAsync();
+
+        await Assert.That(fromScope).IsSameReferenceAs(fromRoot);
+        await Assert.That(AsyncInitServiceProbe.ConstructedCount).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task AsyncInitService_ResolvedAsServiceTypeTask_ReturnsSameCachedTask()
+    {
+        using var fallback = new InjectionModule();
+        await using var module = new AsyncInjectionModule(fallback);
+        using var scope = module.CreateScope();
+
+        var fromAccessor = module.GetAsyncInitServiceAsync();
+        var fromProvider = module.GetRequiredService<Task<IAsyncInitService>>();
+        var fromScope = scope.ServiceProvider.GetRequiredService<Task<IAsyncInitService>>();
+
+        await Assert.That((object)fromProvider).IsSameReferenceAs(fromAccessor);
+        await Assert.That((object)fromScope).IsSameReferenceAs(fromAccessor);
+    }
+
+    [Test]
+    public async Task AsyncInitService_CompareExchangeContainer_ConcurrentResolution_InitializesOnce()
+    {
+        ContendedAsyncInitServiceProbe.Reset();
+        using var module = new CompareExchangeAsyncInjectionModule();
+
+        var services = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => module.GetContendedAsyncInitServiceAsync())));
+
+        await Assert.That(services.Distinct().Count()).IsEqualTo(1);
+        await Assert.That(ContendedAsyncInitServiceProbe.InitializeCount).IsEqualTo(1);
+    }
+
     #endregion
 
     #region MS.Extensions.DI Integration Tests (via Task<T>)

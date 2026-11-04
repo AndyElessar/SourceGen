@@ -49,6 +49,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         _dep2 = parent._dep2;
         _dep3 = parent._dep3;
         _myService = parent._myService;
+        _myServiceTask_As_IMyService = parent._myServiceTask_As_IMyService;
     }
 
     #endregion
@@ -95,17 +96,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myServiceTask_As_IMyService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
-    {
-        if(_myService is not null)
-            return await _myService.ConfigureAwait(false);
-        if(_root is not null)
-            return await _root.GetMyServiceAsync().ConfigureAwait(false);
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? (_myService = CreateMyServiceAsync());
 
-        _myService = CreateMyServiceAsync();
-        return await _myService.ConfigureAwait(false);
-    }
+    private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetMyServiceAsync_As_IMyService() => _myServiceTask_As_IMyService ?? _root?.GetMyServiceAsync_As_IMyService() ?? (_myServiceTask_As_IMyService = __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(GetMyServiceAsync()));
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {
@@ -290,7 +285,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.Dep2), static c => c.GetDep2()),
         __Resolver(typeof(global::TestNamespace.Dep3), static c => c.GetDep3()),
         __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.GetMyServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.GetMyServiceAsync())),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => c.GetMyServiceAsync_As_IMyService()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

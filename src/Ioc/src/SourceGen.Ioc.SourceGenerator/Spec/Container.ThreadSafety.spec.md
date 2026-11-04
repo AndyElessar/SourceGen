@@ -12,23 +12,31 @@ The `ThreadSafeStrategy` enum controls how the container ensures thread-safe ini
 |:---|:---|:---|
 |`None`|No thread safety. Direct field assignment without synchronization.|Single-threaded applications or when external synchronization is guaranteed. **Warning**: May create multiple instances in multi-threaded scenarios.|
 |`Lock`|Uses `lock` statement with double-checked locking pattern. **(Default)**|General-purpose thread safety with balanced performance.|
-|`SemaphoreSlim`|Uses `SemaphoreSlim` with double-checked locking pattern.|Only option for scenarios with async initialization.|
+|`SemaphoreSlim`|Uses `SemaphoreSlim` with double-checked locking pattern.|When concurrent first resolutions of async-init services must wait asynchronously instead of blocking a thread.|
 |`SpinLock`|Uses `SpinLock` with double-checked locking pattern.|High-performance scenarios with very short initialization times. Not recommended for I/O-bound initialization.|
 |`CompareExchange`|Uses `Interlocked.CompareExchange` (CAS) for lock-free thread safety.|Best performance for lightweight constructors. No synchronization overhead. May create duplicate instances under contention; disposable duplicates are disposed synchronously (never throwing for `IAsyncDisposable`-only instances).|
 
 ## Async-init Strategy Override
 
-Registrations that contain one or more `InjectionMemberType.AsyncMethod` members generate async-init resolver paths and cached fields of type `Task<T>`. Those resolver paths MUST use an async-compatible synchronization strategy.
+Registrations that contain one or more `InjectionMemberType.AsyncMethod` members generate async-init resolver paths and cached fields of type `Task<T>`. The synchronization only guards **starting** the task: the slow path stores `CreateXAsync()` in the field, which runs only the synchronous prefix of the creation method (up to its first incomplete `await`) inside the critical section. No `await` ever happens while a `Lock` is held.
+
+Like synchronous resolvers, each async-init resolver is split into a non-`async` expression-bodied fast path (`GetXAsync() => _x ?? ...`) that returns the cached task directly, and a slow path that runs only while the field is `null`:
+
+|Effective strategy|Slow path|
+|:---|:---|
+|`None`|Inline assignment `(_x = CreateXAsync())`; scoped resolvers use `_x ??= CreateXAsync()`.|
+|`Lock`|Non-`async` method `InitXAsync()` returning `_x ??= CreateXAsync()` inside `lock(_xLock)`. Concurrent first resolvers block until the synchronous prefix finishes.|
+|`SemaphoreSlim`|`async` method `InitXAsync()` using `WaitAsync()` / `Release()`. Concurrent first resolvers wait asynchronously.|
 
 ### Effective Strategy Rules for Async-init Services
 
 |Container `ThreadSafeStrategy`|Effective strategy for async-init field declarations and resolver methods|Required behavior|
 |:---|:---|:---|
 |`None`|`None`|The generator MUST preserve `None` as-is. This remains an explicit opt-in for single-threaded or externally synchronized usage.|
-|`SemaphoreSlim`|`SemaphoreSlim`|The generator MUST use `SemaphoreSlim` for async-init services.|
-|`Lock`|`SemaphoreSlim`|The generator MUST automatically override the configured strategy to `SemaphoreSlim` for async-init field declarations and resolver methods because `lock` cannot span `await`.|
-|`SpinLock`|`SemaphoreSlim`|The generator MUST automatically override the configured strategy to `SemaphoreSlim` for async-init field declarations and resolver methods because `SpinLock` cannot span `await`.|
-|`CompareExchange`|`SemaphoreSlim`|The generator MUST automatically override the configured strategy to `SemaphoreSlim` for async-init field declarations and resolver methods because the CAS path is not compatible with awaited first-initialization.|
+|`Lock`|`Lock`|The generator MUST preserve `Lock` as-is.|
+|`SemaphoreSlim`|`SemaphoreSlim`|The generator MUST preserve `SemaphoreSlim` as-is.|
+|`SpinLock`|`Lock`|The generator MUST override the configured strategy to `Lock`, because the critical section runs user initialization code (the synchronous prefix of async inject methods), which is unsuitable for spinning.|
+|`CompareExchange`|`Lock`|The generator MUST override the configured strategy to `Lock`, because CAS would start duplicate initializations under contention, running async inject methods more than once.|
 
 > **Scope**: This override applies only to async-init services. Non-async resolver paths MUST continue to use the container's configured `ThreadSafeStrategy`.
 
@@ -36,9 +44,9 @@ Registrations that contain one or more `InjectionMemberType.AsyncMethod` members
 flowchart TD
     A[Container ThreadSafeStrategy] --> B{Registration has\nInjectionMemberType.AsyncMethod?}
     B -- No --> C[Use configured strategy as-is]
-    B -- Yes --> D{Configured strategy == None?}
-    D -- Yes --> E[Keep None]
-    D -- No --> F[Override to SemaphoreSlim]
+    B -- Yes --> D{SpinLock or CompareExchange?}
+    D -- Yes --> E[Override to Lock]
+    D -- No --> F[Keep None / Lock / SemaphoreSlim]
 ```
 
 ### Example: `Lock` Container Strategy with Async-init Service
@@ -70,43 +78,54 @@ public partial class AppContainer;
 partial class AppContainer
 {
     private global::System.Threading.Tasks.Task<global::MyService>? _myService;
-    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = new(1, 1);
+    private readonly global::System.Threading.Lock _myServiceLock = new();
 
-    private async global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync()
+    // Non-async fast path: an already-started task (or the root's) is returned without allocating.
+    private global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
+
+    // Non-async slow path: only starts the task inside the lock; nothing is awaited while holding it.
+    private global::System.Threading.Tasks.Task<global::MyService> InitMyServiceAsync()
     {
-        if(_myService is not null)
-            return await _myService.ConfigureAwait(false);
-
-        await _myServiceSemaphore.WaitAsync().ConfigureAwait(false);
-        try
+        lock(_myServiceLock)
         {
-            if(_myService is null)
-            {
-                _myService = CreateMyServiceAsync();
-            }
+            return _myService ??= CreateMyServiceAsync();
         }
-        finally
-        {
-            _myServiceSemaphore.Release();
-        }
-
-        return await _myService.ConfigureAwait(false);
     }
 }
 #endregion
 ```
 
+With `ThreadSafeStrategy.SemaphoreSlim`, the field is guarded by `SemaphoreSlim` and the slow path waits asynchronously:
+
 ```csharp
-// Invalid outcome (must not happen): async-init resolver paths cannot use lock-based strategies.
-private readonly Lock _myServiceLock = new();
-private async global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync()
+private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = new(1, 1);
+
+private async global::System.Threading.Tasks.Task<global::MyService> InitMyServiceAsync()
 {
-    lock(_myServiceLock)
+    await _myServiceSemaphore.WaitAsync().ConfigureAwait(false);
+    try
     {
-        _myService ??= CreateMyServiceAsync();
+        if(_myService is null)
+        {
+            _myService = CreateMyServiceAsync();
+        }
+    }
+    finally
+    {
+        _myServiceSemaphore.Release();
     }
 
-    return await _myService;
+    return await _myService.ConfigureAwait(false);
+}
+```
+
+```csharp
+// Invalid outcome (must not happen): the resolver must not be async, and the task must not be awaited while synchronizing.
+private async global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync()
+{
+    if(_myService is not null)
+        return await _myService.ConfigureAwait(false);
+    ...
 }
 ```
 

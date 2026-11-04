@@ -312,7 +312,8 @@ partial class IocSourceGenerator
             funcFieldByResolver,
             new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
             new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
-            names);
+            names,
+            CreateProjectedTasks(lastWinsLookup, serviceLookup, lazyWrapperEntries, funcWrapperEntries, reservedNames, names));
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,
@@ -352,6 +353,183 @@ partial class IocSourceGenerator
             funcWrapperEntries,
             kvpWrapperEntries,
             collectionEntries);
+    }
+
+    /// <summary>
+    /// The member names generated for the container's services and Lazy/Func wrapper fields, so derived names can avoid them.
+    /// Only the base names are stored; methods and fields derived from them (<c>Create…</c>, <c>…Async</c>, <c>Init…Async</c>,
+    /// <c>…Lock</c>, …) are matched by stripping the derivation from the checked name, without building candidate names.
+    /// </summary>
+    private sealed class ServiceMemberNames
+    {
+        private static readonly string[] SynchronizationFieldSuffixes = ["Lock", "Semaphore", "SpinLock"];
+
+        private readonly HashSet<string> resolverNames = new(StringComparer.Ordinal);
+        private readonly HashSet<string> fieldNames = new(StringComparer.Ordinal);
+
+        public ServiceMemberNames(
+            Dictionary<ServiceTypeKey, List<ServiceLookupEntry>> serviceLookup,
+            ImmutableEquatableArray<LazyWrapperContainerEntry> lazyWrapperEntries,
+            ImmutableEquatableArray<FuncWrapperContainerEntry> funcWrapperEntries)
+        {
+            foreach(var registrations in serviceLookup.Values)
+            {
+                foreach(var cached in registrations)
+                {
+                    resolverNames.Add(cached.ResolverMethodName);
+                    if(cached.FieldName is { } fieldName)
+                    {
+                        fieldNames.Add(fieldName);
+                    }
+                }
+            }
+
+            foreach(var entry in lazyWrapperEntries)
+            {
+                fieldNames.Add(entry.FieldName);
+            }
+
+            foreach(var entry in funcWrapperEntries)
+            {
+                fieldNames.Add(entry.FieldName);
+            }
+        }
+
+        public void AddField(string fieldName) => fieldNames.Add(fieldName);
+
+        public void AddMethod(string methodName) => resolverNames.Add(methodName);
+
+        /// <summary>
+        /// Gets whether <paramref name="fieldName"/> is a generated field or one of its synchronization fields.
+        /// </summary>
+        public bool ContainsField(string fieldName)
+        {
+            if(fieldNames.Contains(fieldName))
+                return true;
+
+            foreach(var suffix in SynchronizationFieldSuffixes)
+            {
+                if(fieldName.Length > suffix.Length
+                    && fieldName.EndsWith(suffix, StringComparison.Ordinal)
+                    && fieldNames.Contains(fieldName[..^suffix.Length]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Gets whether <paramref name="methodName"/> is a generated resolver or a method derived from one
+        /// (see <see cref="GetCreateMethodName"/>, <see cref="GetAsyncResolverMethodName"/>,
+        /// <see cref="GetAsyncCreateMethodName"/> and <see cref="GetAsyncInitMethodName"/>).
+        /// </summary>
+        public bool ContainsMethod(string methodName)
+        {
+            if(resolverNames.Contains(methodName))
+                return true;
+
+            // {M}Async
+            var isAsync = methodName.Length > 5 && methodName.EndsWith("Async", StringComparison.Ordinal);
+            var syncName = isAsync ? methodName[..^5] : methodName;
+            if(isAsync && resolverNames.Contains(syncName))
+                return true;
+
+            // Create{X}[Async] and Init{X}Async derive from Get{X}
+            if(syncName.Length > 6 && syncName.StartsWith("Create", StringComparison.Ordinal) && resolverNames.Contains("Get" + syncName[6..]))
+                return true;
+            if(isAsync && syncName.Length > 4 && syncName.StartsWith("Init", StringComparison.Ordinal) && resolverNames.Contains("Get" + syncName[4..]))
+                return true;
+
+            // {M}_Create[Async] and {M}_InitAsync derive from any other method M
+            if(syncName.Length > 7 && syncName.EndsWith("_Create", StringComparison.Ordinal) && resolverNames.Contains(syncName[..^7]))
+                return true;
+            return isAsync && syncName.Length > 5 && syncName.EndsWith("_Init", StringComparison.Ordinal) && resolverNames.Contains(syncName[..^5]);
+        }
+    }
+
+    /// <summary>
+    /// Creates the cached <c>Task&lt;ServiceType&gt;</c> projections of singleton/scoped async-init services: one for each
+    /// service type that resolves to the service but differs from its resolver's result type (<c>Task&lt;T&gt;</c> is invariant).
+    /// </summary>
+    private static Dictionary<string, ImmutableEquatableArray<ProjectedTask>> CreateProjectedTasks(
+        Dictionary<ServiceTypeKey, ServiceLookupEntry> lastWinsLookup,
+        Dictionary<ServiceTypeKey, List<ServiceLookupEntry>> serviceLookup,
+        ImmutableEquatableArray<LazyWrapperContainerEntry> lazyWrapperEntries,
+        ImmutableEquatableArray<FuncWrapperContainerEntry> funcWrapperEntries,
+        ReservedMemberNames reservedNames,
+        ContainerNames names)
+    {
+        var projectedTasksByResolver = new Dictionary<string, List<ProjectedTask>>(StringComparer.Ordinal);
+
+        // Built only when a projection is needed: most containers have no async-init service aliases
+        ServiceMemberNames? serviceMemberNames = null;
+
+        foreach(var kvp in lastWinsLookup)
+        {
+            var cached = kvp.Value;
+            var serviceType = kvp.Key.ServiceType;
+
+            if(!cached.IsAsyncInit
+                || cached.FieldName is null
+                || cached.Registration.Lifetime == ServiceLifetime.Transient
+                || serviceType == GetResolvedTypeName(cached.Registration))
+            {
+                continue;
+            }
+
+            if(!projectedTasksByResolver.TryGetValue(cached.ResolverMethodName, out var projectedTasks))
+            {
+                projectedTasks = [];
+                projectedTasksByResolver[cached.ResolverMethodName] = projectedTasks;
+            }
+
+            if(ContainsProjectedTask(projectedTasks, serviceType))
+            {
+                continue;
+            }
+
+            var safeServiceType = names.Get(serviceType);
+            var fieldName = $"{cached.FieldName}Task_As_{safeServiceType}";
+            var methodName = $"{cached.ResolverMethodName}Async_As_{safeServiceType}";
+
+            // Avoid user/infrastructure members and the names generated for other services (e.g. a type named FooTask_As_IFoo)
+            serviceMemberNames ??= new ServiceMemberNames(serviceLookup, lazyWrapperEntries, funcWrapperEntries);
+
+            while(reservedNames.IsReservedFieldName(fieldName) || serviceMemberNames.ContainsField(fieldName))
+            {
+                fieldName = $"{fieldName}_Resolve";
+            }
+
+            while(reservedNames.IsReservedResolverName(methodName) || serviceMemberNames.ContainsMethod(methodName))
+            {
+                methodName = $"{methodName}_Resolve";
+            }
+
+            serviceMemberNames.AddField(fieldName);
+            serviceMemberNames.AddMethod(methodName);
+            projectedTasks.Add(new ProjectedTask(serviceType, fieldName, methodName));
+        }
+
+        var result = new Dictionary<string, ImmutableEquatableArray<ProjectedTask>>(projectedTasksByResolver.Count, StringComparer.Ordinal);
+        foreach(var kvp in projectedTasksByResolver)
+        {
+            result[kvp.Key] = kvp.Value.ToImmutableEquatableArray();
+        }
+
+        return result;
+
+        static bool ContainsProjectedTask(List<ProjectedTask> projectedTasks, string serviceType)
+        {
+            foreach(var projected in projectedTasks)
+            {
+                if(projected.ServiceType == serviceType)
+                    return true;
+            }
+
+            return false;
+        }
     }
 
     private static ImmutableEquatableDictionary<ServiceTypeKey, ContainerEntry> CreateLastWinsByServiceType(

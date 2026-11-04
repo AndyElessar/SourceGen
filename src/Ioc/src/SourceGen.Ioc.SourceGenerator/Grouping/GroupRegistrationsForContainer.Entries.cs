@@ -130,6 +130,12 @@ partial class IocSourceGenerator
                 entry = serviceEntry with { InnerResolverMethodName = cached.InnerResolverMethodName };
             }
 
+            if(entry is AsyncContainerEntry asyncEntry
+                && wrapperFields.ProjectedTasksByResolver.TryGetValue(asyncEntry.ResolverMethodName, out var projectedTasks))
+            {
+                entry = asyncEntry with { ProjectedTasks = projectedTasks };
+            }
+
             entries.Add(entry);
         }
 
