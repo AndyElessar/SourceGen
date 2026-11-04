@@ -927,4 +927,46 @@ public class AsyncMethodInjectTests
         await Assert.That(generatedSource).Contains(expectedCall);
         await Verify(generatedSource).UseParameters(userMember);
     }
+
+    [Test]
+    [Arguments("MyServiceTask_As_IMyService", "_myServiceTask_As_IMyService_Resolve")]
+    [Arguments("MyServiceAsync_As_IMyService", "GetMyServiceAsync_As_IMyService_Resolve()")]
+    public async Task AsyncMethodInject_ServiceNamedLikeProjection_ProjectionGetsResolveSuffix(string serviceName, string expectedMember)
+    {
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class {{serviceName}} { }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains(expectedMember);
+        await Verify(generatedSource).UseParameters(serviceName);
+    }
 }

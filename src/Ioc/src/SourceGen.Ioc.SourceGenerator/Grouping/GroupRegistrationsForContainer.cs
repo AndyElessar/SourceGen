@@ -313,7 +313,11 @@ partial class IocSourceGenerator
             new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
             new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
             names,
-            CreateProjectedTasks(lastWinsLookup, reservedNames, names));
+            CreateProjectedTasks(
+                lastWinsLookup,
+                reservedNames,
+                names,
+                CollectGeneratedMemberNames(serviceLookup, lazyWrapperEntries.Select(static e => e.FieldName).Concat(funcWrapperEntries.Select(static e => e.FieldName)))));
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,
@@ -356,13 +360,48 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Collects the member names generated for the container's services (resolver methods and the methods derived from
+    /// them, service fields and their synchronization fields) and wrapper fields, so derived names can avoid them.
+    /// </summary>
+    private static HashSet<string> CollectGeneratedMemberNames(
+        Dictionary<ServiceTypeKey, List<ServiceLookupEntry>> serviceLookup,
+        IEnumerable<string> wrapperFieldNames)
+    {
+        var generatedNames = new HashSet<string>(wrapperFieldNames, StringComparer.Ordinal);
+
+        foreach(var registrations in serviceLookup.Values)
+        {
+            foreach(var cached in registrations)
+            {
+                var resolverMethodName = cached.ResolverMethodName;
+                generatedNames.Add(resolverMethodName);
+                generatedNames.Add(GetCreateMethodName(resolverMethodName));
+                generatedNames.Add(GetAsyncResolverMethodName(resolverMethodName));
+                generatedNames.Add(GetAsyncCreateMethodName(resolverMethodName));
+                generatedNames.Add(GetAsyncInitMethodName(resolverMethodName));
+
+                if(cached.FieldName is { } fieldName)
+                {
+                    generatedNames.Add(fieldName);
+                    generatedNames.Add($"{fieldName}Lock");
+                    generatedNames.Add($"{fieldName}Semaphore");
+                    generatedNames.Add($"{fieldName}SpinLock");
+                }
+            }
+        }
+
+        return generatedNames;
+    }
+
+    /// <summary>
     /// Creates the cached <c>Task&lt;ServiceType&gt;</c> projections of singleton/scoped async-init services: one for each
     /// service type that resolves to the service but differs from its resolver's result type (<c>Task&lt;T&gt;</c> is invariant).
     /// </summary>
     private static Dictionary<string, ImmutableEquatableArray<ProjectedTask>> CreateProjectedTasks(
         Dictionary<ServiceTypeKey, ServiceLookupEntry> lastWinsLookup,
         ReservedMemberNames reservedNames,
-        ContainerNames names)
+        ContainerNames names,
+        HashSet<string> generatedNames)
     {
         var projectedTasksByResolver = new Dictionary<string, List<ProjectedTask>>(StringComparer.Ordinal);
 
@@ -394,16 +433,19 @@ partial class IocSourceGenerator
             var fieldName = $"{cached.FieldName}Task_As_{safeServiceType}";
             var methodName = $"{cached.ResolverMethodName}Async_As_{safeServiceType}";
 
-            if(reservedNames.IsReservedFieldName(fieldName))
+            // Avoid user/infrastructure members and the names generated for other services (e.g. a type named FooTask_As_IFoo)
+            while(reservedNames.IsReservedFieldName(fieldName) || generatedNames.Contains(fieldName))
             {
                 fieldName = $"{fieldName}_Resolve";
             }
 
-            if(reservedNames.IsReservedResolverName(methodName))
+            while(reservedNames.IsReservedResolverName(methodName) || generatedNames.Contains(methodName))
             {
                 methodName = $"{methodName}_Resolve";
             }
 
+            generatedNames.Add(fieldName);
+            generatedNames.Add(methodName);
             projectedTasks.Add(new ProjectedTask(serviceType, fieldName, methodName));
         }
 
