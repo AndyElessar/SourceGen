@@ -66,7 +66,8 @@ partial class AppContainer
 
     // Singleton - stored in root, shared across scopes
     private global::SingletonService? _singletonService;
-    private readonly SemaphoreSlim _singletonServiceSemaphore = new(1, 1);
+    // Allocated by the root constructors only (`_singletonServiceSemaphore = new(1, 1);`): scopes never use it
+    private readonly SemaphoreSlim _singletonServiceSemaphore = null!;
     private global::SingletonService GetSingletonService() => _singletonService ?? CreateSingletonService();
 
     private global::SingletonService CreateSingletonService()

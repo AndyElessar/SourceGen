@@ -38,6 +38,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
+        // Synchronization of lazily created singletons (scopes delegate creation to the root)
+        _myServiceSemaphore = new(1, 1);
+        _myService_As_IMyServiceSemaphore = new(1, 1);
+
     }
 
     private TestContainer(TestContainer parent)
@@ -54,7 +58,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
-    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = new(1, 1);
+    private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = null!;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
 
@@ -83,7 +87,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myService_As_IMyService;
-    private readonly global::System.Threading.SemaphoreSlim _myService_As_IMyServiceSemaphore = new(1, 1);
+    private readonly global::System.Threading.SemaphoreSlim _myService_As_IMyServiceSemaphore = null!;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService> GetMyService_As_IMyServiceAsync() => _myService_As_IMyService ?? _root?.GetMyService_As_IMyServiceAsync() ?? InitMyService_As_IMyServiceAsync();
 

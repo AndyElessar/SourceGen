@@ -181,14 +181,28 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes the synchronization field guarding <paramref name="fieldName"/> for <paramref name="strategy"/>.
+    /// Gets whether the synchronization field of <paramref name="strategy"/> is an allocated object.
     /// </summary>
-    private static void WriteSyncField(SourceWriter writer, ThreadSafeStrategy strategy, string fieldName)
+    private static bool IsAllocatedSyncStrategy(ThreadSafeStrategy strategy) =>
+        strategy is ThreadSafeStrategy.Lock or ThreadSafeStrategy.SemaphoreSlim;
+
+    /// <summary>
+    /// Writes the synchronization field guarding <paramref name="fieldName"/> for <paramref name="strategy"/>.
+    /// A <paramref name="rootOnly"/> field is allocated by the root constructors (see <see cref="WriteSyncFieldInit"/>)
+    /// instead of an initializer, so scopes, which never use it, do not allocate it.
+    /// </summary>
+    private static void WriteSyncField(SourceWriter writer, ThreadSafeStrategy strategy, string fieldName, bool rootOnly = false)
     {
         switch(strategy)
         {
+            case ThreadSafeStrategy.Lock when rootOnly:
+                writer.WriteLine($"private readonly global::System.Threading.Lock {fieldName}Lock = null!;");
+                break;
             case ThreadSafeStrategy.Lock:
                 writer.WriteLine($"private readonly global::System.Threading.Lock {fieldName}Lock = new();");
+                break;
+            case ThreadSafeStrategy.SemaphoreSlim when rootOnly:
+                writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = null!;");
                 break;
             case ThreadSafeStrategy.SemaphoreSlim:
                 writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);");
@@ -196,6 +210,22 @@ partial class IocSourceGenerator
             case ThreadSafeStrategy.SpinLock:
                 // SpinLock must NOT be readonly because Enter/Exit mutate it
                 writer.WriteLine($"private global::System.Threading.SpinLock {fieldName}SpinLock = new(false);");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Writes the root constructor statement allocating a root-only synchronization field (see <see cref="WriteSyncField"/>).
+    /// </summary>
+    private static void WriteSyncFieldInit(SourceWriter writer, ThreadSafeStrategy strategy, string fieldName)
+    {
+        switch(strategy)
+        {
+            case ThreadSafeStrategy.Lock:
+                writer.WriteLine($"{fieldName}Lock = new();");
+                break;
+            case ThreadSafeStrategy.SemaphoreSlim:
+                writer.WriteLine($"{fieldName}Semaphore = new(1, 1);");
                 break;
         }
     }
@@ -315,6 +345,18 @@ partial class IocSourceGenerator
         bool hasParameter,
         bool effectiveUseSwitchStatement)
     {
+        // Singletons are synchronized only on the root: scopes delegate their creation to it.
+        // Must precede eager initialization because eager singletons may resolve lazy ones.
+        if(groups.SingletonEntries.Any(static entry => entry.HasRootOnlySyncField))
+        {
+            writer.WriteLine("// Synchronization of lazily created singletons (scopes delegate creation to the root)");
+            foreach(var entry in groups.SingletonEntries)
+            {
+                entry.WriteRootSyncFieldInit(writer);
+            }
+            writer.WriteLine();
+        }
+
         // Initialize imported modules
         foreach(var module in container.ImportedModules)
         {

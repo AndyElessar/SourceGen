@@ -118,10 +118,20 @@ partial class IocSourceGenerator
             writer.WriteLine($"{FieldName} = parent.{FieldName};");
         }
 
+        public override bool HasRootOnlySyncField => DelegatesToRoot && IsAllocatedSyncStrategy(ThreadSafeStrategy);
+
+        public override void WriteRootSyncFieldInit(SourceWriter writer)
+        {
+            if(HasRootOnlySyncField)
+            {
+                WriteSyncFieldInit(writer, ThreadSafeStrategy, FieldName);
+            }
+        }
+
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {ResolvedTypeName}? {FieldName};");
-            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
+            WriteSyncField(writer, ThreadSafeStrategy, FieldName, HasRootOnlySyncField);
         }
 
         public override void WriteResolver(SourceWriter writer)

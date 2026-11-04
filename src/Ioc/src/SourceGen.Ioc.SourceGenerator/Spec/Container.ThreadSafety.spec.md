@@ -262,9 +262,11 @@ Each strategy generates different synchronization fields:
 
 > **Note**: Eager singletons use non-nullable fields (`private T _field;`) without synchronization fields, as the root constructor creates them before the container can be used from other threads. Eager scoped services MUST keep the synchronized shape above: scope constructors create them, but the root creates them on demand, possibly from several threads.
 
+**Root-only singleton synchronization**: scopes delegate the creation of lazily created singletons to the root, so they never use the singletons' synchronization fields. The `Lock` and `SemaphoreSlim` fields of singletons MUST NOT be allocated by a field initializer: they MUST be declared `= null!;` and allocated at the start of the root constructor body (before eager singletons, which may resolve lazy ones), e.g. `_fieldLock = new();`. Scopes therefore allocate synchronization objects only for scoped services. `SpinLock` fields are value types and keep their initializer.
+
 ## Scope Constructor Behavior
 
-When creating a child scope, synchronization fields are NOT copied from parent. Each scope has its own synchronization primitives for scoped services:
+When creating a child scope, synchronization fields are NOT copied from parent. Each scope has its own synchronization primitives for scoped services; singleton synchronization fields stay `null` in scopes (see above):
 
 ```csharp
 private AppContainer(AppContainer parent)

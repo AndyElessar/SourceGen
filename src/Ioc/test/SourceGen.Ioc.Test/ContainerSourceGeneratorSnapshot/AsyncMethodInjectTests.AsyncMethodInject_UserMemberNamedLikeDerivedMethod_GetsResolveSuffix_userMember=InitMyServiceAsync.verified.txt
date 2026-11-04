@@ -38,6 +38,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
+        // Synchronization of lazily created singletons (scopes delegate creation to the root)
+        _myServiceLock = new();
+
     }
 
     private TestContainer(TestContainer parent)
@@ -54,7 +57,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = new();
+    private readonly global::System.Threading.Lock _myServiceLock = null!;
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myServiceTask_As_IMyService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyService_ResolveAsync() => _myService ?? _root?.GetMyService_ResolveAsync() ?? InitMyService_ResolveAsync();

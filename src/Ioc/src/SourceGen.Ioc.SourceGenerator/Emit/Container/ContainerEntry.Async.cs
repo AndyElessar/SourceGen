@@ -107,10 +107,20 @@ partial class IocSourceGenerator
             }
         }
 
+        public override bool HasRootOnlySyncField => DelegatesToRoot && IsAllocatedSyncStrategy(ThreadSafeStrategy);
+
+        public override void WriteRootSyncFieldInit(SourceWriter writer)
+        {
+            if(HasRootOnlySyncField)
+            {
+                WriteSyncFieldInit(writer, ThreadSafeStrategy, FieldName);
+            }
+        }
+
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
-            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
+            WriteSyncField(writer, ThreadSafeStrategy, FieldName, HasRootOnlySyncField);
 
             foreach(var projected in ProjectedTasks)
             {

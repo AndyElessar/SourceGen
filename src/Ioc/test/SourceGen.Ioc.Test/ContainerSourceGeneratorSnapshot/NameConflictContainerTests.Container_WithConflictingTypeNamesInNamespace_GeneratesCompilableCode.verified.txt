@@ -38,6 +38,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
         _fallbackProvider = fallbackProvider;
+        // Synchronization of lazily created singletons (scopes delegate creation to the root)
+        _asyncServiceLock = new();
+
 
         // Initialize Lazy wrapper fields
         _lazy_IDependency_dependency = new global::System.Lazy<global::Services.IDependency>(() => GetDependency(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
@@ -99,7 +102,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService>? _asyncService;
-    private readonly global::System.Threading.Lock _asyncServiceLock = new();
+    private readonly global::System.Threading.Lock _asyncServiceLock = null!;
     private global::System.Threading.Tasks.Task<global::Services.IAsyncService>? _asyncServiceTask_As_IAsyncService;
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService> GetAsyncServiceAsync() => _asyncService ?? _root?.GetAsyncServiceAsync() ?? InitAsyncServiceAsync();

@@ -60,6 +60,19 @@ partial class IocSourceGenerator
         /// Gets whether a scope delegates creation of this entry to the root container (lazily created singletons).
         /// </summary>
         public virtual bool DelegatesToRoot => false;
+
+        /// <summary>
+        /// Gets whether the root constructors allocate this entry's synchronization field: scopes delegate creation
+        /// to the root, so they never use it (see <see cref="WriteRootSyncFieldInit"/>).
+        /// </summary>
+        public virtual bool HasRootOnlySyncField => false;
+
+        /// <summary>
+        /// Writes the root constructor statement allocating this entry's synchronization field.
+        /// </summary>
+        public virtual void WriteRootSyncFieldInit(SourceWriter writer)
+        {
+        }
     }
 
     private closed record class ServiceContainerEntry(
