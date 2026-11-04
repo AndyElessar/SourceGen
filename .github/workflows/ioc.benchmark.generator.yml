@@ -19,7 +19,7 @@ on:
       - '!**/*.md'
   pull_request:
     branches: [main]
-    # labeled/unlabeled re-run the comparison when the accept label changes; other labels skip the job.
+    # labeled/unlabeled re-run the comparison when the accept label changes; other labels skip the run.
     types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - 'src/Ioc/src/SourceGen.Ioc/**'
@@ -47,7 +47,7 @@ env:
   ACCEPT_LABEL: benchmark-accept-allocation
 
 jobs:
-  generator-benchmark:
+  plan:
     if: >-
       github.event_name != 'pull_request' ||
       (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
@@ -55,23 +55,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 45
-    # Job-level so that a skipped run for an unrelated label never cancels a running benchmark.
-    # Newer commits replace older runs of the same pull request; every other run is kept.
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
-      cancel-in-progress: true
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      base-label: ${{ steps.plan.outputs.base-label }}
+      head-label: ${{ steps.plan.outputs.head-label }}
+      accepted: ${{ steps.plan.outputs.accepted }}
 
     steps:
+      # The measured commit and its parents are enough to label the run and diff it against the base.
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
 
-      # Base and head run in this job on the same runner, so time comparisons are not affected by runner hardware.
-      - name: Resolve base
-        id: base
+      - name: Plan
+        id: plan
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -92,21 +92,70 @@ jobs:
             base_label="$REF_NAME@$(short HEAD^1)"
           fi
 
-          base_dir=""
-          if git cat-file -e "HEAD^1:$BENCHMARK_PROJECT" 2>/dev/null; then
-            base_dir="$RUNNER_TEMP/base"
-            git worktree add --detach "$base_dir" HEAD^1
-            echo "Head $head_label is compared with base $base_label."
-          else
-            echo "Head $head_label has no base because $base_label has no $BENCHMARK_PROJECT."
+          # Updates of packages that neither the harness, the generator nor its runtime library use, such as test
+          # and CLI packages, cannot change the results. A manual run always measures.
+          irrelevant='TUnit|Verify\.TUnit|System\.IO\.Abstractions|System\.IO\.Abstractions\.TestingHelpers|ConsoleAppFramework|ConsoleAppFramework\.CliSchema|ZLogger|Microsoft\.AspNetCore\.Components\.Web|StyleCop\.Analyzers'
+          run=true
+          changed="$(git diff --name-only HEAD^1 HEAD -- ':(exclude)*.md')"
+          if [[ "$EVENT_NAME" != workflow_dispatch && "$changed" == Directory.Packages.props ]]; then
+            # Every added or removed line must be the version of an irrelevant package; anything else measures.
+            relevant="$(git diff --unified=0 HEAD^1 HEAD -- Directory.Packages.props \
+              | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' \
+              | grep -vE "^[+-][[:space:]]*<PackageVersion Include=\"($irrelevant)\" Version=\"[^\"]*\"[[:space:]]*/>[[:space:]]*$" || true)"
+            if [[ -z "$relevant" ]]; then
+              run=false
+              echo "Only packages that the benchmarks do not use changed, so the benchmark is skipped." | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
           fi
 
           {
-            echo "dir=$base_dir"
+            echo "run=$run"
             echo "base-label=$base_label"
             echo "head-label=$head_label"
             echo "accepted=$ACCEPTED"
           } >> "$GITHUB_OUTPUT"
+
+  # Each class runs on its own runner in parallel. Its base and head run on that runner, so time comparisons
+  # are not affected by runner hardware, and its *Overhead benchmarks estimate the drift between them.
+  measure:
+    name: measure (${{ matrix.class }})
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        class: [GeneratorBenchmarks, ColdGeneratorBenchmarks, AnalyzerBenchmarks]
+    # Job-level so that a skipped run for an unrelated label never cancels a running benchmark.
+    # Newer commits replace older runs of the same pull request; every other run is kept.
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.class }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_dir=""
+          if git cat-file -e "HEAD^1:$BENCHMARK_PROJECT" 2>/dev/null; then
+            base_dir="$RUNNER_TEMP/base"
+            git worktree add --detach "$base_dir" HEAD^1
+          else
+            echo "The base has no $BENCHMARK_PROJECT, so the head is measured without a baseline."
+          fi
+          echo "dir=$base_dir" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -138,42 +187,127 @@ jobs:
         shell: bash
         env:
           BASE_DIR: ${{ steps.build-base.outcome == 'success' && steps.base.outputs.dir || '' }}
+          CLASS: ${{ matrix.class }}
+          # Scenarios per BenchmarkDotNet run. Smaller groups shorten the time between a benchmark's base and head runs,
+          # but every run builds its own benchmark executable first.
+          GROUP_SIZE: '2'
         run: |
           set -euo pipefail
 
           results="$RUNNER_TEMP/generator-benchmark"
+          harness() {
+            (cd "$1" && shift && dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build -- "$@" </dev/null)
+          }
+          # Compiling the output in every benchmark process is skipped; GeneratorPerformanceTests compiles it.
           run() {
-            (cd "$1" && dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build -- \
-              --filter '*Count: 500*' \
+            local dir="$1" out="$2"
+            shift 2
+            harness "$dir" --filter "$@" \
               --job short --warmupCount 3 --iterationCount 8 --iterationTime 300 \
-              --envVars DOTNET_TieredCompilation:0 \
+              --envVars DOTNET_TieredCompilation:0 SOURCEGEN_BENCHMARK_SKIP_COMPILE_VALIDATION:true \
               --exporters json \
-              --artifacts "$2")
+              --artifacts "$out"
+          }
+          scenarios() {
+            harness "$1" --scenarios "$CLASS" | tr -d '\r' | grep -E '^[A-Za-z0-9_]+$' || true
           }
 
-          # A failed base run leaves the head without a baseline instead of failing the job.
-          # Its partial reports move out of the compared directory but stay in the uploaded artifact.
-          if [[ -n "$BASE_DIR" ]] && ! run "$BASE_DIR" "$results/base"; then
-            echo "::warning title=Base benchmark failed::The base run failed, so head results are reported without a baseline."
-            if [[ -d "$results/base/results" ]]; then
-              mv "$results/base/results" "$results/base/failed-results"
+          # Scenarios that only the base has are measured too, so removed benchmarks are reported. A base harness
+          # without --scenarios contributes none.
+          mapfile -t all < <({
+            scenarios "$GITHUB_WORKSPACE"
+            if [[ -n "$BASE_DIR" ]] && grep -q -- '"--scenarios"' "$BASE_DIR/src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/Program.cs"; then
+              scenarios "$BASE_DIR"
             fi
+          } | sort -u)
+          if (( ${#all[@]} == 0 )); then
+            echo "::error title=No scenarios::The head harness listed no scenarios for $CLASS."
+            exit 1
           fi
-          run "$GITHUB_WORKSPACE" "$results/head"
+
+          # Groups alternate base-head and head-base, so a steady drift during the job affects both sides equally.
+          head_status=0
+          for ((group = 0; group * GROUP_SIZE < ${#all[@]}; group++)); do
+            filters=()
+            for scenario in "${all[@]:group * GROUP_SIZE:GROUP_SIZE}"; do
+              filters+=("*.$CLASS.*(Count: 500, Scenario: $scenario)")
+            done
+            if (( group % 2 == 0 )); then order=(base head); else order=(head base); fi
+
+            for side in "${order[@]}"; do
+              out="$results/$side/$CLASS/group-$group"
+              if [[ "$side" == head ]]; then
+                run "$GITHUB_WORKSPACE" "$out" "${filters[@]}" || head_status=$?
+              elif [[ -n "$BASE_DIR" ]] && ! run "$BASE_DIR" "$out" "${filters[@]}"; then
+                # A failed base run leaves these head results without a baseline instead of failing the job.
+                # Its partial reports move out of the compared directory but stay in the uploaded artifact.
+                echo "::warning title=Base benchmark failed::The base run of $CLASS group $group failed, so its head results are reported without a baseline."
+                if [[ -d "$out" ]]; then
+                  mkdir -p "$results/failed-base/$CLASS"
+                  mv "$out" "$results/failed-base/$CLASS/group-$group"
+                fi
+              fi
+            done
+          done
+          exit "$head_status"
+
+      - name: Upload benchmark results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ioc-generator-benchmark-${{ matrix.class }}
+          path: ${{ runner.temp }}/generator-benchmark
+          if-no-files-found: warn
+          retention-days: 7
+          overwrite: true
+
+  generator-benchmark:
+    needs: [plan, measure]
+    # A measure job cancelled by a newer commit makes this run's comparison incomplete, so it is not reported.
+    if: ${{ !cancelled() && needs.plan.outputs.run == 'true' && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          global-json-file: global.json
+
+      - name: Build head
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release
+
+      # A measure job that failed before uploading leaves its benchmarks missing, which the comparison reports.
+      - name: Download benchmark results
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ioc-generator-benchmark-*Benchmarks
+          path: ${{ runner.temp }}/generator-benchmark
+          merge-multiple: true
 
       - name: Compare with base
-        if: ${{ !cancelled() }}
         shell: bash
         env:
-          ACCEPTED: ${{ steps.base.outputs.accepted }}
-          BASE_LABEL: ${{ steps.base.outputs.base-label }}
-          HEAD_LABEL: ${{ steps.base.outputs.head-label }}
+          ACCEPTED: ${{ needs.plan.outputs.accepted }}
+          BASE_LABEL: ${{ needs.plan.outputs.base-label }}
+          HEAD_LABEL: ${{ needs.plan.outputs.head-label }}
         run: |
           set -euo pipefail
 
           results="$RUNNER_TEMP/generator-benchmark"
+          mkdir -p "$results"
           # A path that does not exist compares the head without a baseline.
-          args=(--compare "$results/base/results" "$results/head/results" "$results/table.md" "$REGRESSION_THRESHOLD_PERCENT"
+          args=(--compare "$results/base" "$results/head" "$results/table.md" "$REGRESSION_THRESHOLD_PERCENT"
             --allocation-threshold "AnalyzerBenchmarks=$ANALYZER_ALLOCATION_THRESHOLD_PERCENT")
           if [[ "$ACCEPTED" == true ]]; then
             args+=(--accept-regressions)
@@ -185,10 +319,14 @@ jobs:
           {
             echo "## SourceGen.Ioc generator benchmark"
             echo
-            if [[ -d "$results/base/results" ]]; then
-              echo "Head \`$HEAD_LABEL\` is compared with base \`$BASE_LABEL\`, both measured in this job on the same runner."
+            if [[ -n "$(find "$results/base" -name '*-report*.json' -print -quit 2>/dev/null)" ]]; then
+              echo "Head \`$HEAD_LABEL\` is compared with base \`$BASE_LABEL\`. Each benchmark class ran on its own runner, alternating between base and head runs of its scenarios."
             else
               echo "Head \`$HEAD_LABEL\` is reported without a baseline because base \`$BASE_LABEL\` produced no results."
+            fi
+            if [[ -d "$results/failed-base" ]]; then
+              echo
+              echo "Some base runs failed, so their head results have no baseline."
             fi
             if [[ "$ACCEPTED" == true ]]; then
               echo
@@ -214,13 +352,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
+          shopt -s nullglob globstar
 
+          results="$RUNNER_TEMP/generator-benchmark"
           for side in head base; do
-            for report in "$RUNNER_TEMP/generator-benchmark/$side/results"/*-report-github.md; do
+            for report in "$results/$side"/**/*-report-github.md; do
               {
                 echo
-                echo "<details><summary>BenchmarkDotNet report ($side)</summary>"
+                echo "<details><summary>BenchmarkDotNet report (${report#"$results/"})</summary>"
                 echo
                 cat "$report"
                 echo
@@ -229,12 +368,14 @@ jobs:
             done
           done
 
-      - name: Upload benchmark results
+      - name: Upload comparison
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ioc-generator-benchmark-${{ github.run_id }}
-          path: ${{ runner.temp }}/generator-benchmark
+          name: ioc-generator-benchmark-comparison
+          path: |
+            ${{ runner.temp }}/generator-benchmark/comparison.md
+            ${{ runner.temp }}/generator-benchmark/table.md
           if-no-files-found: warn
           retention-days: 7
           overwrite: true
