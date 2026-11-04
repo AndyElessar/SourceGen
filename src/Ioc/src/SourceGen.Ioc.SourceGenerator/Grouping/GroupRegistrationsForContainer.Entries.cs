@@ -64,15 +64,10 @@ partial class IocSourceGenerator
         ServiceLookupEntry inner,
         EagerResolveOptions eagerResolveOptions,
         ReservedMemberNames reservedNames,
-        ContainerNames names)
+        DecoratedServiceNames decoratedNames)
     {
-        var safeServiceType = names.Get(reg.ServiceType.Name);
-        var entry = CreateServiceLookupEntry(
-            reg,
-            $"{inner.ResolverMethodName}_As_{safeServiceType}",
-            $"{inner.FieldName}_As_{safeServiceType}",
-            eagerResolveOptions,
-            reservedNames);
+        var (methodName, fieldName) = decoratedNames.Get(inner, reg.ServiceType.Name);
+        var entry = CreateServiceLookupEntry(reg, methodName, fieldName, eagerResolveOptions, reservedNames);
 
         // Transient async-init services only have a creation method (no cached resolver)
         var innerResolverMethodName = !inner.IsAsyncInit
