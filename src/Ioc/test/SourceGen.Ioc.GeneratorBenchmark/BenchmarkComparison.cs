@@ -33,7 +33,7 @@ internal static class BenchmarkComparison
             .Select(key => Classify(key, baseline.Measurements.GetValueOrDefault(key), head.Measurements.GetValueOrDefault(key), acceptRegressions, thresholdPercent, allocationThresholds, drift))];
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-        File.WriteAllText(outputPath, Format(rows, thresholdPercent, allocationThresholds, drift, baseline.Host, head.Host));
+        File.WriteAllText(outputPath, Format(rows, thresholdPercent, allocationThresholds, drift, baseline.Hosts, head.Hosts));
         if(Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
         {
             WriteAnnotations(rows);
@@ -45,9 +45,10 @@ internal static class BenchmarkComparison
     private static Report Load(string path)
     {
         Dictionary<(string Parameters, string Method), Measurement> measurements = [];
-        Host? host = null;
+        Dictionary<string, Host> hosts = new(StringComparer.Ordinal);
+        // Subdirectories are included because CI splits a run into one BenchmarkDotNet run per class and scenario group.
         string[] files = File.Exists(path) ? [path]
-            : Directory.Exists(path) ? [.. Directory.EnumerateFiles(path, "*-report*.json").Order(StringComparer.Ordinal)]
+            : Directory.Exists(path) ? [.. Directory.EnumerateFiles(path, "*-report*.json", SearchOption.AllDirectories).Order(StringComparer.Ordinal)]
             : [];
 
         foreach(var file in files)
@@ -59,16 +60,19 @@ internal static class BenchmarkComparison
                 continue;
             }
 
-            if(host is null && root.TryGetProperty("HostEnvironmentInfo", out var info))
-            {
-                host = new(Text(info, "ProcessorName") ?? "unknown", Text(info, "OsVersion") ?? "unknown",
-                    Text(info, "RuntimeVersion") ?? "unknown", Text(info, "BenchmarkDotNetVersion") ?? "unknown");
-            }
+            Host? host = root.TryGetProperty("HostEnvironmentInfo", out var info)
+                ? new(Text(info, "ProcessorName") ?? "unknown", Text(info, "OsVersion") ?? "unknown",
+                    Text(info, "RuntimeVersion") ?? "unknown", Text(info, "BenchmarkDotNetVersion") ?? "unknown")
+                : null;
 
             foreach(var benchmark in benchmarks.EnumerateArray())
             {
                 var key = (Text(benchmark, "Parameters") ?? "", Text(benchmark, "Method") ?? "unknown");
                 var type = Text(benchmark, "Type") ?? "";
+                if(host is not null)
+                {
+                    hosts.TryAdd(type, host);
+                }
 
                 // Failed benchmarks have no statistics; keeping them as failed measurements fails the gate instead of dropping them.
                 if(!benchmark.TryGetProperty("Statistics", out var statistics) || Number(statistics, "Mean") is double.NaN)
@@ -85,7 +89,7 @@ internal static class BenchmarkComparison
             }
         }
 
-        return new(measurements, host);
+        return new(measurements, hosts);
     }
 
     /// <summary>
@@ -177,7 +181,7 @@ internal static class BenchmarkComparison
     };
 
     private static string Format(IReadOnlyList<Row> rows, double threshold, IReadOnlyDictionary<string, double> allocationThresholds,
-        RunnerDrift drift, Host? baselineHost, Host? headHost)
+        RunnerDrift drift, IReadOnlyDictionary<string, Host> baselineHosts, IReadOnlyDictionary<string, Host> headHosts)
     {
         var builder = new StringBuilder();
         builder.AppendLine(string.Join(" · ", rows
@@ -211,19 +215,35 @@ internal static class BenchmarkComparison
         }
 
         builder.AppendLine();
-        if(baselineHost is not null && headHost is not null && baselineHost != headHost)
+        // Classes can run on different machines, so only the baseline and head of the same class must match.
+        var mismatched = headHosts
+            .Where(pair => baselineHosts.TryGetValue(pair.Key, out var baselineHost) && baselineHost != pair.Value)
+            .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+            .ToArray();
+        if(mismatched.Length > 0)
         {
             builder.AppendLine();
             builder.AppendLine("> [!WARNING]");
-            builder.AppendLine("> The baseline and head ran in different environments, so time comparisons may not be meaningful.");
-            builder.AppendLine(">");
-            builder.AppendLine($"> - Baseline: {Describe(baselineHost)}");
-            builder.AppendLine($"> - Head: {Describe(headHost)}");
+            builder.AppendLine("> The baseline and head of these classes ran in different environments, so their time comparisons may not be meaningful.");
+            foreach(var (type, headHost) in mismatched)
+            {
+                builder.AppendLine(">");
+                builder.AppendLine($"> - `{type}` baseline: {Describe(baselineHosts[type])}");
+                builder.AppendLine($"> - `{type}` head: {Describe(headHost)}");
+            }
         }
-        else if(headHost is not null)
+        else if(headHosts.Values.Distinct().ToArray() is [var host])
         {
             builder.AppendLine();
-            builder.AppendLine($"Environment: {Describe(headHost)}.");
+            builder.AppendLine($"Environment: {Describe(host)}.");
+        }
+        else if(headHosts.Count > 0)
+        {
+            builder.AppendLine();
+            foreach(var (type, headHost) in headHosts.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+            {
+                builder.AppendLine($"- Environment of `{type}`: {Describe(headHost)}.");
+            }
         }
 
         return builder.ToString();
@@ -345,7 +365,8 @@ internal static class BenchmarkComparison
         public double For(string type) => ByClass.GetValueOrDefault(type, Overall);
     }
 
-    private sealed record Report(Dictionary<(string Parameters, string Method), Measurement> Measurements, Host? Host);
+    /// <param name="Hosts">The environment of each benchmark class, from the first report that contains it.</param>
+    private sealed record Report(Dictionary<(string Parameters, string Method), Measurement> Measurements, Dictionary<string, Host> Hosts);
 
     private sealed record Row(string Parameters, string Method, Measurement? Baseline, Measurement? Head, double TimeChange, double AllocationChange, Status Status);
 }

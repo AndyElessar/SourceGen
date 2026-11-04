@@ -24,7 +24,17 @@ public class GeneratorBenchmarks
     {
         input = new GeneratorBenchmarkInput(Scenario, Count);
         warmDriver = input.CreateDriver().RunGeneratorsAndUpdateCompilation(input.Initial, out var output, out _);
-        GeneratorBenchmarkInput.Validate(warmDriver, output);
+        BenchmarkValidation.Validate(warmDriver, output);
+    }
+
+    [GlobalSetup(Target = nameof(EditConstructorOverhead))]
+    public void SetupEditConstructorOverhead()
+    {
+        input = new GeneratorBenchmarkInput(Scenario, Count);
+        warmDriver = input.CreateOverheadDriver().RunGenerators(input.Initial);
+        edited = input.CreateEdited(GeneratorEdit.Constructor);
+        // Runs the edit once outside the measurement, as SetupEdited does, so the edited compilation's caches start in the same state.
+        _ = warmDriver.RunGenerators(edited);
     }
 
     [GlobalSetup(Target = nameof(Edit))]
@@ -56,12 +66,17 @@ public class GeneratorBenchmarks
     [Benchmark]
     public GeneratorDriver EditDefaults() => warmDriver.RunGenerators(edited);
 
+    // EditConstructor with a generator that subscribes to the same inputs with empty transforms: Roslyn's share of an
+    // incremental run. Its time change between two runs estimates the runner drift of this class.
+    [Benchmark]
+    public GeneratorDriver EditConstructorOverhead() => warmDriver.RunGenerators(edited);
+
     private void SetupEdited(GeneratorEdit edit)
     {
         input = new GeneratorBenchmarkInput(Scenario, Count);
         warmDriver = input.CreateDriver().RunGenerators(input.Initial);
         edited = input.CreateEdited(edit);
         var editedDriver = warmDriver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out _);
-        GeneratorBenchmarkInput.Validate(editedDriver, editedOutput);
+        BenchmarkValidation.Validate(editedDriver, editedOutput);
     }
 }

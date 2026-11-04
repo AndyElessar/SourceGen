@@ -1,9 +1,27 @@
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using SourceGen.Ioc.GeneratorBenchmark;
+
+Type[] benchmarkTypes = [typeof(ColdGeneratorBenchmarks), typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks), typeof(GeneratedCodeBenchmarks)];
+
+// Prints the Scenario values of one benchmark class, one per line, so CI can alternate the base and head runs by scenario.
+if(args is ["--scenarios", var className])
+{
+    var type = benchmarkTypes.SingleOrDefault(type => type.Name == className)
+        ?? throw new ArgumentException($"Unknown benchmark class '{className}'.");
+    var scenarios = type.GetProperty(nameof(GeneratorBenchmarks.Scenario))?.GetCustomAttribute<ParamsAttribute>()?.Values
+        ?? throw new InvalidOperationException($"{className}.{nameof(GeneratorBenchmarks.Scenario)} has no [Params].");
+    foreach(var scenario in scenarios)
+    {
+        Console.WriteLine(scenario);
+    }
+    return 0;
+}
 
 if(args is ["--compare", var baselinePath, var headPath, var outputPath, var threshold, .. var options])
 {
@@ -68,5 +86,5 @@ if(args is ["--verify", var path])
     static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }
 
-BenchmarkSwitcher.FromTypes([typeof(ColdGeneratorBenchmarks), typeof(GeneratorBenchmarks), typeof(AnalyzerBenchmarks), typeof(GeneratedCodeBenchmarks)]).Run(args);
+BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(args);
 return 0;

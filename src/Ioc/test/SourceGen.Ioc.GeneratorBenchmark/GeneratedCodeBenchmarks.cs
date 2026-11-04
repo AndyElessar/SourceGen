@@ -28,7 +28,7 @@ public class GeneratedCodeBenchmarks
     {
         input = new GeneratorBenchmarkInput(Scenario, Count);
         var driver = input.CreateDriver().RunGeneratorsAndUpdateCompilation(input.Initial, out var output, out _);
-        GeneratorBenchmarkInput.Validate(driver, output);
+        BenchmarkValidation.Validate(driver, output);
         generated = [.. driver.GetRunResult().GeneratedTrees];
     }
 

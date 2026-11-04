@@ -21,7 +21,7 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 
 ## Generator benchmarks
 
-`ColdGeneratorBenchmarks` contains `Cold` and `ColdOverhead`; `GeneratorBenchmarks` contains the incremental benchmarks. Both run every scenario except `StrictContainers`.
+`ColdGeneratorBenchmarks` contains `Cold` and `ColdOverhead`; `GeneratorBenchmarks` contains the incremental benchmarks and `EditConstructorOverhead`. Both run every scenario except `StrictContainers`.
 
 | Benchmark | Operation |
 | --- | --- |
@@ -32,9 +32,10 @@ Each `Realistic` unit declares a two-level interface hierarchy and a request typ
 | EditConstructor | Adds a constructor dependency to the middle service unit. |
 | EditAddRegistration | Adds a file with one new registration; RegisterFor adds the class file and its attribute to `Registrations.cs`. |
 | EditDefaults | Changes the lifetime of the `[IocRegisterDefaults]` attribute (Singleton → Scoped). Only `Realistic` has services it applies to; the others still re-run every step that depends on default settings. |
+| EditConstructorOverhead | `EditConstructor` with the generator that `ColdOverhead` uses. It is Roslyn's share of an incremental run and estimates the runner drift of this class (see below). |
 
 - Edit benchmarks always start from the same previously run driver and apply the edited compilation. The returned driver is not reused, so they do not accidentally measure a no-op cached run.
-- Setup validates the compilation and generated output that each benchmark measures (initial for `Cold`, `ColdOverhead` and `Rerun`, the edited compilation for the edit benchmarks) outside the timed operation. The edited compilation's semantic caches are warmed during setup.
+- Setup validates the compilation and generated output that each benchmark measures (initial for `Cold`, `ColdOverhead` and `Rerun`, the edited compilation for the edit benchmarks) outside the timed operation: the generator must not fail or report errors, and the output must compile. The edited compilation's semantic caches are warmed during setup; `EditConstructorOverhead` warms them by running its edit once. With the environment variable `SOURCEGEN_BENCHMARK_SKIP_COMPILE_VALIDATION=true`, setup skips compiling the output, which takes seconds to minutes per benchmark process at `Count = 500`, and the caches are only warmed by the generator; CI sets it because GeneratorPerformanceTests compiles the output of every scenario at a smaller size.
 - `Cold` and `ColdOverhead` run a fixed 4 operations per iteration (`[InvocationCount(4)]`). A cold operation allocates up to tens of MB, so with a pilot-chosen operation count, two runs could choose different counts and fit a different number of GCs inside an iteration, which changes the time and allocations per operation. The incremental benchmarks take 0.2 to 50 ms per operation and keep the pilot-chosen count.
 - MemoryDiagnoser reports managed allocations per operation, not retained heap size.
 - These synthetic workloads isolate generator costs; they do not measure total build or IDE latency.
@@ -77,9 +78,9 @@ Compare the two runs:
 dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --compare "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before\results" "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-after\results" "$env:TEMP\generator-comparison.md" 5
 ```
 
-The comparison mode reads BenchmarkDotNet JSON reports or a directory containing them, and writes a Markdown table. A base path that does not exist reports the second run without a baseline. It exits with code 1 when allocated bytes increase by more than the threshold percentage, a benchmark in the first run is missing from the second, or a benchmark in the second run failed or has no allocation data. A time change above the threshold is reported only when the 99.9% confidence intervals do not overlap.
+The comparison mode reads a BenchmarkDotNet JSON report or every report in a directory and its subdirectories, and writes a Markdown table. A base path that does not exist reports the second run without a baseline. It exits with code 1 when allocated bytes increase by more than the threshold percentage, a benchmark in the first run is missing from the second, or a benchmark in the second run failed or has no allocation data. A time change above the threshold is reported only when the 99.9% confidence intervals do not overlap.
 
-Time changes are adjusted for drift between the two runs. The drift of a benchmark class is the median head/base mean time ratio of its `*Overhead` benchmarks (`ColdOverhead`, `AnalyzerOverhead`), which do the same Roslyn work without the IoC generator or analyzers. A class without overhead benchmarks in both runs, such as `GeneratorBenchmarks`, uses the median over all overhead benchmarks. The second run's mean and confidence interval are divided by that ratio before they are compared, and the table's footnote lists the drifts. Allocations are never adjusted, and `*Overhead` benchmarks are excluded from the allocation check because they run no IoC code. Also review the errors and standard deviations in the CSV reports rather than only the means.
+Time changes are adjusted for drift between the two runs. The drift of a benchmark class is the median head/base mean time ratio of its `*Overhead` benchmarks (`ColdOverhead`, `EditConstructorOverhead`, `AnalyzerOverhead`), which do the same Roslyn work without the IoC generator or analyzers. A class without overhead benchmarks in both runs, such as `GeneratedCodeBenchmarks`, uses the median over all overhead benchmarks. The second run's mean and confidence interval are divided by that ratio before they are compared, and the table's footnote lists the drifts. Allocations are never adjusted, and `*Overhead` benchmarks are excluded from the allocation check because they run no IoC code. Also review the errors and standard deviations in the CSV reports rather than only the means.
 
 Options after the threshold:
 
@@ -100,19 +101,20 @@ No differences are expected for behavior-preserving optimizations. GeneratorPerf
 
 ## Continuous integration
 
-[ioc.benchmark.generator.yml](../../../../.github/workflows/ioc.benchmark.generator.yml) runs the `Count = 500` generator and analyzer workloads with the arguments above for pull requests to `main` and pushes to `main` that change the generator, its runtime library, this harness, shared build files or benchmark workflow/comment code. Changes to Markdown files (`*.md`), such as specs and this README, do not trigger it. It can also be started manually.
+[ioc.benchmark.generator.yml](../../../../.github/workflows/ioc.benchmark.generator.yml) runs the `Count = 500` generator and analyzer workloads with the arguments above for pull requests to `main` and pushes to `main` that change the generator, its runtime library, this harness, shared build files or benchmark workflow/comment code. Changes to Markdown files (`*.md`), such as specs and this README, do not trigger it. A change whose only non-Markdown file is `Directory.Packages.props` and that only changes versions of packages the benchmarks do not use, such as TUnit, the CLI packages or StyleCop.Analyzers, is skipped after a short `plan` job. It can also be started manually, which always measures.
 
-Each run measures the base and the head in the same job, on the same runner, and compares them. Nothing is committed to the repository.
+Each benchmark class (`GeneratorBenchmarks`, `ColdGeneratorBenchmarks`, `AnalyzerBenchmarks`) is measured by its own `measure` job in parallel, which runs the base and the head of that class on the same runner. The `generator-benchmark` job then compares all classes. Nothing is committed to the repository.
 
 | Event | Base | Head |
 | --- | --- | --- |
 | Pull request | The `main` commit that the pull request merge commit is based on | The merge commit |
 | Push to `main`, manual run | The first parent of the measured commit | The measured commit |
 
-- The base is checked out into a separate worktree and built and run with its own harness and SDK, so benchmarks that the base does not have yet, such as newly added ones, are reported as "No baseline" and do not fail the job. The same applies to all benchmarks when the base has no harness, or its SDK setup, build or benchmark run fails; the head is still measured. Reports of a failed base run are moved to `base/failed-results` so they are not compared.
-- The base runs before the head. Both share the runner, but neighbouring load can still change during the run, so time changes are adjusted by the drift of the overhead benchmarks (see above) and only produce warnings.
+- The base is checked out into a separate worktree and built and run with its own harness and SDK, so benchmarks that the base does not have yet, such as newly added ones, are reported as "No baseline" and do not fail the job. The same applies to all benchmarks when the base has no harness or its SDK setup or build fails, and to the benchmarks of a failed base run; the head is still measured. Reports of a failed base run are moved to `failed-base/` so they are not compared.
+- A job splits its class into BenchmarkDotNet runs of two scenarios each (`--scenarios <class>` lists them) and alternates the base and head runs of each group, base first for even groups and head first for odd ones. A benchmark's base and head runs are therefore minutes apart instead of the whole class, and a steady slowdown of the runner affects both sides. Scenarios that only the base has are run too, so removed benchmarks are still reported. Neighbouring load can still change during the job, so time changes are adjusted by the drift of the class's overhead benchmarks (see above) and only produce warnings.
+- The benchmark processes set `SOURCEGEN_BENCHMARK_SKIP_COMPILE_VALIDATION=true` (see [Generator benchmarks](#generator-benchmarks)).
 - The job fails when allocated bytes of a benchmark other than `*Overhead` increase by more than 5% (10% for `AnalyzerBenchmarks`), a base benchmark is missing from the head, or a head result failed or has no allocation data. Analyzer allocations vary between identical runs because of Roslyn's analysis driver, usually by up to about 4%, but `AnalyzerOverhead` once varied by 14% on a runner where GCs ran inside each operation; generator allocations vary by less than 0.1%.
-- The comparison is written to the job summary, followed by the BenchmarkDotNet reports of both runs. All BenchmarkDotNet output is uploaded as the `ioc-generator-benchmark-<run id>` artifact for 7 days, with the runs in `base/` and `head/`.
+- The comparison is written to the job summary, followed by the BenchmarkDotNet reports of both sides. The BenchmarkDotNet output of each class is uploaded as the `ioc-generator-benchmark-<class>` artifact for 7 days, with the runs in `base/<class>/group-<n>/` and `head/<class>/group-<n>/`, and the comparison as `ioc-generator-benchmark-comparison`.
 - For pull requests, [ioc.benchmark.generator.comment.yml](../../../../.github/workflows/ioc.benchmark.generator.comment.yml) creates or updates a single comment with the comparison. It runs from the default branch through `workflow_run`, so pull request code never receives a write token.
 
 ### Accept a regression
