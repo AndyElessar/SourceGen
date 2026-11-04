@@ -83,9 +83,11 @@ When a registration contains one or more async inject methods, the container MUS
 |Singleton or scoped async-init registration|The container MUST cache `Task<ImplementationType>` in a field.|
 |Transient async-init registration|The container MUST create a new `Task<ImplementationType>` per resolution and MUST NOT cache it.|
 |Multiple service-type aliases resolve the same implementation, key, and instance/factory identity|The container MUST share a single cached `Task<ImplementationType>` field. The deduplication key MUST be `(ImplementationType, Key, InstanceOrFactory)`. Service type is **not** part of the cache key.|
+|Singleton or scoped async-init resolver (`GetXxxAsync`)|The resolver MUST be a non-`async` method that returns the cached task directly (`_field ?? ...`), so resolving an already-started service allocates nothing. A singleton resolver in a child scope MUST return the root's task (`_root?.GetXxxAsync()`) without wrapping it.|
 |`ThreadSafeStrategy.None`|Allowed. The container MAY assign the task field directly without synchronization.|
-|`ThreadSafeStrategy.SemaphoreSlim`|Allowed. Singleton/scoped async-init services MUST use `WaitAsync()` / `Release()` around first initialization.|
-|`ThreadSafeStrategy.Lock`, `ThreadSafeStrategy.SpinLock`, or `ThreadSafeStrategy.CompareExchange`|Async-incompatible for async-init services and MUST NOT be used for that resolver path.|
+|`ThreadSafeStrategy.Lock`|Allowed. Singleton/scoped async-init services MUST start the task inside `lock` in a separate non-`async` slow-path method (`InitXxxAsync`) that the resolver calls only when the field is `null`. The task MUST NOT be awaited while the lock is held.|
+|`ThreadSafeStrategy.SemaphoreSlim`|Allowed. Singleton/scoped async-init services MUST use `WaitAsync()` / `Release()` around first initialization, in a separate `async` slow-path method (`InitXxxAsync`) that the resolver calls only when the field is `null`.|
+|`ThreadSafeStrategy.SpinLock` or `ThreadSafeStrategy.CompareExchange`|Not used for async-init services: the generator MUST use `Lock` for that resolver path instead (see [Thread Safety](Container.ThreadSafety.spec.md#async-init-strategy-override)).|
 |`EagerResolveOptions` and singleton/scoped services|`EagerResolveOptions` controls eager resolution of **both** synchronous singleton/scoped services **and** async-init singleton/scoped services.|
 |Singleton async-init registration — eager init|When `EagerResolveOptions` includes `Singleton`, the container constructor MUST emit `_ = GetXxxAsync();` (fire-and-forget) to pre-start the task. Otherwise, no fire-and-forget call is emitted.|
 |Scoped async-init registration — eager init|When `EagerResolveOptions` includes `Scoped`, the scope constructor MUST emit `_ = GetXxxAsync();` (fire-and-forget) to pre-start the task. Otherwise, no fire-and-forget call is emitted.|
@@ -160,11 +162,10 @@ partial class AppContainer
         _ = GetFooBarAsync();
     }
 
-    private async global::System.Threading.Tasks.Task<global::FooBar> GetFooBarAsync()
-    {
-        if(_fooBar is not null)
-            return await _fooBar.ConfigureAwait(false);
+    private global::System.Threading.Tasks.Task<global::FooBar> GetFooBarAsync() => _fooBar ?? _root?.GetFooBarAsync() ?? InitFooBarAsync();
 
+    private async global::System.Threading.Tasks.Task<global::FooBar> InitFooBarAsync()
+    {
         await _fooBarSemaphore.WaitAsync().ConfigureAwait(false);
         try
         {

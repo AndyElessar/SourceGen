@@ -68,16 +68,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl>? _asyncImpl;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> GetAsyncImplAsync()
-    {
-        if(_asyncImpl is not null)
-            return await _asyncImpl.ConfigureAwait(false);
-        if(_root is not null)
-            return await _root.GetAsyncImplAsync().ConfigureAwait(false);
-
-        _asyncImpl = CreateAsyncImplAsync();
-        return await _asyncImpl.ConfigureAwait(false);
-    }
+    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> GetAsyncImplAsync() => _asyncImpl ?? _root?.GetAsyncImplAsync() ?? (_asyncImpl = CreateAsyncImplAsync());
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncImpl> CreateAsyncImplAsync()
     {

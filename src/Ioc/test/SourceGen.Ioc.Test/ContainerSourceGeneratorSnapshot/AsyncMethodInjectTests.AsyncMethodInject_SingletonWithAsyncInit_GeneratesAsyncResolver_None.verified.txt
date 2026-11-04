@@ -68,16 +68,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync()
-    {
-        if(_myService is not null)
-            return await _myService.ConfigureAwait(false);
-        if(_root is not null)
-            return await _root.GetMyServiceAsync().ConfigureAwait(false);
-
-        _myService = CreateMyServiceAsync();
-        return await _myService.ConfigureAwait(false);
-    }
+    private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? (_myService = CreateMyServiceAsync());
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyServiceAsync()
     {

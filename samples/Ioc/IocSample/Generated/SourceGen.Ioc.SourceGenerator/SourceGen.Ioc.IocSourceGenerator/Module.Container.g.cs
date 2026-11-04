@@ -327,26 +327,16 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     }
 
     private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency>? _asyncDependency;
-    private readonly global::System.Threading.SemaphoreSlim _asyncDependencySemaphore = new(1, 1);
+    private readonly global::System.Threading.Lock _asyncDependencyLock = new();
 
-    private async global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> GetAsyncDependencyAsync()
+    private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> GetAsyncDependencyAsync() => _asyncDependency ?? InitAsyncDependencyAsync();
+
+    private global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> InitAsyncDependencyAsync()
     {
-        if(_asyncDependency is not null)
-            return await _asyncDependency.ConfigureAwait(false);
-
-        await _asyncDependencySemaphore.WaitAsync().ConfigureAwait(false);
-        try
+        lock(_asyncDependencyLock)
         {
-            if(_asyncDependency is null)
-            {
-                _asyncDependency = CreateAsyncDependencyAsync();
-            }
+            return _asyncDependency ??= CreateAsyncDependencyAsync();
         }
-        finally
-        {
-            _asyncDependencySemaphore.Release();
-        }
-        return await _asyncDependency.ConfigureAwait(false);
     }
 
     private async global::System.Threading.Tasks.Task<global::IocSample.AsyncDependency> CreateAsyncDependencyAsync()
@@ -940,7 +930,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         DisposeService(_factoryService_IocSample_Factory_Create);
         DisposeService(_basic);
         DisposeService(_asyncDependency);
-        _asyncDependencySemaphore.Dispose();
         DisposeService(_default2);
         if(!_isRootScope)
         {
@@ -978,7 +967,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         await DisposeServiceAsync(_factoryService_IocSample_Factory_Create).ConfigureAwait(false);
         await DisposeServiceAsync(_basic).ConfigureAwait(false);
         await DisposeServiceAsync(_asyncDependency).ConfigureAwait(false);
-        _asyncDependencySemaphore.Dispose();
         await DisposeServiceAsync(_default2).ConfigureAwait(false);
         if(!_isRootScope)
         {

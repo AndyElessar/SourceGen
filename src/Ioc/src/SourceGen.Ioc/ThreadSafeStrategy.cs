@@ -22,6 +22,7 @@ public enum ThreadSafeStrategy
 
   /// <summary>
   /// Use SpinLock for thread safety.
+  /// Services with async inject methods use <see cref="Lock"/> instead.
   /// </summary>
   SpinLock = 1 << 2,
 
@@ -29,6 +30,7 @@ public enum ThreadSafeStrategy
   /// Use <see cref="System.Threading.Interlocked.CompareExchange(ref object?, object?, object?)"/> for lock-free thread safety.
   /// Best performance with no synchronization overhead, but may create duplicate instances under contention.
   /// Duplicate instances are disposed via <see cref="IDisposable"/> if implemented.
+  /// Services with async inject methods use <see cref="Lock"/> instead, so their initialization never runs twice.
   /// </summary>
   CompareExchange = 1 << 3,
 }

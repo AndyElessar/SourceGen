@@ -50,3 +50,35 @@ public sealed partial class AsyncInjectionModule
     /// <summary>Async accessor — generated as <c>async Task&lt;IAsyncInitService&gt;</c> → awaits the internal resolver.</summary>
     public partial Task<IAsyncInitService> GetAsyncInitServiceAsync();
 }
+
+/// <summary>Async-init service resolved concurrently to verify single initialization.</summary>
+public interface IContendedAsyncInitService;
+
+public static class ContendedAsyncInitServiceProbe
+{
+    private static int initializeCount;
+
+    public static int InitializeCount => global::System.Threading.Volatile.Read(ref initializeCount);
+
+    public static void Reset() => global::System.Threading.Interlocked.Exchange(ref initializeCount, 0);
+
+    internal static void OnInitialize() => global::System.Threading.Interlocked.Increment(ref initializeCount);
+}
+
+internal sealed class ContendedAsyncInitService : IContendedAsyncInitService
+{
+    [IocInject]
+    public async Task InitializeAsync()
+    {
+        ContendedAsyncInitServiceProbe.OnInitialize();
+        await Task.Delay(10);
+    }
+}
+
+// CompareExchange is overridden to Lock for async-init services, so initialization never runs twice.
+[IocRegisterFor<ContendedAsyncInitService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IContendedAsyncInitService)])]
+[IocContainer(ExplicitOnly = true, ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange, EagerResolveOptions = EagerResolveOptions.None)]
+public sealed partial class CompareExchangeAsyncInjectionModule
+{
+    public partial Task<IContendedAsyncInitService> GetContendedAsyncInitServiceAsync();
+}

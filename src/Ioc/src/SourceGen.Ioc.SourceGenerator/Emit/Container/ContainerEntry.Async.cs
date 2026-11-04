@@ -82,47 +82,37 @@ partial class IocSourceGenerator
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
-            {
-                writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {FieldName}Semaphore = new(1, 1);");
-            }
+            WriteSyncField(writer, ThreadSafeStrategy, FieldName);
         }
 
         public override void WriteResolver(SourceWriter writer)
         {
             var createMethodName = GetAsyncCreateMethodName(ResolverMethodName);
 
-            writer.WriteLine($"private async {TaskReturnTypeName} {AsyncEntryMethodName}()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"if({FieldName} is not null)");
-            writer.Indentation++;
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
-            writer.Indentation--;
-
-            if(DelegatesToRoot)
+            // Non-async fast path: returns the cached task (or the root's) without allocating a wrapper task.
+            if(ThreadSafeStrategy is ThreadSafeStrategy.Lock or ThreadSafeStrategy.SemaphoreSlim)
             {
-                writer.WriteLine("if(_root is not null)");
-                writer.Indentation++;
-                writer.WriteLine($"return await _root.{AsyncEntryMethodName}().ConfigureAwait(false);");
-                writer.Indentation--;
+                var initMethodName = GetAsyncInitMethodName(ResolverMethodName);
+                if(DelegatesToRoot)
+                    writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ?? _root?.{AsyncEntryMethodName}() ?? {initMethodName}();");
+                else
+                    writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ?? {initMethodName}();");
+                writer.WriteLine();
+
+                if(ThreadSafeStrategy == ThreadSafeStrategy.Lock)
+                    WriteAsyncInitMethodLock(writer, initMethodName, createMethodName);
+                else
+                    WriteAsyncInitMethodSemaphoreSlim(writer, initMethodName, createMethodName);
             }
-
-            writer.WriteLine();
-
-            if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
+            else if(DelegatesToRoot)
             {
-                WriteAsyncResolverBodySemaphoreSlim(writer, createMethodName);
+                writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ?? _root?.{AsyncEntryMethodName}() ?? ({FieldName} = {createMethodName}());");
             }
             else
             {
-                WriteAsyncResolverBodyNone(writer, createMethodName);
+                writer.WriteLine($"private {TaskReturnTypeName} {AsyncEntryMethodName}() => {FieldName} ??= {createMethodName}();");
             }
 
-            writer.Indentation--;
-            writer.WriteLine("}");
             writer.WriteLine();
 
             WriteCreateMethod(writer);
@@ -146,14 +136,28 @@ partial class IocSourceGenerator
             }
         }
 
-        private void WriteAsyncResolverBodyNone(SourceWriter writer, string createMethodName)
+        // Non-async: the lock only covers starting the task (CreateXAsync's synchronous prefix), never an await.
+        private void WriteAsyncInitMethodLock(SourceWriter writer, string initMethodName, string createMethodName)
         {
-            writer.WriteLine($"{FieldName} = {createMethodName}();");
-            writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
+            writer.WriteLine($"private {TaskReturnTypeName} {initMethodName}()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine($"lock({FieldName}Lock)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine($"return {FieldName} ??= {createMethodName}();");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.Indentation--;
+            writer.WriteLine("}");
         }
 
-        private void WriteAsyncResolverBodySemaphoreSlim(SourceWriter writer, string createMethodName)
+        private void WriteAsyncInitMethodSemaphoreSlim(SourceWriter writer, string initMethodName, string createMethodName)
         {
+            writer.WriteLine($"private async {TaskReturnTypeName} {initMethodName}()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
             writer.WriteLine($"await {FieldName}Semaphore.WaitAsync().ConfigureAwait(false);");
             writer.WriteLine("try");
             writer.WriteLine("{");
@@ -175,6 +179,9 @@ partial class IocSourceGenerator
             writer.WriteLine("}");
 
             writer.WriteLine($"return await {FieldName}.ConfigureAwait(false);");
+
+            writer.Indentation--;
+            writer.WriteLine("}");
         }
     }
 

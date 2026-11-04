@@ -55,14 +55,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService>? _asyncScopedService;
 
-    private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> GetAsyncScopedServiceAsync()
-    {
-        if(_asyncScopedService is not null)
-            return await _asyncScopedService.ConfigureAwait(false);
-
-        _asyncScopedService = CreateAsyncScopedServiceAsync();
-        return await _asyncScopedService.ConfigureAwait(false);
-    }
+    private global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> GetAsyncScopedServiceAsync() => _asyncScopedService ??= CreateAsyncScopedServiceAsync();
 
     private async global::System.Threading.Tasks.Task<global::TestNamespace.AsyncScopedService> CreateAsyncScopedServiceAsync()
     {

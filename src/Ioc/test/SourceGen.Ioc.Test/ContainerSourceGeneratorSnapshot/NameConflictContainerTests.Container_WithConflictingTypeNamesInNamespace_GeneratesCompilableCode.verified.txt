@@ -98,28 +98,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService>? _asyncService;
-    private readonly global::System.Threading.SemaphoreSlim _asyncServiceSemaphore = new(1, 1);
+    private readonly global::System.Threading.Lock _asyncServiceLock = new();
 
-    private async global::System.Threading.Tasks.Task<global::Services.AsyncService> GetAsyncServiceAsync()
+    private global::System.Threading.Tasks.Task<global::Services.AsyncService> GetAsyncServiceAsync() => _asyncService ?? _root?.GetAsyncServiceAsync() ?? InitAsyncServiceAsync();
+
+    private global::System.Threading.Tasks.Task<global::Services.AsyncService> InitAsyncServiceAsync()
     {
-        if(_asyncService is not null)
-            return await _asyncService.ConfigureAwait(false);
-        if(_root is not null)
-            return await _root.GetAsyncServiceAsync().ConfigureAwait(false);
-
-        await _asyncServiceSemaphore.WaitAsync().ConfigureAwait(false);
-        try
+        lock(_asyncServiceLock)
         {
-            if(_asyncService is null)
-            {
-                _asyncService = CreateAsyncServiceAsync();
-            }
+            return _asyncService ??= CreateAsyncServiceAsync();
         }
-        finally
-        {
-            _asyncServiceSemaphore.Release();
-        }
-        return await _asyncService.ConfigureAwait(false);
     }
 
     private async global::System.Threading.Tasks.Task<global::Services.AsyncService> CreateAsyncServiceAsync()
@@ -446,7 +434,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
 
         DisposeService(_asyncService);
-        _asyncServiceSemaphore.Dispose();
         DisposeService(_keyedDependency__keyed_);
         DisposeService(_dependency);
         DisposeService(_ownedFallbackProvider);
@@ -464,7 +451,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         }
 
         await DisposeServiceAsync(_asyncService).ConfigureAwait(false);
-        _asyncServiceSemaphore.Dispose();
         await DisposeServiceAsync(_keyedDependency__keyed_).ConfigureAwait(false);
         await DisposeServiceAsync(_dependency).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
