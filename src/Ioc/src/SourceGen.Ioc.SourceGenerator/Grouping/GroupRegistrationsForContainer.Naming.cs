@@ -15,6 +15,10 @@ partial class IocSourceGenerator
         "CreateControllerFactory", "CreateComponentFactory", "CreateComponentPropertyInjector",
         "_root", "_disposed", "_isRootScope", "_fallbackProvider", "_ownedFallbackProvider", "_fallbackScope",
         "_localResolvers", "_serviceResolvers", "_controllerFactoryCache", "_componentFactoryCache", "_propertyActivatorCache",
+        // Helpers and the resolver entry alias, which a container member of the same name would hide
+        ProjectTaskMethodName, CreateLockMethodName, CreateSemaphoreMethodName,
+        ResolverEntryMethodName, KeyedResolverEntryMethodName, CollectionResolverEntriesMethodName,
+        Constants.ResolverEntryAlias, HotReloadHandlerTypeName,
     ];
 
     private static ReservedMemberNames GetReservedNames(ContainerModel container)

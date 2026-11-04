@@ -262,6 +262,8 @@ partial class IocSourceGenerator
         writer.WriteLine();
     }
 
+    private const string HotReloadHandlerTypeName = "__HotReloadHandler";
+
     /// <summary>
     /// Writes the __HotReloadHandler nested class for hot reload cache invalidation.
     /// </summary>
@@ -269,7 +271,7 @@ partial class IocSourceGenerator
     {
         writer.WriteLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
         writer.WriteLine(GeneratedCodeAttribute);
-        writer.WriteLine("internal static class __HotReloadHandler");
+        writer.WriteLine($"internal static class {HotReloadHandlerTypeName}");
         writer.WriteLine("{");
         writer.Indentation++;
         writer.WriteLine("public static void ClearCache(global::System.Type[]? _)");

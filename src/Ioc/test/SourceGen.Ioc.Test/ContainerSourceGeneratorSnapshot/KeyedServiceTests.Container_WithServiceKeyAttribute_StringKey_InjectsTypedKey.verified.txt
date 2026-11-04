@@ -50,12 +50,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.Handler1? _handler1__handler_1_;
-    private readonly global::System.Threading.Lock _handler1__handler_1_Lock = new();
+    private global::System.Threading.Lock? _handler1__handler_1_Lock;
     private global::TestNamespace.Handler1 GetHandler1__handler_1_() => _handler1__handler_1_ ?? CreateHandler1__handler_1_();
 
     private global::TestNamespace.Handler1 CreateHandler1__handler_1_()
     {
-        lock(_handler1__handler_1_Lock)
+        lock(_handler1__handler_1_Lock ?? __CreateLock(ref _handler1__handler_1_Lock))
         {
             if(_handler1__handler_1_ is not null) return _handler1__handler_1_;
 
@@ -67,12 +67,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.Handler2? _handler2__handler_2_;
-    private readonly global::System.Threading.Lock _handler2__handler_2_Lock = new();
+    private global::System.Threading.Lock? _handler2__handler_2_Lock;
     private global::TestNamespace.Handler2 GetHandler2__handler_2_() => _handler2__handler_2_ ?? CreateHandler2__handler_2_();
 
     private global::TestNamespace.Handler2 CreateHandler2__handler_2_()
     {
-        lock(_handler2__handler_2_Lock)
+        lock(_handler2__handler_2_Lock ?? __CreateLock(ref _handler2__handler_2_Lock))
         {
             if(_handler2__handler_2_ is not null) return _handler2__handler_2_;
 
@@ -81,6 +81,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _handler2__handler_2_ = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

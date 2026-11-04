@@ -57,14 +57,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.Queue? _queue;
-    private readonly global::System.Threading.Lock _queueLock = new();
+    private global::System.Threading.Lock? _queueLock;
     private global::TestNamespace.Queue GetQueue() => _queue ?? CreateQueue();
 
     private global::TestNamespace.Queue CreateQueue()
     {
         if(_root is not null) return _root.GetQueue();
 
-        lock(_queueLock)
+        lock(_queueLock ?? __CreateLock(ref _queueLock))
         {
             if(_queue is not null) return _queue;
 
@@ -76,14 +76,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.QueueLock? _queueLock_Resolve;
-    private readonly global::System.Threading.Lock _queueLock_ResolveLock = new();
+    private global::System.Threading.Lock? _queueLock_ResolveLock;
     private global::TestNamespace.QueueLock GetQueueLock() => _queueLock_Resolve ?? CreateQueueLock();
 
     private global::TestNamespace.QueueLock CreateQueueLock()
     {
         if(_root is not null) return _root.GetQueueLock();
 
-        lock(_queueLock_ResolveLock)
+        lock(_queueLock_ResolveLock ?? __CreateLock(ref _queueLock_ResolveLock))
         {
             if(_queueLock_Resolve is not null) return _queueLock_Resolve;
 
@@ -95,13 +95,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.Cache>? _cache;
-    private readonly global::System.Threading.Lock _cacheLock = new();
+    private global::System.Threading.Lock? _cacheLock;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.Cache> GetCacheAsync() => _cache ?? _root?.GetCacheAsync() ?? InitCacheAsync();
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.Cache> InitCacheAsync()
     {
-        lock(_cacheLock)
+        lock(_cacheLock ?? __CreateLock(ref _cacheLock))
         {
             return _cache ??= CreateCacheAsync();
         }
@@ -115,14 +115,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.CacheAsync? _cacheAsync;
-    private readonly global::System.Threading.Lock _cacheAsyncLock = new();
+    private global::System.Threading.Lock? _cacheAsyncLock;
     private global::TestNamespace.CacheAsync GetCacheAsync_Resolve() => _cacheAsync ?? CreateCacheAsync_Resolve();
 
     private global::TestNamespace.CacheAsync CreateCacheAsync_Resolve()
     {
         if(_root is not null) return _root.GetCacheAsync_Resolve();
 
-        lock(_cacheAsyncLock)
+        lock(_cacheAsyncLock ?? __CreateLock(ref _cacheAsyncLock))
         {
             if(_cacheAsync is not null) return _cacheAsync;
 
@@ -134,14 +134,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.ClockAsync? _clockAsync;
-    private readonly global::System.Threading.Lock _clockAsyncLock = new();
+    private global::System.Threading.Lock? _clockAsyncLock;
     private global::TestNamespace.ClockAsync GetClockAsync_Resolve() => _clockAsync ?? CreateClockAsync_Resolve();
 
     private global::TestNamespace.ClockAsync CreateClockAsync_Resolve()
     {
         if(_root is not null) return _root.GetClockAsync_Resolve();
 
-        lock(_clockAsyncLock)
+        lock(_clockAsyncLock ?? __CreateLock(ref _clockAsyncLock))
         {
             if(_clockAsync is not null) return _clockAsync;
 
@@ -157,6 +157,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         var instance = new global::TestNamespace.Clock();
         await instance.InitAsync().ConfigureAwait(false);
         return instance;
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

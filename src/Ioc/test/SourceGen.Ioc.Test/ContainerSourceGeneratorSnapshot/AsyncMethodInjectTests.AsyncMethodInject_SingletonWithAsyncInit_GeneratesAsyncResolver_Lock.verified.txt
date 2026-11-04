@@ -55,14 +55,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.Dependency? _dependency;
-    private readonly global::System.Threading.Lock _dependencyLock = new();
+    private global::System.Threading.Lock? _dependencyLock;
     private global::TestNamespace.Dependency GetDependency() => _dependency ?? CreateDependency();
 
     private global::TestNamespace.Dependency CreateDependency()
     {
         if(_root is not null) return _root.GetDependency();
 
-        lock(_dependencyLock)
+        lock(_dependencyLock ?? __CreateLock(ref _dependencyLock))
         {
             if(_dependency is not null) return _dependency;
 
@@ -74,14 +74,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = new();
+    private global::System.Threading.Lock? _myServiceLock;
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myServiceTask_As_IMyService;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> InitMyServiceAsync()
     {
-        lock(_myServiceLock)
+        lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))
         {
             return _myService ??= CreateMyServiceAsync();
         }
@@ -98,6 +98,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+    }
 
     #endregion
 

@@ -107,6 +107,8 @@ partial class IocSourceGenerator
             }
         }
 
+        public override ThreadSafeStrategy SynchronizationStrategy => ThreadSafeStrategy;
+
         public override void WriteField(SourceWriter writer)
         {
             writer.WriteLine($"private {TaskReturnTypeName}? {FieldName};");
@@ -180,7 +182,7 @@ partial class IocSourceGenerator
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
-                writer.WriteLine($"{FieldName}Semaphore.Dispose();");
+                writer.WriteLine($"{FieldName}Semaphore?.Dispose();");
             }
         }
 
@@ -190,7 +192,7 @@ partial class IocSourceGenerator
             writer.WriteLine($"private {TaskReturnTypeName} {initMethodName}()");
             writer.WriteLine("{");
             writer.Indentation++;
-            writer.WriteLine($"lock({FieldName}Lock)");
+            writer.WriteLine($"lock({FieldName}Lock ?? {CreateLockMethodName}(ref {FieldName}Lock))");
             writer.WriteLine("{");
             writer.Indentation++;
             writer.WriteLine($"return {FieldName} ??= {createMethodName}();");
@@ -206,7 +208,7 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
 
-            writer.WriteLine($"await {FieldName}Semaphore.WaitAsync().ConfigureAwait(false);");
+            writer.WriteLine($"await ({FieldName}Semaphore ?? {CreateSemaphoreMethodName}(ref {FieldName}Semaphore)).WaitAsync().ConfigureAwait(false);");
             writer.WriteLine("try");
             writer.WriteLine("{");
             writer.Indentation++;
@@ -222,7 +224,7 @@ partial class IocSourceGenerator
             writer.WriteLine("finally");
             writer.WriteLine("{");
             writer.Indentation++;
-            writer.WriteLine($"{FieldName}Semaphore.Release();");
+            writer.WriteLine($"{FieldName}Semaphore!.Release();");
             writer.Indentation--;
             writer.WriteLine("}");
 

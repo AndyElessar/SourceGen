@@ -78,12 +78,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.Handler2? _handler2__h2_;
-    private readonly global::System.Threading.Lock _handler2__h2_Lock = new();
+    private global::System.Threading.Lock? _handler2__h2_Lock;
     private global::TestNamespace.Handler2 GetHandler2__h2_() => _handler2__h2_ ?? CreateHandler2__h2_();
 
     private global::TestNamespace.Handler2 CreateHandler2__h2_()
     {
-        lock(_handler2__h2_Lock)
+        lock(_handler2__h2_Lock ?? __CreateLock(ref _handler2__h2_Lock))
         {
             if(_handler2__h2_ is not null) return _handler2__h2_;
 
@@ -92,6 +92,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _handler2__h2_ = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     // KeyValuePair resolver methods

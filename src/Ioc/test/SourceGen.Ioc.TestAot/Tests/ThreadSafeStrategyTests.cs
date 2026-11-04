@@ -105,6 +105,50 @@ public sealed class ThreadSafeStrategyTests
     }
 
     [Test]
+    public async Task ThreadSafeStrategy_Lock_ConcurrentFirstResolutionFromScopes_ReturnsOnlyOneInstance()
+    {
+        using var container = new ThreadSafeLazyLockContainer();
+
+        await AssertConcurrentFirstResolutionsReturnOneInstance(container);
+    }
+
+    [Test]
+    public async Task ThreadSafeStrategy_SemaphoreSlim_ConcurrentFirstResolutionFromScopes_ReturnsOnlyOneInstance()
+    {
+        using var container = new ThreadSafeLazySemaphoreSlimContainer();
+
+        await AssertConcurrentFirstResolutionsReturnOneInstance(container);
+    }
+
+    /// <summary>
+    /// Resolves a lazy singleton from many scopes, and a scoped service many times in one scope, concurrently:
+    /// the synchronization fields are allocated by the first resolutions, which race.
+    /// </summary>
+    private static async Task AssertConcurrentFirstResolutionsReturnOneInstance(IServiceScopeFactory container)
+    {
+        const int concurrentRequests = 100;
+        var scopes = Enumerable.Range(0, concurrentRequests).Select(_ => container.CreateScope()).ToArray();
+        using var sharedScope = container.CreateScope();
+
+        try
+        {
+            var singletons = await Task.WhenAll(scopes.Select(scope => Task.Run(() => scope.ServiceProvider.GetRequiredService<ISingletonService>())));
+            var scopedServices = await Task.WhenAll(Enumerable.Range(0, concurrentRequests)
+                .Select(_ => Task.Run(() => sharedScope.ServiceProvider.GetRequiredService<IScopedService>())));
+
+            await Assert.That(singletons.Select(static s => s.InstanceId).Distinct()).Count().IsEqualTo(1);
+            await Assert.That(scopedServices.Select(static s => s.InstanceId).Distinct()).Count().IsEqualTo(1);
+        }
+        finally
+        {
+            foreach(var scope in scopes)
+            {
+                scope.Dispose();
+            }
+        }
+    }
+
+    [Test]
     public async Task ThreadSafeStrategy_SemaphoreSlim_ConcurrentAccess_ReturnsOnlyOneInstance()
     {
         // Arrange

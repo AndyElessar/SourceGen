@@ -129,6 +129,40 @@ public class ContainerNamingTests
     }
 
     [Test]
+    public async Task Container_WithServiceNamedLikeInfrastructureHelper_AppendsResolveSuffix()
+    {
+        // The fields of these services (__CreateLock, __Resolver, __IocResolver) are named like the generated helpers
+        // __CreateLock / __Resolver and the __IocResolver alias
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class _CreateLock;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class _Resolver;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class _IocResolver;
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("__CreateLock_Resolve");
+        await Assert.That(generatedSource).Contains("__Resolver_Resolve");
+        await Assert.That(generatedSource).Contains("__IocResolver_Resolve");
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithServiceNamedLikeDerivedMemberOfAnotherService_AppendsResolveSuffix()
     {
         const string source = """

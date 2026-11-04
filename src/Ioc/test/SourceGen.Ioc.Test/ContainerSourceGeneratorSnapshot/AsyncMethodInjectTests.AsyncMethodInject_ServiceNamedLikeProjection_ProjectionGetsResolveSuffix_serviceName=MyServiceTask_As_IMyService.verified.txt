@@ -55,14 +55,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService>? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = new();
+    private global::System.Threading.Lock? _myServiceLock;
     private global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>? _myServiceTask_As_IMyService_Resolve;
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
 
     private global::System.Threading.Tasks.Task<global::TestNamespace.MyService> InitMyServiceAsync()
     {
-        lock(_myServiceLock)
+        lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))
         {
             return _myService ??= CreateMyServiceAsync();
         }
@@ -78,14 +78,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.MyServiceTask_As_IMyService? _myServiceTask_As_IMyService;
-    private readonly global::System.Threading.Lock _myServiceTask_As_IMyServiceLock = new();
+    private global::System.Threading.Lock? _myServiceTask_As_IMyServiceLock;
     private global::TestNamespace.MyServiceTask_As_IMyService GetMyServiceTask_As_IMyService() => _myServiceTask_As_IMyService ?? CreateMyServiceTask_As_IMyService();
 
     private global::TestNamespace.MyServiceTask_As_IMyService CreateMyServiceTask_As_IMyService()
     {
         if(_root is not null) return _root.GetMyServiceTask_As_IMyService();
 
-        lock(_myServiceTask_As_IMyServiceLock)
+        lock(_myServiceTask_As_IMyServiceLock ?? __CreateLock(ref _myServiceTask_As_IMyServiceLock))
         {
             if(_myServiceTask_As_IMyService is not null) return _myServiceTask_As_IMyService;
 
@@ -98,6 +98,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+    }
 
     #endregion
 

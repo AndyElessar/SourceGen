@@ -183,8 +183,9 @@ public class AsyncMethodInjectTests
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
-        await Assert.That(generatedSource).Contains("private readonly global::System.Threading.Lock _myServiceLock = new();");
-        await Assert.That(generatedSource).Contains("lock(_myServiceLock)");
+        // The lock is allocated on the first slow path
+        await Assert.That(generatedSource).Contains("private global::System.Threading.Lock? _myServiceLock;");
+        await Assert.That(generatedSource).Contains("lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))");
         await Assert.That(generatedSource).DoesNotContain("SpinLock");
         await Assert.That(generatedSource).DoesNotContain("Interlocked.CompareExchange(ref _myService");
         await Verify(generatedSource).UseParameters(strategy);

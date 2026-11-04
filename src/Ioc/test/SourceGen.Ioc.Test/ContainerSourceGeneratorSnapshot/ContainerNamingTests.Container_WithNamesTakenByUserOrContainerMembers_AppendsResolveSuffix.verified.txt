@@ -65,12 +65,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.Logger? _logger_Resolve;
-    private readonly global::System.Threading.Lock _logger_ResolveLock = new();
+    private global::System.Threading.Lock? _logger_ResolveLock;
     private global::TestNamespace.Logger GetLogger_Resolve() => _logger_Resolve ?? CreateLogger_Resolve();
 
     private global::TestNamespace.Logger CreateLogger_Resolve()
     {
-        lock(_logger_ResolveLock)
+        lock(_logger_ResolveLock ?? __CreateLock(ref _logger_ResolveLock))
         {
             if(_logger_Resolve is not null) return _logger_Resolve;
 
@@ -79,6 +79,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _logger_Resolve = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

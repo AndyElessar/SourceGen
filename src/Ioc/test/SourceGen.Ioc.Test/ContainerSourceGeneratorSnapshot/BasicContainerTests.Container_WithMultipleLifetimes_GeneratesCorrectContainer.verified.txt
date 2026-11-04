@@ -65,12 +65,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::TestNamespace.ScopedService? _scopedService;
-    private readonly global::System.Threading.Lock _scopedServiceLock = new();
+    private global::System.Threading.Lock? _scopedServiceLock;
     private global::TestNamespace.ScopedService GetScopedService() => _scopedService ?? CreateScopedService();
 
     private global::TestNamespace.ScopedService CreateScopedService()
     {
-        lock(_scopedServiceLock)
+        lock(_scopedServiceLock ?? __CreateLock(ref _scopedServiceLock))
         {
             if(_scopedService is not null) return _scopedService;
 
@@ -84,6 +84,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     private global::TestNamespace.TransientService GetTransientService()
     {
         return new global::TestNamespace.TransientService();
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

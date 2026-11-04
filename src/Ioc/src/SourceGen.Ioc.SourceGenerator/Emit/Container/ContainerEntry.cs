@@ -60,6 +60,11 @@ partial class IocSourceGenerator
         /// Gets whether a scope delegates creation of this entry to the root container (lazily created singletons).
         /// </summary>
         public virtual bool DelegatesToRoot => false;
+
+        /// <summary>
+        /// Gets the strategy of the synchronization field this entry declares (<see cref="ThreadSafeStrategy.None"/> when none).
+        /// </summary>
+        public virtual ThreadSafeStrategy SynchronizationStrategy => ThreadSafeStrategy.None;
     }
 
     private closed record class ServiceContainerEntry(

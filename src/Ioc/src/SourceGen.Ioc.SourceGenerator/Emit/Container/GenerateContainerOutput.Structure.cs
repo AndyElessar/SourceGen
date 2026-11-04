@@ -182,16 +182,18 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Writes the synchronization field guarding <paramref name="fieldName"/> for <paramref name="strategy"/>.
+    /// <c>Lock</c> and <c>SemaphoreSlim</c> fields are allocated on the first slow path (see <see cref="WriteSyncFieldHelpers"/>),
+    /// so scopes allocate them only for the services they create: never for singletons, which scopes delegate to the root.
     /// </summary>
     private static void WriteSyncField(SourceWriter writer, ThreadSafeStrategy strategy, string fieldName)
     {
         switch(strategy)
         {
             case ThreadSafeStrategy.Lock:
-                writer.WriteLine($"private readonly global::System.Threading.Lock {fieldName}Lock = new();");
+                writer.WriteLine($"private global::System.Threading.Lock? {fieldName}Lock;");
                 break;
             case ThreadSafeStrategy.SemaphoreSlim:
-                writer.WriteLine($"private readonly global::System.Threading.SemaphoreSlim {fieldName}Semaphore = new(1, 1);");
+                writer.WriteLine($"private global::System.Threading.SemaphoreSlim? {fieldName}Semaphore;");
                 break;
             case ThreadSafeStrategy.SpinLock:
                 // SpinLock must NOT be readonly because Enter/Exit mutate it
@@ -199,6 +201,7 @@ partial class IocSourceGenerator
                 break;
         }
     }
+
 
     /// <summary>
     /// Writes container constructors.

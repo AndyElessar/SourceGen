@@ -51,3 +51,21 @@ public sealed partial class ThreadSafeSpinLockContainer;
 [IocRegisterFor<TransientService>(ServiceLifetime.Transient, ServiceTypes = [typeof(ITransientService)])]
 [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.CompareExchange, ExplicitOnly = true)]
 public sealed partial class ThreadSafeCompareExchangeContainer;
+
+/// <summary>
+/// Container with ThreadSafeStrategy.Lock and lazy singletons, so first resolutions go through the
+/// synchronization fields, which are allocated on first use.
+/// </summary>
+[IocRegisterFor<SingletonService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(ISingletonService)])]
+[IocRegisterFor<ScopedService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.Lock, EagerResolveOptions = EagerResolveOptions.None, ExplicitOnly = true)]
+public sealed partial class ThreadSafeLazyLockContainer;
+
+/// <summary>
+/// Container with ThreadSafeStrategy.SemaphoreSlim and lazy singletons, so first resolutions go through the
+/// synchronization fields, which are allocated on first use.
+/// </summary>
+[IocRegisterFor<SingletonService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(ISingletonService)])]
+[IocRegisterFor<ScopedService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IScopedService)])]
+[IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.SemaphoreSlim, EagerResolveOptions = EagerResolveOptions.None, ExplicitOnly = true)]
+public sealed partial class ThreadSafeLazySemaphoreSlimContainer;

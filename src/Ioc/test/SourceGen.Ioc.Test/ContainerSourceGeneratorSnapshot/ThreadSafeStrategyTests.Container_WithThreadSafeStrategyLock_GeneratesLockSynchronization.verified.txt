@@ -53,14 +53,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     #region Service Resolution
 
     private global::TestNamespace.MyService? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = new();
+    private global::System.Threading.Lock? _myServiceLock;
     private global::TestNamespace.MyService GetMyService() => _myService ?? CreateMyService();
 
     private global::TestNamespace.MyService CreateMyService()
     {
         if(_root is not null) return _root.GetMyService();
 
-        lock(_myServiceLock)
+        lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))
         {
             if(_myService is not null) return _myService;
 
@@ -69,6 +69,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             _myService = instance;
             return instance;
         }
+    }
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
     #endregion

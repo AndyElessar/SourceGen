@@ -99,14 +99,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService>? _asyncService;
-    private readonly global::System.Threading.Lock _asyncServiceLock = new();
+    private global::System.Threading.Lock? _asyncServiceLock;
     private global::System.Threading.Tasks.Task<global::Services.IAsyncService>? _asyncServiceTask_As_IAsyncService;
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService> GetAsyncServiceAsync() => _asyncService ?? _root?.GetAsyncServiceAsync() ?? InitAsyncServiceAsync();
 
     private global::System.Threading.Tasks.Task<global::Services.AsyncService> InitAsyncServiceAsync()
     {
-        lock(_asyncServiceLock)
+        lock(_asyncServiceLock ?? __CreateLock(ref _asyncServiceLock))
         {
             return _asyncService ??= CreateAsyncServiceAsync();
         }
@@ -122,12 +122,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     }
 
     private global::Services.Scoped? _scoped;
-    private readonly global::System.Threading.Lock _scopedLock = new();
+    private global::System.Threading.Lock? _scopedLock;
     private global::Services.Scoped GetScoped() => _scoped ?? CreateScoped();
 
     private global::Services.Scoped CreateScoped()
     {
-        lock(_scopedLock)
+        lock(_scopedLock ?? __CreateLock(ref _scopedLock))
         {
             if(_scoped is not null) return _scoped;
 
@@ -145,6 +145,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
         => (TService)(object)(await task.ConfigureAwait(false))!;
+
+    private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+    {
+        var created = new global::System.Threading.Lock();
+        return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+    }
 
     private global::Services.IDependency[] GetAllIDependencyArray() =>
         [

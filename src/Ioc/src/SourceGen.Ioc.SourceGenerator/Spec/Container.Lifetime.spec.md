@@ -66,7 +66,8 @@ partial class AppContainer
 
     // Singleton - stored in root, shared across scopes
     private global::SingletonService? _singletonService;
-    private readonly SemaphoreSlim _singletonServiceSemaphore = new(1, 1);
+    // Allocated on first use (see Thread Safety): only by the root, since scopes delegate creation to it
+    private SemaphoreSlim? _singletonServiceSemaphore;
     private global::SingletonService GetSingletonService() => _singletonService ?? CreateSingletonService();
 
     private global::SingletonService CreateSingletonService()
@@ -74,7 +75,7 @@ partial class AppContainer
         // Scopes never create singletons; the root creates, caches, and disposes them
         if(_root is not null) return _root.GetSingletonService();
 
-        _singletonServiceSemaphore.Wait();
+        (_singletonServiceSemaphore ?? __CreateSemaphore(ref _singletonServiceSemaphore)).Wait();
         try
         {
             if (_singletonService is not null) return _singletonService;
@@ -85,18 +86,18 @@ partial class AppContainer
         }
         finally
         {
-            _singletonServiceSemaphore.Release();
+            _singletonServiceSemaphore!.Release();
         }
     }
 
-    // Scoped - stored in each scope instance
+    // Scoped - stored in each scope instance; the semaphore is allocated only by scopes creating the service
     private global::ScopedService? _scopedService;
-    private readonly SemaphoreSlim _scopedServiceSemaphore = new(1, 1);
+    private SemaphoreSlim? _scopedServiceSemaphore;
     private global::ScopedService GetScopedService() => _scopedService ?? CreateScopedService();
 
     private global::ScopedService CreateScopedService()
     {
-        _scopedServiceSemaphore.Wait();
+        (_scopedServiceSemaphore ?? __CreateSemaphore(ref _scopedServiceSemaphore)).Wait();
         try
         {
             if (_scopedService is not null) return _scopedService;
@@ -107,7 +108,7 @@ partial class AppContainer
         }
         finally
         {
-            _scopedServiceSemaphore.Release();
+            _scopedServiceSemaphore!.Release();
         }
     }
 

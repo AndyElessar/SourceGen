@@ -48,7 +48,7 @@ partial class IocSourceGenerator
         // Write [assembly: MetadataUpdateHandler] attribute for hot reload cache invalidation
         if(container.ImplementComponentActivator || container.ImplementComponentPropertyActivator)
         {
-            writer.WriteLine($"[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof({container.ContainerTypeName}.__HotReloadHandler))]");
+            writer.WriteLine($"[assembly: global::System.Reflection.Metadata.MetadataUpdateHandler(typeof({container.ContainerTypeName}.{HotReloadHandlerTypeName}))]");
             writer.WriteLine();
         }
 

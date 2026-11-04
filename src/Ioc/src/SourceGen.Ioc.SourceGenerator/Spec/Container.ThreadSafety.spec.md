@@ -78,7 +78,7 @@ public partial class AppContainer;
 partial class AppContainer
 {
     private global::System.Threading.Tasks.Task<global::MyService>? _myService;
-    private readonly global::System.Threading.Lock _myServiceLock = new();
+    private global::System.Threading.Lock? _myServiceLock;
 
     // Non-async fast path: an already-started task (or the root's) is returned without allocating.
     private global::System.Threading.Tasks.Task<global::MyService> GetMyServiceAsync() => _myService ?? _root?.GetMyServiceAsync() ?? InitMyServiceAsync();
@@ -86,7 +86,7 @@ partial class AppContainer
     // Non-async slow path: only starts the task inside the lock; nothing is awaited while holding it.
     private global::System.Threading.Tasks.Task<global::MyService> InitMyServiceAsync()
     {
-        lock(_myServiceLock)
+        lock(_myServiceLock ?? __CreateLock(ref _myServiceLock))
         {
             return _myService ??= CreateMyServiceAsync();
         }
@@ -98,11 +98,11 @@ partial class AppContainer
 With `ThreadSafeStrategy.SemaphoreSlim`, the field is guarded by `SemaphoreSlim` and the slow path waits asynchronously:
 
 ```csharp
-private readonly global::System.Threading.SemaphoreSlim _myServiceSemaphore = new(1, 1);
+private global::System.Threading.SemaphoreSlim? _myServiceSemaphore;
 
 private async global::System.Threading.Tasks.Task<global::MyService> InitMyServiceAsync()
 {
-    await _myServiceSemaphore.WaitAsync().ConfigureAwait(false);
+    await (_myServiceSemaphore ?? __CreateSemaphore(ref _myServiceSemaphore)).WaitAsync().ConfigureAwait(false);
     try
     {
         if(_myService is null)
@@ -112,7 +112,7 @@ private async global::System.Threading.Tasks.Task<global::MyService> InitMyServi
     }
     finally
     {
-        _myServiceSemaphore.Release();
+        _myServiceSemaphore!.Release();
     }
 
     return await _myService.ConfigureAwait(false);
@@ -155,12 +155,12 @@ Uses `Lock` class with double-checked locking:
 
 ```csharp
 private global::MyService? _myService;
-private readonly Lock _myServiceLock = new();
+private Lock? _myServiceLock;
 private global::MyService GetMyService() => _myService ?? CreateMyService();
 
 private global::MyService CreateMyService()
 {
-    lock (_myServiceLock)
+    lock (_myServiceLock ?? __CreateLock(ref _myServiceLock))
     {
         if (_myService is not null) return _myService;
 
@@ -177,12 +177,12 @@ Uses `SemaphoreSlim` with double-checked locking:
 
 ```csharp
 private global::MyService? _myService;
-private readonly SemaphoreSlim _myServiceSemaphore = new(1, 1);
+private SemaphoreSlim? _myServiceSemaphore;
 private global::MyService GetMyService() => _myService ?? CreateMyService();
 
 private global::MyService CreateMyService()
 {
-    _myServiceSemaphore.Wait();
+    (_myServiceSemaphore ?? __CreateSemaphore(ref _myServiceSemaphore)).Wait();
     try
     {
         if (_myService is not null) return _myService;
@@ -193,7 +193,7 @@ private global::MyService CreateMyService()
     }
     finally
     {
-        _myServiceSemaphore.Release();
+        _myServiceSemaphore!.Release();
     }
 }
 ```
@@ -255,16 +255,32 @@ Each strategy generates different synchronization fields:
 |Strategy|Instance Field|Synchronization Field|Disposed|
 |:---|:---|:---|:---|
 |`None`|`private T? _field;`|None|N/A|
-|`Lock`|`private T? _field;`|`private readonly Lock _fieldLock = new();`|No (no unmanaged resources)|
-|`SemaphoreSlim`|`private T? _field;`|`private readonly SemaphoreSlim _fieldSemaphore = new(1, 1);`|**Yes** (in `Dispose`/`DisposeAsync`)|
+|`Lock`|`private T? _field;`|`private Lock? _fieldLock;` (allocated on first use)|No (no unmanaged resources)|
+|`SemaphoreSlim`|`private T? _field;`|`private SemaphoreSlim? _fieldSemaphore;` (allocated on first use)|**Yes** (in `Dispose`/`DisposeAsync`, when allocated: `_fieldSemaphore?.Dispose();`)|
 |`SpinLock`|`private T? _field;`|`private SpinLock _fieldSpinLock = new(false);` (not readonly)|No (value type)|
 |`CompareExchange`|`private T? _field;`|None|No|
 
 > **Note**: Eager singletons use non-nullable fields (`private T _field;`) without synchronization fields, as the root constructor creates them before the container can be used from other threads. Eager scoped services MUST keep the synchronized shape above: scope constructors create them, but the root creates them on demand, possibly from several threads.
 
+**Synchronization allocated on first use**: `Lock` and `SemaphoreSlim` fields MUST NOT be allocated by a field initializer, which every scope would run. The slow path MUST allocate the field on first use with the static helpers below, which agree on one instance through `Interlocked.CompareExchange`; a container emits a helper only when some entry uses its strategy. A scope (or the root) thus allocates synchronization only for the services it creates: never for singletons in scopes, which delegate creation to the root, and never for scoped services a scope does not resolve. The slow path MUST NOT keep the primitive in a local variable, which could hide a container member referenced by a user expression in the creation code (e.g. a `KeyType.Csharp` key); it re-reads the field (`_fieldSemaphore!.Release()`), which is never reset. A losing `SemaphoreSlim` is dropped undisposed (it holds no unmanaged resource until `AvailableWaitHandle` is used). `SpinLock` fields are value types and keep their initializer.
+
+```csharp
+private static global::System.Threading.Lock __CreateLock(ref global::System.Threading.Lock? field)
+{
+    var created = new global::System.Threading.Lock();
+    return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+}
+
+private static global::System.Threading.SemaphoreSlim __CreateSemaphore(ref global::System.Threading.SemaphoreSlim? field)
+{
+    var created = new global::System.Threading.SemaphoreSlim(1, 1);
+    return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
+}
+```
+
 ## Scope Constructor Behavior
 
-When creating a child scope, synchronization fields are NOT copied from parent. Each scope has its own synchronization primitives for scoped services:
+When creating a child scope, synchronization fields are NOT copied from parent. Each scope allocates its own synchronization primitives for the scoped services it creates (see above):
 
 ```csharp
 private AppContainer(AppContainer parent)
