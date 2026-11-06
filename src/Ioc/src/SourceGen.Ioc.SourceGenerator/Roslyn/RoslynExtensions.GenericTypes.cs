@@ -32,48 +32,10 @@ internal static partial class RoslynExtensions
                 return false;
             }
         }
-
-        public INamedTypeSymbol? GetCompatibleGenericBaseType([NotNullWhen(true)] INamedTypeSymbol? genericType)
-        {
-            if(genericType is null)
-            {
-                return null;
-            }
-
-            Debug.Assert(genericType.IsGenericTypeDefinition);
-
-            if(genericType.TypeKind is TypeKind.Interface)
-            {
-                foreach(INamedTypeSymbol interfaceType in typeSymbol.AllInterfaces)
-                {
-                    if(IsMatchingGenericType(interfaceType, genericType))
-                    {
-                        return interfaceType;
-                    }
-                }
-            }
-
-            for(INamedTypeSymbol? current = typeSymbol as INamedTypeSymbol; current != null; current = current.BaseType)
-            {
-                if(IsMatchingGenericType(current, genericType))
-                {
-                    return current;
-                }
-            }
-
-            return null;
-
-            static bool IsMatchingGenericType(INamedTypeSymbol candidate, INamedTypeSymbol baseType)
-            {
-                return candidate.IsGenericType && SymbolEqualityComparer.Default.Equals(candidate.ConstructedFrom, baseType);
-            }
-        }
     }
 
     extension(INamedTypeSymbol typeSymbol)
     {
-        public bool IsGenericTypeDefinition => typeSymbol is { IsGenericType: true, IsDefinition: true };
-
         /// <summary>
         /// Gets the type parameters source for this type symbol.
         /// For unbound generic types and constructed generic types, returns parameters from the original definition.
