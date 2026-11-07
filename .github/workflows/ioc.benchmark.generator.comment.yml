@@ -1,9 +1,13 @@
 name: SourceGen.Ioc Generator Benchmark Comment
 
+# Also posts the NativeAOT benchmark report; each benchmark has its own artifact and comment marker.
 on:
   workflow_run:
-    workflows: [SourceGen.Ioc Generator Benchmark]
+    workflows: [SourceGen.Ioc Generator Benchmark, SourceGen.Ioc Benchmark NativeAOT]
     types: [completed]
+
+env:
+  BENCHMARK: ${{ github.event.workflow_run.name == 'SourceGen.Ioc Benchmark NativeAOT' && 'nativeaot' || 'generator' }}
 
 # Serializes reports for the same pull request branch so a commit's comment is updated instead of duplicated.
 concurrency:
@@ -29,7 +33,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          name: ioc-generator-benchmark-comment
+          name: ioc-${{ env.BENCHMARK }}-benchmark-comment
           path: ${{ runner.temp }}/pr-comment
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
@@ -53,6 +57,7 @@ jobs:
         run: dotnet run --file .github/scripts/post-generator-benchmark-comment.cs
         env:
           COMMENT_DIR: ${{ runner.temp }}/pr-comment
+          COMMENT_MARKER: sourcegen-ioc-${{ env.BENCHMARK }}-benchmark
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}

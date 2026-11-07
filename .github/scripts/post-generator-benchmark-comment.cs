@@ -8,8 +8,14 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-// Each commit gets its own comment; the prefix also matches older comments without a commit.
-const string MarkerPrefix = "<!-- sourcegen-ioc-generator-benchmark";
+// Each benchmark and commit gets its own comment; the prefix also matches older comments without a commit.
+var markerName = Environment.GetEnvironmentVariable("COMMENT_MARKER") is { Length: > 0 } name ? name : "sourcegen-ioc-generator-benchmark";
+if(!markerName.All(static character => character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-'))
+{
+    throw new FormatException($"The COMMENT_MARKER value '{markerName}' is invalid.");
+}
+
+var markerPrefix = $"<!-- {markerName}";
 
 var commentDirectory = RequiredEnvironmentVariable("COMMENT_DIR");
 var headSha = RequiredEnvironmentVariable("HEAD_SHA");
@@ -51,11 +57,11 @@ if(report.Length > reportLimit)
     report = $"{report[..reportLimit]}\n\n_The report was truncated. See the workflow run for the full results._";
 }
 
-var marker = $"{MarkerPrefix} sha={headSha} -->";
+var marker = $"{markerPrefix} sha={headSha} -->";
 var body = $"{marker}\n{report}\n\n[Workflow run]({runUrl}) for {headSha}.";
 try
 {
-    var comments = await ListBenchmarkCommentsAsync(client, owner, repository, pullRequestNumber);
+    var comments = await ListBenchmarkCommentsAsync(client, owner, repository, pullRequestNumber, markerPrefix);
     var existingCommentId = comments.FirstOrDefault(comment => comment.Body.StartsWith(marker, StringComparison.Ordinal))?.Id;
     var endpoint = existingCommentId is { } commentId
         ? $"repos/{owner}/{repository}/issues/comments/{commentId.ToString(CultureInfo.InvariantCulture)}"
@@ -113,7 +119,7 @@ static async Task<JsonDocument> GetJsonAsync(HttpClient client, string endpoint)
     return await JsonDocument.ParseAsync(stream);
 }
 
-static async Task<List<BenchmarkComment>> ListBenchmarkCommentsAsync(HttpClient client, string owner, string repository, long pullRequestNumber)
+static async Task<List<BenchmarkComment>> ListBenchmarkCommentsAsync(HttpClient client, string owner, string repository, long pullRequestNumber, string markerPrefix)
 {
     List<BenchmarkComment> result = [];
     for(var page = 1; ; page++)
@@ -129,7 +135,7 @@ static async Task<List<BenchmarkComment>> ListBenchmarkCommentsAsync(HttpClient 
             var body = comment.TryGetProperty("body", out var commentBody) && commentBody.ValueKind is JsonValueKind.String
                 ? commentBody.GetString() ?? ""
                 : "";
-            if(isActionsBot && body.StartsWith(MarkerPrefix, StringComparison.Ordinal))
+            if(isActionsBot && body.StartsWith(markerPrefix, StringComparison.Ordinal))
             {
                 result.Add(new(comment.GetProperty("id").GetInt64(), comment.GetProperty("node_id").GetString()!, body));
             }

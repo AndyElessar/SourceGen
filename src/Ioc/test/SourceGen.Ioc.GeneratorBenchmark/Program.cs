@@ -26,6 +26,7 @@ if(args is ["--scenarios", var className])
 if(args is ["--compare", var baselinePath, var headPath, var outputPath, var threshold, .. var options])
 {
     var acceptRegressions = false;
+    var driftSuffix = "Overhead";
     var allocationThresholds = new Dictionary<string, double>(StringComparer.Ordinal);
     for(var i = 0; i < options.Length; i++)
     {
@@ -39,13 +40,17 @@ if(args is ["--compare", var baselinePath, var headPath, var outputPath, var thr
                 allocationThresholds[type] = double.Parse(percent, CultureInfo.InvariantCulture);
                 i++;
                 break;
+            // --drift-suffix <method suffix>, e.g. _MSDI for the runtime benchmarks' MS.DI baselines
+            case "--drift-suffix" when i + 1 < options.Length:
+                driftSuffix = options[++i];
+                break;
             default:
                 throw new ArgumentException($"Unknown or incomplete --compare option '{options[i]}'.");
         }
     }
 
     return BenchmarkComparison.Run(baselinePath, headPath, outputPath, double.Parse(threshold, CultureInfo.InvariantCulture),
-        allocationThresholds, acceptRegressions);
+        allocationThresholds, acceptRegressions, driftSuffix);
 }
 
 if(args is ["--verify", var path])

@@ -1,33 +1,204 @@
 name: SourceGen.Ioc Benchmark NativeAOT
 
 on:
-  workflow_dispatch:
-
   push:
+    branches: [main]
+    # Path filters do not apply to tag pushes, so every ioc-v* tag is measured.
     tags:
       - 'ioc-v*'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    # Markdown never affects the benchmarks; the exclusion is last so no later pattern re-includes it.
+    paths:
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.Benchmark/**'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/BenchmarkComparison.cs'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/Program.cs'
+      - 'src/Ioc/test/Directory.Build.props'
+      - 'src/Directory.Build.props'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/ioc.benchmark.nativeaot.yml'
+      - '.github/workflows/ioc.benchmark.generator.comment.yml'
+      - '.github/scripts/**'
+      - '!**/*.md'
+  pull_request:
+    branches: [main]
+    # labeled/unlabeled re-run the comparison when the accept label changes; other labels skip the run.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - 'src/Ioc/src/SourceGen.Ioc/**'
+      - 'src/Ioc/src/SourceGen.Ioc.SourceGenerator/**'
+      - 'src/Ioc/test/SourceGen.Ioc.Benchmark/**'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/BenchmarkComparison.cs'
+      - 'src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/Program.cs'
+      - 'src/Ioc/test/Directory.Build.props'
+      - 'src/Directory.Build.props'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/ioc.benchmark.nativeaot.yml'
+      - '.github/workflows/ioc.benchmark.generator.comment.yml'
+      - '.github/scripts/**'
+      - '!**/*.md'
+  workflow_dispatch:
 
 env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  BENCHMARK_DIR: src/Ioc/test/SourceGen.Ioc.Benchmark
+  BENCHMARK_PROJECT: src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj
+  # The generator benchmark harness compares BenchmarkDotNet reports of any benchmark project.
+  COMPARER_PROJECT: src/Ioc/test/SourceGen.Ioc.GeneratorBenchmark/SourceGen.Ioc.GeneratorBenchmark.csproj
+  REGRESSION_THRESHOLD_PERCENT: '5'
+  # The MS.DI baselines run no SourceGen.Ioc code, so their time changes estimate the runner drift.
+  DRIFT_SUFFIX: _MSDI
+  ACCEPT_LABEL: benchmark-accept-nativeaot-allocation
 
 jobs:
-  nativeaot-benchmark:
+  plan:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+      github.event.label.name == 'benchmark-accept-nativeaot-allocation'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 120
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      base-sha: ${{ steps.plan.outputs.base-sha }}
+      base-label: ${{ steps.plan.outputs.base-label }}
+      head-label: ${{ steps.plan.outputs.head-label }}
+      accepted: ${{ steps.plan.outputs.accepted }}
+
+    steps:
+      # The whole history and its tags are needed to find the previous release tag and main's merge base.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BASE_REF: ${{ github.base_ref }}
+          ACCEPTED: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark-accept-nativeaot-allocation') }}
+        run: |
+          set -euo pipefail
+
+          short() { git rev-parse --short "$1"; }
+
+          head_label="$REF_NAME@$(short HEAD)"
+          base_sha=""
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            # The merge commit's first parent is the target branch.
+            head_label="$(short HEAD^2) merged into $BASE_REF"
+            base_sha="$(git rev-parse HEAD^1)"
+            base_label="$BASE_REF@$(short HEAD^1)"
+          elif [[ "$REF_TYPE" == tag ]]; then
+            # A release is compared with the previous release.
+            previous="$(git describe --tags --abbrev=0 --match 'ioc-v*' HEAD^ 2>/dev/null || true)"
+            if [[ -n "$previous" ]]; then
+              base_sha="$(git rev-parse "$previous^{commit}")"
+              base_label="$previous@$(short "$base_sha")"
+            else
+              base_label="no earlier ioc-v* tag"
+            fi
+          elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            # A branch is compared with the main commit it is based on, and main with its previous commit.
+            base_sha="$(git merge-base origin/main HEAD)"
+            if [[ "$base_sha" == "$(git rev-parse HEAD)" ]]; then
+              base_sha="$(git rev-parse HEAD^1)"
+            fi
+            base_label="main@$(short "$base_sha")"
+          else
+            base_sha="$(git rev-parse HEAD^1)"
+            base_label="$REF_NAME@$(short HEAD^1)"
+          fi
+
+          # Updates of packages that neither the benchmarks nor SourceGen.Ioc use, such as test and CLI packages,
+          # cannot change the results. Manual and release runs always measure.
+          irrelevant='TUnit|Verify\.TUnit|System\.IO\.Abstractions|System\.IO\.Abstractions\.TestingHelpers|ConsoleAppFramework|ConsoleAppFramework\.CliSchema|ZLogger|Microsoft\.AspNetCore\.Components\.Web|StyleCop\.Analyzers'
+          run=true
+          if [[ "$EVENT_NAME" != workflow_dispatch && "$REF_TYPE" != tag ]]; then
+            changed="$(git diff --name-only HEAD^1 HEAD -- ':(exclude)*.md')"
+            if [[ "$changed" == Directory.Packages.props ]]; then
+              # Every added or removed line must be the version of an irrelevant package; anything else measures.
+              relevant="$(git diff --unified=0 HEAD^1 HEAD -- Directory.Packages.props \
+                | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' \
+                | grep -vE "^[+-][[:space:]]*<PackageVersion Include=\"($irrelevant)\" Version=\"[^\"]*\"[[:space:]]*/>[[:space:]]*$" || true)"
+              if [[ -z "$relevant" ]]; then
+                run=false
+                echo "Only packages that the benchmarks do not use changed, so the benchmark is skipped." | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
+            fi
+          fi
+
+          {
+            echo "run=$run"
+            echo "base-sha=$base_sha"
+            echo "base-label=$base_label"
+            echo "head-label=$head_label"
+            echo "accepted=$ACCEPTED"
+          } >> "$GITHUB_OUTPUT"
+
+  # Each class runs on its own runner in parallel. Its base and head run on that runner, so time comparisons
+  # are not affected by runner hardware, and its MS.DI baselines estimate the drift between them.
+  measure:
+    name: measure (${{ matrix.class }})
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        class: [ThreadSafeStrategyBenchmark, RealisticAppBenchmark, AsyncInitBenchmark]
+    # Job-level so that a skipped run for an unrelated label never cancels a running benchmark.
+    # Newer commits replace older runs of the same pull request; every other run is kept.
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.class }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare base
+        id: base
+        shell: bash
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base-sha }}
+        run: |
+          set -euo pipefail
+
+          base_dir=""
+          if [[ -z "$BASE_SHA" ]]; then
+            echo "There is no base, so the head is measured without a baseline."
+          elif git cat-file -e "$BASE_SHA:$BENCHMARK_PROJECT" 2>/dev/null; then
+            base_dir="$RUNNER_TEMP/base"
+            git worktree add --detach "$base_dir" "$BASE_SHA"
+          else
+            echo "The base has no $BENCHMARK_PROJECT, so the head is measured without a baseline."
+          fi
+          echo "dir=$base_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Install NativeAOT prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -35,98 +206,217 @@ jobs:
           dotnet-version: '10.0.x'
           global-json-file: global.json
 
-      - name: Install NativeAOT prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang zlib1g-dev
+      # The base may pin a different SDK; the base worktree's global.json selects it.
+      - name: Setup .NET for base
+        id: setup-base
+        if: steps.base.outputs.dir != ''
+        continue-on-error: true
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: ${{ steps.base.outputs.dir }}/global.json
 
-      - name: Restore benchmark project
-        run: dotnet restore src/Ioc/test/SourceGen.Ioc.Benchmark/SourceGen.Ioc.Benchmark.csproj
+      - name: Build head
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release -f net10.0
 
-      - name: Run ThreadSafeStrategy, RealisticApp and AsyncInit benchmarks (NativeAOT)
-        working-directory: src/Ioc/test/SourceGen.Ioc.Benchmark
-        run: |
-          dotnet run \
-            --project SourceGen.Ioc.Benchmark.csproj \
-            -c Release \
-            -f net10.0 \
-            -- \
-            --runtimes nativeaot10.0 \
-            --filter "*ThreadSafeStrategyBenchmark*" "*RealisticAppBenchmark*" "*AsyncInitBenchmark*"
+      # A base that cannot build, for example when this change fixes its build, leaves the head without a baseline.
+      - name: Build base
+        id: build-base
+        if: steps.base.outputs.dir != '' && steps.setup-base.outcome == 'success'
+        continue-on-error: true
+        working-directory: ${{ steps.base.outputs.dir }}
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release -f net10.0
 
-      - name: Publish benchmark summary
-        if: always()
+      - name: Run benchmarks
         shell: bash
+        env:
+          BASE_DIR: ${{ steps.build-base.outcome == 'success' && steps.base.outputs.dir || '' }}
+          CLASS: ${{ matrix.class }}
+          JOB_INDEX: ${{ strategy.job-index }}
         run: |
           set -euo pipefail
 
-          results_dir=""
-          results_dir_candidates=(
-            "src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts/results"
-            "BenchmarkDotNet.Artifacts/results"
-          )
+          results="$RUNNER_TEMP/nativeaot-benchmark"
+          # BenchmarkDotNet finds the project to publish from the working directory, so each side runs from its own.
+          run() {
+            local dir="$1" out="$2"
+            (cd "$dir/$BENCHMARK_DIR" && dotnet run --project SourceGen.Ioc.Benchmark.csproj -c Release -f net10.0 --no-build -- \
+              --runtimes nativeaot10.0 \
+              --filter "*.$CLASS.*" \
+              --exporters json \
+              --artifacts "$out" </dev/null)
+          }
 
-          for candidate in "${results_dir_candidates[@]}"; do
-            if [[ -d "$candidate" ]]; then
-              results_dir="$candidate"
-              break
+          # Classes alternate base-head and head-base, so a steady drift during the jobs does not favor one side.
+          if (( JOB_INDEX % 2 == 0 )); then order=(base head); else order=(head base); fi
+
+          head_status=0
+          for side in "${order[@]}"; do
+            out="$results/$side/$CLASS"
+            if [[ "$side" == head ]]; then
+              run "$GITHUB_WORKSPACE" "$out" || head_status=$?
+            elif [[ -n "$BASE_DIR" ]] && ! run "$BASE_DIR" "$out"; then
+              # A failed base run leaves the head results without a baseline instead of failing the job.
+              # Its partial reports move out of the compared directory but stay in the uploaded artifact.
+              echo "::warning title=Base benchmark failed::The base run of $CLASS failed, so its head results are reported without a baseline."
+              if [[ -d "$out" ]]; then
+                mkdir -p "$results/failed-base"
+                mv "$out" "$results/failed-base/$CLASS"
+              fi
             fi
           done
+          exit "$head_status"
 
-          {
-            echo "## NativeAOT Benchmark Summary"
-            echo
-            echo "- Runtime: \`nativeaot10.0\`"
-            echo "- Filters: \`*ThreadSafeStrategyBenchmark*\`, \`*RealisticAppBenchmark*\`, \`*AsyncInitBenchmark*\`"
-            if [[ -n "$results_dir" ]]; then
-              echo "- Results directory: \`$results_dir\`"
-            fi
-            echo
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [[ -z "$results_dir" ]]; then
-            echo "Benchmark results directory not found in expected locations." >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-            echo "Checked paths:" >> "$GITHUB_STEP_SUMMARY"
-            for candidate in "${results_dir_candidates[@]}"; do
-              echo "- \`$candidate\`" >> "$GITHUB_STEP_SUMMARY"
-            done
-            exit 0
-          fi
-
-          shopt -s nullglob
-          reports=(
-            "$results_dir"/*ThreadSafeStrategyBenchmark*-report-github.md
-            "$results_dir"/*RealisticAppBenchmark*-report-github.md
-            "$results_dir"/*AsyncInitBenchmark*-report-github.md
-          )
-
-          if [[ ${#reports[@]} -eq 0 ]]; then
-            reports=("$results_dir"/*-report-github.md)
-          fi
-
-          if [[ ${#reports[@]} -eq 0 ]]; then
-            echo "No \`*-report-github.md\` files were produced." >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-            echo "Available files in \`$results_dir\`:" >> "$GITHUB_STEP_SUMMARY"
-            find "$results_dir" -maxdepth 1 -type f -printf -- "- %f\\n" >> "$GITHUB_STEP_SUMMARY" || true
-            exit 0
-          fi
-
-          for report in "${reports[@]}"; do
-            echo >> "$GITHUB_STEP_SUMMARY"
-            echo "### $(basename "$report")" >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-            cat "$report" >> "$GITHUB_STEP_SUMMARY"
-          done
-
-      - name: Upload BenchmarkDotNet artifacts
-        if: always()
+      - name: Upload benchmark results
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ioc-benchmark-nativeaot-${{ github.run_id }}
-          path: |
-            src/Ioc/test/SourceGen.Ioc.Benchmark/BenchmarkDotNet.Artifacts
-            BenchmarkDotNet.Artifacts
+          name: ioc-nativeaot-benchmark-${{ matrix.class }}
+          path: ${{ runner.temp }}/nativeaot-benchmark
           if-no-files-found: warn
           retention-days: 7
+          overwrite: true
+
+  nativeaot-benchmark:
+    needs: [plan, measure]
+    # A measure job cancelled by a newer commit makes this run's comparison incomplete, so it is not reported.
+    if: ${{ !cancelled() && needs.plan.outputs.run == 'true' && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          global-json-file: global.json
+
+      - name: Build comparer
+        run: dotnet build "$COMPARER_PROJECT" -c Release
+
+      # A measure job that failed before uploading leaves its benchmarks missing, which the comparison reports.
+      - name: Download benchmark results
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ioc-nativeaot-benchmark-*Benchmark
+          path: ${{ runner.temp }}/nativeaot-benchmark
+          merge-multiple: true
+
+      - name: Compare with base
+        shell: bash
+        env:
+          ACCEPTED: ${{ needs.plan.outputs.accepted }}
+          BASE_LABEL: ${{ needs.plan.outputs.base-label }}
+          HEAD_LABEL: ${{ needs.plan.outputs.head-label }}
+        run: |
+          set -euo pipefail
+
+          results="$RUNNER_TEMP/nativeaot-benchmark"
+          mkdir -p "$results"
+          # A path that does not exist compares the head without a baseline.
+          args=(--compare "$results/base" "$results/head" "$results/table.md" "$REGRESSION_THRESHOLD_PERCENT"
+            --drift-suffix "$DRIFT_SUFFIX")
+          if [[ "$ACCEPTED" == true ]]; then
+            args+=(--accept-regressions)
+          fi
+
+          status=0
+          dotnet run --project "$COMPARER_PROJECT" -c Release --no-build -- "${args[@]}" || status=$?
+
+          {
+            echo "## SourceGen.Ioc NativeAOT benchmark"
+            echo
+            if [[ -n "$(find "$results/base" -name '*-report*.json' -print -quit 2>/dev/null)" ]]; then
+              echo "Head \`$HEAD_LABEL\` is compared with base \`$BASE_LABEL\` on \`nativeaot10.0\`. Each benchmark class ran its base and head on its own runner."
+            else
+              echo "Head \`$HEAD_LABEL\` is reported without a baseline because base \`$BASE_LABEL\` produced no results."
+            fi
+            if [[ -d "$results/failed-base" ]]; then
+              echo
+              echo "Some base runs failed, so their head results have no baseline."
+            fi
+            if [[ "$ACCEPTED" == true ]]; then
+              echo
+              echo "The \`$ACCEPT_LABEL\` label accepts allocation regressions and removed benchmarks in this pull request."
+            fi
+            echo
+            if [[ -f "$results/table.md" ]]; then
+              cat "$results/table.md"
+            else
+              echo "The comparison failed. See the workflow log for details."
+            fi
+            if [[ "$status" -ne 0 ]]; then
+              echo
+              echo "If the change is intentional, add the \`$ACCEPT_LABEL\` label to the pull request to accept it."
+            fi
+          } > "$results/comparison.md"
+
+          cat "$results/comparison.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Publish BenchmarkDotNet report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+
+          results="$RUNNER_TEMP/nativeaot-benchmark"
+          for side in head base; do
+            for report in "$results/$side"/**/*-report-github.md; do
+              {
+                echo
+                echo "<details><summary>BenchmarkDotNet report (${report#"$results/"})</summary>"
+                echo
+                cat "$report"
+                echo
+                echo "</details>"
+              } >> "$GITHUB_STEP_SUMMARY"
+            done
+          done
+
+      - name: Upload comparison
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ioc-nativeaot-benchmark-comparison
+          path: |
+            ${{ runner.temp }}/nativeaot-benchmark/comparison.md
+            ${{ runner.temp }}/nativeaot-benchmark/table.md
+          if-no-files-found: warn
+          retention-days: 7
+          overwrite: true
+
+      # Pull request runs only have a read-only token; ioc.benchmark.generator.comment.yml posts this report.
+      - name: Prepare pull request comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          comment="$RUNNER_TEMP/pr-comment"
+          mkdir -p "$comment"
+          echo "$PR_NUMBER" > "$comment/pr-number.txt"
+          if [[ -f "$RUNNER_TEMP/nativeaot-benchmark/comparison.md" ]]; then
+            cp "$RUNNER_TEMP/nativeaot-benchmark/comparison.md" "$comment/comparison.md"
+          else
+            printf '## SourceGen.Ioc NativeAOT benchmark\n\nThe benchmark did not produce a comparison. See the workflow run for details.\n' > "$comment/comparison.md"
+          fi
+
+      - name: Upload pull request comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ioc-nativeaot-benchmark-comment
+          path: ${{ runner.temp }}/pr-comment
+          retention-days: 7
+          overwrite: true
