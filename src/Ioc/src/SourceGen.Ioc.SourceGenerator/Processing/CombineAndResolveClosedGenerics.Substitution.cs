@@ -42,7 +42,8 @@ partial class IocSourceGenerator
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
 
-        var closedImplType = TypeData.CreateGeneric(
+        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
+        return TypeData.CreateGeneric(
             closedImplTypeName,
             openImplType.NameWithoutGeneric,
             IsOpenGeneric: false,
@@ -50,10 +51,8 @@ partial class IocSourceGenerator
             IsNestedOpenGeneric: false,
             TypeParameters: closedTypeParams,
             ConstructorParameters: closedConstructorParams,
-            HasInjectConstructor: openImplType.HasInjectConstructor);
-
-        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
-        return openImplType.IsKnownNonDisposable ? closedImplType with { IsKnownNonDisposable = true } : closedImplType;
+            HasInjectConstructor: openImplType.HasInjectConstructor,
+            IsKnownNonDisposable: openImplType.IsKnownNonDisposable);
     }
 
     /// <summary>
@@ -393,7 +392,8 @@ partial class IocSourceGenerator
         // Substitute in type parameters
         var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap);
 
-        var closedDecorator = TypeData.CreateGeneric(
+        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
+        return TypeData.CreateGeneric(
             closedDecoratorName,
             closedDecoratorNameWithoutGeneric,
             IsOpenGeneric: false,
@@ -402,10 +402,8 @@ partial class IocSourceGenerator
             TypeParameters: newTypeParams,
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: false,
-            InjectionMembers: closedInjectionMembers);
-
-        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
-        return genericDecorator.IsKnownNonDisposable ? closedDecorator with { IsKnownNonDisposable = true } : closedDecorator;
+            InjectionMembers: closedInjectionMembers,
+            IsKnownNonDisposable: genericDecorator.IsKnownNonDisposable);
     }
 
     /// <summary>

@@ -100,16 +100,15 @@ internal static partial class TransformExtensions
                 isKnownNonDisposable = hierarchySource.IsKnownNonDisposable();
             }
 
-            var typeData = typeSymbol.CreateTypeData(
+            return typeSymbol.CreateTypeData(
                 typeName,
                 typeParameters,
                 constructorParams,
                 hasInjectConstructor,
                 injectionMembers,
                 allInterfaces,
-                allBaseClasses);
-
-            return isKnownNonDisposable ? typeData with { IsKnownNonDisposable = true } : typeData;
+                allBaseClasses,
+                isKnownNonDisposable);
         }
 
         /// <summary>
@@ -127,11 +126,20 @@ internal static partial class TransformExtensions
                 return false;
             }
 
-            foreach(var iface in typeSymbol.AllInterfaces)
+            // The interfaces are checked before any declaration syntax is read, so disposable types need no syntax access
+            var interfaces = typeSymbol.AllInterfaces;
+            foreach(var iface in interfaces)
             {
                 if(iface.SpecialType == SpecialType.System_IDisposable
-                    || iface is { Name: "IAsyncDisposable", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } }
-                    || !IsHierarchyFinal(iface))
+                    || iface is { Name: "IAsyncDisposable", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } })
+                {
+                    return false;
+                }
+            }
+
+            foreach(var iface in interfaces)
+            {
+                if(!IsHierarchyFinal(iface))
                 {
                     return false;
                 }
@@ -175,7 +183,8 @@ internal static partial class TransformExtensions
             bool hasInjectConstructor,
             ImmutableEquatableArray<InjectionMemberData>? injectionMembers,
             ImmutableEquatableArray<TypeData>? allInterfaces,
-            ImmutableEquatableArray<TypeData>? allBaseClasses)
+            ImmutableEquatableArray<TypeData>? allBaseClasses,
+            bool isKnownNonDisposable)
         {
             // Error types (e.g., types from other source generators not yet resolved)
             // should be treated as simple types, not open generics
@@ -252,7 +261,8 @@ internal static partial class TransformExtensions
                     hasInjectConstructor,
                     injectionMembers,
                     allInterfaces,
-                    allBaseClasses);
+                    allBaseClasses,
+                    IsKnownNonDisposable: isKnownNonDisposable);
             }
 
             return TypeData.CreateSimple(
@@ -261,7 +271,8 @@ internal static partial class TransformExtensions
                 hasInjectConstructor,
                 injectionMembers,
                 allInterfaces,
-                allBaseClasses);
+                allBaseClasses,
+                IsKnownNonDisposable: isKnownNonDisposable);
         }
 
         /// <summary>
