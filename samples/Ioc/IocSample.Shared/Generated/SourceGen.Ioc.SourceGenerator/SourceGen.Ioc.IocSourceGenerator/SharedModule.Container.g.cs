@@ -406,17 +406,6 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
             return;
         }
 
-        DisposeService(_testRequest3Handler_As_IRequestHandler_TestRequest3_int);
-        DisposeService(_testRequest2Handler_As_IRequestHandler_TestRequest2_List_string);
-        DisposeService(_testHandler_As_IRequestHandler_TestRequest_List_string);
-        DisposeService(_logger_HandlerDecorator1_TestRequest3_int);
-        DisposeService(_logger_TestRequest3Handler);
-        DisposeService(_logger_HandlerDecorator1_TestRequest2_List_string);
-        DisposeService(_logger_TestRequest2Handler);
-        DisposeService(_logger_HandlerDecorator1_TestRequest_List_string);
-        DisposeService(_testRequest3Handler);
-        DisposeService(_testRequest2Handler);
-        DisposeService(_testHandler);
     }
 
     public async global::System.Threading.Tasks.ValueTask DisposeAsync()
@@ -429,17 +418,6 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
             return;
         }
 
-        await DisposeServiceAsync(_testRequest3Handler_As_IRequestHandler_TestRequest3_int).ConfigureAwait(false);
-        await DisposeServiceAsync(_testRequest2Handler_As_IRequestHandler_TestRequest2_List_string).ConfigureAwait(false);
-        await DisposeServiceAsync(_testHandler_As_IRequestHandler_TestRequest_List_string).ConfigureAwait(false);
-        await DisposeServiceAsync(_logger_HandlerDecorator1_TestRequest3_int).ConfigureAwait(false);
-        await DisposeServiceAsync(_logger_TestRequest3Handler).ConfigureAwait(false);
-        await DisposeServiceAsync(_logger_HandlerDecorator1_TestRequest2_List_string).ConfigureAwait(false);
-        await DisposeServiceAsync(_logger_TestRequest2Handler).ConfigureAwait(false);
-        await DisposeServiceAsync(_logger_HandlerDecorator1_TestRequest_List_string).ConfigureAwait(false);
-        await DisposeServiceAsync(_testRequest3Handler).ConfigureAwait(false);
-        await DisposeServiceAsync(_testRequest2Handler).ConfigureAwait(false);
-        await DisposeServiceAsync(_testHandler).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()
@@ -447,10 +425,11 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
         global::System.ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
+    private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is global::System.IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)

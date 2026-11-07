@@ -229,10 +229,12 @@ If accessing the cached task result or disposing the resolved service throws, th
 
 |Disposal path|Field type|Required generated pattern|Forbidden pattern|
 |:---|:---|:---|:---|
-|`DisposeAsync`|`Task<T>?`|Check `task.IsCompletedSuccessfully`, then try-catch `await DisposeServiceAsync(await _field)`|Direct `await task` without status check or try-catch|
+|`DisposeAsync`|`Task<T>?`|Without an `async` state machine, return `default` unless `task.IsCompletedSuccessfully` and `task.Result` is disposable; otherwise try-catch `await DisposeServiceAsync(task.Result)` in an `async` local function|Direct `await task` without status check or try-catch|
 |`Dispose`|`Task<T>?`|Check `task.IsCompletedSuccessfully`, then try-catch `DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult())`|Direct `.GetResult()` without status check or try-catch|
 
 These rules apply regardless of the container's `ThreadSafeStrategy`. Disposal behavior depends on the cached field type (`Task<T>?`), not on the synchronization primitive used during first initialization.
+
+As for other fields, an async-init field whose service is known not to be disposable gets no disposal call (see [Disposal Field Registration](Container.Performance.spec.md#disposal-field-registration)). The `Task<T>?` overloads are generated only when an async-init field has a disposal call.
 
 ### Example
 
@@ -240,15 +242,19 @@ These rules apply regardless of the container's `ThreadSafeStrategy`. Disposal b
 #region Generate:
 partial class AppContainer : IAsyncDisposable, IDisposable
 {
+    // FooBar implements IDisposable
     private global::System.Threading.Tasks.Task<global::FooBar>? _fooBar;
 
-    private static async ValueTask DisposeServiceAsync<T>(Task<T>? task)
+    private static ValueTask DisposeServiceAsync<T>(Task<T>? task)
     {
-        if(task is { IsCompletedSuccessfully: true })
+        if(task is not { IsCompletedSuccessfully: true } || task.Result is not (IAsyncDisposable or IDisposable)) return default;
+        return DisposeCoreAsync(task.Result);
+
+        static async ValueTask DisposeCoreAsync(object service)
         {
             try
             {
-                await DisposeServiceAsync(await task.ConfigureAwait(false)).ConfigureAwait(false);
+                await DisposeServiceAsync(service).ConfigureAwait(false);
             }
             catch(Exception ex)
             {

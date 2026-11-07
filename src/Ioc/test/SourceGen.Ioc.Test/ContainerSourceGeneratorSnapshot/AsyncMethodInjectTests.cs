@@ -24,6 +24,54 @@ public class AsyncMethodInjectTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [Test]
+    public async Task AsyncMethodInject_DisposableAndNonDisposableServices_DisposesOnlyDisposableTasks()
+    {
+        // Only the disposable async-init service gets a dispose call, through the Task<T> overloads
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlainAsync { }
+            public interface IDisposableAsync { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IPlainAsync)])]
+            public class PlainAsync : IPlainAsync
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IDisposableAsync)])]
+            public class DisposableAsync : IDisposableAsync, IAsyncDisposable
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+
+                public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task AsyncMethodInject_SingletonWithAsyncInit_GeneratesAsyncResolver_None()
     {
         // A singleton with a single async-init method should get a Task<T>? field

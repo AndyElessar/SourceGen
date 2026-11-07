@@ -26,19 +26,38 @@ partial class IocSourceGenerator
         writer.WriteLine();
 
         // IAsyncDisposable.DisposeAsync
-        writer.WriteLine("public async global::System.Threading.Tasks.ValueTask DisposeAsync()");
-        writer.WriteLine("{");
-        writer.Indentation++;
-        writer.WriteLine("if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;");
-        writer.WriteLine();
-        WriteDisposalBody(writer, container, groups, ownsFallbackProvider, isAsync: true);
-        writer.Indentation--;
-        writer.WriteLine("}");
+        var hasAsyncDisposeCalls = container.IntegrateServiceProvider
+            || ownsFallbackProvider
+            || container.ImportedModules.Length > 0
+            || groups.SingletonEntries.Any(static e => e.HasDisposeCall)
+            || groups.ScopedEntries.Any(static e => e.HasDisposeCall);
+        if(hasAsyncDisposeCalls)
+        {
+            writer.WriteLine("public async global::System.Threading.Tasks.ValueTask DisposeAsync()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;");
+            writer.WriteLine();
+            WriteDisposalBody(writer, container, groups, ownsFallbackProvider, isAsync: true);
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
+        else
+        {
+            // Nothing to await: disposal releases only synchronization primitives
+            writer.WriteLine("public global::System.Threading.Tasks.ValueTask DisposeAsync()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("Dispose();");
+            writer.WriteLine("return default;");
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
         writer.WriteLine();
 
-        var hasAsyncInitServices = groups.SingletonEntries.Any(static e => e is AsyncContainerEntry)
-            || groups.ScopedEntries.Any(static e => e is AsyncContainerEntry);
-        WriteDisposalHelperMethods(writer, hasAsyncInitServices);
+        var hasAsyncInitDisposeCalls = groups.SingletonEntries.Any(static e => e is AsyncContainerEntry { HasDisposeCall: true })
+            || groups.ScopedEntries.Any(static e => e is AsyncContainerEntry { HasDisposeCall: true });
+        WriteDisposalHelperMethods(writer, hasAsyncInitDisposeCalls);
 
         writer.WriteLine("#endregion");
     }
@@ -138,7 +157,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes the static helper methods for disposal.
     /// </summary>
-    private static void WriteDisposalHelperMethods(SourceWriter writer, bool hasAsyncInitServices)
+    private static void WriteDisposalHelperMethods(SourceWriter writer, bool hasAsyncInitDisposeCalls)
     {
         // Helper method to throw ObjectDisposedException if disposed
         writer.WriteLine("private void ThrowIfDisposed()");
@@ -149,12 +168,13 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
-        // Helper method for async disposal
-        writer.WriteLine("private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)");
+        // Helper method for async disposal; not async, so null and non-disposable services need no state machine
+        writer.WriteLine("private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)");
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine("if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);");
-        writer.WriteLine("else if(service is global::System.IDisposable disposable) disposable.Dispose();");
+        writer.WriteLine("if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();");
+        writer.WriteLine("if(service is global::System.IDisposable disposable) disposable.Dispose();");
+        writer.WriteLine("return default;");
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -170,19 +190,22 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
-        if(hasAsyncInitServices)
+        if(hasAsyncInitDisposeCalls)
         {
-            // Overload for async-init services stored as Task<T>?
-            writer.WriteLine("private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync<T>(global::System.Threading.Tasks.Task<T>? task)");
+            // Overload for async-init services stored as Task<T>?; only a disposable result enters the state machine
+            writer.WriteLine("private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync<T>(global::System.Threading.Tasks.Task<T>? task)");
             writer.WriteLine("{");
             writer.Indentation++;
-            writer.WriteLine("if(task is { IsCompletedSuccessfully: true })");
+            writer.WriteLine("if(task is not { IsCompletedSuccessfully: true } || task.Result is not (global::System.IAsyncDisposable or global::System.IDisposable)) return default;");
+            writer.WriteLine("return DisposeCoreAsync(task.Result);");
+            writer.WriteLine();
+            writer.WriteLine("static async global::System.Threading.Tasks.ValueTask DisposeCoreAsync(object service)");
             writer.WriteLine("{");
             writer.Indentation++;
             writer.WriteLine("try");
             writer.WriteLine("{");
             writer.Indentation++;
-            writer.WriteLine("await DisposeServiceAsync(await task.ConfigureAwait(false)).ConfigureAwait(false);");
+            writer.WriteLine("await DisposeServiceAsync(service).ConfigureAwait(false);");
             writer.Indentation--;
             writer.WriteLine("}");
             writer.WriteLine("catch(global::System.Exception ex)");

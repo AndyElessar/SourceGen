@@ -372,9 +372,8 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
             return;
         }
 
-        // Eager singletons - no SemaphoreSlim to dispose
-        DisposeService(_myService);
-        DisposeService(_myDependency);
+        // MyService and MyDependency are known not to be disposable, so they get no disposal call
+        // (see Container.Performance); eager singletons have no SemaphoreSlim to dispose
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -391,16 +390,15 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
             return;
         }
 
-        // Eager singletons - no SemaphoreSlim to dispose
-        await DisposeServiceAsync(_myService).ConfigureAwait(false);
-        await DisposeServiceAsync(_myDependency).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
-    private static async ValueTask DisposeServiceAsync(object? service)
+    // Not async: null and non-disposable services need no state machine
+    private static ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is IDisposable disposable) disposable.Dispose();
+        if(service is IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)

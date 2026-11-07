@@ -300,10 +300,11 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::LevelA.
         global::System.ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
+    private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is global::System.IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)

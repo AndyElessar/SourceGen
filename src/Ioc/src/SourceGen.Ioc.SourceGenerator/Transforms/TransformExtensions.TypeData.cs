@@ -89,6 +89,7 @@ internal static partial class TransformExtensions
             // Extract hierarchy (interfaces and base classes) if requested
             ImmutableEquatableArray<TypeData>? allInterfaces = null;
             ImmutableEquatableArray<TypeData>? allBaseClasses = null;
+            var isKnownNonDisposable = false;
             if(extractHierarchy)
             {
                 // The hierarchy of an unbound generic type such as typeof(Decorator<,>) has no type arguments to match,
@@ -96,8 +97,95 @@ internal static partial class TransformExtensions
                 var hierarchySource = typeSymbol.IsUnboundGenericType ? typeSymbol.OriginalDefinition : typeSymbol;
                 allInterfaces = hierarchySource.GetAllInterfaces();
                 allBaseClasses = hierarchySource.GetAllBaseClasses();
+                isKnownNonDisposable = hierarchySource.IsKnownNonDisposable();
             }
 
+            return typeSymbol.CreateTypeData(
+                typeName,
+                typeParameters,
+                constructorParams,
+                hasInjectConstructor,
+                injectionMembers,
+                allInterfaces,
+                allBaseClasses,
+                isKnownNonDisposable);
+        }
+
+        /// <summary>
+        /// Gets whether instances of exactly this type implement neither <c>IDisposable</c> nor <c>IAsyncDisposable</c>.
+        /// </summary>
+        /// <remarks>
+        /// Returns <see langword="false"/> (unknown) when a source declaration of the type, one of its base classes, or one of
+        /// its interfaces is partial, or when the hierarchy contains an error type: another source generator may add
+        /// <c>IDisposable</c> to it, and this generator cannot see that generator's output.
+        /// </remarks>
+        public bool IsKnownNonDisposable()
+        {
+            if(typeSymbol.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            {
+                return false;
+            }
+
+            // The interfaces are checked before any declaration syntax is read, so disposable types need no syntax access
+            var interfaces = typeSymbol.AllInterfaces;
+            foreach(var iface in interfaces)
+            {
+                if(iface.SpecialType == SpecialType.System_IDisposable
+                    || iface is { Name: "IAsyncDisposable", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } })
+                {
+                    return false;
+                }
+            }
+
+            foreach(var iface in interfaces)
+            {
+                if(!IsHierarchyFinal(iface))
+                {
+                    return false;
+                }
+            }
+
+            for(var type = typeSymbol; type is not null; type = type.BaseType)
+            {
+                if(!IsHierarchyFinal(type))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+
+            // Metadata types are final; source types are final unless declared partial
+            static bool IsHierarchyFinal(INamedTypeSymbol type)
+            {
+                if(type.TypeKind == TypeKind.Error)
+                {
+                    return false;
+                }
+
+                foreach(var reference in type.OriginalDefinition.DeclaringSyntaxReferences)
+                {
+                    if(reference.GetSyntax() is TypeDeclarationSyntax declaration
+                        && declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        private TypeData CreateTypeData(
+            string typeName,
+            ImmutableEquatableArray<TypeParameter>? typeParameters,
+            ImmutableEquatableArray<ParameterData>? constructorParams,
+            bool hasInjectConstructor,
+            ImmutableEquatableArray<InjectionMemberData>? injectionMembers,
+            ImmutableEquatableArray<TypeData>? allInterfaces,
+            ImmutableEquatableArray<TypeData>? allBaseClasses,
+            bool isKnownNonDisposable)
+        {
             // Error types (e.g., types from other source generators not yet resolved)
             // should be treated as simple types, not open generics
             if(typeSymbol.TypeKind == TypeKind.Error)
@@ -173,7 +261,8 @@ internal static partial class TransformExtensions
                     hasInjectConstructor,
                     injectionMembers,
                     allInterfaces,
-                    allBaseClasses);
+                    allBaseClasses,
+                    IsKnownNonDisposable: isKnownNonDisposable);
             }
 
             return TypeData.CreateSimple(
@@ -182,7 +271,8 @@ internal static partial class TransformExtensions
                 hasInjectConstructor,
                 injectionMembers,
                 allInterfaces,
-                allBaseClasses);
+                allBaseClasses,
+                IsKnownNonDisposable: isKnownNonDisposable);
         }
 
         /// <summary>

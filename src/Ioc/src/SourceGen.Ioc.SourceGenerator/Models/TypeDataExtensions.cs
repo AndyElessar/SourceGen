@@ -18,7 +18,8 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
-            TypeTraits Traits = default) =>
+            TypeTraits Traits = default,
+            bool IsKnownNonDisposable = false) =>
             new SimpleTypeData(
                 Name,
                 Traits,
@@ -26,7 +27,10 @@ internal static class TypeDataExtensions
                 HasInjectConstructor,
                 InjectionMembers,
                 AllInterfaces,
-                AllBaseClasses);
+                AllBaseClasses)
+            {
+                IsKnownNonDisposable = IsKnownNonDisposable,
+            };
 
         /// <summary>
         /// Creates a generic type data.
@@ -43,7 +47,8 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
-            TypeTraits Traits = default) =>
+            TypeTraits Traits = default,
+            bool IsKnownNonDisposable = false) =>
             new NamedGenericTypeData(
                 Name,
                 NameWithoutGeneric,
@@ -56,7 +61,10 @@ internal static class TypeDataExtensions
                 HasInjectConstructor,
                 InjectionMembers,
                 AllInterfaces,
-                AllBaseClasses);
+                AllBaseClasses)
+            {
+                IsKnownNonDisposable = IsKnownNonDisposable,
+            };
 
         /// <summary>
         /// Creates a type parameter placeholder (e.g., T, TRequest).
