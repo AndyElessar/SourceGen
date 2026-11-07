@@ -286,9 +286,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      # Nerdbank.GitVersioning needs the history to build the comparer, which references SourceGen.Ioc.
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
