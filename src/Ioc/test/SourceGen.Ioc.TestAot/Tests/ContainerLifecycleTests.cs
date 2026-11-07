@@ -233,6 +233,20 @@ public sealed class ContainerLifecycleTests
         await Assert.That(service.IsDisposed).IsTrue();
     }
 
+    [Test]
+    public async Task AsyncInitDisposableService_DisposeAsync_DisposesInitializedService()
+    {
+        await using var container = new AsyncInitDisposableContainer();
+        var scope = container.CreateAsyncScope();
+        var service = await scope.ServiceProvider.GetRequiredService<Task<ILifecycleAsyncInitDisposable>>();
+
+        await Assert.That(service.IsInitialized).IsTrue();
+
+        await scope.DisposeAsync();
+
+        await Assert.That(service.IsDisposed).IsTrue();
+    }
+
     /// <summary>Fallback provider that counts scopes created through its <see cref="IServiceScopeFactory"/>.</summary>
     private sealed class CountingScopeFactoryProvider(IServiceProvider inner) : IServiceProvider, IServiceScopeFactory
     {

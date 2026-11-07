@@ -340,9 +340,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_consumer);
-        DisposeService(_handler2__handler2_);
-        DisposeService(_handler1__handler1_);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -356,9 +353,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_handler2__handler2_).ConfigureAwait(false);
-        await DisposeServiceAsync(_handler1__handler1_).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
@@ -367,10 +361,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         global::System.ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
+    private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is global::System.IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)

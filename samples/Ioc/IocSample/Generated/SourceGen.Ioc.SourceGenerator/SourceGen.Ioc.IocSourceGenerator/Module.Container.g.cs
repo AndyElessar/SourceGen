@@ -937,9 +937,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
         DisposeService(_factoryService2_IocSample_FactoryService2_Create);
         DisposeService(_factoryService_IocSample_Factory_Create);
-        DisposeService(_basic);
-        DisposeService(_asyncDependency);
-        DisposeService(_default2);
         if(!_isRootScope)
         {
             _iocSample_Shared_SharedModule.Dispose();
@@ -947,23 +944,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
             return;
         }
 
-        DisposeService(_genericRequestHandler2_Entity2_As_IRequestHandler_GenericRequest2_Entity2_List_Entity2);
-        DisposeService(_genericRequestHandler2_Entity_As_IRequestHandler_GenericRequest2_Entity_List_Entity);
-        DisposeService(_genericRequestHandler2_Entity3_As_IRequestHandler_GenericRequest2_Entity3_List_Entity3);
-        DisposeService(_genericRequestHandler_Entity2_As_IRequestHandler_GenericRequest_Entity2_List_Entity2);
-        DisposeService(_genericRequestHandler_Entity3_As_IRequestHandler_GenericRequest_Entity3_List_Entity3);
-        DisposeService(_genericRequestHandler_Entity_As_IRequestHandler_GenericRequest_Entity_List_Entity);
-        DisposeService(_testQueryHandler_As_IRequestHandler_TestQuery_string);
-        DisposeService(_genericRequestHandler2_Entity2);
         DisposeService(_iGenericFactoryService_IWrapper_decimal_IocSample_GenericFactory_Create);
-        DisposeService(_genericRequestHandler2_Entity);
-        DisposeService(_genericRequestHandler2_Entity3);
-        DisposeService(_genericRequestHandler_Entity2);
-        DisposeService(_genericRequestHandler_Entity3);
-        DisposeService(_genericRequestHandler_Entity);
-        DisposeService(_external);
-        DisposeService(_consumer);
-        DisposeService(_testQueryHandler);
         _iocSample_Shared_SharedModule.Dispose();
         DisposeService(_ownedFallbackProvider);
     }
@@ -974,9 +955,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
         await DisposeServiceAsync(_factoryService2_IocSample_FactoryService2_Create).ConfigureAwait(false);
         await DisposeServiceAsync(_factoryService_IocSample_Factory_Create).ConfigureAwait(false);
-        await DisposeServiceAsync(_basic).ConfigureAwait(false);
-        await DisposeServiceAsync(_asyncDependency).ConfigureAwait(false);
-        await DisposeServiceAsync(_default2).ConfigureAwait(false);
         if(!_isRootScope)
         {
             await _iocSample_Shared_SharedModule.DisposeAsync().ConfigureAwait(false);
@@ -984,23 +962,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
             return;
         }
 
-        await DisposeServiceAsync(_genericRequestHandler2_Entity2_As_IRequestHandler_GenericRequest2_Entity2_List_Entity2).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler2_Entity_As_IRequestHandler_GenericRequest2_Entity_List_Entity).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler2_Entity3_As_IRequestHandler_GenericRequest2_Entity3_List_Entity3).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler_Entity2_As_IRequestHandler_GenericRequest_Entity2_List_Entity2).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler_Entity3_As_IRequestHandler_GenericRequest_Entity3_List_Entity3).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler_Entity_As_IRequestHandler_GenericRequest_Entity_List_Entity).ConfigureAwait(false);
-        await DisposeServiceAsync(_testQueryHandler_As_IRequestHandler_TestQuery_string).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler2_Entity2).ConfigureAwait(false);
         await DisposeServiceAsync(_iGenericFactoryService_IWrapper_decimal_IocSample_GenericFactory_Create).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler2_Entity).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler2_Entity3).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler_Entity2).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler_Entity3).ConfigureAwait(false);
-        await DisposeServiceAsync(_genericRequestHandler_Entity).ConfigureAwait(false);
-        await DisposeServiceAsync(_external).ConfigureAwait(false);
-        await DisposeServiceAsync(_consumer).ConfigureAwait(false);
-        await DisposeServiceAsync(_testQueryHandler).ConfigureAwait(false);
         await _iocSample_Shared_SharedModule.DisposeAsync().ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
@@ -1010,46 +972,17 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         global::System.ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
+    private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is global::System.IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)
     {
         if(service is global::System.IDisposable disposable) disposable.Dispose();
         else if(service is global::System.IAsyncDisposable) throw new global::System.InvalidOperationException($"'{service.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
-    }
-
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync<T>(global::System.Threading.Tasks.Task<T>? task)
-    {
-        if(task is { IsCompletedSuccessfully: true })
-        {
-            try
-            {
-                await DisposeServiceAsync(await task.ConfigureAwait(false)).ConfigureAwait(false);
-            }
-            catch(global::System.Exception ex)
-            {
-                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
-            }
-        }
-    }
-
-    private static void DisposeService<T>(global::System.Threading.Tasks.Task<T>? task)
-    {
-        if(task is { IsCompletedSuccessfully: true })
-        {
-            try
-            {
-                DisposeService(task.ConfigureAwait(false).GetAwaiter().GetResult());
-            }
-            catch(global::System.Exception ex)
-            {
-                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
-            }
-        }
     }
 
     #endregion

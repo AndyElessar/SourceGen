@@ -11,6 +11,18 @@ partial class IocSourceGenerator
     private static string GetResolvedTypeName(ServiceRegistrationModel registration) =>
         registration.HasOwnServiceInstance ? registration.ServiceType.Name : registration.ImplementationType.Name;
 
+    /// <summary>
+    /// Gets whether the instance an entry caches is known not to be disposable: the container creates it with <c>new</c>
+    /// (the outermost decorator, or the implementation type without a factory), so its runtime type is known.
+    /// A factory may return any subtype, so its result is checked at run time.
+    /// </summary>
+    private static bool IsKnownNonDisposableInstance(
+        ServiceRegistrationModel registration,
+        ImmutableEquatableArray<ResolvedDecorator> decorators) =>
+        decorators.Length > 0
+            ? decorators[0].Decorator.ImplementationType.IsKnownNonDisposable
+            : registration is { Factory: null, Instance: null, ImplementationType.IsKnownNonDisposable: true };
+
     private closed record class ContainerEntry
     {
         public virtual void WriteField(SourceWriter writer)
@@ -26,6 +38,11 @@ partial class IocSourceGenerator
         public virtual void WriteDisposal(SourceWriter writer, bool isAsync)
         {
         }
+
+        /// <summary>
+        /// Gets whether <see cref="WriteDisposal"/> writes a <c>DisposeService</c>/<c>DisposeServiceAsync</c> call.
+        /// </summary>
+        public virtual bool HasDisposeCall => false;
 
         public virtual void WriteInit(SourceWriter writer)
         {
@@ -79,6 +96,12 @@ partial class IocSourceGenerator
         /// (<c>with { Registration = ... }</c>) keep the resolver's actual return type.
         /// </summary>
         public string ResolvedTypeName { get; } = GetResolvedTypeName(Registration);
+
+        /// <summary>
+        /// Gets whether the cached instance is known not to be disposable, so disposal skips it.
+        /// Captured at construction like <see cref="ResolvedTypeName"/>.
+        /// </summary>
+        public bool IsKnownNonDisposable { get; } = IsKnownNonDisposableInstance(Registration, Decorators);
 
         /// <summary>
         /// Gets the method resolving the undecorated instance that this decorated service entry wraps

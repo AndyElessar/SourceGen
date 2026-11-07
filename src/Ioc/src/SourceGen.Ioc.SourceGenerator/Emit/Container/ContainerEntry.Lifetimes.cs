@@ -80,9 +80,14 @@ partial class IocSourceGenerator
             writer.WriteLine($"{FieldName} = parent.{FieldName};");
         }
 
+        public override bool HasDisposeCall => !IsKnownNonDisposable;
+
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            WriteDisposeCall(writer, FieldName, isAsync);
+            if(HasDisposeCall)
+            {
+                WriteDisposeCall(writer, FieldName, isAsync);
+            }
         }
     }
 
@@ -160,9 +165,14 @@ partial class IocSourceGenerator
             writer.WriteLine("}");
         }
 
+        public override bool HasDisposeCall => !IsKnownNonDisposable;
+
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            WriteDisposeCall(writer, FieldName, isAsync);
+            if(HasDisposeCall)
+            {
+                WriteDisposeCall(writer, FieldName, isAsync);
+            }
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
@@ -252,7 +262,7 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
             // A losing decorator wraps the shared inner instance, so disposing it could dispose that instance too
-            if(InnerResolverMethodName is null)
+            if(InnerResolverMethodName is null && !IsKnownNonDisposable)
             {
                 // Not DisposeService: resolution must not throw for an IAsyncDisposable-only losing instance
                 writer.WriteLine("((object)instance as global::System.IDisposable)?.Dispose();");

@@ -18,7 +18,15 @@ internal closed record class TypeData(
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-    ImmutableEquatableArray<TypeData>? AllBaseClasses = null);
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+{
+    /// <summary>
+    /// Gets whether instances of exactly this type are known to implement neither <c>IDisposable</c> nor
+    /// <c>IAsyncDisposable</c>. Only recorded with the hierarchy, and only when no declaration in it can gain interfaces
+    /// from another source generator (partial or error types); <see langword="false"/> when unknown.
+    /// </summary>
+    public bool IsKnownNonDisposable { get; init; }
+}
 
 /// <summary>
 /// Represents a non-generic type without wrapper-specific data.

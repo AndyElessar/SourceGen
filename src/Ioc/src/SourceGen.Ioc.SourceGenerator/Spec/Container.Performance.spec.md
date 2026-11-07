@@ -10,7 +10,18 @@ Singleton and scoped services are disposed in LIFO (Last In, First Out) order wh
 
 ### Disposal Field Registration
 
-Every `Singleton` or `Scoped` service field is passed to `DisposeService`/`DisposeServiceAsync`, which dispose the instance only when it implements `IDisposable` or `IAsyncDisposable` (checked at runtime). Fields are disposed in reverse declaration order.
+`Singleton` and `Scoped` service fields are passed to `DisposeService`/`DisposeServiceAsync`, which dispose the instance only when it implements `IDisposable` or `IAsyncDisposable` (checked at runtime). Fields are disposed in reverse declaration order.
+
+The generator MUST omit the disposal call of a field whose instance is known at compile time not to implement `IDisposable` or `IAsyncDisposable`. An instance is known when the container creates it with `new`: the outermost decorator for a decorated service, otherwise the implementation type of a registration without `Factory`. Its runtime type is then exactly that type, so its disposability does not depend on the instance.
+
+- A registration with `Factory` (including a generic factory) MUST keep the runtime check, because the factory may return a disposable subtype of its declared return type. Decorators of a factory registration are still created with `new`.
+- A type MUST be treated as unknown when it, one of its base classes, or one of its interfaces has a `partial` declaration in source, or when its hierarchy contains an error type: another source generator may add `IDisposable` to it, and the generator cannot see that output.
+- A closed generic type is disposable exactly when its open generic definition is, because type arguments cannot add interfaces to a type.
+- `Instance` registrations have no field and are never disposed (see [Factory and Instance](Container.Factory.spec.md)).
+- The `SemaphoreSlim` of an omitted field is still disposed. A losing `CompareExchange` instance whose type is known not to be disposable is not disposed either.
+- When `DisposeAsync` has nothing to await (no disposal calls, imported modules, fallback scope or owned fallback provider), it MUST NOT be an `async` method: it calls `Dispose()` and returns `default`.
+
+`DisposeServiceAsync(object?)` MUST NOT be an `async` method, so that `null` and non-disposable fields cost no state machine: it returns the service's `DisposeAsync()` task directly, or `default` after a synchronous `Dispose()`.
 
 ### Example
 
@@ -18,6 +29,7 @@ Every `Singleton` or `Scoped` service field is passed to `DisposeService`/`Dispo
 #region Define:
 public interface IConnection : IDisposable;
 public interface ILogger : IDisposable;
+public interface IClock;
 
 [IocRegister<IConnection>(ServiceLifetime.Singleton)]
 public class Connection : IConnection
@@ -31,6 +43,10 @@ public class Logger : ILogger
     public void Dispose() => Console.WriteLine("Logger disposed");
 }
 
+// Not disposable: no disposal call
+[IocRegister<IClock>(ServiceLifetime.Singleton)]
+public class Clock : IClock;
+
 [IocContainer]
 public partial class AppContainer;
 #endregion
@@ -42,6 +58,7 @@ partial class AppContainer : IDisposable, IAsyncDisposable
     // Eager singletons (the default EagerResolveOptions)
     private global::Connection _connection = null!;
     private global::Logger _logger = null!;
+    private global::Clock _clock = null!;
 
     public void Dispose()
     {
@@ -54,7 +71,7 @@ partial class AppContainer : IDisposable, IAsyncDisposable
             return;
         }
 
-        // LIFO order: newest services are disposed first
+        // LIFO order: newest services are disposed first; _clock is known not to be disposable
         DisposeService(_logger);
         DisposeService(_connection);
         DisposeService(_ownedFallbackProvider);
@@ -76,10 +93,12 @@ partial class AppContainer : IDisposable, IAsyncDisposable
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
+    // Not async: null and non-disposable services need no state machine
+    private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is global::System.IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)

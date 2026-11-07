@@ -99,6 +99,36 @@ public sealed partial class RootScopedContainer;
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class AsyncOnlyDisposableContainer;
 
+public interface ILifecycleAsyncInitDisposable
+{
+    bool IsInitialized { get; }
+    bool IsDisposed { get; }
+}
+
+internal sealed class LifecycleAsyncInitDisposable : ILifecycleAsyncInitDisposable, IAsyncDisposable
+{
+    public bool IsInitialized { get; private set; }
+    public bool IsDisposed { get; private set; }
+
+    [IocInject]
+    public async Task InitializeAsync()
+    {
+        await Task.Yield();
+        IsInitialized = true;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        IsDisposed = true;
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>Scoped async-init service disposed through the <c>Task&lt;T&gt;</c> disposal overloads.</summary>
+[IocRegisterFor<LifecycleAsyncInitDisposable>(ServiceLifetime.Scoped, ServiceTypes = [typeof(ILifecycleAsyncInitDisposable)])]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class AsyncInitDisposableContainer;
+
 /// <summary>Service registered only in the fallback <see cref="IServiceCollection"/>.</summary>
 public sealed class LifecycleExternalService : IDisposable
 {

@@ -333,11 +333,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        DisposeService(_job_Resolve);
-        DisposeService(_pool_Resolve);
-        DisposeService(_queue_Resolve);
-        DisposeService(_clock);
-        DisposeService(_cache);
         DisposeService(_ownedFallbackProvider);
     }
 
@@ -351,11 +346,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             return;
         }
 
-        await DisposeServiceAsync(_job_Resolve).ConfigureAwait(false);
-        await DisposeServiceAsync(_pool_Resolve).ConfigureAwait(false);
-        await DisposeServiceAsync(_queue_Resolve).ConfigureAwait(false);
-        await DisposeServiceAsync(_clock).ConfigureAwait(false);
-        await DisposeServiceAsync(_cache).ConfigureAwait(false);
         await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
@@ -364,10 +354,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         global::System.ObjectDisposedException.ThrowIf(_disposed != 0, GetType());
     }
 
-    private static async global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
+    private static global::System.Threading.Tasks.ValueTask DisposeServiceAsync(object? service)
     {
-        if(service is global::System.IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        else if(service is global::System.IDisposable disposable) disposable.Dispose();
+        if(service is global::System.IAsyncDisposable asyncDisposable) return asyncDisposable.DisposeAsync();
+        if(service is global::System.IDisposable disposable) disposable.Dispose();
+        return default;
     }
 
     private static void DisposeService(object? service)

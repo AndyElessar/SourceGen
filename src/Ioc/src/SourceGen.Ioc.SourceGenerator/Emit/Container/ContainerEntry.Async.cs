@@ -176,9 +176,14 @@ partial class IocSourceGenerator
             }
         }
 
+        public override bool HasDisposeCall => !IsKnownNonDisposable;
+
         public override void WriteDisposal(SourceWriter writer, bool isAsync)
         {
-            WriteDisposeCall(writer, FieldName, isAsync);
+            if(HasDisposeCall)
+            {
+                WriteDisposeCall(writer, FieldName, isAsync);
+            }
 
             if(ThreadSafeStrategy == ThreadSafeStrategy.SemaphoreSlim)
             {
