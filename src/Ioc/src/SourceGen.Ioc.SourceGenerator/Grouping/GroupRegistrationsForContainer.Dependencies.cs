@@ -75,6 +75,7 @@ partial class IocSourceGenerator
                     {
                         var resolvedParameters = new List<ResolvedDependency>(method.Parameters.Length);
 
+                        // The key of the method applies to parameters without their own key
                         foreach(var parameter in method.Parameters)
                         {
                             resolvedParameters.Add(ResolveParameterDependencyForContainerEntryModel(
@@ -83,7 +84,8 @@ partial class IocSourceGenerator
                                 serviceLookup,
                                 collectionRegistrations,
                                 wrapperFields,
-                                allowServiceKeyAttributeForMethods));
+                                allowServiceKeyAttributeForMethods,
+                                method.Key));
                         }
 
                         parameterDependencies = resolvedParameters.ToImmutableEquatableArray();
@@ -205,7 +207,8 @@ partial class IocSourceGenerator
         ServiceLookup serviceLookup,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
         WrapperFieldLookup wrapperFields,
-        bool allowServiceKeyAttribute)
+        bool allowServiceKeyAttribute,
+        string? defaultKey = null)
     {
         if(allowServiceKeyAttribute && parameter.HasServiceKeyAttribute)
         {
@@ -219,7 +222,7 @@ partial class IocSourceGenerator
 
         return ResolveServiceDependencyForContainerEntryModel(
             parameter.Type,
-            parameter.ServiceKey,
+            parameter.ServiceKey ?? defaultKey,
             parameter.IsOptional,
             serviceLookup,
             collectionRegistrations,

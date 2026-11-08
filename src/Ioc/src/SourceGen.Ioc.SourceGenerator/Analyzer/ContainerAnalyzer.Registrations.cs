@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 
 namespace SourceGen.Ioc;
 
@@ -88,6 +89,7 @@ partial class ContainerAnalyzer
         var (key, _, _) = attribute.GetKeyInfo();
         var (hasRegisterAllInterfaces, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
         var (hasRegisterAllBaseClasses, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
+        var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
         return new RawRegistration(
             implementationType,
@@ -99,8 +101,133 @@ partial class ContainerAnalyzer
             hasRegisterAllBaseClasses,
             registerAllBaseClasses,
             [.. attribute.GetTags()],
-            explicitContainer);
+            explicitContainer,
+            hasFactory,
+            hasInstance,
+            attribute.ApplicationSyntaxReference);
     }
+
+    /// <summary>
+    /// Resolves the <c>Factory</c> method and the <c>InjectMembers</c> members of an attribute, which are given with
+    /// <c>nameof()</c> and need a semantic model. The results are looked up by the attribute syntax at compilation end.
+    /// Mirrors the generator's <c>GetFactoryMethodData</c> and <c>ExtractInjectMembersFromAttribute</c>.
+    /// </summary>
+    private static void CollectAttributeSemantics(SyntaxNodeAnalysisContext context, ContainerAnalyzerContext analyzerContext)
+    {
+        if(context.Node is not AttributeSyntax { ArgumentList: { } argumentList } attribute)
+            return;
+
+        IMethodSymbol? factory = null;
+        var hasFactory = false;
+        ImmutableArray<InjectMemberInfo> injectMembers = [];
+        foreach(var argument in argumentList.Arguments)
+        {
+            switch(argument.NameEquals?.Name.Identifier.Text)
+            {
+                case "Factory":
+                    hasFactory = true;
+                    if(GetNameofArgument(argument.Expression) is { } factoryExpression)
+                        factory = RoslynExtensions.ResolveMethodSymbol(factoryExpression, context.SemanticModel);
+                    break;
+
+                case "InjectMembers":
+                    injectMembers = GetInjectMembers(argument.Expression, context.SemanticModel, context.CancellationToken);
+                    break;
+            }
+        }
+
+        if(hasFactory || !injectMembers.IsEmpty)
+            analyzerContext.AttributeSemanticsBySyntax[new(attribute.SyntaxTree, attribute.Span)] = new(factory, injectMembers);
+    }
+
+    /// <summary>
+    /// Reads the <c>InjectMembers</c> elements: <c>nameof(member)</c>, or <c>new object[] { nameof(member), key [, KeyType] }</c>.
+    /// Invalid elements (SGIOC023/024) are skipped, like the generator's <c>ParseInjectMemberElement</c>.
+    /// </summary>
+    private static ImmutableArray<InjectMemberInfo> GetInjectMembers(
+        ExpressionSyntax expression,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
+    {
+        if(GetArrayElements(expression) is not { } elements)
+            return [];
+
+        var result = ImmutableArray.CreateBuilder<InjectMemberInfo>();
+        foreach(var element in elements)
+        {
+            if(GetNameofArgument(element) is { } memberExpression)
+            {
+                if(GetInjectableMember(memberExpression) is { } member)
+                    result.Add(new(member, Key: null, element.GetLocation()));
+
+                continue;
+            }
+
+            if(GetArrayElements(element) is not { Length: 2 or 3 } nested
+                || GetNameofArgument(nested[0]) is not { } keyedMemberExpression
+                || GetInjectableMember(keyedMemberExpression) is not { } keyedMember)
+            {
+                continue;
+            }
+
+            var keyType = 0;
+            if(nested.Length == 3)
+            {
+                if(semanticModel.GetConstantValue(nested[2], cancellationToken) is not { HasValue: true, Value: int value and (0 or 1) })
+                    continue;
+
+                keyType = value;
+            }
+
+            ServiceKeyValue key;
+            if(keyType == 1)
+            {
+                key = ServiceKeyValue.Unknown(nested[1].ToString());
+            }
+            else
+            {
+                if(semanticModel.GetConstantValue(nested[1], cancellationToken) is not { HasValue: true, Value: { } keyValue })
+                    continue;
+
+                key = new ServiceKeyValue(
+                    semanticModel.GetTypeInfo(nested[1], cancellationToken).Type,
+                    keyValue,
+                    IsUnknown: false,
+                    nested[1].ToString());
+            }
+
+            result.Add(new(keyedMember, key, element.GetLocation()));
+        }
+
+        return result.ToImmutable();
+
+        ISymbol? GetInjectableMember(ExpressionSyntax memberExpression)
+        {
+            var symbolInfo = semanticModel.GetSymbolInfo(memberExpression, cancellationToken);
+            return (symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is { } symbol
+                && IocSourceGenerator.IsInjectableMember(symbol)
+                    ? symbol
+                    : null;
+        }
+
+        static ExpressionSyntax[]? GetArrayElements(ExpressionSyntax expression) => expression switch
+        {
+            ArrayCreationExpressionSyntax { Initializer: { } initializer } => [.. initializer.Expressions],
+            ImplicitArrayCreationExpressionSyntax implicitArray => [.. implicitArray.Initializer.Expressions],
+            CollectionExpressionSyntax collection => [.. collection.Elements.OfType<ExpressionElementSyntax>().Select(static e => e.Expression)],
+            _ => null,
+        };
+    }
+
+    /// <summary>Gets the argument of a <c>nameof(...)</c> expression.</summary>
+    private static ExpressionSyntax? GetNameofArgument(ExpressionSyntax expression)
+        => expression is InvocationExpressionSyntax
+        {
+            Expression: IdentifierNameSyntax { Identifier.Text: "nameof" },
+            ArgumentList.Arguments: [{ Expression: var argument }],
+        }
+            ? argument
+            : null;
 
     /// <summary>
     /// Reads an [IocRegisterDefaults] / [IocRegisterDefaults&lt;T&gt;] attribute.
@@ -203,13 +330,26 @@ partial class ContainerAnalyzer
                 ? registration.Tags
                 : best?.Tags ?? registration.Tags;
 
+            // Instance takes precedence (SGIOC010); a registration's Factory takes precedence over the default Factory
+            var activation = registration switch
+            {
+                { HasInstance: true } => RegistrationActivation.None,
+                { HasFactory: true } => GetFactoryActivation(registration.Syntax),
+                _ when best is { HasFactory: true } => GetFactoryActivation(best.Syntax),
+                _ => RegistrationActivation.Constructor,
+            };
+
             resolved.Add(new ResolvedRegistration(
                 implementationType,
                 registration.Key,
                 registration.KeyValue,
                 [.. serviceTypes],
                 tags,
-                registration.ExplicitContainer));
+                registration.ExplicitContainer,
+                activation,
+                activation.Kind is ActivationKind.Constructor
+                    ? analyzerContext.GetAttributeSemantics(registration.Syntax)?.InjectMembers ?? []
+                    : []));
 
             void MatchDefaults(INamedTypeSymbol candidate)
             {
@@ -236,6 +376,12 @@ partial class ContainerAnalyzer
         AddImportedOpenGenericRegistrations(resolved, analyzerContext, cancellationToken);
 
         return resolved;
+
+        // A factory given as a string or declared in metadata cannot be resolved; its dependencies are unknown
+        RegistrationActivation GetFactoryActivation(SyntaxReference? syntax)
+            => analyzerContext.GetAttributeSemantics(syntax)?.Factory is { } factory
+                ? RegistrationActivation.FromFactory(factory)
+                : RegistrationActivation.None;
     }
 
     /// <summary>
@@ -251,6 +397,7 @@ partial class ContainerAnalyzer
             if(!defaults.HasFactory || !IsOpenGeneric(defaults.TargetType))
                 continue;
 
+            // The factory creates the closed forms the generator discovers; the target type is not constructed
             var targetType = defaults.TargetType.OriginalDefinition;
             resolved.Add(new ResolvedRegistration(
                 targetType,
@@ -258,7 +405,8 @@ partial class ContainerAnalyzer
                 KeyValue: null,
                 [targetType],
                 defaults.Tags,
-                ExplicitContainer: null));
+                ExplicitContainer: null,
+                RegistrationActivation.None));
         }
     }
 
@@ -364,13 +512,23 @@ partial class ContainerAnalyzer
                 if(defaults.RegisterAllBaseClasses)
                     serviceTypes.UnionWith(EnumerateBaseClasses(implementationType));
 
+                // Only an open generic implementation uses the Factory of the settings
+                var activation = RegistrationActivation.Constructor;
+                if(defaults.HasFactory && IsOpenGeneric(implementationType))
+                {
+                    activation = analyzerContext.GetAttributeSemantics(defaults.Syntax)?.Factory is { } factory
+                        ? RegistrationActivation.FromFactory(factory)
+                        : RegistrationActivation.None;
+                }
+
                 resolved.Add(new ResolvedRegistration(
                     implementationType,
                     Key: null,
                     KeyValue: null,
                     [.. serviceTypes],
                     defaults.Tags,
-                    ExplicitContainer: null));
+                    ExplicitContainer: null,
+                    activation));
             }
         }
 
@@ -682,6 +840,11 @@ partial class ContainerAnalyzer
                 && ContainsExact(serviceType.OriginalDefinition, key);
         }
 
+        /// <summary>Gets whether a service has a keyed registration (dictionary and key value pair collection checks).</summary>
+        public bool ContainsKeyed(INamedTypeSymbol serviceType)
+            => _keyed.Contains(serviceType)
+                || (serviceType.IsGenericType && _keyed.Contains(serviceType.OriginalDefinition));
+
         private bool ContainsExact(INamedTypeSymbol serviceType, ServiceKeyValue? key)
         {
             if(key is not { } keyValue)
@@ -769,12 +932,15 @@ partial class ContainerAnalyzer
     #region SGIOC018
 
     /// <summary>
-    /// SGIOC018: Collects the unregistered constructor and injected member dependencies of the implementation types
-    /// registered in a container. Service types that are not implementation types (interfaces, base classes) are not
-    /// analyzed, because the generator only constructs and injects the implementation type.
-    /// Implementations of imported modules are analyzed as part of their own container, and implementations declared in
-    /// another assembly are not analyzed. Dependencies that use type parameters of an open generic implementation are
-    /// not analyzed, because they depend on the closed forms the generator creates.
+    /// SGIOC018: Collects the unregistered dependencies of the registrations of a container, according to how the
+    /// container creates each instance: the constructor, injected members and <c>InjectMembers</c> of the implementation
+    /// type, or the parameters of the factory method. <c>Instance</c> registrations and factories that cannot be resolved
+    /// are not analyzed. Service types that are not implementation types (interfaces, base classes) are not analyzed,
+    /// because the generator only constructs and injects the implementation type.
+    /// Implementations of imported modules are analyzed as part of their own container. Implementations and factories
+    /// declared in another assembly are not analyzed, except their <c>InjectMembers</c>, which are reported on the
+    /// attribute. Dependencies that use type parameters (open generic implementations, generic factory methods) are not
+    /// analyzed, because they depend on the closed forms the generator creates.
     /// </summary>
     private static List<(Location? Location, string ServiceType)> CollectUnresolvedDependencies(
         ContainerScope scope,
@@ -782,47 +948,108 @@ partial class ContainerAnalyzer
         CancellationToken cancellationToken)
     {
         var unresolvedDependencies = new List<(Location? Location, string ServiceType)>();
-        var implementationTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var analyzedSymbols = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
         foreach(var registration in scope.Own.Registrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if(!implementationTypes.Add(registration.ImplementationType)
-                || !registration.ImplementationType.Locations.Any(static l => l.IsInSource))
+            switch(registration.Activation.Kind)
             {
-                continue;
-            }
+                case ActivationKind.Constructor:
+                    var implementationType = registration.ImplementationType;
+                    if(IsInSource(implementationType) && analyzedSymbols.Add(implementationType))
+                        AddUnresolved(dependencyCache.GetConstructorAndMembers(implementationType, cancellationToken));
 
-            foreach(var dependency in dependencyCache.Get(registration.ImplementationType, cancellationToken))
-            {
-                if(!ContainsTypeParameter(dependency.Type)
-                    && !IsServiceRegistered(dependency.Type, dependency.Key, scope.Services))
-                {
-                    var serviceType = dependency.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                    unresolvedDependencies.Add((
-                        dependency.Location,
-                        dependency.Key is { } key ? $"{serviceType} (key {key.Display})" : serviceType));
-                }
+                    if(!registration.InjectMembers.IsDefaultOrEmpty)
+                        AddUnresolved(DependencyCache.GetInjectMembers(implementationType, registration.InjectMembers));
+
+                    break;
+
+                case ActivationKind.Factory when registration.Activation.Factory is { } factory:
+                    if(IsInSource(factory) && analyzedSymbols.Add(factory))
+                        AddUnresolved(dependencyCache.GetFactory(factory));
+
+                    break;
             }
         }
 
         return unresolvedDependencies;
+
+        void AddUnresolved(List<Dependency> dependencies)
+        {
+            foreach(var dependency in dependencies)
+            {
+                if(ContainsTypeParameter(dependency.Type) || IsServiceRegistered(dependency.Type, dependency.Key, scope.Services))
+                    continue;
+
+                var serviceType = dependency.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                unresolvedDependencies.Add((
+                    dependency.Location,
+                    dependency.Key is { } key ? $"{serviceType} (key {key.Display})" : serviceType));
+            }
+        }
+
+        static bool IsInSource(ISymbol symbol) => symbol.Locations.Any(static l => l.IsInSource);
     }
 
+    /// <summary>
+    /// Gets whether the container resolves a dependency. Like the generator's
+    /// <c>ResolveServiceDependencyForContainerEntryModel</c>, a supported wrapper resolves its inner service with the same
+    /// key: collections, <c>Lazy&lt;T&gt;</c>, <c>Func&lt;T&gt;</c> and <c>KeyValuePair&lt;TKey, T&gt;</c> unwrap
+    /// recursively; <c>Task&lt;T&gt;</c> and <c>Func&lt;..., T&gt;</c> with input parameters need a registration of
+    /// <c>T</c> itself; dictionaries and collections of key value pairs need a non-keyed dependency and a keyed registration
+    /// of the value type.
+    /// </summary>
     private static bool IsServiceRegistered(INamedTypeSymbol serviceType, ServiceKeyValue? key, ServiceIndex services)
     {
         if(services.Contains(serviceType, key))
             return true;
 
-        // IEnumerable<T> is resolvable if T is registered with the same key
-        if(AnalyzerHelpers.IsIEnumerableOfT(serviceType)
-            && AnalyzerHelpers.GetEnumerableElementType(serviceType) is { } elementType)
+        if(!TryGetSupportedWrapper(serviceType, out var kind, out var elementType))
+            return false;
+
+        return kind switch
         {
-            return services.Contains(elementType, key);
+            WrapperKind.Task => services.Contains(elementType, key),
+            WrapperKind.Func when serviceType.Arity > 1 => services.Contains(elementType, key),
+            WrapperKind.Lazy or WrapperKind.Func or WrapperKind.KeyValuePair => IsServiceRegistered(elementType, key, services),
+            WrapperKind.Dictionary => key is null && services.ContainsKeyed(elementType),
+
+            // Collections
+            _ when elementType.TryGetWrapperInfo(out var element) && element.Kind is WrapperKind.KeyValuePair
+                => key is null && element.ElementType is { } valueType && services.ContainsKeyed(valueType),
+            _ => IsServiceRegistered(elementType, key, services),
+        };
+    }
+
+    /// <summary>
+    /// Gets the wrapper kind and element type of a wrapper the generator supports. Like the generator's
+    /// <c>GetTypeData</c>, <c>ValueTask&lt;T&gt;</c> and unsupported nesting (e.g. <c>Task&lt;Lazy&lt;T&gt;&gt;</c>) are
+    /// plain service types.
+    /// </summary>
+    private static bool TryGetSupportedWrapper(INamedTypeSymbol type, out WrapperKind kind, out INamedTypeSymbol elementType)
+    {
+        kind = WrapperKind.None;
+        elementType = null!;
+
+        if(!type.TryGetWrapperInfo(out var wrapper) || wrapper.Kind is WrapperKind.ValueTask || wrapper.ElementType is null)
+            return false;
+
+        foreach(var typeArgument in type.TypeArguments)
+        {
+            if(typeArgument is INamedTypeSymbol namedArgument
+                && namedArgument.TryGetWrapperInfo(out var child)
+                && child.Kind is not WrapperKind.ValueTask
+                && IsUnsupportedWrapperNesting(wrapper.Kind, child.Kind, isAfterCollection: false))
+            {
+                return false;
+            }
         }
 
-        return false;
+        kind = wrapper.Kind;
+        elementType = wrapper.ElementType;
+        return true;
     }
 
     private static bool ContainsTypeParameter(ITypeSymbol type) => type switch
@@ -837,16 +1064,17 @@ partial class ContainerAnalyzer
     private readonly record struct Dependency(Location? Location, INamedTypeSymbol Type, ServiceKeyValue? Key);
 
     /// <summary>
-    /// Caches the constructor and injected member dependencies of implementation types that need a registration
-    /// (dependencies that are always resolvable are excluded), so each type is inspected once per compilation.
+    /// Caches the dependencies that need a registration (dependencies that are always resolvable are excluded) of
+    /// implementation types and factory methods, so each is inspected once per compilation.
     /// The key of a dependency follows the generator: <c>[FromKeyedServices(key)]</c> takes precedence over the key of
-    /// <c>[IocInject]</c> / <c>[Inject]</c>.
+    /// <c>[IocInject]</c> / <c>[Inject]</c> on the parameter, which takes precedence over the key of an injected method.
     /// </summary>
     private sealed class DependencyCache
     {
-        private readonly Dictionary<INamedTypeSymbol, List<Dependency>> _cache = new(SymbolEqualityComparer.Default);
+        private readonly Dictionary<ISymbol, List<Dependency>> _cache = new(SymbolEqualityComparer.Default);
 
-        public List<Dependency> Get(INamedTypeSymbol implementationType, CancellationToken cancellationToken)
+        /// <summary>Gets the dependencies of the constructor and the <c>[IocInject]</c> members of an implementation type.</summary>
+        public List<Dependency> GetConstructorAndMembers(INamedTypeSymbol implementationType, CancellationToken cancellationToken)
         {
             if(_cache.TryGetValue(implementationType, out var dependencies))
                 return dependencies;
@@ -855,57 +1083,104 @@ partial class ContainerAnalyzer
 
             var constructor = implementationType.SpecifiedOrPrimaryOrMostParametersConstructor;
             if(constructor is not null)
-                AddParameters(constructor.Parameters);
+                AddParameters(dependencies, constructor.Parameters, methodKey: null, location: null);
 
             foreach(var (member, injectAttribute) in implementationType.GetInjectedMembers())
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                switch(member)
-                {
-                    // Injected IEnumerable<T> properties are resolved even without a registration
-                    case IPropertySymbol { Type: INamedTypeSymbol propertyType } property
-                        when !AnalyzerHelpers.IsIEnumerableOfT(propertyType):
-                        AddMember(property, propertyType, injectAttribute);
-                        break;
-
-                    case IMethodSymbol method:
-                        AddParameters(method.Parameters);
-                        break;
-
-                    case IFieldSymbol { Type: INamedTypeSymbol fieldType } field:
-                        AddMember(field, fieldType, injectAttribute);
-                        break;
-                }
+                var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+                    ?? member.Locations.FirstOrDefault();
+                AddMember(dependencies, member, GetAttributeServiceKey(injectAttribute), location, useLocationForParameters: false);
             }
 
             _cache[implementationType] = dependencies;
             return dependencies;
+        }
 
-            void AddParameters(ImmutableArray<IParameterSymbol> parameters)
+        /// <summary>
+        /// Gets the dependencies of a factory method: its parameters except <c>IServiceProvider</c> and <c>[ServiceKey]</c>,
+        /// like the generator's <c>CreateFactoryMethodData</c>.
+        /// </summary>
+        public List<Dependency> GetFactory(IMethodSymbol factory)
+        {
+            if(_cache.TryGetValue(factory, out var dependencies))
+                return dependencies;
+
+            dependencies = [];
+            AddParameters(dependencies, factory.Parameters, methodKey: null, location: null);
+
+            _cache[factory] = dependencies;
+            return dependencies;
+        }
+
+        /// <summary>
+        /// Gets the dependencies of the <c>InjectMembers</c> of a registration, reported on their attribute elements.
+        /// <c>[IocInject]</c> on a member takes precedence, like the generator's <c>MergeInjectionMembers</c>.
+        /// </summary>
+        public static List<Dependency> GetInjectMembers(
+            INamedTypeSymbol implementationType,
+            ImmutableArray<InjectMemberInfo> injectMembers)
+        {
+            var injectedNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach(var (member, _) in implementationType.GetInjectedMembers())
+                injectedNames.Add(member.Name);
+
+            var dependencies = new List<Dependency>();
+            foreach(var injectMember in injectMembers)
             {
-                foreach(var parameter in parameters)
-                {
-                    if(parameter.HasExplicitDefaultValue
-                        || parameter.Type is not INamedTypeSymbol parameterType
-                        || AnalyzerHelpers.IsAlwaysResolvable(parameterType)
-                        || !TryGetParameterKey(parameter, out var key))
-                    {
-                        continue;
-                    }
-
-                    dependencies.Add(new(parameter.Locations.FirstOrDefault(), parameterType, key));
-                }
+                if(!injectedNames.Contains(injectMember.Member.Name))
+                    AddMember(dependencies, injectMember.Member, injectMember.Key, injectMember.Location, useLocationForParameters: true);
             }
 
-            void AddMember(ISymbol member, INamedTypeSymbol memberType, AttributeData injectAttribute)
-            {
-                if(AnalyzerHelpers.IsAlwaysResolvable(memberType))
-                    return;
+            return dependencies;
+        }
 
-                var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
-                    ?? member.Locations.FirstOrDefault();
-                dependencies.Add(new(location, memberType, GetAttributeServiceKey(injectAttribute)));
+        private static void AddMember(
+            List<Dependency> dependencies,
+            ISymbol member,
+            ServiceKeyValue? key,
+            Location? location,
+            bool useLocationForParameters)
+        {
+            switch(member)
+            {
+                // Injected IEnumerable<T> properties are resolved even without a registration
+                case IPropertySymbol { Type: INamedTypeSymbol propertyType } when !AnalyzerHelpers.IsIEnumerableOfT(propertyType):
+                    if(!AnalyzerHelpers.IsAlwaysResolvable(propertyType))
+                        dependencies.Add(new(location, propertyType, key));
+                    break;
+
+                case IFieldSymbol { Type: INamedTypeSymbol fieldType }:
+                    if(!AnalyzerHelpers.IsAlwaysResolvable(fieldType))
+                        dependencies.Add(new(location, fieldType, key));
+                    break;
+
+                case IMethodSymbol method:
+                    AddParameters(dependencies, method.Parameters, key, useLocationForParameters ? location : null);
+                    break;
+            }
+        }
+
+        /// <param name="methodKey">The key of an injected method, which applies to parameters without their own key.</param>
+        /// <param name="location">The location to report; <see langword="null"/> for the location of each parameter.</param>
+        private static void AddParameters(
+            List<Dependency> dependencies,
+            ImmutableArray<IParameterSymbol> parameters,
+            ServiceKeyValue? methodKey,
+            Location? location)
+        {
+            foreach(var parameter in parameters)
+            {
+                if(parameter.HasExplicitDefaultValue
+                    || parameter.Type is not INamedTypeSymbol parameterType
+                    || AnalyzerHelpers.IsAlwaysResolvable(parameterType)
+                    || !TryGetParameterKey(parameter, out var key))
+                {
+                    continue;
+                }
+
+                dependencies.Add(new(location ?? parameter.Locations.FirstOrDefault(), parameterType, key ?? methodKey));
             }
         }
 
@@ -960,17 +1235,60 @@ partial class ContainerAnalyzer
         bool HasExplicitRegisterAllBaseClasses,
         bool RegisterAllBaseClasses,
         ImmutableArray<string> Tags,
-        INamedTypeSymbol? ExplicitContainer);
+        INamedTypeSymbol? ExplicitContainer,
+        bool HasFactory,
+        bool HasInstance,
+        SyntaxReference? Syntax);
 
     /// <param name="Key">The key as the generator's code expression (SGIOC021/027/029).</param>
     /// <param name="KeyValue">The key value (SGIOC018).</param>
+    /// <param name="Activation">How the container creates the instance; the default is the constructor.</param>
+    /// <param name="InjectMembers">The members of the <c>InjectMembers</c> attribute property (constructor activation only).</param>
     private sealed record class ResolvedRegistration(
         INamedTypeSymbol ImplementationType,
         string? Key,
         ServiceKeyValue? KeyValue,
         ImmutableArray<INamedTypeSymbol> ServiceTypes,
         ImmutableArray<string> Tags,
-        INamedTypeSymbol? ExplicitContainer);
+        INamedTypeSymbol? ExplicitContainer,
+        RegistrationActivation Activation = default,
+        ImmutableArray<InjectMemberInfo> InjectMembers = default);
+
+    private enum ActivationKind
+    {
+        /// <summary>The constructor, injected members and <c>InjectMembers</c> are resolved.</summary>
+        Constructor,
+
+        /// <summary>Only the parameters of the factory method are resolved.</summary>
+        Factory,
+
+        /// <summary>The dependencies are unknown or there are none (<c>Instance</c>, or a factory that cannot be resolved).</summary>
+        None,
+    }
+
+    private readonly struct RegistrationActivation
+    {
+        private RegistrationActivation(ActivationKind kind, IMethodSymbol? factory)
+        {
+            Kind = kind;
+            Factory = factory;
+        }
+
+        public ActivationKind Kind { get; }
+        public IMethodSymbol? Factory { get; }
+
+        public static RegistrationActivation Constructor => new(ActivationKind.Constructor, null);
+        public static RegistrationActivation None => new(ActivationKind.None, null);
+        public static RegistrationActivation FromFactory(IMethodSymbol factory) => new(ActivationKind.Factory, factory);
+    }
+
+    /// <summary>A member listed in <c>InjectMembers</c>, with its key and the location of its element.</summary>
+    private readonly record struct InjectMemberInfo(ISymbol Member, ServiceKeyValue? Key, Location Location);
+
+    /// <param name="Factory">The resolved <c>Factory</c> method, or <see langword="null"/> when it cannot be resolved.</param>
+    private sealed record class AttributeSemantics(IMethodSymbol? Factory, ImmutableArray<InjectMemberInfo> InjectMembers);
+
+    private readonly record struct AttributeSyntaxKey(SyntaxTree Tree, TextSpan Span);
 
     /// <summary>
     /// Settings of an [IocRegisterDefaults] attribute. Compared by reference, like the generator's default settings indices.
@@ -1050,6 +1368,13 @@ partial class ContainerAnalyzer
         public ConcurrentBag<ModuleImport> ModuleImports { get; } = [];
         public ConcurrentBag<ContainerInfo> Containers { get; } = [];
         public ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)> ImportEdges { get; } = [];
+        public ConcurrentDictionary<AttributeSyntaxKey, AttributeSemantics> AttributeSemanticsBySyntax { get; } = new();
+
+        /// <summary>Gets the semantics of an attribute in source; <see langword="null"/> when it has none or is in metadata.</summary>
+        public AttributeSemantics? GetAttributeSemantics(SyntaxReference? syntax)
+            => syntax is not null && AttributeSemanticsBySyntax.TryGetValue(new(syntax.SyntaxTree, syntax.Span), out var semantics)
+                ? semantics
+                : null;
     }
 
     #endregion

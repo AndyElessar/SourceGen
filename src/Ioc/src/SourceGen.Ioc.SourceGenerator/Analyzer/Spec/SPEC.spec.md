@@ -397,14 +397,17 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 - Applies only when `[IocContainer(IntegrateServiceProvider = false)]` is used.
 - Each container is analyzed with its own registrations ([Container Scope](#container-scope)): `ExplicitOnly`, `IncludeTags` and imported modules decide which implementation types are analyzed and which service types resolve a dependency.
 - Analyzes every implementation type of the container's own registrations. Implementations of imported modules are analyzed as part of their own container. Service types that are only exposed by a registration (interfaces, base classes from `RegisterAllBaseClasses`, explicit `ServiceTypes`) are NOT analyzed as implementations, because the generator only constructs the implementation type and injects the members declared on it.
-- For each implementation type's dependencies:
-  - Constructor parameters: Checks if the dependency type is a service type of the container (including its imported modules).
-  - Properties/Fields with `[IocInject]` or `[Inject]`: Checks if the dependency type is a service type of the container.
-  - Method parameters with `[IocInject]` or `[Inject]`: Checks if the dependency type is a service type of the container.
-  - `IEnumerable<T>` is resolvable when `T` is a service type of the container with the same key. Injected `IEnumerable<T>` properties are not checked.
+- The dependencies checked depend on how the container creates the instance of a registration:
+  - Constructor (default): the constructor parameters, the properties, fields and method parameters with `[IocInject]` or `[Inject]`, and the members listed in `InjectMembers` (`[IocInject]` on a member takes precedence). `InjectMembers` dependencies are reported on their attribute element, so they are checked even when the implementation type is declared in another assembly.
+  - `Factory` (of the registration, otherwise of the matching `[IocRegisterDefaults]`): only the factory method parameters, except `IServiceProvider` and `[ServiceKey]`. The constructor and injected members are not checked. A factory that cannot be resolved (a string, or settings imported from another assembly) is not analyzed. Factory methods declared in another assembly are not analyzed.
+  - `Instance`: no dependencies.
+- For each dependency:
+  - Checks if the dependency type is a service type of the container (including its imported modules).
+  - Supported wrappers resolve their inner service with the same key, like the generator: collections (`IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`), `Lazy<T>`, `Func<T>` and `KeyValuePair<TKey, T>` unwrap recursively (e.g. `IEnumerable<Lazy<T>>`); `Task<T>` and `Func<..., T>` with input parameters need a registration of `T` itself; `IDictionary<TKey, T>` (and `IReadOnlyDictionary`, `Dictionary`) and collections of `KeyValuePair<TKey, T>` need a non-keyed dependency and a keyed registration of `T`. `ValueTask<T>` and unsupported nesting (e.g. `Task<Lazy<T>>`) are plain service types. Array dependencies are not checked.
+  - Injected `IEnumerable<T>` properties are not checked.
   - Checks if the dependency type is a built-in service type (e.g., `IServiceProvider`, `IServiceScopeFactory`).
   - Parameters with a default value or `[ServiceKey]`, and `[FromKeyedServices]` without a key, are not checked.
-- Keyed dependencies: the key of a parameter is the key of `[FromKeyedServices(key)]`, otherwise the key of `[IocInject]` / `[Inject]`; the key of a property or field is the key of its `[IocInject]` / `[Inject]`.
+- Keyed dependencies: the key of a parameter is the key of `[FromKeyedServices(key)]`, otherwise the key of `[IocInject]` / `[Inject]` on the parameter, otherwise the key of its injected method (`[IocInject(Key = ...)]` on the method, or the key of its `InjectMembers` element); the key of a property or field is the key of its `[IocInject]` / `[Inject]` or `InjectMembers` element.
   - A keyed dependency is resolved by a registration of the same service type with the same key; a non-keyed dependency only by a non-keyed registration. Generated containers look keyed services up by key value (`ServiceIdentifier`), so keys are compared by constant value and type (e.g. the enum `Region.West` does not match the integer `1`).
   - A key given as C# code (`KeyType = KeyType.Csharp`) cannot be evaluated: a registration with such a key resolves any keyed dependency of its service type, and a dependency with such a key is resolved by any registration of its service type.
   - The message shows the key: `Unable to resolve service 'IDependency (key "A")' for container 'AppContainer'`.

@@ -158,6 +158,43 @@ public class InjectionTests
     }
 
     [Test]
+    public async Task Container_WithKeyedMethodInjection_AppliesMethodKeyToParametersWithoutKey()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger)], Key = "file")]
+            public class FileLogger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger)], Key = "console")]
+            public class ConsoleLogger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class MyService
+            {
+                [IocInject(Key = "file")]
+                public void Initialize(ILogger fileLogger, [FromKeyedServices("console")] ILogger consoleLogger)
+                {
+                }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithFieldInjection_GeneratesFieldAssignment()
     {
         const string source = """

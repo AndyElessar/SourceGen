@@ -553,7 +553,7 @@ partial class IocSourceGenerator
     /// Checks whether a symbol is considered injectable: non-static, with suitable accessibility,
     /// and meeting the specific criteria for properties, fields, or methods.
     /// </summary>
-    private static bool IsInjectableMember(ISymbol symbol)
+    internal static bool IsInjectableMember(ISymbol symbol)
     {
         if(symbol.IsStatic)
             return false;

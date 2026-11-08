@@ -1393,5 +1393,328 @@ public class SGIOC018Tests
 
         await Assert.That(sgioc018).Count().IsEqualTo(0);
     }
-}
 
+    [Test]
+    [Arguments("IDependency", 0)]
+    [Arguments("IUnregisteredService", 1)]
+    public async Task SGIOC018_Factory_ChecksFactoryParametersInsteadOfConstructor(string factoryParameter, int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+            public interface IUnregisteredService { }
+            public interface IMyService { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService
+            {
+                public MyService(IUnregisteredService unregistered) { }
+            }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(System.IServiceProvider sp, {{factoryParameter}} dependency) => null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC018_RegisterDefaultsFactory_ConstructorNotChecked_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.MyServiceFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IUnregisteredService { }
+            public interface IMyService { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class MyService : IMyService
+            {
+                public MyService(IUnregisteredService unregistered) { }
+            }
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create() => null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_Instance_ConstructorNotChecked_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IUnregisteredService { }
+            public interface IMyService { }
+
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Instance = nameof(MyService.Default))]
+            public class MyService : IMyService
+            {
+                public static readonly MyService Default = new(null!);
+
+                public MyService(IUnregisteredService unregistered) { }
+
+                [IocInject]
+                public IUnregisteredService? Injected { get; set; }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("nameof(ExternalService.Dependency)", "", 1)]
+    [Arguments("nameof(ExternalService.Dependency)", "ServiceLifetime.Singleton", 0)]
+    [Arguments("nameof(ExternalService.Initialize)", "", 1)]
+    [Arguments("nameof(ExternalService.Initialize)", "ServiceLifetime.Singleton", 0)]
+    [Arguments("new object[] { nameof(ExternalService.Dependency), \"A\" }", "ServiceLifetime.Singleton, Key = \"A\"", 0)]
+    [Arguments("new object[] { nameof(ExternalService.Dependency), \"A\" }", "ServiceLifetime.Singleton", 1)]
+    [Arguments("new object[] { nameof(ExternalService.Initialize), \"A\" }", "ServiceLifetime.Singleton, Key = \"A\"", 0)]
+    [Arguments("new object[] { nameof(ExternalService.Initialize), \"A\" }", "ServiceLifetime.Singleton", 1)]
+    public async Task SGIOC018_InjectMembers_ChecksMemberDependencies(string injectMember, string dependencyRegistration, int expected)
+    {
+        var registration = dependencyRegistration.Length == 0
+            ? ""
+            : $"[assembly: IocRegisterFor<TestNamespace.Dependency>({dependencyRegistration}, ServiceTypes = [typeof(TestNamespace.IDependency)])]";
+
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor<ExternalService>(ServiceLifetime.Singleton, InjectMembers = [{{injectMember}}])]
+            {{registration}}
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public class Dependency : IDependency { }
+
+            public class ExternalService
+            {
+                public IDependency? Dependency { get; set; }
+
+                public void Initialize(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected);
+        if(expected > 0)
+            await Assert.That(sgioc018[0].GetMessage()).Contains("IDependency");
+    }
+
+    [Test]
+    public async Task SGIOC018_InjectMembers_OfExternalImplementation_ReportedOnAttribute()
+    {
+        const string externalSource = """
+            namespace External;
+
+            public interface IExternalDependency { }
+
+            public class ExternalService
+            {
+                public IExternalDependency? Dependency { get; set; }
+            }
+            """;
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<External.ExternalService>(ServiceLifetime.Singleton, InjectMembers = [nameof(External.ExternalService.Dependency)])]
+
+            namespace TestNamespace;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var externalCompilation = SourceGeneratorTestHelper.CreateCompilation("ExternalAssembly", externalSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [externalCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).Contains("IExternalDependency");
+        await Assert.That(sgioc018[0].Location.IsInSource).IsTrue();
+    }
+
+    [Test]
+    [Arguments("Lazy<IDependency>")]
+    [Arguments("Func<IDependency>")]
+    [Arguments("Func<string, IDependency>")]
+    [Arguments("Task<IDependency>")]
+    [Arguments("IReadOnlyList<IDependency>")]
+    [Arguments("IEnumerable<Lazy<IDependency>>")]
+    [Arguments("Lazy<IEnumerable<IDependency>>")]
+    [Arguments("Lazy<IRepository<User>>")]
+    [Arguments("IDictionary<string, IKeyedDependency>")]
+    [Arguments("IEnumerable<KeyValuePair<string, IKeyedDependency>>")]
+    public async Task SGIOC018_WrapperOfRegisteredService_NoDiagnostic(string parameterType)
+    {
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class User { }
+            public interface IDependency { }
+            public interface IKeyedDependency { }
+            public interface IRepository<T> { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IocRegister<IKeyedDependency>(ServiceLifetime.Singleton, Key = "A")]
+            public class KeyedDependency : IKeyedDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{parameterType}} dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("Lazy<IUnregisteredService>")]
+    [Arguments("Func<IUnregisteredService>")]
+    [Arguments("Task<IUnregisteredService>")]
+    [Arguments("IReadOnlyList<Lazy<IUnregisteredService>>")]
+    [Arguments("Lazy<IEnumerable<IUnregisteredService>>")]
+    [Arguments("IDictionary<string, IDependency>")]
+    [Arguments("Task<Lazy<IDependency>>")]
+    public async Task SGIOC018_WrapperOfUnregisteredService_ReportsDiagnostic(string parameterType)
+    {
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+            public interface IUnregisteredService { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{parameterType}} dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("Key = \"A\"", 0)]
+    [Arguments("", 1)]
+    public async Task SGIOC018_InjectedMethodKey_AppliesToParametersWithoutKey(string dependencyKey, int expected)
+    {
+        var registrationArguments = dependencyKey.Length == 0 ? "ServiceLifetime.Singleton" : $"ServiceLifetime.Singleton, {dependencyKey}";
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+            public interface IOther { }
+
+            [IocRegister<IDependency>({{registrationArguments}})]
+            public class Dependency : IDependency { }
+
+            [IocRegister<IOther>(ServiceLifetime.Singleton, Key = "B")]
+            public class Other : IOther { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                [IocInject(Key = "A")]
+                public void Initialize(IDependency dependency, [FromKeyedServices("B")] IOther other) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected);
+        if(expected > 0)
+            await Assert.That(sgioc018[0].GetMessage()).Contains("IDependency (key \"A\")");
+    }
+}

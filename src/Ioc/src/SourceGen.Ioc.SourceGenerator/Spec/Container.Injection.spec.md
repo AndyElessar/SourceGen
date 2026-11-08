@@ -71,6 +71,19 @@ partial class AppContainer
 #endregion
 ```
 
+The key of an injected method (`[IocInject(Key = ...)]` on the method, or the key of its `InjectMembers` element) MUST apply to its parameters without their own key; a parameter's own key (`[FromKeyedServices(key)]`, `[IocInject(Key = ...)]`) takes precedence.
+
+```csharp
+#region Define:
+[IocInject(Key = "file")]
+public void Initialize(ILogger fileLogger, [FromKeyedServices("console")] ILogger consoleLogger) { }
+#endregion
+
+#region Generate:
+instance.Initialize(GetFileLogger__file_(), GetConsoleLogger__console_());
+#endregion
+```
+
 ## Async Method Injection
 
 When a registration contains one or more async inject methods, the container MUST switch that implementation path from synchronous `T` resolution to asynchronous `Task<T>` resolution.
