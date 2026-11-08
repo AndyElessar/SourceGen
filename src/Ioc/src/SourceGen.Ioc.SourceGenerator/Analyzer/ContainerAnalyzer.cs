@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SourceGen.Ioc;
@@ -8,7 +7,7 @@ namespace SourceGen.Ioc;
 /// Reports diagnostics for container-level issues such as missing partial modifier and unresolvable dependencies.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class ContainerAnalyzer : DiagnosticAnalyzer
+public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
 {
     /// <summary>
     /// SGIOC018: Unable to resolve service - A dependency cannot be resolved when IntegrateServiceProvider = false.
@@ -142,44 +141,17 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         if(!attributeSymbols.HasContainerAttribute)
             return;
 
-        // Collect registered services for SGIOC018 analysis
-        var registeredServiceTypes = new ConcurrentDictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
+        var analyzerContext = new ContainerAnalyzerContext(attributeSymbols, features);
 
-        // Maps (service type, key) -> implementation type for async partial accessor validation.
-        var serviceImplementationTypes = new ConcurrentDictionary<ServiceSymbolKey, INamedTypeSymbol>();
+        // Collect assembly-level [IocRegisterFor] registrations and [IocRegisterDefaults] settings
+        CollectAssemblyLevelAttributes(context.Compilation, analyzerContext, context.CancellationToken);
 
-        // Tracks every registration entry so async-init checks can evaluate all implementations for a (service type, key) pair.
-        var registrations = new ConcurrentBag<ServiceRegistration>();
-
-        // Collect containers with IntegrateServiceProvider = false for SGIOC018 analysis
-        var containersWithNoFallback = new ConcurrentBag<INamedTypeSymbol>();
-
-        // Collect all [IocContainer] types for SGIOC027/029 analysis
-        var allContainers = new ConcurrentBag<INamedTypeSymbol>();
-
-        // Collect import edges for SGIOC025 circular import analysis
-        var importEdges = new ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)>();
-
-        var analyzerContext = new ContainerAnalyzerContext(
-            attributeSymbols,
-            registeredServiceTypes,
-            serviceImplementationTypes,
-            registrations,
-            containersWithNoFallback,
-            allContainers,
-            importEdges,
-            features);
-
-        // Collect assembly-level [IocRegisterFor] / [IocRegisterFor<T>] registrations
-        CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
-
-        // SGIOC019: Check for partial modifier and static modifier on container classes
-        // Also collect containers with IntegrateServiceProvider = false for SGIOC018,
-        // and all registered services for SGIOC018 analysis
+        // SGIOC019/020/031 on container classes; collect containers, import edges, registrations,
+        // default settings and module imports for the compilation end analysis
         context.RegisterSymbolAction(ctx =>
         {
             AnalyzeContainerClass(ctx, analyzerContext);
-            CollectRegisteredServices(ctx, analyzerContext);
+            CollectRegistrationAttributes(ctx, analyzerContext);
         }, SymbolKind.NamedType);
 
         // SGIOC018: Analyze dependencies at compilation end
@@ -250,35 +222,53 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Collect containers with IntegrateServiceProvider = false for SGIOC018
+        // Read the options that select the container's registrations (SGIOC018/021)
         var integrateServiceProvider = true;
         var useSwitchStatement = false;
+        var explicitOnly = false;
+        ImmutableArray<string> includeTags = [];
         foreach(var namedArg in containerAttribute.NamedArguments)
         {
-            if(namedArg.Key is "IntegrateServiceProvider" && namedArg.Value.Value is bool integrateValue)
+            switch(namedArg.Key)
             {
-                integrateServiceProvider = integrateValue;
-            }
-            else if(namedArg.Key is "UseSwitchStatement" && namedArg.Value.Value is bool switchValue)
-            {
-                useSwitchStatement = switchValue;
+                case "IntegrateServiceProvider" when namedArg.Value.Value is bool integrateValue:
+                    integrateServiceProvider = integrateValue;
+                    break;
+                case "UseSwitchStatement" when namedArg.Value.Value is bool switchValue:
+                    useSwitchStatement = switchValue;
+                    break;
+                case "ExplicitOnly" when namedArg.Value.Value is bool explicitValue:
+                    explicitOnly = explicitValue;
+                    break;
+                case "IncludeTags" when !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array:
+                    includeTags = [.. namedArg.Value.Values.Select(static v => v.Value).OfType<string>()];
+                    break;
             }
         }
 
-        if(!integrateServiceProvider)
+        // Collect import edges for SGIOC025 circular import detection
+        var importedModules = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+        foreach(var attr in typeSymbol.GetAttributes())
         {
-            analyzerContext.ContainersWithNoFallback.Add(typeSymbol);
+            var importedModuleType = GetImportedModuleType(attr, analyzerContext.AttributeSymbols);
+            if(importedModuleType is not null)
+            {
+                importedModules.Add(importedModuleType);
+                analyzerContext.ImportEdges.Add((typeSymbol, importedModuleType));
+            }
         }
 
-        analyzerContext.AllContainers.Add(typeSymbol);
+        analyzerContext.Containers.Add(new ContainerInfo(
+            typeSymbol,
+            integrateServiceProvider,
+            explicitOnly,
+            includeTags,
+            importedModules.ToImmutable()));
 
         // SGIOC020: Check for UseSwitchStatement = true with imported modules
         if(useSwitchStatement)
         {
-            var hasImportedModules = typeSymbol.GetAttributes()
-                .Any(attr => AnalyzerHelpers.IsIocImportModuleAttribute(attr.AttributeClass, analyzerContext.AttributeSymbols));
-
-            if(hasImportedModules)
+            if(importedModules.Count > 0)
             {
                 var location = containerAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
                     ?? typeSymbol.Locations.FirstOrDefault();
@@ -292,64 +282,6 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                 }
             }
         }
-
-        // Collect import edges for SGIOC025 circular import detection
-        foreach(var attr in typeSymbol.GetAttributes())
-        {
-            var importedModuleType = GetImportedModuleType(attr, analyzerContext.AttributeSymbols);
-            if(importedModuleType is not null)
-            {
-                analyzerContext.ImportEdges.Add((typeSymbol, importedModuleType));
-            }
-        }
-    }
-
-    /// <summary>
-    /// Collects assembly-level [IocRegisterFor] / [IocRegisterFor&lt;T&gt;] registrations into the analyzer context.
-    /// </summary>
-    private static void CollectAssemblyLevelRegistrations(
-        Compilation compilation,
-        ContainerAnalyzerContext analyzerContext,
-        CancellationToken cancellationToken)
-    {
-        foreach(var (attribute, targetType) in AnalyzerHelpers.EnumerateAssemblyLevelRegisterForAttributes(
-            compilation, analyzerContext.AttributeSymbols, cancellationToken))
-        {
-            RegisterServiceTypes(analyzerContext, targetType, attribute);
-        }
-    }
-
-    /// <summary>
-    /// Collects all registered service types for SGIOC018 analysis.
-    /// </summary>
-    private static void CollectRegisteredServices(SymbolAnalysisContext context, ContainerAnalyzerContext analyzerContext)
-    {
-        if(context.Symbol is not INamedTypeSymbol typeSymbol)
-            return;
-
-        foreach(var attribute in typeSymbol.GetAttributes())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
-
-            var attrClass = attribute.AttributeClass;
-            if(attrClass is null)
-                continue;
-
-            // Check for IocRegisterAttribute
-            if(AnalyzerHelpers.IsIoCRegisterAttribute(attrClass, analyzerContext.AttributeSymbols))
-            {
-                RegisterServiceTypes(analyzerContext, typeSymbol, attribute);
-            }
-
-            // Check for IocRegisterForAttribute
-            if(AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, analyzerContext.AttributeSymbols))
-            {
-                // Get the target implementation type from the attribute
-                var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
-                if(targetType is not null)
-                    RegisterServiceTypes(analyzerContext, targetType, attribute);
-            }
-        }
     }
 
     /// <summary>
@@ -357,120 +289,93 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     /// </summary>
     private static void AnalyzeContainerDependencies(CompilationAnalysisContext context, ContainerAnalyzerContext analyzerContext)
     {
-        if(analyzerContext.AllContainers.IsEmpty)
+        if(analyzerContext.Containers.IsEmpty)
             return;
 
-        var asyncInitServiceKeys = BuildAsyncInitServiceKeys(analyzerContext, context.CancellationToken);
+        var cancellationToken = context.CancellationToken;
+        var registrations = ResolveRegistrations(context.Compilation, analyzerContext, cancellationToken);
+        var asyncInitServiceKeys = BuildAsyncInitServiceKeys(analyzerContext.Features, registrations, cancellationToken);
 
         // SGIOC027/029: async-init semantic validation runs on ALL containers
-        foreach(var containerSymbol in analyzerContext.AllContainers)
+        foreach(var container in analyzerContext.Containers)
         {
-            context.CancellationToken.ThrowIfCancellationRequested();
-            AnalyzeAsyncPartialAccessors(context, asyncInitServiceKeys, containerSymbol);
+            cancellationToken.ThrowIfCancellationRequested();
+            AnalyzeAsyncPartialAccessors(context, asyncInitServiceKeys, container.Symbol);
         }
 
         // SGIOC018/021: registration resolution checks only when IntegrateServiceProvider = false
-        if(analyzerContext.ContainersWithNoFallback.IsEmpty)
+        if(!analyzerContext.Containers.Any(static c => !c.IntegrateServiceProvider))
             return;
 
-        // The unresolved dependencies do not depend on the container, so they are collected once
-        var unresolvedDependencies = CollectUnresolvedDependencies(analyzerContext, context.CancellationToken);
+        var containers = new Dictionary<INamedTypeSymbol, ContainerInfo>(SymbolEqualityComparer.Default);
+        foreach(var container in analyzerContext.Containers)
+            containers[container.Symbol] = container;
 
-        foreach(var containerSymbol in analyzerContext.ContainersWithNoFallback)
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
+        var scopeBuilder = new ContainerScopeBuilder(registrations, containers, context.Compilation.Assembly);
+        var dependencyCache = new DependencyCache();
 
-            foreach(var (location, serviceType) in unresolvedDependencies)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    UnableToResolveService,
-                    location,
-                    serviceType,
-                    containerSymbol.Name));
-            }
+        // Containers that use every registration of the compilation share the same unresolved dependencies
+        List<(Location? Location, string ServiceType)>? sharedUnresolvedDependencies = null;
 
-            AnalyzePartialAccessorDependencies(context, analyzerContext, asyncInitServiceKeys, containerSymbol);
-        }
-    }
-
-    /// <summary>
-    /// SGIOC018: Collects the unregistered constructor and injected member dependencies of every registered
-    /// implementation type. Service types that are not implementation types (interfaces, base classes) are not
-    /// analyzed, because the generator only constructs and injects the implementation type.
-    /// </summary>
-    private static List<(Location? Location, string ServiceType)> CollectUnresolvedDependencies(
-        ContainerAnalyzerContext analyzerContext,
-        CancellationToken cancellationToken)
-    {
-        var unresolvedDependencies = new List<(Location? Location, string ServiceType)>();
-        var implementationTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-
-        foreach(var registration in analyzerContext.Registrations)
+        foreach(var container in analyzerContext.Containers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var implementationType = registration.ImplementationType;
-            if(!implementationTypes.Add(implementationType))
+            if(container.IntegrateServiceProvider)
                 continue;
 
-            // Analyze constructor dependencies
-            var constructor = implementationType.SpecifiedOrPrimaryOrMostParametersConstructor;
-            if(constructor is not null)
-            {
-                CollectUnresolvedParameterDependencies(analyzerContext, constructor.Parameters, unresolvedDependencies, cancellationToken);
-            }
+            var scope = scopeBuilder.GetScope(container);
 
-            // Analyze injected member dependencies
-            foreach(var (member, injectAttribute) in implementationType.GetInjectedMembers())
+            // Registrations of a module from another assembly cannot be enumerated, so its services are unknown
+            if(!scope.HasExternalModule)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                var unresolvedDependencies = ContainerScopeBuilder.UsesAllRegistrations(container)
+                    ? sharedUnresolvedDependencies ??= CollectUnresolvedDependencies(scope, dependencyCache, cancellationToken)
+                    : CollectUnresolvedDependencies(scope, dependencyCache, cancellationToken);
 
-                switch(member)
+                foreach(var (location, serviceType) in unresolvedDependencies)
                 {
-                    case IPropertySymbol property:
-                        CollectUnresolvedPropertyDependency(analyzerContext, property, injectAttribute, unresolvedDependencies, cancellationToken);
-                        break;
-
-                    case IMethodSymbol method:
-                        CollectUnresolvedParameterDependencies(analyzerContext, method.Parameters, unresolvedDependencies, cancellationToken);
-                        break;
-
-                    // IFieldSymbol - analyze field dependencies like properties
-                    case IFieldSymbol field:
-                        CollectUnresolvedFieldDependency(analyzerContext, field, injectAttribute, unresolvedDependencies, cancellationToken);
-                        break;
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        UnableToResolveService,
+                        location,
+                        serviceType,
+                        container.Symbol.Name));
                 }
             }
-        }
 
-        return unresolvedDependencies;
+            AnalyzePartialAccessorDependencies(context, scope.Own, asyncInitServiceKeys, container.Symbol);
+        }
     }
 
     /// <summary>
     /// Builds the (service type, key) pairs that have at least one async-init implementation (SGIOC021/027/029).
     /// </summary>
     private static HashSet<ServiceSymbolKey> BuildAsyncInitServiceKeys(
-        ContainerAnalyzerContext analyzerContext,
+        IocFeatures features,
+        List<ResolvedRegistration> registrations,
         CancellationToken cancellationToken)
     {
         var asyncInitServiceKeys = new HashSet<ServiceSymbolKey>();
-        if((analyzerContext.Features & IocFeatures.AsyncMethodInject) == 0)
+        if((features & IocFeatures.AsyncMethodInject) == 0)
             return asyncInitServiceKeys;
 
         var isAsyncInitByImplementation = new Dictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
-        foreach(var registration in analyzerContext.Registrations)
+        foreach(var registration in registrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var implementationType = registration.ImplementationType;
             if(!isAsyncInitByImplementation.TryGetValue(implementationType, out var isAsyncInit))
             {
-                isAsyncInit = AnalyzerHelpers.IsAsyncInitImplementation(implementationType, analyzerContext.Features);
+                isAsyncInit = AnalyzerHelpers.IsAsyncInitImplementation(implementationType, features);
                 isAsyncInitByImplementation[implementationType] = isAsyncInit;
             }
 
             if(isAsyncInit)
-                asyncInitServiceKeys.Add(new(registration.ServiceType, registration.Key));
+            {
+                foreach(var serviceType in registration.ServiceTypes)
+                    asyncInitServiceKeys.Add(new(serviceType, registration.Key));
+            }
         }
 
         return asyncInitServiceKeys;
@@ -568,7 +473,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
     /// </summary>
     private static void AnalyzePartialAccessorDependencies(
         CompilationAnalysisContext context,
-        ContainerAnalyzerContext analyzerContext,
+        RegistrationSet registrations,
         HashSet<ServiceSymbolKey> asyncInitServiceKeys,
         INamedTypeSymbol containerSymbol)
     {
@@ -641,7 +546,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
             if(serviceType is not null
                 && !isNullable
-                && !IsPartialAccessorServiceRegistered(serviceType, serviceKey, analyzerContext))
+                && !IsPartialAccessorServiceRegistered(serviceType, serviceKey, registrations))
             {
                 var location = member.Locations.FirstOrDefault();
                 // For ValueTask<T> (not a generator-supported recursive wrapper), report the full return type
@@ -661,7 +566,7 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
             // (When it IS async-init, SGIOC029 is reported by AnalyzeAsyncPartialAccessors and we already continued.)
             if(serviceType is not null
                 && !isNullable
-                && IsPartialAccessorServiceRegistered(serviceType, serviceKey, analyzerContext)
+                && IsPartialAccessorServiceRegistered(serviceType, serviceKey, registrations)
                 && isGenericValueTaskReturnType)
             {
                 var location = member.Locations.FirstOrDefault();
@@ -673,23 +578,6 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
                     containerSymbol.Name));
                 continue;
             }
-        }
-    }
-
-    private static void RegisterServiceTypes(
-        ContainerAnalyzerContext analyzerContext,
-        INamedTypeSymbol implementationType,
-        AttributeData attribute)
-    {
-        var (serviceKey, _, _) = attribute.GetKeyInfo();
-
-        foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(
-                     implementationType,
-                     attribute))
-        {
-            analyzerContext.RegisteredServiceTypes.TryAdd(serviceType, true);
-            analyzerContext.Registrations.Add(new ServiceRegistration(serviceType, serviceKey, implementationType));
-            analyzerContext.ServiceImplementationTypes[new(serviceType, serviceKey)] = implementationType;
         }
     }
 
@@ -760,102 +648,12 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         return IocFeaturesHelper.Parse(rawFeatures);
     }
 
-    private static void CollectUnresolvedParameterDependencies(
-        ContainerAnalyzerContext analyzerContext,
-        ImmutableArray<IParameterSymbol> parameters,
-        List<(Location? Location, string ServiceType)> unresolvedDependencies,
-        CancellationToken cancellationToken)
-    {
-        foreach(var param in parameters)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Skip if parameter is always resolvable
-            if(AnalyzerHelpers.IsParameterAlwaysResolvable(param))
-                continue;
-
-            // Check if the dependency type is registered
-            if(param.Type is INamedTypeSymbol namedParamType && !IsServiceRegistered(namedParamType, analyzerContext))
-            {
-                unresolvedDependencies.Add((
-                    param.Locations.FirstOrDefault(),
-                    namedParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
-            }
-        }
-    }
-
-    private static void CollectUnresolvedPropertyDependency(
-        ContainerAnalyzerContext analyzerContext,
-        IPropertySymbol property,
-        AttributeData injectAttribute,
-        List<(Location? Location, string ServiceType)> unresolvedDependencies,
-        CancellationToken cancellationToken)
-    {
-        // Skip if property is always resolvable
-        if(AnalyzerHelpers.IsPropertyAlwaysResolvable(property, injectAttribute))
-            return;
-
-        // Check if the dependency type is registered
-        if(property.Type is INamedTypeSymbol namedPropertyType && !IsServiceRegistered(namedPropertyType, analyzerContext))
-        {
-            unresolvedDependencies.Add((
-                injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
-                    ?? property.Locations.FirstOrDefault(),
-                namedPropertyType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
-        }
-    }
-
-    private static void CollectUnresolvedFieldDependency(
-        ContainerAnalyzerContext analyzerContext,
-        IFieldSymbol field,
-        AttributeData injectAttribute,
-        List<(Location? Location, string ServiceType)> unresolvedDependencies,
-        CancellationToken cancellationToken)
-    {
-        // Skip if field is always resolvable
-        if(AnalyzerHelpers.IsFieldAlwaysResolvable(field, injectAttribute))
-            return;
-
-        // Check if the dependency type is registered
-        if(field.Type is INamedTypeSymbol namedFieldType && !IsServiceRegistered(namedFieldType, analyzerContext))
-        {
-            unresolvedDependencies.Add((
-                injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
-                    ?? field.Locations.FirstOrDefault(),
-                namedFieldType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
-        }
-    }
-
-    private static bool IsServiceRegistered(INamedTypeSymbol serviceType, ContainerAnalyzerContext analyzerContext)
-    {
-        // Direct match
-        if(analyzerContext.RegisteredServiceTypes.ContainsKey(serviceType))
-            return true;
-
-        // Check if it's always resolvable (well-known types like IServiceProvider)
-        if(AnalyzerHelpers.IsAlwaysResolvable(serviceType))
-            return true;
-
-        // Handle IEnumerable<T> - check if T is registered
-        if(AnalyzerHelpers.IsIEnumerableOfT(serviceType))
-        {
-            var elementType = AnalyzerHelpers.GetEnumerableElementType(serviceType);
-            if(elementType is not null)
-            {
-                // IEnumerable<T> is resolvable if T is registered
-                return analyzerContext.RegisteredServiceTypes.ContainsKey(elementType);
-            }
-        }
-
-        return false;
-    }
-
     private static bool IsPartialAccessorServiceRegistered(
         INamedTypeSymbol serviceType,
         string? serviceKey,
-        ContainerAnalyzerContext analyzerContext)
+        RegistrationSet registrations)
     {
-        if(analyzerContext.ServiceImplementationTypes.ContainsKey(new(serviceType, serviceKey)))
+        if(registrations.ServiceKeys.Contains(new(serviceType, serviceKey)))
             return true;
 
         if(AnalyzerHelpers.IsAlwaysResolvable(serviceType))
@@ -865,11 +663,12 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
         {
             var elementType = AnalyzerHelpers.GetEnumerableElementType(serviceType);
             if(elementType is not null)
-                return analyzerContext.RegisteredServiceTypes.ContainsKey(elementType);
+                return registrations.ServiceTypes.Contains(elementType);
         }
 
         return false;
     }
+
 
     /// <summary>
     /// Extracts the imported module type from an [IocImportModule] or [IocImportModule&lt;T&gt;] attribute.
@@ -990,30 +789,4 @@ public sealed class ContainerAnalyzer : DiagnosticAnalyzer
 
     private static Location? GetContainerLocation(INamedTypeSymbol containerSymbol)
         => containerSymbol.Locations.FirstOrDefault();
-
-    private readonly record struct ServiceRegistration(
-        INamedTypeSymbol ServiceType,
-        string? Key,
-        INamedTypeSymbol ImplementationType);
-
-    private sealed class ContainerAnalyzerContext(
-        IocAttributeSymbols attributeSymbols,
-        ConcurrentDictionary<INamedTypeSymbol, bool> registeredServiceTypes,
-        ConcurrentDictionary<ServiceSymbolKey, INamedTypeSymbol> serviceImplementationTypes,
-        ConcurrentBag<ServiceRegistration> registrations,
-        ConcurrentBag<INamedTypeSymbol> containersWithNoFallback,
-        ConcurrentBag<INamedTypeSymbol> allContainers,
-        ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)> importEdges,
-        IocFeatures features)
-    {
-        public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
-        public ConcurrentDictionary<INamedTypeSymbol, bool> RegisteredServiceTypes { get; } = registeredServiceTypes;
-        public ConcurrentDictionary<ServiceSymbolKey, INamedTypeSymbol> ServiceImplementationTypes { get; } = serviceImplementationTypes;
-        public ConcurrentBag<ServiceRegistration> Registrations { get; } = registrations;
-        public ConcurrentBag<INamedTypeSymbol> ContainersWithNoFallback { get; } = containersWithNoFallback;
-        public ConcurrentBag<INamedTypeSymbol> AllContainers { get; } = allContainers;
-        public ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)> ImportEdges { get; } = importEdges;
-        public IocFeatures Features { get; } = features;
-    }
 }
-

@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.Diagnostics;
+
 namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
@@ -479,6 +481,299 @@ public class SGIOC018Tests
             "Unable to resolve service 'IUnregisteredService' for container 'FirstContainer'",
             "Unable to resolve service 'IUnregisteredService' for container 'SecondContainer'"
         ]);
+    }
+
+    [Test]
+    public async Task SGIOC018_ExplicitOnly_UnresolvedDependencyOfOtherRegistration_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IExternalService { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class FallbackService
+            {
+                public FallbackService(IExternalService external) { }
+            }
+
+            public class StandaloneService { }
+
+            [IocContainer]
+            public partial class FallbackContainer { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocRegisterFor<StandaloneService>(ServiceLifetime.Singleton)]
+            public partial class StandaloneContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_ExplicitOnly_DependencyRegisteredOutsideContainer_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            public class Consumer
+            {
+                public Consumer(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
+            public partial class StandaloneContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency' for container 'StandaloneContainer'");
+    }
+
+    [Test]
+    public async Task SGIOC018_ExplicitOnly_DependencyRegisteredOnContainerWithAllInterfaces_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFirst { }
+            public interface ISecond { }
+
+            public class Dependency : IFirst, ISecond { }
+
+            public class Consumer
+            {
+                public Consumer(ISecond second) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocRegisterFor<Dependency>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFirst)], RegisterAllInterfaces = true)]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
+            public partial class StandaloneContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_IncludeTags_UnresolvedDependencyOfExcludedRegistration_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IExternalService { }
+
+            [IocRegister(ServiceLifetime.Singleton, Tags = ["Other"])]
+            public class OtherService
+            {
+                public OtherService(IExternalService external) { }
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, Tags = ["Feature"])]
+            public class FeatureService { }
+
+            [IocContainer(IntegrateServiceProvider = false, IncludeTags = ["Feature"])]
+            public partial class FeatureContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_IncludeTags_DependencyWithoutMatchingTag_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton)]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton, Tags = ["Feature"])]
+            public class FeatureService
+            {
+                public FeatureService(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, IncludeTags = ["Feature"])]
+            public partial class FeatureContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency' for container 'FeatureContainer'");
+    }
+
+    [Test]
+    public async Task SGIOC018_IncludeTags_TagsFromRegisterDefaults_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults<TestNamespace.IDependency>(ServiceLifetime.Singleton, Tags = ["Feature"])]
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton, Tags = ["Feature"])]
+            public class FeatureService
+            {
+                public FeatureService(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, IncludeTags = ["Feature"])]
+            public partial class FeatureContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_RegisterDefaultsTargetServiceType_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults<TestNamespace.IDependency>(ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_ImportedModuleInSameAssembly_ProvidesDependency_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public class Dependency : IDependency { }
+
+            public class Consumer
+            {
+                public Consumer(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocRegisterFor<Dependency>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IDependency)])]
+            public partial class DependencyModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<DependencyModule>]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
+            public partial class AppContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_ImportedModuleFromOtherAssembly_NoDiagnostic()
+    {
+        const string moduleSource = """
+            using SourceGen.Ioc;
+
+            namespace ModuleNamespace;
+
+            [IocContainer]
+            public partial class SharedModule { }
+            """;
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IModuleService { }
+
+            public class Consumer
+            {
+                public Consumer(IModuleService service) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<ModuleNamespace.SharedModule>]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
+            public partial class AppContainer { }
+            """;
+
+        var moduleCompilation = SourceGeneratorTestHelper.CreateCompilation("ModuleAssembly", moduleSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [moduleCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
     }
 }
 

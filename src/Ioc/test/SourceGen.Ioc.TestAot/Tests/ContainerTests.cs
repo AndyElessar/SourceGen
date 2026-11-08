@@ -434,6 +434,24 @@ public sealed class ContainerTests
 
     #endregion
 
+    #region ExplicitOnly Tests
+
+    [Test]
+    public async Task ExplicitOnly_RegistrationWithSeveralServiceTypes_ResolvesEveryServiceType()
+    {
+        using var container = new StandaloneExplicitContainer();
+
+        var first = container.GetService<IStandaloneFirst>();
+        var second = container.GetService<IStandaloneSecond>();
+        var third = container.GetService<IStandaloneThird>();
+
+        await Assert.That(first).IsNotNull();
+        await Assert.That(second).IsSameReferenceAs(first);
+        await Assert.That(third).IsSameReferenceAs(first);
+    }
+
+    #endregion
+
     #region Helper Types
 
     /// <summary>Unregistered service for testing null/exception scenarios.</summary>
