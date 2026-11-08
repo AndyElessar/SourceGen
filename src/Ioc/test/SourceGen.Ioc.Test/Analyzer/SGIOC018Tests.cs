@@ -857,6 +857,218 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("[FromKeyedServices(\"A\")] IDependency dependency")]
+    [Arguments("[IocInject(\"A\")] IDependency dependency")]
+    [Arguments("[IocInject(Key = \"A\")] IDependency dependency")]
+    [Arguments("[FromKeyedServices(\"A\")] IEnumerable<IDependency> dependencies")]
+    public async Task SGIOC018_KeyedDependency_RegisteredWithSameKey_NoDiagnostic(string parameter)
+    {
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton, Key = "A")]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{parameter}}) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments(", Key = \"B\"")]
+    [Arguments(", Key = 1")]
+    public async Task SGIOC018_KeyedDependency_NotRegisteredWithSameKey_ReportsDiagnostic(string registrationKey)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton{{registrationKey}})]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer([FromKeyedServices("A")] IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency (key \"A\")' for container 'TestContainer'");
+    }
+
+    [Test]
+    public async Task SGIOC018_NonKeyedDependency_OnlyKeyedRegistration_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton, Key = "A")]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency' for container 'TestContainer'");
+    }
+
+    [Test]
+    public async Task SGIOC018_KeyedDependency_EnumKey_ComparedByValueAndType()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public enum Region { East, West }
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton, Key = Region.West)]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(
+                    [FromKeyedServices(Region.West)] IDependency west,
+                    [FromKeyedServices(Region.East)] IDependency east,
+                    [FromKeyedServices(1)] IDependency number) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var messages = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")
+            .Select(static d => d.GetMessage())
+            .OrderBy(static m => m, StringComparer.Ordinal)
+            .ToList();
+
+        await Assert.That(messages).IsEquivalentTo(
+        [
+            "Unable to resolve service 'IDependency (key 1)' for container 'TestContainer'",
+            "Unable to resolve service 'IDependency (key TestNamespace.Region.East)' for container 'TestContainer'"
+        ]);
+    }
+
+    [Test]
+    public async Task SGIOC018_KeyedInjectedProperty_NotRegisteredWithSameKey_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton, Key = "A")]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                [IocInject(Key = "A")]
+                public IDependency First { get; set; } = null!;
+
+                [IocInject(Key = "B")]
+                public IDependency Second { get; set; } = null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency (key \"B\")' for container 'TestContainer'");
+    }
+
+    [Test]
+    public async Task SGIOC018_CsharpKey_MatchesAnyRegistrationOfType_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public static class Keys
+            {
+                public const string Primary = "Primary";
+            }
+
+            public interface IDependency { }
+
+            [IocRegister<IDependency>(ServiceLifetime.Singleton, Key = "Keys.Primary", KeyType = KeyType.Csharp)]
+            public class Dependency : IDependency { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer([FromKeyedServices("Primary")] IDependency dependency) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
     public async Task SGIOC018_ImportedModuleInSameAssembly_ProvidesDependency_NoDiagnostic()
     {
         const string source = """

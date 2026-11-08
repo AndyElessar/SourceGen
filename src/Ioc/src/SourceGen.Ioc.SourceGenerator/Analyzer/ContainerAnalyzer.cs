@@ -663,7 +663,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
         {
             var elementType = AnalyzerHelpers.GetEnumerableElementType(serviceType);
             if(elementType is not null)
-                return registrations.ServiceTypes.Contains(elementType);
+                return registrations.Services.Contains(elementType, key: null);
         }
 
         return false;

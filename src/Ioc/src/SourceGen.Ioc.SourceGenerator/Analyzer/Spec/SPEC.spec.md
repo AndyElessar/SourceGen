@@ -401,15 +401,19 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
   - Constructor parameters: Checks if the dependency type is a service type of the container (including its imported modules).
   - Properties/Fields with `[IocInject]` or `[Inject]`: Checks if the dependency type is a service type of the container.
   - Method parameters with `[IocInject]` or `[Inject]`: Checks if the dependency type is a service type of the container.
-  - `IEnumerable<T>` is resolvable when `T` is a service type of the container.
+  - `IEnumerable<T>` is resolvable when `T` is a service type of the container with the same key. Injected `IEnumerable<T>` properties are not checked.
   - Checks if the dependency type is a built-in service type (e.g., `IServiceProvider`, `IServiceScopeFactory`).
+  - Parameters with a default value or `[ServiceKey]`, and `[FromKeyedServices]` without a key, are not checked.
+- Keyed dependencies: the key of a parameter is the key of `[FromKeyedServices(key)]`, otherwise the key of `[IocInject]` / `[Inject]`; the key of a property or field is the key of its `[IocInject]` / `[Inject]`.
+  - A keyed dependency is resolved by a registration of the same service type with the same key; a non-keyed dependency only by a non-keyed registration. Generated containers look keyed services up by key value (`ServiceIdentifier`), so keys are compared by constant value and type (e.g. the enum `Region.West` does not match the integer `1`).
+  - A key given as C# code (`KeyType = KeyType.Csharp`) cannot be evaluated: a registration with such a key resolves any keyed dependency of its service type, and a dependency with such a key is resolved by any registration of its service type.
+  - The message shows the key: `Unable to resolve service 'IDependency (key "A")' for container 'AppContainer'`.
 - Reports when a dependency cannot be resolved and there is no fallback to external `IServiceProvider`.
 - Does NOT report for a container that imports a module from another assembly (directly or through a same-compilation module), because that module's registrations cannot be enumerated.
 
 **Limitations:**
 
 - Open generic registrations closed on demand are not modeled.
-- Service keys are ignored: a keyed registration resolves a dependency of the same type.
 
 **Message format:** `Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`
 

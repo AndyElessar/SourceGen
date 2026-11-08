@@ -92,6 +92,7 @@ partial class ContainerAnalyzer
         return new RawRegistration(
             implementationType,
             key,
+            GetAttributeServiceKey(attribute),
             [.. AnalyzerHelpers.GetExplicitServiceTypes(attribute)],
             hasRegisterAllInterfaces,
             registerAllInterfaces,
@@ -204,6 +205,7 @@ partial class ContainerAnalyzer
             resolved.Add(new ResolvedRegistration(
                 implementationType,
                 registration.Key,
+                registration.KeyValue,
                 [.. serviceTypes],
                 tags,
                 registration.ExplicitContainer));
@@ -269,6 +271,7 @@ partial class ContainerAnalyzer
                 resolved.Add(new ResolvedRegistration(
                     implementationType,
                     Key: null,
+                    KeyValue: null,
                     [.. serviceTypes],
                     defaults.Tags,
                     ExplicitContainer: null));
@@ -433,12 +436,13 @@ partial class ContainerAnalyzer
             _building.Add(container.Symbol);
 
             var own = GetOwnRegistrations(container);
-            var serviceTypes = own.ServiceTypes;
+            var services = own.Services;
             var hasExternalModule = false;
 
             if(container.ImportedModules.Length > 0)
             {
-                serviceTypes = new HashSet<INamedTypeSymbol>(own.ServiceTypes, SymbolEqualityComparer.Default);
+                services = new ServiceIndex();
+                services.UnionWith(own.Services);
                 foreach(var module in container.ImportedModules)
                 {
                     if(!SymbolEqualityComparer.Default.Equals(module.ContainingAssembly, assembly))
@@ -453,14 +457,14 @@ partial class ContainerAnalyzer
                         continue;
 
                     var moduleScope = GetScope(moduleContainer);
-                    serviceTypes.UnionWith(moduleScope.ServiceTypes);
+                    services.UnionWith(moduleScope.Services);
                     hasExternalModule |= moduleScope.HasExternalModule;
                 }
             }
 
             _building.Remove(container.Symbol);
 
-            scope = new ContainerScope(own, serviceTypes, hasExternalModule);
+            scope = new ContainerScope(own, services, hasExternalModule);
             _scopes[container.Symbol] = scope;
             return scope;
         }
@@ -502,7 +506,7 @@ partial class ContainerAnalyzer
             {
                 foreach(var serviceType in registration.ServiceTypes)
                 {
-                    ServiceTypes.Add(serviceType);
+                    Services.Add(serviceType, registration.KeyValue);
                     ServiceKeys.Add(new(serviceType, registration.Key));
                 }
             }
@@ -510,18 +514,137 @@ partial class ContainerAnalyzer
 
         public List<ResolvedRegistration> Registrations { get; }
 
-        public HashSet<INamedTypeSymbol> ServiceTypes { get; } = new(SymbolEqualityComparer.Default);
+        /// <summary>The services by key value (SGIOC018 and collection checks).</summary>
+        public ServiceIndex Services { get; } = new();
 
+        /// <summary>The services by key expression (SGIOC021, which compares keys like the generator's accessor lookup).</summary>
         public HashSet<ServiceSymbolKey> ServiceKeys { get; } = [];
     }
 
     /// <param name="Own">The registrations of the container itself.</param>
-    /// <param name="ServiceTypes">The service types of the container, including the services of imported modules.</param>
+    /// <param name="Services">The services of the container, including the services of imported modules.</param>
     /// <param name="HasExternalModule">Whether the container imports a module of another assembly (directly or transitively).</param>
     private sealed record class ContainerScope(
         RegistrationSet Own,
-        HashSet<INamedTypeSymbol> ServiceTypes,
+        ServiceIndex Services,
         bool HasExternalModule);
+
+    /// <summary>
+    /// Registered services by type and key value. Generated containers look up keyed services by key value at runtime
+    /// (<c>ServiceIdentifier</c>), so keys are compared by constant value; a key given as C# code
+    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key.
+    /// </summary>
+    private sealed class ServiceIndex
+    {
+        private readonly HashSet<INamedTypeSymbol> _nonKeyed = new(SymbolEqualityComparer.Default);
+        private readonly HashSet<INamedTypeSymbol> _keyed = new(SymbolEqualityComparer.Default);
+        private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(SymbolEqualityComparer.Default);
+        private readonly HashSet<KeyedService> _keyedValues = [];
+
+        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key)
+        {
+            if(key is not { } keyValue)
+            {
+                _nonKeyed.Add(serviceType);
+                return;
+            }
+
+            _keyed.Add(serviceType);
+            if(keyValue.IsUnknown)
+                _unknownKeyed.Add(serviceType);
+            else
+                _keyedValues.Add(new(serviceType, keyValue));
+        }
+
+        public void UnionWith(ServiceIndex other)
+        {
+            _nonKeyed.UnionWith(other._nonKeyed);
+            _keyed.UnionWith(other._keyed);
+            _unknownKeyed.UnionWith(other._unknownKeyed);
+            _keyedValues.UnionWith(other._keyedValues);
+        }
+
+        public bool Contains(INamedTypeSymbol serviceType, ServiceKeyValue? key)
+        {
+            if(key is not { } keyValue)
+                return _nonKeyed.Contains(serviceType);
+
+            // A key given as C# code is matched by any registration of the type
+            if(keyValue.IsUnknown)
+                return _keyed.Contains(serviceType) || _nonKeyed.Contains(serviceType);
+
+            return _keyedValues.Contains(new(serviceType, keyValue)) || _unknownKeyed.Contains(serviceType);
+        }
+    }
+
+    private readonly record struct KeyedService(INamedTypeSymbol ServiceType, ServiceKeyValue Key)
+    {
+        public bool Equals(KeyedService other) =>
+            SymbolEqualityComparer.Default.Equals(ServiceType, other.ServiceType) && Key.Equals(other.Key);
+
+        public override int GetHashCode() =>
+            unchecked((SymbolEqualityComparer.Default.GetHashCode(ServiceType) * 397) ^ Key.GetHashCode());
+    }
+
+    /// <summary>
+    /// A service key: the constant value and its type, or an unknown value for a key given as C# code.
+    /// </summary>
+    /// <param name="Display">The key as C# code, for diagnostic messages.</param>
+    private readonly record struct ServiceKeyValue(ITypeSymbol? Type, object? Value, bool IsUnknown, string Display)
+    {
+        public static ServiceKeyValue FromConstant(TypedConstant constant)
+            => new(constant.Type, constant.Value, IsUnknown: false, constant.ToCSharpString());
+
+        public static ServiceKeyValue Unknown(string display)
+            => new(Type: null, Value: null, IsUnknown: true, display);
+
+        public bool Equals(ServiceKeyValue other) =>
+            IsUnknown == other.IsUnknown
+            && SymbolEqualityComparer.Default.Equals(Type, other.Type)
+            && object.Equals(Value, other.Value);
+
+        public override int GetHashCode() =>
+            unchecked((SymbolEqualityComparer.Default.GetHashCode(Type) * 397) ^ (Value?.GetHashCode() ?? 0) ^ (IsUnknown ? 1 : 0));
+    }
+
+    /// <summary>
+    /// Gets the key of a registration or [IocInject] attribute, with the same argument rules as <c>GetKeyInfo</c>:
+    /// the first constructor argument (unless it is a lifetime, type or array), otherwise the <c>Key</c> named argument.
+    /// </summary>
+    private static ServiceKeyValue? GetAttributeServiceKey(AttributeData attribute)
+    {
+        TypedConstant? key = null;
+        if(attribute.ConstructorArguments.Length > 0)
+        {
+            var ctorArg = attribute.ConstructorArguments[0];
+            if(ctorArg.Type?.Name != nameof(ServiceLifetime)
+                && ctorArg.Kind is not (TypedConstantKind.Type or TypedConstantKind.Array)
+                && !ctorArg.IsNull)
+            {
+                key = ctorArg;
+            }
+        }
+
+        if(key is null)
+        {
+            foreach(var namedArg in attribute.NamedArguments)
+            {
+                if(namedArg.Key == "Key" && !namedArg.Value.IsNull)
+                {
+                    key = namedArg.Value;
+                    break;
+                }
+            }
+        }
+
+        if(key is not { } keyConstant)
+            return null;
+
+        var (_, keyType) = attribute.TryGetNamedArgument<int>("KeyType", 0);
+        return keyType == 1
+            ? ServiceKeyValue.Unknown(keyConstant.Value?.ToString() ?? "null")
+            : ServiceKeyValue.FromConstant(keyConstant);
+    }
 
     #endregion
 
@@ -548,13 +671,14 @@ partial class ContainerAnalyzer
             if(!implementationTypes.Add(registration.ImplementationType))
                 continue;
 
-            foreach(var (location, dependencyType) in dependencyCache.Get(registration.ImplementationType, cancellationToken))
+            foreach(var dependency in dependencyCache.Get(registration.ImplementationType, cancellationToken))
             {
-                if(!IsServiceRegistered(dependencyType, scope.ServiceTypes))
+                if(!IsServiceRegistered(dependency.Type, dependency.Key, scope.Services))
                 {
+                    var serviceType = dependency.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
                     unresolvedDependencies.Add((
-                        location,
-                        dependencyType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        dependency.Location,
+                        dependency.Key is { } key ? $"{serviceType} (key {key.Display})" : serviceType));
                 }
             }
         }
@@ -562,31 +686,35 @@ partial class ContainerAnalyzer
         return unresolvedDependencies;
     }
 
-    private static bool IsServiceRegistered(INamedTypeSymbol serviceType, HashSet<INamedTypeSymbol> serviceTypes)
+    private static bool IsServiceRegistered(INamedTypeSymbol serviceType, ServiceKeyValue? key, ServiceIndex services)
     {
-        if(serviceTypes.Contains(serviceType))
+        if(services.Contains(serviceType, key))
             return true;
 
-        // IEnumerable<T> is resolvable if T is registered
+        // IEnumerable<T> is resolvable if T is registered with the same key
         if(AnalyzerHelpers.IsIEnumerableOfT(serviceType)
             && AnalyzerHelpers.GetEnumerableElementType(serviceType) is { } elementType)
         {
-            return serviceTypes.Contains(elementType);
+            return services.Contains(elementType, key);
         }
 
         return false;
     }
 
+    /// <param name="Key">The service key of a keyed dependency; <see langword="null"/> for a non-keyed dependency.</param>
+    private readonly record struct Dependency(Location? Location, INamedTypeSymbol Type, ServiceKeyValue? Key);
+
     /// <summary>
     /// Caches the constructor and injected member dependencies of implementation types that need a registration
     /// (dependencies that are always resolvable are excluded), so each type is inspected once per compilation.
+    /// The key of a dependency follows the generator: <c>[FromKeyedServices(key)]</c> takes precedence over the key of
+    /// <c>[IocInject]</c> / <c>[Inject]</c>.
     /// </summary>
     private sealed class DependencyCache
     {
-        private readonly Dictionary<INamedTypeSymbol, List<(Location? Location, INamedTypeSymbol Type)>> _cache =
-            new(SymbolEqualityComparer.Default);
+        private readonly Dictionary<INamedTypeSymbol, List<Dependency>> _cache = new(SymbolEqualityComparer.Default);
 
-        public List<(Location? Location, INamedTypeSymbol Type)> Get(INamedTypeSymbol implementationType, CancellationToken cancellationToken)
+        public List<Dependency> Get(INamedTypeSymbol implementationType, CancellationToken cancellationToken)
         {
             if(_cache.TryGetValue(implementationType, out var dependencies))
                 return dependencies;
@@ -603,22 +731,18 @@ partial class ContainerAnalyzer
 
                 switch(member)
                 {
-                    case IPropertySymbol property
-                        when !AnalyzerHelpers.IsPropertyAlwaysResolvable(property, injectAttribute)
-                             && property.Type is INamedTypeSymbol propertyType
-                             && !AnalyzerHelpers.IsAlwaysResolvable(propertyType):
-                        dependencies.Add((GetInjectLocation(injectAttribute, property), propertyType));
+                    // Injected IEnumerable<T> properties are resolved even without a registration
+                    case IPropertySymbol { Type: INamedTypeSymbol propertyType } property
+                        when !AnalyzerHelpers.IsIEnumerableOfT(propertyType):
+                        AddMember(property, propertyType, injectAttribute);
                         break;
 
                     case IMethodSymbol method:
                         AddParameters(method.Parameters);
                         break;
 
-                    case IFieldSymbol field
-                        when !AnalyzerHelpers.IsFieldAlwaysResolvable(field, injectAttribute)
-                             && field.Type is INamedTypeSymbol fieldType
-                             && !AnalyzerHelpers.IsAlwaysResolvable(fieldType):
-                        dependencies.Add((GetInjectLocation(injectAttribute, field), fieldType));
+                    case IFieldSymbol { Type: INamedTypeSymbol fieldType } field:
+                        AddMember(field, fieldType, injectAttribute);
                         break;
                 }
             }
@@ -630,18 +754,59 @@ partial class ContainerAnalyzer
             {
                 foreach(var parameter in parameters)
                 {
-                    if(!AnalyzerHelpers.IsParameterAlwaysResolvable(parameter)
-                        && parameter.Type is INamedTypeSymbol parameterType
-                        && !AnalyzerHelpers.IsAlwaysResolvable(parameterType))
+                    if(parameter.HasExplicitDefaultValue
+                        || parameter.Type is not INamedTypeSymbol parameterType
+                        || AnalyzerHelpers.IsAlwaysResolvable(parameterType)
+                        || !TryGetParameterKey(parameter, out var key))
                     {
-                        dependencies.Add((parameter.Locations.FirstOrDefault(), parameterType));
+                        continue;
                     }
+
+                    dependencies.Add(new(parameter.Locations.FirstOrDefault(), parameterType, key));
                 }
             }
 
-            Location? GetInjectLocation(AttributeData injectAttribute, ISymbol member)
-                => injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+            void AddMember(ISymbol member, INamedTypeSymbol memberType, AttributeData injectAttribute)
+            {
+                if(AnalyzerHelpers.IsAlwaysResolvable(memberType))
+                    return;
+
+                var location = injectAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
                     ?? member.Locations.FirstOrDefault();
+                dependencies.Add(new(location, memberType, GetAttributeServiceKey(injectAttribute)));
+            }
+        }
+
+        /// <summary>
+        /// Gets the key of a parameter dependency. Returns <see langword="false"/> for a parameter that is not resolved
+        /// as a service: <c>[ServiceKey]</c>, and <c>[FromKeyedServices]</c> without a key (inherited key).
+        /// </summary>
+        private static bool TryGetParameterKey(IParameterSymbol parameter, out ServiceKeyValue? key)
+        {
+            key = null;
+            foreach(var attribute in parameter.GetAttributes())
+            {
+                var attrClass = attribute.AttributeClass;
+                if(attrClass is null)
+                    continue;
+
+                if(AnalyzerHelpers.IsServiceKeyAttribute(attrClass))
+                    return false;
+
+                if(AnalyzerHelpers.IsFromKeyedServicesAttribute(attrClass))
+                {
+                    if(attribute.ConstructorArguments is not [{ IsNull: false, Value: not null } keyArg])
+                        return false;
+
+                    key = ServiceKeyValue.FromConstant(keyArg);
+                    return true;
+                }
+
+                if(attrClass.IsInject && key is null)
+                    key = GetAttributeServiceKey(attribute);
+            }
+
+            return true;
         }
     }
 
@@ -656,6 +821,7 @@ partial class ContainerAnalyzer
     private sealed record class RawRegistration(
         INamedTypeSymbol ImplementationType,
         string? Key,
+        ServiceKeyValue? KeyValue,
         ImmutableArray<INamedTypeSymbol> ExplicitServiceTypes,
         bool HasExplicitRegisterAllInterfaces,
         bool RegisterAllInterfaces,
@@ -664,9 +830,12 @@ partial class ContainerAnalyzer
         ImmutableArray<string> Tags,
         INamedTypeSymbol? ExplicitContainer);
 
+    /// <param name="Key">The key as the generator's code expression (SGIOC021/027/029).</param>
+    /// <param name="KeyValue">The key value (SGIOC018).</param>
     private sealed record class ResolvedRegistration(
         INamedTypeSymbol ImplementationType,
         string? Key,
+        ServiceKeyValue? KeyValue,
         ImmutableArray<INamedTypeSymbol> ServiceTypes,
         ImmutableArray<string> Tags,
         INamedTypeSymbol? ExplicitContainer);
