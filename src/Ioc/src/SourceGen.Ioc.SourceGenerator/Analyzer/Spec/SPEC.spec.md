@@ -91,6 +91,8 @@ Mirrors the generator's `ProcessSingleRegistration`:
 - Defaults order: current-assembly `[IocRegisterDefaults]` (non-generic attributes, then generic attributes, each in source order), then the defaults of imported module assemblies (settings on the module type, then assembly-level settings). The first settings for a target type win.
 - Defaults match the implementation's base classes, then its interfaces, exactly or by generic type definition. Each matched type becomes a service type; the first match is the best default.
 - The best default adds its `ServiceTypes`, and supplies `Tags`, `RegisterAllInterfaces` and `RegisterAllBaseClasses` when the registration does not set them.
+- An open generic service type (explicit or from defaults) of a closed implementation is replaced by each closed form the implementation implements or inherits, like the generator's `AddExplicitServiceType`.
+- `[IocRegisterDefaults(ImplementationTypes = ...)]` of the current assembly adds a registration per implementation type with the attribute's settings and no default settings lookup (`CreateRegistrationDataFromDefaultSettings`): a closed implementation is registered as the types of its hierarchy named like the target or `ServiceTypes` (ignoring generic arguments), or as the target and `ServiceTypes` when none matches. `ImplementationTypes` of imported module defaults add no registration.
 
 #### Container Scope
 
@@ -406,7 +408,7 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 
 **Limitations:**
 
-- Registrations created by `[IocRegisterDefaults(ImplementationTypes = ...)]`, open generic registrations closed on demand, and open generic `ServiceTypes` of a closed implementation are not modeled.
+- Open generic registrations closed on demand are not modeled.
 - Service keys are ignored: a keyed registration resolves a dependency of the same type.
 
 **Message format:** `Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`

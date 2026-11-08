@@ -139,6 +139,7 @@ partial class ContainerAnalyzer
             registerAllInterfaces,
             registerAllBaseClasses,
             [.. attribute.GetTags()],
+            [.. attribute.GetImplementationTypeSymbols()],
             attrClass.IsGenericType,
             attribute.ApplicationSyntaxReference);
     }
@@ -167,7 +168,7 @@ partial class ContainerAnalyzer
 
             var implementationType = registration.ImplementationType;
             var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default) { implementationType };
-            serviceTypes.UnionWith(registration.ExplicitServiceTypes);
+            AddExplicitServiceTypes(serviceTypes, implementationType, registration.ExplicitServiceTypes);
 
             // Base classes are matched before interfaces; the first match is the best default
             matched.Clear();
@@ -182,7 +183,7 @@ partial class ContainerAnalyzer
             }
 
             if(best is not null)
-                serviceTypes.UnionWith(best.ServiceTypes);
+                AddExplicitServiceTypes(serviceTypes, implementationType, best.ServiceTypes);
 
             var registerAllInterfaces = registration.HasExplicitRegisterAllInterfaces
                 ? registration.RegisterAllInterfaces
@@ -227,8 +228,111 @@ partial class ContainerAnalyzer
             }
         }
 
+        AddDefaultSettingsImplementationTypes(resolved, analyzerContext, cancellationToken);
+
         return resolved;
     }
+
+    /// <summary>
+    /// Adds the registrations of <c>[IocRegisterDefaults(ImplementationTypes = ...)]</c> in the current assembly.
+    /// Mirrors the generator's <c>CreateRegistrationDataFromDefaultSettings</c>: the settings of the attribute apply
+    /// directly, without a default settings lookup.
+    /// </summary>
+    private static void AddDefaultSettingsImplementationTypes(
+        List<ResolvedRegistration> resolved,
+        ContainerAnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        foreach(var defaults in analyzerContext.DefaultSettings)
+        {
+            foreach(var implementationType in defaults.ImplementationTypes)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // A closed implementation is registered as the types of its hierarchy named like the target or the
+                // service types; when none matches (e.g. Razor components), as the target and service types themselves.
+                var declaredServiceTypes = IsOpenGeneric(implementationType)
+                    ? []
+                    : FindServiceTypesByName(implementationType, defaults);
+                if(declaredServiceTypes.Count == 0)
+                    declaredServiceTypes = [.. defaults.ServiceTypes, defaults.TargetType];
+
+                var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default) { implementationType };
+                AddExplicitServiceTypes(serviceTypes, implementationType, declaredServiceTypes);
+
+                if(defaults.RegisterAllInterfaces)
+                    serviceTypes.UnionWith(implementationType.AllInterfaces);
+
+                if(defaults.RegisterAllBaseClasses)
+                    serviceTypes.UnionWith(EnumerateBaseClasses(implementationType));
+
+                resolved.Add(new ResolvedRegistration(
+                    implementationType,
+                    Key: null,
+                    [.. serviceTypes],
+                    defaults.Tags,
+                    ExplicitContainer: null));
+            }
+        }
+
+        // Mirrors FindClosedServiceTypesFromImplementation, which compares names without generic arguments
+        static List<INamedTypeSymbol> FindServiceTypesByName(INamedTypeSymbol implementationType, DefaultSettings defaults)
+        {
+            var result = new List<INamedTypeSymbol>();
+            foreach(var target in defaults.ServiceTypes.Prepend(defaults.TargetType))
+            {
+                foreach(var candidate in implementationType.AllInterfaces.Concat(EnumerateBaseClasses(implementationType)))
+                {
+                    if(candidate.Name == target.Name
+                        && SymbolEqualityComparer.Default.Equals(candidate.ContainingSymbol, target.ContainingSymbol))
+                    {
+                        result.Add(candidate);
+                    }
+                }
+            }
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Adds explicit service types like the generator's <c>AddExplicitServiceType</c>: a closed implementation is
+    /// registered as each closed form of an open generic service type that it implements or inherits
+    /// (e.g. <c>typeof(IHandler&lt;&gt;)</c> for <c>Handler : IHandler&lt;string&gt;</c>).
+    /// Without such a form, the open type is kept.
+    /// </summary>
+    private static void AddExplicitServiceTypes(
+        HashSet<INamedTypeSymbol> serviceTypes,
+        INamedTypeSymbol implementationType,
+        IEnumerable<INamedTypeSymbol> explicitServiceTypes)
+    {
+        var isClosedImplementation = !IsOpenGeneric(implementationType);
+        foreach(var serviceType in explicitServiceTypes)
+        {
+            if(isClosedImplementation && serviceType.IsUnboundGenericType)
+            {
+                var closed = false;
+                foreach(var candidate in implementationType.AllInterfaces.Concat(EnumerateBaseClasses(implementationType)))
+                {
+                    if(candidate.IsGenericType
+                        && SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, serviceType.OriginalDefinition))
+                    {
+                        serviceTypes.Add(candidate);
+                        closed = true;
+                    }
+                }
+
+                if(closed)
+                    continue;
+            }
+
+            serviceTypes.Add(serviceType);
+        }
+    }
+
+    private static bool IsOpenGeneric(INamedTypeSymbol type)
+        => type.IsUnboundGenericType
+            || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
 
     /// <summary>
     /// Builds the default settings lookup with the generator's precedence: settings of the current assembly
@@ -576,6 +680,7 @@ partial class ContainerAnalyzer
         bool registerAllInterfaces,
         bool registerAllBaseClasses,
         ImmutableArray<string> tags,
+        ImmutableArray<INamedTypeSymbol> implementationTypes,
         bool isGeneric,
         SyntaxReference? syntax)
     {
@@ -584,6 +689,12 @@ partial class ContainerAnalyzer
         public bool RegisterAllInterfaces { get; } = registerAllInterfaces;
         public bool RegisterAllBaseClasses { get; } = registerAllBaseClasses;
         public ImmutableArray<string> Tags { get; } = tags;
+
+        /// <summary>
+        /// Implementation types registered with these settings. Only registrations of the current assembly are
+        /// created; the generator ignores them for settings imported from a module assembly.
+        /// </summary>
+        public ImmutableArray<INamedTypeSymbol> ImplementationTypes { get; } = implementationTypes;
         public bool IsGeneric { get; } = isGeneric;
         public SyntaxReference? Syntax { get; } = syntax;
     }
