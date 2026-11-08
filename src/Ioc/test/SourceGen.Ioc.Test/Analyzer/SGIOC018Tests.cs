@@ -1107,7 +1107,7 @@ public class SGIOC018Tests
     }
 
     [Test]
-    public async Task SGIOC018_ExplicitOnly_OpenGenericRegistration_ClosedDependency_ReportsDiagnostic()
+    public async Task SGIOC018_ExplicitOnly_OpenGenericRegistration_ClosedDependency_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -1128,6 +1128,38 @@ public class SGIOC018Tests
 
             [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
             [IocRegisterFor(typeof(Repository<>), ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_ExplicitOnly_OpenGenericRegistrationOutsideContainer_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class User { }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> { }
+
+            public class Consumer
+            {
+                public Consumer(IRepository<User> repository) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
             [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
             public partial class TestContainer { }
             """;

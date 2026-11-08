@@ -450,6 +450,21 @@ public sealed class ContainerTests
         await Assert.That(third).IsSameReferenceAs(first);
     }
 
+    [Test]
+    public async Task ExplicitOnly_OpenGenericRegistration_ResolvesClosedForms()
+    {
+        using var container = new StandaloneExplicitContainer();
+
+        var consumer = container.GetRequiredService<StandaloneRepositoryConsumer>();
+        var user = container.GetService<IStandaloneRepository<StandaloneUser>>();
+        var order = container.GetService<IStandaloneRepository<StandaloneOrder>>();
+        var invoice = container.GetService<IStandaloneRepository<StandaloneInvoice>>();
+
+        await Assert.That(consumer.Repository).IsSameReferenceAs(user);
+        await Assert.That(order).IsNotNull();
+        await Assert.That(invoice).IsNotNull();
+    }
+
     #endregion
 
     #region Helper Types

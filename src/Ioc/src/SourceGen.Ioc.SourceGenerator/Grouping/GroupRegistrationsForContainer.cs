@@ -58,25 +58,37 @@ partial class IocSourceGenerator
     /// Groups explicit registrations for ExplicitOnly containers.
     /// Each explicit registration is processed like an assembly registration (default settings, explicit service types,
     /// RegisterAllInterfaces and RegisterAllBaseClasses), so it exposes the same service types.
+    /// Open generic explicit registrations are closed for the dependencies of the explicit registrations, the
+    /// IServiceProvider invocations of the compilation and the [IocDiscover] on the container class.
     /// </summary>
     private static ContainerWithGroups GroupExplicitOnlyRegistrations(
         ContainerModel container,
         DefaultSettingsMap defaultSettings,
+        ImmutableArray<ClosedGenericDependency> invocationDependencies,
         IocFeatures features,
         ImmutableEquatableArray<string> requestedCollectionServiceTypes,
         CancellationToken ct)
     {
-        var registrations = new List<ServiceRegistrationModel>(container.ExplicitRegistrations.Length);
-
+        var basicResults = ImmutableArray.CreateBuilder<BasicRegistrationResult>(container.ExplicitRegistrations.Length);
         foreach(var explicitReg in container.ExplicitRegistrations)
         {
-            registrations.AddRange(ProcessSingleRegistration(explicitReg, defaultSettings, ct).ServiceRegistrations);
+            basicResults.Add(ProcessSingleRegistration(explicitReg, defaultSettings, ct));
         }
+
+        var closedGenericDependencies = CollectUniqueClosedGenericDependencies(
+            invocationDependencies,
+            [.. container.ExplicitDiscoveredDependencies],
+            ct);
+        var registrations = CombineAndResolveClosedGenerics(
+            basicResults.MoveToImmutable(),
+            closedGenericDependencies,
+            [],
+            ct);
 
         var reservedNames = GetReservedNames(container);
 
         var groups = BuildContainerRegistrationGroups(
-            registrations.ToImmutableEquatableArray(),
+            registrations.Select(static r => r.Registration).ToImmutableEquatableArray(),
             features,
             container.ThreadSafeStrategy,
             container.EagerResolveOptions,

@@ -575,11 +575,9 @@ partial class ContainerAnalyzer
         {
             if(container.ExplicitOnly)
             {
-                return new RegistrationSet(
-                    registrations
-                        .Where(r => SymbolEqualityComparer.Default.Equals(r.ExplicitContainer, container.Symbol))
-                        .ToList(),
-                    includeOpenGenerics: false);
+                return new RegistrationSet(registrations
+                    .Where(r => SymbolEqualityComparer.Default.Equals(r.ExplicitContainer, container.Symbol))
+                    .ToList());
             }
 
             if(container.IncludeTags.IsEmpty)
@@ -597,15 +595,14 @@ partial class ContainerAnalyzer
     /// </summary>
     private sealed class RegistrationSet
     {
-        /// <param name="includeOpenGenerics">Whether open generic registrations resolve their closed forms (not in ExplicitOnly containers).</param>
-        public RegistrationSet(List<ResolvedRegistration> registrations, bool includeOpenGenerics = true)
+        public RegistrationSet(List<ResolvedRegistration> registrations)
         {
             Registrations = registrations;
             foreach(var registration in registrations)
             {
                 foreach(var serviceType in registration.ServiceTypes)
                 {
-                    Services.Add(serviceType, registration.KeyValue, includeOpenGenerics);
+                    Services.Add(serviceType, registration.KeyValue);
                     ServiceKeys.Add(new(serviceType, registration.Key));
                 }
             }
@@ -642,18 +639,12 @@ partial class ContainerAnalyzer
 
         /// <summary>
         /// Adds a service. An open generic service type is added as its generic type definition, which resolves every
-        /// closed form (the generator closes open generic registrations on demand); it is skipped when
-        /// <paramref name="includeOpenGenerics"/> is <see langword="false"/> (ExplicitOnly containers do not close them).
+        /// closed form (the generator closes open generic registrations for the dependencies it discovers).
         /// </summary>
-        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key, bool includeOpenGenerics)
+        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key)
         {
             if(IsOpenGeneric(serviceType))
-            {
-                if(!includeOpenGenerics)
-                    return;
-
                 serviceType = serviceType.OriginalDefinition;
-            }
 
             if(key is not { } keyValue)
             {

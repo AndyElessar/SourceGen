@@ -411,9 +411,9 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 - Reports when a dependency cannot be resolved and there is no fallback to external `IServiceProvider`.
 - Does NOT report for a container that imports a module from another assembly (directly or through a same-compilation module), because that module's registrations cannot be enumerated.
 
-- Open generic registrations: the generator closes them on demand for the dependencies it discovers, except in `ExplicitOnly` containers.
-  - In a container without `ExplicitOnly`, a closed generic dependency (e.g. `IRepository<User>`) is resolved by a registration of its open generic service type (`IRepository<>`), with the same key rules. The sources are open generic registrations of the compilation, current-assembly `[IocRegisterDefaults]` with a `Factory` and an open generic target, and the open generic `[IocRegisterFor]` of every imported module (recursively; for any `[IocImportModule]` of the compilation, like the generator's `ExtractOpenGenericEntriesFromModuleRecursive`).
-  - In an `ExplicitOnly` container, open generic registrations do not resolve closed dependencies.
+- Open generic registrations: the generator closes them on demand for the dependencies it discovers, so a closed generic dependency (e.g. `IRepository<User>`) is resolved by a registration of its open generic service type (`IRepository<>`) in the container's own registrations, with the same key rules.
+  - In a container without `ExplicitOnly`, the sources are open generic registrations of the compilation, current-assembly `[IocRegisterDefaults]` with a `Factory` and an open generic target, and the open generic `[IocRegisterFor]` of every imported module (recursively; for any `[IocImportModule]` of the compilation, like the generator's `ExtractOpenGenericEntriesFromModuleRecursive`).
+  - In an `ExplicitOnly` container, only the open generic `[IocRegisterFor]` on the container class.
   - Dependencies that use type parameters of an open generic implementation (e.g. `IValidator<T>` in `Repository<T>`) are not checked, because they depend on the closed forms the generator creates. Implementations declared in another assembly are not analyzed.
 
 **Limitations:**

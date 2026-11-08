@@ -113,7 +113,7 @@ Configure generation with `IocContainerAttribute` properties:
 |Property|Default|Description|
 |:---|:---|:---|
 |`IntegrateServiceProvider`|`true`|Allow fallback to external `IServiceProvider` for unknown services. The generated container does not resolve `IServiceCollection` by itself.|
-|`ExplicitOnly`|`false`|Only include services registered by `[IocRegisterFor]` on this container class. Each one exposes the same service types as an assembly registration (`ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`, and `[IocRegisterDefaults]`).|
+|`ExplicitOnly`|`false`|Only include services registered by `[IocRegisterFor]` on this container class. Each one exposes the same service types as an assembly registration (`ServiceTypes`, `RegisterAllInterfaces`, `RegisterAllBaseClasses`, and `[IocRegisterDefaults]`). Open generic ones are closed for the container's dependencies, `GetService<T>()` calls, and `[IocDiscover]` on the container class.|
 |`IncludeTags`|`[]`|Include only services that match at least one tag.|
 |`UseSwitchStatement`|`false`|Use switch/if resolver path instead of `FrozenDictionary` (typically only beneficial for small service counts).|
 |`ThreadSafeStrategy`|`ThreadSafeStrategy.Lock`|Thread-safety model for singleton/scoped cache initialization.|

@@ -214,6 +214,53 @@ public class ContainerOptionsTests
     }
 
     [Test]
+    public async Task Container_WithExplicitOnlyMode_ClosesOpenGenericRegistrations()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class User { }
+            public class Order { }
+            public class Invoice { }
+            public class Unused { }
+
+            public interface IRepository<T> { }
+
+            public class Repository<T> : IRepository<T> { }
+
+            public class Consumer
+            {
+                public Consumer(IRepository<User> repository) { }
+            }
+
+            // Not on the container: does not close the ExplicitOnly container's registrations
+            [IocDiscover<IRepository<Unused>>]
+            public class Elsewhere
+            {
+                public static object? Resolve(IServiceProvider provider) => provider.GetService<IRepository<Invoice>>();
+            }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Repository<>), ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]
+            [IocDiscover<IRepository<Order>>]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ExplicitContainer.Container.g.cs");
+
+        await Assert.That(generatedSource).IsNotNull();
+        await Assert.That(generatedSource!).DoesNotContain("IRepository<global::TestNamespace.Unused>");
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithExplicitOnlyAndIncludeTags_ExplicitOnlyTakesPrecedence()
     {
         const string source = """
