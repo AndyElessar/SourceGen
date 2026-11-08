@@ -1081,4 +1081,62 @@ public class SGIOC021Tests
 
         await Assert.That(sgioc021).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC021_ExplicitOnly_ServiceRegisteredOutsideContainer_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister<IMyService>(ServiceLifetime.Singleton)]
+            public class MyService : IMyService { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            public partial class TestContainer
+            {
+                public partial IMyService GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
+        await Assert.That(sgioc021).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC021_ServiceOnlyInImportedModule_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            public class MyService : IMyService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public partial class ServiceModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<ServiceModule>]
+            public partial class TestContainer
+            {
+                public partial IMyService GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
+        await Assert.That(sgioc021).Count().IsEqualTo(1);
+    }
 }

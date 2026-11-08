@@ -49,7 +49,8 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Resolves a keyed method parameter and emits its variable declaration.
+    /// Resolves a parameter of a keyed method and emits its variable declaration.
+    /// The key of the method applies when the parameter has no key of its own.
     /// </summary>
     private static string? ResolveMethodParameterWithKey(
         SourceWriter writer,
@@ -61,7 +62,9 @@ partial class IocSourceGenerator
         Func<TypeData, string>? typeNameResolver,
         ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
     {
-        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, methodKey, isOptional: false, typeNameResolver, asyncInitServiceTypeNames, out var resolvedVar))
+        var key = param.ServiceKey ?? methodKey;
+
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, key, isOptional: false, typeNameResolver, asyncInitServiceTypeNames, out var resolvedVar))
         {
             return resolvedVar!;
         }
@@ -69,12 +72,12 @@ partial class IocSourceGenerator
         var resolvedTypeName = typeNameResolver is not null ? typeNameResolver(param.Type) : param.Type.Name;
         if(param.HasDefaultValue && param.GetFallbackValue(resolvedTypeName) is { } fallbackValue)
         {
-            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(resolvedTypeName, methodKey, fallbackValue)};");
+            writer.WriteLine($"var {paramVar} = {BuildOptionalServiceCallWithFallback(resolvedTypeName, key, fallbackValue)};");
             return paramVar;
         }
 
-        var methodName = GetServiceResolutionMethod(methodKey, isOptional: param.HasDefaultValue);
-        writer.WriteLine($"var {paramVar} = {BuildServiceCall(methodName, resolvedTypeName, methodKey)}{(param.HasDefaultValue ? " ?? default" : "")};");
+        var methodName = GetServiceResolutionMethod(key, isOptional: param.HasDefaultValue);
+        writer.WriteLine($"var {paramVar} = {BuildServiceCall(methodName, resolvedTypeName, key)}{(param.HasDefaultValue ? " ?? default" : "")};");
         return paramVar;
     }
 

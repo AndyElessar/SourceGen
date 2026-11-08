@@ -260,14 +260,18 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
             .Where(static source => (source.Right & IocFeatures.Container) != 0)
             .Select(static (source, _) => source.Left);
 
+        // ExplicitOnly containers close their open generic registrations for their own dependencies, the
+        // IServiceProvider invocations of the compilation and the [IocDiscover] on the container class.
         var explicitOnlyContainerWithGroups = enabledContainers
             .Where(static c => c.ExplicitOnly)
+            .Combine(combinedDefaultSettings)
+            .Combine(invocations)
             .Combine(msbuildPropertiesProvider)
             .Combine(requestedCollectionServiceTypes)
-            .Select(static (source, _) =>
+            .Select(static (source, ct) =>
             {
-                var ((container, msbuildProps), requestedCollections) = source;
-                return GroupExplicitOnlyRegistrations(container, msbuildProps.Features, requestedCollections);
+                var ((((container, defaultSettings), invocationDependencies), msbuildProps), requestedCollections) = source;
+                return GroupExplicitOnlyRegistrations(container, defaultSettings, invocationDependencies, msbuildProps.Features, requestedCollections, ct);
             })
             .WithTrackingName("ExplicitContainerGroups");
 

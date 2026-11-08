@@ -73,7 +73,26 @@ partial class StandaloneContainer
 
 ## ExplicitOnly = true
 
-Only register services explicitly marked on the container class:
+Only register services explicitly marked on the container class (`[IocRegisterFor]` / `[IocRegisterFor<T>]`).
+Each explicit registration MUST be processed like an assembly registration: it is registered as its implementation type, its `ServiceTypes`, all interfaces when `RegisterAllInterfaces = true`, all base classes when `RegisterAllBaseClasses = true`, and the settings of a matching `[IocRegisterDefaults]` apply.
+
+Open generic explicit registrations MUST be closed on demand (see [Container Generics](Container.Generics.spec.md)) for these closed generic types:
+
+- dependencies of the explicit registrations (constructor parameters, injected members, decorators);
+- `IServiceProvider` invocations of the compilation (`GetService<T>()`, `GetRequiredService<T>()`, ...);
+- `[IocDiscover]` / `[IocDiscover<T>]` on the container class. `[IocDiscover]` elsewhere does not close the registrations of an `ExplicitOnly` container.
+
+Open generic registrations that are not on the container class (assembly registrations, `[IocRegisterDefaults]` factories, imported module registrations) are not included.
+
+```csharp
+#region Define:
+[IocContainer(ExplicitOnly = true)]
+[IocRegisterFor(typeof(Repository<>), ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+[IocRegisterFor<Consumer>(ServiceLifetime.Singleton)]   // Consumer(IRepository<User>) → closes Repository<User>
+[IocDiscover<IRepository<Order>>]                       // → closes Repository<Order>
+public partial class ExplicitContainer;
+#endregion
+```
 
 ```csharp
 #region Define:

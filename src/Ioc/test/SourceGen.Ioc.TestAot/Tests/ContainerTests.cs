@@ -434,6 +434,39 @@ public sealed class ContainerTests
 
     #endregion
 
+    #region ExplicitOnly Tests
+
+    [Test]
+    public async Task ExplicitOnly_RegistrationWithSeveralServiceTypes_ResolvesEveryServiceType()
+    {
+        using var container = new StandaloneExplicitContainer();
+
+        var first = container.GetService<IStandaloneFirst>();
+        var second = container.GetService<IStandaloneSecond>();
+        var third = container.GetService<IStandaloneThird>();
+
+        await Assert.That(first).IsNotNull();
+        await Assert.That(second).IsSameReferenceAs(first);
+        await Assert.That(third).IsSameReferenceAs(first);
+    }
+
+    [Test]
+    public async Task ExplicitOnly_OpenGenericRegistration_ResolvesClosedForms()
+    {
+        using var container = new StandaloneExplicitContainer();
+
+        var consumer = container.GetRequiredService<StandaloneRepositoryConsumer>();
+        var user = container.GetService<IStandaloneRepository<StandaloneUser>>();
+        var order = container.GetService<IStandaloneRepository<StandaloneOrder>>();
+        var invoice = container.GetService<IStandaloneRepository<StandaloneInvoice>>();
+
+        await Assert.That(consumer.Repository).IsSameReferenceAs(user);
+        await Assert.That(order).IsNotNull();
+        await Assert.That(invoice).IsNotNull();
+    }
+
+    #endregion
+
     #region Helper Types
 
     /// <summary>Unregistered service for testing null/exception scenarios.</summary>

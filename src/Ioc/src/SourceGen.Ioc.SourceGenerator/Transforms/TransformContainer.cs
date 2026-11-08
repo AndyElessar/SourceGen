@@ -84,6 +84,11 @@ partial class IocSourceGenerator
             ? ExtractExplicitRegistrations(typeSymbol, ctx.SemanticModel)
             : [];
 
+        // [IocDiscover] on an ExplicitOnly container closes its open generic registrations
+        var explicitDiscoveredDependencies = explicitOnly
+            ? ExtractDiscoveredDependencies(typeSymbol)
+            : [];
+
         // Extract user-declared partial methods/properties for direct service resolution
         var partialAccessors = ExtractPartialAccessors(typeSymbol, ctx.SemanticModel);
 
@@ -121,6 +126,7 @@ partial class IocSourceGenerator
             eagerResolveOptions,
             importedModules,
             explicitRegistrations,
+            explicitDiscoveredDependencies,
             partialAccessors,
             implementControllerActivator,
             implementComponentActivator,
@@ -271,6 +277,36 @@ partial class IocSourceGenerator
         }
 
         return modules.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// Extracts the closed generic types of [IocDiscover] / [IocDiscover&lt;T&gt;] on the container class.
+    /// </summary>
+    private static ImmutableEquatableArray<ClosedGenericDependency> ExtractDiscoveredDependencies(INamedTypeSymbol containerSymbol)
+    {
+        var dependencies = new List<ClosedGenericDependency>();
+
+        foreach(var attr in containerSymbol.GetAttributes())
+        {
+            if(attr.AttributeClass is not { } attrClass)
+                continue;
+
+            var metadataName = attrClass.IsGenericType ? attrClass.OriginalDefinition.MetadataName : attrClass.MetadataName;
+            var metadataNamespace = attrClass.ContainingNamespace?.ToDisplayString() ?? "";
+            var fullName = string.IsNullOrEmpty(metadataNamespace) ? metadataName : $"{metadataNamespace}.{metadataName}";
+
+            var closedType = fullName switch
+            {
+                Constants.IocDiscoverAttributeFullName when attr.ConstructorArguments is [{ Value: INamedTypeSymbol type }] => type,
+                Constants.IocDiscoverAttributeFullName_T1 when attrClass.TypeArguments is [INamedTypeSymbol type] => type,
+                _ => null,
+            };
+
+            if(closedType is not null && CreateClosedGenericDependency(closedType) is { } dependency)
+                dependencies.Add(dependency);
+        }
+
+        return dependencies.ToImmutableEquatableArray();
     }
 
     /// <summary>

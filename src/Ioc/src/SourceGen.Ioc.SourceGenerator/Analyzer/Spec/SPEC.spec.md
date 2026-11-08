@@ -64,15 +64,15 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 1. Parse `SourceGenIocFeatures`
 2. Build `IocAttributeSymbols`
 3. Early exit if `IocContainerAttribute` unavailable
-4. Build `ContainerAnalyzerContext`: `RegisteredServiceTypes`, `ServiceImplementationTypes`, `Registrations`, `ContainersWithNoFallback`, `AllContainers`, `ImportEdges`
-5. Collect assembly-level register-for registrations
+4. Build `ContainerAnalyzerContext`: `Registrations`, `DefaultSettings`, `ModuleImports`, `Containers`, `ImportEdges`
+5. Collect assembly-level register-for registrations and register-defaults settings
 
 #### Registered Actions
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
 | Symbol (NamedType) | `AnalyzeContainerClass` | Container feature gate, partial/static/record validation, import edges, UseSwitchStatement | SGIOC019, 020, 031 |
-| Symbol (NamedType) | `CollectRegisteredServices` | Collect registrations from IocRegister/IocRegisterFor | Feeds 018, 021, 027, 029 |
+| Symbol (NamedType) | `CollectRegistrationAttributes` | Collect registrations (IocRegister/IocRegisterFor), type-level IocRegisterDefaults and IocImportModule | Feeds 018, 021, 027, 029 |
 | CompilationEnd | `AnalyzeContainerDependencies` | Async accessor contracts, container dependency resolvability | SGIOC018, 021, 027, 029 |
 | CompilationEnd | `AnalyzeCircularImports` | Module import cycle detection via DFS | SGIOC025 |
 
@@ -80,9 +80,29 @@ The two named type handlers run in one registered action.
 
 #### CompilationEnd: AnalyzeContainerDependencies
 
-Setup: `BuildAsyncInitServiceKeys` builds the (service type, key) pairs with an async-init implementation once (empty when `AsyncMethodInject` is disabled)
+Setup: `ResolveRegistrations` applies `[IocRegisterDefaults]` to every registration once (see [Registration Resolution](#registration-resolution)); `BuildAsyncInitServiceKeys` builds the (service type, key) pairs with an async-init implementation once (empty when `AsyncMethodInject` is disabled)
 Pass 1 (all containers): `AnalyzeAsyncPartialAccessors` → SGIOC027 (sync accessor on async-init), SGIOC029 (unsupported async return)
-Pass 2 (IntegrateServiceProvider=false only): `CollectUnresolvedDependencies` runs once, then each container reports them (SGIOC018) and runs `AnalyzePartialAccessorDependencies` (SGIOC021)
+Pass 2 (IntegrateServiceProvider=false only): `ContainerScopeBuilder` computes each container's registrations (see [Container Scope](#container-scope)); `CollectUnresolvedDependencies` checks them (SGIOC018) and `AnalyzePartialAccessorDependencies` checks the partial accessors (SGIOC021). Dependencies of each implementation type are inspected once (`DependencyCache`), and containers that use every registration of the compilation share one SGIOC018 result.
+
+#### Registration Resolution
+
+Mirrors the generator's `ProcessSingleRegistration`:
+
+- Defaults order: current-assembly `[IocRegisterDefaults]` (non-generic attributes, then generic attributes, each in source order), then the defaults of imported module assemblies (settings on the module type, then assembly-level settings). The first settings for a target type win.
+- Defaults match the implementation's base classes, then its interfaces, exactly or by generic type definition. Each matched type becomes a service type; the first match is the best default.
+- The best default adds its `ServiceTypes`, and supplies `Tags`, `RegisterAllInterfaces` and `RegisterAllBaseClasses` when the registration does not set them.
+- An open generic service type (explicit or from defaults) of a closed implementation is replaced by each closed form the implementation implements or inherits, like the generator's `AddExplicitServiceType`.
+- `[IocRegisterDefaults(ImplementationTypes = ...)]` of the current assembly adds a registration per implementation type with the attribute's settings and no default settings lookup (`CreateRegistrationDataFromDefaultSettings`): a closed implementation is registered as the types of its hierarchy named like the target or `ServiceTypes` (ignoring generic arguments), or as the target and `ServiceTypes` when none matches. `ImplementationTypes` of imported module defaults add no registration.
+
+#### Container Scope
+
+| Container | Own registrations |
+| :-------- | :---------------- |
+| `ExplicitOnly = true` | `[IocRegisterFor]` on the container class |
+| `IncludeTags` non-empty | Registrations with at least one matching (effective) tag |
+| Otherwise | All registrations of the compilation |
+
+The container's service types are the service types of its own registrations plus the service types of its imported modules (same-compilation modules use their own scope, recursively). A module from another assembly cannot be enumerated: its container is marked as having an external module.
 
 ### Diagnostic Coverage
 
@@ -375,14 +395,33 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 **Analysis:**
 
 - Applies only when `[IocContainer(IntegrateServiceProvider = false)]` is used.
-- Analyzes every registered implementation type. Service types that are only exposed by a registration (interfaces, base classes from `RegisterAllBaseClasses`, explicit `ServiceTypes`) are NOT analyzed as implementations, because the generator only constructs the implementation type and injects the members declared on it.
-- The unresolved dependencies are collected once per compilation and reported for each container with `IntegrateServiceProvider = false`.
-- For each implementation type's dependencies:
-  - Constructor parameters: Checks if the dependency type is registered in the container.
-  - Properties/Fields with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.
-  - Method parameters with `[IocInject]` or `[Inject]`: Checks if the dependency type is registered in the container.
+- Each container is analyzed with its own registrations ([Container Scope](#container-scope)): `ExplicitOnly`, `IncludeTags` and imported modules decide which implementation types are analyzed and which service types resolve a dependency.
+- Analyzes every implementation type of the container's own registrations. Implementations of imported modules are analyzed as part of their own container. Service types that are only exposed by a registration (interfaces, base classes from `RegisterAllBaseClasses`, explicit `ServiceTypes`) are NOT analyzed as implementations, because the generator only constructs the implementation type and injects the members declared on it.
+- The dependencies checked depend on how the container creates the instance of a registration:
+  - Constructor (default): the constructor parameters, the properties, fields and method parameters with `[IocInject]` or `[Inject]`, and the members listed in `InjectMembers` (`[IocInject]` on a member takes precedence). `InjectMembers` dependencies are reported on their attribute element, so they are checked even when the implementation type is declared in another assembly.
+  - `Factory` (of the registration, otherwise of the matching `[IocRegisterDefaults]`): only the factory method parameters, except `IServiceProvider` and `[ServiceKey]`. The constructor and injected members are not checked. A factory that cannot be resolved (a string, or settings imported from another assembly) is not analyzed. Factory methods declared in another assembly are not analyzed.
+  - `Instance`: no dependencies.
+- For each dependency:
+  - Checks if the dependency type is a service type of the container (including its imported modules).
+  - Supported wrappers resolve their inner service with the same key, like the generator: collections (`IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`), `Lazy<T>`, `Func<T>` and `KeyValuePair<TKey, T>` unwrap recursively (e.g. `IEnumerable<Lazy<T>>`); `Task<T>` and `Func<..., T>` with input parameters need a registration of `T` itself; `IDictionary<TKey, T>` (and `IReadOnlyDictionary`, `Dictionary`) and collections of `KeyValuePair<TKey, T>` need a non-keyed dependency and a keyed registration of `T`. `ValueTask<T>` and unsupported nesting (e.g. `Task<Lazy<T>>`) are plain service types. Array dependencies are not checked.
+  - Injected `IEnumerable<T>` properties are not checked.
   - Checks if the dependency type is a built-in service type (e.g., `IServiceProvider`, `IServiceScopeFactory`).
+  - Parameters with a default value or `[ServiceKey]`, and `[FromKeyedServices]` without a key, are not checked.
+- Keyed dependencies: the key of a parameter is the key of `[FromKeyedServices(key)]`, otherwise the key of `[IocInject]` / `[Inject]` on the parameter, otherwise the key of its injected method (`[IocInject(Key = ...)]` on the method, or the key of its `InjectMembers` element); the key of a property or field is the key of its `[IocInject]` / `[Inject]` or `InjectMembers` element.
+  - A keyed dependency is resolved by a registration of the same service type with the same key; a non-keyed dependency only by a non-keyed registration. Generated containers look keyed services up by key value (`ServiceIdentifier`), so keys are compared by constant value and type (e.g. the enum `Region.West` does not match the integer `1`).
+  - A key given as C# code (`KeyType = KeyType.Csharp`) cannot be evaluated: a registration with such a key resolves any keyed dependency of its service type, and a dependency with such a key is resolved by any registration of its service type.
+  - The message shows the key: `Unable to resolve service 'IDependency (key "A")' for container 'AppContainer'`.
 - Reports when a dependency cannot be resolved and there is no fallback to external `IServiceProvider`.
+- Does NOT report for a container that imports a module from another assembly (directly or through a same-compilation module), because that module's registrations cannot be enumerated.
+
+- Open generic registrations: the generator closes them on demand for the dependencies it discovers, so a closed generic dependency (e.g. `IRepository<User>`) is resolved by a registration of its open generic service type (`IRepository<>`) in the container's own registrations, with the same key rules.
+  - In a container without `ExplicitOnly`, the sources are open generic registrations of the compilation, current-assembly `[IocRegisterDefaults]` with a `Factory` and an open generic target, and the open generic `[IocRegisterFor]` of every imported module (recursively; for any `[IocImportModule]` of the compilation, like the generator's `ExtractOpenGenericEntriesFromModuleRecursive`).
+  - In an `ExplicitOnly` container, only the open generic `[IocRegisterFor]` on the container class.
+  - Dependencies that use type parameters of an open generic implementation (e.g. `IValidator<T>` in `Repository<T>`) are not checked, because they depend on the closed forms the generator creates. Implementations declared in another assembly are not analyzed.
+
+**Limitations:**
+
+- Generic constraints are not checked when matching an open generic registration (the generator then emits code that does not compile).
 
 **Message format:** `Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`
 
@@ -443,7 +482,8 @@ Report when a partial method or property accessor in a container class reference
   - For supported wrapper shapes that successfully unwrap, registration lookup and the diagnostic message use the innermost service type.
   - For downgraded or unsupported wrapper shapes whose innermost service type is not async-init, the accessor is treated as unresolvable and the diagnostic message uses the full return type.
   - For non-wrapper types, the return type itself is checked directly.
-- Reports when a non-nullable partial accessor's effective service type is not found among registered services.
+- Reports when a non-nullable partial accessor's effective service type is not found among the container's own registrations ([Container Scope](#container-scope)), with the same service key.
+- Services of imported modules do NOT satisfy a partial accessor, because the generated accessor only uses the container's own resolvers when `IntegrateServiceProvider = false`.
 - Nullable accessors are exempt (can safely return `null`).
 
 **Rationale:**

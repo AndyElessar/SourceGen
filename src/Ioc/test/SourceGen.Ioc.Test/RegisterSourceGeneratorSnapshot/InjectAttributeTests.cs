@@ -613,6 +613,43 @@ public class InjectAttributeTests
     }
 
     [Test]
+    public async Task InjectAttribute_KeyedMethod_ParameterKeyTakesPrecedence()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface ILogger { }
+
+            [IocRegister(ServiceTypes = [typeof(ILogger)], Key = "file")]
+            public class FileLogger : ILogger { }
+
+            [IocRegister(ServiceTypes = [typeof(ILogger)], Key = "console")]
+            public class ConsoleLogger : ILogger { }
+
+            [IocRegister]
+            public class MyService
+            {
+                [IocInject(Key = "file")]
+                public void Initialize(
+                    ILogger fileLogger,
+                    [FromKeyedServices("console")] ILogger consoleLogger,
+                    [IocInject(Key = "console")] ILogger injectedLogger)
+                {
+                }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ServiceKeyAttribute_MethodParameter_NonKeyedService_InjectsNull()
     {
         const string source = """

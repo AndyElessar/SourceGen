@@ -56,27 +56,39 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Groups explicit registrations for ExplicitOnly containers.
+    /// Each explicit registration is processed like an assembly registration (default settings, explicit service types,
+    /// RegisterAllInterfaces and RegisterAllBaseClasses), so it exposes the same service types.
+    /// Open generic explicit registrations are closed for the dependencies of the explicit registrations, the
+    /// IServiceProvider invocations of the compilation and the [IocDiscover] on the container class.
     /// </summary>
     private static ContainerWithGroups GroupExplicitOnlyRegistrations(
         ContainerModel container,
+        DefaultSettingsMap defaultSettings,
+        ImmutableArray<ClosedGenericDependency> invocationDependencies,
         IocFeatures features,
-        ImmutableEquatableArray<string> requestedCollectionServiceTypes)
+        ImmutableEquatableArray<string> requestedCollectionServiceTypes,
+        CancellationToken ct)
     {
-        var registrations = new List<ServiceRegistrationModel>(container.ExplicitRegistrations.Length);
-
+        var basicResults = ImmutableArray.CreateBuilder<BasicRegistrationResult>(container.ExplicitRegistrations.Length);
         foreach(var explicitReg in container.ExplicitRegistrations)
         {
-            var processed = ProcessExplicitRegistrationForContainer(explicitReg);
-            if(processed is not null)
-            {
-                registrations.Add(processed);
-            }
+            basicResults.Add(ProcessSingleRegistration(explicitReg, defaultSettings, ct));
         }
+
+        var closedGenericDependencies = CollectUniqueClosedGenericDependencies(
+            invocationDependencies,
+            [.. container.ExplicitDiscoveredDependencies],
+            ct);
+        var registrations = CombineAndResolveClosedGenerics(
+            basicResults.MoveToImmutable(),
+            closedGenericDependencies,
+            [],
+            ct);
 
         var reservedNames = GetReservedNames(container);
 
         var groups = BuildContainerRegistrationGroups(
-            registrations.ToImmutableEquatableArray(),
+            registrations.Select(static r => r.Registration).ToImmutableEquatableArray(),
             features,
             container.ThreadSafeStrategy,
             container.EagerResolveOptions,
@@ -84,30 +96,6 @@ partial class IocSourceGenerator
             requestedCollectionServiceTypes);
 
         return new ContainerWithGroups(container, groups);
-    }
-
-    /// <summary>
-    /// Converts explicit RegistrationData to ServiceRegistrationModel for container generation.
-    /// </summary>
-    private static ServiceRegistrationModel? ProcessExplicitRegistrationForContainer(RegistrationData data)
-    {
-        // Get the first service type, or use implementation type
-        var serviceType = data.ServiceTypes.Length > 0
-            ? data.ServiceTypes[0]
-            : data.ImplementationType;
-
-        return new ServiceRegistrationModel(
-            serviceType,
-            data.ImplementationType,
-            data.Lifetime,
-            data.Key,
-            data.KeyType,
-            data.KeyValueType,
-            data.ImplementationType is GenericTypeData { IsOpenGeneric: true },
-            data.Decorators,
-            data.InjectionMembers,
-            data.Factory,
-            data.Instance);
     }
 
     /// <summary>
