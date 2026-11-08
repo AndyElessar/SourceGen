@@ -141,6 +141,7 @@ partial class ContainerAnalyzer
             registerAllBaseClasses,
             [.. attribute.GetTags()],
             [.. attribute.GetImplementationTypeSymbols()],
+            attribute.NamedArguments.Any(static a => a.Key == "Factory" && !a.Value.IsNull),
             attrClass.IsGenericType,
             attribute.ApplicationSyntaxReference);
     }
@@ -231,8 +232,103 @@ partial class ContainerAnalyzer
         }
 
         AddDefaultSettingsImplementationTypes(resolved, analyzerContext, cancellationToken);
+        AddFactoryOpenGenericRegistrations(resolved, analyzerContext);
+        AddImportedOpenGenericRegistrations(resolved, analyzerContext, cancellationToken);
 
         return resolved;
+    }
+
+    /// <summary>
+    /// Adds the open generic registrations of current-assembly <c>[IocRegisterDefaults]</c> with a <c>Factory</c> and an
+    /// open generic target type, like the generator's <c>CreateOpenGenericEntriesFromDefaultSettings</c>.
+    /// </summary>
+    private static void AddFactoryOpenGenericRegistrations(
+        List<ResolvedRegistration> resolved,
+        ContainerAnalyzerContext analyzerContext)
+    {
+        foreach(var defaults in analyzerContext.DefaultSettings)
+        {
+            if(!defaults.HasFactory || !IsOpenGeneric(defaults.TargetType))
+                continue;
+
+            var targetType = defaults.TargetType.OriginalDefinition;
+            resolved.Add(new ResolvedRegistration(
+                targetType,
+                Key: null,
+                KeyValue: null,
+                [targetType],
+                defaults.Tags,
+                ExplicitContainer: null));
+        }
+    }
+
+    /// <summary>
+    /// Adds the open generic <c>[IocRegisterFor]</c> registrations of every imported module and, recursively, of the
+    /// modules it imports. Like the generator's <c>ExtractOpenGenericEntriesFromModuleRecursive</c>, they are added to
+    /// the registrations of the current assembly for every [IocImportModule] of the compilation; they expose the open
+    /// generic <c>ServiceTypes</c> and interfaces of the implementation.
+    /// </summary>
+    private static void AddImportedOpenGenericRegistrations(
+        List<ResolvedRegistration> resolved,
+        ContainerAnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        var attributeSymbols = analyzerContext.AttributeSymbols;
+        var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        foreach(var import in analyzerContext.ModuleImports)
+            AddModule(import.ModuleType);
+
+        void AddModule(INamedTypeSymbol moduleType)
+        {
+            if(!visited.Add(moduleType))
+                return;
+
+            foreach(var attribute in moduleType.GetAttributes())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if(attribute.AttributeClass is not { } attrClass)
+                    continue;
+
+                if(AnalyzerHelpers.IsIocImportModuleAttribute(attrClass, attributeSymbols))
+                {
+                    if(attribute.GetImportedModuleType() is { } importedModule)
+                        AddModule(importedModule);
+
+                    continue;
+                }
+
+                if(!AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, attributeSymbols)
+                    || attribute.GetTargetTypeFromRegisterForAttribute() is not { } targetType
+                    || !IsOpenGeneric(targetType))
+                {
+                    continue;
+                }
+
+                var implementationType = targetType.OriginalDefinition;
+                var explicitServiceTypes = AnalyzerHelpers.GetExplicitServiceTypes(attribute);
+                var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+                foreach(var serviceType in explicitServiceTypes.Count > 0
+                             ? explicitServiceTypes.Concat(implementationType.AllInterfaces)
+                             : implementationType.AllInterfaces)
+                {
+                    if(IsOpenGeneric(serviceType))
+                        serviceTypes.Add(serviceType.OriginalDefinition);
+                }
+
+                if(serviceTypes.Count == 0)
+                    continue;
+
+                var (key, _, _) = attribute.GetKeyInfo();
+                resolved.Add(new ResolvedRegistration(
+                    implementationType,
+                    key,
+                    GetAttributeServiceKey(attribute),
+                    [.. serviceTypes],
+                    [.. attribute.GetTags()],
+                    ExplicitContainer: null));
+            }
+        }
     }
 
     /// <summary>
@@ -479,9 +575,11 @@ partial class ContainerAnalyzer
         {
             if(container.ExplicitOnly)
             {
-                return new RegistrationSet(registrations
-                    .Where(r => SymbolEqualityComparer.Default.Equals(r.ExplicitContainer, container.Symbol))
-                    .ToList());
+                return new RegistrationSet(
+                    registrations
+                        .Where(r => SymbolEqualityComparer.Default.Equals(r.ExplicitContainer, container.Symbol))
+                        .ToList(),
+                    includeOpenGenerics: false);
             }
 
             if(container.IncludeTags.IsEmpty)
@@ -499,14 +597,15 @@ partial class ContainerAnalyzer
     /// </summary>
     private sealed class RegistrationSet
     {
-        public RegistrationSet(List<ResolvedRegistration> registrations)
+        /// <param name="includeOpenGenerics">Whether open generic registrations resolve their closed forms (not in ExplicitOnly containers).</param>
+        public RegistrationSet(List<ResolvedRegistration> registrations, bool includeOpenGenerics = true)
         {
             Registrations = registrations;
             foreach(var registration in registrations)
             {
                 foreach(var serviceType in registration.ServiceTypes)
                 {
-                    Services.Add(serviceType, registration.KeyValue);
+                    Services.Add(serviceType, registration.KeyValue, includeOpenGenerics);
                     ServiceKeys.Add(new(serviceType, registration.Key));
                 }
             }
@@ -541,8 +640,21 @@ partial class ContainerAnalyzer
         private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(SymbolEqualityComparer.Default);
         private readonly HashSet<KeyedService> _keyedValues = [];
 
-        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key)
+        /// <summary>
+        /// Adds a service. An open generic service type is added as its generic type definition, which resolves every
+        /// closed form (the generator closes open generic registrations on demand); it is skipped when
+        /// <paramref name="includeOpenGenerics"/> is <see langword="false"/> (ExplicitOnly containers do not close them).
+        /// </summary>
+        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key, bool includeOpenGenerics)
         {
+            if(IsOpenGeneric(serviceType))
+            {
+                if(!includeOpenGenerics)
+                    return;
+
+                serviceType = serviceType.OriginalDefinition;
+            }
+
             if(key is not { } keyValue)
             {
                 _nonKeyed.Add(serviceType);
@@ -564,7 +676,22 @@ partial class ContainerAnalyzer
             _keyedValues.UnionWith(other._keyedValues);
         }
 
-        public bool Contains(INamedTypeSymbol serviceType, ServiceKeyValue? key)
+        /// <summary>
+        /// Gets whether a service is registered. A closed generic type is also resolved by an open generic registration
+        /// of its generic type definition when <paramref name="matchOpenGenerics"/> is <see langword="true"/>.
+        /// </summary>
+        public bool Contains(INamedTypeSymbol serviceType, ServiceKeyValue? key, bool matchOpenGenerics = true)
+        {
+            if(ContainsExact(serviceType, key))
+                return true;
+
+            return matchOpenGenerics
+                && serviceType.IsGenericType
+                && !SymbolEqualityComparer.Default.Equals(serviceType, serviceType.OriginalDefinition)
+                && ContainsExact(serviceType.OriginalDefinition, key);
+        }
+
+        private bool ContainsExact(INamedTypeSymbol serviceType, ServiceKeyValue? key)
         {
             if(key is not { } keyValue)
                 return _nonKeyed.Contains(serviceType);
@@ -654,7 +781,9 @@ partial class ContainerAnalyzer
     /// SGIOC018: Collects the unregistered constructor and injected member dependencies of the implementation types
     /// registered in a container. Service types that are not implementation types (interfaces, base classes) are not
     /// analyzed, because the generator only constructs and injects the implementation type.
-    /// Implementations of imported modules are analyzed as part of their own container.
+    /// Implementations of imported modules are analyzed as part of their own container, and implementations declared in
+    /// another assembly are not analyzed. Dependencies that use type parameters of an open generic implementation are
+    /// not analyzed, because they depend on the closed forms the generator creates.
     /// </summary>
     private static List<(Location? Location, string ServiceType)> CollectUnresolvedDependencies(
         ContainerScope scope,
@@ -668,12 +797,16 @@ partial class ContainerAnalyzer
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if(!implementationTypes.Add(registration.ImplementationType))
+            if(!implementationTypes.Add(registration.ImplementationType)
+                || !registration.ImplementationType.Locations.Any(static l => l.IsInSource))
+            {
                 continue;
+            }
 
             foreach(var dependency in dependencyCache.Get(registration.ImplementationType, cancellationToken))
             {
-                if(!IsServiceRegistered(dependency.Type, dependency.Key, scope.Services))
+                if(!ContainsTypeParameter(dependency.Type)
+                    && !IsServiceRegistered(dependency.Type, dependency.Key, scope.Services))
                 {
                     var serviceType = dependency.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
                     unresolvedDependencies.Add((
@@ -700,6 +833,14 @@ partial class ContainerAnalyzer
 
         return false;
     }
+
+    private static bool ContainsTypeParameter(ITypeSymbol type) => type switch
+    {
+        ITypeParameterSymbol => true,
+        IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+        INamedTypeSymbol named => named.TypeArguments.Any(ContainsTypeParameter),
+        _ => false,
+    };
 
     /// <param name="Key">The service key of a keyed dependency; <see langword="null"/> for a non-keyed dependency.</param>
     private readonly record struct Dependency(Location? Location, INamedTypeSymbol Type, ServiceKeyValue? Key);
@@ -850,6 +991,7 @@ partial class ContainerAnalyzer
         bool registerAllBaseClasses,
         ImmutableArray<string> tags,
         ImmutableArray<INamedTypeSymbol> implementationTypes,
+        bool hasFactory,
         bool isGeneric,
         SyntaxReference? syntax)
     {
@@ -864,6 +1006,9 @@ partial class ContainerAnalyzer
         /// created; the generator ignores them for settings imported from a module assembly.
         /// </summary>
         public ImmutableArray<INamedTypeSymbol> ImplementationTypes { get; } = implementationTypes;
+
+        /// <summary>Whether the settings specify a <c>Factory</c>, which registers an open generic target type.</summary>
+        public bool HasFactory { get; } = hasFactory;
         public bool IsGeneric { get; } = isGeneric;
         public SyntaxReference? Syntax { get; } = syntax;
     }
