@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Microsoft.CodeAnalysis.Text;
 
 namespace SourceGen.Ioc;
 
@@ -90,6 +89,7 @@ partial class ContainerAnalyzer
         var (hasRegisterAllInterfaces, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
         var (hasRegisterAllBaseClasses, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
         var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
+        var hasInjectMembers = attribute.NamedArguments.Any(static a => a.Key == "InjectMembers" && !a.Value.IsNull);
 
         return new RawRegistration(
             implementationType,
@@ -104,40 +104,61 @@ partial class ContainerAnalyzer
             explicitContainer,
             hasFactory,
             hasInstance,
+            hasInjectMembers,
             attribute.ApplicationSyntaxReference);
     }
 
     /// <summary>
-    /// Resolves the <c>Factory</c> method and the <c>InjectMembers</c> members of an attribute, which are given with
-    /// <c>nameof()</c> and need a semantic model. The results are looked up by the attribute syntax at compilation end.
-    /// Mirrors the generator's <c>GetFactoryMethodData</c> and <c>ExtractInjectMembersFromAttribute</c>.
+    /// Resolves the <c>Factory</c> method and the <c>InjectMembers</c> members of attributes, which are given with
+    /// <c>nameof()</c> and need a semantic model. Mirrors the generator's <c>GetFactoryMethodData</c> and
+    /// <c>ExtractInjectMembersFromAttribute</c>.
     /// </summary>
-    private static void CollectAttributeSemantics(SyntaxNodeAnalysisContext context, ContainerAnalyzerContext analyzerContext)
+    /// <remarks>
+    /// Few attributes use these arguments, so the semantic models are created at compilation end for those attributes
+    /// only, instead of registering a syntax node action that visits every attribute of the compilation.
+    /// </remarks>
+    private sealed class AttributeSemanticsResolver(Compilation compilation, CancellationToken cancellationToken)
     {
-        if(context.Node is not AttributeSyntax { ArgumentList: { } argumentList } attribute)
-            return;
+        private readonly Dictionary<SyntaxTree, SemanticModel> _semanticModels = [];
 
-        IMethodSymbol? factory = null;
-        var hasFactory = false;
-        ImmutableArray<InjectMemberInfo> injectMembers = [];
-        foreach(var argument in argumentList.Arguments)
+        /// <summary>Gets the semantics of an attribute in source; <see langword="null"/> for an attribute in metadata.</summary>
+        public AttributeSemantics? Get(SyntaxReference? syntax)
         {
-            switch(argument.NameEquals?.Name.Identifier.Text)
-            {
-                case "Factory":
-                    hasFactory = true;
-                    if(GetNameofArgument(argument.Expression) is { } factoryExpression)
-                        factory = RoslynExtensions.ResolveMethodSymbol(factoryExpression, context.SemanticModel);
-                    break;
+            if(syntax?.GetSyntax(cancellationToken) is not AttributeSyntax { ArgumentList: { } argumentList })
+                return null;
 
-                case "InjectMembers":
-                    injectMembers = GetInjectMembers(argument.Expression, context.SemanticModel, context.CancellationToken);
-                    break;
+            IMethodSymbol? factory = null;
+            ImmutableArray<InjectMemberInfo> injectMembers = [];
+            foreach(var argument in argumentList.Arguments)
+            {
+                switch(argument.NameEquals?.Name.Identifier.Text)
+                {
+                    case "Factory" when GetNameofArgument(argument.Expression) is { } factoryExpression:
+                        factory = RoslynExtensions.ResolveMethodSymbol(factoryExpression, GetSemanticModel(syntax.SyntaxTree));
+                        break;
+
+                    case "InjectMembers":
+                        injectMembers = GetInjectMembers(argument.Expression, GetSemanticModel(syntax.SyntaxTree), cancellationToken);
+                        break;
+                }
             }
+
+            return new AttributeSemantics(factory, injectMembers);
         }
 
-        if(hasFactory || !injectMembers.IsEmpty)
-            analyzerContext.AttributeSemanticsBySyntax[new(attribute.SyntaxTree, attribute.Span)] = new(factory, injectMembers);
+        // RS1030: semantic models are only created for the few attributes with Factory or InjectMembers
+#pragma warning disable RS1030
+        private SemanticModel GetSemanticModel(SyntaxTree tree)
+        {
+            if(!_semanticModels.TryGetValue(tree, out var semanticModel))
+            {
+                semanticModel = compilation.GetSemanticModel(tree);
+                _semanticModels[tree] = semanticModel;
+            }
+
+            return semanticModel;
+        }
+#pragma warning restore RS1030
     }
 
     /// <summary>
@@ -288,6 +309,7 @@ partial class ContainerAnalyzer
         CancellationToken cancellationToken)
     {
         var defaults = BuildDefaultSettingsLookup(compilation, analyzerContext, cancellationToken);
+        var semantics = new AttributeSemanticsResolver(compilation, cancellationToken);
 
         var resolved = new List<ResolvedRegistration>();
         var matched = new List<DefaultSettings>();
@@ -347,8 +369,8 @@ partial class ContainerAnalyzer
                 tags,
                 registration.ExplicitContainer,
                 activation,
-                activation.Kind is ActivationKind.Constructor
-                    ? analyzerContext.GetAttributeSemantics(registration.Syntax)?.InjectMembers ?? []
+                activation.Kind is ActivationKind.Constructor && registration.HasInjectMembers
+                    ? semantics.Get(registration.Syntax)?.InjectMembers ?? []
                     : []));
 
             void MatchDefaults(INamedTypeSymbol candidate)
@@ -371,7 +393,7 @@ partial class ContainerAnalyzer
             }
         }
 
-        AddDefaultSettingsImplementationTypes(resolved, analyzerContext, cancellationToken);
+        AddDefaultSettingsImplementationTypes(resolved, analyzerContext, semantics, cancellationToken);
         AddFactoryOpenGenericRegistrations(resolved, analyzerContext);
         AddImportedOpenGenericRegistrations(resolved, analyzerContext, cancellationToken);
 
@@ -379,7 +401,7 @@ partial class ContainerAnalyzer
 
         // A factory given as a string or declared in metadata cannot be resolved; its dependencies are unknown
         RegistrationActivation GetFactoryActivation(SyntaxReference? syntax)
-            => analyzerContext.GetAttributeSemantics(syntax)?.Factory is { } factory
+            => semantics.Get(syntax)?.Factory is { } factory
                 ? RegistrationActivation.FromFactory(factory)
                 : RegistrationActivation.None;
     }
@@ -487,6 +509,7 @@ partial class ContainerAnalyzer
     private static void AddDefaultSettingsImplementationTypes(
         List<ResolvedRegistration> resolved,
         ContainerAnalyzerContext analyzerContext,
+        AttributeSemanticsResolver semantics,
         CancellationToken cancellationToken)
     {
         foreach(var defaults in analyzerContext.DefaultSettings)
@@ -516,7 +539,7 @@ partial class ContainerAnalyzer
                 var activation = RegistrationActivation.Constructor;
                 if(defaults.HasFactory && IsOpenGeneric(implementationType))
                 {
-                    activation = analyzerContext.GetAttributeSemantics(defaults.Syntax)?.Factory is { } factory
+                    activation = semantics.Get(defaults.Syntax)?.Factory is { } factory
                         ? RegistrationActivation.FromFactory(factory)
                         : RegistrationActivation.None;
                 }
@@ -1238,6 +1261,7 @@ partial class ContainerAnalyzer
         INamedTypeSymbol? ExplicitContainer,
         bool HasFactory,
         bool HasInstance,
+        bool HasInjectMembers,
         SyntaxReference? Syntax);
 
     /// <param name="Key">The key as the generator's code expression (SGIOC021/027/029).</param>
@@ -1288,7 +1312,6 @@ partial class ContainerAnalyzer
     /// <param name="Factory">The resolved <c>Factory</c> method, or <see langword="null"/> when it cannot be resolved.</param>
     private sealed record class AttributeSemantics(IMethodSymbol? Factory, ImmutableArray<InjectMemberInfo> InjectMembers);
 
-    private readonly record struct AttributeSyntaxKey(SyntaxTree Tree, TextSpan Span);
 
     /// <summary>
     /// Settings of an [IocRegisterDefaults] attribute. Compared by reference, like the generator's default settings indices.
@@ -1368,13 +1391,6 @@ partial class ContainerAnalyzer
         public ConcurrentBag<ModuleImport> ModuleImports { get; } = [];
         public ConcurrentBag<ContainerInfo> Containers { get; } = [];
         public ConcurrentBag<(INamedTypeSymbol Container, INamedTypeSymbol Module)> ImportEdges { get; } = [];
-        public ConcurrentDictionary<AttributeSyntaxKey, AttributeSemantics> AttributeSemanticsBySyntax { get; } = new();
-
-        /// <summary>Gets the semantics of an attribute in source; <see langword="null"/> when it has none or is in metadata.</summary>
-        public AttributeSemantics? GetAttributeSemantics(SyntaxReference? syntax)
-            => syntax is not null && AttributeSemanticsBySyntax.TryGetValue(new(syntax.SyntaxTree, syntax.Span), out var semantics)
-                ? semantics
-                : null;
     }
 
     #endregion

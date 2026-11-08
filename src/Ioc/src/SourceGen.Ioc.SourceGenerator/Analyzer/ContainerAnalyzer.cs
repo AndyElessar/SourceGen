@@ -154,9 +154,6 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
             CollectRegistrationAttributes(ctx, analyzerContext);
         }, SymbolKind.NamedType);
 
-        // Factory and InjectMembers of registration attributes need a semantic model to resolve their nameof() members
-        context.RegisterSyntaxNodeAction(ctx => CollectAttributeSemantics(ctx, analyzerContext), SyntaxKind.Attribute);
-
         // SGIOC018: Analyze dependencies at compilation end
         context.RegisterCompilationEndAction(ctx => AnalyzeContainerDependencies(ctx, analyzerContext));
 
