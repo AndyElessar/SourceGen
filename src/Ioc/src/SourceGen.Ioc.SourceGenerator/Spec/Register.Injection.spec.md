@@ -268,6 +268,21 @@ services.AddSingleton<MyService>((IServiceProvider sp) =>
 #endregion
 ```
 
+**Keyed method**: the key of an injected method (`[IocInject(Key = ...)]` on the method, or the key of its `InjectMembers` element) MUST apply to its parameters without their own key; a parameter's own key (`[FromKeyedServices(key)]`, `[IocInject(Key = ...)]`) takes precedence. The container output follows the same rule (see [Container Injection](Container.Injection.spec.md)).
+
+```csharp
+#region Define:
+[IocInject(Key = "file")]
+public void Initialize(ILogger fileLogger, [FromKeyedServices("console")] ILogger consoleLogger) { }
+#endregion
+
+#region Generate:
+var s0_m0 = sp.GetRequiredKeyedService<ILogger>("file");
+var s0_m1 = sp.GetRequiredKeyedService<ILogger>("console");
+s0.Initialize(s0_m0, s0_m1);
+#endregion
+```
+
 **Method with `[ServiceKey]` and `[FromKeyedServices]` on parameters**:
 
 ```csharp
