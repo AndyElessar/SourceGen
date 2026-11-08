@@ -262,12 +262,13 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
 
         var explicitOnlyContainerWithGroups = enabledContainers
             .Where(static c => c.ExplicitOnly)
+            .Combine(combinedDefaultSettings)
             .Combine(msbuildPropertiesProvider)
             .Combine(requestedCollectionServiceTypes)
-            .Select(static (source, _) =>
+            .Select(static (source, ct) =>
             {
-                var ((container, msbuildProps), requestedCollections) = source;
-                return GroupExplicitOnlyRegistrations(container, msbuildProps.Features, requestedCollections);
+                var (((container, defaultSettings), msbuildProps), requestedCollections) = source;
+                return GroupExplicitOnlyRegistrations(container, defaultSettings, msbuildProps.Features, requestedCollections, ct);
             })
             .WithTrackingName("ExplicitContainerGroups");
 

@@ -187,6 +187,33 @@ public class ContainerOptionsTests
     }
 
     [Test]
+    public async Task Container_WithExplicitOnlyMode_RegistersAllServiceTypes()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFirst { }
+            public interface ISecond { }
+            public interface IThird { }
+
+            public class MyService : IFirst, ISecond, IThird { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFirst), typeof(ISecond)], RegisterAllInterfaces = true)]
+            public partial class ExplicitContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithExplicitOnlyAndIncludeTags_ExplicitOnlyTakesPrecedence()
     {
         const string source = """

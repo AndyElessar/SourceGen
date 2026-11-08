@@ -73,7 +73,8 @@ partial class StandaloneContainer
 
 ## ExplicitOnly = true
 
-Only register services explicitly marked on the container class:
+Only register services explicitly marked on the container class (`[IocRegisterFor]` / `[IocRegisterFor<T>]`).
+Each explicit registration MUST be processed like an assembly registration: it is registered as its implementation type, its `ServiceTypes`, all interfaces when `RegisterAllInterfaces = true`, all base classes when `RegisterAllBaseClasses = true`, and the settings of a matching `[IocRegisterDefaults]` apply.
 
 ```csharp
 #region Define:
