@@ -11,7 +11,7 @@ Core rules are in `.github/instructions/csharp-source-generator.instructions.md`
 
 ## Workflow
 
-1. Find the analogous existing feature and follow its pipeline, model, and emission pattern. If behavior changes, update the spec first (`sourcegen-spec-writing` skill).
+1. Find the analogous existing feature and follow its pipeline, model, and emission pattern. If behavior changes, update the spec first (`sourcegen-spec-writing` skill). For a bug fix, first add a test (snapshot, analyzer, or AOT) that reproduces the bug and confirm it fails.
 2. Implement: pipeline → immutable model → emission → analyzer diagnostics (if needed).
 3. Add tests following `.github/instructions/csharp-tunit.instructions.md`.
 4. If generated code changes, confirm it is AOT-safe (no reflection-based activation, no runtime `MakeGenericType`) and run the domain's AOT tests.
@@ -78,6 +78,10 @@ internal static readonly DiagnosticDescriptor InvalidUsage = new(
 
 - IDs follow the domain prefix (e.g. `SGIOC`); check the analyzer spec for the next free ID and document new IDs there.
 - The generator skips invalid input silently; the analyzer reports it.
+
+## Performance
+
+To investigate generator performance or read CI benchmark results, see [references/performance-measurement.md](./references/performance-measurement.md). It covers stale-build pitfalls, attributing time and allocations, and known costs.
 
 ## References
 

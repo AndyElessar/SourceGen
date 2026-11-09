@@ -74,7 +74,16 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:62b772556ca698a862928fbd02425b5f4386545f942bffc3b4fcf2b01f7afe45
+  content_hash: sha256:73c0ec429a3ed1d7edd06dc40ce3f92777393344da1995d47b48154aea7d1c47
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/sourcegen-generator-development/references/performance-measurement.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:8ec71fe75f079dad54e3b93c9b9875da9a59a3751242f508b40bb8e568a9a9e7
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/sourcegen-git-workflow
@@ -92,7 +101,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:e9f4e1d2d7e900be9018c6c8bfcab44936c49bf2838e05f419ff3e458ea44250
+  content_hash: sha256:9260d3908d0e31c9fa7ea0fc36f9400adbbce0eeebaf53b8f242d4d3fbf4657b
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/sourcegen-release-commands
@@ -263,7 +272,16 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:62b772556ca698a862928fbd02425b5f4386545f942bffc3b4fcf2b01f7afe45
+  content_hash: sha256:73c0ec429a3ed1d7edd06dc40ce3f92777393344da1995d47b48154aea7d1c47
+- kind: project-relative
+  target: claude
+  value: .claude/skills/sourcegen-generator-development/references/performance-measurement.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:8ec71fe75f079dad54e3b93c9b9875da9a59a3751242f508b40bb8e568a9a9e7
 - kind: project-relative
   target: claude
   value: .claude/skills/sourcegen-git-workflow
@@ -281,7 +299,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:e9f4e1d2d7e900be9018c6c8bfcab44936c49bf2838e05f419ff3e458ea44250
+  content_hash: sha256:9260d3908d0e31c9fa7ea0fc36f9400adbbce0eeebaf53b8f242d4d3fbf4657b
 - kind: project-relative
   target: claude
   value: .claude/skills/sourcegen-release-commands
@@ -406,6 +424,7 @@ local_deployed_files:
 - .agents/skills/sourcegen-docs-writing/SKILL.md
 - .agents/skills/sourcegen-generator-development
 - .agents/skills/sourcegen-generator-development/SKILL.md
+- .agents/skills/sourcegen-generator-development/references/performance-measurement.md
 - .agents/skills/sourcegen-git-workflow
 - .agents/skills/sourcegen-git-workflow/SKILL.md
 - .agents/skills/sourcegen-release-commands
@@ -425,6 +444,7 @@ local_deployed_files:
 - .claude/skills/sourcegen-docs-writing/SKILL.md
 - .claude/skills/sourcegen-generator-development
 - .claude/skills/sourcegen-generator-development/SKILL.md
+- .claude/skills/sourcegen-generator-development/references/performance-measurement.md
 - .claude/skills/sourcegen-git-workflow
 - .claude/skills/sourcegen-git-workflow/SKILL.md
 - .claude/skills/sourcegen-release-commands
@@ -441,8 +461,9 @@ local_deployed_files:
 local_deployed_file_hashes:
   .agents/skills/sourcegen-ci-workflows/SKILL.md: sha256:aa53aa24dba2d619087ab04af10afcf66fd3fdd9cfb9b8588e717b1af75a88d0
   .agents/skills/sourcegen-docs-writing/SKILL.md: sha256:9ef5559e74e709ce44bc3703f565feb458fb6feacb84254d9b08c88d876f5b24
-  .agents/skills/sourcegen-generator-development/SKILL.md: sha256:62b772556ca698a862928fbd02425b5f4386545f942bffc3b4fcf2b01f7afe45
-  .agents/skills/sourcegen-git-workflow/SKILL.md: sha256:e9f4e1d2d7e900be9018c6c8bfcab44936c49bf2838e05f419ff3e458ea44250
+  .agents/skills/sourcegen-generator-development/SKILL.md: sha256:73c0ec429a3ed1d7edd06dc40ce3f92777393344da1995d47b48154aea7d1c47
+  .agents/skills/sourcegen-generator-development/references/performance-measurement.md: sha256:8ec71fe75f079dad54e3b93c9b9875da9a59a3751242f508b40bb8e568a9a9e7
+  .agents/skills/sourcegen-git-workflow/SKILL.md: sha256:9260d3908d0e31c9fa7ea0fc36f9400adbbce0eeebaf53b8f242d4d3fbf4657b
   .agents/skills/sourcegen-release-commands/SKILL.md: sha256:7b47885394abe62ebbaedf4000dbf467c34739777dddeac195a45e77fc277c42
   .agents/skills/sourcegen-release-commands/scripts/monitor-release.ps1: sha256:8283b66594d1d70a85878bc9e4d593be874fd7b5284d93d14eec119158a90602
   .agents/skills/sourcegen-release-commands/scripts/post-release.ps1: sha256:18e1531e370ba9b04cb78dcaa05c0dac6ca6cee9740f82b275463d888b1bd159
@@ -454,8 +475,9 @@ local_deployed_file_hashes:
   .claude/rules/csharp.md: sha256:f07c8f93ed44565f2969a18692647cf25e0f9c890c2c1d4e2bc50bac993daf43
   .claude/skills/sourcegen-ci-workflows/SKILL.md: sha256:aa53aa24dba2d619087ab04af10afcf66fd3fdd9cfb9b8588e717b1af75a88d0
   .claude/skills/sourcegen-docs-writing/SKILL.md: sha256:9ef5559e74e709ce44bc3703f565feb458fb6feacb84254d9b08c88d876f5b24
-  .claude/skills/sourcegen-generator-development/SKILL.md: sha256:62b772556ca698a862928fbd02425b5f4386545f942bffc3b4fcf2b01f7afe45
-  .claude/skills/sourcegen-git-workflow/SKILL.md: sha256:e9f4e1d2d7e900be9018c6c8bfcab44936c49bf2838e05f419ff3e458ea44250
+  .claude/skills/sourcegen-generator-development/SKILL.md: sha256:73c0ec429a3ed1d7edd06dc40ce3f92777393344da1995d47b48154aea7d1c47
+  .claude/skills/sourcegen-generator-development/references/performance-measurement.md: sha256:8ec71fe75f079dad54e3b93c9b9875da9a59a3751242f508b40bb8e568a9a9e7
+  .claude/skills/sourcegen-git-workflow/SKILL.md: sha256:9260d3908d0e31c9fa7ea0fc36f9400adbbce0eeebaf53b8f242d4d3fbf4657b
   .claude/skills/sourcegen-release-commands/SKILL.md: sha256:7b47885394abe62ebbaedf4000dbf467c34739777dddeac195a45e77fc277c42
   .claude/skills/sourcegen-release-commands/scripts/monitor-release.ps1: sha256:8283b66594d1d70a85878bc9e4d593be874fd7b5284d93d14eec119158a90602
   .claude/skills/sourcegen-release-commands/scripts/post-release.ps1: sha256:18e1531e370ba9b04cb78dcaa05c0dac6ca6cee9740f82b275463d888b1bd159
