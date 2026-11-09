@@ -69,7 +69,7 @@ internal enum ThreadSafeStrategy
 /// <param name="IncludeTags">Tags to filter services by. When non-empty, only services with matching tags are included.</param>
 /// <param name="UseSwitchStatement">Whether to use switch statement instead of FrozenDictionary.</param>
 /// <param name="ThreadSafeStrategy">Thread safety strategy for singleton/scoped service resolution.</param>
-/// <param name="ImportedModules">Types of imported module containers.</param>
+/// <param name="ImportedModules">Imported module containers.</param>
 /// <param name="ExplicitRegistrations">Registrations explicitly marked on the container class (for ExplicitOnly mode).</param>
 /// <param name="ExplicitDiscoveredDependencies">Closed generic types of [IocDiscover] on the container class (for ExplicitOnly mode).</param>
 /// <param name="PartialAccessors">User-declared partial methods/properties that serve as fast-path service accessors.</param>
@@ -87,7 +87,7 @@ internal sealed record class ContainerModel(
     bool UseSwitchStatement,
     ThreadSafeStrategy ThreadSafeStrategy,
     EagerResolveOptions EagerResolveOptions,
-    ImmutableEquatableArray<TypeData> ImportedModules,
+    ImmutableEquatableArray<ImportedModuleData> ImportedModules,
     ImmutableEquatableArray<RegistrationData> ExplicitRegistrations,
     ImmutableEquatableArray<ClosedGenericDependency> ExplicitDiscoveredDependencies,
     ImmutableEquatableArray<PartialAccessorData> PartialAccessors,

@@ -283,9 +283,10 @@ private static global::System.Threading.SemaphoreSlim __CreateSemaphore(ref glob
 When creating a child scope, synchronization fields are NOT copied from parent. Each scope allocates its own synchronization primitives for the scoped services it creates (see above):
 
 ```csharp
-private AppContainer(AppContainer parent)
+private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
 {
     _fallbackProvider = parent._fallbackProvider;
+    _fallbackScopeOwner = fallbackScopeOwner;
     _isRootScope = false;
     _root = parent._root ?? parent;
 

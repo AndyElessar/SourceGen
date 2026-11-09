@@ -17,6 +17,7 @@ internal static class Constants
     public const string IocInjectAttributeFullName = "SourceGen.Ioc.IocInjectAttribute";
     public const string IocGenericFactoryAttributeFullName = "SourceGen.Ioc.IocGenericFactoryAttribute";
     public const string IocContainerAttributeFullName = "SourceGen.Ioc.IocContainerAttribute";
+    public const string IocFallbackScopeOwnerFullName = "SourceGen.Ioc.IIocFallbackScopeOwner";
 
     /// <summary>
     /// The MSBuild property name for the root namespace.

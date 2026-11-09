@@ -77,7 +77,8 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Writes the fallback provider accessor. Container scopes create the matching fallback scope
-    /// only when a service is first resolved from the fallback provider.
+    /// only when a service is first resolved from the fallback provider; scopes of an imported module
+    /// use the fallback scope of the importing container scope instead.
     /// </summary>
     private static void WriteFallbackServiceProviderMethods(SourceWriter writer)
     {
@@ -85,6 +86,7 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
         writer.WriteLine("if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;");
+        writer.WriteLine("if(_fallbackScopeOwner is not null) return _fallbackScopeOwner.GetFallbackServiceProvider();");
         writer.WriteLine();
         writer.WriteLine("return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;");
         writer.Indentation--;

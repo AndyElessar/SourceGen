@@ -50,6 +50,7 @@ The container generates generic instance methods matching the signatures from `S
 |Resolver shape|Synchronous singleton/scoped resolvers MUST be split into an expression-bodied fast path `GetX() => _x ?? CreateX();` and a slow-path `CreateX()` that holds creation, synchronization, and root delegation, so the fast path stays small enough to inline.|
 |Singletons in scopes|A scope MUST NOT create a singleton. Lazily created singletons (non-eager, including async-init) MUST delegate to the root container through `_root` (see [Lifetime](Container.Lifetime.spec.md)).|
 |Fallback scope|When `IntegrateServiceProvider = true`, fallback resolution MUST go through `GetFallbackServiceProvider()`. In a container scope it MUST lazily create one scope on the fallback provider (via its `IServiceScopeFactory`, if available) on the first fallback resolution, publish it with `Interlocked.CompareExchange`, and dispose a losing duplicate. Scopes that never use the fallback provider MUST NOT create one. The scope MUST dispose the fallback scope after its own scoped services. `IsService`/`IsKeyedService` MAY query the root fallback provider directly.|
+|Fallback scope owner|When `IntegrateServiceProvider = true`, the container MUST implement `IIocFallbackScopeOwner` explicitly. The private scope constructor MUST take the owner (`null` for `CreateScope()`) and store it in `_fallbackScopeOwner` before eager services are initialized, since they may resolve fallback services. A scope created through `IIocFallbackScopeOwner.CreateScope(owner)` MUST resolve fallback services through `owner.GetFallbackServiceProvider()` and MUST NOT create or dispose a fallback scope of its own. See [Fallback Scope of Imported Modules](Container.ImportModule.spec.md#fallback-scope-of-imported-modules).|
 |Fallback ownership|The provider built by `ServiceProviderFactory.CreateServiceProvider` MUST be disposed by the returned root container. A provider passed to the public constructor is owned by the caller and MUST NOT be disposed.|
 |Service provider factory|`IServiceProviderFactory<IServiceCollection>` MUST be implemented by a nested `public sealed class ServiceProviderFactory`, not by the container, so that building a container from an `IServiceCollection` does not first construct a container instance. Such an instance would create eager services, which can fail without a fallback provider.|
 |Scoped services in the root|A scoped service resolved directly from the root container is cached in the root. Both `Dispose` and `DisposeAsync` MUST dispose scoped services first (in scopes and in the root), then singletons.|
@@ -57,8 +58,6 @@ The container generates generic instance methods matching the signatures from `S
 |`IAsyncDisposable`-only services|Synchronous `Dispose` MUST throw `InvalidOperationException` when it reaches a tracked service that implements only `IAsyncDisposable` (matching `Microsoft.Extensions.DependencyInjection`); `DisposeAsync` MUST be used instead. Disposing a losing `CompareExchange` instance during resolution MUST NOT throw.|
 |Fully qualified names|Generated container code MUST reference every type with a `global::`-qualified name, so types declared in the container's namespace (e.g. `Lock`, `Task`, `Type`, `System`) cannot shadow them. The `using` directives are kept only for extension methods.|
 |Awaits|Every `await` in generated code MUST use `ConfigureAwait(false)`.|
-
-> **Limitation**: An imported module scope is created through the module's own `CreateScope()` and therefore opens its own fallback scope. Within one container scope, fallback scoped services resolved through an imported module are a different instance from those resolved through the importing container.
 
 ## Member Names
 
@@ -119,10 +118,11 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 
 partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvider, IKeyedServiceProvider,
     IServiceProviderIsService, IServiceProviderIsKeyedService, ISupportRequiredService,
-    IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable
+    IServiceScopeFactory, IServiceScope, IDisposable, IAsyncDisposable, IIocFallbackScopeOwner
 {
     private readonly IServiceProvider? _fallbackProvider;
     private IServiceScope? _fallbackScope; // created lazily in container scopes
+    private readonly IIocFallbackScopeOwner? _fallbackScopeOwner; // importing container scope of a module scope
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -146,9 +146,10 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         GetMyService();
     }
 
-    private AppContainer(AppContainer parent)
+    private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
         // Copy eager singleton references from parent
         _myDependency = parent._myDependency;
@@ -199,6 +200,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     private IServiceProvider? GetFallbackServiceProvider()
     {
         if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+        if(_fallbackScopeOwner is not null) return _fallbackScopeOwner.GetFallbackServiceProvider();
 
         return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
     }
@@ -297,12 +299,25 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     public IServiceScope CreateScope()
     {
         ThrowIfDisposed();
-        return new AppContainer(this);
+        return new AppContainer(this, null);
     }
 
     public AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
     IServiceProvider IServiceScope.ServiceProvider => this;
+
+    #endregion
+
+    #region IIocFallbackScopeOwner
+
+    // Scope of an imported module: resolves fallback services through the importing container scope
+    IServiceScope IIocFallbackScopeOwner.CreateScope(IIocFallbackScopeOwner fallbackScopeOwner)
+    {
+        ThrowIfDisposed();
+        return new AppContainer(this, fallbackScopeOwner);
+    }
+
+    IServiceProvider? IIocFallbackScopeOwner.GetFallbackServiceProvider() => GetFallbackServiceProvider();
 
     #endregion
 

@@ -13,7 +13,7 @@ partial class IocSourceGenerator
         "GetFallbackServiceProvider", "GetType", "GetHashCode",
         "CreateScope", "CreateAsyncScope", "CreateFallbackScope", "ServiceProviderFactory",
         "CreateControllerFactory", "CreateComponentFactory", "CreateComponentPropertyInjector",
-        "_root", "_disposed", "_isRootScope", "_fallbackProvider", "_ownedFallbackProvider", "_fallbackScope",
+        "_root", "_disposed", "_isRootScope", "_fallbackProvider", "_ownedFallbackProvider", "_fallbackScope", "_fallbackScopeOwner",
         "_localResolvers", "_serviceResolvers", "_controllerFactoryCache", "_componentFactoryCache", "_propertyActivatorCache",
         // Helpers and the resolver entry alias, which a container member of the same name would hide
         ProjectTaskMethodName, CreateLockMethodName, CreateSemaphoreMethodName,
@@ -36,7 +36,7 @@ partial class IocSourceGenerator
 
         foreach(var module in container.ImportedModules)
         {
-            reservedNames.Add(GetModuleFieldName(module.Name));
+            reservedNames.Add(GetModuleFieldName(module.Type.Name));
         }
 
         return reservedNames;

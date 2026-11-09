@@ -18,10 +18,11 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 namespace IocRazorSample;
 
 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
-partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::IocRazorSample.ComponentContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
+partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::IocRazorSample.ComponentContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::SourceGen.Ioc.IIocFallbackScopeOwner
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
     private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;
+    private readonly global::SourceGen.Ioc.IIocFallbackScopeOwner? _fallbackScopeOwner;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -41,9 +42,10 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
         _fallbackProvider = fallbackProvider;
     }
 
-    private ComponentContainer(ComponentContainer parent)
+    private ComponentContainer(ComponentContainer parent, global::SourceGen.Ioc.IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
     }
 
@@ -77,6 +79,7 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
     private global::System.IServiceProvider? GetFallbackServiceProvider()
     {
         if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+        if(_fallbackScopeOwner is not null) return _fallbackScopeOwner.GetFallbackServiceProvider();
 
         return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
     }
@@ -207,12 +210,24 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
     public global::Microsoft.Extensions.DependencyInjection.IServiceScope CreateScope()
     {
         ThrowIfDisposed();
-        return new ComponentContainer(this);
+        return new ComponentContainer(this, null);
     }
 
     public global::Microsoft.Extensions.DependencyInjection.AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
     global::System.IServiceProvider global::Microsoft.Extensions.DependencyInjection.IServiceScope.ServiceProvider => this;
+
+    #endregion
+
+    #region IIocFallbackScopeOwner
+
+    global::Microsoft.Extensions.DependencyInjection.IServiceScope global::SourceGen.Ioc.IIocFallbackScopeOwner.CreateScope(global::SourceGen.Ioc.IIocFallbackScopeOwner fallbackScopeOwner)
+    {
+        ThrowIfDisposed();
+        return new ComponentContainer(this, fallbackScopeOwner);
+    }
+
+    global::System.IServiceProvider? global::SourceGen.Ioc.IIocFallbackScopeOwner.GetFallbackServiceProvider() => GetFallbackServiceProvider();
 
     #endregion
 

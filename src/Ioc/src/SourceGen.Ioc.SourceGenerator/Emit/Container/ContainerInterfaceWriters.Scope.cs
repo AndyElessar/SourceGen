@@ -14,13 +14,49 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
         writer.WriteLine("ThrowIfDisposed();");
-        writer.WriteLine($"return new {container.ClassName}(this);");
+        if(container.IntegrateServiceProvider)
+        {
+            writer.WriteLine($"return new {container.ClassName}(this, null);");
+        }
+        else
+        {
+            writer.WriteLine($"return new {container.ClassName}(this);");
+        }
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
         writer.WriteLine("public global::Microsoft.Extensions.DependencyInjection.AsyncServiceScope CreateAsyncScope() => new(CreateScope());");
         writer.WriteLine();
         writer.WriteLine("global::System.IServiceProvider global::Microsoft.Extensions.DependencyInjection.IServiceScope.ServiceProvider => this;");
+        writer.WriteLine();
+
+        writer.WriteLine("#endregion");
+        writer.WriteLine();
+
+        if(container.IntegrateServiceProvider)
+        {
+            WriteIIocFallbackScopeOwnerImplementation(writer, container);
+        }
+    }
+
+    /// <summary>
+    /// Writes IIocFallbackScopeOwner implementation, through which scopes of an imported module
+    /// resolve fallback services with the fallback scope of the importing container scope.
+    /// </summary>
+    private static void WriteIIocFallbackScopeOwnerImplementation(SourceWriter writer, ContainerModel container)
+    {
+        writer.WriteLine("#region IIocFallbackScopeOwner");
+        writer.WriteLine();
+
+        writer.WriteLine("global::Microsoft.Extensions.DependencyInjection.IServiceScope global::SourceGen.Ioc.IIocFallbackScopeOwner.CreateScope(global::SourceGen.Ioc.IIocFallbackScopeOwner fallbackScopeOwner)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
+        writer.WriteLine($"return new {container.ClassName}(this, fallbackScopeOwner);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("global::System.IServiceProvider? global::SourceGen.Ioc.IIocFallbackScopeOwner.GetFallbackServiceProvider() => GetFallbackServiceProvider();");
         writer.WriteLine();
 
         writer.WriteLine("#endregion");
@@ -100,10 +136,10 @@ partial class IocSourceGenerator
                 var isFirst = true;
                 foreach(var module in container.ImportedModules)
                 {
-                    var fieldName = GetModuleFieldName(module.Name);
+                    var fieldName = GetModuleFieldName(module.Type.Name);
 
                     // Every module after the first is appended with .Concat(...)
-                    writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{module.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))){(isFirst ? "" : ")")}");
+                    writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{module.Type.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))){(isFirst ? "" : ")")}");
                     isFirst = false;
                 }
 

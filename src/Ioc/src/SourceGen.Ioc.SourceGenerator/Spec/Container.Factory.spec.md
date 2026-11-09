@@ -38,9 +38,10 @@ public partial class AppContainer;
 #region Generate:
 partial class AppContainer
 {
-    private AppContainer(AppContainer parent)
+    private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
         // Copy only factory-based singleton fields from parent (an eager singleton by default)
         // Instance registrations don't have fields, no need to copy
