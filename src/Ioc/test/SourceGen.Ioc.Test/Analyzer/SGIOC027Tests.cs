@@ -369,6 +369,11 @@ public class SGIOC027Tests
         var sgioc027 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC027").ToList();
 
         await Assert.That(sgioc027).Count().IsEqualTo(expectedCount);
+        if(expectedCount > 0)
+        {
+            // The implementation has no async inject methods; the message must not say it has
+            await Assert.That(sgioc027[0].GetMessage()).Contains("async-init").And.Contains("decorator");
+        }
     }
 }
 

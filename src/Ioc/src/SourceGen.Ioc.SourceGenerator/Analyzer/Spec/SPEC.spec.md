@@ -612,7 +612,7 @@ Both require `AsyncMethodInject`.
 
 ### SGIOC027 - Error - Design - Partial accessor must return `Task<T>` for async-init service
 
-Report when a partial accessor returns the direct synchronous service type with no wrapper even though the matched implementation has async inject methods.
+Report when a partial accessor returns the direct synchronous service type with no wrapper even though the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)).
 
 **Analysis:**
 
@@ -622,7 +622,7 @@ Report when a partial accessor returns the direct synchronous service type with 
 - If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and the accessor returns the direct synchronous service type `TService` with no wrapper instead of `Task<TService>`, the analyzer MUST report `SGIOC027`.
 - `SGIOC029` owns all non-`Task<T>` return types for async-init services, including wrappers, arrays, and unsupported async shapes; `SGIOC027` is only for the direct synchronous `TService` case.
 
-**Message format:** `Partial accessor '{MemberName}' returns '{ServiceType}' but the implementation has async inject methods. Use 'Task<{ServiceType}>'.`
+**Message format:** `Partial accessor '{MemberName}' returns '{ServiceType}' but the service is async-init (its implementation or a decorator has async inject methods). Use 'Task<{ServiceType}>'.`
 
 ---
 
@@ -666,7 +666,7 @@ Report when a consumer requests `TService` but the matched registration can only
 
 **Analysis:**
 
-- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods.
+- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods, of registered services and of decorators. Decorators are the `Decorators` of registrations and assembly-level `[IocRegisterDefaults]`, each analyzed once (an open generic decorator through its definition); a decorator constructor parameter whose type the decorator implements or inherits receives the decorated instance and is not analyzed.
 - Matches the requested service type and key against available registrations.
 - If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`.
 - `Lazy<T>`, `Func<T>` and `Func<T1, ..., T>` (also nested, e.g. `Lazy<Func<T>>`) are unwrapped first: they create `T` synchronously, so they cannot resolve an async-init service either (the Register output does not register a `Func` with input parameters for it, and the Container resolves these wrappers from the fallback provider). A `Task<T>` inside them (`Lazy<Task<T>>`) is not reported. Collections are not unwrapped, since they exclude async-init registrations.
@@ -674,7 +674,7 @@ Report when a consumer requests `TService` but the matched registration can only
 - Consumers SHOULD request `Task<TService>` instead of `TService` in this scenario.
 - Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
 
-**Message format:** `'{MemberName}' requires '{ServiceType}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
+**Message format:** `'{MemberName}' requires '{ServiceType}' but this service is async-init (its implementation or a decorator has async inject methods) and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
 
 ---
 
