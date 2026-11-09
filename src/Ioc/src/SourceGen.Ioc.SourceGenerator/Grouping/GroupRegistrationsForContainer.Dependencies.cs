@@ -415,7 +415,8 @@ partial class IocSourceGenerator
 
                 if(func.HasInputParameters)
                 {
-                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations))
+                    // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service
+                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations) && !innerRegistrations[^1].IsAsyncInit)
                     {
                         var targetRegistration = innerRegistrations[^1].Registration;
                         return new MultiParamFuncDependency(

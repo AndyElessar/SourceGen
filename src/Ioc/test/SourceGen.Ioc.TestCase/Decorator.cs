@@ -81,6 +81,57 @@ public sealed class AsyncInnerExposingDecorator(IAsyncInnerExposingService inner
     public bool IsInitialized => inner.IsInitialized;
 }
 
+/// <summary>Synchronous service whose decorators initialize asynchronously, decorated as <see cref="IAsyncDecoratedService"/>.</summary>
+public interface IAsyncDecoratedService
+{
+    IAsyncDecoratedService? Inner { get; }
+    bool IsInitialized { get; }
+
+    /// <summary>Whether the wrapped service was initialized when this instance was initialized.</summary>
+    bool InnerWasInitialized { get; }
+}
+
+public sealed class AsyncDecoratedService : IAsyncDecoratedService
+{
+    public IAsyncDecoratedService? Inner => null;
+    public bool IsInitialized => true;
+    public bool InnerWasInitialized => true;
+}
+
+public sealed class OuterAsyncInitDecorator(IAsyncDecoratedService inner) : IAsyncDecoratedService
+{
+    public IAsyncDecoratedService? Inner => inner;
+    public bool IsInitialized { get; private set; }
+    public bool InnerWasInitialized { get; private set; }
+
+    [IocInject]
+    public async Task InitializeAsync()
+    {
+        await Task.Yield();
+        InnerWasInitialized = inner.IsInitialized;
+        IsInitialized = true;
+    }
+}
+
+public sealed class InnerAsyncInitDecorator(IAsyncDecoratedService inner) : IAsyncDecoratedService
+{
+    public IAsyncDecoratedService? Inner => inner;
+    public bool IsInitialized { get; private set; }
+    public bool InnerWasInitialized { get; private set; }
+
+    [IocInject]
+    public async Task InitializeAsync()
+    {
+        await Task.Yield();
+        InnerWasInitialized = inner.IsInitialized;
+        IsInitialized = true;
+    }
+}
+
+[IocRegisterFor<AsyncDecoratedService>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IAsyncDecoratedService)],
+    Decorators = [typeof(OuterAsyncInitDecorator), typeof(InnerAsyncInitDecorator)])]
 [IocRegisterFor<InnerExposingService>(
     ServiceLifetime.Scoped,
     ServiceTypes = [typeof(IInnerExposingService)],

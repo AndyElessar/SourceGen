@@ -552,7 +552,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             foreach(var serviceType in serviceTypes)
             {
                 serviceTypeStates.TryGetValue(serviceType, out var state);
-                serviceTypeStates[serviceType] = isAsyncInit
+                serviceTypeStates[serviceType] = isAsyncInit || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType)
                     ? (HasAsync: true, HasSync: state.HasSync)
                     : (HasAsync: state.HasAsync, HasSync: true);
             }

@@ -372,7 +372,7 @@ partial class IocSourceGenerator
     /// <c>TextDecorator&lt;T&gt; : IHandler&lt;T, string&gt;</c> cannot decorate <c>IHandler&lt;Req, int&gt;</c>.
     /// </remarks>
     /// <returns>The closed decorator, or null when it cannot decorate the service type or its constraints are not satisfied.</returns>
-    private static TypeData? TryCloseDecorator(TypeData decorator, TypeData serviceType)
+    internal static TypeData? TryCloseDecorator(TypeData decorator, TypeData serviceType)
     {
         var declaredForms = (decorator.AllInterfaces ?? []).Concat(decorator.AllBaseClasses ?? []);
         if(decorator is not GenericTypeData { IsOpenGeneric: true, TypeParameters: { Length: > 0 } decoratorTypeParams } genericDecorator)

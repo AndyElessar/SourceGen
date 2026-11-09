@@ -92,6 +92,43 @@ partial class AppContainer
 #endregion
 ```
 
+## Async Decorators
+
+A decorator with `[IocInject]` methods returning `Task` makes the decorated service type async-init (see [Register: Async Decorators](Register.Decorators.spec.md#async-decorators) and [Async Method Injection](Container.Injection.spec.md#async-method-injection)); `AsyncMethodInject` gates it.
+
+- The service type resolver MUST follow the async-init rules: it is resolved as `Task<ServiceType>` only (`Get{Impl}_As_{ServiceType}Async()`, field type `Task<ServiceType>?`), with the async-init thread safety, eager initialization and collection exclusion rules.
+- The implementation type resolver MUST keep its own shape: a synchronous implementation type stays synchronous and the service type resolver calls it without awaiting.
+- Decorators MUST be applied innermost first; each decorator's async inject methods MUST be awaited (after its synchronous injection) before the next decorator wraps it.
+
+```csharp
+#region Define:
+[IocRegister<IHandler>(ServiceLifetime.Singleton, Decorators = [typeof(LoggingDecorator), typeof(WarmupDecorator)])]
+public class Handler : IHandler;
+
+public class WarmupDecorator(IHandler inner) : IHandler
+{
+    [IocInject]
+    public Task WarmupAsync() => Task.CompletedTask;
+}
+#endregion
+
+#region Generate:
+private global::System.Threading.Tasks.Task<global::IHandler>? _handler_As_IHandler;
+private global::System.Threading.Tasks.Task<global::IHandler> GetHandler_As_IHandlerAsync() => _handler_As_IHandler ?? _root?.GetHandler_As_IHandlerAsync() ?? InitHandler_As_IHandlerAsync();
+
+private async global::System.Threading.Tasks.Task<global::IHandler> CreateHandler_As_IHandlerAsync()
+{
+    global::IHandler instance = GetHandler(); // synchronous implementation type
+
+    var decorator0 = new global::WarmupDecorator(instance);
+    await decorator0.WarmupAsync().ConfigureAwait(false);
+    instance = decorator0;
+    instance = new global::LoggingDecorator(instance);
+    return instance;
+}
+#endregion
+```
+
 ## See Also
 
 - [Decorator Registration](Register.Decorators.spec.md)

@@ -348,7 +348,8 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Builds the (service type, key) pairs that have at least one async-init implementation (SGIOC021/027/029).
+    /// Builds the (service type, key) pairs that have at least one async-init registration (SGIOC021/027/029): an async-init
+    /// implementation, or a decorator with async inject methods applied to the service type.
     /// </summary>
     private static HashSet<ServiceSymbolKey> BuildAsyncInitServiceKeys(
         IocFeatures features,
@@ -371,9 +372,9 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
                 isAsyncInitByImplementation[implementationType] = isAsyncInit;
             }
 
-            if(isAsyncInit)
+            foreach(var serviceType in registration.ServiceTypes)
             {
-                foreach(var serviceType in registration.ServiceTypes)
+                if(isAsyncInit || AnalyzerHelpers.HasAsyncDecorator(implementationType, serviceType, registration.Decorators, features))
                     asyncInitServiceKeys.Add(new(serviceType, registration.Key));
             }
         }

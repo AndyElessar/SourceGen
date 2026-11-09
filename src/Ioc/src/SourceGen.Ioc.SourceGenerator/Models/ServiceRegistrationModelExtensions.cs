@@ -14,16 +14,31 @@ internal static class ServiceRegistrationModelExtensions
         public bool IsServiceTypeAlias => registration.ServiceType.Name != registration.ImplementationType.Name;
 
         /// <summary>
-        /// Gets whether the registration has an async injection method, making it an async-init service that is resolved
-        /// as <c>Task&lt;T&gt;</c>.
+        /// Gets whether the registration is an async-init service that is resolved as <c>Task&lt;T&gt;</c>: its implementation
+        /// type or a decorator applied to its service type has an async injection method.
         /// </summary>
-        public bool IsAsyncInit
+        public bool IsAsyncInit => registration.HasAsyncInjection || registration.HasAsyncDecorators;
+
+        /// <summary>
+        /// Gets whether the implementation type has an async injection method, so the implementation type itself is
+        /// resolved as <c>Task&lt;T&gt;</c>.
+        /// </summary>
+        public bool HasAsyncInjection => HasAsyncMethod(registration.InjectionMembers);
+
+        /// <summary>
+        /// Gets whether a decorator applied to the service type has an async injection method, so the decorated service type
+        /// is resolved as <c>Task&lt;T&gt;</c> even when the implementation type is not.
+        /// </summary>
+        public bool HasAsyncDecorators
         {
             get
             {
-                foreach(var member in registration.InjectionMembers)
+                if(!registration.AppliesDecorators)
+                    return false;
+
+                foreach(var decorator in registration.Decorators)
                 {
-                    if(member.MemberType == InjectionMemberType.AsyncMethod)
+                    if(decorator.InjectionMembers is { } members && HasAsyncMethod(members))
                         return true;
                 }
 
@@ -56,5 +71,16 @@ internal static class ServiceRegistrationModelExtensions
         /// a decorated instance, or the result of a generic factory. The instance is typed as the service type.
         /// </summary>
         public bool HasOwnServiceInstance => registration.AppliesDecorators || registration.HasOwnFactoryInstance;
+    }
+
+    private static bool HasAsyncMethod(ImmutableEquatableArray<InjectionMemberData> members)
+    {
+        foreach(var member in members)
+        {
+            if(member.MemberType == InjectionMemberType.AsyncMethod)
+                return true;
+        }
+
+        return false;
     }
 }

@@ -305,4 +305,148 @@ public class AsyncMethodInjectTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task AsyncMethodInject_AsyncDecoratorOnSyncImplementation_RegistersTaskOfDecoratedServiceType()
+    {
+        // The implementation type stays synchronous; only the decorated service type is registered as Task<T>.
+        // Decorators are applied innermost first, each one's async methods awaited before the next one wraps it.
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IOther { }
+            public interface IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IDependency)])]
+            public class Dependency : IDependency { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService), typeof(IOther)], Decorators = [typeof(OuterDecorator), typeof(InnerDecorator)])]
+            public class MyService : IMyService, IOther { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IMyService)], Key = "keyed", Decorators = [typeof(InnerDecorator)])]
+            public class KeyedMyService : IMyService { }
+
+            public class OuterDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public void Initialize() { }
+            }
+
+            public class InnerDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public IDependency? Dependency { get; set; }
+
+                [IocInject]
+                public void Initialize(IDependency dependency) { }
+
+                [IocInject]
+                public async Task InitializeAsync(IDependency dependency) { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(MyService implementation, IOther other, Task<IMyService> decorated, Func<IOther> otherFactory);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_AsyncDecoratorWithFeatureDisabled_RegistersSynchronousDecoratorChain()
+    {
+        // Without AsyncMethodInject the decorator's Task method is ignored (SGIOC022), so the service stays synchronous.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService : IMyService { }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public void Initialize() { }
+
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject"
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_FuncWithInputParametersOfAsyncInitService_IsNotRegistered()
+    {
+        // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service.
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IPlainService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService(string name) : IMyService { }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IPlainService)])]
+            public class PlainService(string name) : IPlainService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Func<string, IMyService> factory, Func<string, IPlainService> plainFactory);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

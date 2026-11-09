@@ -218,6 +218,8 @@ services.AddSingleton<global::System.Threading.Tasks.Task<global::MyNamespace.IM
 
 > [!NOTE]
 > When a service has async inject methods, the registration type changes from `T` to `Task<T>`. Consumers that depend on this service should inject `Task<T>` and `await` the result. See [Wrapper Types — Task\<T\>](10_Wrapper.md#taskt) for consumer-side usage.
+>
+> Decorators can have async inject methods too; they make the decorated service type async-init. See [Async Decorators](06_Decorator.md#async-decorators).
 
 ## Diagnostics
 

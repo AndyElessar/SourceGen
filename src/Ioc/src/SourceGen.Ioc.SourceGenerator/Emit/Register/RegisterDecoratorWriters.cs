@@ -24,55 +24,28 @@ partial class IocSourceGenerator
     /// </remarks>
     private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
     {
-        if(registration.IsAsyncInit)
-        {
-            WriteAsyncDecoratorRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
-            return;
-        }
-
         var hiddenKey = WriteOwnServiceInstanceOpen(writer, registration, lifetime);
 
         var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
-        writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({(registration.Key is not null ? "key" : "")});");
+        var keyArgument = registration.Key is not null ? "key" : "";
+        if(registration.HasAsyncInjection)
+        {
+            writer.WriteLine($"var s0 = await sp.{methodName}<global::System.Threading.Tasks.Task<{registration.ImplementationType.Name}>>({keyArgument});");
+        }
+        else
+        {
+            writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({keyArgument});");
+        }
 
         WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, asyncInitServiceTypeNames);
     }
 
     /// <summary>
-    /// Writes the <c>Task&lt;ServiceType&gt;</c> registration of an async-init service type's decorator chain: an <c>async</c>
-    /// local function awaits the implementation type's <c>Task&lt;ImplementationType&gt;</c> and wraps the result. The service
-    /// type has no synchronous registration, so the chain is registered under the registration's own key, without a hidden key.
+    /// Gets whether a decorated service type is async-init (its implementation type or a decorator has async injection
+    /// methods), so its decorator chain is registered as <c>Task&lt;ServiceType&gt;</c>.
     /// </summary>
-    private static void WriteAsyncDecoratorRegistration(
-        SourceWriter writer,
-        ServiceRegistrationModel registration,
-        string lifetime,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
-    {
-        var serviceTypeName = registration.ServiceType.Name;
-        writer.WriteServiceLambdaOpen(lifetime, $"global::System.Threading.Tasks.Task<{serviceTypeName}>", registration.Key);
-
-        writer.WriteLine("{");
-        writer.Indentation++;
-
-        writer.WriteLine($"async global::System.Threading.Tasks.Task<{serviceTypeName}> Init()");
-        writer.WriteLine("{");
-        writer.Indentation++;
-
-        var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
-        writer.WriteLine($"var s0 = await sp.{methodName}<global::System.Threading.Tasks.Task<{registration.ImplementationType.Name}>>({(registration.Key is not null ? "key" : "")});");
-
-        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
-        writer.WriteLine($"return {outermostVar};");
-
-        writer.Indentation--;
-        writer.WriteLine("}");
-
-        writer.WriteLine("return Init();");
-
-        writer.Indentation--;
-        writer.WriteLine("});");
-    }
+    private static bool RegistersAsyncDecoratorChain(ServiceRegistrationModel registration) =>
+        registration.AppliesDecorators && registration.IsAsyncInit;
 
     /// <summary>
     /// Opens the lambda registering a service type's own instance (see <c>RegistersOwnServiceInstance</c>), whose body creates
@@ -82,9 +55,29 @@ partial class IocSourceGenerator
     /// <remarks>
     /// A non-keyed instance is registered under a hidden key, so Lazy/Func wrappers can resolve this registration's instance;
     /// the service type forwards to it, sharing the instance. The body still resolves non-keyed.
+    /// <para>
+    /// An async-init decorator chain (<see cref="RegistersAsyncDecoratorChain"/>) is registered as <c>Task&lt;ServiceType&gt;</c>
+    /// instead: the body is an <c>async</c> local function, so <c>s0</c> may be awaited. The service type has no synchronous
+    /// registration, so the chain is registered under the registration's own key, without a hidden key.
+    /// </para>
     /// </remarks>
     private static string? WriteOwnServiceInstanceOpen(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
     {
+        if(RegistersAsyncDecoratorChain(registration))
+        {
+            var serviceTypeName = registration.ServiceType.Name;
+            writer.WriteServiceLambdaOpen(lifetime, $"global::System.Threading.Tasks.Task<{serviceTypeName}>", registration.Key);
+
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            writer.WriteLine($"async global::System.Threading.Tasks.Task<{serviceTypeName}> Init()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            return null;
+        }
+
         var hiddenKey = registration.Key is null ? GetDecoratedServiceKey(registration) : null;
         writer.WriteServiceLambdaOpen(lifetime, registration.ServiceType.Name, hiddenKey ?? registration.Key);
 
@@ -105,8 +98,17 @@ partial class IocSourceGenerator
         string? hiddenKey,
         ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
     {
-        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
+        var isAsync = RegistersAsyncDecoratorChain(registration);
+        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames, isAsyncMode: isAsync);
         writer.WriteLine($"return {outermostVar};");
+
+        if(isAsync)
+        {
+            writer.Indentation--;
+            writer.WriteLine("}");
+
+            writer.WriteLine("return Init();");
+        }
 
         writer.Indentation--;
         writer.WriteLine("});");
@@ -121,9 +123,15 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes the statements wrapping the instance in variable <c>s0</c> with <paramref name="registration"/>'s decorators,
     /// the last decorator outermost, and returns the variable holding the outermost instance (<c>s{n}</c>).
-    /// Decorator dependencies are resolved from <c>sp</c> (and <c>key</c> for keyed registrations).
+    /// Decorator dependencies are resolved from <c>sp</c> (and <c>key</c> for keyed registrations). When
+    /// <paramref name="isAsyncMode"/> is <see langword="true"/>, each decorator's async injection methods are awaited before
+    /// the next decorator wraps it.
     /// </summary>
-    private static string WriteDecoratorChain(SourceWriter writer, ServiceRegistrationModel registration, ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+    private static string WriteDecoratorChain(
+        SourceWriter writer,
+        ServiceRegistrationModel registration,
+        ImmutableEquatableSet<string>? asyncInitServiceTypeNames,
+        bool isAsyncMode = false)
     {
         var decorators = registration.Decorators;
         var decoratorCount = decorators.Length;
@@ -161,7 +169,8 @@ partial class IocSourceGenerator
                 ctorTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
                 memberTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
                 decoratedPrevVar: prevVar,
-                asyncInitServiceTypeNames: asyncInitServiceTypeNames);
+                asyncInitServiceTypeNames: asyncInitServiceTypeNames,
+                isAsyncMode: isAsyncMode);
         }
 
         return $"s{decoratorCount}";

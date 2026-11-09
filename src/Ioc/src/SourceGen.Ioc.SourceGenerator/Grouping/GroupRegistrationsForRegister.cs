@@ -63,7 +63,7 @@ partial class IocSourceGenerator
 
         var demand = WrapperDemand.Scan(registrations.Select(static r => r.Registration));
         var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations, demand.LazyServiceTypes), canonicalTagsCache);
-        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations, demand.FuncTypes), canonicalTagsCache);
+        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations, demand.FuncTypes, features), canonicalTagsCache);
         var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations, demand.KvpPairs), canonicalTagsCache);
 
         var asyncInitServiceTypeSet = new HashSet<string>(StringComparer.Ordinal);
@@ -75,7 +75,10 @@ partial class IocSourceGenerator
                     continue;
 
                 asyncInitServiceTypeSet.Add(entry.Registration.ServiceType.Name);
-                asyncInitServiceTypeSet.Add(entry.Registration.ImplementationType.Name);
+
+                // Async decorators make only the decorated service type async-init, not the implementation type
+                if(entry.Registration.HasAsyncInjection)
+                    asyncInitServiceTypeSet.Add(entry.Registration.ImplementationType.Name);
             }
         }
 
@@ -199,7 +202,7 @@ partial class IocSourceGenerator
 
         if(NeedsInjectionConstruction(registration))
         {
-            return registration.IsAsyncInit
+            return registration.HasAsyncInjection
                 ? new AsyncInjectionRegisterEntry(registration)
                 : new InjectionRegisterEntry(registration);
         }
@@ -215,7 +218,7 @@ partial class IocSourceGenerator
     private static bool SharesFactoryInstance(ServiceRegistrationModel registration) =>
         registration.IsServiceTypeAlias
         && !registration.HasOwnFactoryInstance
-        && !registration.IsAsyncInit;
+        && !registration.HasAsyncInjection;
 
     /// <summary>
     /// Gets whether a service type alias registers an instance of its own instead of forwarding to the implementation type:
@@ -226,7 +229,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static bool RegistersOwnServiceInstance(ServiceRegistrationModel registration) =>
         registration.HasOwnServiceInstance
-        || (registration.Factory is not null && !registration.IsOpenGeneric && registration.IsServiceTypeAlias && registration.IsAsyncInit);
+        || (registration.Factory is not null && !registration.IsOpenGeneric && registration.IsServiceTypeAlias && registration.HasAsyncInjection);
 
     /// <summary>
     /// Gets whether the implementation type is constructed in a lambda instead of by <c>services.Add{Lifetime}&lt;TService, TImpl&gt;()</c>:
