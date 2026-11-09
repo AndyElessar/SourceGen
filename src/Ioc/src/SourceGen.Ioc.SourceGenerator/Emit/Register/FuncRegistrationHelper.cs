@@ -222,7 +222,7 @@ partial class IocSourceGenerator
         }
 
         // The input arguments are for the implementation only; decorator dependencies are resolved from DI
-        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServiceTypeNames: null);
+        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServices: null);
         writer.WriteLine($"return {outermostVar};");
     }
 

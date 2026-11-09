@@ -16,7 +16,7 @@ partial class IocSourceGenerator
         bool isNullable,
         bool hasNonNullDefault,
         string? defaultValue,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
         if(memberType is CollectionWrapperTypeData)
         {
@@ -26,7 +26,7 @@ partial class IocSourceGenerator
 
         if(memberType is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData or TaskTypeData)
         {
-            WriteWrapperResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable, asyncInitServiceTypeNames);
+            WriteWrapperResolution(writer, memberType, paramVar, serviceKey, isOptional: isNullable, asyncInitServices);
             return;
         }
 
@@ -60,11 +60,11 @@ partial class IocSourceGenerator
         bool isKeyedRegistration,
         string? registrationKey,
         Func<TypeData, string>? typeNameResolver,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
         var key = param.ServiceKey ?? methodKey;
 
-        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, key, isOptional: false, typeNameResolver, asyncInitServiceTypeNames, out var resolvedVar))
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, key, isOptional: false, typeNameResolver, asyncInitServices, out var resolvedVar))
         {
             return resolvedVar!;
         }
@@ -118,11 +118,11 @@ partial class IocSourceGenerator
         string paramVar,
         bool isKeyedRegistration,
         string? registrationKey = null,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
         var paramTypeName = param.Type.Name;
 
-        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, param.ServiceKey, param.IsOptional, typeNameResolver: null, asyncInitServiceTypeNames, out var resolvedVar))
+        if(TryResolveCommonParameter(writer, param, paramVar, isKeyedRegistration, registrationKey, param.ServiceKey, param.IsOptional, typeNameResolver: null, asyncInitServices, out var resolvedVar))
         {
             return resolvedVar!;
         }
@@ -216,16 +216,16 @@ partial class IocSourceGenerator
         string paramVar,
         string? serviceKey,
         bool isOptional = false,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
-        var expr = BuildWrapperExpression(type, serviceKey, isOptional, asyncInitServiceTypeNames);
+        var expr = BuildWrapperExpression(type, serviceKey, isOptional, asyncInitServices);
         writer.WriteLine($"var {paramVar} = {expr};");
     }
 
     /// <summary>
     /// Builds an inline wrapper expression. Recursively handles nested wrappers.
     /// </summary>
-    private static string BuildWrapperExpression(TypeData type, string? serviceKey, bool isOptional, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+    private static string BuildWrapperExpression(TypeData type, string? serviceKey, bool isOptional, ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
         switch(type)
         {
@@ -238,7 +238,7 @@ partial class IocSourceGenerator
                     return BuildServiceCall(methodName, type.Name, serviceKey);
                 }
 
-                var lazyInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, asyncInitServiceTypeNames);
+                var lazyInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, asyncInitServices);
                 return $"new global::System.Lazy<{innerType.Name}>(() => {lazyInnerExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
             }
 
@@ -251,7 +251,7 @@ partial class IocSourceGenerator
                     return BuildServiceCall(methodName, type.Name, serviceKey);
                 }
 
-                var funcInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, asyncInitServiceTypeNames);
+                var funcInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, asyncInitServices);
                 return $"new global::System.Func<{innerType.Name}>(() => {funcInnerExpr})";
             }
 
@@ -259,7 +259,7 @@ partial class IocSourceGenerator
             {
                 // A non-keyed registration has the default key, null for reference type keys
                 var keyExpr = serviceKey ?? "default!";
-                var valueExpr = BuildInnerResolutionExpression(kvp.ValueType, serviceKey, isOptional, asyncInitServiceTypeNames);
+                var valueExpr = BuildInnerResolutionExpression(kvp.ValueType, serviceKey, isOptional, asyncInitServices);
                 return $"new global::System.Collections.Generic.KeyValuePair<{kvp.KeyType.Name}, {kvp.ValueType.Name}>({keyExpr}, {valueExpr})";
             }
 
@@ -273,7 +273,7 @@ partial class IocSourceGenerator
             case TaskTypeData task:
             {
                 var innerTypeName = task.InnerType.Name;
-                if(asyncInitServiceTypeNames?.Contains(innerTypeName) == true)
+                if(asyncInitServices?.Contains(new(innerTypeName, serviceKey)) == true)
                 {
                     var methodName = GetServiceResolutionMethod(serviceKey, isOptional);
                     return BuildServiceCall(methodName, type.Name, serviceKey);
@@ -296,11 +296,11 @@ partial class IocSourceGenerator
     /// Builds an inner resolution expression — either a nested wrapper expression, a collection
     /// expression, or a direct service call. Supports nesting such as Lazy&lt;IEnumerable&lt;T&gt;&gt;.
     /// </summary>
-    private static string BuildInnerResolutionExpression(TypeData innerType, string? serviceKey, bool isOptional, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+    private static string BuildInnerResolutionExpression(TypeData innerType, string? serviceKey, bool isOptional, ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
         if(innerType is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
         {
-            return BuildWrapperExpression(innerType, serviceKey, isOptional, asyncInitServiceTypeNames);
+            return BuildWrapperExpression(innerType, serviceKey, isOptional, asyncInitServices);
         }
 
         if(innerType is CollectionWrapperTypeData collectionInner)
@@ -351,7 +351,7 @@ partial class IocSourceGenerator
         string? serviceKey,
         bool isOptional,
         Func<TypeData, string>? typeNameResolver,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames,
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices,
         out string? resolvedVar)
     {
         if(IsServiceProviderType(param.Type.Name))
@@ -376,7 +376,7 @@ partial class IocSourceGenerator
 
         if(param.Type is LazyTypeData or FuncTypeData or DictionaryTypeData or KeyValuePairTypeData or TaskTypeData)
         {
-            WriteWrapperResolution(writer, param.Type, paramVar, serviceKey, isOptional, asyncInitServiceTypeNames);
+            WriteWrapperResolution(writer, param.Type, paramVar, serviceKey, isOptional, asyncInitServices);
             resolvedVar = paramVar;
             return true;
         }

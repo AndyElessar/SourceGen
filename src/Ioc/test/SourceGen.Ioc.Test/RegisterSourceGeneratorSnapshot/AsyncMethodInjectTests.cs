@@ -449,4 +449,67 @@ public class AsyncMethodInjectTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task AsyncMethodInject_TaskOfServiceWithAsyncAndSyncKeys_ResolvesEachKeyByItsOwnShape()
+    {
+        // IMyService is async-init without a key and synchronous with the "sync" key, and the reverse for IOtherService.
+        // A Task<T> dependency is resolved as Task<T> only for the async-init (service type, key) pair.
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IOtherService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(AsyncDecorator)])]
+            public class AsyncService : IMyService { }
+
+            public class AsyncDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "sync")]
+            public class SyncService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IOtherService)], Key = "async")]
+            public class AsyncOtherService : IOtherService
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IOtherService)])]
+            public class SyncOtherService : IOtherService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(
+                Task<IMyService> asyncService,
+                [FromKeyedServices("sync")] Task<IMyService> syncService,
+                [FromKeyedServices("async")] Task<IOtherService> asyncOther,
+                Task<IOtherService> syncOther);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("sp.GetRequiredService<global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>>()")
+            .And.Contains("global::System.Threading.Tasks.Task.FromResult(sp.GetRequiredKeyedService<global::TestNamespace.IMyService>(\"sync\"))")
+            .And.Contains("sp.GetRequiredKeyedService<global::System.Threading.Tasks.Task<global::TestNamespace.IOtherService>>(\"async\")")
+            .And.Contains("global::System.Threading.Tasks.Task.FromResult(sp.GetRequiredService<global::TestNamespace.IOtherService>())");
+        await Verify(generatedSource);
+    }
 }

@@ -66,24 +66,26 @@ partial class IocSourceGenerator
         var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations, demand.FuncTypes, features), canonicalTagsCache);
         var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations, demand.KvpPairs), canonicalTagsCache);
 
-        var asyncInitServiceTypeSet = new HashSet<string>(StringComparer.Ordinal);
+        // Keyed by (type, key): the same service type can be async-init under one key and synchronous under another
+        var asyncInitServiceSet = new HashSet<AsyncInitService>();
         foreach(var group in groupedRegistrations.Values)
         {
             foreach(var entry in group)
             {
-                if(!entry.Registration.IsAsyncInit)
+                var registration = entry.Registration;
+                if(!registration.IsAsyncInit)
                     continue;
 
-                asyncInitServiceTypeSet.Add(entry.Registration.ServiceType.Name);
+                asyncInitServiceSet.Add(new(registration.ServiceType.Name, registration.Key));
 
                 // Async decorators make only the decorated service type async-init, not the implementation type
-                if(entry.Registration.HasAsyncInjection)
-                    asyncInitServiceTypeSet.Add(entry.Registration.ImplementationType.Name);
+                if(registration.HasAsyncInjection)
+                    asyncInitServiceSet.Add(new(registration.ImplementationType.Name, registration.Key));
             }
         }
 
-        var asyncInitServiceTypes = asyncInitServiceTypeSet.Count > 0
-            ? asyncInitServiceTypeSet.ToImmutableEquatableSet()
+        var asyncInitServices = asyncInitServiceSet.Count > 0
+            ? asyncInitServiceSet.ToImmutableEquatableSet()
             : null;
 
         var tagGroups = groupedRegistrations
@@ -110,7 +112,7 @@ partial class IocSourceGenerator
             rootNamespace,
             assemblyName,
             tagGroups,
-            asyncInitServiceTypes);
+            asyncInitServices);
     }
 
     private static Dictionary<ImmutableEquatableArray<string>, List<LazyRegistrationEntry>> GroupLazyEntriesByTagKey(

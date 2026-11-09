@@ -219,6 +219,8 @@ services.AddSingleton<Task<IMyService>>(async (IServiceProvider sp) => await sp.
 |Sync-only service (`T` only has synchronous resolution)|MUST wrap the synchronous resolution as `Task.FromResult(sp.GetRequiredService<T>())` or the matching optional/default-aware `Task.FromResult(...)` form.|MUST wrap the sync resolver result as `Task.FromResult(self.GetT_Resolve())` or the equivalent generated sync resolver call.|
 |Not registered in the container (an imported module or the fallback provider)|—|MUST resolve `GetService(typeof(Task<T>)) as Task<T> ?? Task.FromResult((T)GetRequiredService(typeof(T)))` (keyed and optional forms accordingly), so that an async-init service of an imported module keeps its initialization task and a synchronous one is wrapped in a completed task.|
 
+The Register path decides the shape per (service type, key) pair, comparing the dependency's key expression with the registration's: the same `T` can be async-init without a key and synchronous under a key (or the reverse), and `[FromKeyedServices("sync")] Task<T>` MUST then resolve `Task.FromResult(sp.GetRequiredKeyedService<T>("sync"))`, because only `T` is registered under that key.
+
 ```csharp
 // Invalid: nested async wrappers are not supported.
 [IocRegister]
