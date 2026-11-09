@@ -113,7 +113,12 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 #endregion
 ```
 
+## Services of Imported Modules
+
+Constructor dependencies and partial accessors of a service the container does not register itself resolve through `GetService` / `GetRequiredService`, which look it up in `_serviceResolvers` and therefore find the services of imported modules, also when `IntegrateServiceProvider = false` (see [Partial Accessors](Container.PartialAccessors.spec.md#resolution-rules)).
+
 ## See Also
 
 - [Import Module Registration](Register.ImportModule.spec.md)
 - [Service Resolution Strategy](Container.Options.spec.md)
+- [Partial Accessors](Container.PartialAccessors.spec.md)

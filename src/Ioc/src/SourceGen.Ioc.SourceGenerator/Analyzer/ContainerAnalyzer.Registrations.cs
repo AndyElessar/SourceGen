@@ -714,12 +714,14 @@ partial class ContainerAnalyzer
 
             var own = GetOwnRegistrations(container);
             var services = own.Services;
+            var serviceKeys = own.ServiceKeys;
             var hasExternalModule = false;
 
             if(container.ImportedModules.Length > 0)
             {
                 services = new ServiceIndex();
                 services.UnionWith(own.Services);
+                serviceKeys = [.. own.ServiceKeys];
                 foreach(var module in container.ImportedModules)
                 {
                     if(!SymbolEqualityComparer.Default.Equals(module.ContainingAssembly, assembly))
@@ -735,13 +737,14 @@ partial class ContainerAnalyzer
 
                     var moduleScope = GetScope(moduleContainer);
                     services.UnionWith(moduleScope.Services);
+                    serviceKeys.UnionWith(moduleScope.ServiceKeys);
                     hasExternalModule |= moduleScope.HasExternalModule;
                 }
             }
 
             _building.Remove(container.Symbol);
 
-            scope = new ContainerScope(own, services, hasExternalModule);
+            scope = new ContainerScope(own, services, serviceKeys, hasExternalModule);
             _scopes[container.Symbol] = scope;
             return scope;
         }
@@ -800,10 +803,12 @@ partial class ContainerAnalyzer
 
     /// <param name="Own">The registrations of the container itself.</param>
     /// <param name="Services">The services of the container, including the services of imported modules.</param>
+    /// <param name="ServiceKeys">The services by key expression, including the services of imported modules (SGIOC021).</param>
     /// <param name="HasExternalModule">Whether the container imports a module of another assembly (directly or transitively).</param>
     private sealed record class ContainerScope(
         RegistrationSet Own,
         ServiceIndex Services,
+        HashSet<ServiceSymbolKey> ServiceKeys,
         bool HasExternalModule);
 
     /// <summary>

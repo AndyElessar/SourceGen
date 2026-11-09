@@ -18,6 +18,8 @@ namespace TestNamespace;
 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
 partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNamespace.TestContainer>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
 {
+    private readonly global::System.IServiceProvider? _fallbackProvider;
+    private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -26,12 +28,20 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     /// <summary>
     /// Creates a new standalone container without external service provider fallback.
     /// </summary>
-    public TestContainer()
+    public TestContainer() : this((global::System.IServiceProvider?)null) { }
+
+    /// <summary>
+    /// Creates a new container with optional fallback to external service provider.
+    /// </summary>
+    /// <param name="fallbackProvider">Optional external service provider for unknown dependencies.</param>
+    public TestContainer(global::System.IServiceProvider? fallbackProvider)
     {
+        _fallbackProvider = fallbackProvider;
     }
 
     private TestContainer(TestContainer parent)
     {
+        _fallbackProvider = parent._fallbackProvider;
         _isRootScope = false;
     }
 
@@ -39,11 +49,21 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     #region Service Resolution
 
+    private async global::System.Threading.Tasks.Task<global::TestNamespace.MyService> CreateMyService_ResolveAsync()
+    {
+        var instance = new global::TestNamespace.MyService();
+        await instance.InitAsync().ConfigureAwait(false);
+        return instance;
+    }
+
+    private static async global::System.Threading.Tasks.Task<TService> __ProjectTask<TService, TResult>(global::System.Threading.Tasks.Task<TResult> task)
+        => (TService)(object)(await task.ConfigureAwait(false))!;
+
     #endregion
 
     #region Partial Accessor Implementations
 
-    public partial global::TestNamespace.IUnknownService GetUnknownService() => throw new global::System.InvalidOperationException("Service 'global::TestNamespace.IUnknownService' is not registered.");
+    public partial global::TestNamespace.IMyService GetMyService() => CreateMyService_ResolveAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
     #endregion
 
@@ -56,7 +76,26 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return null;
+        return GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    private global::System.IServiceProvider? GetFallbackServiceProvider()
+    {
+        if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+
+        return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
+    }
+
+    private global::Microsoft.Extensions.DependencyInjection.IServiceScope? CreateFallbackScope(global::System.IServiceProvider fallbackProvider)
+    {
+        if(fallbackProvider.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) is not global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory) return null;
+
+        var scope = scopeFactory.CreateScope();
+        var existing = global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, scope, null);
+        if(existing is null) return scope;
+
+        scope.Dispose();
+        return existing;
     }
 
     #endregion
@@ -72,7 +111,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return null;
+        return GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
     }
 
     public object GetRequiredKeyedService(global::System.Type serviceType, object? serviceKey)
@@ -100,7 +139,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? resolver(this) as T
-            : null;
+            : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
     }
 
     public T GetRequiredService<T>() where T : notnull
@@ -108,7 +147,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (T)resolver(this)
-            : throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered.");
+            : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
 
     public global::System.Collections.Generic.IEnumerable<T> GetServices<T>()
@@ -116,7 +155,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : [];
+            : GetFallbackServiceProvider()?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     public T? GetKeyedService<T>(object? serviceKey) where T : class
@@ -125,7 +164,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? resolver(this) as T
-            : null;
+            : (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) as T;
     }
 
     public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
@@ -134,7 +173,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? (T)resolver(this)
-            : throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered.");
+            : (T)((GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
     }
 
     public global::System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
@@ -143,7 +182,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : [];
+            : (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     #endregion
@@ -154,7 +193,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
 
-        return false;
+        return _fallbackProvider is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService isService && isService.IsService(serviceType);
     }
 
     public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
@@ -163,7 +202,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
         if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;
 
-        return false;
+        return _fallbackProvider is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
 
     #endregion
@@ -191,12 +230,40 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.MyService>), static c => c.CreateMyService_ResolveAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::TestNamespace.IMyService>), static c => __ProjectTask<global::TestNamespace.IMyService, global::TestNamespace.MyService>(c.CreateMyService_ResolveAsync())),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
+
+    #endregion
+
+    #region IServiceProviderFactory<IServiceCollection>
+
+    private object? _ownedFallbackProvider;
+
+    /// <summary>
+    /// Builds a <see cref="TestContainer"/> from an IServiceCollection, which becomes its fallback service provider.
+    /// </summary>
+    public sealed class ServiceProviderFactory : global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
+    {
+        /// <summary>
+        /// Creates a new container builder (returns the same IServiceCollection).
+        /// </summary>
+        public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
+
+        /// <summary>
+        /// Creates the service provider from the built IServiceCollection.
+        /// </summary>
+        public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
+        {
+            var fallbackProvider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
+            return new TestContainer(fallbackProvider) { _ownedFallbackProvider = fallbackProvider };
+        }
+    }
 
     #endregion
 
@@ -208,15 +275,24 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
         if(!_isRootScope)
         {
+            DisposeService(_fallbackScope);
             return;
         }
 
+        DisposeService(_ownedFallbackProvider);
     }
 
-    public global::System.Threading.Tasks.ValueTask DisposeAsync()
+    public async global::System.Threading.Tasks.ValueTask DisposeAsync()
     {
-        Dispose();
-        return default;
+        if(global::System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        if(!_isRootScope)
+        {
+            await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
+            return;
+        }
+
+        await DisposeServiceAsync(_ownedFallbackProvider).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()

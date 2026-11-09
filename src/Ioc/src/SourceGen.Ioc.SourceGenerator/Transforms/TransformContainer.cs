@@ -178,44 +178,35 @@ partial class IocSourceGenerator
                          && method.Parameters.Length == 0
                          && !method.IsGenericMethod
                          && method.MethodKind == MethodKind.Ordinary:
-                {
-                    var returnType = method.ReturnType;
-                    var returnTypeName = returnType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
-                        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var isNullable = returnType.NullableAnnotation == NullableAnnotation.Annotated;
-                    var key = ExtractKeyFromInjectAttribute(method, semanticModel);
-
-                    accessors.Add(new PartialAccessorData(
-                        PartialAccessorKind.Method,
-                        method.Name,
-                        returnTypeName,
-                        isNullable,
-                        key));
+                    accessors.Add(CreatePartialAccessor(PartialAccessorKind.Method, method, method.ReturnType, semanticModel));
                     break;
-                }
 
                 case IPropertySymbol property
                     when property.IsPartialDefinition
                          && property.GetMethod is not null:
-                {
-                    var returnType = property.Type;
-                    var returnTypeName = returnType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
-                        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var isNullable = returnType.NullableAnnotation == NullableAnnotation.Annotated;
-                    var key = ExtractKeyFromInjectAttribute(property, semanticModel);
-
-                    accessors.Add(new PartialAccessorData(
-                        PartialAccessorKind.Property,
-                        property.Name,
-                        returnTypeName,
-                        isNullable,
-                        key));
+                    accessors.Add(CreatePartialAccessor(PartialAccessorKind.Property, property, property.Type, semanticModel));
                     break;
-                }
             }
         }
 
         return accessors.ToImmutableEquatableArray();
+    }
+
+    private static PartialAccessorData CreatePartialAccessor(
+        PartialAccessorKind kind,
+        ISymbol member,
+        ITypeSymbol returnType,
+        SemanticModel semanticModel)
+    {
+        var notAnnotatedType = returnType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+
+        return new PartialAccessorData(
+            kind,
+            member.Name,
+            notAnnotatedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            notAnnotatedType.GetTypeData(),
+            returnType.NullableAnnotation == NullableAnnotation.Annotated,
+            ExtractKeyFromInjectAttribute(member, semanticModel));
     }
 
     /// <summary>

@@ -22,12 +22,14 @@ internal enum PartialAccessorKind
 /// </summary>
 /// <param name="Kind">Whether this is a partial method or partial property.</param>
 /// <param name="Name">The name of the method or property.</param>
-/// <param name="ReturnTypeName">Fully qualified return type name (e.g., "global::IMyService").</param>
+/// <param name="ReturnTypeName">Fully qualified return type name as declared (e.g., "global::IMyService"), used for the implementation signature.</param>
+/// <param name="ReturnType">The return type data (with wrapper detection), resolved like a dependency of the same type.</param>
 /// <param name="IsNullable">Whether the return type is nullable (optional resolution).</param>
 /// <param name="Key">The keyed service key from [IocInject], or null for non-keyed resolution.</param>
 internal sealed record class PartialAccessorData(
     PartialAccessorKind Kind,
     string Name,
     string ReturnTypeName,
+    TypeData ReturnType,
     bool IsNullable,
     string? Key);

@@ -482,8 +482,8 @@ Report when a partial method or property accessor in a container class reference
   - For supported wrapper shapes that successfully unwrap, registration lookup and the diagnostic message use the innermost service type.
   - For downgraded or unsupported wrapper shapes whose innermost service type is not async-init, the accessor is treated as unresolvable and the diagnostic message uses the full return type.
   - For non-wrapper types, the return type itself is checked directly.
-- Reports when a non-nullable partial accessor's effective service type is not found among the container's own registrations ([Container Scope](#container-scope)), with the same service key.
-- Services of imported modules do NOT satisfy a partial accessor, because the generated accessor only uses the container's own resolvers when `IntegrateServiceProvider = false`.
+- Reports when a non-nullable partial accessor's effective service type is not found among the container's registrations, including the services of its imported modules ([Container Scope](#container-scope)), with the same service key. The generated accessor resolves services it does not register itself through the merged resolvers, which include the services of imported modules.
+- When the container imports a module of another assembly (directly or transitively), its services cannot be enumerated, so only unsupported and downgraded return types are reported.
 - Nullable accessors are exempt (can safely return `null`).
 
 **Rationale:**
