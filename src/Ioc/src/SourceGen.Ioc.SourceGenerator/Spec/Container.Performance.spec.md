@@ -194,9 +194,10 @@ partial class AppContainer
         // Eager resolution happens only when creating child scopes
     }
 
-    private AppContainer(AppContainer parent)
+    private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
 
         // Eagerly resolve scoped services for this scope

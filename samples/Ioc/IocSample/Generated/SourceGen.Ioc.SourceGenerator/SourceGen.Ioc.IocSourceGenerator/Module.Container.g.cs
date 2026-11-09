@@ -16,10 +16,11 @@ using __IocResolver = global::System.Collections.Generic.KeyValuePair<global::So
 namespace IocSample;
 
 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "0.9.4")]
-partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Module>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable
+partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Module>, global::System.IServiceProvider, global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService, global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService, global::Microsoft.Extensions.DependencyInjection.ISupportRequiredService, global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory, global::Microsoft.Extensions.DependencyInjection.IServiceScope, global::System.IDisposable, global::System.IAsyncDisposable, global::SourceGen.Ioc.IIocFallbackScopeOwner
 {
     private readonly global::System.IServiceProvider? _fallbackProvider;
     private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;
+    private readonly global::SourceGen.Ioc.IIocFallbackScopeOwner? _fallbackScopeOwner;
     private readonly bool _isRootScope = true;
     private int _disposed;
 
@@ -66,9 +67,10 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         GetGenericRequestHandler2_Entity2_As_IRequestHandler_GenericRequest2_Entity2_List_Entity2();
     }
 
-    private Module(Module parent)
+    private Module(Module parent, global::SourceGen.Ioc.IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
         _testQueryHandler = parent._testQueryHandler;
         _consumer = parent._consumer;
@@ -87,7 +89,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         _genericRequestHandler2_Entity3_As_IRequestHandler_GenericRequest2_Entity3_List_Entity3 = parent._genericRequestHandler2_Entity3_As_IRequestHandler_GenericRequest2_Entity3_List_Entity3;
         _genericRequestHandler2_Entity_As_IRequestHandler_GenericRequest2_Entity_List_Entity = parent._genericRequestHandler2_Entity_As_IRequestHandler_GenericRequest2_Entity_List_Entity;
         _genericRequestHandler2_Entity2_As_IRequestHandler_GenericRequest2_Entity2_List_Entity2 = parent._genericRequestHandler2_Entity2_As_IRequestHandler_GenericRequest2_Entity2_List_Entity2;
-        _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)parent._iocSample_Shared_SharedModule.CreateScope().ServiceProvider;
+        _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)((global::SourceGen.Ioc.IIocFallbackScopeOwner)parent._iocSample_Shared_SharedModule).CreateScope(this).ServiceProvider;
 
         // Initialize Lazy wrapper fields
 
@@ -636,6 +638,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     private global::System.IServiceProvider? GetFallbackServiceProvider()
     {
         if(_isRootScope || _fallbackProvider is null) return _fallbackProvider;
+        if(_fallbackScopeOwner is not null) return _fallbackScopeOwner.GetFallbackServiceProvider();
 
         return (_fallbackScope ?? CreateFallbackScope(_fallbackProvider))?.ServiceProvider ?? _fallbackProvider;
     }
@@ -766,12 +769,24 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public global::Microsoft.Extensions.DependencyInjection.IServiceScope CreateScope()
     {
         ThrowIfDisposed();
-        return new Module(this);
+        return new Module(this, null);
     }
 
     public global::Microsoft.Extensions.DependencyInjection.AsyncServiceScope CreateAsyncScope() => new(CreateScope());
 
     global::System.IServiceProvider global::Microsoft.Extensions.DependencyInjection.IServiceScope.ServiceProvider => this;
+
+    #endregion
+
+    #region IIocFallbackScopeOwner
+
+    global::Microsoft.Extensions.DependencyInjection.IServiceScope global::SourceGen.Ioc.IIocFallbackScopeOwner.CreateScope(global::SourceGen.Ioc.IIocFallbackScopeOwner fallbackScopeOwner)
+    {
+        ThrowIfDisposed();
+        return new Module(this, fallbackScopeOwner);
+    }
+
+    global::System.IServiceProvider? global::SourceGen.Ioc.IIocFallbackScopeOwner.GetFallbackServiceProvider() => GetFallbackServiceProvider();
 
     #endregion
 

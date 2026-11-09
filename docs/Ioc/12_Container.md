@@ -199,10 +199,10 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _iocSample_Shared_SharedModule = new global::IocSample.Shared.SharedModule(fallbackProvider);
     }
 
-    private Module(Module parent)
+    private Module(Module parent, IIocFallbackScopeOwner? fallbackScopeOwner)
     {
-        // A scope of this container creates a scope of the module
-        _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)parent._iocSample_Shared_SharedModule.CreateScope().ServiceProvider;
+        // A scope of this container creates a scope of the module, which shares this scope's fallback scope
+        _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)((IIocFallbackScopeOwner)parent._iocSample_Shared_SharedModule).CreateScope(this).ServiceProvider;
     }
 
     // Imported resolvers first, local resolvers last
@@ -227,6 +227,8 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 - **Lifetime** — Each container instance creates its own module instance, so module singletons are shared within that root container and the scopes created from it, not across separate root containers. Creating a scope also creates a scope of each module, so module scoped services follow the importing container's scopes.
 - **Disposal** — Disposing the container (or one of its scopes) also disposes the corresponding module instance (or module scope).
 - **Dependencies** — A module resolves its services' dependencies from its own registrations and then from the fallback `IServiceProvider` passed to the importing container. It cannot see services registered only in the importing container.
+- **Fallback scope** — Within one scope of the importing container, a scoped service of the fallback `IServiceProvider` (e.g. a `DbContext`) is the same instance whether a module service or a container service receives it. A module built with an earlier SourceGen.Ioc version opens its own fallback scope instead, until it is rebuilt.
+- **Fallback provider** — A module with `IntegrateServiceProvider = false` is created without the fallback `IServiceProvider`.
 - **Defaults** — `[IocRegisterDefaults]` declared in the module's assembly also apply to the importing assembly. See [Default Settings](03_Defaults.md#import-module-defaults).
 - **Open generics** — Open generic registrations of the module (and of modules it imports) are available for closed generic discovery in the importing container.
 
@@ -322,9 +324,10 @@ public AppContainer(IServiceProvider? fallbackProvider)
     _testNamespace_SingletonService = GetTestNamespace_SingletonService();
 }
 
-private AppContainer(AppContainer parent)
+private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
 {
     _fallbackProvider = parent._fallbackProvider;
+    _fallbackScopeOwner = fallbackScopeOwner;
     _isRootScope = false;
 
     // copy singleton references from parent

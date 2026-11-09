@@ -139,6 +139,53 @@ public sealed class ContainerLifecycleTests
     }
 
     [Test]
+    public async Task ImportedModule_FallbackScopedService_IsSharedWithImportingContainerScope()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<ModuleFallbackExternalService>();
+        using var inner = services.BuildServiceProvider();
+        var fallback = new CountingScopeFactoryProvider(inner);
+        using var container = new ModuleFallbackScopeContainer(fallback);
+
+        ModuleFallbackExternalService fromScope1;
+        using(var scope1 = container.CreateScope())
+        {
+            fromScope1 = scope1.ServiceProvider.GetRequiredService<ModuleFallbackConsumer>().External;
+            var fromNestedModule = scope1.ServiceProvider.GetRequiredService<InnerModuleFallbackConsumer>().External;
+            var fromContainer = scope1.ServiceProvider.GetRequiredService<AppModuleFallbackConsumer>().External;
+
+            await Assert.That(fromNestedModule).IsSameReferenceAs(fromScope1);
+            await Assert.That(fromContainer).IsSameReferenceAs(fromScope1);
+        }
+
+        await Assert.That(fromScope1.IsDisposed).IsTrue();
+        await Assert.That(fallback.CreatedScopes).IsEqualTo(1);
+
+        using(var scope2 = container.CreateScope())
+        {
+            var fromScope2 = scope2.ServiceProvider.GetRequiredService<ModuleFallbackConsumer>().External;
+
+            await Assert.That(fromScope2).IsNotSameReferenceAs(fromScope1);
+        }
+    }
+
+    [Test]
+    public async Task ImportedModule_ScopeWithoutFallbackResolution_CreatesNoFallbackScope()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<ModuleFallbackExternalService>();
+        using var inner = services.BuildServiceProvider();
+        var fallback = new CountingScopeFactoryProvider(inner);
+        using var container = new ModuleFallbackScopeContainer(fallback);
+
+        using(container.CreateScope())
+        {
+        }
+
+        await Assert.That(fallback.CreatedScopes).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task FallbackProvider_CreatedByServiceProviderFactory_IsDisposedWithContainer()
     {
         var services = new ServiceCollection();

@@ -175,6 +175,160 @@ public class ModuleImportContainerTests
     }
 
     [Test]
+    public async Task Container_WithImportedModuleInSameAssembly_SharesFallbackScope()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace MainApp;
+
+            public interface IModuleService { }
+
+            public class ModuleService : IModuleService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<ModuleService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IModuleService)])]
+            public partial class SharedModule { }
+
+            [IocImportModule<SharedModule>]
+            [IocContainer(ExplicitOnly = true)]
+            public partial class AppContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "AppContainer.Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithImportedModuleWithoutServiceProviderIntegration_CreatesModuleWithoutFallbackProvider()
+    {
+        const string sharedLibSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace SharedLib;
+
+            public interface ISharedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(ISharedService)])]
+            public class SharedService : ISharedService { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class SharedModule { }
+            """;
+
+        const string mainAppSource = """
+            using SourceGen.Ioc;
+
+            namespace MainApp;
+
+            [IocImportModule<SharedLib.SharedModule>]
+            [IocContainer]
+            public partial class AppContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithImportedModuleInSameAssemblyWithoutServiceProviderIntegration_CreatesModuleWithoutFallbackProvider()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace MainApp;
+
+            public interface IModuleService { }
+
+            public class ModuleService : IModuleService { }
+
+            [IocContainer(ExplicitOnly = true, IntegrateServiceProvider = false)]
+            [IocRegisterFor<ModuleService>(ServiceLifetime.Scoped, ServiceTypes = [typeof(IModuleService)])]
+            public partial class SharedModule { }
+
+            [IocImportModule<SharedModule>]
+            [IocContainer(ExplicitOnly = true)]
+            public partial class AppContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "AppContainer.Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithImportedModuleWithoutFallbackScopeSharing_CreatesModuleScopeWithoutOwner()
+    {
+        // A module built by an earlier generator version: it accepts a fallback provider
+        // but does not implement IIocFallbackScopeOwner.
+        const string legacyModuleSource = """
+            #pragma warning disable SGIOCEXP001
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace LegacyLib;
+
+            public sealed class LegacyModule : IIocContainer<LegacyModule>, IServiceScope
+            {
+                public LegacyModule() { }
+                public LegacyModule(IServiceProvider? fallbackProvider) { }
+
+                public static IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<LegacyModule, object>>> Resolvers => [];
+
+                public IServiceProvider ServiceProvider => this;
+                public object? GetService(Type serviceType) => null;
+                public object GetRequiredService(Type serviceType) => throw new InvalidOperationException();
+                public object? GetKeyedService(Type serviceType, object? serviceKey) => null;
+                public object GetRequiredKeyedService(Type serviceType, object? serviceKey) => throw new InvalidOperationException();
+                public bool IsService(Type serviceType) => false;
+                public bool IsKeyedService(Type serviceType, object? serviceKey) => false;
+                public IServiceScope CreateScope() => new LegacyModule();
+                public T? GetService<T>() where T : class => null;
+                public T? GetRequiredService<T>() where T : notnull => throw new InvalidOperationException();
+                public IEnumerable<T> GetServices<T>() => [];
+                public T? GetKeyedService<T>(object? serviceKey) where T : class => null;
+                public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull => throw new InvalidOperationException();
+                public IEnumerable<T> GetKeyedServices<T>(object? serviceKey) => [];
+                public void Dispose() { }
+                public ValueTask DisposeAsync() => default;
+            }
+            """;
+
+        const string mainAppSource = """
+            using SourceGen.Ioc;
+
+            namespace MainApp;
+
+            [IocImportModule<LegacyLib.LegacyModule>]
+            [IocContainer]
+            public partial class AppContainer { }
+            """;
+
+        var legacyCompilation = SourceGeneratorTestHelper.CreateCompilation("LegacyLib", legacyModuleSource);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            mainAppSource, "MainApp", [legacyCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithImportedModule_UseSwitchStatementIgnored_UsesFrozenDictionary()
     {
         // Dependency assembly (SharedLib) - simulates a separate NuGet package or class library

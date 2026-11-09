@@ -27,7 +27,14 @@ partial class IocSourceGenerator
 
         // Write class declaration
         writer.WriteLine(GeneratedCodeAttribute);
-        writer.WriteLine($"partial class {container.ClassName} : global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>, {FixedContainerInterfaces}");
+        if(container.IntegrateServiceProvider)
+        {
+            writer.WriteLine($"partial class {container.ClassName} : global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>, {FixedContainerInterfaces}, global::SourceGen.Ioc.IIocFallbackScopeOwner");
+        }
+        else
+        {
+            writer.WriteLine($"partial class {container.ClassName} : global::SourceGen.Ioc.IIocContainer<{container.ContainerTypeName}>, {FixedContainerInterfaces}");
+        }
         writer.WriteLine("{");
         writer.Indentation++;
 
@@ -129,6 +136,8 @@ partial class IocSourceGenerator
             writer.WriteLine("private readonly global::System.IServiceProvider? _fallbackProvider;");
             // Scope on the fallback provider, created on first fallback resolution in a container scope (null in the root)
             writer.WriteLine("private global::Microsoft.Extensions.DependencyInjection.IServiceScope? _fallbackScope;");
+            // Importing container scope whose fallback scope a scope of an imported module uses (null otherwise)
+            writer.WriteLine("private readonly global::SourceGen.Ioc.IIocFallbackScopeOwner? _fallbackScopeOwner;");
         }
 
         // Root container reference used by scopes to resolve lazily created singletons (null in the root)
@@ -145,8 +154,8 @@ partial class IocSourceGenerator
         // Imported module fields
         foreach(var module in container.ImportedModules)
         {
-            var fieldName = GetModuleFieldName(module.Name);
-            writer.WriteLine($"private readonly {module.Name} {fieldName};");
+            var fieldName = GetModuleFieldName(module.Type.Name);
+            writer.WriteLine($"private readonly {module.Type.Name} {fieldName};");
         }
 
         if(container.ImportedModules.Length > 0)
@@ -257,13 +266,22 @@ partial class IocSourceGenerator
         }
 
         // Private constructor for scoped instances
-        writer.WriteLine($"private {container.ClassName}({container.ClassName} parent)");
+        if(needsFallbackProvider)
+        {
+            writer.WriteLine($"private {container.ClassName}({container.ClassName} parent, global::SourceGen.Ioc.IIocFallbackScopeOwner? fallbackScopeOwner)");
+        }
+        else
+        {
+            writer.WriteLine($"private {container.ClassName}({container.ClassName} parent)");
+        }
         writer.WriteLine("{");
         writer.Indentation++;
         if(needsFallbackProvider)
         {
-            // Root fallback provider; the matching fallback scope is created lazily by GetFallbackServiceProvider()
+            // Root fallback provider; the matching fallback scope is created lazily by GetFallbackServiceProvider().
+            // The owner is set before eager services, which may resolve fallback services.
             writer.WriteLine("_fallbackProvider = parent._fallbackProvider;");
+            writer.WriteLine("_fallbackScopeOwner = fallbackScopeOwner;");
         }
         writer.WriteLine("_isRootScope = false;");
 
@@ -278,11 +296,19 @@ partial class IocSourceGenerator
             entry.WriteCopyFromParent(writer);
         }
 
-        // Create scopes for imported modules (so their scoped services are properly isolated)
+        // Create scopes for imported modules (so their scoped services are properly isolated).
+        // Modules that can share it use the fallback scope of this scope.
         foreach(var module in container.ImportedModules)
         {
-            var fieldName = GetModuleFieldName(module.Name);
-            writer.WriteLine($"{fieldName} = ({module.Name})parent.{fieldName}.CreateScope().ServiceProvider;");
+            var fieldName = GetModuleFieldName(module.Type.Name);
+            if(needsFallbackProvider && module.SharesFallbackScope)
+            {
+                writer.WriteLine($"{fieldName} = ({module.Type.Name})((global::SourceGen.Ioc.IIocFallbackScopeOwner)parent.{fieldName}).CreateScope(this).ServiceProvider;");
+            }
+            else
+            {
+                writer.WriteLine($"{fieldName} = ({module.Type.Name})parent.{fieldName}.CreateScope().ServiceProvider;");
+            }
         }
 
         // Initialize Lazy/Func wrapper fields (each scope gets its own wrappers).
@@ -321,14 +347,14 @@ partial class IocSourceGenerator
         // Initialize imported modules
         foreach(var module in container.ImportedModules)
         {
-            var fieldName = GetModuleFieldName(module.Name);
-            if(container.IntegrateServiceProvider && hasParameter)
+            var fieldName = GetModuleFieldName(module.Type.Name);
+            if(container.IntegrateServiceProvider && hasParameter && module.AcceptsFallbackProvider)
             {
-                writer.WriteLine($"{fieldName} = new {module.Name}(fallbackProvider);");
+                writer.WriteLine($"{fieldName} = new {module.Type.Name}(fallbackProvider);");
             }
             else
             {
-                writer.WriteLine($"{fieldName} = new {module.Name}();");
+                writer.WriteLine($"{fieldName} = new {module.Type.Name}();");
             }
         }
 

@@ -147,3 +147,15 @@ public sealed class LifecycleFallbackConsumer(LifecycleExternalService external)
 [IocRegisterFor<LifecycleFallbackConsumer>(ServiceLifetime.Scoped)]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class FallbackScopeContainer;
+
+/// <summary>Container scoped service that depends on the fallback-provider service also used by imported modules.</summary>
+public sealed class AppModuleFallbackConsumer(ModuleFallbackExternalService external)
+{
+    public ModuleFallbackExternalService External { get; } = external;
+}
+
+/// <summary>Container whose imported modules (from another assembly) resolve fallback-provider services.</summary>
+[IocImportModule<FallbackScopeModule>]
+[IocRegisterFor<AppModuleFallbackConsumer>(ServiceLifetime.Scoped)]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class ModuleFallbackScopeContainer;

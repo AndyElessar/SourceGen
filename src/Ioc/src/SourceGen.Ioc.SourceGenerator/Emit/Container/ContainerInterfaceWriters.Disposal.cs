@@ -122,12 +122,12 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteModuleDisposalCalls(
         SourceWriter writer,
-        ImmutableEquatableArray<TypeData> modules,
+        ImmutableEquatableArray<ImportedModuleData> modules,
         bool isAsync)
     {
         foreach(var module in modules)
         {
-            var fieldName = GetModuleFieldName(module.Name);
+            var fieldName = GetModuleFieldName(module.Type.Name);
             if(isAsync)
             {
                 writer.WriteLine($"await {fieldName}.DisposeAsync().ConfigureAwait(false);");

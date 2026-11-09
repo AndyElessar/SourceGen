@@ -52,9 +52,10 @@ partial class AppContainer
     // Root container reference (null in the root); emitted only when some singleton is created lazily
     private readonly AppContainer? _root;
 
-    private AppContainer(AppContainer parent)
+    private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
         _root = parent._root ?? parent;
         // Copy singleton references from parent (fast path when already created)

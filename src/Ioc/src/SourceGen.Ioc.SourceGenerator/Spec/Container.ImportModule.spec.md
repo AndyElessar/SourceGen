@@ -48,13 +48,15 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         _sharedModule2 = new global::SharedModule2(fallbackProvider);
     }
 
-    private AppContainer(AppContainer parent)
+    private AppContainer(AppContainer parent, IIocFallbackScopeOwner? fallbackScopeOwner)
     {
         _fallbackProvider = parent._fallbackProvider;
+        _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
-        // Create scopes for imported modules (so their scoped services are properly isolated)
-        _sharedModule1 = (global::SharedModule1)parent._sharedModule1.CreateScope().ServiceProvider;
-        _sharedModule2 = (global::SharedModule2)parent._sharedModule2.CreateScope().ServiceProvider;
+        // Create scopes for imported modules (so their scoped services are properly isolated),
+        // which use the fallback scope of this scope
+        _sharedModule1 = (global::SharedModule1)((IIocFallbackScopeOwner)parent._sharedModule1).CreateScope(this).ServiceProvider;
+        _sharedModule2 = (global::SharedModule2)((IIocFallbackScopeOwner)parent._sharedModule2).CreateScope(this).ServiceProvider;
     }
 
     // Local services array with container-typed resolvers
@@ -112,6 +114,21 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 }
 #endregion
 ```
+
+## Fallback Scope of Imported Modules
+
+Within one container scope, a fallback scoped service (e.g. a `DbContext` registered in the `IServiceCollection`) MUST be the same instance whether it is resolved through an imported module or through the importing container. A container scope therefore creates the scope of each imported module through `IIocFallbackScopeOwner.CreateScope(this)`: the module scope resolves fallback services through `GetFallbackServiceProvider()` of the importing scope, which creates the single fallback scope on first use and disposes it after the module scopes. Nested imports chain the owners, so every module scope uses the fallback scope of the outermost container scope.
+
+What the generator emits for an imported module depends on the members the module has:
+
+|Module|Root construction|Scope creation|
+|:---|:---|:---|
+|Declared in the current assembly|`[IocContainer]` decides: `new Module(fallbackProvider)` when `IntegrateServiceProvider = true`, otherwise `new Module()`|`CreateScope(this)` when `IntegrateServiceProvider = true`, otherwise `CreateScope()`|
+|From a referenced assembly or project|`new Module(fallbackProvider)` when it has a public constructor taking a single `IServiceProvider`, otherwise `new Module()`|`CreateScope(this)` when it implements `IIocFallbackScopeOwner`, otherwise `CreateScope()`|
+
+- The importing container passes the fallback provider and shares its fallback scope only when its own `IntegrateServiceProvider = true`.
+- A module built by an earlier generator version does not implement `IIocFallbackScopeOwner`: its scopes keep opening their own fallback scope, until the module is rebuilt.
+- Generated members of a module declared in the current assembly are not visible to the generator, which is why `[IocContainer]` decides for it; for a referenced module the attribute may be missing from metadata (`[Conditional("SOURCEGEN")]`), which is why its members decide.
 
 ## Services of Imported Modules
 
