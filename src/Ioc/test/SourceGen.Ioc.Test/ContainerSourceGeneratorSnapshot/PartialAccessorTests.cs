@@ -184,7 +184,7 @@ public class PartialAccessorTests
     }
 
     [Test]
-    public async Task PartialMethod_NoFallback_UnregisteredService_ThrowsExpression()
+    public async Task PartialMethod_NoFallback_UnregisteredService_UsesRequiredServiceLookup()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -265,6 +265,82 @@ public class PartialAccessorTests
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics);
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task PartialAccessor_NoFallback_WrapperOfRegisteredService_ResolvesWrapper()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial Lazy<IMyService> GetLazyService();
+                public partial Func<IMyService> GetServiceFactory();
+                public partial IEnumerable<IMyService> GetServices();
+                public partial IMyService[] ServiceArray { get; }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task PartialAccessor_NoFallback_ServiceOnlyInImportedModule_ResolvesFromModule()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IModuleService { }
+
+            public class ModuleService : IModuleService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<ModuleService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IModuleService)])]
+            [IocRegisterFor<ModuleService>(ServiceLifetime.Singleton, Key = "keyed", ServiceTypes = [typeof(IModuleService)])]
+            public partial class ServiceModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<ServiceModule>]
+            public partial class TestContainer
+            {
+                public partial IModuleService GetModuleService();
+                public partial IModuleService? TryGetModuleService();
+                public partial Task<IModuleService> GetModuleServiceAsync();
+                public partial Task<IModuleService>? TryGetModuleServiceAsync();
+
+                [IocInject("keyed")]
+                public partial IModuleService GetKeyedModuleService();
+
+                [IocInject("keyed")]
+                public partial Task<IModuleService> GetKeyedModuleServiceAsync();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "TestContainer.Container.g.cs");
 
         await Verify(generatedSource);
     }

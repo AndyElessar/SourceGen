@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.Diagnostics;
+
 namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
@@ -1110,9 +1112,17 @@ public class SGIOC021Tests
     }
 
     [Test]
-    public async Task SGIOC021_ServiceOnlyInImportedModule_ReportsDiagnostic()
+    [Arguments("IMyService")]
+    [Arguments("Task<IMyService>")]
+    [Arguments("Lazy<IMyService>")]
+    [Arguments("Func<IMyService>")]
+    [Arguments("IEnumerable<IMyService>")]
+    public async Task SGIOC021_ServiceOnlyInImportedModule_NoDiagnostic(string returnType)
     {
-        const string source = """
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
@@ -1130,6 +1140,41 @@ public class SGIOC021Tests
             [IocImportModule<ServiceModule>]
             public partial class TestContainer
             {
+                public partial {{returnType}} GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
+        await Assert.That(sgioc021).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC021_ServiceOnlyInTransitivelyImportedModule_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            public class MyService : IMyService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public partial class InnerModule { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocImportModule<InnerModule>]
+            public partial class OuterModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<OuterModule>]
+            public partial class TestContainer
+            {
                 public partial IMyService GetService();
             }
             """;
@@ -1137,6 +1182,152 @@ public class SGIOC021Tests
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
         var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
 
+        await Assert.That(sgioc021).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("\"A\"", 0)]
+    [Arguments("\"B\"", 1)]
+    public async Task SGIOC021_KeyedServiceInImportedModule_MatchesKey(string accessorKey, int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            public class MyService : IMyService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, Key = "A", ServiceTypes = [typeof(IMyService)])]
+            public partial class ServiceModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<ServiceModule>]
+            public partial class TestContainer
+            {
+                [IocInject({{accessorKey}})]
+                public partial IMyService GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
+        await Assert.That(sgioc021).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC021_ServiceNotInImportedModule_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IUnregistered { }
+
+            public class MyService : IMyService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public partial class ServiceModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<ServiceModule>]
+            public partial class TestContainer
+            {
+                public partial IUnregistered GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
         await Assert.That(sgioc021).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("ValueTask<IMyService>")]
+    [Arguments("Task<Lazy<IMyService>>")]
+    public async Task SGIOC021_UnsupportedShapeOfImportedModuleService_ReportsDiagnostic(string returnType)
+    {
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            public class MyService : IMyService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]
+            public partial class ServiceModule { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<ServiceModule>]
+            public partial class TestContainer
+            {
+                public partial {{returnType}} GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
+        await Assert.That(sgioc021).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("IUnregistered", 0)]
+    [Arguments("ValueTask<IUnregistered>", 1)]
+    public async Task SGIOC021_ContainerImportsModuleOfAnotherAssembly_ReportsOnlyUnsupportedShapes(string returnType, int expected)
+    {
+        const string moduleSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace ModuleNamespace;
+
+            public interface IModuleService { }
+
+            public class ModuleService : IModuleService { }
+
+            [IocContainer(ExplicitOnly = true)]
+            [IocRegisterFor<ModuleService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IModuleService)])]
+            public partial class SharedModule { }
+            """;
+
+        var source = $$"""
+            using System.Threading.Tasks;
+            using ModuleNamespace;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IUnregistered { }
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocImportModule<SharedModule>]
+            public partial class TestContainer
+            {
+                public partial {{returnType}} GetService();
+            }
+            """;
+
+        var moduleCompilation = SourceGeneratorTestHelper.CreateCompilation("ModuleAssembly", moduleSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [moduleCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
+
+        await Assert.That(sgioc021).Count().IsEqualTo(expected);
     }
 }

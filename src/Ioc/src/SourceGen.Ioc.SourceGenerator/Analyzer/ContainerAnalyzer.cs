@@ -343,7 +343,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
                 }
             }
 
-            AnalyzePartialAccessorDependencies(context, scope.Own, asyncInitServiceKeys, container.Symbol);
+            AnalyzePartialAccessorDependencies(context, scope, asyncInitServiceKeys, container.Symbol);
         }
     }
 
@@ -468,15 +468,19 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// SGIOC021: Analyzes partial method/property accessors in a container class to ensure their return types are registered.
-    /// Only applies when IntegrateServiceProvider = false.
+    /// SGIOC021: Analyzes partial method/property accessors in a container class to ensure their return types are registered
+    /// in the container or its imported modules. Only applies when IntegrateServiceProvider = false.
     /// </summary>
     private static void AnalyzePartialAccessorDependencies(
         CompilationAnalysisContext context,
-        RegistrationSet registrations,
+        ContainerScope scope,
         HashSet<ServiceSymbolKey> asyncInitServiceKeys,
         INamedTypeSymbol containerSymbol)
     {
+        // Registrations of a module from another assembly cannot be enumerated, so only unsupported shapes are reported
+        bool IsRegistered(INamedTypeSymbol serviceType, string? serviceKey)
+            => scope.HasExternalModule || IsPartialAccessorServiceRegistered(serviceType, serviceKey, scope);
+
         foreach(var member in containerSymbol.GetMembers())
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -546,7 +550,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
 
             if(serviceType is not null
                 && !isNullable
-                && !IsPartialAccessorServiceRegistered(serviceType, serviceKey, registrations))
+                && !IsRegistered(serviceType, serviceKey))
             {
                 var location = member.Locations.FirstOrDefault();
                 // For ValueTask<T> (not a generator-supported recursive wrapper), report the full return type
@@ -566,7 +570,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
             // (When it IS async-init, SGIOC029 is reported by AnalyzeAsyncPartialAccessors and we already continued.)
             if(serviceType is not null
                 && !isNullable
-                && IsPartialAccessorServiceRegistered(serviceType, serviceKey, registrations)
+                && IsRegistered(serviceType, serviceKey)
                 && isGenericValueTaskReturnType)
             {
                 var location = member.Locations.FirstOrDefault();
@@ -651,9 +655,9 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
     private static bool IsPartialAccessorServiceRegistered(
         INamedTypeSymbol serviceType,
         string? serviceKey,
-        RegistrationSet registrations)
+        ContainerScope scope)
     {
-        if(registrations.ServiceKeys.Contains(new(serviceType, serviceKey)))
+        if(scope.ServiceKeys.Contains(new(serviceType, serviceKey)))
             return true;
 
         if(AnalyzerHelpers.IsAlwaysResolvable(serviceType))
@@ -663,7 +667,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
         {
             var elementType = AnalyzerHelpers.GetEnumerableElementType(serviceType);
             if(elementType is not null)
-                return registrations.Services.Contains(elementType, key: null, matchOpenGenerics: false);
+                return scope.Services.Contains(elementType, key: null, matchOpenGenerics: false);
         }
 
         return false;

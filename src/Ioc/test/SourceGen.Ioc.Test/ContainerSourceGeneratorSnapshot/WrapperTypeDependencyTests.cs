@@ -975,6 +975,71 @@ public class WrapperTypeDependencyTests
     }
 
     [Test]
+    public async Task TaskOfUnregisteredService_FallsBackToTaskOrCompletedTask()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IExternalService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(
+                System.Threading.Tasks.Task<IExternalService> service,
+                [IocInject("key")] System.Threading.Tasks.Task<IExternalService>? keyedService = null,
+                System.Threading.Tasks.Task<IExternalService>? optionalService = null)
+            {
+                public System.Threading.Tasks.Task<IExternalService> Service { get; } = service;
+                public System.Threading.Tasks.Task<IExternalService>? KeyedService { get; } = keyedService;
+                public System.Threading.Tasks.Task<IExternalService>? OptionalService { get; } = optionalService;
+            }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task CollectionOfUnregisteredService_FallsBackToArray()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IExternalService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IExternalService[] services, IReadOnlyList<IExternalService> list, [IocInject("key")] IList<IExternalService> keyed, IEnumerable<IExternalService> enumerable)
+            {
+                public IExternalService[] Services { get; } = services;
+                public IReadOnlyList<IExternalService> List { get; } = list;
+                public IList<IExternalService> Keyed { get; } = keyed;
+                public IEnumerable<IExternalService> Enumerable { get; } = enumerable;
+            }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task LazyTask_FallsBackToServiceProvider()
     {
         const string source = """

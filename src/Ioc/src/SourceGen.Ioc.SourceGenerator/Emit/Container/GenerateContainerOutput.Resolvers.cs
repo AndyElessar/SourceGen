@@ -196,9 +196,10 @@ partial class IocSourceGenerator
         writer.WriteLine("#region Partial Accessor Implementations");
         writer.WriteLine();
 
-        foreach(var accessor in container.PartialAccessors)
+        for(var i = 0; i < container.PartialAccessors.Length; i++)
         {
-            var resolveExpression = ResolvePartialAccessorExpression(accessor, container, groups);
+            var accessor = container.PartialAccessors[i];
+            var resolveExpression = groups.PartialAccessorDependencies[i].FormatExpression(accessor.IsNullable);
 
             switch(accessor.Kind)
             {
@@ -216,97 +217,5 @@ partial class IocSourceGenerator
 
         writer.WriteLine("#endregion");
         writer.WriteLine();
-    }
-
-    /// <summary>
-    /// Resolves the expression to use for a partial accessor implementation.
-    /// Looks up the registration by return type and optional key, with fallback to IServiceProvider.
-    /// For <c>Task&lt;T&gt;</c> return types, routes through the async resolver.
-    /// </summary>
-    private static string ResolvePartialAccessorExpression(
-        PartialAccessorData accessor,
-        ContainerModel container,
-        ContainerRegistrationGroups groups)
-    {
-        var serviceType = accessor.ReturnTypeName;
-        var key = accessor.Key;
-
-        // Handle Task<T> return types — route through the async resolver.
-        if(TryExtractTaskInnerType(serviceType, out var innerTypeName))
-        {
-            if(groups.LastWinsByServiceType.TryGetValue(new(innerTypeName, key), out var entry))
-            {
-                switch(entry)
-                {
-                    case AsyncServiceContainerEntry asyncEntry:
-                        // The resolver already returns Task<innerType> (cached projection, or __ProjectTask for transients)
-                        return asyncEntry.FormatResolveExpression(innerTypeName, "");
-                    case InstanceContainerEntry instanceEntry:
-                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){instanceEntry.Registration.Instance})";
-                    case ServiceContainerEntry serviceEntry:
-                        return $"global::System.Threading.Tasks.Task.FromResult(({innerTypeName}){serviceEntry.ResolverMethodName}())";
-                }
-            }
-
-            // Fallback: delegate to IServiceProvider if available
-            if(container.IntegrateServiceProvider)
-            {
-                if(key is not null)
-                    return $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})";
-                return $"({serviceType})GetRequiredService(typeof({serviceType}))";
-            }
-
-            return $"""throw new global::System.InvalidOperationException("Service '{innerTypeName}' is not registered.")""";
-        }
-
-        // Try to find direct resolver in this container
-        if(groups.LastWinsByServiceType.TryGetValue(new(serviceType, key), out var directEntry))
-        {
-            switch(directEntry)
-            {
-                case AsyncServiceContainerEntry asyncEntry:
-                    return $"{asyncEntry.AsyncEntryMethodName}().ConfigureAwait(false).GetAwaiter().GetResult()";
-                case ServiceContainerEntry serviceEntry:
-                    return serviceEntry.FormatResolveExpression(serviceType, "");
-            }
-        }
-
-        // Fallback to GetService/GetRequiredService (only when IntegrateServiceProvider is enabled)
-        if(container.IntegrateServiceProvider)
-        {
-            if(key is not null)
-            {
-                return accessor.IsNullable
-                    ? $"GetKeyedService(typeof({serviceType}), {key}) as {serviceType}"
-                    : $"({serviceType})GetRequiredKeyedService(typeof({serviceType}), {key})";
-            }
-
-            return accessor.IsNullable
-                ? $"GetService(typeof({serviceType})) as {serviceType}"
-                : $"({serviceType})GetRequiredService(typeof({serviceType}))";
-        }
-
-        // No resolver found and no fallback: throw (analyzer should have caught this)
-        return accessor.IsNullable
-            ? "default"
-            : $"""throw new global::System.InvalidOperationException("Service '{serviceType}' is not registered.")""";
-    }
-
-    /// <summary>
-    /// Tries to extract the inner type name from a
-    /// <c>global::System.Threading.Tasks.Task&lt;T&gt;</c> type name string.
-    /// Returns <see langword="true"/> and sets <paramref name="innerTypeName"/> if matched.
-    /// </summary>
-    private static bool TryExtractTaskInnerType(string typeName, out string innerTypeName)
-    {
-        const string TaskPrefix = "global::System.Threading.Tasks.Task<";
-        if(typeName.StartsWith(TaskPrefix, StringComparison.Ordinal)
-            && typeName.EndsWith(">", StringComparison.Ordinal))
-        {
-            innerTypeName = typeName[TaskPrefix.Length..^1];
-            return true;
-        }
-        innerTypeName = string.Empty;
-        return false;
     }
 }

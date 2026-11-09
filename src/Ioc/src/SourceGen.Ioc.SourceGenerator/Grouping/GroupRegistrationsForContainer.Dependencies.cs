@@ -201,6 +201,50 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <summary>
+    /// Resolves the return value of each partial accessor like a dependency of its return type, so wrappers, collections and
+    /// services the container does not register itself (imported modules, the fallback provider) resolve as they do for
+    /// constructor parameters.
+    /// </summary>
+    private static ImmutableEquatableArray<ResolvedDependency> ResolvePartialAccessorDependencies(
+        ImmutableEquatableArray<PartialAccessorData> partialAccessors,
+        ServiceLookup serviceLookup,
+        IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
+        WrapperFieldLookup wrapperFields)
+    {
+        if(partialAccessors.Length == 0)
+            return [];
+
+        var dependencies = new List<ResolvedDependency>(partialAccessors.Length);
+
+        foreach(var accessor in partialAccessors)
+        {
+            var type = accessor.ReturnType;
+
+            if(type.Name is IServiceProviderTypeName or IServiceProviderGlobalTypeName)
+            {
+                dependencies.Add(new ServiceProviderSelfDependency());
+                continue;
+            }
+
+            var dependency = ResolveServiceDependencyForContainerEntryModel(
+                type,
+                accessor.Key,
+                accessor.IsNullable,
+                serviceLookup,
+                collectionRegistrations,
+                wrapperFields);
+
+            // A synchronous accessor of an async-init service (SGIOC027) gets its task's result
+            if(serviceLookup.TryGetValue(new(type.Name, accessor.Key), out var registrations) && registrations[^1].IsAsyncInit)
+                dependency = new BlockingTaskDependency(dependency);
+
+            dependencies.Add(dependency);
+        }
+
+        return dependencies.ToImmutableEquatableArray();
+    }
+
     private static ResolvedDependency ResolveParameterDependencyForContainerEntryModel(
         ParameterData parameter,
         ServiceRegistrationModel ownerRegistration,
@@ -243,10 +287,11 @@ partial class IocSourceGenerator
         if(type is CollectionWrapperTypeData collectionType)
         {
             var elementTypeName = collectionType.ElementType.Name;
+            var toArray = collectionType.WrapperKind is not WrapperKind.Enumerable;
 
             if(key is not null)
             {
-                return new CollectionFallbackDependency(elementTypeName, IsKeyed: true, Key: key);
+                return new CollectionFallbackDependency(elementTypeName, IsKeyed: true, Key: key, toArray);
             }
 
             if(collectionType.ElementType is KeyValuePairTypeData kvpElement
@@ -276,7 +321,7 @@ partial class IocSourceGenerator
                 return new CollectionDependency(wrapperFields.Names.FuncArrayResolver(funcElement.ReturnType.Name));
             }
 
-            return new CollectionFallbackDependency(elementTypeName, IsKeyed: false, Key: null);
+            return new CollectionFallbackDependency(elementTypeName, IsKeyed: false, Key: null, toArray);
         }
 
         if(type is LazyTypeData or FuncTypeData or KeyValuePairTypeData or DictionaryTypeData or TaskTypeData)
@@ -474,7 +519,10 @@ partial class IocSourceGenerator
                     return new TaskFromResultDependency(CreateDirectDependency(cached), task.InnerType.Name);
                 }
 
-                return new FallbackProviderDependency(type.Name, key, isOptional);
+                // Task<Wrapper<T>> is not supported and falls back as a whole
+                return task.InnerType is WrapperTypeData
+                    ? new FallbackProviderDependency(type.Name, key, isOptional)
+                    : new TaskFallbackDependency(task.InnerType.Name, key, isOptional);
             }
 
             default:

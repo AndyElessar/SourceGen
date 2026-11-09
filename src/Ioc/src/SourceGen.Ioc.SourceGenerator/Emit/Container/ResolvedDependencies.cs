@@ -316,19 +316,59 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <param name="ToArray">Whether the requested collection type needs an array (every collection type but <c>IEnumerable&lt;T&gt;</c>).</param>
     private sealed record class CollectionFallbackDependency(
         string ElementType,
         bool IsKeyed,
-        string? Key) : ResolvedDependency
+        string? Key,
+        bool ToArray = false) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
         {
-            if(IsKeyed)
+            return (IsKeyed, ToArray) switch
             {
-                return $"GetKeyedServices<{ElementType}>({Key})";
+                (true, true) => $"GetKeyedServices<{ElementType}>({Key}).ToArray()",
+                (true, false) => $"GetKeyedServices<{ElementType}>({Key})",
+                (false, true) => $"GetServices<{ElementType}>().ToArray()",
+                (false, false) => $"GetServices<{ElementType}>()",
+            };
+        }
+    }
+
+    /// <summary>
+    /// <c>Task&lt;TypeName&gt;</c> dependency on a service the container does not register itself (an imported module or the
+    /// fallback provider): its <c>Task&lt;TypeName&gt;</c> when it is an async-init service, otherwise its synchronous instance
+    /// wrapped in a completed task.
+    /// </summary>
+    private sealed record class TaskFallbackDependency(string TypeName, string? Key, bool IsOptional) : ResolvedDependency
+    {
+        public override string FormatExpression(bool isOptional)
+        {
+            const string TaskPrefix = "global::System.Threading.Tasks.Task";
+            var patternTypeName = GetPatternTypeName(TypeName);
+
+            // The switch scopes its pattern variable to the arm, so several of these can share one statement
+            if(Key is not null)
+            {
+                return IsOptional || isOptional
+                    ? $"(GetKeyedService(typeof({TaskPrefix}<{TypeName}>), {Key}) as {TaskPrefix}<{TypeName}> ?? (GetKeyedService(typeof({TypeName}), {Key}) switch {{ {patternTypeName} service => {TaskPrefix}.FromResult<{TypeName}>(service), _ => null }}))"
+                    : $"(GetKeyedService(typeof({TaskPrefix}<{TypeName}>), {Key}) as {TaskPrefix}<{TypeName}> ?? {TaskPrefix}.FromResult(({TypeName})GetRequiredKeyedService(typeof({TypeName}), {Key})))";
             }
 
-            return $"GetServices<{ElementType}>()";
+            return IsOptional || isOptional
+                ? $"(GetService(typeof({TaskPrefix}<{TypeName}>)) as {TaskPrefix}<{TypeName}> ?? (GetService(typeof({TypeName})) switch {{ {patternTypeName} service => {TaskPrefix}.FromResult<{TypeName}>(service), _ => null }}))"
+                : $"(GetService(typeof({TaskPrefix}<{TypeName}>)) as {TaskPrefix}<{TypeName}> ?? {TaskPrefix}.FromResult(({TypeName})GetRequiredService(typeof({TypeName}))))";
+        }
+    }
+
+    /// <summary>
+    /// A synchronous partial accessor of an async-init service (reported by SGIOC027), which blocks on its initialization task.
+    /// </summary>
+    private sealed record class BlockingTaskDependency(ResolvedDependency Inner) : ResolvedDependency
+    {
+        public override string FormatExpression(bool isOptional)
+        {
+            return $"{Inner.FormatExpression(isOptional)}.ConfigureAwait(false).GetAwaiter().GetResult()";
         }
     }
 

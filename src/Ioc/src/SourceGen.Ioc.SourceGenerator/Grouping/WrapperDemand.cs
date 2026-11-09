@@ -6,6 +6,7 @@ partial class IocSourceGenerator
     /// The wrapper and collection types that registrations depend on, scanned once for both the Register and Container
     /// outputs from every dependency of a registration: its factory's parameters (or the implementation type's constructor
     /// parameters), its injection members, and its decorators' constructor parameters and injection members.
+    /// The Container output also scans the return types of the container's partial accessors.
     /// </summary>
     /// <remarks>
     /// Nested wrappers are intentionally excluded from the wrapper demand. This is a deliberate pragmatic choice: direct
@@ -44,7 +45,11 @@ partial class IocSourceGenerator
             return serviceTypes;
         }
 
-        public static WrapperDemand Scan(IEnumerable<ServiceRegistrationModel> registrations)
+        /// <param name="registrations">The registrations whose dependencies are scanned.</param>
+        /// <param name="partialAccessors">The container's partial accessors, whose return types are scanned like dependencies.</param>
+        public static WrapperDemand Scan(
+            IEnumerable<ServiceRegistrationModel> registrations,
+            ImmutableEquatableArray<PartialAccessorData>? partialAccessors = null)
         {
             var demand = new WrapperDemand();
 
@@ -58,6 +63,12 @@ partial class IocSourceGenerator
                     demand.ScanParameters(decorator.ConstructorParameters);
                     demand.ScanInjectionMembers(decorator.InjectionMembers);
                 }
+            }
+
+            if(partialAccessors is not null)
+            {
+                foreach(var accessor in partialAccessors)
+                    demand.ScanType(accessor.ReturnType);
             }
 
             return demand;

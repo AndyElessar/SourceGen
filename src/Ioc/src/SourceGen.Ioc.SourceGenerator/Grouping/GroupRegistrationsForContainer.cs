@@ -15,7 +15,7 @@ partial class IocSourceGenerator
         var reservedNames = GetReservedNames(container);
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes);
+        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes, container.PartialAccessors);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -93,7 +93,8 @@ partial class IocSourceGenerator
             container.ThreadSafeStrategy,
             container.EagerResolveOptions,
             reservedNames,
-            requestedCollectionServiceTypes);
+            requestedCollectionServiceTypes,
+            container.PartialAccessors);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -108,7 +109,8 @@ partial class IocSourceGenerator
         ThreadSafeStrategy threadSafeStrategy,
         EagerResolveOptions eagerResolveOptions,
         ReservedMemberNames reservedNames,
-        ImmutableEquatableArray<string> requestedCollectionServiceTypes)
+        ImmutableEquatableArray<string> requestedCollectionServiceTypes,
+        ImmutableEquatableArray<PartialAccessorData> partialAccessors)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
         var serviceLookup = new Dictionary<ServiceTypeKey, List<ServiceLookupEntry>>();
@@ -267,7 +269,7 @@ partial class IocSourceGenerator
         // Async-init services are excluded from collection resolution (only Task<T> can access them).
         var collectionServiceTypes = new List<string>();
         var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<ServiceLookupEntry>>();
-        var demand = WrapperDemand.Scan(featureFilteredRegistrations);
+        var demand = WrapperDemand.Scan(featureFilteredRegistrations, partialAccessors);
         var requestedCollectionTypes = demand.CollectionServiceTypes;
         requestedCollectionTypes.UnionWith(requestedCollectionServiceTypes);
 
@@ -340,6 +342,11 @@ partial class IocSourceGenerator
             singletonEntries,
             scopedEntries,
             transientEntries);
+        var partialAccessorDependencies = ResolvePartialAccessorDependencies(
+            partialAccessors,
+            serviceLookupEntries,
+            collectionRegistrations,
+            wrapperFields);
 
         return new ContainerRegistrationGroups(
             immutableLastWinsByServiceType,
@@ -353,7 +360,8 @@ partial class IocSourceGenerator
             lazyWrapperEntries,
             funcWrapperEntries,
             kvpWrapperEntries,
-            collectionEntries);
+            collectionEntries,
+            partialAccessorDependencies);
     }
 
     /// <summary>

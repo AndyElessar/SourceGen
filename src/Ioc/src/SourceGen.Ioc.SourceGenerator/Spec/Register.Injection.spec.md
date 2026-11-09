@@ -216,6 +216,7 @@ services.AddSingleton<Task<IMyService>>(async (IServiceProvider sp) => await sp.
 |:----------------------|:---------------------|:----------------------|
 |Async-init service (`T` resolves through generated `Task<T>` init path)|MUST resolve `Task<T>` directly via `sp.GetRequiredService<Task<T>>()` or `sp.GetService<Task<T>>()`, depending on requiredness/default handling rules.|MUST call the generated async resolver path for `Task<T>` directly.|
 |Sync-only service (`T` only has synchronous resolution)|MUST wrap the synchronous resolution as `Task.FromResult(sp.GetRequiredService<T>())` or the matching optional/default-aware `Task.FromResult(...)` form.|MUST wrap the sync resolver result as `Task.FromResult(self.GetT_Resolve())` or the equivalent generated sync resolver call.|
+|Not registered in the container (an imported module or the fallback provider)|—|MUST resolve `GetService(typeof(Task<T>)) as Task<T> ?? Task.FromResult((T)GetRequiredService(typeof(T)))` (keyed and optional forms accordingly), so that an async-init service of an imported module keeps its initialization task and a synchronous one is wrapped in a completed task.|
 
 ```csharp
 // Invalid: nested async wrappers are not supported.

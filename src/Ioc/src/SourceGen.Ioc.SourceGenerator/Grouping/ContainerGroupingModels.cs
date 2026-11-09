@@ -34,6 +34,7 @@ partial class IocSourceGenerator
     /// <param name="FuncWrapperEntries">Wrapper entry model for <c>Func&lt;T&gt;</c> registrations.</param>
     /// <param name="KvpWrapperEntries">Wrapper entry model for <c>KeyValuePair&lt;TKey, TValue&gt;</c> registrations.</param>
     /// <param name="CollectionEntries">Parallel collection entry model for IEnumerable and related wrappers.</param>
+    /// <param name="PartialAccessorDependencies">The resolved return value of each partial accessor, parallel to the container's partial accessors.</param>
     private sealed record class ContainerRegistrationGroups(
         ImmutableEquatableDictionary<ServiceTypeKey, ContainerEntry> LastWinsByServiceType,
         ImmutableEquatableSet<string> AllServiceTypes,
@@ -46,5 +47,6 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<LazyWrapperContainerEntry> LazyWrapperEntries,
         ImmutableEquatableArray<FuncWrapperContainerEntry> FuncWrapperEntries,
         ImmutableEquatableArray<KvpWrapperContainerEntry> KvpWrapperEntries,
-        ImmutableEquatableArray<ContainerEntry> CollectionEntries);
+        ImmutableEquatableArray<ContainerEntry> CollectionEntries,
+        ImmutableEquatableArray<ResolvedDependency> PartialAccessorDependencies);
 }

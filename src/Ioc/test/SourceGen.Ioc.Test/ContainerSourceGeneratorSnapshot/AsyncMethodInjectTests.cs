@@ -760,6 +760,49 @@ public class AsyncMethodInjectTests
         await Verify(generatedSource);
     }
 
+    [Test]
+    [Arguments("Singleton")]
+    [Arguments("Transient")]
+    public async Task AsyncMethodInject_SynchronousPartialAccessor_BlocksOnInitialization(string lifetime)
+    {
+        // A synchronous accessor of an async-init service (reported by SGIOC027) still compiles: it blocks on the task
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.{{lifetime}}, ServiceTypes = [typeof(IMyService)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocContainer(ThreadSafeStrategy = ThreadSafeStrategy.None, EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer
+            {
+                public partial IMyService GetMyService();
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource).UseParameters(lifetime);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Decorator support for async-init services
     // ─────────────────────────────────────────────────────────────────────────
