@@ -669,6 +669,8 @@ Report when a consumer requests `TService` but the matched registration can only
 - Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods.
 - Matches the requested service type and key against available registrations.
 - If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`.
+- `Lazy<T>`, `Func<T>` and `Func<T1, ..., T>` (also nested, e.g. `Lazy<Func<T>>`) are unwrapped first: they create `T` synchronously, so they cannot resolve an async-init service either (the Register output does not register a `Func` with input parameters for it, and the Container resolves these wrappers from the fallback provider). A `Task<T>` inside them (`Lazy<Task<T>>`) is not reported. Collections are not unwrapped, since they exclude async-init registrations.
+- A registration's service types are resolved like the generator's `ProcessSingleRegistration`, including assembly-level `[IocRegisterDefaults]`: each base class (first) and interface of the implementation that has default settings, the `ServiceTypes` of the best (first) match, and its `RegisterAllInterfaces` / `RegisterAllBaseClasses` when the registration does not set them. Type-level `[IocRegisterDefaults]` are not collected by `RegisterAnalyzer`.
 - Consumers SHOULD request `Task<TService>` instead of `TService` in this scenario.
 - Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
 

@@ -208,7 +208,7 @@ services.AddSingleton<global::System.Threading.Tasks.Task<global::MyNamespace.IH
 
 </details>
 
-The decorated service type becomes async-init: it is registered as `Task<IHandler>` only, so consumers inject `Task<IHandler>` and `await` it (requesting `IHandler` reports `SGIOC030`). Decorators are applied from the innermost one, and each decorator's async methods are awaited before the next decorator wraps it.
+The decorated service type becomes async-init: it is registered as `Task<IHandler>` only, so consumers inject `Task<IHandler>` and `await` it (requesting `IHandler`, `Lazy<IHandler>` or `Func<..., IHandler>` reports `SGIOC030`). Decorators are applied from the innermost one, and each decorator's async methods are awaited before the next decorator wraps it.
 
 > [!NOTE]
 > Only the decorated service types change. The implementation type (`MyHandler`) and service types the decorator does not implement keep their synchronous registrations. A `Func<..., IHandler>` with input parameters cannot initialize an async-init service, so it is not generated for it.

@@ -689,6 +689,13 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         string? serviceKey,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes)
     {
+        // Lazy<T> and Func<..., T> create T synchronously, so they cannot resolve an async-init service either
+        while(dependencyType.TryGetWrapperInfo(out var wrapperInfo)
+            && wrapperInfo is { Kind: WrapperKind.Lazy or WrapperKind.Func, ElementType: { } elementType })
+        {
+            dependencyType = elementType;
+        }
+
         if(AnalyzerHelpers.TryGetAsyncWrapperElementType(dependencyType) is not null)
             return;
 

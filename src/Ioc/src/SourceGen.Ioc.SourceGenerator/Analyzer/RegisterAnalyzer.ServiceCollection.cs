@@ -162,13 +162,85 @@ public sealed partial class RegisterAnalyzer
         // Check for Factory and Instance (used by ServiceInfo)
         var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
-        ImmutableArray<ServiceSymbolKey> registrations =
-            [.. AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes).Select(serviceType => new ServiceSymbolKey(serviceType, key))];
+        var serviceTypes = new HashSet<INamedTypeSymbol>(
+            AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes),
+            SymbolEqualityComparer.Default);
+        var bestDefault = AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
+
+        ImmutableArray<ServiceSymbolKey> registrations = [.. serviceTypes.Select(serviceType => new ServiceSymbolKey(serviceType, key))];
         var asyncDecoratedRegistrations = hasInstance
             ? []
-            : GetAsyncDecoratedRegistrations(analyzerContext, attribute, targetType, registrations);
+            : GetAsyncDecoratedRegistrations(analyzerContext, attribute, targetType, bestDefault, registrations);
 
         RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
+    }
+
+    /// <summary>
+    /// Adds the service types that default settings give a registration, like the generator's <c>ProcessSingleRegistration</c>:
+    /// each base class (first) and interface of the implementation that has default settings, then the <c>ServiceTypes</c> of
+    /// the first match (the best default), and its <c>RegisterAllInterfaces</c> / <c>RegisterAllBaseClasses</c> when the
+    /// registration does not set them. Returns the best default, or <see langword="null"/> when none matches.
+    /// </summary>
+    private static DefaultSettingsModel? AddDefaultSettingsServiceTypes(
+        AnalyzerContext analyzerContext,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        HashSet<INamedTypeSymbol> serviceTypes)
+    {
+        if(analyzerContext.DefaultSettings.IsEmpty)
+            return null;
+
+        DefaultSettingsModel? best = null;
+        foreach(var candidate in EnumerateBaseClasses(targetType).Concat(targetType.AllInterfaces))
+        {
+            if(!TryGetDefaultSettingsIndex(analyzerContext, candidate, out var index))
+                continue;
+
+            serviceTypes.Add(candidate);
+            best ??= analyzerContext.DefaultSettings[index];
+        }
+
+        if(best is null)
+            return null;
+
+        // The default's ServiceTypes are matched by name to the implementation's hierarchy; an open generic one adds each
+        // closed form the implementation implements or inherits
+        foreach(var serviceType in best.ServiceTypes)
+        {
+            foreach(var candidate in EnumerateBaseClasses(targetType).Concat(targetType.AllInterfaces))
+            {
+                if(MatchesServiceType(analyzerContext, candidate, serviceType))
+                    serviceTypes.Add(candidate);
+            }
+        }
+
+        var (hasRegisterAllInterfaces, _) = attribute.TryGetRegisterAllInterfaces();
+        if(!hasRegisterAllInterfaces && best.RegisterAllInterfaces)
+            serviceTypes.UnionWith(targetType.AllInterfaces);
+
+        var (hasRegisterAllBaseClasses, _) = attribute.TryGetRegisterAllBaseClasses();
+        if(!hasRegisterAllBaseClasses && best.RegisterAllBaseClasses)
+            serviceTypes.UnionWith(EnumerateBaseClasses(targetType));
+
+        return best;
+
+        static bool MatchesServiceType(AnalyzerContext analyzerContext, INamedTypeSymbol candidate, TypeData serviceType)
+        {
+            var name = analyzerContext.TypeNames.GetOrAdd(candidate, static type => type.BuildTypeName());
+            if(name == serviceType.Name)
+                return true;
+
+            return serviceType is GenericTypeData { IsOpenGeneric: true } openServiceType
+                && candidate is { IsGenericType: true, TypeKind: not TypeKind.Error }
+                && candidate.Arity == openServiceType.GenericArity
+                && TransformExtensions.GetNameWithoutGeneric(name) == openServiceType.NameWithoutGeneric;
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumerateBaseClasses(INamedTypeSymbol type)
+    {
+        for(var baseType = type.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
+            yield return baseType;
     }
 
     /// <summary>
@@ -179,6 +251,7 @@ public sealed partial class RegisterAnalyzer
         AnalyzerContext analyzerContext,
         AttributeData attribute,
         INamedTypeSymbol targetType,
+        DefaultSettingsModel? bestDefault,
         ImmutableArray<ServiceSymbolKey> registrations)
     {
         var features = analyzerContext.Features;
@@ -186,8 +259,8 @@ public sealed partial class RegisterAnalyzer
             return [];
 
         var decorators = AnalyzerHelpers.GetDecoratorSymbols(attribute);
-        var defaultDecorators = decorators.Length == 0 && TryGetBestDefaultSettingsIndex(analyzerContext, targetType, out var index)
-            ? analyzerContext.DefaultSettings[index].Decorators
+        var defaultDecorators = decorators.Length == 0 && bestDefault is not null
+            ? bestDefault.Decorators
             : [];
 
         if(decorators.Length == 0 && defaultDecorators.Length == 0)
@@ -205,31 +278,6 @@ public sealed partial class RegisterAnalyzer
         }
 
         return builder.ToImmutable();
-    }
-
-    /// <summary>
-    /// Finds the best default settings of an implementation type like the generator's <c>FindMatchingDefaults</c>:
-    /// the first match among its base classes, then its interfaces.
-    /// </summary>
-    private static bool TryGetBestDefaultSettingsIndex(AnalyzerContext analyzerContext, INamedTypeSymbol targetType, out int index)
-    {
-        index = -1;
-        if(analyzerContext.DefaultSettings.IsEmpty)
-            return false;
-
-        for(var baseType = targetType.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
-        {
-            if(TryGetDefaultSettingsIndex(analyzerContext, baseType, out index))
-                return true;
-        }
-
-        foreach(var iface in targetType.AllInterfaces)
-        {
-            if(TryGetDefaultSettingsIndex(analyzerContext, iface, out index))
-                return true;
-        }
-
-        return false;
     }
 
     /// <summary>
