@@ -24,12 +24,54 @@ partial class IocSourceGenerator
     /// </remarks>
     private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
     {
+        if(registration.IsAsyncInit)
+        {
+            WriteAsyncDecoratorRegistration(writer, registration, lifetime, asyncInitServiceTypeNames);
+            return;
+        }
+
         var hiddenKey = WriteOwnServiceInstanceOpen(writer, registration, lifetime);
 
         var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
         writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({(registration.Key is not null ? "key" : "")});");
 
         WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, asyncInitServiceTypeNames);
+    }
+
+    /// <summary>
+    /// Writes the <c>Task&lt;ServiceType&gt;</c> registration of an async-init service type's decorator chain: an <c>async</c>
+    /// local function awaits the implementation type's <c>Task&lt;ImplementationType&gt;</c> and wraps the result. The service
+    /// type has no synchronous registration, so the chain is registered under the registration's own key, without a hidden key.
+    /// </summary>
+    private static void WriteAsyncDecoratorRegistration(
+        SourceWriter writer,
+        ServiceRegistrationModel registration,
+        string lifetime,
+        ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+    {
+        var serviceTypeName = registration.ServiceType.Name;
+        writer.WriteServiceLambdaOpen(lifetime, $"global::System.Threading.Tasks.Task<{serviceTypeName}>", registration.Key);
+
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        writer.WriteLine($"async global::System.Threading.Tasks.Task<{serviceTypeName}> Init()");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
+        writer.WriteLine($"var s0 = await sp.{methodName}<global::System.Threading.Tasks.Task<{registration.ImplementationType.Name}>>({(registration.Key is not null ? "key" : "")});");
+
+        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
+        writer.WriteLine($"return {outermostVar};");
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        writer.WriteLine("return Init();");
+
+        writer.Indentation--;
+        writer.WriteLine("});");
     }
 
     /// <summary>

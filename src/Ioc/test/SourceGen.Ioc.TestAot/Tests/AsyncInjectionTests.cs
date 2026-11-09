@@ -136,6 +136,22 @@ public sealed class AsyncInjectionTests
         await Assert.That(service1).IsSameReferenceAs(service2);
     }
 
+    [Test]
+    public async Task AsyncInitService_MsDi_Decorated_ResolvesDecoratedTaskWrappingInitializedImplementation()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestCase();
+        await using var provider = services.BuildServiceProvider();
+
+        var implementation = await provider.GetRequiredService<Task<AsyncInnerExposingService>>();
+        var decorated = await provider.GetRequiredService<Task<IAsyncInnerExposingService>>();
+
+        await Assert.That(implementation.IsInitialized).IsTrue();
+        await Assert.That(decorated).IsTypeOf<AsyncInnerExposingDecorator>();
+        await Assert.That(decorated.Inner).IsSameReferenceAs(implementation);
+        await Assert.That(provider.GetService<IAsyncInnerExposingService>()).IsNull();
+    }
+
     #endregion
 
     #region Composite Container Tests

@@ -259,4 +259,50 @@ public class AsyncMethodInjectTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task AsyncMethodInject_WithDecorator_RegistersTaskOfDecoratedServiceType()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Logger : ILogger { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IMyService)], Key = "keyed", Decorators = [typeof(MyServiceDecorator)])]
+            public class KeyedMyService : IMyService
+            {
+                [IocInject]
+                public async Task InitAsync() { }
+            }
+
+            public class MyServiceDecorator(IMyService inner, ILogger logger) : IMyService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
 }

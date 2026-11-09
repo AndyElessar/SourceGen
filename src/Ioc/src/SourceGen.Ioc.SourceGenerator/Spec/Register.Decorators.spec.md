@@ -18,6 +18,21 @@ A non-keyed decorator chain MUST be registered as a keyed service under the hidd
 
 The decorator chain wraps the instance resolved from the implementation type, including when that instance comes from a non-generic `Factory` (see [Factory](Register.Factory.spec.md)). Decorators are not applied to `Instance` registrations.
 
+For an async-init registration (see [Async Method Injection](Register.Injection.spec.md#async-method-injection)), the service type has no synchronous registration: the decorator chain MUST be registered as `Task<ServiceType>` under the registration's own key (no hidden key and no forwarder). Its factory MUST create an `async Task<ServiceType> Init()` local function that awaits the implementation type's `Task<ImplementationType>` (`sp.GetRequiredService<Task<MyService>>()`, or `sp.GetRequiredKeyedService<Task<MyService>>(key)` when keyed) and wraps the result.
+
+```csharp
+services.AddSingleton<Task<IMyService>>((IServiceProvider sp) =>
+{
+    async Task<IMyService> Init()
+    {
+        var s0 = await sp.GetRequiredService<Task<MyService>>();
+        var s1 = new MyServiceDecorator(s0);
+        return s1;
+    }
+    return Init();
+});
+```
+
 | Decorator | Service type | Closed decorator |
 | :--- | :--- | :--- |
 | `Decorator<TResponse, TRequest> : IHandler<TRequest, TResponse>` | `IHandler<Req, Res>` | `Decorator<Res, Req>` |
