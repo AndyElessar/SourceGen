@@ -52,8 +52,8 @@ When a generator change regenerates `samples/**/Generated/*.g.cs`, commit the re
 - CI (build, AOT tests, CodeQL, generator and NativeAOT benchmarks) runs on PRs, including stacked PRs, and reruns when a PR is retargeted. Benchmarks take about 25 minutes.
 - Benchmark timings on shared runners swing by 5–20% with unchanged allocations. Judge a change by allocations; the benchmark check fails on allocation increases (above 5%, 10% for `AnalyzerBenchmarks`) and only reports time changes.
 - CI does not rerun when `main` moves. If `main` changed since the last run in a way that can interact with the PR, merge `main` into the branch to rerun CI before merging.
-- Merge with a merge commit: `gh pr merge <n> --merge`.
-- A PR in a GitHub stack (`gh stack link <bottom-pr> ... <top-pr>`) cannot be merged with `gh pr merge`; use `gh stack merge <pr> --yes --merge`, which merges up to that PR one at a time.
+- Squash merge: `gh pr merge <n> --squash`. The repository only allows squash merges, so each PR lands on `main` as one commit titled by the PR title (Conventional Commits, see above) with the PR description as its body; no `Merge pull request #n` commit is created.
+- A PR in a GitHub stack (`gh stack link <bottom-pr> ... <top-pr>`) cannot be merged with `gh pr merge`; use `gh stack merge <pr> --yes --squash`, which merges the stack up to that PR in one all-or-nothing operation.
 
 ## Releases
 
