@@ -377,9 +377,10 @@ partial class IocSourceGenerator
     /// </returns>
     internal static TypeData? TryCloseDecorator(TypeData decorator, TypeData serviceType)
     {
-        // Without extracted constructor parameters the decorated parameter cannot be checked
+        // Without extracted constructor parameters the decorated parameter cannot be checked. Closing an open generic
+        // decorator whose constructor has no parameters leaves them null, so the decorator itself tells whether they were extracted.
         return TryCloseDecoratorForServiceType(decorator, serviceType) is { } closed
-            && (closed.ConstructorParameters is null || GetDecoratedParameterIndex(closed.ConstructorParameters, serviceType.Name) >= 0)
+            && (decorator.ConstructorParameters is null || GetDecoratedParameterIndex(closed.ConstructorParameters ?? [], serviceType.Name) >= 0)
             ? closed
             : null;
     }
@@ -413,6 +414,21 @@ partial class IocSourceGenerator
     /// Gets whether a decorator constructor parameter type name is the decorated service type name, ignoring a nullable
     /// annotation.
     /// </summary>
+    /// <summary>
+    /// Enumerates the constructor parameters of a closed decorator that are resolved as dependencies: all except the one that
+    /// receives the decorated instance of <paramref name="serviceType"/>.
+    /// </summary>
+    internal static IEnumerable<ParameterData> EnumerateDecoratorDependencyParameters(TypeData decorator, TypeData serviceType)
+    {
+        var parameters = decorator.ConstructorParameters ?? [];
+        var decoratedParameterIndex = GetDecoratedParameterIndex(parameters, serviceType.Name);
+        for(var i = 0; i < parameters.Length; i++)
+        {
+            if(i != decoratedParameterIndex)
+                yield return parameters[i];
+        }
+    }
+
     internal static bool IsDecoratedServiceTypeName(string parameterTypeName, string serviceTypeName) =>
         parameterTypeName.EndsWith("?", StringComparison.Ordinal)
             ? parameterTypeName.Length == serviceTypeName.Length + 1 && parameterTypeName.StartsWith(serviceTypeName, StringComparison.Ordinal)

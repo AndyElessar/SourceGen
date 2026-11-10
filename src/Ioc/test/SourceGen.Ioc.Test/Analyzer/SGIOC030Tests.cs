@@ -1014,6 +1014,40 @@ public class SGIOC030Tests
     }
 
     [Test]
+    public async Task SGIOC030_DecoratorOfTwoServiceTypes_ReportsParameterResolvedForTheOtherServiceType()
+    {
+        // Decorating IFoo, foo receives the decorated instance and bar is resolved; decorating IBar, the reverse.
+        // The async decorator makes both service types async-init, so each resolved parameter is reported.
+        const string source = """
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo { }
+            public interface IBar { }
+
+            [IocRegister(ServiceTypes = [typeof(IFoo), typeof(IBar)], Decorators = [typeof(FooBarDecorator)])]
+            public class Service : IFoo, IBar { }
+
+            public class FooBarDecorator(IFoo foo, IBar bar) : IFoo, IBar
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var messages = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).Select(static d => d.GetMessage()).ToList();
+
+        await Assert.That(messages).Count().IsEqualTo(2);
+        await Assert.That(messages.Any(static m => m.Contains("'foo'"))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("'bar'"))).IsTrue();
+    }
+
+    [Test]
     public async Task SGIOC030_AsyncDecoratorWrappingItsOwnServiceType_DoesNotReportInnerParameter()
     {
         // The decorator makes IMyService async-init, but its inner IMyService parameter receives the wrapped instance.

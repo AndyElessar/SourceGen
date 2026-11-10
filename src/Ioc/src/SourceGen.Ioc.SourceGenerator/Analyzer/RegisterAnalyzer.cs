@@ -566,18 +566,31 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         }
 
         // Decorators are not registered services, but the generator resolves their dependencies like a service's.
-        // Each applied decorator is analyzed once, however many registrations it decorates.
+        // The parameter that receives the decorated instance depends on the decorated service type, so an applied decorator is
+        // analyzed once per such parameter, and a dependency reported for several of them is reported once.
+        var reportedLocations = new HashSet<Location>();
         foreach(var applied in analyzerContext.AppliedDecorators)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
+
             var decorator = applied.Key;
-            AnalyzeSyncDependenciesOnAsyncInitServices(
-                context.ReportDiagnostic,
-                decorator.SpecifiedOrPrimaryOrMostParametersConstructor,
-                [.. decorator.GetInjectedMembers()],
-                asyncInitOnlyServiceTypes,
-                context.CancellationToken,
-                applied.Value);
+            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = [.. decorator.GetInjectedMembers()];
+            reportedLocations.Clear();
+            foreach(var decoratedParameterIndex in applied.Value.Keys)
+            {
+                AnalyzeSyncDependenciesOnAsyncInitServices(
+                    diagnostic =>
+                    {
+                        if(reportedLocations.Add(diagnostic.Location))
+                            context.ReportDiagnostic(diagnostic);
+                    },
+                    constructor,
+                    injectedMembers,
+                    asyncInitOnlyServiceTypes,
+                    context.CancellationToken,
+                    decoratedParameterIndex);
+            }
         }
     }
 
@@ -705,9 +718,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         return serviceTypes;
     }
 
-    /// <param name="decoratedParameters">
-    /// For a decorator, the indexes of the constructor parameters that receive the decorated instance instead of a resolved
-    /// service (one per decorated service type), which are not analyzed.
+    /// <param name="decoratedParameterIndex">
+    /// For a decorator, the index of the constructor parameter that receives the decorated instance instead of a resolved
+    /// service, which is not analyzed; -1 otherwise.
     /// </param>
     private static void AnalyzeSyncDependenciesOnAsyncInitServices(
         Action<Diagnostic> reportDiagnostic,
@@ -715,7 +728,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken,
-        ConcurrentDictionary<int, byte>? decoratedParameters = null)
+        int decoratedParameterIndex = -1)
     {
         if(constructor is not null)
         {
@@ -724,7 +737,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 constructor.Parameters,
                 asyncInitOnlyServiceTypes,
                 cancellationToken,
-                decoratedParameters);
+                decoratedParameterIndex);
         }
 
         foreach(var (member, injectAttribute) in injectedMembers)
@@ -771,17 +784,14 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ImmutableArray<IParameterSymbol> parameters,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken,
-        ConcurrentDictionary<int, byte>? decoratedParameters = null)
+        int decoratedParameterIndex = -1)
     {
         for(var i = 0; i < parameters.Length; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var parameter = parameters[i];
-            if(ShouldSkipAsyncInitDependencyCheck(parameter))
-                continue;
-
-            if(decoratedParameters?.ContainsKey(i) == true)
+            if(i == decoratedParameterIndex || ShouldSkipAsyncInitDependencyCheck(parameter))
                 continue;
 
             AnalyzeDependencyOnAsyncInitService(

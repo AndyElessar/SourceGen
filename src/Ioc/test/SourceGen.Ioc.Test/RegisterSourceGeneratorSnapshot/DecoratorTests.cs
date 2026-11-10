@@ -718,4 +718,28 @@ public class DecoratorTests
         await Assert.That(generatedSource).Contains("sp.GetRequiredService<global::TestNamespace.IOther>()");
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Decorator_ParameterlessOpenGenericDecorator_IsNotApplied()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<int>)], Decorators = [typeof(NoInnerDecorator<>)])]
+            public sealed class IntHandler : IHandler<int>;
+
+            public sealed class NoInnerDecorator<T> : IHandler<T>;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain("NoInnerDecorator");
+        await Verify(generatedSource);
+    }
 }

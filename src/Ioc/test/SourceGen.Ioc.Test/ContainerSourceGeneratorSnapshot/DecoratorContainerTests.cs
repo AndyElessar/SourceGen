@@ -537,4 +537,49 @@ public class DecoratorContainerTests
         await Assert.That(generatedSource).DoesNotContain("NoInnerDecorator");
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_GenericDecoratorWithInnerParameterNotFirst_DiscoversClosedGenericDependencies()
+    {
+        // The decorator's ILogger<T> dependency is before the inner parameter, for a closed handler and for a handler
+        // closed from an open generic registration on demand
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IHandler<>), ServiceLifetime.Singleton, Decorators = [typeof(TestNamespace.LoggingDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            public interface IHandler<T>;
+
+            [IocRegister]
+            public sealed class IntHandler : IHandler<int>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class GenericHandler<T> : IHandler<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(IHandler<string> handler);
+
+            public sealed class LoggingDecorator<T>(ILogger<T> logger, IHandler<T> inner) : IHandler<T>;
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource)
+            .Contains("new global::TestNamespace.Logger<int>()")
+            .And.Contains("new global::TestNamespace.Logger<string>()");
+        await Verify(generatedSource);
+    }
 }
