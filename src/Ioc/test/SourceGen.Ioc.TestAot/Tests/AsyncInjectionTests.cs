@@ -136,6 +136,43 @@ public sealed class AsyncInjectionTests
         await Assert.That(service1).IsSameReferenceAs(service2);
     }
 
+    [Test]
+    public async Task AsyncInitService_MsDi_Decorated_ResolvesDecoratedTaskWrappingInitializedImplementation()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestCase();
+        await using var provider = services.BuildServiceProvider();
+
+        var implementation = await provider.GetRequiredService<Task<AsyncInnerExposingService>>();
+        var decorated = await provider.GetRequiredService<Task<IAsyncInnerExposingService>>();
+
+        await Assert.That(implementation.IsInitialized).IsTrue();
+        await Assert.That(decorated).IsTypeOf<AsyncInnerExposingDecorator>();
+        await Assert.That(decorated.Inner).IsSameReferenceAs(implementation);
+        await Assert.That(provider.GetService<IAsyncInnerExposingService>()).IsNull();
+    }
+
+    [Test]
+    public async Task AsyncInitDecorators_MsDi_AwaitInnermostFirstAroundSyncImplementation()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestCase();
+        await using var provider = services.BuildServiceProvider();
+
+        var implementation = provider.GetRequiredService<AsyncDecoratedService>();
+        var decorated = await provider.GetRequiredService<Task<IAsyncDecoratedService>>();
+        var again = await provider.GetRequiredService<Task<IAsyncDecoratedService>>();
+
+        await Assert.That(decorated).IsTypeOf<OuterAsyncInitDecorator>();
+        await Assert.That(decorated.IsInitialized).IsTrue();
+        await Assert.That(decorated.InnerWasInitialized).IsTrue();
+        await Assert.That(decorated.Inner).IsTypeOf<InnerAsyncInitDecorator>();
+        await Assert.That(decorated.Inner!.IsInitialized).IsTrue();
+        await Assert.That(decorated.Inner.Inner).IsSameReferenceAs(implementation);
+        await Assert.That(again).IsSameReferenceAs(decorated);
+        await Assert.That(provider.GetService<IAsyncDecoratedService>()).IsNull();
+    }
+
     #endregion
 
     #region Composite Container Tests

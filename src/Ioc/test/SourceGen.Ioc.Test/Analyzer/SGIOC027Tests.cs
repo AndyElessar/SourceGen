@@ -328,5 +328,52 @@ public class SGIOC027Tests
         await Assert.That(sgioc027).Count().IsEqualTo(1);
         await Assert.That(sgioc027[0].GetMessage()).Contains("GetService").And.Contains("IService");
     }
+
+    [Test]
+    [Arguments("IService", 1)]
+    [Arguments("Task<IService>", 0)]
+    [Arguments("TestService", 0)]
+    public async Task SGIOC027_PartialAccessorOfAsyncDecoratedService_ReportsOnlySyncDecoratedServiceType(string returnType, int expectedCount)
+    {
+        // The async decorator makes the decorated service type async-init; the implementation type stays synchronous.
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(ServiceTypes = [typeof(IService)], Decorators = [typeof(AsyncDecorator)])]
+            public class TestService : IService { }
+
+            public class AsyncDecorator(IService inner) : IService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial {{returnType}} GetService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+            });
+        var sgioc027 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC027").ToList();
+
+        await Assert.That(sgioc027).Count().IsEqualTo(expectedCount);
+        if(expectedCount > 0)
+        {
+            // The implementation has no async inject methods; the message must not say it has
+            await Assert.That(sgioc027[0].GetMessage()).Contains("async-init").And.Contains("decorator");
+        }
+    }
 }
 

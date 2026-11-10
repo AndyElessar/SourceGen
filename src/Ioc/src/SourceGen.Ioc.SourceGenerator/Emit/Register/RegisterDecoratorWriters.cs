@@ -22,15 +22,30 @@ partial class IocSourceGenerator
     /// </code>
     /// For open generic decorators, falls back to ActivatorUtilities.CreateInstance.
     /// </remarks>
-    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null)
+    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
     {
         var hiddenKey = WriteOwnServiceInstanceOpen(writer, registration, lifetime);
 
         var methodName = GetServiceResolutionMethod(registration.Key, isOptional: false);
-        writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({(registration.Key is not null ? "key" : "")});");
+        var keyArgument = registration.Key is not null ? "key" : "";
+        if(registration.HasAsyncInjection)
+        {
+            writer.WriteLine($"var s0 = await sp.{methodName}<global::System.Threading.Tasks.Task<{registration.ImplementationType.Name}>>({keyArgument});");
+        }
+        else
+        {
+            writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({keyArgument});");
+        }
 
-        WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, asyncInitServiceTypeNames);
+        WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, asyncInitServices);
     }
+
+    /// <summary>
+    /// Gets whether a decorated service type is async-init (its implementation type or a decorator has async injection
+    /// methods), so its decorator chain is registered as <c>Task&lt;ServiceType&gt;</c>.
+    /// </summary>
+    private static bool RegistersAsyncDecoratorChain(ServiceRegistrationModel registration) =>
+        registration.AppliesDecorators && registration.IsAsyncInit;
 
     /// <summary>
     /// Opens the lambda registering a service type's own instance (see <c>RegistersOwnServiceInstance</c>), whose body creates
@@ -40,9 +55,29 @@ partial class IocSourceGenerator
     /// <remarks>
     /// A non-keyed instance is registered under a hidden key, so Lazy/Func wrappers can resolve this registration's instance;
     /// the service type forwards to it, sharing the instance. The body still resolves non-keyed.
+    /// <para>
+    /// An async-init decorator chain (<see cref="RegistersAsyncDecoratorChain"/>) is registered as <c>Task&lt;ServiceType&gt;</c>
+    /// instead: the body is an <c>async</c> local function, so <c>s0</c> may be awaited. The service type has no synchronous
+    /// registration, so the chain is registered under the registration's own key, without a hidden key.
+    /// </para>
     /// </remarks>
     private static string? WriteOwnServiceInstanceOpen(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
     {
+        if(RegistersAsyncDecoratorChain(registration))
+        {
+            var serviceTypeName = registration.ServiceType.Name;
+            writer.WriteServiceLambdaOpen(lifetime, $"global::System.Threading.Tasks.Task<{serviceTypeName}>", registration.Key);
+
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            writer.WriteLine($"async global::System.Threading.Tasks.Task<{serviceTypeName}> Init()");
+            writer.WriteLine("{");
+            writer.Indentation++;
+
+            return null;
+        }
+
         var hiddenKey = registration.Key is null ? GetDecoratedServiceKey(registration) : null;
         writer.WriteServiceLambdaOpen(lifetime, registration.ServiceType.Name, hiddenKey ?? registration.Key);
 
@@ -61,10 +96,19 @@ partial class IocSourceGenerator
         ServiceRegistrationModel registration,
         string lifetime,
         string? hiddenKey,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices)
     {
-        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServiceTypeNames);
+        var isAsync = RegistersAsyncDecoratorChain(registration);
+        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServices, isAsyncMode: isAsync);
         writer.WriteLine($"return {outermostVar};");
+
+        if(isAsync)
+        {
+            writer.Indentation--;
+            writer.WriteLine("}");
+
+            writer.WriteLine("return Init();");
+        }
 
         writer.Indentation--;
         writer.WriteLine("});");
@@ -79,9 +123,15 @@ partial class IocSourceGenerator
     /// <summary>
     /// Writes the statements wrapping the instance in variable <c>s0</c> with <paramref name="registration"/>'s decorators,
     /// the last decorator outermost, and returns the variable holding the outermost instance (<c>s{n}</c>).
-    /// Decorator dependencies are resolved from <c>sp</c> (and <c>key</c> for keyed registrations).
+    /// Decorator dependencies are resolved from <c>sp</c> (and <c>key</c> for keyed registrations). When
+    /// <paramref name="isAsyncMode"/> is <see langword="true"/>, each decorator's async injection methods are awaited before
+    /// the next decorator wraps it.
     /// </summary>
-    private static string WriteDecoratorChain(SourceWriter writer, ServiceRegistrationModel registration, ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+    private static string WriteDecoratorChain(
+        SourceWriter writer,
+        ServiceRegistrationModel registration,
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices,
+        bool isAsyncMode = false)
     {
         var decorators = registration.Decorators;
         var decoratorCount = decorators.Length;
@@ -89,8 +139,6 @@ partial class IocSourceGenerator
         var serviceTypeParams = registration.ServiceType is GenericTypeData genericServiceType
             ? genericServiceType.TypeParameters
             : null;
-
-        var serviceTypeNames = BuildServiceTypeNames(registration);
 
         for(int i = 0; i < decoratorCount; i++)
         {
@@ -106,6 +154,10 @@ partial class IocSourceGenerator
                 continue;
             }
 
+            Func<TypeData, string> typeNameResolver = t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null
+                ? SubstituteGenericArguments(t, decorator, serviceTypeParams)
+                : t.Name;
+
             bool isKeyedRegistration = registration.Key is not null;
             WriteConstructInstanceWithInjection(
                 writer,
@@ -115,11 +167,11 @@ partial class IocSourceGenerator
                 injectionMembers: decorator.InjectionMembers ?? [],
                 isKeyedRegistration: isKeyedRegistration,
                 registrationKey: registration.Key,
-                serviceTypeNames: serviceTypeNames,
-                ctorTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
-                memberTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
+                decoratedParameterIndex: GetDecoratedParameterIndex(ctorParams, registration.ServiceType.Name, typeNameResolver),
+                memberTypeNameResolver: typeNameResolver,
                 decoratedPrevVar: prevVar,
-                asyncInitServiceTypeNames: asyncInitServiceTypeNames);
+                asyncInitServices: asyncInitServices,
+                isAsyncMode: isAsyncMode);
         }
 
         return $"s{decoratorCount}";
@@ -199,65 +251,5 @@ partial class IocSourceGenerator
         }
 
         return SubstituteTypeArguments(paramType.Name, typeArguments);
-    }
-
-    /// <summary>
-    /// Builds a set of service type names for IsServiceParameter check.
-    /// </summary>
-    private static HashSet<string> BuildServiceTypeNames(ServiceRegistrationModel registration)
-    {
-        var serviceTypeNames = new HashSet<string>(StringComparer.Ordinal);
-
-        AddTypeNameVariants(serviceTypeNames, registration.ServiceType);
-        AddTypeNameVariants(serviceTypeNames, registration.ImplementationType);
-
-        if(registration.ImplementationType.AllBaseClasses is not null)
-        {
-            foreach(var baseClass in registration.ImplementationType.AllBaseClasses)
-            {
-                AddTypeNameVariants(serviceTypeNames, baseClass);
-            }
-        }
-
-        if(registration.ImplementationType.AllInterfaces is not null)
-        {
-            foreach(var iface in registration.ImplementationType.AllInterfaces)
-            {
-                AddTypeNameVariants(serviceTypeNames, iface);
-            }
-        }
-
-        return serviceTypeNames;
-    }
-
-    /// <summary>
-    /// Adds both the full name and non-generic name variants to the set.
-    /// </summary>
-    private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
-    {
-        set.Add(type.Name);
-        if(type is GenericTypeData genericType && type.Name != genericType.NameWithoutGeneric)
-        {
-            set.Add(genericType.NameWithoutGeneric);
-        }
-    }
-
-    /// <summary>
-    /// Checks if a parameter type matches any of the service types.
-    /// </summary>
-    private static bool IsServiceTypeParameter(TypeData paramType, string substitutedTypeName, HashSet<string> serviceTypeNames)
-    {
-        if(serviceTypeNames.Contains(substitutedTypeName))
-        {
-            return true;
-        }
-
-        if(serviceTypeNames.Contains(paramType.Name))
-        {
-            return true;
-        }
-
-        return paramType is GenericTypeData genericParamType
-            && serviceTypeNames.Contains(genericParamType.NameWithoutGeneric);
     }
 }

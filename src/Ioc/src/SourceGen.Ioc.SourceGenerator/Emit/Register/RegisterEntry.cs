@@ -8,7 +8,7 @@ partial class IocSourceGenerator
     /// Shared context for writing register entries.
     /// </summary>
     private readonly record struct RegisterWriteContext(
-        ImmutableEquatableSet<string>? AsyncInitServiceTypeNames);
+        ImmutableEquatableSet<AsyncInitService>? AsyncInitServices);
 
     /// <summary>
     /// Base model for a single registration entry that can write itself.
@@ -124,7 +124,7 @@ partial class IocSourceGenerator
             var implTypeName = Registration.ImplementationType.Name;
             var lifetime = Registration.Lifetime.Name;
             var requiredResolutionMethod = GetServiceResolutionMethod(Key, isOptional: false);
-            bool isAsyncInit = context.AsyncInitServiceTypeNames?.Contains(implTypeName) == true;
+            bool isAsyncInit = context.AsyncInitServices?.Contains(new(implTypeName, Key)) == true;
 
             if(isAsyncInit)
             {
@@ -237,7 +237,7 @@ partial class IocSourceGenerator
                 var hiddenKey = WriteOwnServiceInstanceOpen(writer, Registration, Lifetime);
                 var arguments = WriteAdditionalParameterResolution(writer, context);
                 writer.WriteLine($"var s0 = {BuildFactoryInvocationExpression(arguments)};");
-                WriteOwnServiceInstanceClose(writer, Registration, Lifetime, hiddenKey, context.AsyncInitServiceTypeNames);
+                WriteOwnServiceInstanceClose(writer, Registration, Lifetime, hiddenKey, context.AsyncInitServices);
                 return;
             }
 
@@ -280,7 +280,7 @@ partial class IocSourceGenerator
                     additionalParam.TemporaryVariableName,
                     IsKeyedRegistration,
                     Key,
-                    context.AsyncInitServiceTypeNames);
+                    context.AsyncInitServices);
                 resolvedParameterNames.Add(resolvedName);
             }
 
@@ -396,7 +396,7 @@ partial class IocSourceGenerator
                     paramVarName,
                     IsKeyedRegistration,
                     Key,
-                    context.AsyncInitServiceTypeNames);
+                    context.AsyncInitServices);
 
                 constructorParamEntries.Add((parameter.Name, resolvedVar));
             }
@@ -419,7 +419,7 @@ partial class IocSourceGenerator
                     member.IsNullable,
                     hasNonNullDefault,
                     member.DefaultValue,
-                    context.AsyncInitServiceTypeNames);
+                    context.AsyncInitServices);
 
                 propertyVarNames[i] = memberVarName;
             }
@@ -476,14 +476,14 @@ partial class IocSourceGenerator
                             IsKeyedRegistration,
                             Key,
                             typeNameResolver: null,
-                            context.AsyncInitServiceTypeNames)
+                            context.AsyncInitServices)
                         : ResolveParamAndEmitVar(
                             writer,
                             parameter,
                             paramVarName,
                             IsKeyedRegistration,
                             Key,
-                            context.AsyncInitServiceTypeNames);
+                            context.AsyncInitServices);
 
                     memberParamIndex++;
                 }
@@ -585,7 +585,7 @@ partial class IocSourceGenerator
 
         public override void WriteRegistration(SourceWriter writer, RegisterWriteContext context)
         {
-            WriteDecoratorRegistration(writer, Registration, Lifetime, context.AsyncInitServiceTypeNames);
+            WriteDecoratorRegistration(writer, Registration, Lifetime, context.AsyncInitServices);
         }
     }
 }

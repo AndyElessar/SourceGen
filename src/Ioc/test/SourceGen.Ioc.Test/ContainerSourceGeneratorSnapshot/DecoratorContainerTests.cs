@@ -483,4 +483,103 @@ public class DecoratorContainerTests
 
         await Verify(generatedSource);
     }
+
+    private const string DecoratedParameterSource = """
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        namespace TestNamespace;
+
+        public interface IHandler;
+        public interface IOther;
+        public interface ILogger;
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger)])]
+        public sealed class Logger : ILogger;
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IOther)])]
+        public sealed class OtherService : IOther;
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "other")]
+        public sealed class OtherHandler : IHandler;
+
+        [IocRegister(
+            Lifetime = ServiceLifetime.Singleton,
+            ServiceTypes = [typeof(IHandler)],
+            Decorators = [typeof(LoggingDecorator), typeof(PairDecorator), typeof(OtherDecorator), typeof(NoInnerDecorator)])]
+        public sealed class Handler : IHandler, IOther;
+
+        // The decorated instance is not the first parameter
+        public sealed class LoggingDecorator(ILogger logger, IHandler inner) : IHandler;
+
+        // Only the first IHandler parameter receives the decorated instance; the second is resolved
+        public sealed class PairDecorator(IHandler inner, [FromKeyedServices("other")] IHandler other) : IHandler;
+
+        // The implementation implements IOther, but only the service type receives the decorated instance
+        public sealed class OtherDecorator(IHandler inner, IOther other) : IHandler;
+
+        // No parameter can receive the decorated instance, so the decorator is not applied
+        public sealed class NoInnerDecorator(ILogger logger) : IHandler;
+        """;
+    [Test]
+    public async Task Container_DecoratedParameter_IsFirstParameterOfServiceType()
+    {
+        var source = DecoratedParameterSource + """
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("NoInnerDecorator");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_GenericDecoratorWithInnerParameterNotFirst_DiscoversClosedGenericDependencies()
+    {
+        // The decorator's ILogger<T> dependency is before the inner parameter, for a closed handler and for a handler
+        // closed from an open generic registration on demand
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IHandler<>), ServiceLifetime.Singleton, Decorators = [typeof(TestNamespace.LoggingDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            public interface IHandler<T>;
+
+            [IocRegister]
+            public sealed class IntHandler : IHandler<int>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class GenericHandler<T> : IHandler<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(IHandler<string> handler);
+
+            public sealed class LoggingDecorator<T>(ILogger<T> logger, IHandler<T> inner) : IHandler<T>;
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource)
+            .Contains("new global::TestNamespace.Logger<int>()")
+            .And.Contains("new global::TestNamespace.Logger<string>()");
+        await Verify(generatedSource);
+    }
 }

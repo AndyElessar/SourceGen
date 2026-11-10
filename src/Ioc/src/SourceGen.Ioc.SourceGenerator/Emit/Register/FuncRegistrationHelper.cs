@@ -61,7 +61,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static List<FuncRegistrationEntry> CollectFuncEntries(
         ImmutableEquatableArray<ServiceRegistrationWithTags> registrations,
-        Dictionary<string, FuncTypeData> neededFuncTypes)
+        Dictionary<string, FuncTypeData> neededFuncTypes,
+        IocFeatures features)
     {
         if(neededFuncTypes.Count == 0)
             return [];
@@ -78,6 +79,10 @@ partial class IocSourceGenerator
 
             foreach(var needed in neededByReturnType[reg.ServiceType.Name])
             {
+                // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service
+                if(needed.HasInputParameters && FilterRegistrationForFeatures(reg, features).IsAsyncInit)
+                    continue;
+
                 if(!addedKeys.Add((needed.Name, reg.ImplementationType.Name, reg.Key)))
                     continue;
 
@@ -217,7 +222,7 @@ partial class IocSourceGenerator
         }
 
         // The input arguments are for the implementation only; decorator dependencies are resolved from DI
-        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServiceTypeNames: null);
+        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServices: null);
         writer.WriteLine($"return {outermostVar};");
     }
 

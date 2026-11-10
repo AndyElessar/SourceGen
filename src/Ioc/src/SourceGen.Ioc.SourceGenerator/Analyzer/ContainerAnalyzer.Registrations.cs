@@ -105,6 +105,7 @@ partial class ContainerAnalyzer
             hasFactory,
             hasInstance,
             hasInjectMembers,
+            AnalyzerHelpers.GetDecoratorSymbols(attribute),
             attribute.ApplicationSyntaxReference);
     }
 
@@ -291,6 +292,7 @@ partial class ContainerAnalyzer
             [.. attribute.GetImplementationTypeSymbols()],
             attribute.NamedArguments.Any(static a => a.Key == "Factory" && !a.Value.IsNull),
             attrClass.IsGenericType,
+            AnalyzerHelpers.GetDecoratorSymbols(attribute),
             attribute.ApplicationSyntaxReference);
     }
 
@@ -371,7 +373,11 @@ partial class ContainerAnalyzer
                 activation,
                 activation.Kind is ActivationKind.Constructor && registration.HasInjectMembers
                     ? semantics.Get(registration.Syntax)?.InjectMembers ?? []
-                    : []));
+                    : [],
+                // Like the generator, a registration's own decorators replace the default ones; an Instance is not decorated
+                registration.HasInstance ? []
+                    : registration.Decorators.Length > 0 ? registration.Decorators
+                    : best?.Decorators ?? []));
 
             void MatchDefaults(INamedTypeSymbol candidate)
             {
@@ -551,7 +557,8 @@ partial class ContainerAnalyzer
                     [.. serviceTypes],
                     defaults.Tags,
                     ExplicitContainer: null,
-                    activation));
+                    activation,
+                    Decorators: defaults.Decorators));
             }
         }
 
@@ -1267,12 +1274,14 @@ partial class ContainerAnalyzer
         bool HasFactory,
         bool HasInstance,
         bool HasInjectMembers,
+        ImmutableArray<INamedTypeSymbol> Decorators,
         SyntaxReference? Syntax);
 
     /// <param name="Key">The key as the generator's code expression (SGIOC021/027/029).</param>
     /// <param name="KeyValue">The key value (SGIOC018).</param>
     /// <param name="Activation">How the container creates the instance; the default is the constructor.</param>
     /// <param name="InjectMembers">The members of the <c>InjectMembers</c> attribute property (constructor activation only).</param>
+    /// <param name="Decorators">The decorator types of the registration, or of its best default settings (SGIOC027/029).</param>
     private sealed record class ResolvedRegistration(
         INamedTypeSymbol ImplementationType,
         string? Key,
@@ -1281,7 +1290,8 @@ partial class ContainerAnalyzer
         ImmutableArray<string> Tags,
         INamedTypeSymbol? ExplicitContainer,
         RegistrationActivation Activation = default,
-        ImmutableArray<InjectMemberInfo> InjectMembers = default);
+        ImmutableArray<InjectMemberInfo> InjectMembers = default,
+        ImmutableArray<INamedTypeSymbol> Decorators = default);
 
     private enum ActivationKind
     {
@@ -1330,6 +1340,7 @@ partial class ContainerAnalyzer
         ImmutableArray<INamedTypeSymbol> implementationTypes,
         bool hasFactory,
         bool isGeneric,
+        ImmutableArray<INamedTypeSymbol> decorators,
         SyntaxReference? syntax)
     {
         public INamedTypeSymbol TargetType { get; } = targetType;
@@ -1347,6 +1358,7 @@ partial class ContainerAnalyzer
         /// <summary>Whether the settings specify a <c>Factory</c>, which registers an open generic target type.</summary>
         public bool HasFactory { get; } = hasFactory;
         public bool IsGeneric { get; } = isGeneric;
+        public ImmutableArray<INamedTypeSymbol> Decorators { get; } = decorators;
         public SyntaxReference? Syntax { get; } = syntax;
     }
 

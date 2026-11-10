@@ -18,6 +18,62 @@ A non-keyed decorator chain MUST be registered as a keyed service under the hidd
 
 The decorator chain wraps the instance resolved from the implementation type, including when that instance comes from a non-generic `Factory` (see [Factory](Register.Factory.spec.md)). Decorators are not applied to `Instance` registrations.
 
+### Decorated Parameter
+
+The decorated instance MUST be passed to the first constructor parameter (of the constructor selected like an implementation's: `[IocInject]`, then primary, then most parameters) whose type is the decorated service type, ignoring nullable annotations; for an open generic decorator, the type after closing. The parameter MAY be at any position. Every other parameter MUST be resolved as a dependency, also when its type is the service type, another type the decorator or the implementation implements, or a base type of the service type, so that a decorator gets the same arguments in the Register and Container outputs.
+
+A decorator MUST NOT be applied to a service type when none of its constructor parameters is of that type, since nothing could receive the decorated instance; the analyzer reports `SGIOC035`. More than one parameter of the service type is reported with `SGIOC034`.
+
+```csharp
+public sealed class LoggingDecorator(ILogger logger, IHandler inner) : IHandler;          // inner ← decorated instance
+public sealed class PairDecorator(IHandler inner, [FromKeyedServices("other")] IHandler other) : IHandler; // other resolved (SGIOC034)
+public sealed class FooDecorator(IFoo inner) : IFoo, IBar;                                // not applied to IBar (SGIOC035)
+```
+
+### Async Decorators
+
+A decorated service type is async-init when its implementation type has async inject methods, or when a decorator applied to it has `[IocInject]` methods returning `Task` (see [Async Method Injection](Register.Injection.spec.md#async-method-injection)); `AsyncMethodInject` gates both. A decorator only makes the service types it decorates async-init: the implementation type, and service types the decorator does not implement, keep their own shape.
+
+|Rule|Required behavior|
+|:---|:----------------|
+|Registration|The service type has no synchronous registration: the decorator chain MUST be registered as `Task<ServiceType>` under the registration's own key (no hidden key and no forwarder). Registering `ServiceType` would hand out a decorator whose initialization never ran.|
+|Inner instance|The `async Task<ServiceType> Init()` local function MUST await the implementation type's `Task<ImplementationType>` when the implementation type is async-init (`sp.GetRequiredService<Task<MyService>>()`, keyed: `sp.GetRequiredKeyedService<Task<MyService>>(key)`), otherwise resolve the implementation type synchronously.|
+|Order|Decorators MUST be applied innermost (last) first. Each decorator is constructed, its properties and fields assigned, its synchronous inject methods called, and its async inject methods awaited in source declaration order, before the next decorator wraps it, so every decorator wraps a fully initialized instance.|
+
+```csharp
+#region Define:
+public interface IMyService;
+
+[IocRegister<IMyService>(ServiceLifetime.Singleton, Decorators = [typeof(LoggingDecorator), typeof(WarmupDecorator)])]
+public class MyService : IMyService;
+
+public class LoggingDecorator(IMyService inner) : IMyService;
+
+public class WarmupDecorator(IMyService inner) : IMyService
+{
+    [IocInject]
+    public Task WarmupAsync(ICache cache) => cache.LoadAsync();
+}
+#endregion
+
+#region Generate:
+services.AddSingleton<MyService, MyService>();
+services.AddSingleton<Task<IMyService>>((IServiceProvider sp) =>
+{
+    async Task<IMyService> Init()
+    {
+        var s0 = sp.GetRequiredService<MyService>();
+        var s1_m0 = sp.GetRequiredService<ICache>();
+        var s1 = new WarmupDecorator(s0);
+        await s1.WarmupAsync(s1_m0);
+        var s2 = new LoggingDecorator(s1);
+        return s2;
+    }
+    return Init();
+});
+#endregion
+```
+
 | Decorator | Service type | Closed decorator |
 | :--- | :--- | :--- |
 | `Decorator<TResponse, TRequest> : IHandler<TRequest, TResponse>` | `IHandler<Req, Res>` | `Decorator<Res, Req>` |

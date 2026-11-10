@@ -36,7 +36,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030, 033 |
+| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator analysis | SGIOC002-005, 012-015, 030, 033-035 |
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
@@ -44,7 +44,8 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 
 1. Report buffered duplicated defaults (SGIOC012)
 2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
-3. Build async-init-only pairs → sync dependency analysis (SGIOC030)
+3. Decorated parameters of the decorators matched while collecting registrations (SGIOC034/035)
+4. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
 
 #### Partial Files
 
@@ -80,7 +81,7 @@ The two named type handlers run in one registered action.
 
 #### CompilationEnd: AnalyzeContainerDependencies
 
-Setup: `ResolveRegistrations` applies `[IocRegisterDefaults]` to every registration once (see [Registration Resolution](#registration-resolution)); `BuildAsyncInitServiceKeys` builds the (service type, key) pairs with an async-init implementation once (empty when `AsyncMethodInject` is disabled)
+Setup: `ResolveRegistrations` applies `[IocRegisterDefaults]` to every registration once (see [Registration Resolution](#registration-resolution)); `BuildAsyncInitServiceKeys` builds the (service type, key) pairs with an async-init registration once: an async-init implementation, or a decorator with async inject methods applied to the service type (see [Async-init Registrations](#async-init-registrations); empty when `AsyncMethodInject` is disabled)
 Pass 1 (all containers): `AnalyzeAsyncPartialAccessors` → SGIOC027 (sync accessor on async-init), SGIOC029 (unsupported async return)
 Pass 2 (IntegrateServiceProvider=false only): `ContainerScopeBuilder` computes each container's registrations (see [Container Scope](#container-scope)); `CollectUnresolvedDependencies` checks them (SGIOC018) and `AnalyzePartialAccessorDependencies` checks the partial accessors (SGIOC021). Dependencies of each implementation type are inspected once (`DependencyCache`), and containers that use every registration of the compilation share one SGIOC018 result.
 
@@ -599,19 +600,30 @@ Report when `SourceGenIocFeatures` enables `AsyncMethodInject` without also enab
 
 ---
 
+### Async-init Registrations
+
+SGIOC027, SGIOC029 and SGIOC030 treat a registered (service type, key) pair as async-init when:
+
+- its implementation type has `[IocInject]` methods returning non-generic `Task`, or
+- a decorator applied to the service type has such methods. The decorators are the registration's own `Decorators`, otherwise those of its best `[IocRegisterDefaults]` (like the generator); `Instance` registrations are not decorated. A decorator applies to the service types the generator decorates with it, matched with the generator's own rules (`TryCloseDecorator`: implemented service type, closed generic constraints), so a decorator never makes the implementation type itself, or a service type it cannot decorate, async-init.
+
+Both require `AsyncMethodInject`.
+
+---
+
 ### SGIOC027 - Error - Design - Partial accessor must return `Task<T>` for async-init service
 
-Report when a partial accessor returns the direct synchronous service type with no wrapper even though the matched implementation has async inject methods.
+Report when a partial accessor returns the direct synchronous service type with no wrapper even though the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)).
 
 **Analysis:**
 
 - Applies to partial methods and partial properties declared in `[IocContainer]` types.
 - Applies regardless of the `IntegrateServiceProvider` setting because returning the wrong type for an async-init service is a semantic error, not a fallback-resolution issue.
 - Matches the accessor's service type and key against container registrations.
-- If the matched implementation contains async inject methods and the accessor returns the direct synchronous service type `TService` with no wrapper instead of `Task<TService>`, the analyzer MUST report `SGIOC027`.
+- If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and the accessor returns the direct synchronous service type `TService` with no wrapper instead of `Task<TService>`, the analyzer MUST report `SGIOC027`.
 - `SGIOC029` owns all non-`Task<T>` return types for async-init services, including wrappers, arrays, and unsupported async shapes; `SGIOC027` is only for the direct synchronous `TService` case.
 
-**Message format:** `Partial accessor '{MemberName}' returns '{ServiceType}' but the implementation has async inject methods. Use 'Task<{ServiceType}>'.`
+**Message format:** `Partial accessor '{MemberName}' returns '{ServiceType}' but the service is async-init (its implementation or a decorator has async inject methods). Use 'Task<{ServiceType}>'.`
 
 ---
 
@@ -637,7 +649,7 @@ Report when a partial accessor targets an async-init service but returns any non
 
 - Applies to partial methods and partial properties declared in `[IocContainer]` types.
 - Applies regardless of the `IntegrateServiceProvider` setting because returning any non-`Task<TService>` shape for an async-init service is a semantic error, not a resolution fallback issue.
-- Checks accessors that target registrations whose implementation contains async inject methods.
+- Checks accessors that target async-init registrations (see [Async-init Registrations](#async-init-registrations)).
 - For generic wrappers and arrays, recursively unwraps wrapper element types to find the innermost service type. This diagnostic-only analysis intentionally ignores Generator downgrade rules so that shapes such as `Task<Lazy<T>>`, `Lazy<Task<T>>`, nested wrappers, and arrays are still classified by their innermost service type.
 - If the innermost unwrapped service type is an async-init service and the declared return type is not exactly `Task<TService>`, the analyzer MUST report `SGIOC029`.
 - The only supported async accessor return shape is `Task<TService>`.
@@ -655,13 +667,15 @@ Report when a consumer requests `TService` but the matched registration can only
 
 **Analysis:**
 
-- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods.
+- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods, of registered services and of decorators. Decorators are the ones the generator applies to registrations (their own `Decorators`, otherwise those of the best assembly-level `[IocRegisterDefaults]`), each analyzed once (an open generic decorator once per closed form, closed with the type arguments found by matching the decorated service type, or through its definition when they cannot all be found); the constructor parameter that receives the decorated instance (see [Decorated Parameter](../../Spec/Register.Decorators.spec.md#decorated-parameter)) is not analyzed. That parameter depends on the decorated service type, so a decorator of several service types is analyzed once per such parameter, and a dependency reported for several of them is reported once.
 - Matches the requested service type and key against available registrations.
-- If the matched service has async inject methods and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`.
+- If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`.
+- `Lazy<T>`, `Func<T>` and `Func<T1, ..., T>` (also nested, e.g. `Lazy<Func<T>>`) are unwrapped first: they create `T` synchronously, so they cannot resolve an async-init service either (the Register output does not register a `Func` with input parameters for it, and the Container resolves these wrappers from the fallback provider). A `Task<T>` inside them (`Lazy<Task<T>>`) is not reported. Collections are not unwrapped, since they exclude async-init registrations.
+- A registration's service types are resolved like the generator's `ProcessSingleRegistration`, including assembly-level `[IocRegisterDefaults]`: each base class (first) and interface of the implementation that has default settings, the `ServiceTypes` of the best (first) match, and its `RegisterAllInterfaces` / `RegisterAllBaseClasses` when the registration does not set them. Type-level `[IocRegisterDefaults]` are not collected by `RegisterAnalyzer`.
 - Consumers SHOULD request `Task<TService>` instead of `TService` in this scenario.
 - Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
 
-**Message format:** `'{MemberName}' requires '{ServiceType}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
+**Message format:** `'{MemberName}' requires '{ServiceType}' but this service is async-init (its implementation or a decorator has async inject methods) and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
 
 ---
 
@@ -711,6 +725,38 @@ Report when a registered service depends on `Func<T1, ..., TReturn>` with at lea
 **Message format:** `'{Consumer}' depends on '{FuncType}', which creates a new '{ServiceType}' on every call although '{ServiceType}' is registered as {Lifetime}`
 
 **Fix:** Register the service as Transient, or depend on the parameterless `Func<T>` or the service itself to follow its lifetime.
+
+---
+
+### SGIOC034 - Warning - Design - Multiple decorator parameters can receive the decorated instance
+
+Report when more than one constructor parameter of a decorator is of the decorated service type. Only the first one receives the decorated instance (see [Decorated Parameter](../../Spec/Register.Decorators.spec.md#decorated-parameter)); the others are resolved from the container like any dependency, which is often unintended.
+
+**Analysis:**
+
+- Checks each decorator the generator applies to a registration's service type: the registration's own `Decorators`, otherwise those of its best assembly-level `[IocRegisterDefaults]`. Decorators are matched with the generator's own rules (implemented service type, closed generic constraints).
+- Uses the constructor the generator uses: `[IocInject]`, then the primary constructor, then the one with the most parameters.
+- Reports each extra parameter once per decorator and service type (the definition for generic service types), however many registrations the decorator decorates.
+
+**Message format:** `Parameter '{Parameter}' of decorator '{Decorator}' is of the decorated type '{ServiceType}' but is resolved as a dependency; only the first such parameter '{DecoratedParameter}' receives the decorated instance`
+
+**Fix:** Give the decorated instance a single parameter, or remove the extra parameter.
+
+---
+
+### SGIOC035 - Error - Design - Decorator has no parameter for the decorated instance
+
+Report when a decorator implements a decorated service type of a registration but none of its constructor parameters is of that type, so the generator skips the decorator for that service type.
+
+**Analysis:**
+
+- Checks the same decorators, service types and constructor as `SGIOC034`.
+- A decorator that does not implement the service type, or whose generic constraints are not satisfied, is skipped by the generator without a diagnostic.
+- Reports once per decorator and service type (the definition for generic service types), at the decorator constructor (or the decorator type when it has no declared constructor).
+
+**Message format:** `Decorator '{Decorator}' has no constructor parameter of type '{ServiceType}' to receive the decorated instance, so it is not applied to '{ServiceType}'`
+
+**Fix:** Add a constructor parameter of the service type, or stop implementing the service type in the decorator.
 
 ---
 

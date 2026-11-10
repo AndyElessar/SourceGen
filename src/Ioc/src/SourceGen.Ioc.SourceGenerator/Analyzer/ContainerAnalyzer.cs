@@ -78,11 +78,11 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor PartialAccessorMustReturnTask = new(
         id: "SGIOC027",
         title: "Partial accessor must return Task<T> for async-init service",
-        messageFormat: "Partial accessor '{0}' returns '{1}' but the implementation has async inject methods. Use 'Task<{1}>'.",
+        messageFormat: "Partial accessor '{0}' returns '{1}' but the service is async-init (its implementation or a decorator has async inject methods). Use 'Task<{1}>'.",
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When a registered implementation has async inject methods (methods returning Task decorated with [IocInject]), partial accessors targeting that service must return Task<TService> so the generator can emit an awaitable resolver.",
+        description: "When a registered service is async-init, because its implementation or a decorator applied to it has async inject methods (methods returning Task decorated with [IocInject]), partial accessors targeting that service must return Task<TService> so the generator can emit an awaitable resolver.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
@@ -348,7 +348,8 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Builds the (service type, key) pairs that have at least one async-init implementation (SGIOC021/027/029).
+    /// Builds the (service type, key) pairs that have at least one async-init registration (SGIOC021/027/029): an async-init
+    /// implementation, or a decorator with async inject methods applied to the service type.
     /// </summary>
     private static HashSet<ServiceSymbolKey> BuildAsyncInitServiceKeys(
         IocFeatures features,
@@ -371,9 +372,9 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
                 isAsyncInitByImplementation[implementationType] = isAsyncInit;
             }
 
-            if(isAsyncInit)
+            foreach(var serviceType in registration.ServiceTypes)
             {
-                foreach(var serviceType in registration.ServiceTypes)
+                if(isAsyncInit || AnalyzerHelpers.HasAsyncDecorator(implementationType, serviceType, registration.Decorators, features))
                     asyncInitServiceKeys.Add(new(serviceType, registration.Key));
             }
         }

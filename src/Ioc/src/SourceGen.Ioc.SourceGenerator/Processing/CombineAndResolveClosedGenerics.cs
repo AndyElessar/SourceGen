@@ -219,17 +219,14 @@ partial class IocSourceGenerator
                 // Collect from decorator constructor parameters
                 foreach(var decorator in newReg.Decorators)
                 {
-                    if(decorator.ConstructorParameters is { Length: > 0 })
+                    // Skip the parameter that receives the decorated instance
+                    foreach(var param in EnumerateDecoratorDependencyParameters(decorator, newReg.ServiceType))
                     {
-                        // Skip first parameter (it's the decorated service)
-                        foreach(var param in decorator.ConstructorParameters.Skip(1))
-                        {
-                            CollectNewDependencyFromType(
-                                param.Type,
-                                pendingDependencies,
-                                processedDependencies,
-                                generatedClosedGenerics);
-                        }
+                        CollectNewDependencyFromType(
+                            param.Type,
+                            pendingDependencies,
+                            processedDependencies,
+                            generatedClosedGenerics);
                     }
 
                     // Collect from decorator injection members (properties, fields, methods with [IocInject] attribute)

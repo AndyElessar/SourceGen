@@ -207,6 +207,113 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
+    /// Returns <see langword="true"/> when one of <paramref name="decorators"/> that the generator applies to
+    /// <paramref name="serviceType"/> has an async inject method, which makes the decorated service type async-init even when
+    /// its implementation is not. Decorators are matched with the generator's own rules (implemented service type, closed
+    /// generic constraints), and only async decorators are converted for matching.
+    /// </summary>
+    /// <param name="implementationType">The implementation type; a self-registration is never decorated.</param>
+    public static bool HasAsyncDecorator(
+        INamedTypeSymbol implementationType,
+        INamedTypeSymbol serviceType,
+        ImmutableArray<INamedTypeSymbol> decorators,
+        IocFeatures features)
+    {
+        if((features & IocFeatures.AsyncMethodInject) == 0
+            || decorators.IsDefaultOrEmpty
+            || SymbolEqualityComparer.Default.Equals(implementationType, serviceType))
+        {
+            return false;
+        }
+
+        TypeData? serviceTypeData = null;
+        foreach(var decorator in decorators)
+        {
+            if(!IsAsyncInitImplementation(decorator, features))
+                continue;
+
+            serviceTypeData ??= serviceType.GetTypeData();
+            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true), serviceTypeData) is not null)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// <see cref="HasAsyncDecorator(INamedTypeSymbol, INamedTypeSymbol, ImmutableArray{INamedTypeSymbol}, IocFeatures)"/>
+    /// for decorators already extracted by <c>GetDecorators</c> (with injection members and hierarchy), such as the
+    /// decorators of default settings.
+    /// </summary>
+    public static bool HasAsyncDecorator(
+        INamedTypeSymbol implementationType,
+        INamedTypeSymbol serviceType,
+        ImmutableEquatableArray<TypeData> decorators,
+        IocFeatures features)
+    {
+        if((features & IocFeatures.AsyncMethodInject) == 0
+            || decorators.Length == 0
+            || SymbolEqualityComparer.Default.Equals(implementationType, serviceType))
+        {
+            return false;
+        }
+
+        TypeData? serviceTypeData = null;
+        foreach(var decorator in decorators)
+        {
+            if(decorator.InjectionMembers is not { } members || !members.Any(static m => m.MemberType == InjectionMemberType.AsyncMethod))
+                continue;
+
+            serviceTypeData ??= serviceType.GetTypeData();
+            if(IocSourceGenerator.TryCloseDecorator(decorator, serviceTypeData) is not null)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the constructor parameters of <paramref name="decorator"/> that can receive the decorated instance when it decorates
+    /// <paramref name="serviceType"/>: those whose type is the service type, like the generator's
+    /// <c>GetDecoratedParameterIndex</c>. The generator passes the decorated instance to the first one and skips the decorator
+    /// when there is none.
+    /// </summary>
+    /// <param name="decoratorTypeData">The decorator's type data with constructor parameters and hierarchy.</param>
+    /// <returns>
+    /// <see langword="false"/> when the decorator does not decorate the service type (it does not implement it, or its
+    /// constraints are not satisfied); otherwise <see langword="true"/> with the parameter indexes, possibly empty.
+    /// </returns>
+    public static bool TryGetDecoratedParameterIndexes(
+        TypeData decoratorTypeData,
+        TypeData serviceType,
+        out ImmutableArray<int> parameterIndexes)
+    {
+        parameterIndexes = [];
+        if(IocSourceGenerator.TryCloseDecoratorForServiceType(decoratorTypeData, serviceType) is not { } closed)
+            return false;
+
+        var parameters = closed.ConstructorParameters ?? [];
+        var builder = ImmutableArray.CreateBuilder<int>();
+        for(var i = 0; i < parameters.Length; i++)
+        {
+            if(IocSourceGenerator.IsDecoratedServiceTypeName(parameters[i].Type.Name, serviceType.Name))
+                builder.Add(i);
+        }
+
+        parameterIndexes = builder.ToImmutable();
+        return true;
+    }
+
+    /// <summary>
+    /// Gets the decorator types of a registration or default settings attribute (its <c>Decorators</c> named argument).
+    /// </summary>
+    public static ImmutableArray<INamedTypeSymbol> GetDecoratorSymbols(AttributeData attribute)
+    {
+        var decorators = attribute.GetTypeSymbolsFromNamedArgument("Decorators");
+        return decorators.Length == 0 ? [] : [.. decorators];
+    }
+
+    /// <summary>
     /// Extracts the keyed service key from a member attribute.
     /// [FromKeyedServices] takes precedence over [IocInject]/[Inject].
     /// </summary>

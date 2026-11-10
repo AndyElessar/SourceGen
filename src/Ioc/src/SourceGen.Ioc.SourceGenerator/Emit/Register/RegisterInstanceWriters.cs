@@ -4,7 +4,8 @@ partial class IocSourceGenerator
 {
     /// <summary>
     /// Shared helper to construct an instance and apply property/field/method injection.
-    /// Supports decorator scenarios via service-parameter detection and generic type substitution.
+    /// Supports decorator scenarios (the decorated instance is passed to the constructor parameter at
+    /// <paramref name="decoratedParameterIndex"/>) and generic type substitution.
     /// </summary>
     private static void WriteConstructInstanceWithInjection(
         SourceWriter writer,
@@ -14,28 +15,27 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<InjectionMemberData> injectionMembers,
         bool isKeyedRegistration,
         string? registrationKey,
-        HashSet<string>? serviceTypeNames,
-        Func<TypeData, string>? ctorTypeNameResolver,
+        int decoratedParameterIndex,
         Func<TypeData, string>? memberTypeNameResolver,
         string? decoratedPrevVar,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null,
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null,
         bool isAsyncMode = false)
     {
         var ctorParams = constructorParams ?? [];
         var constructorParamEntries = new List<(string Name, string? Value)>(ctorParams.Length);
         int paramIndex = 0;
 
-        foreach(var param in ctorParams)
+        for(var i = 0; i < ctorParams.Length; i++)
         {
-            var resolvedTypeName = ctorTypeNameResolver is not null ? ctorTypeNameResolver(param.Type) : param.Type.Name;
-            if(decoratedPrevVar is not null && serviceTypeNames is not null && IsServiceTypeParameter(param.Type, resolvedTypeName, serviceTypeNames))
+            var param = ctorParams[i];
+            if(decoratedPrevVar is not null && i == decoratedParameterIndex)
             {
                 constructorParamEntries.Add((param.Name, decoratedPrevVar));
             }
             else
             {
                 var varName = decoratedPrevVar is not null ? $"{instanceVarName}_p{paramIndex}" : $"p{paramIndex}";
-                var resolvedVar = ResolveParamAndEmitVar(writer, param, varName, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
+                var resolvedVar = ResolveParamAndEmitVar(writer, param, varName, isKeyedRegistration, registrationKey, asyncInitServices);
                 constructorParamEntries.Add((param.Name, resolvedVar));
                 paramIndex++;
             }
@@ -50,7 +50,7 @@ partial class IocSourceGenerator
             isKeyedRegistration,
             registrationKey,
             memberTypeNameResolver,
-            asyncInitServiceTypeNames,
+            asyncInitServices,
             isAsyncMode);
     }
 
@@ -63,7 +63,7 @@ partial class IocSourceGenerator
         bool isKeyedRegistration,
         string? registrationKey,
         Func<TypeData, string>? memberTypeNameResolver,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames = null,
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null,
         bool isAsyncMode = false)
     {
         List<string> preProps = [];
@@ -77,7 +77,7 @@ partial class IocSourceGenerator
             var mt = m.Type;
             var mtName = memberTypeNameResolver is not null ? memberTypeNameResolver(mt) : mt.Name;
             bool hasNonNullDefault = m.HasDefaultValue && !m.DefaultValueIsNull;
-            ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue, asyncInitServiceTypeNames);
+            ResolveMemberValue(writer, mt, mtName, varN, m.Key, m.IsNullable, hasNonNullDefault, m.DefaultValue, asyncInitServices);
             preProps.Add($"{m.Name} = {varN}");
             pfIdxCounter++;
         }
@@ -92,7 +92,7 @@ partial class IocSourceGenerator
             isKeyedRegistration,
             registrationKey,
             memberTypeNameResolver,
-            asyncInitServiceTypeNames);
+            asyncInitServices);
 
         var asyncMethodParamResolutions = isAsyncMode
             ? ResolveMethodParamResolutions(
@@ -104,7 +104,7 @@ partial class IocSourceGenerator
                 isKeyedRegistration,
                 registrationKey,
                 memberTypeNameResolver,
-                asyncInitServiceTypeNames)
+                asyncInitServices)
             : [];
 
         var constructorArgs = BuildArgumentListFromEntries(constructorParamEntries);
@@ -129,7 +129,7 @@ partial class IocSourceGenerator
         bool isKeyedRegistration,
         string? registrationKey,
         Func<TypeData, string>? memberTypeNameResolver,
-        ImmutableEquatableSet<string>? asyncInitServiceTypeNames)
+        ImmutableEquatableSet<AsyncInitService>? asyncInitServices)
     {
         var resolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
         foreach(var member in injectionMembers)
@@ -155,11 +155,11 @@ partial class IocSourceGenerator
                         isKeyedRegistration,
                         registrationKey,
                         memberTypeNameResolver,
-                        asyncInitServiceTypeNames);
+                        asyncInitServices);
                 }
                 else
                 {
-                    mVars[mi] = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey, asyncInitServiceTypeNames);
+                    mVars[mi] = ResolveParamAndEmitVar(writer, p, pVar, isKeyedRegistration, registrationKey, asyncInitServices);
                 }
 
                 mi++;

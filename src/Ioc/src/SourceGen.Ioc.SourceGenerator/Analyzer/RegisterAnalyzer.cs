@@ -271,11 +271,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor SyncDependencyOnAsyncInitService = new(
         id: "SGIOC030",
         title: "Synchronous dependency requested for async-init service",
-        messageFormat: "'{0}' requires '{1}' but this service has async inject methods and no synchronous registration exists. Use 'Task<{1}>'.",
+        messageFormat: "'{0}' requires '{1}' but this service is async-init (its implementation or a decorator has async inject methods) and no synchronous registration exists. Use 'Task<{1}>'.",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When a service is registered with async inject methods, consumers must request Task<T> instead of T because no synchronous resolution path exists.");
+        description: "When a service is async-init, because its implementation or a decorator applied to it has async inject methods, consumers must request Task<T> instead of T, Lazy<T> or Func<..., T> because no synchronous resolution path exists.");
 
     /// <summary>
     /// SGIOC028: [IocInject] method is declared as async void, which cannot be awaited.
@@ -313,8 +313,36 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "A Func<T1, ..., TReturn> with input parameters constructs a new instance from its arguments on every call, so a Singleton or Scoped lifetime of the service does not apply. Register the service as Transient, or depend on the parameterless Func<T> or the service itself to follow its lifetime.");
 
+    /// <summary>
+    /// SGIOC034: More than one decorator constructor parameter can receive the decorated instance.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MultipleDecoratedParameters = new(
+        id: "SGIOC034",
+        title: "Multiple decorator parameters can receive the decorated instance",
+        messageFormat: "Parameter '{0}' of decorator '{1}' is of the decorated type '{2}' but is resolved as a dependency; only the first such parameter '{3}' receives the decorated instance",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The decorated instance is passed to the first decorator constructor parameter whose type is the decorated service type. Other parameters of that type are resolved from the container like any dependency, which is often unintended.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
+    /// SGIOC035: No decorator constructor parameter can receive the decorated instance.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NoDecoratedParameter = new(
+        id: "SGIOC035",
+        title: "Decorator has no parameter for the decorated instance",
+        messageFormat: "Decorator '{0}' has no constructor parameter of type '{1}' to receive the decorated instance, so it is not applied to '{1}'",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A decorator receives the decorated instance through its first constructor parameter whose type is the decorated service type. A decorator without such a parameter is skipped for that service type.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
+        MultipleDecoratedParameters,
+        NoDecoratedParameter,
         InvalidAttributeUsage,
         CircularDependency,
         SingletonDependsOnScoped,
@@ -378,13 +406,15 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         var duplicatedDefaults = new ConcurrentBag<(string TargetTypeName, Location? Location)>();
         // Track seen (target type, single tag) pairs for SGIOC012 (shared between assembly and type-level)
         var seenDefaultTargetTypes = new ConcurrentDictionary<(string TargetTypeName, string Tag), Location?>();
-        var defaultSettings = CollectDefaults(context.Compilation, attributeSymbols, duplicatedDefaults, seenDefaultTargetTypes, context.CancellationToken);
+        var defaultDecorators = ImmutableArray.CreateBuilder<ImmutableArray<INamedTypeSymbol>>();
+        var defaultSettings = CollectDefaults(context.Compilation, attributeSymbols, duplicatedDefaults, seenDefaultTargetTypes, defaultDecorators, context.CancellationToken);
 
         var analyzerContext = new AnalyzerContext(
             attributeSymbols,
             registeredServices,
             serviceTypeIndex,
             defaultSettings,
+            defaultDecorators.ToImmutable(),
             duplicatedDefaults,
             seenDefaultTargetTypes,
             features);
@@ -517,6 +547,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 context.CancellationToken);
         }
 
+        // SGIOC034/SGIOC035: Constructor parameters that can receive the decorated instance
+        AnalyzeDecoratedParameters(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
+
         var asyncInitOnlyServiceTypes = BuildAsyncInitOnlyServiceTypes(analyzerContext);
         if(asyncInitOnlyServiceTypes.Count == 0)
             return;
@@ -526,10 +559,91 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             context.CancellationToken.ThrowIfCancellationRequested();
             AnalyzeSyncDependenciesOnAsyncInitServices(
                 context.ReportDiagnostic,
-                serviceInfo,
+                serviceInfo.Constructor,
+                serviceInfo.InjectedMembers,
                 asyncInitOnlyServiceTypes,
                 context.CancellationToken);
         }
+
+        // Decorators are not registered services, but the generator resolves their dependencies like a service's.
+        // The parameter that receives the decorated instance depends on the decorated service type, so an applied decorator is
+        // analyzed once per such parameter (and per closed form of an open generic decorator), and a dependency reported for
+        // several of them is reported once.
+        var reportedLocations = new HashSet<Location>();
+        foreach(var applied in analyzerContext.AppliedDecorators)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var decorator = applied.Key;
+            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = [.. decorator.GetInjectedMembers()];
+            foreach(var decoratedParameterIndex in applied.Value.Keys)
+            {
+                AnalyzeSyncDependenciesOnAsyncInitServices(
+                    diagnostic =>
+                    {
+                        if(reportedLocations.Add(diagnostic.Location))
+                            context.ReportDiagnostic(diagnostic);
+                    },
+                    constructor,
+                    injectedMembers,
+                    asyncInitOnlyServiceTypes,
+                    context.CancellationToken,
+                    decoratedParameterIndex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reports SGIOC035 for a decorator that no constructor parameter lets decorate a service type it implements, and SGIOC034
+    /// for each parameter of the decorated type after the first one, which is resolved as a dependency.
+    /// </summary>
+    private static void AnalyzeDecoratedParameters(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        foreach(var usages in analyzerContext.DecoratorUsages)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var decorator = usages.Key;
+            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var decoratorName = decorator.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+            foreach(var usage in usages.Value)
+            {
+                var parameterIndexes = usage.Value;
+                var serviceTypeName = usage.Key.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                if(parameterIndexes.IsEmpty)
+                {
+                    reportDiagnostic(Diagnostic.Create(
+                        NoDecoratedParameter,
+                        GetSourceLocation(constructor) ?? GetSourceLocation(decorator),
+                        decoratorName,
+                        serviceTypeName));
+                    continue;
+                }
+
+                if(constructor is null)
+                    continue;
+
+                var decoratedParameter = constructor.Parameters[parameterIndexes[0]];
+                for(var i = 1; i < parameterIndexes.Length; i++)
+                {
+                    var parameter = constructor.Parameters[parameterIndexes[i]];
+                    reportDiagnostic(Diagnostic.Create(
+                        MultipleDecoratedParameters,
+                        GetSourceLocation(parameter),
+                        parameter.Name,
+                        decoratorName,
+                        serviceTypeName,
+                        decoratedParameter.Name));
+                }
+            }
+        }
+
+        static Location? GetSourceLocation(ISymbol? symbol) =>
+            symbol?.Locations.FirstOrDefault(static location => location.IsInSource);
     }
 
     private static ImmutableHashSet<ServiceSymbolKey> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
@@ -552,7 +666,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             foreach(var serviceType in serviceTypes)
             {
                 serviceTypeStates.TryGetValue(serviceType, out var state);
-                serviceTypeStates[serviceType] = isAsyncInit
+                serviceTypeStates[serviceType] = isAsyncInit || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType)
                     ? (HasAsync: true, HasSync: state.HasSync)
                     : (HasAsync: state.HasAsync, HasSync: true);
             }
@@ -604,22 +718,29 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         return serviceTypes;
     }
 
+    /// <param name="decoratedParameterIndex">
+    /// For a decorator, the index of the constructor parameter that receives the decorated instance instead of a resolved
+    /// service, which is not analyzed; -1 otherwise.
+    /// </param>
     private static void AnalyzeSyncDependenciesOnAsyncInitServices(
         Action<Diagnostic> reportDiagnostic,
-        ServiceInfo serviceInfo,
+        IMethodSymbol? constructor,
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int decoratedParameterIndex = -1)
     {
-        if(serviceInfo.Constructor is not null)
+        if(constructor is not null)
         {
             AnalyzeParameterDependenciesOnAsyncInitServices(
                 reportDiagnostic,
-                serviceInfo.Constructor.Parameters,
+                constructor.Parameters,
                 asyncInitOnlyServiceTypes,
-                cancellationToken);
+                cancellationToken,
+                decoratedParameterIndex);
         }
 
-        foreach(var (member, injectAttribute) in serviceInfo.InjectedMembers)
+        foreach(var (member, injectAttribute) in injectedMembers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -662,13 +783,15 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         Action<Diagnostic> reportDiagnostic,
         ImmutableArray<IParameterSymbol> parameters,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int decoratedParameterIndex = -1)
     {
-        foreach(var parameter in parameters)
+        for(var i = 0; i < parameters.Length; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if(ShouldSkipAsyncInitDependencyCheck(parameter))
+            var parameter = parameters[i];
+            if(i == decoratedParameterIndex || ShouldSkipAsyncInitDependencyCheck(parameter))
                 continue;
 
             AnalyzeDependencyOnAsyncInitService(
@@ -689,6 +812,13 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         string? serviceKey,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes)
     {
+        // Lazy<T> and Func<..., T> create T synchronously, so they cannot resolve an async-init service either
+        while(dependencyType.TryGetWrapperInfo(out var wrapperInfo)
+            && wrapperInfo is { Kind: WrapperKind.Lazy or WrapperKind.Func, ElementType: { } elementType })
+        {
+            dependencyType = elementType;
+        }
+
         if(AnalyzerHelpers.TryGetAsyncWrapperElementType(dependencyType) is not null)
             return;
 

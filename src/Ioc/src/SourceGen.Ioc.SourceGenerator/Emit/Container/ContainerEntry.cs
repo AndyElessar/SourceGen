@@ -177,20 +177,22 @@ partial class IocSourceGenerator
             }
         }
 
-        protected void WriteDecoratorApplication(SourceWriter writer) =>
-            WriteDecoratorApplication(writer, Decorators, Registration.Key, "instance", "decorator");
+        protected void WriteDecoratorApplication(SourceWriter writer, bool isAsync = false) =>
+            WriteDecoratorApplication(writer, Decorators, Registration.Key, "instance", "decorator", isAsync);
 
         /// <summary>
         /// Writes the statements wrapping variable <paramref name="instanceVar"/> with <paramref name="decorators"/>,
         /// the first decorator outermost. Decorators with injection members are built in variables named
-        /// <paramref name="decoratorVarPrefix"/> followed by an index.
+        /// <paramref name="decoratorVarPrefix"/> followed by an index. When <paramref name="isAsync"/> is <see langword="true"/>
+        /// (in an <c>async</c> method), each decorator's async injection methods are awaited before the next decorator wraps it.
         /// </summary>
         public static void WriteDecoratorApplication(
             SourceWriter writer,
             ImmutableEquatableArray<ResolvedDecorator> decorators,
             string? registrationKey,
             string instanceVar,
-            string decoratorVarPrefix)
+            string decoratorVarPrefix,
+            bool isAsync = false)
         {
             for(var i = decorators.Length - 1; i >= 0; i--)
             {
@@ -198,22 +200,20 @@ partial class IocSourceGenerator
                 var decoratorName = decorator.Decorator.ImplementationType.Name;
                 var hasInjectionMembers = decorator.InjectionMembers.Length > 0;
 
-                var args = new List<string>(1 + decorator.Parameters.Length)
-                {
-                    instanceVar
-                };
-
+                var args = new List<string>(1 + decorator.Parameters.Length);
                 foreach(var parameter in decorator.Parameters)
                 {
                     args.Add(parameter.Dependency.FormatExpression(parameter.IsOptional));
                 }
+
+                args.Insert(Math.Min(decorator.DecoratedParameterIndex, args.Count), instanceVar);
 
                 var argsString = string.Join(", ", args);
 
                 if(hasInjectionMembers)
                 {
                     var decoratorVarName = $"{decoratorVarPrefix}{decorators.Length - 1 - i}";
-                    WriteDecoratorCreationWithInjection(writer, decoratorVarName, decoratorName, decorator.InjectionMembers, argsString, registrationKey);
+                    WriteDecoratorCreationWithInjection(writer, decoratorVarName, decoratorName, decorator.InjectionMembers, argsString, registrationKey, isAsync);
                     writer.WriteLine($"{instanceVar} = {decoratorVarName};");
                 }
                 else
@@ -227,9 +227,18 @@ partial class IocSourceGenerator
         {
             if(InnerResolverMethodName is not null)
             {
-                writer.WriteLine($"{Registration.ServiceType.Name} instance = await {InnerResolverMethodName}().ConfigureAwait(false);");
+                // Async decorators also make a synchronous implementation type's decorated service type async-init
+                if(Registration.HasAsyncInjection)
+                {
+                    writer.WriteLine($"{Registration.ServiceType.Name} instance = await {InnerResolverMethodName}().ConfigureAwait(false);");
+                }
+                else
+                {
+                    writer.WriteLine($"{Registration.ServiceType.Name} instance = {InnerResolverMethodName}();");
+                }
+
                 writer.WriteLine();
-                WriteDecoratorApplication(writer);
+                WriteDecoratorApplication(writer, isAsync: true);
                 writer.WriteLine("return instance;");
                 return;
             }
@@ -293,7 +302,7 @@ partial class IocSourceGenerator
                     writer.WriteLine($"{Registration.ServiceType.Name} instance = {injectionVar};");
                 }
 
-                WriteDecoratorApplication(writer);
+                WriteDecoratorApplication(writer, isAsync: true);
             }
 
             writer.WriteLine("return instance;");
@@ -346,7 +355,8 @@ partial class IocSourceGenerator
             string decoratorTypeName,
             ImmutableEquatableArray<ResolvedInjectionMember> injectionMembers,
             string argsString,
-            string? registrationKey)
+            string? registrationKey,
+            bool isAsync)
         {
             if(injectionMembers.Length == 0)
             {
@@ -382,12 +392,23 @@ partial class IocSourceGenerator
                 writer.WriteLine($"var {variableName} = new {decoratorTypeName}({argsString});");
             }
 
-            // Decorators do not support async injection methods
             foreach(var member in injectionMembers)
             {
                 if(member is ResolvedMethodInjection { Method.IsAsync: false } method)
                 {
                     writer.WriteLine($"{variableName}.{method.Method.Name}({BuildMethodArguments(method, registrationKey)});");
+                }
+            }
+
+            if(!isAsync)
+                return;
+
+            // Async methods are awaited last, after all synchronous injection
+            foreach(var member in injectionMembers)
+            {
+                if(member is ResolvedMethodInjection { Method.IsAsync: true } method)
+                {
+                    writer.WriteLine($"await {variableName}.{method.Method.Name}({BuildMethodArguments(method, registrationKey)}).ConfigureAwait(false);");
                 }
             }
         }

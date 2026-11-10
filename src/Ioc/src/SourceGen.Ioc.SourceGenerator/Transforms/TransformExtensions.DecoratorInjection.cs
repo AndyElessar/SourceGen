@@ -156,12 +156,11 @@ internal static partial class TransformExtensions
                 })
                 .ToImmutableEquatableArray();
 
-            // Decorators do not support async injection methods
             return new MethodInjectionData(
                 method.Name,
                 key,
                 parameters,
-                IsAsync: false);
+                IsAsync: IsNonGenericTaskReturnType(method));
         }
     }
 }

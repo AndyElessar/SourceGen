@@ -10,7 +10,14 @@ partial class IocSourceGenerator
         string RootNamespace,
         string AssemblyName,
         ImmutableEquatableArray<RegisterTagGroup> TagGroups,
-        ImmutableEquatableSet<string>? AsyncInitServiceTypes);
+        ImmutableEquatableSet<AsyncInitService>? AsyncInitServices);
+
+    /// <summary>
+    /// A (type, key) pair registered as <c>Task&lt;T&gt;</c> only, because its registration is async-init.
+    /// </summary>
+    /// <param name="TypeName">The fully qualified service or implementation type name.</param>
+    /// <param name="Key">The registration key expression, or <see langword="null"/> for a non-keyed registration.</param>
+    private readonly record struct AsyncInitService(string TypeName, string? Key);
 
     /// <summary>
     /// Tag-grouped register output data including registrations and wrapper entries.

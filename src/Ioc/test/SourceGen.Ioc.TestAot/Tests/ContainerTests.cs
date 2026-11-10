@@ -349,6 +349,48 @@ public sealed class ContainerTests
         await Assert.That(decorated.Inner).IsSameReferenceAs(implementation);
     }
 
+    [Test]
+    public async Task Container_AsyncInitDecorators_AwaitInnermostFirstAroundSyncImplementation()
+    {
+        await using var container = new DecoratorImplementationTypeModule();
+
+        var implementation = container.GetRequiredService<AsyncDecoratedService>();
+        var decorated = await container.GetRequiredService<Task<IAsyncDecoratedService>>();
+        var again = await container.GetRequiredService<Task<IAsyncDecoratedService>>();
+
+        await Assert.That(decorated).IsTypeOf<OuterAsyncInitDecorator>();
+        await Assert.That(decorated.IsInitialized).IsTrue();
+        await Assert.That(decorated.InnerWasInitialized).IsTrue();
+        await Assert.That(decorated.Inner).IsTypeOf<InnerAsyncInitDecorator>();
+        await Assert.That(decorated.Inner!.IsInitialized).IsTrue();
+        await Assert.That(decorated.Inner.Inner).IsSameReferenceAs(implementation);
+        await Assert.That(again).IsSameReferenceAs(decorated);
+        await Assert.That(container.GetService<IAsyncDecoratedService>()).IsNull();
+    }
+
+    [Test]
+    public async Task Container_AsyncInitDecorator_IsDisposedWithItsLifetime()
+    {
+        var container = new DecoratorImplementationTypeModule();
+        var singleton = await container.GetRequiredKeyedService<Task<IDisposableAsyncDecoratedService>>("singleton");
+
+        IDisposableAsyncDecoratedService scoped;
+        await using(var scope = container.CreateAsyncScope())
+        {
+            scoped = await scope.ServiceProvider.GetRequiredKeyedService<Task<IDisposableAsyncDecoratedService>>("scoped");
+            await Assert.That(scoped).IsTypeOf<DisposableAsyncInitDecorator>();
+            await Assert.That(scoped.IsDisposed).IsFalse();
+        }
+
+        await Assert.That(scoped.IsDisposed).IsTrue();
+        await Assert.That(singleton).IsTypeOf<DisposableAsyncInitDecorator>();
+        await Assert.That(singleton.IsDisposed).IsFalse();
+
+        await container.DisposeAsync();
+
+        await Assert.That(singleton.IsDisposed).IsTrue();
+    }
+
     #endregion
 
     #region Open Generic Tests

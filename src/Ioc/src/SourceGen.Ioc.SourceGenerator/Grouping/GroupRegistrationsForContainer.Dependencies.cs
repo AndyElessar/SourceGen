@@ -113,25 +113,28 @@ partial class IocSourceGenerator
 
         foreach(var decoratorType in registration.Decorators)
         {
-            var constructorParameters = decoratorType.ConstructorParameters;
-            var resolvedParameters = new List<ResolvedConstructorParameter>(constructorParameters?.Length ?? 0);
+            var constructorParameters = decoratorType.ConstructorParameters ?? [];
+            var resolvedParameters = new List<ResolvedConstructorParameter>(constructorParameters.Length);
 
-            if(constructorParameters is { Length: > 1 })
+            // Decorators without a parameter of the service type are skipped when they are closed, so the index exists
+            var decoratedParameterIndex = Math.Max(0, GetDecoratedParameterIndex(constructorParameters, registration.ServiceType.Name));
+
+            for(var i = 0; i < constructorParameters.Length; i++)
             {
-                for(var i = 1; i < constructorParameters.Length; i++)
-                {
-                    var parameter = constructorParameters[i];
-                    var dependency = ResolveServiceDependencyForContainerEntryModel(
-                        parameter.Type,
-                        parameter.ServiceKey,
-                        parameter.IsOptional,
-                        serviceLookup,
-                        collectionRegistrations,
-                        wrapperFields,
-                        parameter.GetFallbackValue(parameter.Type.Name));
+                if(i == decoratedParameterIndex)
+                    continue;
 
-                    resolvedParameters.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
-                }
+                var parameter = constructorParameters[i];
+                var dependency = ResolveServiceDependencyForContainerEntryModel(
+                    parameter.Type,
+                    parameter.ServiceKey,
+                    parameter.IsOptional,
+                    serviceLookup,
+                    collectionRegistrations,
+                    wrapperFields,
+                    parameter.GetFallbackValue(parameter.Type.Name));
+
+                resolvedParameters.Add(new ResolvedConstructorParameter(parameter, dependency, parameter.IsOptional));
             }
 
             var decoratorInjectionMembers = decoratorType.InjectionMembers ?? [];
@@ -158,6 +161,7 @@ partial class IocSourceGenerator
 
             decorators.Add(new ResolvedDecorator(
                 decoratorRegistration,
+                decoratedParameterIndex,
                 resolvedParameters.ToImmutableEquatableArray(),
                 resolvedInjectionMembers));
         }
@@ -415,7 +419,8 @@ partial class IocSourceGenerator
 
                 if(func.HasInputParameters)
                 {
-                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations))
+                    // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service
+                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations) && !innerRegistrations[^1].IsAsyncInit)
                     {
                         var targetRegistration = innerRegistrations[^1].Registration;
                         return new MultiParamFuncDependency(

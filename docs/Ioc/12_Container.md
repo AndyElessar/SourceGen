@@ -730,7 +730,7 @@ partial class AppContainer
 
 ### Async-init Service Accessor
 
-When the implementation has async inject methods (see [Async Method Injection](04_Field_Property_Method_Injection.md#async-method-injection)), the service can only be resolved asynchronously. Declare the accessor with a `Task<T>` return type:
+When the implementation has async inject methods (see [Async Method Injection](04_Field_Property_Method_Injection.md#async-method-injection)), or a decorator applied to the service has them (see [Async Decorators](06_Decorator.md#async-decorators)), the service can only be resolved asynchronously. Declare the accessor with a `Task<T>` return type:
 
 ```csharp
 [IocContainer]
@@ -848,7 +848,7 @@ partial class TestContainer
 |SGIOC020|Warning|`UseSwitchStatement = true` is ignored when importing modules.|
 |SGIOC021|Error|Non-nullable partial accessor return type is registered neither in the container nor in its imported modules when `IntegrateServiceProvider = false`.|
 |SGIOC025|Error|Container has a circular module import dependency (direct or transitive).|
-|SGIOC027|Error|Partial accessor returns `T` directly, but the implementation has async inject methods. Return `Task<T>` instead.|
+|SGIOC027|Error|Partial accessor returns `T` directly, but the service is async-init (its implementation or a decorator has async inject methods). Return `Task<T>` instead.|
 |SGIOC029|Error|Partial accessor targets an async-init service with a return type other than `Task<T>` (for example `ValueTask<T>` or `Lazy<Task<T>>`).|
 |SGIOC031|Warning|Container is not generated because `Container` is not enabled in `SourceGenIocFeatures`.|
 

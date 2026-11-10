@@ -162,8 +162,216 @@ public sealed partial class RegisterAnalyzer
         // Check for Factory and Instance (used by ServiceInfo)
         var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
-        var serviceTypes = AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes);
-        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, serviceTypes);
+        var serviceTypes = new HashSet<INamedTypeSymbol>(
+            AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes),
+            SymbolEqualityComparer.Default);
+        var bestDefaultIndex = AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
+
+        ImmutableArray<ServiceSymbolKey> registrations = [.. serviceTypes.Select(serviceType => new ServiceSymbolKey(serviceType, key))];
+
+        // Like the generator, the registration's own decorators replace the decorators of its best default settings
+        var decorators = AnalyzerHelpers.GetDecoratorSymbols(attribute);
+        if(decorators.IsEmpty && bestDefaultIndex >= 0)
+            decorators = analyzerContext.DefaultDecorators[bestDefaultIndex];
+
+        var asyncDecoratedRegistrations = hasInstance
+            ? []
+            : AnalyzeDecorators(analyzerContext, decorators, targetType, registrations);
+
+        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
+    }
+
+    /// <summary>
+    /// Adds the service types that default settings give a registration, like the generator's <c>ProcessSingleRegistration</c>:
+    /// each base class (first) and interface of the implementation that has default settings, then the <c>ServiceTypes</c> of
+    /// the first match (the best default), and its <c>RegisterAllInterfaces</c> / <c>RegisterAllBaseClasses</c> when the
+    /// registration does not set them. Returns the index of the best default, or -1 when none matches.
+    /// </summary>
+    private static int AddDefaultSettingsServiceTypes(
+        AnalyzerContext analyzerContext,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        HashSet<INamedTypeSymbol> serviceTypes)
+    {
+        if(analyzerContext.DefaultSettings.IsEmpty)
+            return -1;
+
+        var bestIndex = -1;
+        foreach(var candidate in EnumerateBaseClasses(targetType).Concat(targetType.AllInterfaces))
+        {
+            if(!TryGetDefaultSettingsIndex(analyzerContext, candidate, out var index))
+                continue;
+
+            serviceTypes.Add(candidate);
+            if(bestIndex < 0)
+                bestIndex = index;
+        }
+
+        if(bestIndex < 0)
+            return -1;
+
+        var best = analyzerContext.DefaultSettings[bestIndex];
+
+        // The default's ServiceTypes are matched by name to the implementation's hierarchy; an open generic one adds each
+        // closed form the implementation implements or inherits
+        foreach(var serviceType in best.ServiceTypes)
+        {
+            foreach(var candidate in EnumerateBaseClasses(targetType).Concat(targetType.AllInterfaces))
+            {
+                if(MatchesServiceType(analyzerContext, candidate, serviceType))
+                    serviceTypes.Add(candidate);
+            }
+        }
+
+        var (hasRegisterAllInterfaces, _) = attribute.TryGetRegisterAllInterfaces();
+        if(!hasRegisterAllInterfaces && best.RegisterAllInterfaces)
+            serviceTypes.UnionWith(targetType.AllInterfaces);
+
+        var (hasRegisterAllBaseClasses, _) = attribute.TryGetRegisterAllBaseClasses();
+        if(!hasRegisterAllBaseClasses && best.RegisterAllBaseClasses)
+            serviceTypes.UnionWith(EnumerateBaseClasses(targetType));
+
+        return bestIndex;
+
+        static bool MatchesServiceType(AnalyzerContext analyzerContext, INamedTypeSymbol candidate, TypeData serviceType)
+        {
+            var name = analyzerContext.TypeNames.GetOrAdd(candidate, static type => type.BuildTypeName());
+            if(name == serviceType.Name)
+                return true;
+
+            return serviceType is GenericTypeData { IsOpenGeneric: true } openServiceType
+                && candidate is { IsGenericType: true, TypeKind: not TypeKind.Error }
+                && candidate.Arity == openServiceType.GenericArity
+                && TransformExtensions.GetNameWithoutGeneric(name) == openServiceType.NameWithoutGeneric;
+        }
+    }
+
+    /// <summary>
+    /// Closes a generic decorator definition for a closed service type, like the generator's <c>TryCloseDecorator</c>: the
+    /// type arguments are found by matching the service type as the decorator implements or inherits it against the service type.
+    /// </summary>
+    /// <returns>The closed decorator, or <see langword="null"/> when the decorator is not generic or not every type argument is found.</returns>
+    private static INamedTypeSymbol? TryConstructDecorator(INamedTypeSymbol definition, INamedTypeSymbol serviceType)
+    {
+        if(!definition.IsGenericType || serviceType.IsUnboundGenericType)
+            return null;
+
+        var serviceDefinition = serviceType.OriginalDefinition;
+        foreach(var form in definition.AllInterfaces.Concat(EnumerateBaseClasses(definition)))
+        {
+            if(!SymbolEqualityComparer.Default.Equals(form.OriginalDefinition, serviceDefinition))
+                continue;
+
+            var typeArguments = new Dictionary<ITypeParameterSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
+            if(!MatchTypeArguments(form, serviceType, typeArguments))
+                continue;
+
+            var arguments = new ITypeSymbol[definition.TypeParameters.Length];
+            for(var i = 0; i < arguments.Length; i++)
+            {
+                if(!typeArguments.TryGetValue(definition.TypeParameters[i], out var argument))
+                    return null;
+
+                arguments[i] = argument;
+            }
+
+            return definition.Construct(arguments);
+        }
+
+        return null;
+
+        static bool MatchTypeArguments(ITypeSymbol pattern, ITypeSymbol actual, Dictionary<ITypeParameterSymbol, ITypeSymbol> typeArguments)
+        {
+            switch(pattern)
+            {
+                case ITypeParameterSymbol typeParameter:
+                    if(typeArguments.TryGetValue(typeParameter, out var existing))
+                        return SymbolEqualityComparer.Default.Equals(existing, actual);
+
+                    typeArguments[typeParameter] = actual;
+                    return true;
+
+                case INamedTypeSymbol { IsGenericType: true } genericPattern
+                    when actual is INamedTypeSymbol { IsGenericType: true } genericActual
+                        && SymbolEqualityComparer.Default.Equals(genericPattern.OriginalDefinition, genericActual.OriginalDefinition):
+                    for(var i = 0; i < genericPattern.TypeArguments.Length; i++)
+                    {
+                        if(!MatchTypeArguments(genericPattern.TypeArguments[i], genericActual.TypeArguments[i], typeArguments))
+                            return false;
+                    }
+
+                    return true;
+
+                case IArrayTypeSymbol arrayPattern when actual is IArrayTypeSymbol arrayActual:
+                    return arrayPattern.Rank == arrayActual.Rank
+                        && MatchTypeArguments(arrayPattern.ElementType, arrayActual.ElementType, typeArguments);
+
+                default:
+                    return SymbolEqualityComparer.Default.Equals(pattern, actual);
+            }
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumerateBaseClasses(INamedTypeSymbol type)
+    {
+        for(var baseType = type.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
+            yield return baseType;
+    }
+
+    /// <summary>
+    /// Matches the decorators to the registration's service types with the generator's rules, recording each match in
+    /// <see cref="AnalyzerContext.DecoratorUsages"/> (SGIOC034/SGIOC035) and each applied decorator in
+    /// <see cref="AnalyzerContext.AppliedDecorators"/> (SGIOC030). Returns the (service type, key) pairs that an applied
+    /// decorator with async inject methods makes async-init (SGIOC030).
+    /// </summary>
+    private static ImmutableArray<ServiceSymbolKey> AnalyzeDecorators(
+        AnalyzerContext analyzerContext,
+        ImmutableArray<INamedTypeSymbol> decorators,
+        INamedTypeSymbol targetType,
+        ImmutableArray<ServiceSymbolKey> registrations)
+    {
+        if(decorators.IsEmpty)
+            return [];
+
+        ImmutableArray<ServiceSymbolKey>.Builder? asyncDecorated = null;
+        foreach(var registration in registrations)
+        {
+            // A self-registration is never decorated
+            var serviceType = registration.ServiceType;
+            if(SymbolEqualityComparer.Default.Equals(serviceType, targetType))
+                continue;
+
+            var serviceTypeData = serviceType.GetTypeData();
+            var serviceTypeForDiagnostics = serviceType.IsGenericType ? serviceType.OriginalDefinition : serviceType;
+            var isAsyncDecorated = false;
+            foreach(var decorator in decorators)
+            {
+                var definition = decorator.IsUnboundGenericType ? decorator.OriginalDefinition : decorator;
+                if(!AnalyzerHelpers.TryGetDecoratedParameterIndexes(analyzerContext.GetDecoratorTypeData(decorator), serviceTypeData, out var parameterIndexes))
+                    continue;
+
+                analyzerContext.DecoratorUsages
+                    .GetOrAdd(definition, static _ => new(SymbolEqualityComparer.Default))
+                    .TryAdd(serviceTypeForDiagnostics, parameterIndexes);
+
+                // The generator skips a decorator without a parameter for the decorated instance
+                if(parameterIndexes.IsEmpty)
+                    continue;
+
+                // An open generic decorator is analyzed as closed for the service type, so its dependencies have closed types
+                var appliedDecorator = TryConstructDecorator(definition, serviceType) ?? definition;
+                analyzerContext.AppliedDecorators
+                    .GetOrAdd(appliedDecorator, static _ => new())
+                    .TryAdd(parameterIndexes[0], 0);
+
+                isAsyncDecorated |= AnalyzerHelpers.IsAsyncInitImplementation(decorator, analyzerContext.Features);
+            }
+
+            if(isAsyncDecorated)
+                (asyncDecorated ??= ImmutableArray.CreateBuilder<ServiceSymbolKey>()).Add(registration);
+        }
+
+        return asyncDecorated?.ToImmutable() ?? [];
     }
 
     /// <summary>
@@ -303,25 +511,24 @@ public sealed partial class RegisterAnalyzer
         ITypeSymbol? keyTypeSymbol,
         bool hasFactory,
         bool hasInstance,
-        IEnumerable<INamedTypeSymbol> registrationServiceTypes)
+        ImmutableArray<ServiceSymbolKey> registrations,
+        ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
     {
-        ImmutableArray<ServiceSymbolKey> registrations = [.. registrationServiceTypes.Select(serviceType => new ServiceSymbolKey(serviceType, serviceKey))];
-
         // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
         // attributes targeting the same impl type with different keys). Record the additional
         // (service type, key) pairs on the existing entry so SGIOC030 analysis sees all registrations.
         if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
         {
-            existingInfo.AddRegistrations(registrations);
+            existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
             return;
         }
 
         var hasKey = serviceKey is not null;
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations);
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
         {
             // Another registration of the type was added concurrently
-            analyzerContext.RegisteredServices[targetType].AddRegistrations(registrations);
+            analyzerContext.RegisteredServices[targetType].AddRegistrations(registrations, asyncDecoratedRegistrations);
             return;
         }
 
@@ -352,11 +559,13 @@ public sealed partial class RegisterAnalyzer
     /// Uses the shared ExtractDefaultSettings method from Constants.
     /// Also tracks duplicated target types for SGIOC012 reporting.
     /// </summary>
+    /// <param name="decoratorTypes">Receives the <c>Decorators</c> of each collected setting, in the order of the settings.</param>
     private static DefaultSettingsMap CollectDefaults(
         Compilation compilation,
         IocAttributeSymbols attributeSymbols,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenTargetTypes,
+        ImmutableArray<ImmutableArray<INamedTypeSymbol>>.Builder decoratorTypes,
         CancellationToken cancellationToken)
     {
         if(attributeSymbols.IocRegisterDefaultsAttribute is null && attributeSymbols.IocRegisterDefaultsAttribute_T1 is null)
@@ -411,6 +620,7 @@ public sealed partial class RegisterAnalyzer
                 else
                 {
                     settingsBuilder.Add(settings);
+                    decoratorTypes.Add(settings.Decorators.Length > 0 ? AnalyzerHelpers.GetDecoratorSymbols(attribute) : []);
                 }
             }
         }
@@ -502,6 +712,7 @@ public sealed partial class RegisterAnalyzer
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         DefaultSettingsMap defaultSettings,
+        ImmutableArray<ImmutableArray<INamedTypeSymbol>> defaultDecorators,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes,
         IocFeatures features)
@@ -519,6 +730,11 @@ public sealed partial class RegisterAnalyzer
         /// Default settings from IoCRegisterDefaultSettingsAttribute, using DefaultSettingsMap for efficient lookups.
         /// </summary>
         public DefaultSettingsMap DefaultSettings { get; } = defaultSettings;
+
+        /// <summary>
+        /// The <c>Decorators</c> symbols of each default setting, by the index of the setting in <see cref="DefaultSettings"/>.
+        /// </summary>
+        public ImmutableArray<ImmutableArray<INamedTypeSymbol>> DefaultDecorators { get; } = defaultDecorators;
 
         /// <summary>
         /// List of duplicated IoCRegisterDefaults for SGIOC012 reporting.
@@ -555,6 +771,37 @@ public sealed partial class RegisterAnalyzer
         /// Enabled generation features parsed from SourceGenIocFeatures.
         /// </summary>
         public IocFeatures Features { get; } = features;
+
+        /// <summary>
+        /// The decorators applied to registrations (open generic decorators closed for each closed service type, otherwise
+        /// their definitions), with the indexes of their constructor parameters that receive a decorated instance. SGIOC030
+        /// checks their other dependencies.
+        /// </summary>
+        public ConcurrentDictionary<INamedTypeSymbol, ConcurrentDictionary<int, byte>> AppliedDecorators { get; } = new(SymbolEqualityComparer.Default);
+
+        /// <summary>
+        /// For each decorator (definition) and service type it implements (definition for generic service types) of a
+        /// registration it decorates, the indexes of the constructor parameters that can receive the decorated instance
+        /// (SGIOC034/SGIOC035).
+        /// </summary>
+        public ConcurrentDictionary<INamedTypeSymbol, ConcurrentDictionary<INamedTypeSymbol, ImmutableArray<int>>> DecoratorUsages { get; } = new(SymbolEqualityComparer.Default);
+
+        private readonly ConcurrentDictionary<INamedTypeSymbol, TypeData> decoratorTypeData = new(SymbolEqualityComparer.Default);
+
+        /// <summary>
+        /// Gets the type data of a decorator (with constructor parameters and hierarchy), cached because registrations share
+        /// decorators.
+        /// </summary>
+        public TypeData GetDecoratorTypeData(INamedTypeSymbol decorator)
+        {
+            if(!decoratorTypeData.TryGetValue(decorator, out var typeData))
+            {
+                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+                decoratorTypeData.TryAdd(decorator, typeData);
+            }
+
+            return typeData;
+        }
     }
 
     private sealed record ServiceInfo
@@ -599,6 +846,14 @@ public sealed partial class RegisterAnalyzer
         private ImmutableArray<ServiceSymbolKey> _allRegistrations;
 
         /// <summary>
+        /// The (service type, key) pairs of <see cref="AllRegistrations"/> that a decorator with async inject methods makes
+        /// async-init, even when the implementation type is not (SGIOC030).
+        /// </summary>
+        public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations => _asyncDecoratedRegistrations;
+
+        private ImmutableArray<ServiceSymbolKey> _asyncDecoratedRegistrations;
+
+        /// <summary>
         /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
         /// </summary>
         public IMethodSymbol? Constructor { get; }
@@ -617,12 +872,14 @@ public sealed partial class RegisterAnalyzer
             bool hasKey,
             bool hasFactory,
             bool hasInstance,
-            ImmutableArray<ServiceSymbolKey> registrations)
+            ImmutableArray<ServiceSymbolKey> registrations,
+            ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
         {
             Type = type;
             Lifetime = lifetime;
             Location = location;
             _allRegistrations = registrations;
+            _asyncDecoratedRegistrations = asyncDecoratedRegistrations;
             ServiceKey = serviceKey;
             KeyTypeSymbol = keyTypeSymbol;
             HasKey = hasKey;
@@ -639,7 +896,12 @@ public sealed partial class RegisterAnalyzer
         /// <summary>
         /// Adds the (service type, key) pairs of another registration of this implementation type.
         /// </summary>
-        public void AddRegistrations(ImmutableArray<ServiceSymbolKey> registrations)
-            => ImmutableInterlocked.Update(ref _allRegistrations, static (current, added) => current.AddRange(added), registrations);
+        public void AddRegistrations(ImmutableArray<ServiceSymbolKey> registrations, ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
+        {
+            ImmutableInterlocked.Update(ref _allRegistrations, static (current, added) => current.AddRange(added), registrations);
+
+            if(!asyncDecoratedRegistrations.IsEmpty)
+                ImmutableInterlocked.Update(ref _asyncDecoratedRegistrations, static (current, added) => current.AddRange(added), asyncDecoratedRegistrations);
+        }
     }
 }

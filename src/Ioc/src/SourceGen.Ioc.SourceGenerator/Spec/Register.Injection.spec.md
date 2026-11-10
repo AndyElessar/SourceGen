@@ -107,6 +107,7 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
   - Collection outer wrapper with 3+ levels (e.g., `IEnumerable<Lazy<Func<T>>>`) is **not** supported. No wrapper registrations are emitted; the consumer is registered with a plain `AddXXX<Consumer, Consumer>()` call and the parameter is left to MS.DI runtime resolution.
   - `ValueTask<T>` is **not** a recognized wrapper type in any context. Only `Task<T>` is supported for async-init wrapping. When used as a partial accessor return type: if the target service uses async-init, `SGIOC029` is reported; otherwise `SGIOC021` is reported.
 - **Multi-parameter Func matching**: For `Func<T1,...,TN-1,TReturn>`, constructor parameters and injectable members are matched by type against Func inputs using first-unused semantics. Unmatched dependencies are resolved from DI.
+- **Multi-parameter Func of an async-init registration**: Not supported. A `Func` with input parameters constructs the instance synchronously and cannot await its async inject methods, so no `Func<T1,...,TReturn>` registration MUST be emitted for an async-init registration (the implementation type or a decorator applied to the service type has async inject methods); the Container resolves it from the fallback provider instead. The analyzer reports such a dependency with `SGIOC030`.
 - **Nested multi-parameter Func**: Not supported (e.g., `Lazy<Func<string, IService>>` with input parameters).
 - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
 - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
@@ -122,7 +123,7 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
 |:--------|:----------------|
 |Method has `[IocInject]`/`[Inject]`, is an ordinary instance method, returns non-generic `Task`, and `AsyncMethodInject` is enabled|MUST classify the member as `InjectionMemberType.AsyncMethod`.|
 |Method has `[IocInject]`/`[Inject]` and returns `void`|MUST continue to classify the member as `InjectionMemberType.Method`.|
-|Method is declared on a decorator|MUST classify the member as `InjectionMemberType.Method`, also when it returns `Task`: decorators do not support async method injection.|
+|Method is declared on a decorator|MUST classify the member by the same rules. An async method of a decorator makes the decorated service type async-init (see [Async Decorators](Register.Decorators.spec.md#async-decorators)); otherwise its `Task` would be discarded without being awaited.|
 |Method returns `Task<T>`|MUST NOT classify the member as async method injection. `Task<T>` is not a supported injection-method return type.|
 |Method returns `ValueTask` or `ValueTask<T>`|MUST NOT classify the member as async method injection.|
 |Method returns `Task` but `AsyncMethodInject` is disabled|The generator MUST treat the member as feature-gated; the analyzer owns the user-facing warning via `SGIOC022`.|
@@ -217,6 +218,8 @@ services.AddSingleton<Task<IMyService>>(async (IServiceProvider sp) => await sp.
 |Async-init service (`T` resolves through generated `Task<T>` init path)|MUST resolve `Task<T>` directly via `sp.GetRequiredService<Task<T>>()` or `sp.GetService<Task<T>>()`, depending on requiredness/default handling rules.|MUST call the generated async resolver path for `Task<T>` directly.|
 |Sync-only service (`T` only has synchronous resolution)|MUST wrap the synchronous resolution as `Task.FromResult(sp.GetRequiredService<T>())` or the matching optional/default-aware `Task.FromResult(...)` form.|MUST wrap the sync resolver result as `Task.FromResult(self.GetT_Resolve())` or the equivalent generated sync resolver call.|
 |Not registered in the container (an imported module or the fallback provider)|—|MUST resolve `GetService(typeof(Task<T>)) as Task<T> ?? Task.FromResult((T)GetRequiredService(typeof(T)))` (keyed and optional forms accordingly), so that an async-init service of an imported module keeps its initialization task and a synchronous one is wrapped in a completed task.|
+
+The Register path decides the shape per (service type, key) pair, comparing the dependency's key expression with the registration's: the same `T` can be async-init without a key and synchronous under a key (or the reverse), and `[FromKeyedServices("sync")] Task<T>` MUST then resolve `Task.FromResult(sp.GetRequiredKeyedService<T>("sync"))`, because only `T` is registered under that key.
 
 ```csharp
 // Invalid: nested async wrappers are not supported.

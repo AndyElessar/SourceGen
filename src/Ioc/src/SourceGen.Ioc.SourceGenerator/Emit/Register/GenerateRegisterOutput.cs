@@ -49,7 +49,7 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;
 
-        var context = new RegisterWriteContext(model.AsyncInitServiceTypes);
+        var context = new RegisterWriteContext(model.AsyncInitServices);
 
         bool isFirstGroup = true;
         foreach(var group in model.TagGroups)

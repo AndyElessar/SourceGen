@@ -20,7 +20,7 @@ partial class IocSourceGenerator
         {
             foreach(var decorator in reg.Decorators)
             {
-                // Check constructor parameters (> 1 because first param is the decorated service)
+                // Check constructor parameters (> 1 because one parameter receives the decorated instance)
                 if(decorator.ConstructorParameters is { Length: > 1 })
                 {
                     hasDecoratorDependencies = true;
@@ -92,14 +92,10 @@ partial class IocSourceGenerator
         {
             foreach(var decorator in reg.Decorators)
             {
-                // Collect from constructor parameters (skip first parameter - it's the decorated service)
-                if(decorator.ConstructorParameters is { Length: > 1 })
+                // Collect from constructor parameters, except the one that receives the decorated instance
+                foreach(var param in EnumerateDecoratorDependencyParameters(decorator, reg.ServiceType))
                 {
-                    for(int i = 1; i < decorator.ConstructorParameters.Length; i++)
-                    {
-                        var param = decorator.ConstructorParameters[i];
-                        CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
-                    }
+                    CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
                 }
 
                 // Collect from injection members (properties, fields, methods with [Inject] attribute)
