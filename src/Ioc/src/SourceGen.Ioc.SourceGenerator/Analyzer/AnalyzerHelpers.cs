@@ -233,7 +233,7 @@ internal static class AnalyzerHelpers
                 continue;
 
             serviceTypeData ??= serviceType.GetTypeData();
-            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractHierarchy: true), serviceTypeData) is not null)
+            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true), serviceTypeData) is not null)
                 return true;
         }
 
@@ -270,6 +270,38 @@ internal static class AnalyzerHelpers
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Gets the constructor parameters of <paramref name="decorator"/> that can receive the decorated instance when it decorates
+    /// <paramref name="serviceType"/>: those whose type is the service type, like the generator's
+    /// <c>GetDecoratedParameterIndex</c>. The generator passes the decorated instance to the first one and skips the decorator
+    /// when there is none.
+    /// </summary>
+    /// <param name="decoratorTypeData">The decorator's type data with constructor parameters and hierarchy.</param>
+    /// <returns>
+    /// <see langword="false"/> when the decorator does not decorate the service type (it does not implement it, or its
+    /// constraints are not satisfied); otherwise <see langword="true"/> with the parameter indexes, possibly empty.
+    /// </returns>
+    public static bool TryGetDecoratedParameterIndexes(
+        TypeData decoratorTypeData,
+        TypeData serviceType,
+        out ImmutableArray<int> parameterIndexes)
+    {
+        parameterIndexes = [];
+        if(IocSourceGenerator.TryCloseDecoratorForServiceType(decoratorTypeData, serviceType) is not { } closed)
+            return false;
+
+        var parameters = closed.ConstructorParameters ?? [];
+        var builder = ImmutableArray.CreateBuilder<int>();
+        for(var i = 0; i < parameters.Length; i++)
+        {
+            if(IocSourceGenerator.IsDecoratedServiceTypeName(parameters[i].Type.Name, serviceType.Name))
+                builder.Add(i);
+        }
+
+        parameterIndexes = builder.ToImmutable();
+        return true;
     }
 
     /// <summary>

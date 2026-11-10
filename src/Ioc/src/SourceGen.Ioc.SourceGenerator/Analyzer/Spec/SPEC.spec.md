@@ -36,7 +36,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init analysis | SGIOC002-005, 012-015, 030, 033 |
+| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator analysis | SGIOC002-005, 012-015, 030, 033-035 |
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
@@ -44,7 +44,8 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 
 1. Report buffered duplicated defaults (SGIOC012)
 2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
-3. Build async-init-only pairs → sync dependency analysis (SGIOC030)
+3. Decorated parameters of the decorators matched while collecting registrations (SGIOC034/035)
+4. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
 
 #### Partial Files
 
@@ -666,7 +667,7 @@ Report when a consumer requests `TService` but the matched registration can only
 
 **Analysis:**
 
-- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods, of registered services and of decorators. Decorators are the `Decorators` of registrations and assembly-level `[IocRegisterDefaults]`, each analyzed once (an open generic decorator through its definition); a decorator constructor parameter whose type the decorator implements or inherits receives the decorated instance and is not analyzed.
+- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods, of registered services and of decorators. Decorators are the ones the generator applies to registrations (their own `Decorators`, otherwise those of the best assembly-level `[IocRegisterDefaults]`), each analyzed once (an open generic decorator through its definition); the constructor parameter that receives the decorated instance (see [Decorated Parameter](../../Spec/Register.Decorators.spec.md#decorated-parameter)) is not analyzed.
 - Matches the requested service type and key against available registrations.
 - If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`.
 - `Lazy<T>`, `Func<T>` and `Func<T1, ..., T>` (also nested, e.g. `Lazy<Func<T>>`) are unwrapped first: they create `T` synchronously, so they cannot resolve an async-init service either (the Register output does not register a `Func` with input parameters for it, and the Container resolves these wrappers from the fallback provider). A `Task<T>` inside them (`Lazy<Task<T>>`) is not reported. Collections are not unwrapped, since they exclude async-init registrations.
@@ -724,6 +725,38 @@ Report when a registered service depends on `Func<T1, ..., TReturn>` with at lea
 **Message format:** `'{Consumer}' depends on '{FuncType}', which creates a new '{ServiceType}' on every call although '{ServiceType}' is registered as {Lifetime}`
 
 **Fix:** Register the service as Transient, or depend on the parameterless `Func<T>` or the service itself to follow its lifetime.
+
+---
+
+### SGIOC034 - Warning - Design - Multiple decorator parameters can receive the decorated instance
+
+Report when more than one constructor parameter of a decorator is of the decorated service type. Only the first one receives the decorated instance (see [Decorated Parameter](../../Spec/Register.Decorators.spec.md#decorated-parameter)); the others are resolved from the container like any dependency, which is often unintended.
+
+**Analysis:**
+
+- Checks each decorator the generator applies to a registration's service type: the registration's own `Decorators`, otherwise those of its best assembly-level `[IocRegisterDefaults]`. Decorators are matched with the generator's own rules (implemented service type, closed generic constraints).
+- Uses the constructor the generator uses: `[IocInject]`, then the primary constructor, then the one with the most parameters.
+- Reports each extra parameter once per decorator and service type (the definition for generic service types), however many registrations the decorator decorates.
+
+**Message format:** `Parameter '{Parameter}' of decorator '{Decorator}' is of the decorated type '{ServiceType}' but is resolved as a dependency; only the first such parameter '{DecoratedParameter}' receives the decorated instance`
+
+**Fix:** Give the decorated instance a single parameter, or remove the extra parameter.
+
+---
+
+### SGIOC035 - Error - Design - Decorator has no parameter for the decorated instance
+
+Report when a decorator implements a decorated service type of a registration but none of its constructor parameters is of that type, so the generator skips the decorator for that service type.
+
+**Analysis:**
+
+- Checks the same decorators, service types and constructor as `SGIOC034`.
+- A decorator that does not implement the service type, or whose generic constraints are not satisfied, is skipped by the generator without a diagnostic.
+- Reports once per decorator and service type (the definition for generic service types), at the decorator constructor (or the decorator type when it has no declared constructor).
+
+**Message format:** `Decorator '{Decorator}' has no constructor parameter of type '{ServiceType}' to receive the decorated instance, so it is not applied to '{ServiceType}'`
+
+**Fix:** Add a constructor parameter of the service type, or stop implementing the service type in the decorator.
 
 ---
 

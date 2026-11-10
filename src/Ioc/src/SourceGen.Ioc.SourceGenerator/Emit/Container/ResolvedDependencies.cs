@@ -412,8 +412,11 @@ partial class IocSourceGenerator
         MethodInjectionData Method,
         ImmutableEquatableArray<ResolvedDependency> ParameterDependencies) : ResolvedInjectionMember;
 
+    /// <param name="DecoratedParameterIndex">The constructor parameter that receives the decorated instance.</param>
+    /// <param name="Parameters">The other constructor parameters, in parameter order.</param>
     private sealed record class ResolvedDecorator(
         ServiceRegistrationModel Decorator,
+        int DecoratedParameterIndex,
         ImmutableEquatableArray<ResolvedConstructorParameter> Parameters,
         ImmutableEquatableArray<ResolvedInjectionMember> InjectionMembers);
 }

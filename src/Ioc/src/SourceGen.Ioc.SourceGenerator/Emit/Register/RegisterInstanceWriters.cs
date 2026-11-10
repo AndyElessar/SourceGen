@@ -4,7 +4,8 @@ partial class IocSourceGenerator
 {
     /// <summary>
     /// Shared helper to construct an instance and apply property/field/method injection.
-    /// Supports decorator scenarios via service-parameter detection and generic type substitution.
+    /// Supports decorator scenarios (the decorated instance is passed to the constructor parameter at
+    /// <paramref name="decoratedParameterIndex"/>) and generic type substitution.
     /// </summary>
     private static void WriteConstructInstanceWithInjection(
         SourceWriter writer,
@@ -14,8 +15,7 @@ partial class IocSourceGenerator
         ImmutableEquatableArray<InjectionMemberData> injectionMembers,
         bool isKeyedRegistration,
         string? registrationKey,
-        HashSet<string>? serviceTypeNames,
-        Func<TypeData, string>? ctorTypeNameResolver,
+        int decoratedParameterIndex,
         Func<TypeData, string>? memberTypeNameResolver,
         string? decoratedPrevVar,
         ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null,
@@ -25,10 +25,10 @@ partial class IocSourceGenerator
         var constructorParamEntries = new List<(string Name, string? Value)>(ctorParams.Length);
         int paramIndex = 0;
 
-        foreach(var param in ctorParams)
+        for(var i = 0; i < ctorParams.Length; i++)
         {
-            var resolvedTypeName = ctorTypeNameResolver is not null ? ctorTypeNameResolver(param.Type) : param.Type.Name;
-            if(decoratedPrevVar is not null && serviceTypeNames is not null && IsServiceTypeParameter(param.Type, resolvedTypeName, serviceTypeNames))
+            var param = ctorParams[i];
+            if(decoratedPrevVar is not null && i == decoratedParameterIndex)
             {
                 constructorParamEntries.Add((param.Name, decoratedPrevVar));
             }

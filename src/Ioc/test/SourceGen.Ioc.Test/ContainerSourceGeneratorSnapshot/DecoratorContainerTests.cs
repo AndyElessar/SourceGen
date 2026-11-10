@@ -483,4 +483,58 @@ public class DecoratorContainerTests
 
         await Verify(generatedSource);
     }
+
+    private const string DecoratedParameterSource = """
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        namespace TestNamespace;
+
+        public interface IHandler;
+        public interface IOther;
+        public interface ILogger;
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger)])]
+        public sealed class Logger : ILogger;
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IOther)])]
+        public sealed class OtherService : IOther;
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "other")]
+        public sealed class OtherHandler : IHandler;
+
+        [IocRegister(
+            Lifetime = ServiceLifetime.Singleton,
+            ServiceTypes = [typeof(IHandler)],
+            Decorators = [typeof(LoggingDecorator), typeof(PairDecorator), typeof(OtherDecorator), typeof(NoInnerDecorator)])]
+        public sealed class Handler : IHandler, IOther;
+
+        // The decorated instance is not the first parameter
+        public sealed class LoggingDecorator(ILogger logger, IHandler inner) : IHandler;
+
+        // Only the first IHandler parameter receives the decorated instance; the second is resolved
+        public sealed class PairDecorator(IHandler inner, [FromKeyedServices("other")] IHandler other) : IHandler;
+
+        // The implementation implements IOther, but only the service type receives the decorated instance
+        public sealed class OtherDecorator(IHandler inner, IOther other) : IHandler;
+
+        // No parameter can receive the decorated instance, so the decorator is not applied
+        public sealed class NoInnerDecorator(ILogger logger) : IHandler;
+        """;
+    [Test]
+    public async Task Container_DecoratedParameter_IsFirstParameterOfServiceType()
+    {
+        var source = DecoratedParameterSource + """
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("NoInnerDecorator");
+        await Verify(generatedSource);
+    }
 }

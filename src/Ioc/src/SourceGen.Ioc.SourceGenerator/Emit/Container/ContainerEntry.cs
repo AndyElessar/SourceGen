@@ -200,15 +200,13 @@ partial class IocSourceGenerator
                 var decoratorName = decorator.Decorator.ImplementationType.Name;
                 var hasInjectionMembers = decorator.InjectionMembers.Length > 0;
 
-                var args = new List<string>(1 + decorator.Parameters.Length)
-                {
-                    instanceVar
-                };
-
+                var args = new List<string>(1 + decorator.Parameters.Length);
                 foreach(var parameter in decorator.Parameters)
                 {
                     args.Add(parameter.Dependency.FormatExpression(parameter.IsOptional));
                 }
+
+                args.Insert(Math.Min(decorator.DecoratedParameterIndex, args.Count), instanceVar);
 
                 var argsString = string.Join(", ", args);
 

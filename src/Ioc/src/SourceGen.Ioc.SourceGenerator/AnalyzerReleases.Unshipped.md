@@ -35,3 +35,5 @@ SGIOC030 | Usage | Error | Synchronous dependency requested for async-init servi
 SGIOC031 | Usage | Warning | Container ignored due to disabled feature - [IocContainer] is ignored when SourceGenIocFeatures does not include Container.
 SGIOC032 | Design | Warning | Service type is not compatible with implementation - An explicit service type has an incompatible generic shape and is skipped.
 SGIOC033 | Design | Warning | Func with arguments ignores the service lifetime - A Func<T1, ..., TReturn> with input parameters creates a new instance per call although the service is registered as Singleton or Scoped.
+SGIOC034 | Design | Warning | Multiple decorator parameters can receive the decorated instance - More than one decorator constructor parameter is of the decorated service type; only the first receives the decorated instance.
+SGIOC035 | Design | Error | Decorator has no parameter for the decorated instance - No decorator constructor parameter is of the decorated service type, so the decorator is not applied to it.

@@ -13,6 +13,8 @@ With `ThreadSafeStrategy.CompareExchange`, a decorated instance that loses the r
 
 Instance registrations and registrations whose service type is the implementation type are not split; their single resolver applies the decorators.
 
+The decorated instance MUST be passed to the same constructor parameter as in the Register output, and decorators without such a parameter are skipped (see [Decorated Parameter](Register.Decorators.spec.md#decorated-parameter)). The other parameters are resolved like the implementation's dependencies.
+
 ## Decorator Resolution
 
 > **Note**: The `GetService` snippet below shows `UseSwitchStatement = true` style. The decorator resolution logic remains the same regardless of the resolution strategy.

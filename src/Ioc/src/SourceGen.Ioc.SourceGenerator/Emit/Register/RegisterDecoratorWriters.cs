@@ -140,8 +140,6 @@ partial class IocSourceGenerator
             ? genericServiceType.TypeParameters
             : null;
 
-        var serviceTypeNames = BuildServiceTypeNames(registration);
-
         for(int i = 0; i < decoratorCount; i++)
         {
             var decorator = decorators[decoratorCount - 1 - i];
@@ -156,6 +154,10 @@ partial class IocSourceGenerator
                 continue;
             }
 
+            Func<TypeData, string> typeNameResolver = t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null
+                ? SubstituteGenericArguments(t, decorator, serviceTypeParams)
+                : t.Name;
+
             bool isKeyedRegistration = registration.Key is not null;
             WriteConstructInstanceWithInjection(
                 writer,
@@ -165,9 +167,8 @@ partial class IocSourceGenerator
                 injectionMembers: decorator.InjectionMembers ?? [],
                 isKeyedRegistration: isKeyedRegistration,
                 registrationKey: registration.Key,
-                serviceTypeNames: serviceTypeNames,
-                ctorTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
-                memberTypeNameResolver: t => decorator is GenericTypeData { IsOpenGeneric: true } && serviceTypeParams is not null ? SubstituteGenericArguments(t, decorator, serviceTypeParams) : t.Name,
+                decoratedParameterIndex: GetDecoratedParameterIndex(ctorParams, registration.ServiceType.Name, typeNameResolver),
+                memberTypeNameResolver: typeNameResolver,
                 decoratedPrevVar: prevVar,
                 asyncInitServices: asyncInitServices,
                 isAsyncMode: isAsyncMode);
@@ -250,65 +251,5 @@ partial class IocSourceGenerator
         }
 
         return SubstituteTypeArguments(paramType.Name, typeArguments);
-    }
-
-    /// <summary>
-    /// Builds a set of service type names for IsServiceParameter check.
-    /// </summary>
-    private static HashSet<string> BuildServiceTypeNames(ServiceRegistrationModel registration)
-    {
-        var serviceTypeNames = new HashSet<string>(StringComparer.Ordinal);
-
-        AddTypeNameVariants(serviceTypeNames, registration.ServiceType);
-        AddTypeNameVariants(serviceTypeNames, registration.ImplementationType);
-
-        if(registration.ImplementationType.AllBaseClasses is not null)
-        {
-            foreach(var baseClass in registration.ImplementationType.AllBaseClasses)
-            {
-                AddTypeNameVariants(serviceTypeNames, baseClass);
-            }
-        }
-
-        if(registration.ImplementationType.AllInterfaces is not null)
-        {
-            foreach(var iface in registration.ImplementationType.AllInterfaces)
-            {
-                AddTypeNameVariants(serviceTypeNames, iface);
-            }
-        }
-
-        return serviceTypeNames;
-    }
-
-    /// <summary>
-    /// Adds both the full name and non-generic name variants to the set.
-    /// </summary>
-    private static void AddTypeNameVariants(HashSet<string> set, TypeData type)
-    {
-        set.Add(type.Name);
-        if(type is GenericTypeData genericType && type.Name != genericType.NameWithoutGeneric)
-        {
-            set.Add(genericType.NameWithoutGeneric);
-        }
-    }
-
-    /// <summary>
-    /// Checks if a parameter type matches any of the service types.
-    /// </summary>
-    private static bool IsServiceTypeParameter(TypeData paramType, string substitutedTypeName, HashSet<string> serviceTypeNames)
-    {
-        if(serviceTypeNames.Contains(substitutedTypeName))
-        {
-            return true;
-        }
-
-        if(serviceTypeNames.Contains(paramType.Name))
-        {
-            return true;
-        }
-
-        return paramType is GenericTypeData genericParamType
-            && serviceTypeNames.Contains(genericParamType.NameWithoutGeneric);
     }
 }

@@ -18,6 +18,18 @@ A non-keyed decorator chain MUST be registered as a keyed service under the hidd
 
 The decorator chain wraps the instance resolved from the implementation type, including when that instance comes from a non-generic `Factory` (see [Factory](Register.Factory.spec.md)). Decorators are not applied to `Instance` registrations.
 
+### Decorated Parameter
+
+The decorated instance MUST be passed to the first constructor parameter (of the constructor selected like an implementation's: `[IocInject]`, then primary, then most parameters) whose type is the decorated service type, ignoring nullable annotations; for an open generic decorator, the type after closing. The parameter MAY be at any position. Every other parameter MUST be resolved as a dependency, also when its type is the service type, another type the decorator or the implementation implements, or a base type of the service type, so that a decorator gets the same arguments in the Register and Container outputs.
+
+A decorator MUST NOT be applied to a service type when none of its constructor parameters is of that type, since nothing could receive the decorated instance; the analyzer reports `SGIOC035`. More than one parameter of the service type is reported with `SGIOC034`.
+
+```csharp
+public sealed class LoggingDecorator(ILogger logger, IHandler inner) : IHandler;          // inner ← decorated instance
+public sealed class PairDecorator(IHandler inner, [FromKeyedServices("other")] IHandler other) : IHandler; // other resolved (SGIOC034)
+public sealed class FooDecorator(IFoo inner) : IFoo, IBar;                                // not applied to IBar (SGIOC035)
+```
+
 ### Async Decorators
 
 A decorated service type is async-init when its implementation type has async inject methods, or when a decorator applied to it has `[IocInject]` methods returning `Task` (see [Async Method Injection](Register.Injection.spec.md#async-method-injection)); `AsyncMethodInject` gates both. A decorator only makes the service types it decorates async-init: the implementation type, and service types the decorator does not implement, keep their own shape.

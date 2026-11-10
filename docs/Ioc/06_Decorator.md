@@ -52,6 +52,20 @@ services.AddTransient<global::MyNamespace.IHandler>((global::System.IServiceProv
 >
 > A decorator is only applied to service types it implements. An open generic decorator is closed from the decorated service type (see [Type Constraint Validation](#type-constraint-validation)), so a generic decorator such as `LoggingDecorator<T> : IHandler` cannot be closed for the non-generic `IHandler` and is skipped.
 
+### Which Parameter Receives the Inner Instance
+
+The inner instance is passed to the **first** constructor parameter whose type is the decorated service type, at any position. All other parameters are resolved from the container:
+
+```csharp
+// inner receives the decorated instance; logger is resolved
+public class LoggingDecorator(ILogger logger, IHandler inner) : IHandler;
+
+// Only inner receives the decorated instance; fallback is resolved as a keyed IHandler (SGIOC034)
+public class FallbackDecorator(IHandler inner, [FromKeyedServices("fallback")] IHandler fallback) : IHandler;
+```
+
+A decorator without a parameter of the service type is not applied to that service type, and the analyzer reports `SGIOC035`.
+
 ## Multiple Decorators
 
 Decorators are applied in order (first = outermost):
@@ -277,6 +291,13 @@ services.AddScoped<global::MyNamespace.IRequestHandler<global::MyNamespace.MyQue
 ```
 
 </details>
+
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC034|Warning|More than one decorator constructor parameter is of the decorated service type. Only the first receives the inner instance; the others are resolved from the container.|
+|SGIOC035|Error|A decorator implements a decorated service type but has no constructor parameter of that type, so it is not applied to it.|
 
 ---
 

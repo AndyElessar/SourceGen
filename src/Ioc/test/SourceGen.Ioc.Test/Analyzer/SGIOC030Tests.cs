@@ -929,6 +929,7 @@ public class SGIOC030Tests
 
     [Test]
     [Arguments("public MyServiceDecorator(IMyService inner, IAsyncService dependency) { }", "", "dependency")]
+    [Arguments("public MyServiceDecorator(IAsyncService dependency, IMyService inner) { }", "", "dependency")]
     [Arguments("public MyServiceDecorator(IMyService inner) { }", "[IocInject] public Task InitializeAsync(IAsyncService dependency) => Task.CompletedTask;", "dependency")]
     [Arguments("public MyServiceDecorator(IMyService inner) { }", "[IocInject] public void Initialize(Lazy<IAsyncService> dependency) { }", "dependency")]
     [Arguments("public MyServiceDecorator(IMyService inner) { }", "[IocInject] public IAsyncService? Dependency { get; set; }", "Dependency")]
@@ -974,6 +975,42 @@ public class SGIOC030Tests
         // Reported once, although the decorator decorates two registrations
         await Assert.That(sgioc030).Count().IsEqualTo(1);
         await Assert.That(sgioc030[0].GetMessage()).Contains($"'{memberName}'").And.Contains("IAsyncService");
+    }
+
+    [Test]
+    public async Task SGIOC030_DecoratorAlsoImplementingDependencyType_ReportsDependency()
+    {
+        // Only the first parameter of the decorated service type receives the decorated instance; a parameter of another
+        // type the decorator implements is resolved as a dependency.
+        const string source = """
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IAsyncService { }
+
+            [IocRegister(ServiceTypes = [typeof(IAsyncService)])]
+            public class AsyncService : IAsyncService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Decorators = [typeof(MyDecorator)])]
+            public class MyService : IMyService { }
+
+            public class MyDecorator(IMyService inner, IAsyncService dependency) : IMyService, IAsyncService { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'dependency'");
     }
 
     [Test]

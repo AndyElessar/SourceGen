@@ -371,8 +371,57 @@ partial class IocSourceGenerator
     /// closes as <c>Decorator&lt;Res, Req&gt;</c> for <c>IHandler&lt;Req, Res&gt;</c>, and
     /// <c>TextDecorator&lt;T&gt; : IHandler&lt;T, string&gt;</c> cannot decorate <c>IHandler&lt;Req, int&gt;</c>.
     /// </remarks>
-    /// <returns>The closed decorator, or null when it cannot decorate the service type or its constraints are not satisfied.</returns>
+    /// <returns>
+    /// The closed decorator, or null when it cannot decorate the service type, its constraints are not satisfied, or no
+    /// constructor parameter can receive the decorated instance (see <see cref="GetDecoratedParameterIndex"/>).
+    /// </returns>
     internal static TypeData? TryCloseDecorator(TypeData decorator, TypeData serviceType)
+    {
+        // Without extracted constructor parameters the decorated parameter cannot be checked
+        return TryCloseDecoratorForServiceType(decorator, serviceType) is { } closed
+            && (closed.ConstructorParameters is null || GetDecoratedParameterIndex(closed.ConstructorParameters, serviceType.Name) >= 0)
+            ? closed
+            : null;
+    }
+
+    /// <summary>
+    /// Gets the index of the constructor parameter that receives the decorated instance: the first parameter whose type is
+    /// the decorated service type (nullable annotations ignored). Other parameters, also of the service type, are resolved
+    /// as dependencies.
+    /// </summary>
+    /// <param name="typeNameResolver">Closes the parameter types of an open generic decorator, when it is not closed yet.</param>
+    /// <returns>The parameter index, or -1 when no parameter can receive the decorated instance.</returns>
+    internal static int GetDecoratedParameterIndex(
+        ImmutableEquatableArray<ParameterData> constructorParameters,
+        string serviceTypeName,
+        Func<TypeData, string>? typeNameResolver = null)
+    {
+        for(var i = 0; i < constructorParameters.Length; i++)
+        {
+            var type = constructorParameters[i].Type;
+            if(IsDecoratedServiceTypeName(type.Name, serviceTypeName)
+                || (typeNameResolver is not null && IsDecoratedServiceTypeName(typeNameResolver(type), serviceTypeName)))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Gets whether a decorator constructor parameter type name is the decorated service type name, ignoring a nullable
+    /// annotation.
+    /// </summary>
+    internal static bool IsDecoratedServiceTypeName(string parameterTypeName, string serviceTypeName) =>
+        parameterTypeName.EndsWith("?", StringComparison.Ordinal)
+            ? parameterTypeName.Length == serviceTypeName.Length + 1 && parameterTypeName.StartsWith(serviceTypeName, StringComparison.Ordinal)
+            : parameterTypeName == serviceTypeName;
+
+    /// <summary>
+    /// Closes a decorator for a service type it implements, checking generic constraints but not its constructor.
+    /// </summary>
+    internal static TypeData? TryCloseDecoratorForServiceType(TypeData decorator, TypeData serviceType)
     {
         var declaredForms = (decorator.AllInterfaces ?? []).Concat(decorator.AllBaseClasses ?? []);
         if(decorator is not GenericTypeData { IsOpenGeneric: true, TypeParameters: { Length: > 0 } decoratorTypeParams } genericDecorator)
