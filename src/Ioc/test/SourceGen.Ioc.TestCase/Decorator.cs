@@ -128,10 +128,51 @@ public sealed class InnerAsyncInitDecorator(IAsyncDecoratedService inner) : IAsy
     }
 }
 
+/// <summary>Service decorated by a disposable decorator that initializes asynchronously.</summary>
+public interface IDisposableAsyncDecoratedService
+{
+    bool IsDisposed { get; }
+}
+
+public sealed class SingletonDisposableAsyncDecoratedService : IDisposableAsyncDecoratedService
+{
+    public bool IsDisposed => false;
+}
+
+public sealed class ScopedDisposableAsyncDecoratedService : IDisposableAsyncDecoratedService
+{
+    public bool IsDisposed => false;
+}
+
+public sealed class DisposableAsyncInitDecorator(IDisposableAsyncDecoratedService inner) : IDisposableAsyncDecoratedService, IAsyncDisposable
+{
+    public IDisposableAsyncDecoratedService Inner => inner;
+    public bool IsDisposed { get; private set; }
+
+    [IocInject]
+    public async Task InitializeAsync() => await Task.Yield();
+
+    public ValueTask DisposeAsync()
+    {
+        IsDisposed = true;
+        return default;
+    }
+}
+
 [IocRegisterFor<AsyncDecoratedService>(
     ServiceLifetime.Singleton,
     ServiceTypes = [typeof(IAsyncDecoratedService)],
     Decorators = [typeof(OuterAsyncInitDecorator), typeof(InnerAsyncInitDecorator)])]
+[IocRegisterFor<SingletonDisposableAsyncDecoratedService>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IDisposableAsyncDecoratedService)],
+    Key = "singleton",
+    Decorators = [typeof(DisposableAsyncInitDecorator)])]
+[IocRegisterFor<ScopedDisposableAsyncDecoratedService>(
+    ServiceLifetime.Scoped,
+    ServiceTypes = [typeof(IDisposableAsyncDecoratedService)],
+    Key = "scoped",
+    Decorators = [typeof(DisposableAsyncInitDecorator)])]
 [IocRegisterFor<InnerExposingService>(
     ServiceLifetime.Scoped,
     ServiceTypes = [typeof(IInnerExposingService)],

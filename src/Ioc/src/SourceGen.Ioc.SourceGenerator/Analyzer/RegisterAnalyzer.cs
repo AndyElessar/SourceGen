@@ -567,7 +567,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
         // Decorators are not registered services, but the generator resolves their dependencies like a service's.
         // The parameter that receives the decorated instance depends on the decorated service type, so an applied decorator is
-        // analyzed once per such parameter, and a dependency reported for several of them is reported once.
+        // analyzed once per such parameter (and per closed form of an open generic decorator), and a dependency reported for
+        // several of them is reported once.
         var reportedLocations = new HashSet<Location>();
         foreach(var applied in analyzerContext.AppliedDecorators)
         {
@@ -576,7 +577,6 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             var decorator = applied.Key;
             var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
             ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = [.. decorator.GetInjectedMembers()];
-            reportedLocations.Clear();
             foreach(var decoratedParameterIndex in applied.Value.Keys)
             {
                 AnalyzeSyncDependenciesOnAsyncInitServices(

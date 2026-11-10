@@ -1048,6 +1048,49 @@ public class SGIOC030Tests
     }
 
     [Test]
+    [Arguments("[IocRegister(ServiceTypes = [typeof(IHandler<int>)], Decorators = [typeof(Decorator<>)])]")]
+    [Arguments("[IocRegister(ServiceTypes = [typeof(IHandler<int>)], Decorators = [typeof(Decorator<>)])] [IocRegister(ServiceTypes = [typeof(IHandler<int>)], Key = \"other\", Decorators = [typeof(Decorator<>)])]")]
+    public async Task SGIOC030_OpenGenericDecoratorRequestsClosedAsyncInitService_ReportsDiagnostic(string registrations)
+    {
+        // The decorator's dependency is checked as closed for the decorated service type: IAsyncService<int>
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T> { }
+            public interface IAsyncService<T> { }
+
+            [IocRegister(ServiceTypes = [typeof(IAsyncService<int>)])]
+            public class AsyncService : IAsyncService<int>
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            {{registrations}}
+            public class Handler : IHandler<int> { }
+
+            public class Decorator<T>(IHandler<T> inner, IAsyncService<T> dependency) : IHandler<T>
+            {
+                [IocInject]
+                public IAsyncService<T>? Property { get; set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject,AsyncMethodInject" });
+        var messages = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).Select(static d => d.GetMessage()).ToList();
+
+        // Reported once per dependency, however many registrations the decorator decorates
+        await Assert.That(messages).Count().IsEqualTo(2);
+        await Assert.That(messages.Any(static m => m.Contains("'dependency'") && m.Contains("IAsyncService<int>"))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("'Property'") && m.Contains("IAsyncService<int>"))).IsTrue();
+    }
+
+    [Test]
     public async Task SGIOC030_AsyncDecoratorWrappingItsOwnServiceType_DoesNotReportInnerParameter()
     {
         // The decorator makes IMyService async-init, but its inner IMyService parameter receives the wrapped instance.

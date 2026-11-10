@@ -368,6 +368,29 @@ public sealed class ContainerTests
         await Assert.That(container.GetService<IAsyncDecoratedService>()).IsNull();
     }
 
+    [Test]
+    public async Task Container_AsyncInitDecorator_IsDisposedWithItsLifetime()
+    {
+        var container = new DecoratorImplementationTypeModule();
+        var singleton = await container.GetRequiredKeyedService<Task<IDisposableAsyncDecoratedService>>("singleton");
+
+        IDisposableAsyncDecoratedService scoped;
+        await using(var scope = container.CreateAsyncScope())
+        {
+            scoped = await scope.ServiceProvider.GetRequiredKeyedService<Task<IDisposableAsyncDecoratedService>>("scoped");
+            await Assert.That(scoped).IsTypeOf<DisposableAsyncInitDecorator>();
+            await Assert.That(scoped.IsDisposed).IsFalse();
+        }
+
+        await Assert.That(scoped.IsDisposed).IsTrue();
+        await Assert.That(singleton).IsTypeOf<DisposableAsyncInitDecorator>();
+        await Assert.That(singleton.IsDisposed).IsFalse();
+
+        await container.DisposeAsync();
+
+        await Assert.That(singleton.IsDisposed).IsTrue();
+    }
+
     #endregion
 
     #region Open Generic Tests

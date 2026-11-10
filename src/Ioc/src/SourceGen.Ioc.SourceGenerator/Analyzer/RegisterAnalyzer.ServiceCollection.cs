@@ -246,6 +246,72 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
+    /// <summary>
+    /// Closes a generic decorator definition for a closed service type, like the generator's <c>TryCloseDecorator</c>: the
+    /// type arguments are found by matching the service type as the decorator implements or inherits it against the service type.
+    /// </summary>
+    /// <returns>The closed decorator, or <see langword="null"/> when the decorator is not generic or not every type argument is found.</returns>
+    private static INamedTypeSymbol? TryConstructDecorator(INamedTypeSymbol definition, INamedTypeSymbol serviceType)
+    {
+        if(!definition.IsGenericType || serviceType.IsUnboundGenericType)
+            return null;
+
+        var serviceDefinition = serviceType.OriginalDefinition;
+        foreach(var form in definition.AllInterfaces.Concat(EnumerateBaseClasses(definition)))
+        {
+            if(!SymbolEqualityComparer.Default.Equals(form.OriginalDefinition, serviceDefinition))
+                continue;
+
+            var typeArguments = new Dictionary<ITypeParameterSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
+            if(!MatchTypeArguments(form, serviceType, typeArguments))
+                continue;
+
+            var arguments = new ITypeSymbol[definition.TypeParameters.Length];
+            for(var i = 0; i < arguments.Length; i++)
+            {
+                if(!typeArguments.TryGetValue(definition.TypeParameters[i], out var argument))
+                    return null;
+
+                arguments[i] = argument;
+            }
+
+            return definition.Construct(arguments);
+        }
+
+        return null;
+
+        static bool MatchTypeArguments(ITypeSymbol pattern, ITypeSymbol actual, Dictionary<ITypeParameterSymbol, ITypeSymbol> typeArguments)
+        {
+            switch(pattern)
+            {
+                case ITypeParameterSymbol typeParameter:
+                    if(typeArguments.TryGetValue(typeParameter, out var existing))
+                        return SymbolEqualityComparer.Default.Equals(existing, actual);
+
+                    typeArguments[typeParameter] = actual;
+                    return true;
+
+                case INamedTypeSymbol { IsGenericType: true } genericPattern
+                    when actual is INamedTypeSymbol { IsGenericType: true } genericActual
+                        && SymbolEqualityComparer.Default.Equals(genericPattern.OriginalDefinition, genericActual.OriginalDefinition):
+                    for(var i = 0; i < genericPattern.TypeArguments.Length; i++)
+                    {
+                        if(!MatchTypeArguments(genericPattern.TypeArguments[i], genericActual.TypeArguments[i], typeArguments))
+                            return false;
+                    }
+
+                    return true;
+
+                case IArrayTypeSymbol arrayPattern when actual is IArrayTypeSymbol arrayActual:
+                    return arrayPattern.Rank == arrayActual.Rank
+                        && MatchTypeArguments(arrayPattern.ElementType, arrayActual.ElementType, typeArguments);
+
+                default:
+                    return SymbolEqualityComparer.Default.Equals(pattern, actual);
+            }
+        }
+    }
+
     private static IEnumerable<INamedTypeSymbol> EnumerateBaseClasses(INamedTypeSymbol type)
     {
         for(var baseType = type.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
@@ -292,8 +358,10 @@ public sealed partial class RegisterAnalyzer
                 if(parameterIndexes.IsEmpty)
                     continue;
 
+                // An open generic decorator is analyzed as closed for the service type, so its dependencies have closed types
+                var appliedDecorator = TryConstructDecorator(definition, serviceType) ?? definition;
                 analyzerContext.AppliedDecorators
-                    .GetOrAdd(definition, static _ => new())
+                    .GetOrAdd(appliedDecorator, static _ => new())
                     .TryAdd(parameterIndexes[0], 0);
 
                 isAsyncDecorated |= AnalyzerHelpers.IsAsyncInitImplementation(decorator, analyzerContext.Features);
@@ -705,8 +773,9 @@ public sealed partial class RegisterAnalyzer
         public IocFeatures Features { get; } = features;
 
         /// <summary>
-        /// The decorators applied to registrations (definitions for open generic decorators), with the indexes of their
-        /// constructor parameters that receive a decorated instance. SGIOC030 checks their other dependencies once each.
+        /// The decorators applied to registrations (open generic decorators closed for each closed service type, otherwise
+        /// their definitions), with the indexes of their constructor parameters that receive a decorated instance. SGIOC030
+        /// checks their other dependencies.
         /// </summary>
         public ConcurrentDictionary<INamedTypeSymbol, ConcurrentDictionary<int, byte>> AppliedDecorators { get; } = new(SymbolEqualityComparer.Default);
 
