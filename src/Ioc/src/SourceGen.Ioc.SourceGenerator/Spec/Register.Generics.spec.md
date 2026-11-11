@@ -145,6 +145,14 @@ The implementation's type arguments are found by matching the service type as th
 
 Array type arguments are matched by element type and rank, including jagged arrays such as `T[][]`.
 
+A closed generic registration MUST NOT be generated when a type argument does not satisfy the generic constraints of the implementation's type parameter (`class`, `struct`, `unmanaged`, `new()`, and type constraints); the next open generic registration of the service type is tried instead, and when none matches, the dependency is resolved like an unregistered service. Constraints are checked like decorator constraints (see [Decorators](Register.Decorators.spec.md)), including for the dependencies of closed generic registrations.
+
+| Implementation | Closed service type | Closed implementation |
+| :--- | :--- | :--- |
+| `Repo<T> : IRepo<T> where T : struct` | `IRepo<int>` | `Repo<int>` |
+| `Repo<T> : IRepo<T> where T : struct` | `IRepo<string>` | none |
+| `Repo<T> : IRepo<T> where T : IEntity` | `IRepo<Entity>` (`Entity : IEntity`) | `Repo<Entity>` |
+
 ## Feature 2: Explicit Closed Generic Discovery
 
 When `IocDiscoverAttribute` (or `IocDiscoverAttribute<T>`) is exists, collect `IocDiscoverAttribute.ClosedGenericType` (or `T`) for generate factory code for open generic registrations.

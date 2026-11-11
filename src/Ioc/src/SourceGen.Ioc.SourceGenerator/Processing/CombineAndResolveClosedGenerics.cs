@@ -394,13 +394,21 @@ partial class IocSourceGenerator
         // A form the implementation declares is written with the implementation's type parameters, so matching it
         // against the closed service type maps them directly and rejects closed types it cannot produce.
         Dictionary<string, string>? serviceTypeArgMap;
+        Dictionary<string, TypeData>? typeArguments = null;
         if(implementedForm is not null && !isFactoryOnlyRegistration)
         {
-            if(MatchAllTypeArguments(openImplType, implementedForm, closedServiceGenericType) is not { } typeArguments)
+            typeArguments = MatchAllTypeArguments(openImplType, implementedForm, closedServiceGenericType);
+            if(typeArguments is null)
             {
                 return false; // The implementation cannot produce this closed service type
             }
             serviceTypeArgMap = ToTypeArgMap(typeArguments);
+
+            // Closing with type arguments that violate the implementation's constraints would not compile (CS0453 etc.)
+            if(!SatisfiesConstraints(openImplType.TypeParameters ?? [], typeArguments, serviceTypeArgMap))
+            {
+                return false;
+            }
         }
         else
         {
@@ -442,7 +450,8 @@ partial class IocSourceGenerator
         var closedImplType = BuildClosedImplTypeData(
             closedImplTypeName,
             openImplType,
-            implTypeArgMap);
+            implTypeArgMap,
+            typeArguments);
 
         // Build all closed service types from the open generic's service types
         var closedServiceTypes = BuildClosedServiceTypesFromServiceTypeMap(
@@ -458,7 +467,7 @@ partial class IocSourceGenerator
         var implFactory = openGenericInfo.Factory?.TypeParameterCount > 0 ? null : openGenericInfo.Factory;
 
         // Injection members are written with the implementation's type parameters, such as IRepo<T> for Outer<T>
-        var closedInjectionMembers = SubstituteInjectionMembers(openGenericInfo.InjectionMembers, implTypeArgMap);
+        var closedInjectionMembers = SubstituteInjectionMembers(openGenericInfo.InjectionMembers, implTypeArgMap, typeArguments);
 
         // Create registration for the implementation type itself
         var implModel = new ServiceRegistrationModel(

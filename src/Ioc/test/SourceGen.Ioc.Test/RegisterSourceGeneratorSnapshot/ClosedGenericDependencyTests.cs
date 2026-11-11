@@ -88,6 +88,137 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("class")]
+    [Arguments("struct")]
+    [Arguments("unmanaged")]
+    [Arguments("new()")]
+    public async Task ClosedGenericDependency_ImplementationWithSpecialConstraint_ClosesOnlySatisfyingTypeArguments(string constraint)
+    {
+        // class: string, Constructible, NoDefaultConstructor; struct: int, KeyValuePair; unmanaged: int;
+        // new(): int, int?, KeyValuePair, Constructible. KeyValuePair<string, int> holds a reference, so it is not unmanaged.
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using System.Collections.Generic;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T> where T : {{constraint}};
+
+            public class Constructible { }
+
+            public class NoDefaultConstructor(int value) { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            internal sealed class Consumer(
+                IRepo<string> text,
+                IRepo<int> number,
+                IRepo<int?> optionalNumber,
+                IRepo<KeyValuePair<string, int>> pair,
+                IRepo<Constructible> constructible,
+                IRepo<NoDefaultConstructor> noDefaultConstructor);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource).UseTextForParameters(constraint.Replace("()", string.Empty));
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ImplementationWithTypeConstraint_ClosesOnlySatisfyingTypeArguments()
+    {
+        // Entity implements IEntity and DerivedEntity inherits it; PlainEntity does not
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IEntity;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T> where T : IEntity;
+
+            public class Entity : IEntity;
+            public class DerivedEntity : Entity;
+            public class PlainEntity;
+
+            [IocRegister]
+            internal sealed class Consumer(IRepo<Entity> entity, IRepo<DerivedEntity> derived, IRepo<PlainEntity> plain);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ImplementationsWithDifferentConstraints_ClosesSatisfyingImplementation()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class StructRepo<T> : IRepo<T> where T : struct;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class ClassRepo<T> : IRepo<T> where T : class;
+
+            [IocRegister]
+            internal sealed class Consumer(IRepo<int> number, IRepo<string> text);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TransitiveDependencyWithConstraint_ClosesOnlySatisfyingTypeArguments()
+    {
+        // Outer<int> and Outer<string> are closed; only IRepo<int> satisfies Repo<T>'s struct constraint
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T> where T : struct;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T>(IRepo<T> repo) : IOuter<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<int> number, IOuter<string> text);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_WrappedTransitiveDependency_UnwrapsAndCloses()
     {
         // Outer<string> is closed for Consumer; the services inside its wrapper dependencies are closed in turn

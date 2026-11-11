@@ -179,6 +179,38 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_OpenGenericWithConstraint_ClosesOnlySatisfyingTypeArguments()
+    {
+        // IRepo<int> is closed directly and through Outer<int>; IRepo<string> does not satisfy the struct constraint
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Repo<T> : IRepo<T> where T : struct;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            public sealed class Outer<T>(IRepo<T> repo) : IOuter<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IRepo<int> number, IOuter<int> outerNumber, IOuter<string> outerText);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WrappedTransitiveClosedGenericDependency_ResolvesClosedImplementations()
     {
         const string source = """
