@@ -151,7 +151,7 @@ A closed generic registration MUST NOT be generated when a type argument does no
 
 - Every type satisfies a constraint to `object`, such as `where T : U` with `U = object`; base class constraints also apply to structs, enums, and delegates, such as `where T : Enum`.
 - Covariant conversions are followed one level, with a type argument replaced by one of its interfaces or base classes (`List<string>` satisfies `IEnumerable<object>`); contravariant and nested variant conversions are not. Arrays satisfy constraints to the interfaces they implement (`int[]` satisfies `IEnumerable<int>`, `string[]` satisfies `IEnumerable<object>`).
-- The covariant conversions of a type argument of a dependency of a closed generic registration are not recomputed for its substituted type arguments: `List<T>` in `Outer<T>(IRepo<List<T>>)` keeps `IEnumerable<string>` for `Outer<string>`, but not `IEnumerable<object>`.
+- The covariant conversions of a type argument of a dependency of a closed generic registration are not recomputed for its substituted type arguments: `List<T>` in `Outer<T>(IRepo<List<T>>)` keeps `IEnumerable<string>` for `Outer<string>`, but not `IEnumerable<object>`. This is a current limitation, tracked in [#173](https://github.com/AndyElessar/SourceGen/issues/173).
 - A generic value type that is a type argument of a dependency of a closed generic registration, such as `KeyValuePair<T, int>` in `Outer<T>(IRepo<KeyValuePair<T, int>>)`, does not satisfy `unmanaged`, because whether it is unmanaged depends on its fields.
 
 | Implementation | Closed service type | Closed implementation |
