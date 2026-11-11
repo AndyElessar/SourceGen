@@ -416,6 +416,105 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_DecoratorDependencyWithConstraint_ClosesWithTypeArgumentHierarchy()
+    {
+        // Decorator<T>(IService<T>, IRepo<T>) decorates IService<Entity>; Entity implements IEntity, so Repo<Entity> is closed,
+        // both for the open generic Service<T> and for the closed EntityService
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IService<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.Decorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IEntity;
+            public class Entity : IEntity;
+            public class Other : IEntity;
+
+            public interface IService<T>;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<U> : IRepo<U> where U : IEntity;
+
+            [IocRegister(ServiceTypes = [typeof(IService<>)])]
+            internal sealed class Service<T> : IService<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IService<>)])]
+            internal sealed class OtherService : IService<Other>;
+
+            internal sealed class Decorator<T>(IService<T> inner, IRepo<T> repo) : IService<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IService<Entity> service);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ConstructorConstraintWithRequiredMembers_ClosesOnlySatisfyingTypeArguments()
+    {
+        // Types with required members only satisfy new() when the parameterless constructor sets them
+        const string source = """
+            using System.Diagnostics.CodeAnalysis;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T> where T : new();
+
+            public class RequiredEntity
+            {
+                public required string Name { get; init; }
+            }
+
+            public class DerivedRequiredEntity : RequiredEntity;
+
+            public class SetsRequiredEntity
+            {
+                [SetsRequiredMembers]
+                public SetsRequiredEntity() => Name = string.Empty;
+
+                public required string Name { get; init; }
+            }
+
+            public struct RequiredStruct
+            {
+                public required int Value;
+            }
+
+            public class PlainEntity;
+
+            [IocRegister]
+            internal sealed class Consumer(
+                IRepo<RequiredEntity> required,
+                IRepo<DerivedRequiredEntity> derived,
+                IRepo<SetsRequiredEntity> setsRequired,
+                IRepo<RequiredStruct> requiredStruct,
+                IRepo<PlainEntity> plain);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_WrappedTransitiveDependency_UnwrapsAndCloses()
     {
         // Outer<string> is closed for Consumer; the services inside its wrapper dependencies are closed in turn

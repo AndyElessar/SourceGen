@@ -109,7 +109,7 @@ partial class ContainerAnalyzer
         if((typeParameter.HasReferenceTypeConstraint && !typeArgument.IsReferenceType)
             || (typeParameter.HasValueTypeConstraint && !isNonNullableValueType)
             || (typeParameter.HasUnmanagedTypeConstraint && !(isNonNullableValueType && typeArgument.IsUnmanagedType))
-            || (typeParameter.HasConstructorConstraint && !HasPublicParameterlessConstructor(typeArgument)))
+            || (typeParameter.HasConstructorConstraint && !typeArgument.SatisfiesConstructorConstraint()))
         {
             return false;
         }
@@ -125,11 +125,6 @@ partial class ContainerAnalyzer
         }
 
         return true;
-
-        static bool HasPublicParameterlessConstructor(ITypeSymbol type)
-            => type.IsValueType
-                || type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } namedType
-                    && namedType.InstanceConstructors.Any(static c => c.Parameters.IsEmpty && c.DeclaredAccessibility is Accessibility.Public);
     }
 
     /// <summary>
@@ -166,8 +161,15 @@ partial class ContainerAnalyzer
 
     /// <summary>
     /// Gets whether a type argument converts to a constraint type by an identity, implicit reference, or boxing
-    /// conversion, including variant interface and delegate conversions.
+    /// conversion that the generator recognizes.
     /// </summary>
+    /// <remarks>
+    /// Like the generator's constraint check (<c>CreateConvertibleInterfaceTypeData</c>), the type argument converts to
+    /// <c>object</c>, its base classes, its interfaces, and the covariant conversions that
+    /// <see cref="RoslynExtensions.GetCovariantConversions"/> enumerates for itself and its interfaces: one level deep and
+    /// capped. Contravariant and nested variant conversions, such as <c>IComparer&lt;object&gt;</c> to
+    /// <c>IComparer&lt;string&gt;</c>, are not followed, because the generator does not close the registration for them.
+    /// </remarks>
     private static bool IsImplicitlyConvertible(ITypeSymbol source, ITypeSymbol target)
     {
         if(SymbolEqualityComparer.Default.Equals(source, target) || target.SpecialType is SpecialType.System_Object)
@@ -175,72 +177,30 @@ partial class ContainerAnalyzer
 
         for(var baseType = source.BaseType; baseType is not null; baseType = baseType.BaseType)
         {
-            if(IsVariantConvertible(baseType, target))
+            if(SymbolEqualityComparer.Default.Equals(baseType, target))
                 return true;
         }
 
-        if(source is INamedTypeSymbol namedSource && IsVariantConvertible(namedSource, target))
+        if(source is INamedTypeSymbol namedSource && IsCovariantConversion(namedSource, target))
             return true;
 
         foreach(var implemented in source.AllInterfaces)
         {
-            if(IsVariantConvertible(implemented, target))
+            if(SymbolEqualityComparer.Default.Equals(implemented, target) || IsCovariantConversion(implemented, target))
                 return true;
         }
 
         return false;
-    }
 
-    /// <summary>
-    /// Gets whether a type is the target type or converts to it through the covariance of its type parameters, such as
-    /// <c>IEnumerable&lt;string&gt;</c> to <c>IEnumerable&lt;object&gt;</c>.
-    /// </summary>
-    /// <remarks>
-    /// Like the generator's constraint check (<c>CreateConvertibleInterfaceTypeData</c>), a covariant type argument may
-    /// only be replaced by one of its own interfaces or base classes: contravariant and nested variant conversions, such
-    /// as <c>IComparer&lt;object&gt;</c> to <c>IComparer&lt;string&gt;</c>, are not followed, because the generator does
-    /// not close the registration for them.
-    /// </remarks>
-    private static bool IsVariantConvertible(INamedTypeSymbol source, ITypeSymbol target)
-    {
-        if(SymbolEqualityComparer.Default.Equals(source, target))
-            return true;
-
-        if(target is not INamedTypeSymbol { IsGenericType: true } namedTarget
-            || source.TypeKind is not (TypeKind.Interface or TypeKind.Delegate)
-            || !SymbolEqualityComparer.Default.Equals(source.OriginalDefinition, namedTarget.OriginalDefinition))
+        static bool IsCovariantConversion(INamedTypeSymbol type, ITypeSymbol target)
         {
-            return false;
-        }
-
-        var typeParameters = source.OriginalDefinition.TypeParameters;
-        for(var i = 0; i < typeParameters.Length; i++)
-        {
-            var sourceArgument = source.TypeArguments[i];
-            var targetArgument = namedTarget.TypeArguments[i];
-            if(SymbolEqualityComparer.Default.Equals(sourceArgument, targetArgument))
-                continue;
-
-            // Variant conversions require reference conversions of the type arguments
-            if(typeParameters[i].Variance is not VarianceKind.Out
-                || !sourceArgument.IsReferenceType
-                || !IsInterfaceOrBaseClass(sourceArgument, targetArgument))
+            foreach(var conversion in type.GetCovariantConversions())
             {
-                return false;
-            }
-        }
-
-        return true;
-
-        static bool IsInterfaceOrBaseClass(ITypeSymbol type, ITypeSymbol candidate)
-        {
-            for(var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
-            {
-                if(SymbolEqualityComparer.Default.Equals(baseType, candidate))
+                if(SymbolEqualityComparer.Default.Equals(conversion, target))
                     return true;
             }
 
-            return type.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, candidate));
+            return false;
         }
     }
 }

@@ -456,7 +456,7 @@ partial class IocSourceGenerator
 
         var typeArgMap = ToTypeArgMap(typeArguments);
         return SatisfiesConstraints(decoratorTypeParams, typeArguments, typeArgMap)
-            ? SubstituteDecoratorTypeParams(genericDecorator, typeArgMap)
+            ? SubstituteDecoratorTypeParams(genericDecorator, typeArgMap, typeArguments)
             : null;
     }
 

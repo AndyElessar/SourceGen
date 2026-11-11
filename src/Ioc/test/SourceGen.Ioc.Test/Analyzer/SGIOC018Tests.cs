@@ -1208,6 +1208,92 @@ public class SGIOC018Tests
     }
 
     [Test]
+    public async Task SGIOC018_OpenGenericRegistration_ConstructorConstraintWithRequiredMembers_ReportsUnsatisfied()
+    {
+        const string source = """
+            using System.Diagnostics.CodeAnalysis;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class RequiredEntity
+            {
+                public required string Name { get; init; }
+            }
+
+            public class DerivedRequiredEntity : RequiredEntity;
+
+            public class SetsRequiredEntity
+            {
+                [SetsRequiredMembers]
+                public SetsRequiredEntity() => Name = string.Empty;
+
+                public required string Name { get; init; }
+            }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> where T : new() { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IRepository<RequiredEntity> required, IRepository<DerivedRequiredEntity> derived, IRepository<SetsRequiredEntity> setsRequired) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var messages = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").Select(d => d.GetMessage()).Order().ToList();
+
+        await Assert.That(messages).IsEquivalentTo([
+            "Unable to resolve service 'IRepository<DerivedRequiredEntity>' for container 'TestContainer'",
+            "Unable to resolve service 'IRepository<RequiredEntity>' for container 'TestContainer'",
+        ]);
+    }
+
+    [Test]
+    public async Task SGIOC018_OpenGenericRegistration_CovariantConversionBeyondGeneratorLimit_ReportsDiagnostic()
+    {
+        // The generator enumerates at most 64 covariant conversions of IGrouping<Many, Many> (10 candidates per position);
+        // IGrouping<object, object> is beyond them, so the generator does not close Repository<IGrouping<Many, Many>>
+        const string source = """
+            using System.Linq;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface I1; public interface I2; public interface I3; public interface I4;
+            public interface I5; public interface I6; public interface I7; public interface I8;
+            public class Many : I1, I2, I3, I4, I5, I6, I7, I8;
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> where T : IGrouping<object, object> { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IRepository<IGrouping<Many, Many>> repository) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+    }
+
+    [Test]
     public async Task SGIOC018_OpenGenericRegistrationsWithDifferentConstraints_ResolvedBySatisfyingImplementation_NoDiagnostic()
     {
         const string source = """

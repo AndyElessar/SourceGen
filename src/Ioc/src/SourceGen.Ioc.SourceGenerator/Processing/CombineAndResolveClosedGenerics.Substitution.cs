@@ -365,9 +365,14 @@ partial class IocSourceGenerator
     /// <summary>
     /// Substitutes type parameters in a decorator and processes its constructor parameters and injection members.
     /// </summary>
+    /// <param name="typeArguments">
+    /// The matched type argument of each type parameter, so dependencies such as <c>IRepo&lt;Entity&gt;</c> keep the
+    /// hierarchy that the constraints of the implementations closed for them are checked against.
+    /// </param>
     private static TypeData SubstituteDecoratorTypeParams(
         GenericTypeData genericDecorator,
-        Dictionary<string, string> typeArgMap)
+        Dictionary<string, string> typeArgMap,
+        Dictionary<string, TypeData> typeArguments)
     {
         var decorator = genericDecorator;
         var decoratorTypeParams = genericDecorator.TypeParameters;
@@ -387,20 +392,18 @@ partial class IocSourceGenerator
                 // Use SubstituteTypeData to recursively substitute type parameters
                 // This ensures nested generics like ILogger<HandlerDecorator1<TRequest, TResponse>>
                 // get their TypeParameters correctly substituted
-                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
-                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
-                newParams.Add(param with { Type = newParamType });
+                newParams.Add(param with { Type = SubstituteTypeData(param.Type, typeArgMap, typeArguments) });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
 
         // Substitute in injection members (properties, fields, methods with [IocInject] attributes)
         var closedInjectionMembers = decorator.InjectionMembers is { Length: > 0 } injectionMembers
-            ? SubstituteInjectionMembers(injectionMembers, typeArgMap)
+            ? SubstituteInjectionMembers(injectionMembers, typeArgMap, typeArguments)
             : null;
 
         // Substitute in type parameters
-        var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap);
+        var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap, typeArguments);
 
         // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
         return TypeData.CreateGeneric(
