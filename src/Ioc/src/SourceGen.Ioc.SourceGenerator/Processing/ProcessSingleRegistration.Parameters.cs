@@ -18,6 +18,9 @@ partial class IocSourceGenerator
         var hasDecoratorDependencies = false;
         foreach(var reg in serviceRegistrations)
         {
+            if(reg.IsOpenGeneric)
+                continue;
+
             foreach(var decorator in reg.Decorators)
             {
                 // Check constructor parameters (> 1 because one parameter receives the decorated instance)
@@ -87,9 +90,14 @@ partial class IocSourceGenerator
         }
 
         // Collect from closed decorators' constructor parameters and injection members
-        // These are decorators that have been closed (type parameters substituted) for specific service types
+        // These are decorators that have been closed (type parameters substituted) for specific service types.
+        // Decorators of an open generic registration are closed with its own type parameters, so their dependencies are
+        // still open; their closed forms are collected when closed generic registrations are generated.
         foreach(var reg in serviceRegistrations)
         {
+            if(reg.IsOpenGeneric)
+                continue;
+
             foreach(var decorator in reg.Decorators)
             {
                 // Collect from constructor parameters, except the one that receives the decorated instance

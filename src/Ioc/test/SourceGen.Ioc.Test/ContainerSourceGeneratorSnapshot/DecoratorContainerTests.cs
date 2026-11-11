@@ -582,4 +582,43 @@ public class DecoratorContainerTests
             .And.Contains("new global::TestNamespace.Logger<string>()");
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_OpenGenericDecoratorWithNestedOpenGenericDependency_ResolvesOnlyClosedDependencies()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IHandler<>), ServiceLifetime.Singleton, Decorators = [typeof(TestNamespace.LoggingDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class GenericHandler<T> : IHandler<T>;
+
+            public sealed class LoggingDecorator<T>(IHandler<T> inner, ILogger<LoggingDecorator<T>> logger) : IHandler<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(IHandler<int> handler);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("LoggingDecorator<T>>");
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Logger<global::TestNamespace.LoggingDecorator<int>>()");
+        await Verify(generatedSource);
+    }
 }
