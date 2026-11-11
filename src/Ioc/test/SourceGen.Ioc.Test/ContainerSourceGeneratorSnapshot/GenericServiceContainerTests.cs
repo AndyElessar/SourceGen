@@ -179,6 +179,117 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_ExpandingDependencyAlsoReachedIndependently_StopsExpandingAndResolvesIndependentPath()
+    {
+        // Node<string> needs INode<List<string>> on an expanding path, but Other<string> needs it on an independent one,
+        // so Node<List<string>> is resolved directly, and its own INode<List<List<string>>> is not closed
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T>(IEnumerable<INode<List<T>>> children) : INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            public sealed class Other<T>(INode<List<T>> node) : IOther<T>;
+
+            [IocRegister]
+            public sealed class Consumer(INode<string> node, IOther<string> other);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_ExplicitOnly_ExpandingDependencyAlsoReachedIndependently_StopsExpandingAndResolvesIndependentPath()
+    {
+        // An ExplicitOnly container closes its open generic registrations separately, with the same rules
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            public sealed class Node<T>(IEnumerable<INode<List<T>>> children) : INode<T>;
+
+            public sealed class Other<T>(INode<List<T>> node) : IOther<T>;
+
+            public sealed class Consumer(INode<string> node, IOther<string> other);
+
+            [IocContainer(IntegrateServiceProvider = false, ExplicitOnly = true)]
+            [IocRegisterFor(typeof(Node<>), ServiceLifetime.Transient, ServiceTypes = [typeof(INode<>)])]
+            [IocRegisterFor(typeof(Other<>), ServiceLifetime.Transient, ServiceTypes = [typeof(IOther<>)])]
+            [IocRegisterFor<Consumer>(ServiceLifetime.Transient)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_DecoratorDependencyWithConstraint_ResolvesClosedImplementation()
+    {
+        // Decorator<T>'s IRepo<Entity> dependency closes Repo<U> where U : IEntity, so the decorator resolves it directly
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IService<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.Decorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IEntity;
+            public class Entity : IEntity;
+
+            public interface IService<T>;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Repo<U> : IRepo<U> where U : IEntity;
+
+            [IocRegister(ServiceTypes = [typeof(IService<>)])]
+            public sealed class Service<T> : IService<T>;
+
+            public sealed class Decorator<T>(IService<T> inner, IRepo<T> repo) : IService<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IService<Entity> service);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_OpenGenericWithConstraint_ClosesOnlySatisfyingTypeArguments()
     {
         // IRepo<int> is closed directly and through Outer<int>; IRepo<string> does not satisfy the struct constraint
