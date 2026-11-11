@@ -348,9 +348,9 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    [Arguments("INode<string> node, IOther<string> other")]
-    [Arguments("IOther<string> other, INode<string> node")]
-    public async Task ClosedGenericDependency_ExpandingDependencyAlsoReachedIndependently_ClosesRegardlessOfOrder(string parameters)
+    [Arguments("NodeFirst", "INode<string> node, IOther<string> other")]
+    [Arguments("OtherFirst", "IOther<string> other, INode<string> node")]
+    public async Task ClosedGenericDependency_ExpandingDependencyAlsoReachedIndependently_ClosesRegardlessOfOrder(string order, string parameters)
     {
         // INode<List<string>> expands Node<string>'s path, but Other<string> needs it on an independent path
         var source = $$"""
@@ -377,8 +377,10 @@ public class ClosedGenericDependencyTests
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
+        // Both orders close Node<List<string>> for Other<string>, and neither expands further
         await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Node<global::System.Collections.Generic.List<string>>, global::TestNamespace.Node<global::System.Collections.Generic.List<string>>>();");
         await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Node<global::System.Collections.Generic.List<global::System.Collections.Generic.List<string>>>");
+        await Verify(generatedSource).UseTextForParameters(order);
     }
 
     [Test]
