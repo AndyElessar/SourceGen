@@ -520,9 +520,10 @@ internal static partial class TransformExtensions
             static TypeArgHierarchy CreateHierarchy(INamedTypeSymbol type)
             {
                 // Base classes are needed to check base class constraints; names are enough, and avoid recursing
-                // through self-referencing bases such as Foo : Base<Foo>.
+                // through self-referencing bases such as Foo : Base<Foo>. Structs, enums and delegates have base classes
+                // too, such as System.Enum for where T : Enum. System.Object is satisfied by every type, so it is omitted.
                 ImmutableEquatableArray<TypeData>? baseClasses = null;
-                if(type.TypeKind == TypeKind.Class && type.BaseType is { SpecialType: not SpecialType.System_Object })
+                if(type.BaseType is { SpecialType: not SpecialType.System_Object })
                 {
                     using var bases = new ValueListBuilder<TypeData>(4);
                     for(var baseType = type.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)

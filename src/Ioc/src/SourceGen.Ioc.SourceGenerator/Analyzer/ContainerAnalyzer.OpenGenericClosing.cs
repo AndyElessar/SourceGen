@@ -192,9 +192,15 @@ partial class ContainerAnalyzer
     }
 
     /// <summary>
-    /// Gets whether a type is the target type or converts to it through the variance of its type parameters, such as
+    /// Gets whether a type is the target type or converts to it through the covariance of its type parameters, such as
     /// <c>IEnumerable&lt;string&gt;</c> to <c>IEnumerable&lt;object&gt;</c>.
     /// </summary>
+    /// <remarks>
+    /// Like the generator's constraint check (<c>CreateConvertibleInterfaceTypeData</c>), a covariant type argument may
+    /// only be replaced by one of its own interfaces or base classes: contravariant and nested variant conversions, such
+    /// as <c>IComparer&lt;object&gt;</c> to <c>IComparer&lt;string&gt;</c>, are not followed, because the generator does
+    /// not close the registration for them.
+    /// </remarks>
     private static bool IsVariantConvertible(INamedTypeSymbol source, ITypeSymbol target)
     {
         if(SymbolEqualityComparer.Default.Equals(source, target))
@@ -216,16 +222,25 @@ partial class ContainerAnalyzer
                 continue;
 
             // Variant conversions require reference conversions of the type arguments
-            var convertible = typeParameters[i].Variance switch
+            if(typeParameters[i].Variance is not VarianceKind.Out
+                || !sourceArgument.IsReferenceType
+                || !IsInterfaceOrBaseClass(sourceArgument, targetArgument))
             {
-                VarianceKind.Out => sourceArgument.IsReferenceType && IsImplicitlyConvertible(sourceArgument, targetArgument),
-                VarianceKind.In => targetArgument.IsReferenceType && IsImplicitlyConvertible(targetArgument, sourceArgument),
-                _ => false,
-            };
-            if(!convertible)
                 return false;
+            }
         }
 
         return true;
+
+        static bool IsInterfaceOrBaseClass(ITypeSymbol type, ITypeSymbol candidate)
+        {
+            for(var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+            {
+                if(SymbolEqualityComparer.Default.Equals(baseType, candidate))
+                    return true;
+            }
+
+            return type.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, candidate));
+        }
     }
 }

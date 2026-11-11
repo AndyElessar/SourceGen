@@ -127,6 +127,8 @@ services.AddSingleton<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<Te
 
 The constructor parameters and injection members (properties, fields, and method parameters with `[IocInject]` / `[Inject]`) of a closed generic registration MUST have the type parameters of the open generic implementation substituted by its type arguments, and MUST be collected as closed generic dependencies in turn. For example, closing `Outer<T>(IRepo<T> repo)` as `Outer<string>` collects `IRepo<string>`, and `ILogger<Outer<T>>` becomes `ILogger<Outer<string>>`; an `[IocInject] IValidator<T>` property of `Outer<T>` is injected as `IValidator<string>`. Wrapped dependencies MUST be unwrapped like direct dependencies (`Lazy<T>`, `Func<T>`, collections, dictionaries, and `KeyValuePair<TKey, T>`), so `Lazy<IRepo<T>>` collects `IRepo<string>`.
 
+A dependency MUST NOT close an implementation that was closed to reach it with a type argument the new one contains, because such dependencies never end: closing `Node<T>(Lazy<INode<List<T>>> next)` as `Node<string>` does not close `Node<List<string>>`, and `INode<List<string>>` is resolved like an unregistered service.
+
 Decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies. Only their closed forms, from closed generic registrations, are collected.
 
 ### Type Argument Mapping
@@ -145,7 +147,11 @@ The implementation's type arguments are found by matching the service type as th
 
 Array type arguments are matched by element type and rank, including jagged arrays such as `T[][]`.
 
-A closed generic registration MUST NOT be generated when a type argument does not satisfy the generic constraints of the implementation's type parameter (`class`, `struct`, `unmanaged`, `new()`, and type constraints); the next open generic registration of the service type is tried instead, and when none matches, the dependency is resolved like an unregistered service. Constraints are checked like decorator constraints (see [Decorators](Register.Decorators.spec.md)), including for the dependencies of closed generic registrations.
+A closed generic registration MUST NOT be generated when a type argument does not satisfy the generic constraints of the implementation's type parameter (`class`, `struct`, `unmanaged`, `new()`, and type constraints); the next open generic registration of the service type is tried instead, and when none matches, the dependency is resolved like an unregistered service. Constraints are checked like decorator constraints (see [Decorators](Register.Decorators.spec.md)), including for the dependencies of closed generic registrations:
+
+- Every type satisfies a constraint to `object`, such as `where T : U` with `U = object`; base class constraints also apply to structs, enums, and delegates, such as `where T : Enum`.
+- Covariant conversions are followed one level, with a type argument replaced by one of its interfaces or base classes (`List<string>` satisfies `IEnumerable<object>`); contravariant and nested variant conversions are not.
+- A generic value type that is a type argument of a dependency of a closed generic registration, such as `KeyValuePair<T, int>` in `Outer<T>(IRepo<KeyValuePair<T, int>>)`, does not satisfy `unmanaged`, because whether it is unmanaged depends on its fields.
 
 | Implementation | Closed service type | Closed implementation |
 | :--- | :--- | :--- |

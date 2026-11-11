@@ -527,7 +527,9 @@ partial class IocSourceGenerator
             ? constraintArgument.Name
             : SubstituteTypeArguments(constraintType.Name, typeArgMap);
 
-        return typeArgument.Name == constraintName
+        // Every type converts to object, value types by boxing, as for where T : U with U = object
+        return constraintName is "object" or "global::System.Object"
+            || typeArgument.Name == constraintName
             || (typeArgument.AllInterfaces ?? []).Any(type => type.Name == constraintName)
             || (typeArgument.AllBaseClasses ?? []).Any(type => type.Name == constraintName);
     }

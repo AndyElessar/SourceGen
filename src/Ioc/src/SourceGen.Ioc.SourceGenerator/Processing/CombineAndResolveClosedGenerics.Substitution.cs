@@ -206,7 +206,9 @@ partial class IocSourceGenerator
     /// </param>
     private static TypeData SubstituteTypeData(TypeData typeData, Dictionary<string, string> typeArgMap, Dictionary<string, TypeData>? typeArguments = null)
     {
-        if(typeData is TypeParameterTypeData && typeArguments is not null && typeArguments.TryGetValue(typeData.Name, out var typeArgument))
+        // A type named like a type parameter is that type parameter, whether it was extracted as a type argument
+        // (TypeParameterTypeData) or as a parameter or member type declared as T; other names are fully qualified
+        if(typeArguments is not null && typeArguments.TryGetValue(typeData.Name, out var typeArgument))
         {
             return typeArgument;
         }
@@ -220,14 +222,16 @@ partial class IocSourceGenerator
         // Nested type arguments are closed too, such as ILogger<Outer<string>> in Func<ILogger<Outer<string>>>
         var substituted = RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, IsNestedOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
 
-        // Interfaces and base classes are compared with closed decorator constraints, so they are closed too
-        return typeData.AllInterfaces is null && typeData.AllBaseClasses is null
-            ? substituted
-            : substituted with
-            {
-                AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap),
-                AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
-            };
+        // Interfaces and base classes are compared with closed constraints, so they are closed too. Type arguments do
+        // not change whether a type is a reference type, a value type, or has a default constructor, so the traits are
+        // kept. Whether a generic value type is unmanaged depends on its fields, which are not recorded, so it is not
+        // considered unmanaged, and the unmanaged constraint is not satisfied by it.
+        return substituted with
+        {
+            AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap),
+            AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
+            Traits = newTypeParams is { Length: > 0 } ? typeData.Traits & ~TypeTraits.Unmanaged : typeData.Traits,
+        };
 
         static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(ImmutableEquatableArray<TypeData>? types, Dictionary<string, string> typeArgMap)
         {

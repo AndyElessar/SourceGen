@@ -219,6 +219,135 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_ImplementationConstraintOnObjectEnumOrDelegate_Closes()
+    {
+        // string converts to object, int to ValueType by boxing, DayOfWeek to Enum, and Action to Delegate
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U>;
+            public interface IEnumRepo<T>;
+            public interface IDelegateRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class Handler<T, U> : IHandler<T, U> where T : U;
+
+            [IocRegister(ServiceTypes = [typeof(IEnumRepo<>)])]
+            internal sealed class EnumRepo<T> : IEnumRepo<T> where T : Enum;
+
+            [IocRegister(ServiceTypes = [typeof(IDelegateRepo<>)])]
+            internal sealed class DelegateRepo<T> : IDelegateRepo<T> where T : Delegate;
+
+            [IocRegister]
+            internal sealed class Consumer(
+                IHandler<string, object> text,
+                IHandler<int, ValueType> number,
+                IEnumRepo<DayOfWeek> day,
+                IDelegateRepo<Action> action);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TransitiveDependencyDeclaredAsTypeParameter_Closes()
+    {
+        // Outer<IRepo<string>> depends on T itself, which stands for IRepo<string>
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T>(T inner) : IOuter<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<IRepo<string>> outer);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TransitiveConstructedTypeArgument_ChecksConstraint()
+    {
+        // List<string> and string[] are reference types, so they do not satisfy Repo<U>'s struct constraint
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<U> : IRepo<U> where U : struct;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T>(IRepo<List<T>> list, IRepo<T[]> array, IRepo<KeyValuePair<T, int>> pair) : IOuter<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<string> outer);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    public async Task ClosedGenericDependency_ExpandingGenericDependency_StopsClosing(CancellationToken cancellationToken)
+    {
+        // Closing Node<string> requires INode<List<string>>, which would require INode<List<List<string>>>, and so on
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            internal sealed class Node<T>(Lazy<INode<List<T>>> next) : INode<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_WrappedTransitiveDependency_UnwrapsAndCloses()
     {
         // Outer<string> is closed for Consumer; the services inside its wrapper dependencies are closed in turn
