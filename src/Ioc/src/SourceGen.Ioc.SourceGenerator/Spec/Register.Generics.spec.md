@@ -121,6 +121,8 @@ services.AddSingleton<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<Te
 #endregion
 ```
 
+Decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies. Only their closed forms, from closed generic registrations, are collected.
+
 ### Type Argument Mapping
 
 The implementation's type arguments are found by matching the service type as the implementation declares it (one of its interfaces, one of its base classes, or itself) against the closed service type, at every nesting level. Type parameter names and order MAY differ from the service type's definition. A closed generic registration MUST NOT be generated when the closed service type does not have the declared shape, when one type parameter would stand for two different types, or when a type parameter of the implementation is not determined.

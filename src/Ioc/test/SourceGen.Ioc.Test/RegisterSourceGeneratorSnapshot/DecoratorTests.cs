@@ -742,4 +742,40 @@ public class DecoratorTests
         await Assert.That(generatedSource).DoesNotContain("NoInnerDecorator");
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Decorator_OpenGenericWithNestedOpenGenericDependency_RegistersOnlyClosedDependencies()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IHandler<>), ServiceLifetime.Singleton, Decorators = [typeof(TestNamespace.LoggingDecorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface ILogger<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            public interface IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class GenericHandler<T> : IHandler<T>;
+
+            public sealed class LoggingDecorator<T>(IHandler<T> inner, ILogger<LoggingDecorator<T>> logger) : IHandler<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IHandler<int> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain("LoggingDecorator<T>>");
+        await Assert.That(generatedSource).Contains("global::TestNamespace.ILogger<global::TestNamespace.LoggingDecorator<int>>");
+        await Verify(generatedSource);
+    }
 }
