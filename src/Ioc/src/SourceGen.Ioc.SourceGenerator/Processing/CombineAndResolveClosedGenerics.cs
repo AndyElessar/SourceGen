@@ -219,6 +219,13 @@ partial class IocSourceGenerator
                 }
             }
 
+            // A closing rejected on this path, such as an expanding one, may succeed on an independent path, so the
+            // dependency is processed again when another registration collects it. Each registration collects it once.
+            if(registrations.Count == registrationCountBefore)
+            {
+                processedDependencies.Remove(closedTypeName);
+            }
+
             // Collect new dependencies from newly generated registrations (including decorator parameters)
             for(var i = registrationCountBefore; i < registrations.Count; i++)
             {

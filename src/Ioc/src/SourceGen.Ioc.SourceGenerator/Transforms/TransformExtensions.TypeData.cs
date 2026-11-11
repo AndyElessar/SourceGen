@@ -485,11 +485,13 @@ internal static partial class TransformExtensions
             }
 
             // Arrays keep their element type, created like any type argument, so T[] and T[][] can be matched against
-            // closed arrays such as Req[] and Req[][], and the element keeps its interfaces for constraint checks
+            // closed arrays such as Req[] and Req[][], and the element keeps its interfaces for constraint checks.
+            // The array itself keeps its interfaces and System.Array, so where T : IEnumerable<int> accepts int[].
             if(typeArg is IArrayTypeSymbol arrayArg)
             {
                 var elementType = typeParam.CreateTypeDataForTypeArg(arrayArg.ElementType, depth + 1);
                 var arrayName = arrayArg.FullyQualifiedName;
+                var arrayHierarchy = CreateHierarchy(arrayArg);
                 return TypeData.CreateWrapper(
                     arrayName,
                     arrayName,
@@ -498,7 +500,9 @@ internal static partial class TransformExtensions
                     WrapperKind.Array,
                     IsNestedOpenGeneric: false,
                     TypeParameters: [new TypeParameter("T", elementType)],
-                    Traits: GetTypeTraits(arrayArg));
+                    AllInterfaces: arrayHierarchy.AllInterfaces,
+                    AllBaseClasses: arrayHierarchy.AllBaseClasses,
+                    Traits: arrayHierarchy.Traits);
             }
 
             if(typeArg is not null)
@@ -517,7 +521,7 @@ internal static partial class TransformExtensions
             // No type argument available, this is a type parameter placeholder
             return TypeData.CreateTypeParameter(typeParam.Name);
 
-            static TypeArgHierarchy CreateHierarchy(INamedTypeSymbol type)
+            static TypeArgHierarchy CreateHierarchy(ITypeSymbol type)
             {
                 // Base classes are needed to check base class constraints; names are enough, and avoid recursing
                 // through self-referencing bases such as Foo : Base<Foo>. Structs, enums and delegates have base classes
@@ -565,10 +569,10 @@ internal static partial class TransformExtensions
             // Creates the interfaces a type argument converts to: its interfaces and, through covariance, the variant
             // interfaces they become with a supertype argument, such as IEnumerable<object> for List<string>.
             // Decorator constraints compare these names, so where T : IEnumerable<object> accepts List<string>.
-            static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(INamedTypeSymbol type)
+            static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(ITypeSymbol type)
             {
                 var interfaces = type.AllInterfaces;
-                var isVariant = IsVariant(type);
+                var isVariant = type is INamedTypeSymbol namedType && IsVariant(namedType);
                 if(interfaces.Length == 0 && !isVariant)
                 {
                     return null;
@@ -586,11 +590,13 @@ internal static partial class TransformExtensions
                 HashSet<string>? names = null;
                 for(var i = -1; i < interfaces.Length; i++)
                 {
-                    var variant = i < 0 ? type : interfaces[i];
-                    if(i < 0 ? !isVariant : !IsVariant(variant))
+                    if(i < 0 ? !isVariant : !IsVariant(interfaces[i]))
                     {
                         continue;
                     }
+
+                    // Only a named type can be variant itself; an array is never
+                    var variant = i < 0 ? (INamedTypeSymbol)type : interfaces[i];
 
                     if(names is null)
                     {

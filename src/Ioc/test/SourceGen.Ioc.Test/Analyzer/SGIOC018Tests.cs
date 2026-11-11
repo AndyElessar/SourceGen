@@ -1119,6 +1119,7 @@ public class SGIOC018Tests
     // Like the generator, contravariant and nested variant conversions are not followed
     [Arguments("IComparer<string>", "IRepository<IComparer<object>>")]
     [Arguments("IEnumerable<IEnumerable<object>>", "IRepository<List<List<string>>>")]
+    [Arguments("IEnumerable<object>", "IRepository<int[]>")]
     public async Task SGIOC018_OpenGenericRegistration_UnsatisfiedConstraint_ReportsDiagnostic(string constraint, string parameterType)
     {
         var source = $$"""
@@ -1168,6 +1169,8 @@ public class SGIOC018Tests
     [Arguments("Enum", "IRepository<DayOfWeek>")]
     [Arguments("Delegate", "IRepository<Action>")]
     [Arguments("IEnumerable<IEnumerable<string>>", "IRepository<List<List<string>>>")]
+    [Arguments("IEnumerable<int>", "IRepository<int[]>")]
+    [Arguments("IEnumerable<object>", "IRepository<string[]>")]
     public async Task SGIOC018_OpenGenericRegistration_SatisfiedConstraint_NoDiagnostic(string constraint, string parameterType)
     {
         var source = $$"""

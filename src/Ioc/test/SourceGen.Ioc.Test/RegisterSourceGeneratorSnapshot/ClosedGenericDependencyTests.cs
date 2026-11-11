@@ -348,6 +348,72 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("INode<string> node, IOther<string> other")]
+    [Arguments("IOther<string> other, INode<string> node")]
+    public async Task ClosedGenericDependency_ExpandingDependencyAlsoReachedIndependently_ClosesRegardlessOfOrder(string parameters)
+    {
+        // INode<List<string>> expands Node<string>'s path, but Other<string> needs it on an independent path
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            internal sealed class Node<T>(IEnumerable<INode<List<T>>> children) : INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            internal sealed class Other<T>(INode<List<T>> node) : IOther<T>;
+
+            [IocRegister]
+            internal sealed class Consumer({{parameters}});
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Node<global::System.Collections.Generic.List<string>>, global::TestNamespace.Node<global::System.Collections.Generic.List<string>>>();");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Node<global::System.Collections.Generic.List<global::System.Collections.Generic.List<string>>>");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ArrayTypeArgumentWithInterfaceConstraint_Closes()
+    {
+        // int[] implements IEnumerable<int>, and string[] converts to IEnumerable<object> through IEnumerable<string>;
+        // int[] does not convert to IEnumerable<object>, because covariance needs a reference type argument
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INumbers<T>;
+            public interface IObjects<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INumbers<>)])]
+            internal sealed class Numbers<T> : INumbers<T> where T : IEnumerable<int>;
+
+            [IocRegister(ServiceTypes = [typeof(IObjects<>)])]
+            internal sealed class Objects<T> : IObjects<T> where T : IEnumerable<object>;
+
+            [IocRegister]
+            internal sealed class Consumer(INumbers<int[]> numbers, IObjects<string[]> texts, IObjects<int[]> values);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_WrappedTransitiveDependency_UnwrapsAndCloses()
     {
         // Outer<string> is closed for Consumer; the services inside its wrapper dependencies are closed in turn
