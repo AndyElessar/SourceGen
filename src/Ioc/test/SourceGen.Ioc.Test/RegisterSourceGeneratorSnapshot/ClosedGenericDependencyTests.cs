@@ -88,6 +88,49 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_WrappedTransitiveDependency_UnwrapsAndCloses()
+    {
+        // Outer<string> is closed for Consumer; the services inside its wrapper dependencies are closed in turn
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface ILogger<T>;
+            public interface IValidator<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(ILogger<>)])]
+            internal sealed class Logger<T> : ILogger<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IValidator<>)])]
+            internal sealed class Validator<T> : IValidator<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T>(
+                Lazy<IRepo<T>> repo,
+                IEnumerable<IValidator<T>> validators,
+                Func<ILogger<Outer<T>>> loggerFactory) : IOuter<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<string> outer);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_InjectionMembersOfClosedImplementation_SubstitutesAndClosesTypeArguments()
     {
         // Outer<string> is closed for Consumer; its injected property, field, and method parameter are closed in turn

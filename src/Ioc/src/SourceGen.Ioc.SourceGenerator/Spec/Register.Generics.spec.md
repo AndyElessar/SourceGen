@@ -125,7 +125,7 @@ services.AddSingleton<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<Te
 #endregion
 ```
 
-The constructor parameters and injection members (properties, fields, and method parameters with `[IocInject]` / `[Inject]`) of a closed generic registration MUST have the type parameters of the open generic implementation substituted by its type arguments, and MUST be collected as closed generic dependencies in turn. For example, closing `Outer<T>(IRepo<T> repo)` as `Outer<string>` collects `IRepo<string>`, and `ILogger<Outer<T>>` becomes `ILogger<Outer<string>>`; an `[IocInject] IValidator<T>` property of `Outer<T>` is injected as `IValidator<string>`.
+The constructor parameters and injection members (properties, fields, and method parameters with `[IocInject]` / `[Inject]`) of a closed generic registration MUST have the type parameters of the open generic implementation substituted by its type arguments, and MUST be collected as closed generic dependencies in turn. For example, closing `Outer<T>(IRepo<T> repo)` as `Outer<string>` collects `IRepo<string>`, and `ILogger<Outer<T>>` becomes `ILogger<Outer<string>>`; an `[IocInject] IValidator<T>` property of `Outer<T>` is injected as `IValidator<string>`. Wrapped dependencies MUST be unwrapped like direct dependencies (`Lazy<T>`, `Func<T>`, collections, dictionaries, and `KeyValuePair<TKey, T>`), so `Lazy<IRepo<T>>` collects `IRepo<string>`.
 
 Decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies. Only their closed forms, from closed generic registrations, are collected.
 

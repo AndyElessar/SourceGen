@@ -37,9 +37,7 @@ partial class IocSourceGenerator
             {
                 // Substitute the type arguments too, so a parameter collected as a closed generic dependency, such as
                 // IRepo<T> or ILogger<Outer<T>>, matches open generic registrations with its own type arguments
-                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
-                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
-                newParams.Add(param with { Type = newParamType });
+                newParams.Add(param with { Type = SubstituteTypeData(param.Type, typeArgMap) });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
@@ -205,7 +203,8 @@ partial class IocSourceGenerator
             typeData is GenericTypeData genericTypeData ? genericTypeData.TypeParameters : null,
             typeArgMap);
 
-        var substituted = RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
+        // Nested type arguments are closed too, such as ILogger<Outer<string>> in Func<ILogger<Outer<string>>>
+        var substituted = RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, IsNestedOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
 
         // Interfaces and base classes are compared with closed decorator constraints, so they are closed too
         return typeData.AllInterfaces is null && typeData.AllBaseClasses is null

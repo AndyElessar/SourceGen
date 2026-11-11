@@ -179,6 +179,50 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_WrappedTransitiveClosedGenericDependency_ResolvesClosedImplementations()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface ILogger<T>;
+            public interface IValidator<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IValidator<>)])]
+            public sealed class Validator<T> : IValidator<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            public sealed class Outer<T>(
+                Lazy<IRepo<T>> repo,
+                IEnumerable<IValidator<T>> validators,
+                Func<ILogger<Outer<T>>> loggerFactory) : IOuter<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IOuter<string> outer);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_InjectionMembersOfClosedGeneric_ResolveClosedImplementations()
     {
         const string source = """

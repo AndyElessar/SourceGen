@@ -296,7 +296,18 @@ partial class IocSourceGenerator
         HashSet<string> processedDependencies,
         HashSet<string> generatedClosedGenerics)
     {
-        if(paramType is not GenericTypeData genericParamType)
+        // Unwrap wrappers like direct dependencies do, such as IRepo<string> in Lazy<IRepo<string>> or IEnumerable<IRepo<string>>
+        if(GetWrapperInnerType(paramType) is { } innerType)
+        {
+            CollectNewDependencyFromType(innerType, pendingDependencies, processedDependencies, generatedClosedGenerics);
+        }
+
+        if(GetEnumerableElementType(paramType) is { } elementType)
+        {
+            CollectNewDependencyFromType(elementType, pendingDependencies, processedDependencies, generatedClosedGenerics);
+        }
+
+        if(paramType is not GenericTypeData genericParamType || paramType.IsArrayType)
         {
             return;
         }
