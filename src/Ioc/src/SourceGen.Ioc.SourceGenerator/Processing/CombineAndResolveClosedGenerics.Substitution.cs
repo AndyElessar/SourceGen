@@ -35,8 +35,10 @@ partial class IocSourceGenerator
             var newParams = new List<ParameterData>(openConstructorParams.Length);
             foreach(var param in openConstructorParams)
             {
-                var newParamTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
-                var newParamType = RehydrateTypeData(param.Type, Name: newParamTypeName, IsOpenGeneric: false);
+                // Substitute the type arguments too, so a parameter collected as a closed generic dependency, such as
+                // IRepo<T> or ILogger<Outer<T>>, matches open generic registrations with its own type arguments
+                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
+                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
                 newParams.Add(param with { Type = newParamType });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();

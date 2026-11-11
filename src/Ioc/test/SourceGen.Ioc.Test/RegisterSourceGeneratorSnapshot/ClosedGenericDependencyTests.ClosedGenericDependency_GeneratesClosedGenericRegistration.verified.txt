@@ -28,6 +28,8 @@ namespace TestAssembly
                 services.AddSingleton(typeof(global::TestNamespace.TestHandler<>), typeof(global::TestNamespace.TestHandler<>));
                 services.AddSingleton<global::TestNamespace.ViewModel, global::TestNamespace.ViewModel>();
                 services.AddSingleton<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>, global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>();
+                services.AddSingleton<global::TestNamespace.Logger<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>, global::TestNamespace.Logger<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>>();
+                services.AddSingleton<global::TestNamespace.ILogger<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Logger<global::TestNamespace.TestHandler<global::TestNamespace.TestEntity>>>());
             }
 
             return services;

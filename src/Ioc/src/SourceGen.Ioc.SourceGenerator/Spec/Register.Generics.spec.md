@@ -115,11 +115,17 @@ services.AddKeyedSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEnt
 });
 services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest<TestEntity>, System.Collections.Generic.List<TestEntity>>|TestHandler<TestEntity>"));
 
+// TestHandler<TestEntity>'s ILogger<TestHandler<TestEntity>> dependency is closed in turn from the open generic Logger<T>
+services.AddSingleton<Logger<TestHandler<TestEntity>>, Logger<TestHandler<TestEntity>>>();
+services.AddSingleton<ILogger<TestHandler<TestEntity>>>((IServiceProvider sp) => sp.GetRequiredService<Logger<TestHandler<TestEntity>>>());
+
 // The decorator's ILogger<HandlerDecorator1<...>> dependency is also closed from the open generic Logger<T>
 services.AddSingleton<Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>, Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
 services.AddSingleton<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>((IServiceProvider sp) => sp.GetRequiredService<Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>());
 #endregion
 ```
+
+The constructor dependencies of a closed generic registration, with the type parameters of the open generic implementation substituted by its type arguments, MUST be collected as closed generic dependencies in turn. For example, closing `Outer<T>(IRepo<T> repo)` as `Outer<string>` collects `IRepo<string>`, and `ILogger<Outer<T>>` becomes `ILogger<Outer<string>>`.
 
 Decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies. Only their closed forms, from closed generic registrations, are collected.
 

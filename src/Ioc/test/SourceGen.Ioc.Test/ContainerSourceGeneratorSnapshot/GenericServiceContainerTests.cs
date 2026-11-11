@@ -144,6 +144,41 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_TransitiveClosedGenericDependency_ResolvesClosedImplementation()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface ILogger<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            public sealed class Outer<T>(IRepo<T> repo, ILogger<Outer<T>> logger) : IOuter<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IOuter<string> outer);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_ClosedGenericWithTupleElementNamedLikeTypeParameter_KeepsElementName()
     {
         const string source = """
