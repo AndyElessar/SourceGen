@@ -1107,6 +1107,168 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("struct", "IRepository<User>")]
+    [Arguments("struct", "IRepository<int?>")]
+    [Arguments("class", "IRepository<int>")]
+    [Arguments("unmanaged", "IRepository<string>")]
+    [Arguments("new()", "IRepository<NoDefaultConstructor>")]
+    [Arguments("new()", "IRepository<string>")]
+    [Arguments("IEntity", "IRepository<User>")]
+    [Arguments("struct", "Lazy<IRepository<User>>")]
+    [Arguments("struct", "IEnumerable<IRepository<User>>")]
+    public async Task SGIOC018_OpenGenericRegistration_UnsatisfiedConstraint_ReportsDiagnostic(string constraint, string parameterType)
+    {
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IEntity { }
+            public class User { }
+            public class NoDefaultConstructor(int value) { }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> where T : {{constraint}} { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{parameterType}} repository) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("struct", "IRepository<int>")]
+    [Arguments("class", "IRepository<User>")]
+    [Arguments("unmanaged", "IRepository<int>")]
+    [Arguments("new()", "IRepository<User>")]
+    [Arguments("new()", "IRepository<int>")]
+    [Arguments("IEntity", "IRepository<Entity>")]
+    [Arguments("IEntity", "IRepository<DerivedEntity>")]
+    [Arguments("Entity", "IRepository<DerivedEntity>")]
+    [Arguments("IEnumerable<object>", "IRepository<List<string>>")]
+    [Arguments("struct", "Lazy<IRepository<int>>")]
+    public async Task SGIOC018_OpenGenericRegistration_SatisfiedConstraint_NoDiagnostic(string constraint, string parameterType)
+    {
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IEntity { }
+            public class Entity : IEntity { }
+            public class DerivedEntity : Entity { }
+            public class User { }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class Repository<T> : IRepository<T> where T : {{constraint}} { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{parameterType}} repository) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_OpenGenericRegistrationsWithDifferentConstraints_ResolvedBySatisfyingImplementation_NoDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class User { }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class StructRepository<T> : IRepository<T> where T : struct { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]
+            public class ClassRepository<T> : IRepository<T> where T : class { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IRepository<int> number, IRepository<User> user) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC018_OpenGenericRegistration_ConstraintOnOtherTypeParameter_ChecksClosedConstraint()
+    {
+        // Handler<TRequest, TResponse> requires TRequest : IRequest<TResponse>; Request only implements IRequest<string>
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequest<TResponse> { }
+            public class Request : IRequest<string> { }
+
+            public interface IHandler<TRequest, TResponse> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            public class Handler<TRequest, TResponse> : IHandler<TRequest, TResponse> where TRequest : IRequest<TResponse> { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IHandler<Request, string> matching, IHandler<Request, int> mismatched) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IHandler<Request, int>' for container 'TestContainer'");
+    }
+
+    [Test]
     public async Task SGIOC018_ExplicitOnly_OpenGenericRegistration_ClosedDependency_NoDiagnostic()
     {
         const string source = """

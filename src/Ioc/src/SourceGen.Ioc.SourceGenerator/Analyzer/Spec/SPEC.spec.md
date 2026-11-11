@@ -418,11 +418,8 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 - Open generic registrations: the generator closes them on demand for the dependencies it discovers, so a closed generic dependency (e.g. `IRepository<User>`) is resolved by a registration of its open generic service type (`IRepository<>`) in the container's own registrations, with the same key rules.
   - In a container without `ExplicitOnly`, the sources are open generic registrations of the compilation, current-assembly `[IocRegisterDefaults]` with a `Factory` and an open generic target, and the open generic `[IocRegisterFor]` of every imported module (recursively; for any `[IocImportModule]` of the compilation, like the generator's `ExtractOpenGenericEntriesFromModuleRecursive`).
   - In an `ExplicitOnly` container, only the open generic `[IocRegisterFor]` on the container class.
+  - Like the generator, an open generic registration only resolves the closed forms its implementation can be closed for: the service type as the implementation declares it (itself, a base class, or an interface) must match the dependency, determine every type parameter of the implementation, and the type arguments must satisfy its `class`, `struct`, `unmanaged`, `new()` and type constraints (`notnull` is not checked). For example, `Repository<T> : IRepository<T> where T : struct` does not resolve `IRepository<User>`. Open generic `Factory` registrations resolve every closed form.
   - Dependencies that use type parameters of an open generic implementation (e.g. `IValidator<T>` in `Repository<T>`) are not checked, because they depend on the closed forms the generator creates. Implementations declared in another assembly are not analyzed.
-
-**Limitations:**
-
-- Generic constraints are not checked when matching an open generic registration (the generator then emits code that does not compile).
 
 **Message format:** `Unable to resolve service '{ServiceType}' for container '{ContainerType}'.`
 
