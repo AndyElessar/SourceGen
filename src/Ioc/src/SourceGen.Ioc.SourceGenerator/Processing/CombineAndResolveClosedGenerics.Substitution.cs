@@ -378,18 +378,9 @@ partial class IocSourceGenerator
         }
 
         // Substitute in injection members (properties, fields, methods with [IocInject] attributes)
-        var injectionMembers = decorator.InjectionMembers;
-        ImmutableEquatableArray<InjectionMemberData>? closedInjectionMembers = null;
-        if(injectionMembers is not null && injectionMembers.Length > 0)
-        {
-            var newMembers = new List<InjectionMemberData>(injectionMembers.Length);
-            foreach(var member in injectionMembers)
-            {
-                var newMember = SubstituteInjectionMember(member, typeArgMap);
-                newMembers.Add(newMember);
-            }
-            closedInjectionMembers = newMembers.ToImmutableEquatableArray();
-        }
+        var closedInjectionMembers = decorator.InjectionMembers is { Length: > 0 } injectionMembers
+            ? SubstituteInjectionMembers(injectionMembers, typeArgMap)
+            : null;
 
         // Substitute in type parameters
         var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap);
@@ -406,6 +397,27 @@ partial class IocSourceGenerator
             HasInjectConstructor: false,
             InjectionMembers: closedInjectionMembers,
             IsKnownNonDisposable: genericDecorator.IsKnownNonDisposable);
+    }
+
+    /// <summary>
+    /// Substitutes type parameters in injection members.
+    /// </summary>
+    private static ImmutableEquatableArray<InjectionMemberData> SubstituteInjectionMembers(
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers,
+        Dictionary<string, string> typeArgMap)
+    {
+        if(injectionMembers.Length == 0)
+        {
+            return injectionMembers;
+        }
+
+        var newMembers = new List<InjectionMemberData>(injectionMembers.Length);
+        foreach(var member in injectionMembers)
+        {
+            newMembers.Add(SubstituteInjectionMember(member, typeArgMap));
+        }
+
+        return newMembers.ToImmutableEquatableArray();
     }
 
     /// <summary>

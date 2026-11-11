@@ -230,35 +230,11 @@ partial class IocSourceGenerator
                     }
 
                     // Collect from decorator injection members (properties, fields, methods with [IocInject] attribute)
-                    if(decorator.InjectionMembers is { Length: > 0 })
-                    {
-                        foreach(var member in decorator.InjectionMembers)
-                        {
-                            switch(member)
-                            {
-                                // For properties and fields, check the member type
-                                case PropertyOrFieldInjectionData propertyOrField:
-                                    CollectNewDependencyFromType(
-                                        propertyOrField.Type,
-                                        pendingDependencies,
-                                        processedDependencies,
-                                        generatedClosedGenerics);
-                                    break;
-
-                                // For methods, check each parameter type
-                                case MethodInjectionData method:
-                                    foreach(var param in method.Parameters)
-                                    {
-                                        CollectNewDependencyFromType(
-                                            param.Type,
-                                            pendingDependencies,
-                                            processedDependencies,
-                                            generatedClosedGenerics);
-                                    }
-                                    break;
-                            }
-                        }
-                    }
+                    CollectNewDependenciesFromInjectionMembers(
+                        decorator.InjectionMembers,
+                        pendingDependencies,
+                        processedDependencies,
+                        generatedClosedGenerics);
                 }
 
                 // Collect from constructor parameters
@@ -273,6 +249,40 @@ partial class IocSourceGenerator
                             generatedClosedGenerics);
                     }
                 }
+
+                // Collect from the implementation's injection members
+                CollectNewDependenciesFromInjectionMembers(
+                    newReg.InjectionMembers,
+                    pendingDependencies,
+                    processedDependencies,
+                    generatedClosedGenerics);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Collects new closed generic dependencies from injected property and field types and injected method parameters.
+    /// </summary>
+    private static void CollectNewDependenciesFromInjectionMembers(
+        ImmutableEquatableArray<InjectionMemberData>? injectionMembers,
+        Queue<ClosedGenericDependency> pendingDependencies,
+        HashSet<string> processedDependencies,
+        HashSet<string> generatedClosedGenerics)
+    {
+        foreach(var member in injectionMembers ?? [])
+        {
+            switch(member)
+            {
+                case PropertyOrFieldInjectionData propertyOrField:
+                    CollectNewDependencyFromType(propertyOrField.Type, pendingDependencies, processedDependencies, generatedClosedGenerics);
+                    break;
+
+                case MethodInjectionData method:
+                    foreach(var param in method.Parameters)
+                    {
+                        CollectNewDependencyFromType(param.Type, pendingDependencies, processedDependencies, generatedClosedGenerics);
+                    }
+                    break;
             }
         }
     }
@@ -436,6 +446,9 @@ partial class IocSourceGenerator
         // For regular factories, apply to both implementation and service types.
         var implFactory = openGenericInfo.Factory?.TypeParameterCount > 0 ? null : openGenericInfo.Factory;
 
+        // Injection members are written with the implementation's type parameters, such as IRepo<T> for Outer<T>
+        var closedInjectionMembers = SubstituteInjectionMembers(openGenericInfo.InjectionMembers, implTypeArgMap);
+
         // Create registration for the implementation type itself
         var implModel = new ServiceRegistrationModel(
             closedImplType,
@@ -446,7 +459,7 @@ partial class IocSourceGenerator
             openGenericInfo.KeyValueType,
             IsOpenGeneric: false,
             [],
-            openGenericInfo.InjectionMembers,
+            closedInjectionMembers,
             Factory: implFactory,
             openGenericInfo.Instance);
 
@@ -489,7 +502,7 @@ partial class IocSourceGenerator
                 openGenericInfo.KeyValueType,
                 IsOpenGeneric: false,
                 serviceTypeDecorators,
-                openGenericInfo.InjectionMembers,
+                closedInjectionMembers,
                 openGenericInfo.Factory,
                 openGenericInfo.Instance);
 

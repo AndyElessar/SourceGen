@@ -45,7 +45,7 @@ The generator automatically discovers closed generic types used in:
   - `GetKeyedServices(typeof(T), Key)`
   - `GetKeyedServices<T>(Key)`
 
-Closed generic registrations created this way are discovered in turn: when `Outer<string>` is closed from `Outer<T>(IRepo<T> repo)`, its `IRepo<string>` dependency is closed too.
+Closed generic registrations created this way are discovered in turn: when `Outer<string>` is closed from `Outer<T>(IRepo<T> repo)`, its `IRepo<string>` dependency is closed too. The same applies to its injected properties, fields, and method parameters.
 
 ```csharp
 public interface ILogger<T>;

@@ -1,4 +1,4 @@
-﻿namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
+namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 
 /// <summary>
 /// Tests for closed generic dependency resolution (Feature #11).
@@ -81,6 +81,61 @@ public class ClosedGenericDependencyTests
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_InjectionMembersOfClosedImplementation_SubstitutesAndClosesTypeArguments()
+    {
+        // Outer<string> is closed for Consumer; its injected property, field, and method parameter are closed in turn
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface ILogger<T>;
+            public interface IValidator<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(ILogger<>)])]
+            internal sealed class Logger<T> : ILogger<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IValidator<>)])]
+            internal sealed class Validator<T> : IValidator<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T> : IOuter<T>
+            {
+                [IocInject]
+                public IRepo<T> Repo { get; set; } = default!;
+
+                [IocInject]
+                internal ILogger<Outer<T>> logger = default!;
+
+                [IocInject]
+                public void Initialize(IValidator<T> validator) { }
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<string> outer);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject"
+        };
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 

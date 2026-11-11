@@ -179,6 +179,62 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_InjectionMembersOfClosedGeneric_ResolveClosedImplementations()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface ILogger<T>;
+            public interface IValidator<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(ILogger<>)])]
+            public sealed class Logger<T> : ILogger<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IValidator<>)])]
+            public sealed class Validator<T> : IValidator<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            public sealed class Outer<T> : IOuter<T>
+            {
+                [IocInject]
+                public IRepo<T> Repo { get; set; } = default!;
+
+                [IocInject]
+                internal ILogger<Outer<T>> logger = default!;
+
+                [IocInject]
+                public void Initialize(IValidator<T> validator) { }
+            }
+
+            [IocRegister]
+            public sealed class Consumer(IOuter<string> outer);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject"
+        };
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_ClosedGenericWithTupleElementNamedLikeTypeParameter_KeepsElementName()
     {
         const string source = """
