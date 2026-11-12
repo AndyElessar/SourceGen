@@ -417,6 +417,173 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_TransitiveCovariantTypeArgument_RecomputesConversions()
+    {
+        // List<T> in Outer<T>(IRepo<List<T>>) becomes List<string> for Outer<string>, which converts to IEnumerable<object>;
+        // List<int> for Outer<int> does not, because covariance needs a reference type argument
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<U> : IRepo<U> where U : IEnumerable<object>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T>(IRepo<List<T>> repo) : IOuter<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<string> texts, IOuter<int> numbers);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Repo<global::System.Collections.Generic.List<string>>, global::TestNamespace.Repo<global::System.Collections.Generic.List<string>>>();");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Repo<global::System.Collections.Generic.List<int>>");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_InterfaceTypeArgumentWithObjectConstraint_Closes()
+    {
+        // An interface converts to object like any reference type, so IEnumerable<IComparable> satisfies IEnumerable<object>
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IObjects<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IObjects<>)])]
+            internal sealed class Objects<T> : IObjects<T> where T : IEnumerable<object>;
+
+            [IocRegister]
+            internal sealed class Consumer(IObjects<IEnumerable<IComparable>> direct, IObjects<List<IComparable>> implemented);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Objects<global::System.Collections.Generic.IEnumerable<global::System.IComparable>>, global::TestNamespace.Objects<global::System.Collections.Generic.IEnumerable<global::System.IComparable>>>();");
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Objects<global::System.Collections.Generic.List<global::System.IComparable>>, global::TestNamespace.Objects<global::System.Collections.Generic.List<global::System.IComparable>>>();");
+    }
+
+    [Test]
+    [Arguments("IVariantRepo<IVariant<string, string>>", "VariantRepo<global::TestNamespace.IVariant<string, string>>", true)]
+    [Arguments("IVariantRepo<IVariant<string, object>>", "VariantRepo<global::TestNamespace.IVariant<string, object>>", false)]
+    [Arguments("IListRepo<List<string>>", "ListRepo<global::System.Collections.Generic.List<string>>", false)]
+    [Arguments("IPair<Func<string>, Func<object>>", "Pair<global::System.Func<string>, global::System.Func<object>>", true)]
+    [Arguments("IPair<Func<int>, Func<object>>", "Pair<global::System.Func<int>, global::System.Func<object>>", false)]
+    [Arguments("IOuter<IComparable>", "Repo<global::System.Collections.Generic.List<global::System.IComparable>>", true)]
+    [Arguments("IArrayOuter<string>", "Repo<string[]>", true)]
+    [Arguments("IArrayOuter<int>", "Repo<int[]>", false)]
+    [Arguments("INestedRepo<Host<int>.INested<string>>", "NestedRepo<global::TestNamespace.Host<int>.INested<string>>", false)]
+    public async Task ClosedGenericDependency_CovariantConstraint_ClosesOnlyForCovariantReferenceConversions(string parameterType, string closedImplementation, bool closes)
+    {
+        // Only covariant positions with reference type arguments convert, also after substitution (List<T>, T[]) and for
+        // a type parameter's type argument (where A : B); invariant, contravariant and nested-in-generic types do not
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IVariant<out TOut, in TIn>;
+            public class Host<H> { public interface INested<out X>; }
+
+            public interface IVariantRepo<T>;
+            public interface IListRepo<T>;
+            public interface IPair<A, B>;
+            public interface IRepo<T>;
+            public interface IOuter<T>;
+            public interface IArrayOuter<T>;
+            public interface INestedRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IVariantRepo<>)])]
+            internal sealed class VariantRepo<T> : IVariantRepo<T> where T : IVariant<object, string>;
+
+            [IocRegister(ServiceTypes = [typeof(IListRepo<>)])]
+            internal sealed class ListRepo<T> : IListRepo<T> where T : IList<object>;
+
+            [IocRegister(ServiceTypes = [typeof(IPair<,>)])]
+            internal sealed class Pair<A, B> : IPair<A, B> where A : B;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<U> : IRepo<U> where U : IEnumerable<object>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T>(IRepo<List<T>> repo) : IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IArrayOuter<>)])]
+            internal sealed class ArrayOuter<T>(IRepo<T[]> repo) : IArrayOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INestedRepo<>)])]
+            internal sealed class NestedRepo<T> : INestedRepo<T> where T : Host<int>.INested<object>;
+
+            [IocRegister]
+            internal sealed class Consumer({{parameterType}} dependency);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        var closedType = $"global::TestNamespace.{closedImplementation}";
+        if(closes)
+        {
+            await Assert.That(generatedSource).Contains($"services.AddTransient<{closedType}, {closedType}>();");
+        }
+        else
+        {
+            await Assert.That(generatedSource).DoesNotContain(closedType);
+        }
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TypeArgumentWithManyCovariantConversions_Closes()
+    {
+        // Each position of IGrouping<Many, Many> converts to Many, its 8 interfaces, or object, so a type argument with many
+        // interfaces satisfies IGrouping<object, object> like any other
+        const string source = """
+            using System.Linq;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface I1; public interface I2; public interface I3; public interface I4;
+            public interface I5; public interface I6; public interface I7; public interface I8;
+            public class Many : I1, I2, I3, I4, I5, I6, I7, I8;
+
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T> where T : IGrouping<object, object>;
+
+            [IocRegister]
+            internal sealed class Consumer(IRepo<IGrouping<Many, Many>> repo);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Repo<global::System.Linq.IGrouping<global::TestNamespace.Many, global::TestNamespace.Many>>, global::TestNamespace.Repo<global::System.Linq.IGrouping<global::TestNamespace.Many, global::TestNamespace.Many>>>();");
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_DecoratorDependencyWithConstraint_ClosesWithTypeArgumentHierarchy()
     {
         // Decorator<T>(IService<T>, IRepo<T>) decorates IService<Entity>; Entity implements IEntity, so Repo<Entity> is closed,

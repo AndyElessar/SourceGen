@@ -234,12 +234,17 @@ partial class IocSourceGenerator
         // considered unmanaged, and the unmanaged constraint is not satisfied by it.
         return substituted with
         {
-            AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap),
-            AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
+            AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap, typeArguments),
+            AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap, typeArguments),
             Traits = newTypeParams is { Length: > 0 } ? typeData.Traits & ~TypeTraits.Unmanaged : typeData.Traits,
         };
 
-        static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(ImmutableEquatableArray<TypeData>? types, Dictionary<string, string> typeArgMap)
+        // Covariant interfaces keep their type arguments, which are substituted too, so IEnumerable<T> of List<T> becomes
+        // IEnumerable<string> with the supertypes of string, and converts to IEnumerable<object>; others are renamed
+        static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(
+            ImmutableEquatableArray<TypeData>? types,
+            Dictionary<string, string> typeArgMap,
+            Dictionary<string, TypeData>? typeArguments)
         {
             if(types is null)
             {
@@ -249,7 +254,9 @@ partial class IocSourceGenerator
             var result = new List<TypeData>(types.Length);
             foreach(var type in types)
             {
-                result.Add(RehydrateTypeData(type, Name: SubstituteTypeArguments(type.Name, typeArgMap), IsOpenGeneric: false));
+                result.Add(type is GenericTypeData { TypeParameters: { Length: > 0 } typeParams } && typeParams.Any(static p => p.IsCovariant)
+                    ? SubstituteTypeData(type, typeArgMap, typeArguments)
+                    : RehydrateTypeData(type, Name: SubstituteTypeArguments(type.Name, typeArgMap), IsOpenGeneric: false));
             }
 
             return result.ToImmutableEquatableArray();
