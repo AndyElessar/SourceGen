@@ -793,7 +793,7 @@ partial class ContainerAnalyzer
             {
                 foreach(var serviceType in registration.ServiceTypes)
                 {
-                    Services.Add(serviceType, registration.KeyValue);
+                    Services.Add(serviceType, registration.KeyValue, registration.ImplementationType);
                     ServiceKeys.Add(new(serviceType, registration.Key));
                 }
             }
@@ -830,14 +830,27 @@ partial class ContainerAnalyzer
         private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(SymbolEqualityComparer.Default);
         private readonly HashSet<KeyedService> _keyedValues = [];
 
+        // The implementations of open generic service types, by generic type definition
+        private readonly Dictionary<INamedTypeSymbol, List<OpenGenericImplementation>> _openGenerics = new(SymbolEqualityComparer.Default);
+
         /// <summary>
-        /// Adds a service. An open generic service type is added as its generic type definition, which resolves every
-        /// closed form (the generator closes open generic registrations for the dependencies it discovers).
+        /// Adds a service. An open generic service type is added as its generic type definition, which resolves the
+        /// closed forms its implementation can be closed for (the generator closes open generic registrations for the
+        /// dependencies it discovers).
         /// </summary>
-        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key)
+        public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key, INamedTypeSymbol implementationType)
         {
             if(IsOpenGeneric(serviceType))
+            {
                 serviceType = serviceType.OriginalDefinition;
+                if(!_openGenerics.TryGetValue(serviceType, out var implementations))
+                {
+                    implementations = [];
+                    _openGenerics.Add(serviceType, implementations);
+                }
+
+                implementations.Add(new(implementationType.OriginalDefinition, key));
+            }
 
             if(key is not { } keyValue)
             {
@@ -858,22 +871,48 @@ partial class ContainerAnalyzer
             _keyed.UnionWith(other._keyed);
             _unknownKeyed.UnionWith(other._unknownKeyed);
             _keyedValues.UnionWith(other._keyedValues);
+
+            foreach(var entry in other._openGenerics)
+            {
+                if(_openGenerics.TryGetValue(entry.Key, out var implementations))
+                    implementations.AddRange(entry.Value);
+                else
+                    _openGenerics.Add(entry.Key, [.. entry.Value]);
+            }
         }
 
         /// <summary>
         /// Gets whether a service is registered. A closed generic type is also resolved by an open generic registration
-        /// of its generic type definition when <paramref name="matchOpenGenerics"/> is <see langword="true"/>.
+        /// of its generic type definition when <paramref name="matchOpenGenerics"/> is <see langword="true"/> and the
+        /// registration's implementation can be closed for it, like the generator's closed generic registrations.
         /// </summary>
         public bool Contains(INamedTypeSymbol serviceType, ServiceKeyValue? key, bool matchOpenGenerics = true)
         {
             if(ContainsExact(serviceType, key))
                 return true;
 
-            return matchOpenGenerics
-                && serviceType.IsGenericType
-                && !SymbolEqualityComparer.Default.Equals(serviceType, serviceType.OriginalDefinition)
-                && ContainsExact(serviceType.OriginalDefinition, key);
+            if(!matchOpenGenerics
+                || !serviceType.IsGenericType
+                || SymbolEqualityComparer.Default.Equals(serviceType, serviceType.OriginalDefinition)
+                || !_openGenerics.TryGetValue(serviceType.OriginalDefinition, out var implementations))
+            {
+                return false;
+            }
+
+            foreach(var implementation in implementations)
+            {
+                if(KeyMatches(implementation.Key, key) && CanCloseOpenGeneric(implementation.Type, serviceType))
+                    return true;
+            }
+
+            return false;
         }
+
+        // Mirrors ContainsExact: a key given as C# code matches any key
+        private static bool KeyMatches(ServiceKeyValue? registered, ServiceKeyValue? requested)
+            => requested is not { } requestedKey
+                ? registered is null
+                : requestedKey.IsUnknown || registered is { } registeredKey && (registeredKey.IsUnknown || registeredKey.Equals(requestedKey));
 
         /// <summary>Gets whether a service has a keyed registration (dictionary and key value pair collection checks).</summary>
         public bool ContainsKeyed(INamedTypeSymbol serviceType)
@@ -892,6 +931,9 @@ partial class ContainerAnalyzer
             return _keyedValues.Contains(new(serviceType, keyValue)) || _unknownKeyed.Contains(serviceType);
         }
     }
+
+    /// <summary>The generic type definition of an open generic implementation, and the key it is registered with.</summary>
+    private readonly record struct OpenGenericImplementation(INamedTypeSymbol Type, ServiceKeyValue? Key);
 
     private readonly record struct KeyedService(INamedTypeSymbol ServiceType, ServiceKeyValue Key)
     {

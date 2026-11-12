@@ -455,34 +455,47 @@ partial class IocSourceGenerator
         }
 
         var typeArgMap = ToTypeArgMap(typeArguments);
-        foreach(var decoratorParam in decoratorTypeParams)
+        return SatisfiesConstraints(decoratorTypeParams, typeArguments, typeArgMap)
+            ? SubstituteDecoratorTypeParams(genericDecorator, typeArgMap, typeArguments)
+            : null;
+    }
+
+    /// <summary>
+    /// Checks the generic constraints of type parameters against their matched type arguments.
+    /// </summary>
+    private static bool SatisfiesConstraints(
+        ImmutableEquatableArray<TypeParameter> typeParams,
+        Dictionary<string, TypeData> typeArguments,
+        Dictionary<string, string> typeArgMap)
+    {
+        foreach(var typeParam in typeParams)
         {
-            var typeArgument = typeArguments[decoratorParam.ParameterName];
-            if(!SatisfiesSpecialConstraints(decoratorParam, typeArgument))
+            var typeArgument = typeArguments[typeParam.ParameterName];
+            if(!SatisfiesSpecialConstraints(typeParam, typeArgument))
             {
-                return null;
+                return false;
             }
 
-            foreach(var constraintType in decoratorParam.ConstraintTypes ?? [])
+            foreach(var constraintType in typeParam.ConstraintTypes ?? [])
             {
                 if(!SatisfiesTypeConstraint(typeArgument, constraintType, typeArguments, typeArgMap))
                 {
-                    return null;
+                    return false;
                 }
             }
         }
 
-        return SubstituteDecoratorTypeParams(genericDecorator, typeArgMap);
+        return true;
     }
 
     /// <summary>
-    /// Checks the <c>class</c>, <c>struct</c>, <c>unmanaged</c>, and <c>new()</c> constraints of a decorator type parameter.
+    /// Checks the <c>class</c>, <c>struct</c>, <c>unmanaged</c>, and <c>new()</c> constraints of a type parameter.
     /// </summary>
     /// <remarks>
     /// Type arguments whose traits were not recorded, such as ones rebuilt by substitution, are accepted as before.
     /// <c>notnull</c> only produces nullable warnings, so it is not checked.
     /// </remarks>
-    private static bool SatisfiesSpecialConstraints(TypeParameter decoratorParam, TypeData typeArgument)
+    private static bool SatisfiesSpecialConstraints(TypeParameter typeParam, TypeData typeArgument)
     {
         var traits = typeArgument.Traits;
         if((traits & TypeTraits.Known) == 0)
@@ -490,10 +503,10 @@ partial class IocSourceGenerator
             return true;
         }
 
-        return (!decoratorParam.HasReferenceTypeConstraint || (traits & TypeTraits.ReferenceType) != 0)
-            && (!decoratorParam.HasValueTypeConstraint || (traits & TypeTraits.NonNullableValueType) != 0)
-            && (!decoratorParam.HasUnmanagedTypeConstraint || (traits & (TypeTraits.NonNullableValueType | TypeTraits.Unmanaged)) == (TypeTraits.NonNullableValueType | TypeTraits.Unmanaged))
-            && (!decoratorParam.HasConstructorConstraint || (traits & TypeTraits.DefaultConstructor) != 0);
+        return (!typeParam.HasReferenceTypeConstraint || (traits & TypeTraits.ReferenceType) != 0)
+            && (!typeParam.HasValueTypeConstraint || (traits & TypeTraits.NonNullableValueType) != 0)
+            && (!typeParam.HasUnmanagedTypeConstraint || (traits & (TypeTraits.NonNullableValueType | TypeTraits.Unmanaged)) == (TypeTraits.NonNullableValueType | TypeTraits.Unmanaged))
+            && (!typeParam.HasConstructorConstraint || (traits & TypeTraits.DefaultConstructor) != 0);
     }
 
     /// <summary>
@@ -514,7 +527,9 @@ partial class IocSourceGenerator
             ? constraintArgument.Name
             : SubstituteTypeArguments(constraintType.Name, typeArgMap);
 
-        return typeArgument.Name == constraintName
+        // Every type converts to object, value types by boxing, as for where T : U with U = object
+        return constraintName is "object" or "global::System.Object"
+            || typeArgument.Name == constraintName
             || (typeArgument.AllInterfaces ?? []).Any(type => type.Name == constraintName)
             || (typeArgument.AllBaseClasses ?? []).Any(type => type.Name == constraintName);
     }

@@ -145,31 +145,13 @@ partial class IocSourceGenerator
         List<ClosedGenericDependency> dependencies,
         HashSet<string> addedKeys)
     {
-        // Extract inner types from wrapper types for closed generic dependency discovery.
-        // For example, Lazy<IHandler<int>> -> extract IHandler<int> as a dependency.
-        var innerType = paramType switch
-        {
-            LazyTypeData l => l.InstanceType,
-            FuncTypeData f => f.ReturnType,
-            DictionaryTypeData d => d.ValueType,
-            KeyValuePairTypeData k => k.ValueType,
-            _ => (TypeData?)null
-        };
-        if(innerType is not null)
+        if(GetWrapperInnerType(paramType) is { } innerType)
         {
             // Recursively collect from the inner type (handles nested wrappers like Lazy<KVP<K,V>>)
             CollectClosedGenericDependencyFromType(innerType, dependencies, addedKeys);
         }
 
-        // Check if this is any enumerable-compatible type and extract element type for closed generic dependency.
-        // Collection wrappers use ElementType directly via CollectionWrapperTypeData;
-        // other types check direct generic type name and AllInterfaces for IEnumerable<T> implementation.
-        var elementType = paramType switch
-        {
-            CollectionWrapperTypeData c => c.ElementType,
-            _ => paramType.TryGetEnumerableElementType()
-        };
-        if(elementType is not null)
+        if(GetEnumerableElementType(paramType) is { } elementType)
         {
             // Recursively collect from the element type (handles nested wrappers like IEnumerable<Lazy<IHandler<T>>>)
             CollectClosedGenericDependencyFromType(elementType, dependencies, addedKeys);
@@ -188,4 +170,30 @@ partial class IocSourceGenerator
             }
         }
     }
+
+    /// <summary>
+    /// Gets the type a wrapper resolves for closed generic dependency discovery, such as <c>IHandler&lt;int&gt;</c> for
+    /// <c>Lazy&lt;IHandler&lt;int&gt;&gt;</c>.
+    /// </summary>
+    private static TypeData? GetWrapperInnerType(TypeData type) => type switch
+    {
+        LazyTypeData l => l.InstanceType,
+        FuncTypeData f => f.ReturnType,
+        DictionaryTypeData d => d.ValueType,
+        KeyValuePairTypeData k => k.ValueType,
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the element type of an enumerable-compatible type for closed generic dependency discovery.
+    /// </summary>
+    /// <remarks>
+    /// Collection wrappers use their element type; other types check their own generic type name and their interfaces
+    /// for an <c>IEnumerable&lt;T&gt;</c> implementation.
+    /// </remarks>
+    private static TypeData? GetEnumerableElementType(TypeData type) => type switch
+    {
+        CollectionWrapperTypeData c => c.ElementType,
+        _ => type.TryGetEnumerableElementType()
+    };
 }

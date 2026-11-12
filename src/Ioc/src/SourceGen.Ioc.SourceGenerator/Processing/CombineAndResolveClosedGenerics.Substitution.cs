@@ -5,10 +5,12 @@ partial class IocSourceGenerator
     /// <summary>
     /// Builds closed implementation TypeData with substituted constructor parameters.
     /// </summary>
+    /// <param name="typeArguments">The matched type argument of each type parameter, when known; see <see cref="SubstituteTypeData"/>.</param>
     private static GenericTypeData BuildClosedImplTypeData(
         string closedImplTypeName,
         GenericTypeData openImplType,
-        Dictionary<string, string> typeArgMap)
+        Dictionary<string, string> typeArgMap,
+        Dictionary<string, TypeData>? typeArguments)
     {
         // Build closed type parameters
         var openTypeParams = openImplType.TypeParameters;
@@ -35,9 +37,9 @@ partial class IocSourceGenerator
             var newParams = new List<ParameterData>(openConstructorParams.Length);
             foreach(var param in openConstructorParams)
             {
-                var newParamTypeName = SubstituteTypeArguments(param.Type.Name, typeArgMap);
-                var newParamType = RehydrateTypeData(param.Type, Name: newParamTypeName, IsOpenGeneric: false);
-                newParams.Add(param with { Type = newParamType });
+                // Substitute the type arguments too, so a parameter collected as a closed generic dependency, such as
+                // IRepo<T> or ILogger<Outer<T>>, matches open generic registrations with its own type arguments
+                newParams.Add(param with { Type = SubstituteTypeData(param.Type, typeArgMap, typeArguments) });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
@@ -58,12 +60,18 @@ partial class IocSourceGenerator
     /// <summary>
     /// Builds all closed service types from open service types using the service type argument map.
     /// </summary>
+    /// <param name="typeArguments">
+    /// The matched type argument of each type parameter of the implementation, when known, so the type arguments of the
+    /// forms it declares keep their hierarchy, such as <c>Entity</c> in <c>IService&lt;List&lt;Entity&gt;&gt;</c> for
+    /// <c>Service&lt;T&gt; : IService&lt;List&lt;T&gt;&gt;</c>, which decorator constraints are checked against.
+    /// </param>
     private static List<TypeData> BuildClosedServiceTypesFromServiceTypeMap(
         ImmutableEquatableArray<TypeData> openServiceTypes,
         GenericTypeData openImplType,
         ImmutableEquatableArray<TypeData> implInterfaces,
         Dictionary<string, string> serviceTypeArgMap,
-        Dictionary<string, string> implTypeArgMap)
+        Dictionary<string, string> implTypeArgMap,
+        Dictionary<string, TypeData>? typeArguments)
     {
         var result = new List<TypeData>(openServiceTypes.Length);
 
@@ -92,7 +100,7 @@ partial class IocSourceGenerator
                     IsOpenGeneric: false,
                     implementedForm.GenericArity,
                     IsNestedOpenGeneric: false,
-                    TypeParameters: SubstituteTypeParameters(implementedForm.TypeParameters, implTypeArgMap)));
+                    TypeParameters: SubstituteTypeParameters(implementedForm.TypeParameters, implTypeArgMap, typeArguments)));
                 continue;
             }
 
@@ -175,7 +183,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static ImmutableEquatableArray<TypeParameter>? SubstituteTypeParameters(
         ImmutableEquatableArray<TypeParameter>? typeParams,
-        Dictionary<string, string> typeArgMap)
+        Dictionary<string, string> typeArgMap,
+        Dictionary<string, TypeData>? typeArguments = null)
     {
         if(typeParams is null || typeParams.Length == 0)
         {
@@ -185,7 +194,7 @@ partial class IocSourceGenerator
         var result = new List<TypeParameter>(typeParams.Length);
         foreach(var param in typeParams)
         {
-            var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
+            var substitutedType = SubstituteTypeData(param.Type, typeArgMap, typeArguments);
             result.Add(param with { Type = substitutedType });
         }
 
@@ -196,23 +205,39 @@ partial class IocSourceGenerator
     /// Recursively substitutes type arguments in a TypeData, including nested type parameters.
     /// For example, Task&lt;T&gt; with T -> Entity becomes Task&lt;Entity&gt; with proper TypeParameters.
     /// </summary>
-    private static TypeData SubstituteTypeData(TypeData typeData, Dictionary<string, string> typeArgMap)
+    /// <param name="typeArguments">
+    /// The matched type argument of each type parameter, when known. A type parameter is replaced by its type argument
+    /// itself, so the traits and hierarchy that constraint checks need are kept for the dependencies collected from the
+    /// substituted type, such as <c>IRepo&lt;string&gt;</c> from <c>Outer&lt;T&gt;(IRepo&lt;T&gt; repo)</c>.
+    /// </param>
+    private static TypeData SubstituteTypeData(TypeData typeData, Dictionary<string, string> typeArgMap, Dictionary<string, TypeData>? typeArguments = null)
     {
+        // A type named like a type parameter is that type parameter, whether it was extracted as a type argument
+        // (TypeParameterTypeData) or as a parameter or member type declared as T; other names are fully qualified
+        if(typeArguments is not null && typeArguments.TryGetValue(typeData.Name, out var typeArgument))
+        {
+            return typeArgument;
+        }
+
         var newTypeName = SubstituteTypeArguments(typeData.Name, typeArgMap);
         var newTypeParams = SubstituteTypeParameters(
             typeData is GenericTypeData genericTypeData ? genericTypeData.TypeParameters : null,
-            typeArgMap);
+            typeArgMap,
+            typeArguments);
 
-        var substituted = RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
+        // Nested type arguments are closed too, such as ILogger<Outer<string>> in Func<ILogger<Outer<string>>>
+        var substituted = RehydrateTypeData(typeData, Name: newTypeName, IsOpenGeneric: false, IsNestedOpenGeneric: false, TypeParameters: newTypeParams, OverrideTypeParameters: true);
 
-        // Interfaces and base classes are compared with closed decorator constraints, so they are closed too
-        return typeData.AllInterfaces is null && typeData.AllBaseClasses is null
-            ? substituted
-            : substituted with
-            {
-                AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap),
-                AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
-            };
+        // Interfaces and base classes are compared with closed constraints, so they are closed too. Type arguments do
+        // not change whether a type is a reference type, a value type, or has a default constructor, so the traits are
+        // kept. Whether a generic value type is unmanaged depends on its fields, which are not recorded, so it is not
+        // considered unmanaged, and the unmanaged constraint is not satisfied by it.
+        return substituted with
+        {
+            AllInterfaces = SubstituteTypeNames(typeData.AllInterfaces, typeArgMap),
+            AllBaseClasses = SubstituteTypeNames(typeData.AllBaseClasses, typeArgMap),
+            Traits = newTypeParams is { Length: > 0 } ? typeData.Traits & ~TypeTraits.Unmanaged : typeData.Traits,
+        };
 
         static ImmutableEquatableArray<TypeData>? SubstituteTypeNames(ImmutableEquatableArray<TypeData>? types, Dictionary<string, string> typeArgMap)
         {
@@ -346,9 +371,14 @@ partial class IocSourceGenerator
     /// <summary>
     /// Substitutes type parameters in a decorator and processes its constructor parameters and injection members.
     /// </summary>
+    /// <param name="typeArguments">
+    /// The matched type argument of each type parameter, so dependencies such as <c>IRepo&lt;Entity&gt;</c> keep the
+    /// hierarchy that the constraints of the implementations closed for them are checked against.
+    /// </param>
     private static TypeData SubstituteDecoratorTypeParams(
         GenericTypeData genericDecorator,
-        Dictionary<string, string> typeArgMap)
+        Dictionary<string, string> typeArgMap,
+        Dictionary<string, TypeData> typeArguments)
     {
         var decorator = genericDecorator;
         var decoratorTypeParams = genericDecorator.TypeParameters;
@@ -368,29 +398,18 @@ partial class IocSourceGenerator
                 // Use SubstituteTypeData to recursively substitute type parameters
                 // This ensures nested generics like ILogger<HandlerDecorator1<TRequest, TResponse>>
                 // get their TypeParameters correctly substituted
-                var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
-                var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
-                newParams.Add(param with { Type = newParamType });
+                newParams.Add(param with { Type = SubstituteTypeData(param.Type, typeArgMap, typeArguments) });
             }
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
 
         // Substitute in injection members (properties, fields, methods with [IocInject] attributes)
-        var injectionMembers = decorator.InjectionMembers;
-        ImmutableEquatableArray<InjectionMemberData>? closedInjectionMembers = null;
-        if(injectionMembers is not null && injectionMembers.Length > 0)
-        {
-            var newMembers = new List<InjectionMemberData>(injectionMembers.Length);
-            foreach(var member in injectionMembers)
-            {
-                var newMember = SubstituteInjectionMember(member, typeArgMap);
-                newMembers.Add(newMember);
-            }
-            closedInjectionMembers = newMembers.ToImmutableEquatableArray();
-        }
+        var closedInjectionMembers = decorator.InjectionMembers is { Length: > 0 } injectionMembers
+            ? SubstituteInjectionMembers(injectionMembers, typeArgMap, typeArguments)
+            : null;
 
         // Substitute in type parameters
-        var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap);
+        var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap, typeArguments);
 
         // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
         return TypeData.CreateGeneric(
@@ -407,20 +426,44 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Substitutes type parameters in injection members.
+    /// </summary>
+    private static ImmutableEquatableArray<InjectionMemberData> SubstituteInjectionMembers(
+        ImmutableEquatableArray<InjectionMemberData> injectionMembers,
+        Dictionary<string, string> typeArgMap,
+        Dictionary<string, TypeData>? typeArguments = null)
+    {
+        if(injectionMembers.Length == 0)
+        {
+            return injectionMembers;
+        }
+
+        var newMembers = new List<InjectionMemberData>(injectionMembers.Length);
+        foreach(var member in injectionMembers)
+        {
+            newMembers.Add(SubstituteInjectionMember(member, typeArgMap, typeArguments));
+        }
+
+        return newMembers.ToImmutableEquatableArray();
+    }
+
+    /// <summary>
     /// Substitutes type parameters in an injection member.
     /// </summary>
     private static InjectionMemberData SubstituteInjectionMember(
         InjectionMemberData member,
-        Dictionary<string, string> typeArgMap)
+        Dictionary<string, string> typeArgMap,
+        Dictionary<string, TypeData>? typeArguments)
     {
         switch(member)
         {
-            // For properties and fields, substitute the member type
+            // For properties and fields, substitute the member type, and the initializer copied as the fallback value
             case PropertyOrFieldInjectionData propertyOrField:
-            {
-                var substitutedType = SubstituteTypeData(propertyOrField.Type, typeArgMap);
-                return propertyOrField with { Type = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false) };
-            }
+                return propertyOrField with
+                {
+                    Type = SubstituteTypeData(propertyOrField.Type, typeArgMap, typeArguments),
+                    DefaultValue = SubstituteTypeArgumentsInExpression(propertyOrField.DefaultValue, typeArgMap),
+                };
 
             // For methods, substitute each parameter type
             case MethodInjectionData { Parameters.Length: > 0 } method:
@@ -428,9 +471,7 @@ partial class IocSourceGenerator
                 var paramList = new List<ParameterData>(method.Parameters.Length);
                 foreach(var param in method.Parameters)
                 {
-                    var substitutedType = SubstituteTypeData(param.Type, typeArgMap);
-                    var newParamType = RehydrateTypeData(substitutedType, IsNestedOpenGeneric: false);
-                    paramList.Add(param with { Type = newParamType });
+                    paramList.Add(param with { Type = SubstituteTypeData(param.Type, typeArgMap, typeArguments) });
                 }
                 return method with { Parameters = paramList.ToImmutableEquatableArray() };
             }

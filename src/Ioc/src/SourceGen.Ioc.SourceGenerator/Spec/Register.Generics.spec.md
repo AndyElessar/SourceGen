@@ -115,11 +115,19 @@ services.AddKeyedSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEnt
 });
 services.AddSingleton<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>((IServiceProvider sp) => sp.GetRequiredKeyedService<IRequestHandler<TestRequest<TestEntity>, List<TestEntity>>>("SourceGen.Ioc.Decorated:IRequestHandler<TestRequest<TestEntity>, System.Collections.Generic.List<TestEntity>>|TestHandler<TestEntity>"));
 
+// TestHandler<TestEntity>'s ILogger<TestHandler<TestEntity>> dependency is closed in turn from the open generic Logger<T>
+services.AddSingleton<Logger<TestHandler<TestEntity>>, Logger<TestHandler<TestEntity>>>();
+services.AddSingleton<ILogger<TestHandler<TestEntity>>>((IServiceProvider sp) => sp.GetRequiredService<Logger<TestHandler<TestEntity>>>());
+
 // The decorator's ILogger<HandlerDecorator1<...>> dependency is also closed from the open generic Logger<T>
 services.AddSingleton<Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>, Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>();
 services.AddSingleton<ILogger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>((IServiceProvider sp) => sp.GetRequiredService<Logger<HandlerDecorator1<TestRequest<TestEntity>, List<TestEntity>>>>());
 #endregion
 ```
+
+The constructor parameters and injection members (properties, fields, and method parameters with `[IocInject]` / `[Inject]`) of a closed generic registration MUST have the type parameters of the open generic implementation substituted by its type arguments, and MUST be collected as closed generic dependencies in turn. For example, closing `Outer<T>(IRepo<T> repo)` as `Outer<string>` collects `IRepo<string>`, and `ILogger<Outer<T>>` becomes `ILogger<Outer<string>>`; an `[IocInject] IValidator<T>` property of `Outer<T>` is injected as `IValidator<string>`. The initializer of an injected property or field, copied as its fallback value, MUST have its type parameter references substituted too (`new global::Ns.Box<T>()` becomes `new global::Ns.Box<string>()`), without changing member names such as `x.T`; `nameof(T)` becomes the literal `"T"`. Wrapped dependencies MUST be unwrapped like direct dependencies (`Lazy<T>`, `Func<T>`, collections, dictionaries, and `KeyValuePair<TKey, T>`), so `Lazy<IRepo<T>>` collects `IRepo<string>`.
+
+A dependency MUST NOT close an implementation that was closed to reach it with a type argument the new one contains, because such dependencies never end: closing `Node<T>(Lazy<INode<List<T>>> next)` as `Node<string>` does not close `Node<List<string>>`, and `INode<List<string>>` is resolved like an unregistered service. A dependency rejected on one path MUST still be closed when another registration collects it on a path it does not expand, independently of the order in which the dependencies are discovered.
 
 Decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies. Only their closed forms, from closed generic registrations, are collected.
 
@@ -138,6 +146,22 @@ The implementation's type arguments are found by matching the service type as th
 | `GridHandler<T> : IHandler<T[,], T>` | `IHandler<Req[], Req>` | none (array rank differs) |
 
 Array type arguments are matched by element type and rank, including jagged arrays such as `T[][]`.
+
+A closed generic registration MUST NOT be generated when a type argument does not satisfy the generic constraints of the implementation's type parameter (`class`, `struct`, `unmanaged`, `new()`, and type constraints); the next open generic registration of the service type is tried instead, and when none matches, the dependency is resolved like an unregistered service. Constraints are checked like decorator constraints (see [Decorators](Register.Decorators.spec.md)), including for the dependencies of closed generic registrations:
+
+- Every type satisfies a constraint to `object`, such as `where T : U` with `U = object`; base class constraints also apply to structs, enums, and delegates, such as `where T : Enum`.
+- Tuple element names are part of a type here, although C# converts between them by identity: `(int A, int B)` does not satisfy `where T : U` with `U = (int X, int Y)`, so the registration is not closed and SGIOC018 is reported.
+- A type with required members, declared or inherited, only satisfies `new()` when its parameterless constructor has `[SetsRequiredMembers]` (CS9040).
+- The type arguments of a closed decorator keep their hierarchy, so the dependencies of the decorator, such as `IRepo<T>` in `Decorator<T>(IService<T> inner, IRepo<T> repo)`, are closed with the same constraint checks as other dependencies.
+- Covariant conversions are followed one level, with a type argument replaced by one of its interfaces or base classes (`List<string>` satisfies `IEnumerable<object>`); contravariant and nested variant conversions are not. At most 64 conversions are enumerated for each covariant interface, so a type argument with many interfaces may not satisfy a conversion beyond them. An interface type argument does not convert to `object` this way, because an interface has no base class; this is tracked in [#173](https://github.com/AndyElessar/SourceGen/issues/173). Arrays satisfy constraints to the interfaces they implement (`int[]` satisfies `IEnumerable<int>`, `string[]` satisfies `IEnumerable<object>`).
+- The covariant conversions of a type argument of a dependency of a closed generic registration are not recomputed for its substituted type arguments: `List<T>` in `Outer<T>(IRepo<List<T>>)` keeps `IEnumerable<string>` for `Outer<string>`, but not `IEnumerable<object>`. This is a current limitation, tracked in [#173](https://github.com/AndyElessar/SourceGen/issues/173).
+- A generic value type that is a type argument of a dependency of a closed generic registration, such as `KeyValuePair<T, int>` in `Outer<T>(IRepo<KeyValuePair<T, int>>)`, does not satisfy `unmanaged`, because whether it is unmanaged depends on its fields.
+
+| Implementation | Closed service type | Closed implementation |
+| :--- | :--- | :--- |
+| `Repo<T> : IRepo<T> where T : struct` | `IRepo<int>` | `Repo<int>` |
+| `Repo<T> : IRepo<T> where T : struct` | `IRepo<string>` | none |
+| `Repo<T> : IRepo<T> where T : IEntity` | `IRepo<Entity>` (`Entity : IEntity`) | `Repo<Entity>` |
 
 ## Feature 2: Explicit Closed Generic Discovery
 

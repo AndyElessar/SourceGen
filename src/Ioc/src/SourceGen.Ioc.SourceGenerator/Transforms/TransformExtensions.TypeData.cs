@@ -485,11 +485,13 @@ internal static partial class TransformExtensions
             }
 
             // Arrays keep their element type, created like any type argument, so T[] and T[][] can be matched against
-            // closed arrays such as Req[] and Req[][], and the element keeps its interfaces for constraint checks
+            // closed arrays such as Req[] and Req[][], and the element keeps its interfaces for constraint checks.
+            // The array itself keeps its interfaces and System.Array, so where T : IEnumerable<int> accepts int[].
             if(typeArg is IArrayTypeSymbol arrayArg)
             {
                 var elementType = typeParam.CreateTypeDataForTypeArg(arrayArg.ElementType, depth + 1);
                 var arrayName = arrayArg.FullyQualifiedName;
+                var arrayHierarchy = CreateHierarchy(arrayArg);
                 return TypeData.CreateWrapper(
                     arrayName,
                     arrayName,
@@ -498,7 +500,9 @@ internal static partial class TransformExtensions
                     WrapperKind.Array,
                     IsNestedOpenGeneric: false,
                     TypeParameters: [new TypeParameter("T", elementType)],
-                    Traits: GetTypeTraits(arrayArg));
+                    AllInterfaces: arrayHierarchy.AllInterfaces,
+                    AllBaseClasses: arrayHierarchy.AllBaseClasses,
+                    Traits: arrayHierarchy.Traits);
             }
 
             if(typeArg is not null)
@@ -517,12 +521,13 @@ internal static partial class TransformExtensions
             // No type argument available, this is a type parameter placeholder
             return TypeData.CreateTypeParameter(typeParam.Name);
 
-            static TypeArgHierarchy CreateHierarchy(INamedTypeSymbol type)
+            static TypeArgHierarchy CreateHierarchy(ITypeSymbol type)
             {
                 // Base classes are needed to check base class constraints; names are enough, and avoid recursing
-                // through self-referencing bases such as Foo : Base<Foo>.
+                // through self-referencing bases such as Foo : Base<Foo>. Structs, enums and delegates have base classes
+                // too, such as System.Enum for where T : Enum. System.Object is satisfied by every type, so it is omitted.
                 ImmutableEquatableArray<TypeData>? baseClasses = null;
-                if(type.TypeKind == TypeKind.Class && type.BaseType is { SpecialType: not SpecialType.System_Object })
+                if(type.BaseType is { SpecialType: not SpecialType.System_Object })
                 {
                     using var bases = new ValueListBuilder<TypeData>(4);
                     for(var baseType = type.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)
@@ -551,9 +556,7 @@ internal static partial class TransformExtensions
                 {
                     traits |= TypeTraits.Unmanaged;
                 }
-                if(type.IsValueType
-                    || type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } namedType
-                        && namedType.InstanceConstructors.Any(static c => c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public))
+                if(type.SatisfiesConstructorConstraint())
                 {
                     traits |= TypeTraits.DefaultConstructor;
                 }
@@ -564,10 +567,10 @@ internal static partial class TransformExtensions
             // Creates the interfaces a type argument converts to: its interfaces and, through covariance, the variant
             // interfaces they become with a supertype argument, such as IEnumerable<object> for List<string>.
             // Decorator constraints compare these names, so where T : IEnumerable<object> accepts List<string>.
-            static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(INamedTypeSymbol type)
+            static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(ITypeSymbol type)
             {
                 var interfaces = type.AllInterfaces;
-                var isVariant = IsVariant(type);
+                var isVariant = type is INamedTypeSymbol { IsCovariantGeneric: true };
                 if(interfaces.Length == 0 && !isVariant)
                 {
                     return null;
@@ -585,11 +588,13 @@ internal static partial class TransformExtensions
                 HashSet<string>? names = null;
                 for(var i = -1; i < interfaces.Length; i++)
                 {
-                    var variant = i < 0 ? type : interfaces[i];
-                    if(i < 0 ? !isVariant : !IsVariant(variant))
+                    if(i < 0 ? !isVariant : !interfaces[i].IsCovariantGeneric)
                     {
                         continue;
                     }
+
+                    // Only a named type can be variant itself; an array is never
+                    var variant = i < 0 ? (INamedTypeSymbol)type : interfaces[i];
 
                     if(names is null)
                     {
@@ -600,7 +605,7 @@ internal static partial class TransformExtensions
                         }
                     }
 
-                    foreach(var conversion in GetCovariantConversions(variant))
+                    foreach(var conversion in variant.GetCovariantConversions())
                     {
                         var typeData = CreateInterfaceTypeData(conversion);
                         if(names.Add(typeData.Name))
@@ -611,69 +616,6 @@ internal static partial class TransformExtensions
                 }
 
                 return result.Count > 0 ? result.ToImmutableEquatableArray() : null;
-            }
-
-            static bool IsVariant(INamedTypeSymbol type)
-                => type.IsGenericType && type.OriginalDefinition.TypeParameters.Any(static p => p.Variance == VarianceKind.Out);
-
-            // Constructs the variant type with each covariant reference type argument replaced by one of its supertypes.
-            // Value type arguments do not vary, nested variance is not followed, and the count is capped to bound the cost.
-            static IEnumerable<INamedTypeSymbol> GetCovariantConversions(INamedTypeSymbol type)
-            {
-                const int MaxConversions = 64;
-                if(!IsVariant(type))
-                {
-                    yield break;
-                }
-
-                var definition = type.OriginalDefinition;
-                var candidates = new List<ITypeSymbol>[type.TypeArguments.Length];
-                for(var i = 0; i < candidates.Length; i++)
-                {
-                    var argument = type.TypeArguments[i];
-                    candidates[i] = [argument];
-                    if(definition.TypeParameters[i].Variance == VarianceKind.Out && argument.IsReferenceType)
-                    {
-                        candidates[i].AddRange(argument.AllInterfaces);
-                        for(var baseType = argument.BaseType; baseType is not null; baseType = baseType.BaseType)
-                        {
-                            candidates[i].Add(baseType);
-                        }
-                    }
-                }
-
-                var count = 0;
-                var arguments = new ITypeSymbol[candidates.Length];
-                foreach(var combination in Combine(0))
-                {
-                    if(++count > MaxConversions)
-                    {
-                        yield break;
-                    }
-                    yield return definition.Construct(combination);
-                }
-
-                // Yields every combination except the type's own arguments
-                IEnumerable<ITypeSymbol[]> Combine(int index)
-                {
-                    if(index == candidates.Length)
-                    {
-                        if(!arguments.SequenceEqual(type.TypeArguments, SymbolEqualityComparer.Default))
-                        {
-                            yield return [.. arguments];
-                        }
-                        yield break;
-                    }
-
-                    foreach(var candidate in candidates[index])
-                    {
-                        arguments[index] = candidate;
-                        foreach(var combination in Combine(index + 1))
-                        {
-                            yield return combination;
-                        }
-                    }
-                }
             }
 
             // Creates a simple TypeData for an interface or base class type.

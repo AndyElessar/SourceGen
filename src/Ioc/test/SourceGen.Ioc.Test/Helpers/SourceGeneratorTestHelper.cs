@@ -234,12 +234,14 @@ public static class SourceGeneratorTestHelper
     /// <param name="assemblyName">The assembly name for the compilation.</param>
     /// <param name="additionalReferences">Optional additional metadata references.</param>
     /// <param name="analyzerConfigOptions">Optional analyzer config options (e.g., MSBuild properties).</param>
+    /// <param name="cancellationToken">Cancels the generator run, such as when a test with a timeout times out.</param>
     public static GeneratorTestResult RunGenerator<TGenerator>(
         string source,
         string assemblyName = "TestAssembly",
         IEnumerable<MetadataReference>? additionalReferences = null,
         IReadOnlyDictionary<string, string>? analyzerConfigOptions = null,
-        IReadOnlySet<string>? suppressedInitialDiagnosticIds = null)
+        IReadOnlySet<string>? suppressedInitialDiagnosticIds = null,
+        CancellationToken cancellationToken = default)
         where TGenerator : IIncrementalGenerator, new()
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
@@ -265,7 +267,7 @@ public static class SourceGeneratorTestHelper
             driver = driver.WithUpdatedAnalyzerConfigOptions(optionsProvider);
         }
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _, cancellationToken);
 
         return new GeneratorTestResult(driver.GetRunResult().Results.Single(), outputCompilation);
     }

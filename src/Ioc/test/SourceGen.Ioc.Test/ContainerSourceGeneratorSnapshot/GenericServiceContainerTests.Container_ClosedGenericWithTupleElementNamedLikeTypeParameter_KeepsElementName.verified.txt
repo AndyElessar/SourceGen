@@ -41,7 +41,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::TestNamespace.Handler<string> GetHandler_string()
     {
-        return new global::TestNamespace.Handler<string>((global::TestNamespace.Options<(string T, int Count)>)GetRequiredService(typeof(global::TestNamespace.Options<(string T, int Count)>)));
+        return new global::TestNamespace.Handler<string>(GetOptions_string_T_int_Count());
+    }
+
+    private global::TestNamespace.Options<(string T, int Count)> GetOptions_string_T_int_Count()
+    {
+        return new global::TestNamespace.Options<(string T, int Count)>();
     }
 
     #endregion
@@ -192,6 +197,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
         __Resolver(typeof(global::TestNamespace.Handler<string>), static c => c.GetHandler_string()),
         __Resolver(typeof(global::TestNamespace.IHandler<string>), static c => c.GetHandler_string()),
+        __Resolver(typeof(global::TestNamespace.Options<(string T, int Count)>), static c => c.GetOptions_string_T_int_Count()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
