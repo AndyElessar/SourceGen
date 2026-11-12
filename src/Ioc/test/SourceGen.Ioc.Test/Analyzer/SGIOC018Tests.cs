@@ -1294,6 +1294,36 @@ public class SGIOC018Tests
     }
 
     [Test]
+    public async Task SGIOC018_OpenGenericRegistration_TupleTypeArgumentsWithDifferentElementNames_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            public class Handler<T, U> : IHandler<T, U> where T : U { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer(IHandler<(int A, int B), (int X, int Y)> handler) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+    }
+
+    [Test]
     public async Task SGIOC018_OpenGenericRegistrationsWithDifferentConstraints_ResolvedBySatisfyingImplementation_NoDiagnostic()
     {
         const string source = """

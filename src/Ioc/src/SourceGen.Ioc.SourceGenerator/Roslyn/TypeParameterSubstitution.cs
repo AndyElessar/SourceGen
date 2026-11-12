@@ -102,4 +102,45 @@ internal static class TypeParameterSubstitution
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c == '_';
+
+    /// <summary>
+    /// Replaces the type parameters referenced in a C# expression copied from source, such as the initializer
+    /// <c>new global::Ns.Box&lt;T&gt;()</c> of an injected property, with their type arguments.
+    /// </summary>
+    /// <remarks>
+    /// The expression is parsed, so only identifiers that can refer to a type parameter are replaced: member names, such as
+    /// <c>T</c> in <c>x.T</c> or <c>global::Ns.T</c>, and argument names are kept.
+    /// </remarks>
+    public static string? SubstituteTypeArgumentsInExpression(string? expression, Dictionary<string, string> typeArguments)
+    {
+        if(expression is null || typeArguments.Count == 0 || !typeArguments.Keys.Any(expression.Contains))
+        {
+            return expression;
+        }
+
+        var parsed = SyntaxFactory.ParseExpression(expression);
+        return new TypeParameterRewriter(typeArguments).Visit(parsed).ToFullString();
+    }
+
+    private sealed class TypeParameterRewriter(Dictionary<string, string> typeArguments) : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+        {
+            if(IsMemberOrArgumentName(node) || !typeArguments.TryGetValue(node.Identifier.ValueText, out var typeArgument))
+            {
+                return node;
+            }
+
+            return SyntaxFactory.ParseTypeName(typeArgument).WithTriviaFrom(node);
+        }
+
+        private static bool IsMemberOrArgumentName(IdentifierNameSyntax node) => node.Parent switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name == node,
+            QualifiedNameSyntax qualifiedName => qualifiedName.Right == node,
+            AliasQualifiedNameSyntax aliasQualifiedName => aliasQualifiedName.Name == node,
+            MemberBindingExpressionSyntax or NameColonSyntax or NameEqualsSyntax => true,
+            _ => false,
+        };
+    }
 }

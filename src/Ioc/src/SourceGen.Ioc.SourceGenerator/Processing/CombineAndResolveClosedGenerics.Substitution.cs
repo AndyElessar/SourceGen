@@ -60,12 +60,18 @@ partial class IocSourceGenerator
     /// <summary>
     /// Builds all closed service types from open service types using the service type argument map.
     /// </summary>
+    /// <param name="typeArguments">
+    /// The matched type argument of each type parameter of the implementation, when known, so the type arguments of the
+    /// forms it declares keep their hierarchy, such as <c>Entity</c> in <c>IService&lt;List&lt;Entity&gt;&gt;</c> for
+    /// <c>Service&lt;T&gt; : IService&lt;List&lt;T&gt;&gt;</c>, which decorator constraints are checked against.
+    /// </param>
     private static List<TypeData> BuildClosedServiceTypesFromServiceTypeMap(
         ImmutableEquatableArray<TypeData> openServiceTypes,
         GenericTypeData openImplType,
         ImmutableEquatableArray<TypeData> implInterfaces,
         Dictionary<string, string> serviceTypeArgMap,
-        Dictionary<string, string> implTypeArgMap)
+        Dictionary<string, string> implTypeArgMap,
+        Dictionary<string, TypeData>? typeArguments)
     {
         var result = new List<TypeData>(openServiceTypes.Length);
 
@@ -94,7 +100,7 @@ partial class IocSourceGenerator
                     IsOpenGeneric: false,
                     implementedForm.GenericArity,
                     IsNestedOpenGeneric: false,
-                    TypeParameters: SubstituteTypeParameters(implementedForm.TypeParameters, implTypeArgMap)));
+                    TypeParameters: SubstituteTypeParameters(implementedForm.TypeParameters, implTypeArgMap, typeArguments)));
                 continue;
             }
 
@@ -451,9 +457,13 @@ partial class IocSourceGenerator
     {
         switch(member)
         {
-            // For properties and fields, substitute the member type
+            // For properties and fields, substitute the member type, and the initializer copied as the fallback value
             case PropertyOrFieldInjectionData propertyOrField:
-                return propertyOrField with { Type = SubstituteTypeData(propertyOrField.Type, typeArgMap, typeArguments) };
+                return propertyOrField with
+                {
+                    Type = SubstituteTypeData(propertyOrField.Type, typeArgMap, typeArguments),
+                    DefaultValue = SubstituteTypeArgumentsInExpression(propertyOrField.DefaultValue, typeArgMap),
+                };
 
             // For methods, substitute each parameter type
             case MethodInjectionData { Parameters.Length: > 0 } method:

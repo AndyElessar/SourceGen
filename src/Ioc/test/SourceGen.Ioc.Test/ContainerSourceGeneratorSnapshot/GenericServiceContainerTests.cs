@@ -247,6 +247,41 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_InjectedMemberInitializerOfClosedGeneric_SubstitutesTypeParameters()
+    {
+        // IBox<T> is not registered, so the container falls back to the initializer, closed as new Box<string>()
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IBox<T>;
+            public sealed class Box<T> : IBox<T>;
+
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            public sealed class Outer<T> : IOuter<T>
+            {
+                [IocInject]
+                public IBox<T> Box { get; set; } = new global::TestNamespace.Box<T>();
+            }
+
+            [IocRegister]
+            public sealed class Consumer(IOuter<string> outer);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_DecoratorDependencyWithConstraint_ResolvesClosedImplementation()
     {
         // Decorator<T>'s IRepo<Entity> dependency closes Repo<U> where U : IEntity, so the decorator resolves it directly

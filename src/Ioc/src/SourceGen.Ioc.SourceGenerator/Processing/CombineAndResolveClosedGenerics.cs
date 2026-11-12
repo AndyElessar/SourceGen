@@ -545,7 +545,8 @@ partial class IocSourceGenerator
             openImplType,
             openGenericInfo.AllInterfaces,
             serviceTypeArgMap,
-            implTypeArgMap);
+            implTypeArgMap,
+            typeArguments);
 
         // For generic factory methods (with [IocGenericFactory]), factory is only applicable to service types
         // because generic type mapping requires matching service type template.

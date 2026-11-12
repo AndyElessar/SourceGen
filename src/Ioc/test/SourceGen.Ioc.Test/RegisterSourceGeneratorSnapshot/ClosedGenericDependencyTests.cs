@@ -340,7 +340,8 @@ public class ClosedGenericDependencyTests
             internal sealed class Consumer(INode<string> node);
             """;
 
-        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        // The token stops the generator if the expansion regresses, instead of leaving it running after the timeout
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 
@@ -505,6 +506,114 @@ public class ClosedGenericDependencyTests
                 IRepo<SetsRequiredEntity> setsRequired,
                 IRepo<RequiredStruct> requiredStruct,
                 IRepo<PlainEntity> plain);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_InjectedMemberInitializerOfClosedImplementation_SubstitutesTypeParameters()
+    {
+        // The initializers are copied as fallbacks for the unregistered IBox<T>, so T must become string there too
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IBox<T>;
+            public sealed class Box<T> : IBox<T>
+            {
+                public static Box<T> Empty { get; } = new();
+            }
+
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T> : IOuter<T>
+            {
+                [IocInject]
+                public IBox<T> Box { get; set; } = new global::TestNamespace.Box<T>();
+
+                [IocInject]
+                public IBox<T> Empty { get; set; } = global::TestNamespace.Box<T>.Empty;
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<string> outer);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TupleTypeArgumentsWithDifferentElementNames_DoNotSatisfyTypeParameterConstraint()
+    {
+        // C# converts (int A, int B) to (int X, int Y) by identity, but differently named elements mean different things,
+        // so Handler<,> is not closed (SGIOC018 reports it)
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class Handler<T, U> : IHandler<T, U> where T : U;
+
+            [IocRegister]
+            internal sealed class Consumer(IHandler<(int A, int B), (int X, int Y)> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_DecoratorOfServiceDiscoveredThroughImplementation_ClosesConstrainedDependency()
+    {
+        // Service<Entity> is requested directly, so its IService<List<Entity>> is built from the implementation's type
+        // arguments; Decorator<U>'s IRepo<Entity> still closes Repo<U> where U : IEntity
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IService<>),
+                ServiceLifetime.Singleton,
+                Decorators = [typeof(TestNamespace.Decorator<>)])]
+
+            namespace TestNamespace;
+
+            public interface IEntity;
+            public class Entity : IEntity;
+
+            public interface IService<T>;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<U> : IRepo<U> where U : IEntity;
+
+            [IocRegister(ServiceTypes = [typeof(IService<>)])]
+            internal sealed class Service<T> : IService<List<T>>;
+
+            internal sealed class Decorator<U>(IService<List<U>> inner, IRepo<U> repo) : IService<List<U>>;
+
+            [IocRegister]
+            internal sealed class Consumer(Service<Entity> service);
             """;
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
