@@ -555,6 +555,39 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_NameofTypeParameterInInjectedMemberInitializer_KeepsTypeParameterName()
+    {
+        // nameof(T) is "T" in Outer<T>; the copied fallback must keep that value, and T does not exist in generated code
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IOuter<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOuter<>)])]
+            internal sealed class Outer<T> : IOuter<T>
+            {
+                [IocInject]
+                public string Name { get; set; } = nameof(T);
+
+                [IocInject]
+                public global::System.Type Type { get; set; } = typeof(T);
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(IOuter<string> outer);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_TupleTypeArgumentsWithDifferentElementNames_DoNotSatisfyTypeParameterConstraint()
     {
         // C# converts (int A, int B) to (int X, int Y) by identity, but differently named elements mean different things,

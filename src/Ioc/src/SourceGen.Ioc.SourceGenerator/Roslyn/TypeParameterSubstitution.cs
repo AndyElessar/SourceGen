@@ -109,7 +109,8 @@ internal static class TypeParameterSubstitution
     /// </summary>
     /// <remarks>
     /// The expression is parsed, so only identifiers that can refer to a type parameter are replaced: member names, such as
-    /// <c>T</c> in <c>x.T</c> or <c>global::Ns.T</c>, and argument names are kept.
+    /// <c>T</c> in <c>x.T</c> or <c>global::Ns.T</c>, and argument names are kept, and <c>nameof(T)</c> becomes the
+    /// literal <c>"T"</c>.
     /// </remarks>
     public static string? SubstituteTypeArgumentsInExpression(string? expression, Dictionary<string, string> typeArguments)
     {
@@ -124,6 +125,25 @@ internal static class TypeParameterSubstitution
 
     private sealed class TypeParameterRewriter(Dictionary<string, string> typeArguments) : CSharpSyntaxRewriter
     {
+        // nameof(T) is the type parameter's own name, and T does not exist where the expression is emitted
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            if(node is
+                {
+                    Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" },
+                    ArgumentList.Arguments: [{ Expression: IdentifierNameSyntax operand }],
+                }
+                && typeArguments.ContainsKey(operand.Identifier.ValueText))
+            {
+                return SyntaxFactory.LiteralExpression(
+                        SyntaxKind.StringLiteralExpression,
+                        SyntaxFactory.Literal(operand.Identifier.ValueText))
+                    .WithTriviaFrom(node);
+            }
+
+            return base.VisitInvocationExpression(node);
+        }
+
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
             if(IsMemberOrArgumentName(node) || !typeArguments.TryGetValue(node.Identifier.ValueText, out var typeArgument))
