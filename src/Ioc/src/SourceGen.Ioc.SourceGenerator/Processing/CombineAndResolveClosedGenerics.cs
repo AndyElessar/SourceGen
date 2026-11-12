@@ -162,7 +162,7 @@ partial class IocSourceGenerator
         {
             foreach(var dependency in closedGenericDependencies.Values)
             {
-                pendingDependencies.Enqueue(new(dependency, Path: null));
+                pendingDependencies.Enqueue(new(dependency, Source: null));
             }
         }
         var processedDependencies = new HashSet<string>(StringComparer.Ordinal);
@@ -173,11 +173,13 @@ partial class IocSourceGenerator
             return;
         }
 
+        var expandingDependencies = FindExpandingDependencies(openGenericIndex, closedGenericDependencies?.Values ?? Enumerable.Empty<ClosedGenericDependency>(), ct);
+
         while(pendingDependencies.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
 
-            var (dependency, path) = pendingDependencies.Dequeue();
+            var (dependency, source) = pendingDependencies.Dequeue();
             var closedTypeName = dependency.ClosedTypeName;
 
             // Skip if already processed
@@ -198,12 +200,18 @@ partial class IocSourceGenerator
                 continue;
             }
 
+            // A dependency collected only from expanding dependencies, such as INode<List<string>> of Node<string>, would
+            // start closings that never end. It is rejected for every implementation, so that the one closed for it does
+            // not depend on whether another registration collects it first.
+            var isExpanding = IsExpandingDependency(expandingDependencies, source, dependency);
+
             // Track registration count before generating
             var registrationCountBefore = registrations.Count;
 
             // Try each open generic registration to find one that matches the closed type structure
-            var closedPath = path;
-            foreach(var openGenericInfo in openGenericInfoList)
+            ClosingSource? closingSource = null;
+            OpenGenericRegistrationInfo? closedRegistration = null;
+            foreach(var openGenericInfo in isExpanding ? [] : openGenericInfoList)
             {
                 // Generate the closed generic factory registration
                 // Returns true if successful, allowing us to break early
@@ -212,14 +220,14 @@ partial class IocSourceGenerator
                     openGenericInfo,
                     registrations,
                     generatedClosedGenerics,
-                    path,
-                    out closedPath))
+                    out closingSource))
                 {
+                    closedRegistration = openGenericInfo;
                     break; // Found a matching registration, stop searching
                 }
             }
 
-            // A closing rejected on this path, such as an expanding one, may succeed on an independent path, so the
+            // A closing rejected for this registration, such as an expanding one, may succeed for another, so the
             // dependency is processed again when another registration collects it. Each registration collects it once.
             if(registrations.Count == registrationCountBefore)
             {
@@ -234,6 +242,9 @@ partial class IocSourceGenerator
                 // Collect from decorator constructor parameters
                 foreach(var decorator in newReg.Decorators)
                 {
+                    // Decorator dependencies are written with the decorator's type parameters
+                    var decoratorSource = GetDecoratorClosingSource(expandingDependencies, closedRegistration, decorator);
+
                     // Skip the parameter that receives the decorated instance
                     foreach(var param in EnumerateDecoratorDependencyParameters(decorator, newReg.ServiceType))
                     {
@@ -242,7 +253,7 @@ partial class IocSourceGenerator
                             pendingDependencies,
                             processedDependencies,
                             generatedClosedGenerics,
-                            closedPath);
+                            decoratorSource);
                     }
 
                     // Collect from decorator injection members (properties, fields, methods with [IocInject] attribute)
@@ -251,7 +262,7 @@ partial class IocSourceGenerator
                         pendingDependencies,
                         processedDependencies,
                         generatedClosedGenerics,
-                        closedPath);
+                        decoratorSource);
                 }
 
                 // Collect from constructor parameters
@@ -264,7 +275,7 @@ partial class IocSourceGenerator
                             pendingDependencies,
                             processedDependencies,
                             generatedClosedGenerics,
-                            closedPath);
+                            closingSource);
                     }
                 }
 
@@ -274,7 +285,7 @@ partial class IocSourceGenerator
                     pendingDependencies,
                     processedDependencies,
                     generatedClosedGenerics,
-                    closedPath);
+                    closingSource);
             }
         }
     }
@@ -287,20 +298,20 @@ partial class IocSourceGenerator
         Queue<PendingDependency> pendingDependencies,
         HashSet<string> processedDependencies,
         HashSet<string> generatedClosedGenerics,
-        ClosingPath? path)
+        ClosingSource? source)
     {
         foreach(var member in injectionMembers ?? [])
         {
             switch(member)
             {
                 case PropertyOrFieldInjectionData propertyOrField:
-                    CollectNewDependencyFromType(propertyOrField.Type, pendingDependencies, processedDependencies, generatedClosedGenerics, path);
+                    CollectNewDependencyFromType(propertyOrField.Type, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
                     break;
 
                 case MethodInjectionData method:
                     foreach(var param in method.Parameters)
                     {
-                        CollectNewDependencyFromType(param.Type, pendingDependencies, processedDependencies, generatedClosedGenerics, path);
+                        CollectNewDependencyFromType(param.Type, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
                     }
                     break;
             }
@@ -315,17 +326,17 @@ partial class IocSourceGenerator
         Queue<PendingDependency> pendingDependencies,
         HashSet<string> processedDependencies,
         HashSet<string> generatedClosedGenerics,
-        ClosingPath? path)
+        ClosingSource? source)
     {
         // Unwrap wrappers like direct dependencies do, such as IRepo<string> in Lazy<IRepo<string>> or IEnumerable<IRepo<string>>
         if(GetWrapperInnerType(paramType) is { } innerType)
         {
-            CollectNewDependencyFromType(innerType, pendingDependencies, processedDependencies, generatedClosedGenerics, path);
+            CollectNewDependencyFromType(innerType, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
         }
 
         if(GetEnumerableElementType(paramType) is { } elementType)
         {
-            CollectNewDependencyFromType(elementType, pendingDependencies, processedDependencies, generatedClosedGenerics, path);
+            CollectNewDependencyFromType(elementType, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
         }
 
         if(paramType is not GenericTypeData genericParamType || paramType.IsArrayType)
@@ -350,78 +361,26 @@ partial class IocSourceGenerator
             paramType.Name,
             paramType,
             genericParamType.NameWithoutGeneric);
-        pendingDependencies.Enqueue(new(dependency, path));
+        pendingDependencies.Enqueue(new(dependency, source));
     }
 
-    /// <summary>A closed generic dependency waiting to be closed, and the closings it was collected from.</summary>
-    private readonly record struct PendingDependency(ClosedGenericDependency Dependency, ClosingPath? Path);
-
-    /// <summary>
-    /// The open generic implementations closed to reach a dependency, newest first. Used to stop expanding generic
-    /// dependencies, such as <c>Node&lt;T&gt;(INode&lt;List&lt;T&gt;&gt; next)</c>, whose closed forms never end.
-    /// </summary>
-    /// <param name="Implementation">The name of the open generic implementation.</param>
-    /// <param name="TypeArguments">The type argument of each of its type parameters.</param>
-    private sealed class ClosingPath(string implementation, Dictionary<string, TypeData> typeArguments, ClosingPath? parent)
-    {
-        public string Implementation { get; } = implementation;
-        public Dictionary<string, TypeData> TypeArguments { get; } = typeArguments;
-        public ClosingPath? Parent { get; } = parent;
-
-        /// <summary>
-        /// Gets whether closing an implementation with these type arguments expands a closing of the same implementation
-        /// on this path, with a type argument that contains the earlier one, such as <c>Node&lt;List&lt;string&gt;&gt;</c>
-        /// after <c>Node&lt;string&gt;</c>.
-        /// </summary>
-        public bool IsExpandedBy(string implementation, Dictionary<string, TypeData> typeArguments)
-        {
-            for(var closing = this; closing is not null; closing = closing.Parent)
-            {
-                if(closing.Implementation != implementation)
-                    continue;
-
-                foreach(var entry in typeArguments)
-                {
-                    if(closing.TypeArguments.TryGetValue(entry.Key, out var earlier)
-                        && entry.Value.Name != earlier.Name
-                        && ContainsType(entry.Value, earlier.Name))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-
-            static bool ContainsType(TypeData type, string name)
-            {
-                foreach(var typeParam in type is GenericTypeData { TypeParameters: { } typeParams } ? typeParams : [])
-                {
-                    if(typeParam.Type.Name == name || ContainsType(typeParam.Type, name))
-                        return true;
-                }
-
-                return false;
-            }
-        }
-    }
+    /// <summary>A closed generic dependency waiting to be closed, and the closed generic registration it was collected from.</summary>
+    private readonly record struct PendingDependency(ClosedGenericDependency Dependency, ClosingSource? Source);
 
     /// <summary>
     /// Tries to generate a closed generic registration based on an open generic registration.
     /// The closedServiceType is the closed service type from the dependency (e.g., IRequestHandler&lt;GenericRequest&lt;Entity&gt;, List&lt;Entity&gt;&gt;).
     /// Returns true if registration was successfully generated, false if type structure is incompatible.
     /// </summary>
-    /// <param name="path">The closings the closed service type was collected from.</param>
-    /// <param name="closedPath">The closings the dependencies of the generated registrations are collected from.</param>
+    /// <param name="closingSource">The closing the dependencies of the generated registrations are collected from.</param>
     private static bool TryGenerateClosedGenericRegistration(
         TypeData closedServiceType,
         OpenGenericRegistrationInfo openGenericInfo,
         List<ServiceRegistrationWithTags> registrations,
         HashSet<string> generatedClosedGenerics,
-        ClosingPath? path,
-        out ClosingPath? closedPath)
+        out ClosingSource? closingSource)
     {
-        closedPath = path;
+        closingSource = null;
         if(closedServiceType is not GenericTypeData closedServiceGenericType)
         {
             return false;
@@ -488,13 +447,6 @@ partial class IocSourceGenerator
             {
                 return false;
             }
-
-            // A dependency that needs the same implementation closed with a type argument containing its own, such as
-            // Node<List<string>> for Node<string>, would expand without end
-            if(path?.IsExpandedBy(openImplType.Name, typeArguments) == true)
-            {
-                return false;
-            }
         }
         else
         {
@@ -511,6 +463,7 @@ partial class IocSourceGenerator
         // since there's no explicit implementation type to register
         if(isFactoryOnlyRegistration)
         {
+            closingSource = new ClosingSource(openImplType.Name, serviceTypeArgMap);
             return TryGenerateFactoryOnlyRegistration(
                 closedServiceType,
                 openGenericInfo,
@@ -617,11 +570,7 @@ partial class IocSourceGenerator
             generatedClosedGenerics.Add(closedSvcType.Name);
         }
 
-        if(typeArguments is not null)
-        {
-            closedPath = new ClosingPath(openImplType.Name, typeArguments, path);
-        }
-
+        closingSource = new ClosingSource(openImplType.Name, implTypeArgMap);
         return true; // Successfully generated registration
     }
 
