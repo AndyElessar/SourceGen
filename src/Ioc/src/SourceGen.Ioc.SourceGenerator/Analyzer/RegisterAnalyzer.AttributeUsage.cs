@@ -131,6 +131,7 @@ public sealed partial class RegisterAnalyzer
         SyntaxNodeAnalysisContext context,
         AttributeSyntax attributeSyntax,
         INamedTypeSymbol attributeClass,
+        AttributeData? attributeData,
         AnalyzerContext analyzerContext)
     {
         var argumentList = attributeSyntax.ArgumentList;
@@ -164,7 +165,7 @@ public sealed partial class RegisterAnalyzer
         // SGIOC023 + SGIOC024: Validate InjectMembers elements - only for IoCRegisterFor attributes
         if (!isDefaultsAttribute)
         {
-            AnalyzeInjectMembersOnAttribute(context, argumentList, (analyzerContext.Features & IocFeatures.AsyncMethodInject) != 0);
+            AnalyzeInjectMembersOnAttribute(context, attributeSyntax, attributeClass, attributeData, argumentList, analyzerContext);
         }
     }
 
@@ -550,13 +551,19 @@ public sealed partial class RegisterAnalyzer
     /// <summary>
     /// SGIOC023 + SGIOC024: Validates InjectMembers array elements on a registration attribute.
     /// SGIOC023: Fires when an element is not nameof(...) or a valid array literal { nameof(...), key [, KeyType] }.
-    /// SGIOC024: Fires when the resolved member is not injectable.
+    /// SGIOC024: Fires when the resolved member is not injectable. Like the generator, the member is resolved on the registered
+    /// type, so a member it does not have, or implements explicitly, cannot be injected.
+    /// The members the generator injects are recorded for SGIOC036/SGIOC037.
     /// </summary>
     private static void AnalyzeInjectMembersOnAttribute(
         SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass,
+        AttributeData? attributeData,
         AttributeArgumentListSyntax argumentList,
-        bool asyncMethodInjectEnabled = false)
+        AnalyzerContext analyzerContext)
     {
+        var asyncMethodInjectEnabled = (analyzerContext.Features & IocFeatures.AsyncMethodInject) != 0;
         AttributeArgumentSyntax? injectMembersArg = null;
         foreach (var arg in argumentList.Arguments)
         {
@@ -574,6 +581,11 @@ public sealed partial class RegisterAnalyzer
         if (elements is null || elements.Length == 0)
             return;
 
+        // The members are resolved on the registered type (Node<T>.Repo for nameof(Node<int>.Repo) or nameof(INode<int>.Repo))
+        var targetType = GetRegistrationTargetType(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
+        if (targetType is { IsUnboundGenericType: true })
+            targetType = targetType.OriginalDefinition;
+        ImmutableArray<(ISymbol Member, Location Location)>.Builder? injectMembers = null;
         for (int i = 0; i < elements.Length; i++)
         {
             var element = elements[i];
@@ -653,8 +665,11 @@ public sealed partial class RegisterAnalyzer
                 continue; // unresolvable — a compile error will already be reported
 
             // SGIOC024: Check if member is injectable
-            var (isInjectable, reason) = ValidateInjectableMember(symbol, asyncMethodInjectEnabled);
-            if (!isInjectable)
+            var member = targetType is null ? symbol : symbol.AsMemberOf(targetType);
+            var reason = member is null
+                ? $"it is not a member of '{targetType!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'"
+                : GetMemberInjectabilityIssue(member, asyncMethodInjectEnabled);
+            if (reason is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     InjectMembersNonInjectableMember,
@@ -662,12 +677,22 @@ public sealed partial class RegisterAnalyzer
                     symbol.Name,
                     reason));
             }
+
+            // The elements the generator's ParseInjectMemberElement injects
+            if (member is not null && IocSourceGenerator.IsInjectableMember(member))
+            {
+                injectMembers ??= ImmutableArray.CreateBuilder<(ISymbol, Location)>();
+                injectMembers.Add((member, element.GetLocation()));
+            }
         }
+
+        if (injectMembers is not null)
+            analyzerContext.InjectMembers[(attributeSyntax.SyntaxTree, attributeSyntax.Span)] = injectMembers.ToImmutable();
     }
 
     /// <summary>
     /// Returns the reason a member is not injectable, or <see langword="null"/> if it is valid.
-    /// Shared by SGIOC007 (<see cref="AnalyzeInjectAttribute"/>) and SGIOC024 (<see cref="ValidateInjectableMember"/>).
+    /// Shared by SGIOC007 (<see cref="AnalyzeInjectAttribute"/>) and SGIOC024 (<see cref="AnalyzeInjectMembersOnAttribute"/>).
     /// </summary>
     /// <param name="asyncMethodInjectEnabled">
     /// When <see langword="true"/>, methods returning non-generic <see cref="System.Threading.Tasks.Task"/> are
@@ -680,6 +705,9 @@ public sealed partial class RegisterAnalyzer
 
         return symbol switch
         {
+            // Its name is not accessible on the type, so it cannot be assigned or called
+            IPropertySymbol { ExplicitInterfaceImplementations.Length: > 0 } or IMethodSymbol { ExplicitInterfaceImplementations.Length: > 0 }
+                => "it is an explicit interface implementation",
             IPropertySymbol p when p.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                 => "property is not accessible",
             IPropertySymbol { SetMethod: null } => "property has no setter",
@@ -706,12 +734,6 @@ public sealed partial class RegisterAnalyzer
             IPropertySymbol or IFieldSymbol or IMethodSymbol => null,
             _ => "member is not a property, field, or method"
         };
-    }
-
-    private static (bool IsInjectable, string Reason) ValidateInjectableMember(ISymbol symbol, bool asyncMethodInjectEnabled = false)
-    {
-        var reason = GetMemberInjectabilityIssue(symbol, asyncMethodInjectEnabled);
-        return reason is null ? (true, string.Empty) : (false, reason);
     }
 
     /// <summary>

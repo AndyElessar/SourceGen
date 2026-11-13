@@ -240,4 +240,69 @@ public class SGIOC036Tests
         await Assert.That(sgioc036).Count().IsEqualTo(1);
         await Assert.That(sgioc036[0].Location.SourceSpan.Length).IsGreaterThan(0);
     }
+
+    [Test]
+    [Arguments("public INode<List<T>>? Next { get; set; }", "nameof(Node<int>.Next)", Constants.SGIOC036)]
+    [Arguments("public Lazy<INode<List<T>>>? Next { get; set; }", "nameof(Node<int>.Next)", Constants.SGIOC037)]
+    [Arguments("public void Initialize(INode<List<T>> next) { }", "nameof(Node<int>.Initialize)", Constants.SGIOC036)]
+    [Arguments("public INode<List<T>>? Next { get; set; }", "new object[] { nameof(Node<int>.Next), \"A\" }", Constants.SGIOC036)]
+    public async Task SGIOC036_ExpandingMemberListedOnlyInInjectMembers_ReportsAtElement(string member, string element, string expectedId)
+    {
+        // nameof(Node<int>.Next) names Node<T>.Next of the open generic registration, whose type nests T
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Node<>), ServiceTypes = [typeof(INode<>)], InjectMembers = [{{element}}])]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public sealed class Node<T> : INode<T>
+            {
+                {{member}}
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var expected = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, expectedId).ToList();
+        var other = expectedId == Constants.SGIOC036 ? Constants.SGIOC037 : Constants.SGIOC036;
+
+        await Assert.That(expected).Count().IsEqualTo(1);
+        await Assert.That(expected[0].GetMessage()).Contains("Node<T>").And.Contains("INode<List<T>>");
+        await Assert.That(expected[0].Location.SourceTree!.GetText().ToString(expected[0].Location.SourceSpan)).IsEqualTo(element);
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, other)).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC036_ExpandingMemberInInjectMembersWithIocInject_ReportsOnceAtMember()
+    {
+        // [IocInject] on the member takes precedence over InjectMembers, like the generator's MergeInjectionMembers
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Node<>), ServiceTypes = [typeof(INode<>)], InjectMembers = [nameof(Node<int>.Next)])]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public sealed class Node<T> : INode<T>
+            {
+                [IocInject]
+                public INode<List<T>>? Next { get; set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(1);
+        await Assert.That(sgioc036[0].Location.SourceTree!.GetText().ToString(sgioc036[0].Location.SourceSpan)).IsEqualTo("Next");
+    }
 }

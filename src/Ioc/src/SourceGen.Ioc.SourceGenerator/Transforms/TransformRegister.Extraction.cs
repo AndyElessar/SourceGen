@@ -353,7 +353,7 @@ partial class IocSourceGenerator
         var iocInjectMembers = ExtractInjectionMembers(typeSymbol, semanticModel);
 
         ImmutableEquatableArray<InjectionMemberData> attrInjectMembers = semanticModel is not null
-            ? ExtractInjectMembersFromAttribute(attributeData, semanticModel)
+            ? ExtractInjectMembersFromAttribute(typeSymbol, attributeData, semanticModel)
             : [];
 
         var merged = MergeInjectionMembers(iocInjectMembers, attrInjectMembers);
@@ -394,7 +394,7 @@ partial class IocSourceGenerator
     /// Merges injection members from <c>[IocInject]</c> attributes and the <c>InjectMembers</c> attribute property.
     /// <c>[IocInject]</c> on the member takes priority: if the same member appears in both, the <c>[IocInject]</c> entry wins.
     /// </summary>
-    private static ImmutableEquatableArray<InjectionMemberData> MergeInjectionMembers(
+    internal static ImmutableEquatableArray<InjectionMemberData> MergeInjectionMembers(
         ImmutableEquatableArray<InjectionMemberData> iocInjectMembers,
         ImmutableEquatableArray<InjectionMemberData> attributeMembers)
     {
@@ -422,8 +422,10 @@ partial class IocSourceGenerator
     /// <summary>
     /// Extracts injection members from the registration attribute's <c>InjectMembers</c> property.
     /// Uses <see cref="AttributeSyntax"/> + <see cref="SemanticModel"/> to resolve <c>nameof()</c> expressions.
+    /// The members are taken from <paramref name="typeSymbol"/>, whatever type arguments <c>nameof()</c> names them with.
     /// </summary>
     private static ImmutableEquatableArray<InjectionMemberData> ExtractInjectMembersFromAttribute(
+        INamedTypeSymbol typeSymbol,
         AttributeData attributeData,
         SemanticModel semanticModel)
     {
@@ -455,7 +457,7 @@ partial class IocSourceGenerator
         List<InjectionMemberData>? result = null;
         foreach(var elementExpr in elements)
         {
-            var memberData = ParseInjectMemberElement(elementExpr, semanticModel);
+            var memberData = ParseInjectMemberElement(elementExpr, typeSymbol, semanticModel);
             if(memberData is not null)
             {
                 result ??= [];
@@ -478,12 +480,12 @@ partial class IocSourceGenerator
             _ => null
         };
 
-    private static InjectionMemberData? ParseInjectMemberElement(ExpressionSyntax expression, SemanticModel semanticModel)
+    private static InjectionMemberData? ParseInjectMemberElement(ExpressionSyntax expression, INamedTypeSymbol typeSymbol, SemanticModel semanticModel)
     {
         // Case 1: nameof(X) — inject without key
         if(IsNameofInvocation(expression))
         {
-            var symbol = ResolveInjectMemberSymbolFromNameof(expression, semanticModel);
+            var symbol = ResolveInjectMemberSymbolFromNameof(expression, typeSymbol, semanticModel);
             return symbol is not null && IsInjectableMember(symbol) ? CreateInjectionMemberFromSymbol(symbol, key: null, semanticModel) : null;
         }
 
@@ -499,7 +501,7 @@ partial class IocSourceGenerator
         if(nested.Length > 3)
             return null;
 
-        var memberSymbol = ResolveInjectMemberSymbolFromNameof(nested[0], semanticModel);
+        var memberSymbol = ResolveInjectMemberSymbolFromNameof(nested[0], typeSymbol, semanticModel);
         if(memberSymbol is null || !IsInjectableMember(memberSymbol))
             return null;
 
@@ -577,16 +579,20 @@ partial class IocSourceGenerator
         => expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" } } invocation
             && invocation.ArgumentList.Arguments.Count == 1;
 
-    private static ISymbol? ResolveInjectMemberSymbolFromNameof(ExpressionSyntax nameofExpr, SemanticModel semanticModel)
+    /// <summary>
+    /// Resolves the member named by <c>nameof()</c> as a member of <paramref name="typeSymbol"/>: <c>nameof(Node&lt;int&gt;.Repo)</c>
+    /// names <c>Node&lt;int&gt;.Repo</c>, while the registration of <c>Node&lt;T&gt;</c> injects <c>Node&lt;T&gt;.Repo</c>.
+    /// </summary>
+    private static ISymbol? ResolveInjectMemberSymbolFromNameof(ExpressionSyntax nameofExpr, INamedTypeSymbol typeSymbol, SemanticModel semanticModel)
     {
         if(nameofExpr is not InvocationExpressionSyntax invocation)
             return null;
         var inner = invocation.ArgumentList.Arguments[0].Expression;
         var info = semanticModel.GetSymbolInfo(inner);
-        return info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
+        return (info.Symbol ?? info.CandidateSymbols.FirstOrDefault())?.AsMemberOf(typeSymbol);
     }
 
-    private static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel)
+    internal static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel)
         => symbol switch
         {
             IPropertySymbol property => CreatePropertyInjection(property, key),

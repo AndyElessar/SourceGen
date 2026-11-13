@@ -8,6 +8,59 @@ namespace SourceGen.Ioc.Test.Analyzer;
 public class SGIOC024Tests
 {
     [Test]
+    [Arguments("ImplicitImplementation", "typeof(Node<>)", "nameof(INode<int>.Repo)", "public IRepo<T>? Repo { get; set; }", null)]
+    [Arguments("ImplementationOfGetterOnlyMember", "typeof(Node<>)", "nameof(INode<int>.Getter)", "public IRepo<T>? Repo { get; set; } public IRepo<T>? Getter { get; set; }", null)]
+    [Arguments("MissingTargetType", "typeof(Missing)", "nameof(INode<int>.Repo)", "public IRepo<T>? Repo { get; set; }", null)]
+    [Arguments("ExplicitImplementation", "typeof(Node<>)", "nameof(INode<int>.Repo)", "IRepo<T>? INode<T>.Repo { get; set; }", "it is an explicit interface implementation")]
+    [Arguments("ExplicitImplementationOfClosedType", "typeof(Node<string>)", "nameof(INode<string>.Repo)", "IRepo<T>? INode<T>.Repo { get; set; }", "it is an explicit interface implementation")]
+    [Arguments("MemberOfOtherType", "typeof(Node<>)", "nameof(Other.Repo)", "", "it is not a member of 'Node<T>'")]
+    [Arguments("MemberOfOtherTypeOnTypeLevelAttribute", null, "nameof(Other.Repo)", "", "it is not a member of 'Node<T>'")]
+    public async Task SGIOC024_MemberOfInterfaceOrOtherType_ChecksMemberOfRegisteredType(string scenario, string? registeredType, string injectMember, string nodeMember, string? expectedReason)
+    {
+        // The generator injects the member of the registered type: an interface member through its implementation
+        var attribute = $"IocRegisterFor({registeredType}, ServiceTypes = [typeof(INode<>)], InjectMembers = [{injectMember}])";
+        var source = $$"""
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            {{(registeredType is null ? "" : $"[assembly: {attribute}]")}}
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            public interface INode<T>
+            {
+                IRepo<T>? Repo { get; set; }
+                IRepo<T>? Getter => null;
+            }
+
+            public sealed class Other
+            {
+                public IRepo<int>? Repo { get; set; }
+            }
+
+            {{(registeredType is null ? $"[IocRegister(ServiceTypes = [typeof(INode<>)], InjectMembers = [{injectMember}])]" : "")}}
+            public sealed class Node<T> : INode<T>
+            {
+                {{(nodeMember.Length == 0 ? "IRepo<T>? INode<T>.Repo { get; set; }" : nodeMember)}}
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
+
+        if(expectedReason is null)
+        {
+            await Assert.That(sgioc024).IsEmpty().Because(scenario);
+            return;
+        }
+
+        await Assert.That(sgioc024).Count().IsEqualTo(1).Because(scenario);
+        await Assert.That(sgioc024[0].GetMessage()).Contains("'Repo'").And.Contains(expectedReason).Because(scenario);
+    }
+
+    [Test]
     public async Task SGIOC024_NonStaticProperty_WithSetter_NoDiagnostic()
     {
         const string source = """

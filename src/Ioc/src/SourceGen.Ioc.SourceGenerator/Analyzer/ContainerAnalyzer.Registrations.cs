@@ -179,7 +179,7 @@ partial class ContainerAnalyzer
         {
             if(GetNameofArgument(element) is { } memberExpression)
             {
-                if(GetInjectableMember(memberExpression) is { } member)
+                if(GetMember(memberExpression) is { } member)
                     result.Add(new(member, Key: null, element.GetLocation()));
 
                 continue;
@@ -187,7 +187,7 @@ partial class ContainerAnalyzer
 
             if(GetArrayElements(element) is not { Length: 2 or 3 } nested
                 || GetNameofArgument(nested[0]) is not { } keyedMemberExpression
-                || GetInjectableMember(keyedMemberExpression) is not { } keyedMember)
+                || GetMember(keyedMemberExpression) is not { } keyedMember)
             {
                 continue;
             }
@@ -223,13 +223,12 @@ partial class ContainerAnalyzer
 
         return result.ToImmutable();
 
-        ISymbol? GetInjectableMember(ExpressionSyntax memberExpression)
+        // Whether the member is injectable is checked on the member of the implementation type it resolves to (a getter-only
+        // interface property can be implemented with a setter), see DependencyCache.GetInjectMembers
+        ISymbol? GetMember(ExpressionSyntax memberExpression)
         {
             var symbolInfo = semanticModel.GetSymbolInfo(memberExpression, cancellationToken);
-            return (symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is { } symbol
-                && IocSourceGenerator.IsInjectableMember(symbol)
-                    ? symbol
-                    : null;
+            return symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
         }
 
         static ExpressionSyntax[]? GetArrayElements(ExpressionSyntax expression) => expression switch
@@ -1206,8 +1205,15 @@ partial class ContainerAnalyzer
             var dependencies = new List<Dependency>();
             foreach(var injectMember in injectMembers)
             {
-                if(!injectedNames.Contains(injectMember.Member.Name))
-                    AddMember(dependencies, injectMember.Member, injectMember.Key, injectMember.Location, useLocationForParameters: true);
+                // Like the generator, the member is injected as a member of the implementation type, such as Node<T>.Repo
+                // for nameof(Node<int>.Repo) or nameof(INode<int>.Repo), so an open generic implementation's member uses its
+                // type parameters. A member the type does not have, or implements explicitly, is not injected (SGIOC024).
+                if(!injectedNames.Contains(injectMember.Member.Name)
+                    && injectMember.Member.AsMemberOf(implementationType) is { } member
+                    && IocSourceGenerator.IsInjectableMember(member))
+                {
+                    AddMember(dependencies, member, injectMember.Key, injectMember.Location, useLocationForParameters: true);
+                }
             }
 
             return dependencies;
