@@ -112,7 +112,7 @@ partial class IocSourceGenerator
     /// <param name="typeSymbol">The type symbol to extract injection members from.</param>
     /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
     /// <returns>An array of injection member data.</returns>
-    private static ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembers(INamedTypeSymbol typeSymbol, SemanticModel? semanticModel = null)
+    internal static ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembers(INamedTypeSymbol typeSymbol, SemanticModel? semanticModel = null)
     {
         List<InjectionMemberData>? injectionMembers = null;
 

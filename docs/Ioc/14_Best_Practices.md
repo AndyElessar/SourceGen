@@ -322,6 +322,8 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC033`|Parameterized `Func` ignores a Singleton or Scoped lifetime|[Wrapper Types](10_Wrapper.md#diagnostics)|
 |`SGIOC034`|Several decorator parameters can receive the inner instance|[Decorators](06_Decorator.md#diagnostics)|
 |`SGIOC035`|Decorator has no parameter for the inner instance|[Decorators](06_Decorator.md#diagnostics)|
+|`SGIOC036`|Open generic dependency nests type arguments without end (infinite object graph)|[Open Generics](09_OpenGeneric.md#diagnostics)|
+|`SGIOC037`|Open generic dependency nests type arguments without end behind `Lazy<T>` / `Func<T>`|[Open Generics](09_OpenGeneric.md#diagnostics)|
 
 ## Production Checklist
 

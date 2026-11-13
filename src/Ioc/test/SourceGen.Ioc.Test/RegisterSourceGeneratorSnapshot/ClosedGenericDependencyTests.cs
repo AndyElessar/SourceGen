@@ -385,6 +385,279 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("NodeFirst", "INode<string> node, IOther<string> other")]
+    [Arguments("OtherFirst", "IOther<string> other, INode<string> node")]
+    public async Task ClosedGenericDependency_ExpandingCycleThroughSharedRegistration_StopsAtSameDependencyRegardlessOfOrder(string order, string parameters)
+    {
+        // Node<T> -> IBridge<T> -> INode<List<T>> expands, and Other<string> reaches Bridge<string> independently
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IBridge<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            internal sealed class Node<T>(IEnumerable<IBridge<T>> bridges) : INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IBridge<>)])]
+            internal sealed class Bridge<T>(INode<List<T>> node) : IBridge<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            internal sealed class Other<T>(IBridge<T> bridge) : IOther<T>;
+
+            [IocRegister]
+            internal sealed class Consumer({{parameters}});
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        // The edge from Bridge<T> to INode<List<T>> expands the cycle, so it is cut in both orders
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Bridge<string>, global::TestNamespace.Bridge<string>>();");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Node<global::System.Collections.Generic.List<string>>");
+        await Verify(generatedSource).UseTextForParameters(order);
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    [Arguments("DeeperDecorator", """
+        public interface IService<T>;
+
+        [IocRegister(ServiceTypes = [typeof(IService<>)], Decorators = [typeof(Decorator<>)])]
+        internal sealed class Service<T> : IService<T>;
+
+        internal sealed class Decorator<U>(IService<List<U>> inner, IService<List<List<U>>> other) : IService<List<U>>;
+
+        [IocRegister]
+        internal sealed class Consumer(IService<List<string>> service);
+        """, "global::TestNamespace.Service<global::System.Collections.Generic.List<global::System.Collections.Generic.List<string>>>")]
+    [Arguments("TypeParameterDependency", """
+        public interface IA<T>;
+        public interface IB<T>;
+
+        [IocRegister(ServiceTypes = [typeof(IA<>)])]
+        internal sealed class A<T>(T dependency) : IA<T> where T : class;
+
+        [IocRegister(ServiceTypes = [typeof(IB<>)])]
+        internal sealed class B<X>(IA<IB<List<X>>> a) : IB<X>;
+
+        [IocRegister]
+        internal sealed class Consumer(IA<IB<string>> a);
+        """, "global::TestNamespace.A<global::TestNamespace.IB<global::System.Collections.Generic.List<string>>>")]
+    [Arguments("PartlyMatchedDependency", """
+        public interface IB<T1, T2>;
+        public interface IC<T1, T2>;
+        public sealed class Box<T>;
+
+        [IocRegister(ServiceTypes = [typeof(IB<,>)])]
+        internal sealed class B<U, V>(IC<U, List<int>> c) : IB<U, List<V>>;
+
+        [IocRegister(ServiceTypes = [typeof(IC<,>)])]
+        internal sealed class C<T, S>(IB<Box<T>, S> b) : IC<T, S>;
+
+        [IocRegister]
+        internal sealed class Consumer(IC<string, List<int>> c);
+        """, "global::TestNamespace.C<global::TestNamespace.Box<string>")]
+    public async Task ClosedGenericDependency_ExpandingCycle_StopsClosing(string scenario, string declarations, string expandedType, CancellationToken cancellationToken)
+    {
+        // Each cycle nests a type argument deeper on every round: through a decorator declared with a deeper service type,
+        // through a dependency that is a type parameter, and through a dependency that matches its target only partly
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            {{declarations}}
+            """;
+
+        // The token stops the generator if the expansion regresses, instead of leaving it running after the timeout
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain(expandedType).Because(scenario);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ExpandingDependencyWithSeveralImplementations_ClosesRegardlessOfOrder()
+    {
+        // INode<List<string>> expands Node<string>, but Other<string> needs it independently; NodeB<T> is registered for
+        // INode<> too, so an expanding closing must not fall through to it
+        static string Generate(string parameters)
+        {
+            var source = $$"""
+                using System;
+                using System.Collections.Generic;
+                using Microsoft.Extensions.DependencyInjection;
+                using SourceGen.Ioc;
+
+                namespace TestNamespace;
+
+                public interface INode<T>;
+                public interface IOther<T>;
+
+                [IocRegister(ServiceTypes = [typeof(INode<>)])]
+                internal sealed class Node<T>(Lazy<INode<List<T>>> next) : INode<T>;
+
+                [IocRegister(ServiceTypes = [typeof(INode<>)])]
+                internal sealed class NodeB<T> : INode<T>;
+
+                [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+                internal sealed class Other<T>(INode<List<T>> node) : IOther<T>;
+
+                [IocRegister]
+                internal sealed class Consumer({{parameters}});
+                """;
+
+            var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+            var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+            return string.Join("\n", (generatedSource ?? string.Empty).Split('\n').Select(static line => line.Trim()).Where(static line => line.StartsWith("services.", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+        }
+
+        var nodeFirst = Generate("INode<string> node, IOther<string> other");
+        var otherFirst = Generate("IOther<string> other, INode<string> node");
+
+        await Assert.That(otherFirst).IsEqualTo(nodeFirst);
+        await Assert.That(nodeFirst).Contains("global::TestNamespace.Node<global::System.Collections.Generic.List<string>>");
+        await Assert.That(nodeFirst).DoesNotContain("global::System.Collections.Generic.List<global::System.Collections.Generic.List<string>>");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TypeParameterDependencyOutsideCycle_Closes()
+    {
+        // W<T>(T inner) can only become types written as type arguments, and no List<> implementation is registered, so
+        // Consumer<string> -> Handler<List<string>> -> W<List<string>> ends
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public interface IWrapper<T>;
+            public interface IConsumer<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T>(IWrapper<T> wrapper) : IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IWrapper<>)])]
+            internal sealed class W<T>(T inner) : IWrapper<T> where T : class;
+
+            [IocRegister(ServiceTypes = [typeof(IConsumer<>)])]
+            internal sealed class Consumer<T>(IHandler<List<T>> handler) : IConsumer<T>;
+
+            [IocRegister]
+            internal sealed class Root(IConsumer<string> consumer);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.W<global::System.Collections.Generic.List<string>>, global::TestNamespace.W<global::System.Collections.Generic.List<string>>>();");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_CycleThroughDeeperServiceType_Closes()
+    {
+        // B<U> : IB<List<U>> takes a part of A's type argument, so the cycle A<List<string>> -> B<string> -> A<string> ends
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IA<T>;
+            public interface IB<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IA<>)])]
+            internal sealed class A<T>(IB<T> b) : IA<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IB<>)])]
+            internal sealed class B<U>(IA<U> a) : IB<List<U>>;
+
+            [IocRegister]
+            internal sealed class Consumer(IA<List<string>> a);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.B<string>, global::TestNamespace.B<string>>();");
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.A<string>, global::TestNamespace.A<string>>();");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TypeArgumentMovedWithoutNesting_Closes()
+    {
+        // Pair<string, List<string>> needs IPair<List<string>, List<string>>: T takes U's type argument, which contains
+        // T's earlier one, but no type argument is nested deeper, so the closings end there
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPair<T, U>;
+
+            [IocRegister(ServiceTypes = [typeof(IPair<,>)])]
+            internal sealed class Pair<T, U>(IPair<U, U> next) : IPair<T, U>;
+
+            [IocRegister]
+            internal sealed class Consumer(IPair<string, List<string>> pair);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Pair<global::System.Collections.Generic.List<string>, global::System.Collections.Generic.List<string>>, global::TestNamespace.Pair<global::System.Collections.Generic.List<string>, global::System.Collections.Generic.List<string>>>();");
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    public async Task ClosedGenericDependency_ExpandingDecoratorDependency_StopsClosing(CancellationToken cancellationToken)
+    {
+        // Decorating IService<string> requires IService<List<string>>, whose decorator would require IService<List<List<string>>>
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IService<>)], Decorators = [typeof(Decorator<>)])]
+            internal sealed class Service<T> : IService<T>;
+
+            internal sealed class Decorator<T>(IService<T> inner, IService<List<T>> other) : IService<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IService<string> service);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.Decorator<string>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Service<global::System.Collections.Generic.List<string>>");
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_ArrayTypeArgumentWithInterfaceConstraint_Closes()
     {
         // int[] implements IEnumerable<int>, and string[] converts to IEnumerable<object> through IEnumerable<string>;

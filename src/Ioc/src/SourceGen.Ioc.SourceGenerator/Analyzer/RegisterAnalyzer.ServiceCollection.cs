@@ -178,6 +178,10 @@ public sealed partial class RegisterAnalyzer
             ? []
             : AnalyzeDecorators(analyzerContext, decorators, targetType, registrations);
 
+        // SGIOC036/SGIOC037: open generic registrations are closed on demand for the dependencies the generator discovers
+        if(targetType.IsUnboundGenericType || targetType is { IsGenericType: true, IsDefinition: true })
+            analyzerContext.OpenGenericRegistrations.Add((targetType, registrations, decorators));
+
         RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
     }
 
@@ -785,6 +789,12 @@ public sealed partial class RegisterAnalyzer
         /// (SGIOC034/SGIOC035).
         /// </summary>
         public ConcurrentDictionary<INamedTypeSymbol, ConcurrentDictionary<INamedTypeSymbol, ImmutableArray<int>>> DecoratorUsages { get; } = new(SymbolEqualityComparer.Default);
+
+        /// <summary>
+        /// The open generic registrations, with their service types and decorators, whose expanding dependencies are
+        /// reported (SGIOC036/SGIOC037).
+        /// </summary>
+        public ConcurrentBag<(INamedTypeSymbol Implementation, ImmutableArray<ServiceSymbolKey> Registrations, ImmutableArray<INamedTypeSymbol> Decorators)> OpenGenericRegistrations { get; } = [];
 
         private readonly ConcurrentDictionary<INamedTypeSymbol, TypeData> decoratorTypeData = new(SymbolEqualityComparer.Default);
 
