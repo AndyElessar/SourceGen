@@ -36,7 +36,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator analysis | SGIOC002-005, 012-015, 030, 033-035 |
+| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC002-005, 012-015, 030, 033-037 |
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
@@ -45,7 +45,8 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 1. Report buffered duplicated defaults (SGIOC012)
 2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
 3. Decorated parameters of the decorators matched while collecting registrations (SGIOC034/035)
-4. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
+4. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037)
+5. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
 
 #### Partial Files
 
@@ -56,6 +57,7 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration/defaults detection (SGIOC011, 012) |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
+| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037) |
 | `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |
 
 ### ContainerAnalyzer
@@ -109,7 +111,7 @@ The container's service types are the service types of its own registrations plu
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ## Diagnostics
@@ -757,6 +759,34 @@ Report when a decorator implements a decorated service type of a registration bu
 
 ---
 
+### SGIOC036 - Error - Design - Dependency nests type arguments without end
+
+Report when a dependency of an open generic registration (or of one of its decorators) is expanding, as defined by [Generic Registration](../../Spec/Register.Generics.spec.md): closing it nests type arguments deeper on every round of a dependency cycle, so the generator does not close it at compile time. A cycle through it has no dependency resolved through `Lazy<T>` or `Func<...>`, so its object graph is infinite: resolving it at runtime from the open generic registration never ends either.
+
+**Analysis:**
+
+- Builds the open generic registrations of the compilation (implementation, service types, interfaces, decorators, injected members) like the generator's open generic entries, and runs the generator's own analysis on them, so the reported dependencies are the ones the generator does not close.
+- The analysis is static: an expanding dependency is reported whether or not a dependency of a closed registration reaches the open generic registration.
+- A dependency is deferred (`SGIOC037`) when each of its expanding cycles has a dependency wrapped in `Lazy<T>` or `Func<...>` (also inside collections); otherwise `SGIOC036` is reported. Cycles are found among the dependencies without such a wrapper, so a `Lazy<T>` on another cycle does not make an eager expanding cycle deferred.
+- Reports once per constructor parameter, injected property or field, or injected method parameter, at that symbol, when it is declared in source. Injected members whose feature is disabled (`SGIOC022`) are not reported.
+
+**Message format:** `Dependency '{DependencyType}' of '{Implementation}' nests type arguments deeper on every round of a dependency cycle without a Lazy<T> or Func<T> dependency, so its object graph is infinite and it is not closed at compile time`
+
+**Fix:** Break the cycle, or depend on a type argument that does not nest the implementation's type parameters.
+
+---
+
+### SGIOC037 - Warning - Design - Dependency nests type arguments without end behind a deferred wrapper
+
+Report when each expanding cycle of an expanding dependency (see `SGIOC036`) has a `Lazy<T>` or `Func<...>` dependency. The object graph only grows when the wrapper is used, but the generator does not close the dependency: it is resolved at runtime from the open generic registration of the integrated `IServiceProvider` (by reflection, which is not Native AOT safe), and a container with `IntegrateServiceProvider = false` cannot resolve it.
+
+**Analysis:** Same as `SGIOC036`.
+
+**Message format:** `Dependency '{DependencyType}' of '{Implementation}' nests type arguments deeper on every round of a dependency cycle, so it is not closed at compile time`
+
+**Fix:** Register the closed forms that are needed explicitly, or break the cycle.
+
+---
 ### Known Limitations
 
-None.
+- `SGIOC036` / `SGIOC037`: the analyzer only sees the registrations `RegisterAnalyzer` collects, so open generic implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and the registrations of imported modules are not analyzed. The closed generic types that a dependency of type `T` (a type parameter) can become are taken from the constructor parameters of closed registrations only, without `IServiceProvider` invocations, `[IocDiscover]`, or injected members of closed registrations. These limits can miss a dependency the generator does not close, but do not report one it closes. The registrations of all containers are analyzed together, also for `ExplicitOnly` or `IncludeTags` containers whose own registrations do not form the cycle.

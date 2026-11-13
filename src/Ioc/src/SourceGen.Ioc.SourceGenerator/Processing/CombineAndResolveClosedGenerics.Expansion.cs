@@ -19,7 +19,11 @@ partial class IocSourceGenerator
     /// <summary>A dependency of an open generic implementation or decorator, written with its type parameters.</summary>
     /// <param name="Dependency">The name of the dependency, such as <c>INode&lt;List&lt;T&gt;&gt;</c>.</param>
     /// <param name="IsExpanding">Whether closing it nests type arguments deeper on a cycle, so its closings never end.</param>
-    private readonly record struct DependencySite(string Dependency, bool IsExpanding);
+    /// <param name="IsDeferred">
+    /// Whether each of its expanding cycles has a dependency resolved through <c>Lazy&lt;T&gt;</c> or <c>Func&lt;T&gt;</c>, so
+    /// the object graph only grows when it is used.
+    /// </param>
+    internal readonly record struct DependencySite(string Dependency, bool IsExpanding, bool IsDeferred);
 
     /// <summary>A link from a type parameter to a type parameter whose type argument contains it.</summary>
     /// <param name="IsNested">Whether the type argument is not the type parameter itself, such as <c>List&lt;T&gt;</c>.</param>
@@ -57,7 +61,7 @@ partial class IocSourceGenerator
     /// there are none.
     /// </returns>
     /// <param name="rootDependencies">The closed generic dependencies of non-generic registrations and invocations.</param>
-    private static Dictionary<string, List<DependencySite>>? FindExpandingDependencies(
+    internal static Dictionary<string, List<DependencySite>>? FindExpandingDependencies(
         Dictionary<string, List<OpenGenericRegistrationInfo>> openGenericIndex,
         IEnumerable<ClosedGenericDependency> rootDependencies,
         CancellationToken ct)
@@ -77,16 +81,13 @@ partial class IocSourceGenerator
         }
 
         var typeParamsByOwner = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        var ownerDependencies = new List<(string Owner, TypeData Dependency)>();
+        var ownerDependencies = new List<(string Owner, TypeData Dependency, bool IsDeferred)>();
+        var dependencyTypes = new List<(TypeData Type, bool IsDeferred)>();
         var decoratorLinks = new List<TypeParameterLink>();
         var seenDecorators = new HashSet<string>(StringComparer.Ordinal);
 
         // The generic types written as type arguments, which are the only types a type parameter can become
         var argumentTypes = new HashSet<string>(StringComparer.Ordinal);
-        foreach(var root in rootDependencies)
-        {
-            AddMatchedArgumentTypes(root.ClosedType);
-        }
 
         foreach(var (info, implementation) in registrations)
         {
@@ -141,7 +142,16 @@ partial class IocSourceGenerator
         }
 
         // A type parameter can only become a type written as a type argument, so a dependency that is a type parameter,
-        // such as T in W<T>(T inner), can be closed by the implementations registered for those types
+        // such as T in W<T>(T inner), can be closed by the implementations registered for those types. The root
+        // dependencies are only enumerated for such dependencies.
+        if(ownerDependencies.Any(entry => typeParamsByOwner[entry.Owner].Contains(GetTypeParameterName(entry.Dependency))))
+        {
+            foreach(var root in rootDependencies)
+            {
+                AddMatchedArgumentTypes(root.ClosedType);
+            }
+        }
+
         var argumentTargets = new List<(OpenGenericRegistrationInfo Info, GenericTypeData Implementation)>();
         foreach(var argumentType in argumentTypes)
         {
@@ -154,8 +164,8 @@ partial class IocSourceGenerator
             }
         }
 
-        var sites = new List<(string Owner, string Dependency, List<TypeParameterLink> Links)>(ownerDependencies.Count);
-        foreach(var (owner, dependency) in ownerDependencies)
+        var sites = new List<(string Owner, string Dependency, bool IsDeferred, List<TypeParameterLink> Links)>(ownerDependencies.Count);
+        foreach(var (owner, dependency, isDeferred) in ownerDependencies)
         {
             var typeParams = typeParamsByOwner[owner];
             var links = new List<TypeParameterLink>();
@@ -185,7 +195,7 @@ partial class IocSourceGenerator
                 }
             }
 
-            sites.Add((owner, dependency.Name, links));
+            sites.Add((owner, dependency.Name, isDeferred, links));
         }
 
         // Only a nested link can make a dependency expanding
@@ -215,24 +225,52 @@ partial class IocSourceGenerator
             }
         }
 
+        // The cycles without a dependency resolved through Lazy<T> or Func<T>, which make the object graph itself infinite
+        var eagerGraph = new Dictionary<TypeParameterNode, List<TypeParameterNode>>();
+        foreach(var link in sites.Where(static site => !site.IsDeferred).SelectMany(static site => site.Links).Concat(decoratorLinks))
+        {
+            if(!eagerGraph.TryGetValue(link.From, out var successors))
+            {
+                successors = [];
+                eagerGraph[link.From] = successors;
+            }
+            successors.Add(link.To);
+        }
+
+        var eagerComponents = FindStronglyConnectedComponents(eagerGraph);
+        var nestedDecoratorEagerComponents = new HashSet<int>();
+        foreach(var link in decoratorLinks)
+        {
+            if(link.IsNested && eagerComponents[link.From] == eagerComponents[link.To])
+            {
+                nestedDecoratorEagerComponents.Add(eagerComponents[link.From]);
+            }
+        }
+
         // Keep every dependency of the owners with an expanding one, since a closed dependency is only expanding when no
         // other dependency of the same owner needs it too
         Dictionary<string, List<DependencySite>>? result = null;
         var classified = new List<(string Owner, DependencySite Site)>(sites.Count);
-        foreach(var (owner, dependency, links) in sites)
+        foreach(var (owner, dependency, isDeferredSite, links) in sites)
         {
-            var isExpanding = false;
+            bool isExpanding = false, isEagerlyExpanding = false;
             foreach(var link in links)
             {
                 var component = components[link.From];
                 if(component == components[link.To] && (link.IsNested || nestedDecoratorComponents.Contains(component)))
                 {
                     isExpanding = true;
-                    break;
+                }
+
+                if(!isDeferredSite
+                    && eagerComponents[link.From] == eagerComponents[link.To]
+                    && (link.IsNested || nestedDecoratorEagerComponents.Contains(eagerComponents[link.From])))
+                {
+                    isEagerlyExpanding = true;
                 }
             }
 
-            classified.Add((owner, new DependencySite(dependency, isExpanding)));
+            classified.Add((owner, new DependencySite(dependency, isExpanding, IsDeferred: isExpanding && !isEagerlyExpanding)));
             if(isExpanding)
             {
                 result ??= new Dictionary<string, List<DependencySite>>(StringComparer.Ordinal);
@@ -268,24 +306,14 @@ partial class IocSourceGenerator
             return names;
         }
 
-        // Adds the types a dependency type is closed for: the type itself when it is generic or a type parameter, and,
-        // like CollectNewDependencyFromType, the types it wraps
         void AddDependencyType(string owner, TypeData type, HashSet<string> typeParams)
         {
-            if(GetWrapperInnerType(type) is { } innerType)
+            dependencyTypes.Clear();
+            CollectDependencyTypes(type, typeParams, isDeferred: false, dependencyTypes);
+            foreach(var (dependency, isDeferred) in dependencyTypes)
             {
-                AddDependencyType(owner, innerType, typeParams);
-            }
-
-            if(GetEnumerableElementType(type) is { } elementType)
-            {
-                AddDependencyType(owner, elementType, typeParams);
-            }
-
-            if((type is GenericTypeData { GenericArity: > 0 } && !type.IsArrayType) || typeParams.Contains(GetTypeParameterName(type)))
-            {
-                ownerDependencies.Add((owner, type));
-                AddMatchedArgumentTypes(type);
+                ownerDependencies.Add((owner, dependency, isDeferred));
+                AddMatchedArgumentTypes(dependency);
             }
         }
 
@@ -329,6 +357,33 @@ partial class IocSourceGenerator
 
                 AddArgumentTypes(typeParam.Type, argumentTypes);
             }
+        }
+    }
+
+    /// <summary>
+    /// Collects the types a dependency type is closed for: the type itself when it is generic or one of
+    /// <paramref name="typeParams"/>, and, like <see cref="CollectNewDependencyFromType"/>, the types it wraps.
+    /// </summary>
+    /// <param name="isDeferred">Whether the type is wrapped in <c>Lazy&lt;T&gt;</c> or <c>Func&lt;T&gt;</c>.</param>
+    internal static void CollectDependencyTypes(
+        TypeData type,
+        HashSet<string> typeParams,
+        bool isDeferred,
+        List<(TypeData Type, bool IsDeferred)> dependencies)
+    {
+        if(GetWrapperInnerType(type) is { } innerType)
+        {
+            CollectDependencyTypes(innerType, typeParams, isDeferred || type is LazyTypeData or FuncTypeData, dependencies);
+        }
+
+        if(GetEnumerableElementType(type) is { } elementType)
+        {
+            CollectDependencyTypes(elementType, typeParams, isDeferred, dependencies);
+        }
+
+        if((type is GenericTypeData { GenericArity: > 0 } && !type.IsArrayType) || typeParams.Contains(GetTypeParameterName(type)))
+        {
+            dependencies.Add((type, isDeferred));
         }
     }
 

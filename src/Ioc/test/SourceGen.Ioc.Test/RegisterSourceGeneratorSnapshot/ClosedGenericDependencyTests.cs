@@ -519,7 +519,7 @@ public class ClosedGenericDependencyTests
 
             var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
             var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
-            return string.Join("\n", generatedSource.Split('\n').Select(static line => line.Trim()).Where(static line => line.StartsWith("services.", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+            return string.Join("\n", (generatedSource ?? string.Empty).Split('\n').Select(static line => line.Trim()).Where(static line => line.StartsWith("services.", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
         }
 
         var nodeFirst = Generate("INode<string> node, IOther<string> other");

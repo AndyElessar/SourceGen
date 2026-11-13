@@ -339,10 +339,40 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "A decorator receives the decorated instance through its first constructor parameter whose type is the decorated service type. A decorator without such a parameter is skipped for that service type.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC036: A dependency of an open generic registration nests type arguments deeper on every round of a dependency
+    /// cycle without a deferred wrapper, so the object graph is infinite.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InfiniteGenericDependency = new(
+        id: "SGIOC036",
+        title: "Dependency nests type arguments without end",
+        messageFormat: "Dependency '{1}' of '{0}' nests type arguments deeper on every round of a dependency cycle without a Lazy<T> or Func<T> dependency, so its object graph is infinite and it is not closed at compile time",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Closing the dependency needs an open generic implementation on the same cycle closed with a type argument nested deeper, such as Node<List<T>> for Node<T>, so its closed forms never end. The generator does not close it, and resolving it at runtime from the open generic registration would never end.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
+    /// SGIOC037: A dependency of an open generic registration nests type arguments deeper on every round of a dependency
+    /// cycle with a deferred wrapper, so the generator does not close it.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DeferredExpandingGenericDependency = new(
+        id: "SGIOC037",
+        title: "Dependency nests type arguments without end behind a deferred wrapper",
+        messageFormat: "Dependency '{1}' of '{0}' nests type arguments deeper on every round of a dependency cycle, so it is not closed at compile time",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Closing the dependency needs an open generic implementation on the same cycle closed with a type argument nested deeper, such as Node<List<T>> for Node<T>, so its closed forms never end. A Lazy<T> or Func<T> dependency on the cycle keeps the object graph finite, but the generator does not close the dependency: it is resolved at runtime from the open generic registration of the integrated IServiceProvider (by reflection, not Native AOT safe), and a container that does not integrate one cannot resolve it.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         MultipleDecoratedParameters,
         NoDecoratedParameter,
+        InfiniteGenericDependency,
+        DeferredExpandingGenericDependency,
         InvalidAttributeUsage,
         CircularDependency,
         SingletonDependsOnScoped,
@@ -549,6 +579,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
         // SGIOC034/SGIOC035: Constructor parameters that can receive the decorated instance
         AnalyzeDecoratedParameters(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
+
+        // SGIOC036/SGIOC037: Dependencies of open generic registrations that nest type arguments without end
+        AnalyzeExpandingDependencies(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
 
         var asyncInitOnlyServiceTypes = BuildAsyncInitOnlyServiceTypes(analyzerContext);
         if(asyncInitOnlyServiceTypes.Count == 0)

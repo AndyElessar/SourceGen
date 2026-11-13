@@ -49,6 +49,8 @@ Closed generic registrations created this way are discovered in turn: when `Oute
 
 An open generic registration is only closed for type arguments that satisfy its implementation's generic constraints: with `Repo<T> : IRepo<T> where T : struct`, `IRepo<int>` is closed as `Repo<int>`, while `IRepo<string>` is resolved like an unregistered service.
 
+A dependency that nests type arguments deeper on every round of a dependency cycle is not closed, because its closed forms never end: `Node<T>(Lazy<INode<List<T>>> next)` closed as `Node<string>` needs `INode<List<string>>`, which needs `INode<List<List<string>>>`, and so on. `INode<List<string>>` is resolved like an unregistered service (at runtime from the open generic registration, which a container with `IntegrateServiceProvider = false` cannot do), and the analyzer reports `SGIOC036` (no `Lazy<T>` or `Func<T>` on the cycle, so the object graph itself is infinite) or `SGIOC037`. Moving type arguments without nesting them, such as `Pair<T, U>(IPair<U, T> next)`, is closed normally.
+
 ```csharp
 public interface ILogger<T>;
 
@@ -211,6 +213,13 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Te
 ```
 
 </details>
+
+## Diagnostics
+
+|ID|Severity|Description|
+|:---|:---|:---|
+|SGIOC036|Error|A dependency of an open generic registration nests type arguments deeper on every round of a dependency cycle, and no dependency on the cycle is a `Lazy<T>` or `Func<T>`, so its object graph is infinite. The dependency is not closed at compile time.|
+|SGIOC037|Warning|A dependency of an open generic registration nests type arguments deeper on every round of a dependency cycle behind a `Lazy<T>` or `Func<T>`. The dependency is not closed at compile time, so it is resolved at runtime from the open generic registration (not Native AOT safe), or not at all by a container with `IntegrateServiceProvider = false`.|
 
 ---
 
