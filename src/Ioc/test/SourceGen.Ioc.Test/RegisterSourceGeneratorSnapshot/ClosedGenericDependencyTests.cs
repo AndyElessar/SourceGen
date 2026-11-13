@@ -3041,4 +3041,35 @@ public class ClosedGenericDependencyTests
         await Assert.That(generatedSource).DoesNotContain("Node<string[]>");
         await Assert.That(generatedSource).DoesNotContain("T[]");
     }
+
+    [Test]
+    public async Task ClosedGenericDependency_OpenGenericDependencyWithArrayOfPointerToTypeParameter_IsNotClosedWithTypeParameter()
+    {
+        // T*[] is an array of a pointer to a type parameter, so INode<T*[]> is open too. Generated code that uses pointer types
+        // is not in an unsafe context, so only the absence of the open form is checked.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            public sealed unsafe class Other<T>(INode<T*[]> node) : IOther<T> where T : unmanaged;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T> : INode<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IOther<int> other);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, allowUnsafe: true);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.Other<int>");
+        await Assert.That(generatedSource).DoesNotContain("T*[]");
+    }
 }
