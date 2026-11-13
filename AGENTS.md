@@ -20,16 +20,20 @@ C# incremental source generators for compile-time code generation.
 - If unsure whether an issue is a design decision or a test failure, **ask the user for clarification**
 - DO NOT run benchmarks, ask user run them explicitly if needed.
 
+## Stage Reviews
+
+When each stage of work is complete (for example: spec updated, generator change done, analyzer change done, review findings fixed), **MUST** invoke the `sourcegen-code-review` subagent before starting the next stage or committing. Pass it the user's request, what the stage changed, and the diff scope. Fix its **High** findings, then re-run it on the fixes; record **Follow-up** findings for the user and ask the user about **Question** findings.
+
 ## Mandatory Final Steps
 
 Every task that modifies code **MUST** complete these steps before finishing:
 
 1. **Run Tests** — Run the filtered tests for the changed feature, then the full test project of every changed domain; if generated code changed, also run the domain AOT tests. Fix failures before proceeding.
-2. **Review** — Review the full diff against the spec and the user's request, checking spec compliance, generator anti-patterns (symbol capture, mutable models, non-deterministic output), AOT safety, and missing tests or docs. Fix high-severity findings before finishing.
+2. **Review** — Invoke the `sourcegen-code-review` subagent on the full diff against the spec and the user's request (spec compliance, generator/analyzer parity, generator anti-patterns such as symbol capture, mutable models, non-deterministic output, AOT safety, and missing tests or docs). Fix high-severity findings before finishing.
 
 ## Agent Customization
 
-- Sources live in `.apm/` (`instructions/`, `skills/`); external dependencies are declared in `apm.yml`. Edit sources there, never the deployed copies, then run `apm install` to redeploy. `apm install` can delete the deployed copies of skills whose source changed (and drop them from `apm.lock.yaml`); if it does, run it again, then confirm the deployed copies match `.apm/` and that `apm.lock.yaml` only changed for the edited files. Revert changes that are only line endings.
+- Sources live in `.apm/` (`instructions/`, `skills/`, `agents/`); external dependencies are declared in `apm.yml`. Edit sources there, never the deployed copies, then run `apm install` to redeploy. `apm install` can delete the deployed copies of skills whose source changed (and drop them from `apm.lock.yaml`); if it does, run it again, then confirm the deployed copies match `.apm/` and that `apm.lock.yaml` only changed for the edited files. Revert changes that are only line endings.
 - Instructions apply automatically by file path: `.github/instructions/` (Copilot) and `.claude/rules/` (Claude).
 - Skills load on demand: `.agents/skills/` and `.claude/skills/`.
 - Agents: `.github/agents/` (Copilot) and `.claude/agents/` (Claude).
