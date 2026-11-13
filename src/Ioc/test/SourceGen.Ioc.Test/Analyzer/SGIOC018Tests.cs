@@ -1120,6 +1120,11 @@ public class SGIOC018Tests
     [Arguments("IComparer<string>", "IRepository<IComparer<object>>")]
     [Arguments("IEnumerable<IEnumerable<object>>", "IRepository<List<List<string>>>")]
     [Arguments("IEnumerable<object>", "IRepository<int[]>")]
+    [Arguments("IList<object>", "IRepository<List<string>>")]
+    [Arguments("IVariant<object, object>", "IRepository<IVariant<string, string>>")]
+    [Arguments("IEnumerable<object>", "IRepository<IEnumerable<int?>>")]
+    // The generator compares names, which do not separate the type arguments of a containing generic type
+    [Arguments("Host<int>.INested<object>", "IRepository<Host<int>.INested<string>>")]
     public async Task SGIOC018_OpenGenericRegistration_UnsatisfiedConstraint_ReportsDiagnostic(string constraint, string parameterType)
     {
         var source = $$"""
@@ -1133,6 +1138,8 @@ public class SGIOC018Tests
             public interface IEntity { }
             public class User { }
             public class NoDefaultConstructor(int value) { }
+            public interface IVariant<out TOut, in TIn> { }
+            public class Host<H> { public interface INested<out X> { } }
 
             public interface IRepository<T> { }
 
@@ -1171,6 +1178,11 @@ public class SGIOC018Tests
     [Arguments("IEnumerable<IEnumerable<string>>", "IRepository<List<List<string>>>")]
     [Arguments("IEnumerable<int>", "IRepository<int[]>")]
     [Arguments("IEnumerable<object>", "IRepository<string[]>")]
+    [Arguments("IEnumerable<object>", "IRepository<IEnumerable<IComparable>>")]
+    [Arguments("IEnumerable<object>", "IRepository<List<IComparable>>")]
+    [Arguments("IVariant<object, string>", "IRepository<IVariant<string, string>>")]
+    [Arguments("IVariant<IEntity, string>", "IRepository<IVariant<DerivedEntity, string>>")]
+    [Arguments("Func<object>", "IRepository<Func<string>>")]
     public async Task SGIOC018_OpenGenericRegistration_SatisfiedConstraint_NoDiagnostic(string constraint, string parameterType)
     {
         var source = $$"""
@@ -1185,6 +1197,7 @@ public class SGIOC018Tests
             public class Entity : IEntity { }
             public class DerivedEntity : Entity { }
             public class User { }
+            public interface IVariant<out TOut, in TIn> { }
 
             public interface IRepository<T> { }
 
@@ -1257,10 +1270,10 @@ public class SGIOC018Tests
     }
 
     [Test]
-    public async Task SGIOC018_OpenGenericRegistration_CovariantConversionBeyondGeneratorLimit_ReportsDiagnostic()
+    public async Task SGIOC018_OpenGenericRegistration_TypeArgumentWithManyCovariantConversions_NoDiagnostic()
     {
-        // The generator enumerates at most 64 covariant conversions of IGrouping<Many, Many> (10 candidates per position);
-        // IGrouping<object, object> is beyond them, so the generator does not close Repository<IGrouping<Many, Many>>
+        // Each position of IGrouping<Many, Many> converts to Many, its 8 interfaces, or object, so a type argument with many
+        // interfaces satisfies IGrouping<object, object> like any other, and the generator closes the registration
         const string source = """
             using System.Linq;
             using Microsoft.Extensions.DependencyInjection;
@@ -1290,7 +1303,7 @@ public class SGIOC018Tests
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
         var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
 
-        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018).Count().IsEqualTo(0);
     }
 
     [Test]

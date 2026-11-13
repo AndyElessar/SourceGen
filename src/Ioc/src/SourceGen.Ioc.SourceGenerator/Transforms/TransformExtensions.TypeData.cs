@@ -20,6 +20,12 @@ internal static partial class TransformExtensions
     /// </remarks>
     private static readonly ConditionalWeakTable<INamedTypeSymbol, TypeArgHierarchy> MetadataTypeArgHierarchy = new();
 
+    /// <summary>
+    /// Supertypes of covariant type arguments declared in metadata, such as <c>string</c> in <c>IEnumerable&lt;string&gt;</c>,
+    /// cached like <see cref="MetadataTypeArgHierarchy"/>.
+    /// </summary>
+    private static readonly ConditionalWeakTable<INamedTypeSymbol, TypeData> MetadataSupertypes = new();
+
     private sealed record class TypeArgHierarchy(
         TypeTraits Traits,
         ImmutableEquatableArray<TypeData>? AllInterfaces,
@@ -336,7 +342,8 @@ internal static partial class TransformExtensions
                     typeParam.HasReferenceTypeConstraint,
                     typeParam.HasUnmanagedTypeConstraint,
                     typeParam.HasNotNullConstraint,
-                    typeParam.HasConstructorConstraint));
+                    typeParam.HasConstructorConstraint,
+                    typeParam.Variance == VarianceKind.Out));
             }
 
             return parameters.ToImmutableEquatableArray();
@@ -564,58 +571,97 @@ internal static partial class TransformExtensions
                 return traits;
             }
 
-            // Creates the interfaces a type argument converts to: its interfaces and, through covariance, the variant
-            // interfaces they become with a supertype argument, such as IEnumerable<object> for List<string>.
-            // Decorator constraints compare these names, so where T : IEnumerable<object> accepts List<string>.
+            // Creates the interfaces of a type argument. Covariant ones, such as IEnumerable<string> of List<string>, keep
+            // their type arguments and variance, so constraint checks convert them through covariance (to
+            // IEnumerable<object>), also after their type parameters are substituted, such as IEnumerable<T> of List<T>.
             static ImmutableEquatableArray<TypeData>? CreateConvertibleInterfaceTypeData(ITypeSymbol type)
             {
                 var interfaces = type.AllInterfaces;
-                var isVariant = type is INamedTypeSymbol { IsCovariantGeneric: true };
-                if(interfaces.Length == 0 && !isVariant)
+                if(interfaces.Length == 0)
                 {
                     return null;
                 }
 
-                // AllInterfaces has no duplicates, so names are only tracked once covariant conversions are added
                 using var result = new ValueListBuilder<TypeData>(interfaces.Length);
                 foreach(var iface in interfaces)
                 {
-                    result.Add(CreateInterfaceTypeData(iface));
+                    result.Add(iface.IsCovariantGeneric && iface.ContainingType is not { IsGenericType: true }
+                        ? CreateCovariantInterfaceTypeData(iface)
+                        : CreateInterfaceTypeData(iface));
                 }
 
-                // Index -1 is the type itself, which may be a variant interface such as IEnumerable<string>; its own name
-                // is matched directly, so it is excluded from its conversions
-                HashSet<string>? names = null;
-                for(var i = -1; i < interfaces.Length; i++)
+                return result.ToImmutableEquatableArray();
+            }
+
+            // Creates a covariant interface with its type arguments: the supertypes of a covariant one (see
+            // CreateSupertypeData), and the name of an invariant or contravariant one, which only matches itself.
+            // An interface nested in a generic type has type arguments its own do not show, so it is matched by name only.
+            static TypeData CreateCovariantInterfaceTypeData(INamedTypeSymbol iface)
+            {
+                var definition = iface.OriginalDefinition;
+                using var typeParameters = new ValueListBuilder<TypeParameter>(iface.TypeArguments.Length);
+                for(var i = 0; i < iface.TypeArguments.Length; i++)
                 {
-                    if(i < 0 ? !isVariant : !interfaces[i].IsCovariantGeneric)
-                    {
-                        continue;
-                    }
-
-                    // Only a named type can be variant itself; an array is never
-                    var variant = i < 0 ? (INamedTypeSymbol)type : interfaces[i];
-
-                    if(names is null)
-                    {
-                        names = new HashSet<string>(StringComparer.Ordinal) { type.FullyQualifiedName };
-                        foreach(var existing in result.AsSpan())
-                        {
-                            names.Add(existing.Name);
-                        }
-                    }
-
-                    foreach(var conversion in variant.GetCovariantConversions())
-                    {
-                        var typeData = CreateInterfaceTypeData(conversion);
-                        if(names.Add(typeData.Name))
-                        {
-                            result.Add(typeData);
-                        }
-                    }
+                    var argument = iface.TypeArguments[i];
+                    var isCovariant = definition.TypeParameters[i].Variance == VarianceKind.Out;
+                    var argumentData = argument.TypeKind == TypeKind.TypeParameter
+                        ? TypeData.CreateTypeParameter(argument.FullyQualifiedName)
+                        : isCovariant ? CreateSupertypeData(argument) : TypeData.CreateSimple(argument.FullyQualifiedName);
+                    typeParameters.Add(new TypeParameter(definition.TypeParameters[i].Name, argumentData, IsCovariant: isCovariant));
                 }
 
-                return result.Count > 0 ? result.ToImmutableEquatableArray() : null;
+                var name = iface.FullyQualifiedName;
+                return TypeData.CreateGeneric(
+                    name,
+                    GetNameWithoutGeneric(name),
+                    iface.ContainsGenericParameters,
+                    iface.Arity,
+                    false,
+                    typeParameters.ToImmutableEquatableArray());
+            }
+
+            // Creates the supertypes a covariant type argument converts to, one level deep: its traits (only a reference
+            // type converts), and the names of its interfaces and base classes.
+            static TypeData CreateSupertypeData(ITypeSymbol type)
+            {
+                if(!type.IsReferenceType)
+                {
+                    return TypeData.CreateSimple(type.FullyQualifiedName, Traits: GetTypeTraits(type));
+                }
+
+                if(type is INamedTypeSymbol namedType && namedType.DeclaringSyntaxReferences.IsEmpty && namedType.TypeKind != TypeKind.Error)
+                {
+                    return MetadataSupertypes.GetValue((INamedTypeSymbol)namedType.WithNullableAnnotation(NullableAnnotation.None), CreateSupertypes);
+                }
+
+                return CreateSupertypes(type);
+
+                static TypeData CreateSupertypes(ITypeSymbol type)
+                {
+                    ImmutableEquatableArray<TypeData>? interfaces = null;
+                    if(type.AllInterfaces.Length > 0)
+                    {
+                        using var result = new ValueListBuilder<TypeData>(type.AllInterfaces.Length);
+                        foreach(var iface in type.AllInterfaces)
+                        {
+                            result.Add(CreateInterfaceTypeData(iface));
+                        }
+                        interfaces = result.ToImmutableEquatableArray();
+                    }
+
+                    ImmutableEquatableArray<TypeData>? baseClasses = null;
+                    if(type.BaseType is { SpecialType: not SpecialType.System_Object })
+                    {
+                        using var bases = new ValueListBuilder<TypeData>(4);
+                        for(var baseType = type.BaseType; baseType is { SpecialType: not SpecialType.System_Object }; baseType = baseType.BaseType)
+                        {
+                            bases.Add(CreateInterfaceTypeData(baseType));
+                        }
+                        baseClasses = bases.ToImmutableEquatableArray();
+                    }
+
+                    return TypeData.CreateSimple(type.FullyQualifiedName, AllInterfaces: interfaces, AllBaseClasses: baseClasses, Traits: GetTypeTraits(type));
+                }
             }
 
             // Creates a simple TypeData for an interface or base class type.

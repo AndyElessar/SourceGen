@@ -523,15 +523,107 @@ partial class IocSourceGenerator
         Dictionary<string, TypeData> typeArguments,
         Dictionary<string, string> typeArgMap)
     {
-        var constraintName = constraintType is TypeParameterTypeData && typeArguments.TryGetValue(constraintType.Name, out var constraintArgument)
-            ? constraintArgument.Name
-            : SubstituteTypeArguments(constraintType.Name, typeArgMap);
+        var constraintArgument = constraintType is TypeParameterTypeData && typeArguments.TryGetValue(constraintType.Name, out var argument)
+            ? argument
+            : null;
+        var constraintName = constraintArgument?.Name ?? SubstituteTypeArguments(constraintType.Name, typeArgMap);
 
         // Every type converts to object, value types by boxing, as for where T : U with U = object
-        return constraintName is "object" or "global::System.Object"
+        if(constraintName is "object" or "global::System.Object"
             || typeArgument.Name == constraintName
             || (typeArgument.AllInterfaces ?? []).Any(type => type.Name == constraintName)
-            || (typeArgument.AllBaseClasses ?? []).Any(type => type.Name == constraintName);
+            || (typeArgument.AllBaseClasses ?? []).Any(type => type.Name == constraintName))
+        {
+            return true;
+        }
+
+        // A covariant constraint, such as IEnumerable<object>, is also satisfied through covariance by the type argument
+        // itself or one of its interfaces
+        if((constraintArgument ?? constraintType) is not GenericTypeData { TypeParameters: { Length: > 0 } constraintParams } genericConstraint
+            || !IsTopLevelGenericName(constraintName))
+        {
+            return false;
+        }
+
+        // The type arguments of a type parameter's type argument are closed; others are closed with the type arguments
+        var targetArguments = new string[constraintParams.Length];
+        for(var i = 0; i < targetArguments.Length; i++)
+        {
+            var name = constraintParams[i].Type.Name;
+            targetArguments[i] = constraintArgument is not null ? name
+                : typeArguments.TryGetValue(name, out var target) ? target.Name
+                : SubstituteTypeArguments(name, typeArgMap);
+        }
+
+        return IsCovariantConversion(typeArgument, genericConstraint.NameWithoutGeneric, targetArguments)
+            || (typeArgument.AllInterfaces ?? []).Any(type => IsCovariantConversion(type, genericConstraint.NameWithoutGeneric, targetArguments));
+    }
+
+    /// <summary>
+    /// Gets whether a variant type converts to a type through covariance, one level deep: each covariant type argument
+    /// that is a reference type may be replaced by <c>object</c>, one of its interfaces, or one of its base classes, such as
+    /// <c>IEnumerable&lt;string&gt;</c> to <c>IEnumerable&lt;object&gt;</c>. Other type arguments must be the same.
+    /// </summary>
+    /// <param name="targetNameWithoutGeneric">The name of the target's generic type definition, without type arguments.</param>
+    /// <param name="targetArguments">The names of the target's type arguments.</param>
+    private static bool IsCovariantConversion(TypeData source, string targetNameWithoutGeneric, string[] targetArguments)
+    {
+        if(source is not GenericTypeData { TypeParameters: { } sourceParams } genericSource
+            || sourceParams.Length != targetArguments.Length
+            || genericSource.NameWithoutGeneric != targetNameWithoutGeneric
+            || !IsTopLevelGenericName(source.Name))
+        {
+            return false;
+        }
+
+        for(var i = 0; i < targetArguments.Length; i++)
+        {
+            var sourceArgument = sourceParams[i].Type;
+            var target = targetArguments[i];
+            if(sourceArgument.Name == target)
+            {
+                continue;
+            }
+
+            if(!sourceParams[i].IsCovariant
+                || (sourceArgument.Traits & TypeTraits.ReferenceType) == 0
+                || !(target is "object" or "global::System.Object"
+                    || (sourceArgument.AllInterfaces ?? []).Any(type => type.Name == target)
+                    || (sourceArgument.AllBaseClasses ?? []).Any(type => type.Name == target)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Gets whether a type name is a generic type that is not nested in a generic type, such as <c>IEnumerable&lt;T&gt;</c>
+    /// but not <c>Outer&lt;T&gt;.IInner&lt;U&gt;</c>, whose definition and type arguments its name does not separate.
+    /// </summary>
+    private static bool IsTopLevelGenericName(string name)
+    {
+        var start = name.IndexOf('<');
+        if(start < 0)
+        {
+            return false;
+        }
+
+        var depth = 0;
+        for(var i = start; i < name.Length; i++)
+        {
+            switch(name[i])
+            {
+                case '<':
+                    depth++;
+                    break;
+                case '>' when --depth == 0:
+                    return i == name.Length - 1;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

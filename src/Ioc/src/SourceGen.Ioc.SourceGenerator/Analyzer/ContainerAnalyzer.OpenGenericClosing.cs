@@ -140,8 +140,9 @@ partial class ContainerAnalyzer
                 return typeArguments.TryGetValue(typeParameter, out var typeArgument) ? typeArgument : null;
 
             case INamedTypeSymbol { IsGenericType: true } namedType:
-                if(namedType.ContainingType is { IsGenericType: true })
-                    return null;
+                // A type nested in a generic type is only closed here when it is already closed, such as Host<int>.INested<object>
+                if(namedType.ContainingType is { IsGenericType: true } containingType)
+                    return ContainsTypeParameter(namedType) || ContainsTypeParameter(containingType) ? null : namedType;
 
                 var closedArguments = new ITypeSymbol[namedType.TypeArguments.Length];
                 for(var i = 0; i < closedArguments.Length; i++)
@@ -164,10 +165,10 @@ partial class ContainerAnalyzer
     /// conversion that the generator recognizes.
     /// </summary>
     /// <remarks>
-    /// Like the generator's constraint check (<c>CreateConvertibleInterfaceTypeData</c>), the type argument converts to
-    /// <c>object</c>, its base classes, its interfaces, and the covariant conversions that
-    /// <see cref="RoslynExtensions.GetCovariantConversions"/> enumerates for itself and its interfaces: one level deep and
-    /// capped. Contravariant and nested variant conversions, such as <c>IComparer&lt;object&gt;</c> to
+    /// Like the generator's constraint check (<c>SatisfiesTypeConstraint</c>), the type argument converts to
+    /// <c>object</c>, its base classes, its interfaces, and, through covariance one level deep
+    /// (<see cref="RoslynExtensions.IsCovariantConversionTo"/>), the variant types that it or one of its interfaces becomes.
+    /// Contravariant and nested variant conversions, such as <c>IComparer&lt;object&gt;</c> to
     /// <c>IComparer&lt;string&gt;</c>, are not followed, because the generator does not close the registration for them.
     /// </remarks>
     private static bool IsImplicitlyConvertible(ITypeSymbol source, ITypeSymbol target)
@@ -181,26 +182,15 @@ partial class ContainerAnalyzer
                 return true;
         }
 
-        if(source is INamedTypeSymbol namedSource && IsCovariantConversion(namedSource, target))
+        if(source is INamedTypeSymbol namedSource && namedSource.IsCovariantConversionTo(target))
             return true;
 
         foreach(var implemented in source.AllInterfaces)
         {
-            if(SymbolEqualityComparer.Default.Equals(implemented, target) || IsCovariantConversion(implemented, target))
+            if(SymbolEqualityComparer.Default.Equals(implemented, target) || implemented.IsCovariantConversionTo(target))
                 return true;
         }
 
         return false;
-
-        static bool IsCovariantConversion(INamedTypeSymbol type, ITypeSymbol target)
-        {
-            foreach(var conversion in type.GetCovariantConversions())
-            {
-                if(SymbolEqualityComparer.Default.Equals(conversion, target))
-                    return true;
-            }
-
-            return false;
-        }
     }
 }

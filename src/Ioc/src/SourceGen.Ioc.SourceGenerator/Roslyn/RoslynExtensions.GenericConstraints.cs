@@ -67,65 +67,53 @@ internal static partial class RoslynExtensions
             => type.IsGenericType && type.OriginalDefinition.TypeParameters.Any(static p => p.Variance == VarianceKind.Out);
 
         /// <summary>
-        /// Constructs the covariant type with each covariant reference type argument replaced by one of its supertypes
-        /// (its interfaces and base classes). Value type arguments do not vary, nested variance is not followed, and the
-        /// count is capped to bound the cost.
+        /// Gets whether a variant type converts to a type through covariance, one level deep: each covariant type argument
+        /// that is a reference type may be replaced by <c>object</c>, one of its interfaces, or one of its base classes, such
+        /// as <c>IEnumerable&lt;string&gt;</c> to <c>IEnumerable&lt;object&gt;</c>. Other type arguments must be the same,
+        /// so contravariant and nested variant conversions are not followed. A type nested in a generic type is not
+        /// converted, because the generator compares type names, which do not separate its containing type's arguments.
         /// </summary>
-        public IEnumerable<INamedTypeSymbol> GetCovariantConversions()
+        public bool IsCovariantConversionTo(ITypeSymbol target)
         {
-            const int MaxConversions = 64;
-            if(!type.IsCovariantGeneric)
+            if(!type.IsCovariantGeneric
+                || type.ContainingType is { IsGenericType: true }
+                || target is not INamedTypeSymbol namedTarget
+                || !SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, namedTarget.OriginalDefinition))
             {
-                yield break;
+                return false;
             }
 
-            var definition = type.OriginalDefinition;
-            var candidates = new List<ITypeSymbol>[type.TypeArguments.Length];
-            for(var i = 0; i < candidates.Length; i++)
+            var typeParameters = type.OriginalDefinition.TypeParameters;
+            for(var i = 0; i < typeParameters.Length; i++)
             {
                 var argument = type.TypeArguments[i];
-                candidates[i] = [argument];
-                if(definition.TypeParameters[i].Variance == VarianceKind.Out && argument.IsReferenceType)
+                var targetArgument = namedTarget.TypeArguments[i];
+                if(SymbolEqualityComparer.Default.Equals(argument, targetArgument))
                 {
-                    candidates[i].AddRange(argument.AllInterfaces);
-                    for(var baseType = argument.BaseType; baseType is not null; baseType = baseType.BaseType)
-                    {
-                        candidates[i].Add(baseType);
-                    }
+                    continue;
+                }
+
+                if(typeParameters[i].Variance != VarianceKind.Out
+                    || !argument.IsReferenceType
+                    || !(targetArgument.SpecialType is SpecialType.System_Object
+                        || argument.AllInterfaces.Contains(targetArgument, SymbolEqualityComparer.Default)
+                        || IsBaseClass(argument, targetArgument)))
+                {
+                    return false;
                 }
             }
 
-            var count = 0;
-            var arguments = new ITypeSymbol[candidates.Length];
-            foreach(var combination in Combine(0))
-            {
-                if(++count > MaxConversions)
-                {
-                    yield break;
-                }
-                yield return definition.Construct(combination);
-            }
+            return true;
 
-            // Yields every combination except the type's own arguments
-            IEnumerable<ITypeSymbol[]> Combine(int index)
+            static bool IsBaseClass(ITypeSymbol type, ITypeSymbol target)
             {
-                if(index == candidates.Length)
+                for(var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
                 {
-                    if(!arguments.SequenceEqual(type.TypeArguments, SymbolEqualityComparer.Default))
-                    {
-                        yield return [.. arguments];
-                    }
-                    yield break;
+                    if(SymbolEqualityComparer.Default.Equals(baseType, target))
+                        return true;
                 }
 
-                foreach(var candidate in candidates[index])
-                {
-                    arguments[index] = candidate;
-                    foreach(var combination in Combine(index + 1))
-                    {
-                        yield return combination;
-                    }
-                }
+                return false;
             }
         }
     }

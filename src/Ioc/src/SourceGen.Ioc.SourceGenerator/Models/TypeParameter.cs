@@ -12,6 +12,7 @@ namespace SourceGen.Ioc;
 /// <param name="HasUnmanagedTypeConstraint">Whether the type parameter has the 'unmanaged' constraint.</param>
 /// <param name="HasNotNullConstraint">Whether the type parameter has the 'notnull' constraint.</param>
 /// <param name="HasConstructorConstraint">Whether the type parameter has the 'new()' constraint.</param>
+/// <param name="IsCovariant">Whether the type parameter is covariant (<c>out</c>), so a reference type argument converts to its supertypes.</param>
 internal sealed record class TypeParameter(
     string ParameterName,
     TypeData Type,
@@ -20,4 +21,5 @@ internal sealed record class TypeParameter(
     bool HasReferenceTypeConstraint = false,
     bool HasUnmanagedTypeConstraint = false,
     bool HasNotNullConstraint = false,
-    bool HasConstructorConstraint = false);
+    bool HasConstructorConstraint = false,
+    bool IsCovariant = false);
