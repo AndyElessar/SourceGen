@@ -135,7 +135,7 @@ An expanding dependency MUST NOT close an implementation, because its closings n
 - A closed dependency MUST NOT be closed, for any implementation, when every dependency of the closed generic registration or decorator it was collected from that becomes it is expanding. It MUST still be closed when another registration collects it through a dependency that does not expand, or a non-generic registration collects it. With `Node<T>(IEnumerable<IBridge<T>> bridges)`, `Bridge<T>(INode<List<T>> node)`, and `Other<T>(IBridge<T> bridge)`, `Bridge<string>` is closed for both `Node<string>` and `Other<string>`, and `Node<List<string>>` is not, whichever is discovered first.
 - As a safeguard, a dependency collected from a closed generic registration or decorator whose type arguments (including array element types and tuple elements) are nested more than 16 levels deep MUST NOT be closed.
 
-Decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies. Only their closed forms, from closed generic registrations, are collected.
+Dependencies and decorator dependencies of an open generic registration, such as `ILogger<HandlerDecorator1<TRequest, TResponse>>`, still contain its type parameters and MUST NOT be collected as closed generic dependencies, including when a type parameter appears only inside an array, such as `INode<T[]>` or `INode<List<T[]>>`. Only their closed forms, from closed generic registrations (`INode<string[]>`), are collected.
 
 ### Type Argument Mapping
 

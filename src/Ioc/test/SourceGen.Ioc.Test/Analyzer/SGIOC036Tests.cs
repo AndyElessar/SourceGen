@@ -21,9 +21,10 @@ public class SGIOC036Tests
         """;
 
     [Test]
-    [Arguments("INode<List<T>> next")]
-    [Arguments("IEnumerable<INode<List<T>>> children")]
-    public async Task SGIOC036_ExpandingDependencyWithoutDeferredWrapper_ReportsError(string parameter)
+    [Arguments("INode<List<T>> next", "INode<List<T>>")]
+    [Arguments("IEnumerable<INode<List<T>>> children", "INode<List<T>>")]
+    [Arguments("INode<T[]> next", "INode<T[]>")]
+    public async Task SGIOC036_ExpandingDependencyWithoutDeferredWrapper_ReportsError(string parameter, string dependency)
     {
         var source = Usings + $$"""
             public interface INode<T>;
@@ -37,14 +38,15 @@ public class SGIOC036Tests
 
         await Assert.That(sgioc036).Count().IsEqualTo(1);
         await Assert.That(sgioc036[0].Severity).IsEqualTo(DiagnosticSeverity.Error);
-        await Assert.That(sgioc036[0].GetMessage()).Contains("Node<T>").And.Contains("INode<List<T>>");
+        await Assert.That(sgioc036[0].GetMessage()).Contains("Node<T>").And.Contains(dependency);
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC037)).IsEmpty();
     }
 
     [Test]
-    [Arguments("Lazy<INode<List<T>>> next")]
-    [Arguments("Func<INode<List<T>>> next")]
-    public async Task SGIOC037_ExpandingDependencyBehindDeferredWrapper_ReportsWarning(string parameter)
+    [Arguments("Lazy<INode<List<T>>> next", "INode<List<T>>")]
+    [Arguments("Func<INode<List<T>>> next", "INode<List<T>>")]
+    [Arguments("Lazy<INode<T[]>> next", "INode<T[]>")]
+    public async Task SGIOC037_ExpandingDependencyBehindDeferredWrapper_ReportsWarning(string parameter, string dependency)
     {
         var source = Usings + $$"""
             public interface INode<T>;
@@ -58,7 +60,7 @@ public class SGIOC036Tests
 
         await Assert.That(sgioc037).Count().IsEqualTo(1);
         await Assert.That(sgioc037[0].Severity).IsEqualTo(DiagnosticSeverity.Warning);
-        await Assert.That(sgioc037[0].GetMessage()).Contains("Node<T>").And.Contains("INode<List<T>>");
+        await Assert.That(sgioc037[0].GetMessage()).Contains("Node<T>").And.Contains(dependency);
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036)).IsEmpty();
     }
 

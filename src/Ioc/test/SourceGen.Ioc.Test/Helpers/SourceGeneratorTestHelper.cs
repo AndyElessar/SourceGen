@@ -235,13 +235,15 @@ public static class SourceGeneratorTestHelper
     /// <param name="additionalReferences">Optional additional metadata references.</param>
     /// <param name="analyzerConfigOptions">Optional analyzer config options (e.g., MSBuild properties).</param>
     /// <param name="cancellationToken">Cancels the generator run, such as when a test with a timeout times out.</param>
+    /// <param name="allowUnsafe">Compiles the source with unsafe code allowed, such as pointer types.</param>
     public static GeneratorTestResult RunGenerator<TGenerator>(
         string source,
         string assemblyName = "TestAssembly",
         IEnumerable<MetadataReference>? additionalReferences = null,
         IReadOnlyDictionary<string, string>? analyzerConfigOptions = null,
         IReadOnlySet<string>? suppressedInitialDiagnosticIds = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool allowUnsafe = false)
         where TGenerator : IIncrementalGenerator, new()
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, ParseOptions);
@@ -253,7 +255,7 @@ public static class SourceGeneratorTestHelper
             assemblyName,
             [syntaxTree],
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: allowUnsafe));
 
         ThrowIfCompilationHasErrors(compilation, suppressedInitialDiagnosticIds);
 

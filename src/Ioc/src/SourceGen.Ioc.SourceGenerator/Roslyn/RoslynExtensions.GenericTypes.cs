@@ -13,6 +13,17 @@ internal static partial class RoslynExtensions
                     return true;
                 }
 
+                // An array or pointer of a type parameter, such as T[] in INode<T[]>, is open too
+                if(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
+                {
+                    return arrayTypeSymbol.ElementType.ContainsGenericParameters;
+                }
+
+                if(typeSymbol is IPointerTypeSymbol pointerTypeSymbol)
+                {
+                    return pointerTypeSymbol.PointedAtType.ContainsGenericParameters;
+                }
+
                 if(typeSymbol is INamedTypeSymbol namedTypeSymbol)
                 {
                     if(namedTypeSymbol.IsUnboundGenericType)

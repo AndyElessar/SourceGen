@@ -9,6 +9,39 @@ namespace SourceGen.Ioc.Test.ContainerSourceGeneratorSnapshot;
 public class GenericServiceContainerTests
 {
     [Test]
+    public async Task Container_OpenGenericDependencyWithArrayOfTypeParameter_ClosesOnlyClosedForm()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            public sealed class Other<T>(INode<T[]> node) : IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T> : INode<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IOther<string> other);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Node<string[]>()");
+        await Assert.That(generatedSource).DoesNotContain("T[]");
+    }
+
+    [Test]
     public async Task Container_WithGenericService_GeneratesGenericResolution()
     {
         const string source = """

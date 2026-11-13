@@ -2919,4 +2919,157 @@ public class ClosedGenericDependencyTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    [Arguments("INode<T[]>", "global::TestNamespace.Node<string[]>")]
+    [Arguments("INode<List<T[]>>", "global::TestNamespace.Node<global::System.Collections.Generic.List<string[]>>")]
+    [Arguments("INode<T[][]>", "global::TestNamespace.Node<string[][]>")]
+    public async Task ClosedGenericDependency_OpenGenericDependencyWithArrayOfTypeParameter_IsNotClosedWithTypeParameter(string dependency, string closedImplementation)
+    {
+        // A dependency of an open generic registration with an array of a type parameter is open, and only its
+        // closed forms are registered
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            public sealed class Other<T>({{dependency}} node) : IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T> : INode<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IOther<string> other);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains($"services.AddTransient<{closedImplementation}, {closedImplementation}>();");
+        await Assert.That(generatedSource).DoesNotContain("T[]");
+    }
+
+    [Test]
+    [Arguments("Decorator", """
+        [IocRegister(ServiceTypes = [typeof(IOther<>)], Decorators = [typeof(OtherDecorator<>)])]
+        public sealed class Other<T> : IOther<T>;
+
+        public sealed class OtherDecorator<T>(IOther<T> inner, INode<T[]> node) : IOther<T>;
+
+        [IocRegister]
+        public sealed class Consumer(IOther<string> other);
+        """, "global::TestNamespace.Node<string[]>")]
+    [Arguments("InjectedMember", """
+        [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+        public sealed class Other<T> : IOther<T>
+        {
+            [IocInject]
+            public INode<T[]> Node { get; set; } = default!;
+        }
+
+        [IocRegister]
+        public sealed class Consumer(IOther<int> other);
+        """, "global::TestNamespace.Node<int[]>")]
+    [Arguments("ServiceProviderInvocation", """
+        public static class Accessors
+        {
+            public static object? Get<T>(IServiceProvider sp) => sp.GetService<INode<T[]>>();
+        }
+        """, null)]
+    public async Task ClosedGenericDependency_ArrayOfTypeParameterInOtherDependencyKinds_IsNotClosedWithTypeParameter(string scenario, string declarations, string? closedImplementation)
+    {
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T> : INode<T>;
+
+            {{declarations}}
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        if(closedImplementation is not null)
+        {
+            await Assert.That(generatedSource).Contains($"services.AddTransient<{closedImplementation}, {closedImplementation}>();").Because(scenario);
+        }
+        await Assert.That(generatedSource).DoesNotContain("T[]").Because(scenario);
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    public async Task ClosedGenericDependency_ExpandingCycleThroughArrayOfTypeParameter_StopsClosing(CancellationToken cancellationToken)
+    {
+        // Node<T> -> INode<T[]> nests T in an array on every round
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T>(Lazy<INode<T[]>> next) : INode<T>;
+
+            [IocRegister]
+            public sealed class Consumer(INode<string> node);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Node<string>, global::TestNamespace.Node<string>>();");
+        await Assert.That(generatedSource).DoesNotContain("Node<string[]>");
+        await Assert.That(generatedSource).DoesNotContain("T[]");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_OpenGenericDependencyWithArrayOfPointerToTypeParameter_IsNotClosedWithTypeParameter()
+    {
+        // T*[] is an array of a pointer to a type parameter, so INode<T*[]> is open too. Generated code that uses pointer types
+        // is not in an unsafe context, so only the absence of the open form is checked.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            public sealed unsafe class Other<T>(INode<T*[]> node) : IOther<T> where T : unmanaged;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T> : INode<T>;
+
+            [IocRegister]
+            public sealed class Consumer(IOther<int> other);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, allowUnsafe: true);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.Other<int>");
+        await Assert.That(generatedSource).DoesNotContain("T*[]");
+    }
 }
