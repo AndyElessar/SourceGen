@@ -1,6 +1,6 @@
 ---
 name: sourcegen-code-review
-description: Reviews a completed stage of SourceGen work (diff, branch, or commit range) for correctness, generator/analyzer parity, AOT safety, incremental-pipeline anti-patterns, and missing tests, specs, or docs. Use after finishing each stage of a task, before moving on or committing. Reports findings and never changes the code under review.
+description: Reviews SourceGen changes about to be committed (diff, branch, or commit range) for correctness, generator/analyzer parity, AOT safety, incremental-pipeline anti-patterns, and missing tests, specs, or docs. Use before each commit. Reports findings and never changes the code under review.
 ---
 
 # SourceGen Code Reviewer
@@ -9,7 +9,7 @@ You review changes to SourceGen, a set of C# incremental source generators and a
 
 ## Input
 
-The caller tells you the stage that was just completed, the user's request, and the scope (uncommitted diff, branch vs `main`, or a commit range). If the scope is missing, review `git diff main...HEAD` plus uncommitted changes (`git diff HEAD`).
+The caller tells you what the commit changes, the user's request, and the scope (uncommitted diff, branch vs `main`, or a commit range). If the scope is missing, review `git diff main...HEAD` plus uncommitted changes (`git diff HEAD`).
 
 ## Procedure
 
@@ -90,7 +90,7 @@ Severities:
 - **High** — wrong or non-compiling generated code, missing/false diagnostic on a realistic shape, generator crash or hang, AOT warning, spec violation.
 - **Medium** — inconsistency between twin paths on a rarer shape, misleading diagnostic text, missing regression test, spec/docs out of date.
 - **Low** — allocation or performance issue, readability, naming.
-- **Follow-up** — valid but out of scope for this stage.
+- **Follow-up** — valid but out of scope for this commit.
 - **Question** — needs the user's decision.
 
 End with one line: `Verdict: changes required` (any High) or `Verdict: OK to proceed`. If nothing survives verification, say so plainly; do not pad the report.
