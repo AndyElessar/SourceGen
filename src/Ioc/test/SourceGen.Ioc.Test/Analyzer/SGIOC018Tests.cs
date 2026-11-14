@@ -1850,6 +1850,43 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("IocInject", "[IocRegister(ServiceLifetime.Singleton)]", "[IocInject(nameof(Keys.PrimaryKey), KeyType = KeyType.Csharp)]")]
+    [Arguments("InjectMembers", "[IocRegisterFor(typeof(Consumer), ServiceLifetime.Singleton, InjectMembers = [new object[] { nameof(Consumer.Dependency), nameof(Keys.PrimaryKey), KeyType.Csharp }])]", "")]
+    public async Task SGIOC018_CsharpKey_ShowsSameKeyForAttributeAndInjectMembers(string scenario, string registration, string injectAttribute)
+    {
+        // A C# key is shown the same way whether it is given by [IocInject] or by an InjectMembers element
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public static class Keys
+            {
+                public const string PrimaryKey = "primary";
+            }
+
+            {{registration}}
+            public class Consumer
+            {
+                {{injectAttribute}}
+                public IDependency Dependency { get; set; } = null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency (key PrimaryKey)' for container 'TestContainer'");
+    }
+
+    [Test]
     public async Task SGIOC018_InjectMembers_GetterOnlyInterfaceMember_ChecksImplementation()
     {
         // The interface property has no setter, but the generator injects its implementation, which has one

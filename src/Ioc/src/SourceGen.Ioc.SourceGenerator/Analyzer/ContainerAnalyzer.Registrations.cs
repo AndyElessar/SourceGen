@@ -206,7 +206,12 @@ partial class ContainerAnalyzer
             ServiceKeyValue key;
             if(keyType == 1)
             {
-                key = ServiceKeyValue.Unknown(nested[1].ToString());
+                // Shown like the key of an attribute (GetAttributeServiceKey): its constant value, such as PrimaryKey for
+                // nameof(Keys.PrimaryKey)
+                key = ServiceKeyValue.Unknown(
+                    semanticModel.GetConstantValue(nested[1], cancellationToken) is { HasValue: true, Value: { } csharpKey }
+                        ? csharpKey.ToString()!
+                        : nested[1].ToString());
             }
             else
             {
