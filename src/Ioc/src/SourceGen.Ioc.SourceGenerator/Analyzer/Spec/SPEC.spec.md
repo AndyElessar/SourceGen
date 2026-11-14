@@ -37,7 +37,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC002-005, 012-015, 030, 033-037 |
+| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC002-005, 012-015, 030, 033-037, 039 |
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
@@ -46,7 +46,7 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 1. Report buffered duplicated defaults (SGIOC012)
 2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
 3. Decorated parameters of the decorators matched while collecting registrations (SGIOC034/035)
-4. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037)
+4. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), and service types that the mapping of a generic factory does not match (SGIOC039)
 5. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
 
 #### Partial Files
@@ -58,7 +58,7 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration/defaults detection (SGIOC011, 012) |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
-| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037) |
+| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037), and the service types of generic factory registrations (SGIOC039) |
 | `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |
 
 ### ContainerAnalyzer
@@ -262,7 +262,7 @@ Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Ins
 
 ### SGIOC010 - Error - Usage - Invalid Attribute Usage
 
-Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Factory` and `Instance` at same attribute. `Factory` takes precedence.
+Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Factory` and `Instance` at same attribute. `Instance` takes precedence and `Factory` is ignored (see [Factory](../../Spec/Register.Factory.spec.md#instance-and-factory-precedence)).
 
 **Analysis:**
 
@@ -367,7 +367,7 @@ Report when:
 - Checks every method marked with `[IocGenericFactory]`, whether or not it is referenced as a factory. Reports when:
   - The mapping has no service type template or no placeholder type.
   - The placeholder count differs from the method's type parameter count.
-  - A placeholder type does not appear in the service type template (at any nesting level, including array element types).
+  - A placeholder type does not appear in the service type template (at any nesting level, including array element types), or appears more than once, such as `int` in `IPair<int, int>`.
 - Applies the same count and template checks to `GenericFactoryTypeMapping` on the registration attribute.
 - Duplicate placeholders are reported by `SGIOC017` instead.
 
@@ -770,10 +770,12 @@ Report when a dependency of an open generic registration (or of one of its decor
 
 **Analysis:**
 
-- Builds the open generic registrations of the compilation (implementation, service types, interfaces, decorators, injected members) like the generator's open generic entries, and runs the generator's own analysis on them, so the reported dependencies are the ones the generator does not close.
+- Builds the open generic registrations of the compilation (implementation, service types, interfaces, decorators, injected members, `Factory` and `Instance`) like the generator's open generic entries, including the registrations of `[IocRegisterDefaults]` with a `Factory` and an open generic target type, and runs the generator's own analysis on them, so the reported dependencies are the ones the generator does not close. A registration's own `Factory` takes precedence over the `Factory` of its best default settings (`SGIOC010` covers `Factory` with `Instance` on the same attribute); the `Factory` method is resolved by the attribute syntax node action, which has the semantic model that `nameof()` needs. A `Factory` given as a string has no known parameters, like in the generator.
+- Only the dependencies of how the closed registrations are created are analyzed (see [Generic Registration](../../Spec/Register.Generics.spec.md)): the constructor parameters and injected members of a constructed implementation, the `Factory` method parameters except `IServiceProvider` and `[ServiceKey]` parameters, and none for an `Instance` (whose decorators are not analyzed either).
+- The closed generic dependencies of closed registrations, which a dependency that is a type parameter can become, are collected like the generator's: by how each registration creates its instance (the constructor and injected members, the `Factory` parameters substituted for each registered type a generic factory's mapping matches, including the implementation type, none for an `Instance`), and the dependencies of the closed decorators applied to them.
 - The analysis is static: an expanding dependency is reported whether or not a dependency of a closed registration reaches the open generic registration.
-- A dependency is deferred (`SGIOC037`) when each of its expanding cycles has a dependency wrapped in `Lazy<T>` or `Func<...>` (also inside collections); otherwise `SGIOC036` is reported. Cycles are found among the dependencies without such a wrapper, so a `Lazy<T>` on another cycle does not make an eager expanding cycle deferred.
-- Reports once per constructor parameter, injected property or field, or injected method parameter, at that symbol, when it is declared in source. A member listed in `InjectMembers` of the registration attribute (resolved on the open generic implementation, like the generator) is reported once at its `InjectMembers` element, unless `[IocInject]` on the member takes precedence. The members are collected by the attribute syntax node action, which has the semantic model that `nameof()` needs. Injected members whose feature is disabled (`SGIOC022`) are not reported.
+- A dependency is deferred (`SGIOC037`) when each of its expanding cycles has a dependency wrapped in `Lazy<T>` or `Func<...>` (also inside collections); otherwise `SGIOC036` is reported. Cycles are found among the dependencies without such a wrapper, and the decorator and factory links, which belong to no dependency, so a `Lazy<T>` on another cycle does not make an eager expanding cycle deferred.
+- Reports once per constructor parameter, injected property or field, or injected method parameter, at that symbol, when it is declared in source. A member listed in `InjectMembers` of the registration attribute (resolved on the open generic implementation, like the generator) is reported once at its `InjectMembers` element, unless `[IocInject]` on the member takes precedence. The members are collected by the attribute syntax node action, which has the semantic model that `nameof()` needs. Injected members whose feature is disabled (`SGIOC022`) are not reported. An expanding `Factory` method parameter is reported once at that parameter, when the method is declared in source, even when the factory serves several registrations (`SGIOC036` when it is eagerly expanding for any of them, otherwise `SGIOC037`); `{Implementation}` is then the factory method (such as `NodeFactory.Create<TF>`), and `{DependencyType}` is written with the factory's type parameters as declared (`INode<List<TF>>`). A factory declared in metadata is analyzed but not reported.
 
 **Message format:** `Dependency '{DependencyType}' of '{Implementation}' nests type arguments deeper on every round of a dependency cycle without a Lazy<T> or Func<T> dependency, so its object graph is infinite and it is not closed at compile time`
 
@@ -812,6 +814,25 @@ Report when a registration or default settings attribute uses an open type decla
 **Fix:** Use the closed types that are needed, such as `[IocRegisterFor(typeof(Outer<int>.Node<string>))]` or `ServiceTypes = [typeof(Outer<int>.INode<string>)]`, or move the type out of the generic type.
 
 ---
+
+### SGIOC039 - Warning - Design - Service type does not match the generic factory mapping
+
+Report when a service type of a registration whose `Factory` (its own, or the `Factory` of its best default settings) is a generic factory does not match the service type template of the factory's mapping (`[IocGenericFactory]` or `GenericFactoryTypeMapping`), so the factory's type arguments cannot be determined for it. The generator does not register that service type in either output (see [Generic Registration](../../Spec/Register.Generics.spec.md#feature-3-generic-factory-type-mapping)); the implementation type itself is still registered: constructed, or calling the factory when the mapping matches it.
+
+**Analysis:**
+
+- Runs at compilation end over the registrations `RegisterAnalyzer` collects, with the `Factory` method resolved by the attribute syntax node action. Registrations with an `Instance`, factories given as a string, and generic factories without a mapping (`SGIOC016`) are not analyzed.
+- Checks each service type of the registration, matched against the template like the generator. The implementation type of a closed registration is checked only when generated code cannot construct it (an interface, an abstract or static class, or a class without a public or internal constructor), such as the target of `[IocRegisterFor<IRequestHandler<Entity>>]`; otherwise it is constructed when the mapping does not match it. A service type of an open generic registration is reported only when it cannot match for any type arguments: a type parameter where the template has a constructed type, such as `IRequestHandler<T>` for the template `IRequestHandler<Task<int>>`, may match some closings and is not reported.
+- The closed types a registration of `[IocRegisterDefaults]` without an implementation type is closed for are discovered from dependencies, so they are not analyzed.
+- Reported once per service type, at the registration attribute.
+
+**Message format:** `Service type '{ServiceType}' of '{Implementation}' does not match the service type template '{Template}' of the generic factory '{Factory}', so it is not registered`
+
+**Fix:** Remove the service type, or register it without the generic factory.
+
+---
 ### Known Limitations
 
-- `SGIOC036` / `SGIOC037`: the analyzer only sees the registrations `RegisterAnalyzer` collects, so open generic implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and the registrations of imported modules are not analyzed. The closed generic types that a dependency of type `T` (a type parameter) can become are taken from the constructor parameters of closed registrations only, without `IServiceProvider` invocations, `[IocDiscover]`, or injected members of closed registrations. These limits can miss a dependency the generator does not close, but do not report one it closes. The registrations of all containers are analyzed together, also for `ExplicitOnly` or `IncludeTags` containers whose own registrations do not form the cycle.
+- `SGIOC039`: only the registrations `RegisterAnalyzer` collects are analyzed, so the service types the generator skips for implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and for the registrations of imported modules are not reported. It can miss a skipped service type, but does not report one the generator registers.
+
+- `SGIOC036` / `SGIOC037`: the analyzer only sees the registrations `RegisterAnalyzer` collects, so open generic implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and the registrations of imported modules are not analyzed. The closed generic types that a dependency of type `T` (a type parameter) can become are taken from the registrations `RegisterAnalyzer` collects, without `IServiceProvider` invocations or `[IocDiscover]`. These limits can miss a dependency the generator does not close, but do not report one it closes. The registrations of all containers are analyzed together, also for `ExplicitOnly` or `IncludeTags` containers whose own registrations do not form the cycle.

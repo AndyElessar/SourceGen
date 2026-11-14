@@ -177,19 +177,24 @@ partial class IocSourceGenerator
 
     private static RegisterEntry? CreateRegisterEntry(ServiceRegistrationModel registration)
     {
+        // MS.DI constructs the implementation of an open generic registration, so neither an instance nor an implementation type
+        // that cannot be constructed is registered open; only their closed registrations are
         if(registration.IsOpenGeneric)
         {
-            return new SimpleRegisterEntry(registration);
+            return registration.Instance is null && !registration.ImplementationType.IsNotConstructible
+                ? new SimpleRegisterEntry(registration)
+                : null;
+        }
+
+        // An instance takes precedence over any Factory, like the container output
+        if(registration.Instance is not null)
+        {
+            return registration.Lifetime == ServiceLifetime.Singleton ? new InstanceRegisterEntry(registration) : null;
         }
 
         if(registration.Factory is not null && !SharesFactoryInstance(registration))
         {
             return new FactoryRegisterEntry(registration);
-        }
-
-        if(registration.Instance is not null)
-        {
-            return registration.Lifetime == ServiceLifetime.Singleton ? new InstanceRegisterEntry(registration) : null;
         }
 
         if(registration.AppliesDecorators)

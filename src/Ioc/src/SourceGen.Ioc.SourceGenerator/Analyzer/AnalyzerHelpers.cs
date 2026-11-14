@@ -422,26 +422,23 @@ internal static class AnalyzerHelpers
 
         foreach(var placeholder in placeholders)
         {
-            if(placeholder is not null && !ContainsType(template, placeholder))
+            if(placeholder is null)
+                continue;
+
+            // Like the generator, each placeholder must appear exactly once to determine one type argument
+            var occurrences = TransformExtensions.CountPlaceholderOccurrences(template, placeholder);
+            if(occurrences == 0)
             {
                 return $"placeholder type '{placeholder.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' does not appear in the service type template '{template.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'";
+            }
+
+            if(occurrences > 1)
+            {
+                return $"placeholder type '{placeholder.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' appears more than once in the service type template '{template.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'";
             }
         }
 
         return null;
-
-        static bool ContainsType(ITypeSymbol type, ITypeSymbol target)
-        {
-            if(SymbolEqualityComparer.Default.Equals(type, target))
-                return true;
-
-            return type switch
-            {
-                INamedTypeSymbol named => named.TypeArguments.Any(arg => ContainsType(arg, target)),
-                IArrayTypeSymbol array => ContainsType(array.ElementType, target),
-                _ => false
-            };
-        }
     }
 
     /// <summary>

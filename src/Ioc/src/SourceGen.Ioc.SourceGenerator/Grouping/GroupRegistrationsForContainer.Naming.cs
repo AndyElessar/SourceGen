@@ -149,10 +149,16 @@ partial class IocSourceGenerator
         var lowerFirstChar = char.ToLowerInvariant(baseName[0]);
         var restOfName = baseName[1..];
 
-        // Handle keyed services
+        // Handle keyed services. A service type with its own generic factory instance is named after the factory too, so it
+        // does not share the resolver of the constructed implementation type with the same key.
         if(reg.Key is not null)
         {
             var safeKey = GetSafeIdentifier(reg.Key);
+            if(reg.HasOwnFactoryInstance)
+            {
+                safeKey = $"{safeKey}_{GetSafeIdentifier(reg.Factory!.Path)}";
+            }
+
             return (
                 $"_{lowerFirstChar}{restOfName}_{safeKey}",
                 $"Get{baseName}_{safeKey}"

@@ -47,12 +47,15 @@ partial class IocSourceGenerator
     /// its type argument, which does not nest them. A dependency that is a type parameter can only become a generic type
     /// written as a type argument of a dependency that an implementation is closed for, of a root dependency, or of a
     /// decorated service type, so it links to the implementations registered for those types. Each decorator is linked
-    /// the same way from the service types it decorates.
+    /// the same way from the service types it decorates, and each factory from the service types its mapping matches.
+    /// Only the dependencies of how the closed registrations are created are analyzed: the constructor and injection
+    /// members of a constructed implementation, the factory's parameters (written with its own type parameters, which
+    /// are nodes for each registration), and none for an instance.
     /// </para>
     /// <para>
     /// A cycle with a nested link nests type arguments deeper on every round (the expanding cycles of ECMA-335 II.9.2). A
     /// dependency is expanding when it has a nested link within a strongly connected component, or any link within a
-    /// component where a decorator is linked nested, since decorators are applied without a dependency. Without expanding
+    /// component where a decorator or factory is linked nested, since they are applied without a dependency. Without expanding
     /// dependencies, closings only take earlier type arguments, their parts, and types written in the source, so they end.
     /// </para>
     /// </remarks>
@@ -83,7 +86,9 @@ partial class IocSourceGenerator
         var typeParamsByOwner = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var ownerDependencies = new List<(string Owner, TypeData Dependency, bool IsDeferred)>();
         var dependencyTypes = new List<(TypeData Type, bool IsDeferred)>();
-        var decoratorLinks = new List<TypeParameterLink>();
+
+        // Links that belong to no dependency, since decorators and factories are applied without one
+        var appliedLinks = new List<TypeParameterLink>();
         var seenDecorators = new HashSet<string>(StringComparer.Ordinal);
 
         // The generic types written as type arguments, which are the only types a type parameter can become
@@ -94,11 +99,27 @@ partial class IocSourceGenerator
             ct.ThrowIfCancellationRequested();
             var typeParams = GetOwnerTypeParameters(implementation);
 
-            foreach(var param in implementation.ConstructorParameters ?? [])
+            // An instance is neither constructed nor decorated, so it has no dependencies
+            if(info.Instance is not null)
             {
-                AddDependencyType(implementation.Name, param.Type, typeParams);
+                continue;
             }
-            AddInjectionMemberTypes(implementation.Name, info.InjectionMembers, typeParams);
+
+            // A generic factory is called for the service types, while the implementation type is constructed; any other
+            // factory creates the implementation type too
+            if(info.Factory is { } factory)
+            {
+                AddFactoryDependencies(info, implementation, factory, typeParams);
+            }
+
+            if(info.Factory is null or { TypeParameterCount: > 0 })
+            {
+                foreach(var param in implementation.ConstructorParameters ?? [])
+                {
+                    AddDependencyType(implementation.Name, param.Type, typeParams);
+                }
+                AddInjectionMemberTypes(implementation.Name, info.InjectionMembers, typeParams);
+            }
 
             foreach(var serviceType in info.ServiceTypes)
             {
@@ -117,7 +138,7 @@ partial class IocSourceGenerator
                     }
 
                     var decoratorTypeParams = GetOwnerTypeParameters(genericDecorator);
-                    LinkTypeArguments(declaredForm, genericDecorator.Name, decoratorTypeParams, implementedForm, implementation.Name, typeParams, decoratorLinks);
+                    LinkTypeArguments(declaredForm, genericDecorator.Name, decoratorTypeParams, implementedForm, implementation.Name, typeParams, appliedLinks);
                     AddArgumentTypes(implementedForm, argumentTypes);
                     AddArgumentTypes(declaredForm, argumentTypes);
 
@@ -199,13 +220,13 @@ partial class IocSourceGenerator
         }
 
         // Only a nested link can make a dependency expanding
-        if(!sites.Any(static site => site.Links.Any(static link => link.IsNested)) && !decoratorLinks.Any(static link => link.IsNested))
+        if(!sites.Any(static site => site.Links.Any(static link => link.IsNested)) && !appliedLinks.Any(static link => link.IsNested))
         {
             return null;
         }
 
         var graph = new Dictionary<TypeParameterNode, List<TypeParameterNode>>();
-        foreach(var link in sites.SelectMany(static site => site.Links).Concat(decoratorLinks))
+        foreach(var link in sites.SelectMany(static site => site.Links).Concat(appliedLinks))
         {
             if(!graph.TryGetValue(link.From, out var successors))
             {
@@ -216,18 +237,18 @@ partial class IocSourceGenerator
         }
 
         var components = FindStronglyConnectedComponents(graph);
-        var nestedDecoratorComponents = new HashSet<int>();
-        foreach(var link in decoratorLinks)
+        var nestedAppliedComponents = new HashSet<int>();
+        foreach(var link in appliedLinks)
         {
             if(link.IsNested && components[link.From] == components[link.To])
             {
-                nestedDecoratorComponents.Add(components[link.From]);
+                nestedAppliedComponents.Add(components[link.From]);
             }
         }
 
         // The cycles without a dependency resolved through Lazy<T> or Func<T>, which make the object graph itself infinite
         var eagerGraph = new Dictionary<TypeParameterNode, List<TypeParameterNode>>();
-        foreach(var link in sites.Where(static site => !site.IsDeferred).SelectMany(static site => site.Links).Concat(decoratorLinks))
+        foreach(var link in sites.Where(static site => !site.IsDeferred).SelectMany(static site => site.Links).Concat(appliedLinks))
         {
             if(!eagerGraph.TryGetValue(link.From, out var successors))
             {
@@ -238,12 +259,12 @@ partial class IocSourceGenerator
         }
 
         var eagerComponents = FindStronglyConnectedComponents(eagerGraph);
-        var nestedDecoratorEagerComponents = new HashSet<int>();
-        foreach(var link in decoratorLinks)
+        var nestedAppliedEagerComponents = new HashSet<int>();
+        foreach(var link in appliedLinks)
         {
             if(link.IsNested && eagerComponents[link.From] == eagerComponents[link.To])
             {
-                nestedDecoratorEagerComponents.Add(eagerComponents[link.From]);
+                nestedAppliedEagerComponents.Add(eagerComponents[link.From]);
             }
         }
 
@@ -257,14 +278,14 @@ partial class IocSourceGenerator
             foreach(var link in links)
             {
                 var component = components[link.From];
-                if(component == components[link.To] && (link.IsNested || nestedDecoratorComponents.Contains(component)))
+                if(component == components[link.To] && (link.IsNested || nestedAppliedComponents.Contains(component)))
                 {
                     isExpanding = true;
                 }
 
                 if(!isDeferredSite
                     && eagerComponents[link.From] == eagerComponents[link.To]
-                    && (link.IsNested || nestedDecoratorEagerComponents.Contains(eagerComponents[link.From])))
+                    && (link.IsNested || nestedAppliedEagerComponents.Contains(eagerComponents[link.From])))
                 {
                     isEagerlyExpanding = true;
                 }
@@ -304,6 +325,49 @@ partial class IocSourceGenerator
             }
 
             return names;
+        }
+
+        // A factory's dependencies are written with its own type parameters, which are nodes for each registration it serves.
+        // Its mapping links them to the implementation's type parameters, like a dependency matched against a service type.
+        void AddFactoryDependencies(OpenGenericRegistrationInfo info, GenericTypeData implementation, FactoryMethodData factory, HashSet<string> typeParams)
+        {
+            var owner = GetFactoryOwner(factory, implementation);
+            if(typeParamsByOwner.ContainsKey(owner))
+            {
+                return;
+            }
+
+            var factoryTypeParams = new HashSet<string>(factory.TypeParameterNames ?? [], StringComparer.Ordinal);
+            typeParamsByOwner[owner] = factoryTypeParams;
+
+            // A generic factory without a mapping is not called
+            var pattern = GetGenericFactoryPattern(factory);
+            if(factory.TypeParameterCount > 0 && pattern is not GenericTypeData)
+            {
+                return;
+            }
+
+            foreach(var param in factory.AdditionalParameters)
+            {
+                AddDependencyType(owner, param.Type, factoryTypeParams);
+            }
+
+            if(pattern is not GenericTypeData genericPattern)
+            {
+                return;
+            }
+
+            // Every form of the template's definition that the implementation declares (or the open service type itself)
+            foreach(var form in info.AllInterfaces.Concat(implementation.AllBaseClasses ?? []).Append(implementation))
+            {
+                if(form is GenericTypeData genericForm
+                    && genericForm.NameWithoutGeneric == genericPattern.NameWithoutGeneric
+                    && genericForm.GenericArity == genericPattern.GenericArity)
+                {
+                    LinkTypeArguments(genericPattern, owner, factoryTypeParams, genericForm, implementation.Name, typeParams, appliedLinks);
+                    AddArgumentTypes(genericForm, argumentTypes);
+                }
+            }
         }
 
         void AddDependencyType(string owner, TypeData type, HashSet<string> typeParams)

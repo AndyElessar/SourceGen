@@ -106,7 +106,7 @@ internal static partial class TransformExtensions
                 isKnownNonDisposable = hierarchySource.IsKnownNonDisposable();
             }
 
-            return typeSymbol.CreateTypeData(
+            var typeData = typeSymbol.CreateTypeData(
                 typeName,
                 typeParameters,
                 constructorParams,
@@ -115,6 +115,10 @@ internal static partial class TransformExtensions
                 allInterfaces,
                 allBaseClasses,
                 isKnownNonDisposable);
+
+            return extractConstructorParams && !typeSymbol.IsConstructible
+                ? typeData with { IsNotConstructible = true }
+                : typeData;
         }
 
         /// <summary>

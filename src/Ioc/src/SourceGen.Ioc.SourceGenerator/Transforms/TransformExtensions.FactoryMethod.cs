@@ -2,6 +2,38 @@ namespace SourceGen.Ioc;
 
 internal static partial class TransformExtensions
 {
+    /// <summary>
+    /// Counts how often a placeholder type appears in a service type template (in its type arguments at any nesting level,
+    /// including array element types). A valid mapping has each placeholder exactly once, so it determines one type argument.
+    /// </summary>
+    internal static int CountPlaceholderOccurrences(ITypeSymbol template, ITypeSymbol placeholder)
+    {
+        return template switch
+        {
+            INamedTypeSymbol named => named.TypeArguments.Sum(argument => Count(argument)),
+            IArrayTypeSymbol array => Count(array.ElementType),
+            _ => 0,
+        };
+
+        int Count(ITypeSymbol type)
+            => SymbolEqualityComparer.Default.Equals(type, placeholder) ? 1 : CountPlaceholderOccurrences(type, placeholder);
+    }
+
+    /// <summary>
+    /// Gets whether each placeholder type appears exactly once in the service type template, so the mapping determines one
+    /// type argument for each factory type parameter.
+    /// </summary>
+    private static bool HasSinglePlaceholderOccurrences(INamedTypeSymbol template, ImmutableArray<TypedConstant> typeArray)
+    {
+        for(var i = 1; i < typeArray.Length; i++)
+        {
+            if(typeArray[i].Value is ITypeSymbol placeholder && CountPlaceholderOccurrences(template, placeholder) != 1)
+                return false;
+        }
+
+        return true;
+    }
+
     extension(AttributeData attribute)
     {
         /// <summary>
@@ -24,7 +56,8 @@ internal static partial class TransformExtensions
                 if(typeArray.Length < 2)
                     return null;
 
-                if(typeArray[0].Value is not INamedTypeSymbol serviceTypeTemplate)
+                if(typeArray[0].Value is not INamedTypeSymbol serviceTypeTemplate
+                    || !HasSinglePlaceholderOccurrences(serviceTypeTemplate, typeArray))
                     return null;
 
                 var serviceTypeTemplateData = serviceTypeTemplate.GetTypeData();
@@ -104,11 +137,14 @@ internal static partial class TransformExtensions
                     return new FactoryMethodData(nameofPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
                 }
 
-                // String literal - cannot determine parameters, assume full signature
-                if(argument.Expression is LiteralExpressionSyntax literal &&
-                   literal.Token.Value is string literalPath)
+                // Any other constant string, a literal or a const, is the method path: its parameters are unknown, so it is
+                // called with the service provider only, like an Instance given as a constant
+                foreach(var namedArgument in attribute.NamedArguments)
                 {
-                    return new FactoryMethodData(literalPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
+                    if(namedArgument.Key == "Factory" && namedArgument.Value.Value is string constantPath)
+                    {
+                        return new FactoryMethodData(constantPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
+                    }
                 }
             }
 
@@ -187,7 +223,9 @@ internal static partial class TransformExtensions
 
             // Extract [IocGenericFactory] attribute if present
             var genericTypeMapping = methodSymbol.ExtractGenericFactoryMapping();
-            var typeParameterCount = methodSymbol.TypeParameters.Length;
+            ImmutableEquatableArray<string>? typeParameterNames = methodSymbol.TypeParameters.Length > 0
+                ? [.. methodSymbol.TypeParameters.Select(static typeParameter => typeParameter.Name)]
+                : null;
 
             return new FactoryMethodData(
                 path,
@@ -196,7 +234,7 @@ internal static partial class TransformExtensions
                 returnTypeName,
                 additionalParameters?.ToImmutableEquatableArray() ?? [],
                 genericTypeMapping,
-                typeParameterCount);
+                typeParameterNames);
         }
 
         /// <summary>
@@ -253,7 +291,9 @@ internal static partial class TransformExtensions
             }
 
             // First type is the service type template
-            if(typeArray[0].Value is not INamedTypeSymbol serviceTypeTemplate)
+            // A placeholder that appears more than once in the template could take different type arguments (SGIOC016)
+            if(typeArray[0].Value is not INamedTypeSymbol serviceTypeTemplate
+                || !HasSinglePlaceholderOccurrences(serviceTypeTemplate, typeArray))
             {
                 return null;
             }

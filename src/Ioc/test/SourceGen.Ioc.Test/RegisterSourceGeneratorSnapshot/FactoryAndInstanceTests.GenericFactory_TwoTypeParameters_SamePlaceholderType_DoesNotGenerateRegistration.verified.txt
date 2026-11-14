@@ -24,7 +24,6 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddSingleton(typeof(global::TestNamespace.Handler<,>), typeof(global::TestNamespace.Handler<,>));
-                services.AddSingleton<global::TestNamespace.Handler<global::TestNamespace.Entity, global::TestNamespace.Dto>, global::TestNamespace.Handler<global::TestNamespace.Entity, global::TestNamespace.Dto>>();
             }
 
             return services;

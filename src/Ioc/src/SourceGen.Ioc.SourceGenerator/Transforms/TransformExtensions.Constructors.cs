@@ -4,6 +4,20 @@ internal static partial class TransformExtensions
 {
     extension(INamedTypeSymbol typeSymbol)
     {
+        /// <summary>
+        /// Gets whether generated code in the same assembly can construct the type: a struct, or a non-abstract, non-static
+        /// class with a public or internal instance constructor (including the implicit default constructor).
+        /// </summary>
+        public bool IsConstructible => typeSymbol.TypeKind switch
+        {
+            TypeKind.Struct => true,
+            TypeKind.Class => !typeSymbol.IsAbstract && !typeSymbol.IsStatic
+                && typeSymbol.OriginalDefinition.InstanceConstructors.Any(static ctor =>
+                    ctor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal),
+            TypeKind.Error => true,
+            _ => false,
+        };
+
         public IMethodSymbol? SpecifiedOrPrimaryOrMostParametersConstructor
         {
             get

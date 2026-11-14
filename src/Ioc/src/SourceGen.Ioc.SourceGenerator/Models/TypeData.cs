@@ -26,6 +26,12 @@ internal closed record class TypeData(
     /// from another source generator (partial or error types); <see langword="false"/> when unknown.
     /// </summary>
     public bool IsKnownNonDisposable { get; init; }
+
+    /// <summary>
+    /// Gets whether generated code cannot construct the type: an interface, an abstract or static class, or a class without
+    /// a public or internal constructor. Only recorded with the constructor parameters; <see langword="false"/> otherwise.
+    /// </summary>
+    public bool IsNotConstructible { get; init; }
 }
 
 /// <summary>

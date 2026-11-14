@@ -214,7 +214,7 @@ public sealed partial class RegisterAnalyzer
 
     /// <summary>
     /// SGIOC010: Analyzes if both Factory and Instance are specified on the same attribute.
-    /// Reports error when both are present, as Factory takes precedence and Instance will be ignored.
+    /// Reports error when both are present, as Instance takes precedence and Factory will be ignored.
     /// </summary>
     private static void AnalyzeFactoryAndInstanceConflict(
         SyntaxNodeAnalysisContext context,

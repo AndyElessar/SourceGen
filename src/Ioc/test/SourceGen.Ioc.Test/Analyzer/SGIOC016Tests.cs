@@ -38,6 +38,41 @@ public class SGIOC016Tests
     }
 
     [Test]
+    [Arguments("Attribute", "[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]", "")]
+    [Arguments("TypeMapping", "", ", GenericFactoryTypeMapping = [typeof(IPair<int, int>), typeof(int)]")]
+    public async Task SGIOC016_PlaceholderRepeatedInTemplate_ReportsDiagnosticAndDoesNotGenerate(string scenario, string methodAttribute, string mapping)
+    {
+        // IPair<A, B> could give int different type arguments, so the mapping cannot determine T
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(IPair<string, string>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create){{mapping}})]
+
+            namespace TestNamespace;
+
+            public interface IPair<T1, T2>;
+
+            public static class FactoryContainer
+            {
+                {{methodAttribute}}
+                public static IPair<T, T> Create<T>() => throw new NotImplementedException();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016").ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("appears more than once").And.Contains("'IPair<int, int>'");
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration") ?? "").DoesNotContain("FactoryContainer.Create");
+    }
+
+    [Test]
     public async Task SGIOC016_GenericFactory_WithIocGenericFactoryAttribute_NoDiagnostic()
     {
         const string source = """

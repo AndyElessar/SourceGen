@@ -10,6 +10,124 @@ namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 public class FactoryAndInstanceTests
 {
     [Test]
+    public async Task Instance_OpenGeneric_ReadsInstanceOfClosedTypeWithoutOpenRegistration()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Instance = nameof(Default))]
+            public sealed class Node<T> : INode<T>
+            {
+                public static readonly Node<T> Default = new();
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        // MS.DI would construct Node<T> for an open registration instead of using the instance
+        await Assert.That(generatedSource).DoesNotContain("typeof(global::TestNamespace.Node<>)");
+        await Assert.That(generatedSource).Contains("services.AddSingleton<global::TestNamespace.INode<string>>(global::TestNamespace.Node<string>.Default)");
+        await Assert.That(containerSource).Contains("global::TestNamespace.Node<string>.Default");
+    }
+
+    [Test]
+    [Arguments("DefaultFactory", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.MyServiceFactory.Create))]", "")]
+    [Arguments("OwnFactory", "", ", Factory = nameof(MyServiceFactory.Create)")]
+    public async Task Instance_WithFactory_UsesInstanceInRegisterAndContainer(string scenario, string defaults, string ownFactory)
+    {
+        // The instance takes precedence over a Factory of the registration (SGIOC010) or of its default settings
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{defaults}}
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IServiceProvider sp) => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Instance = nameof(Default){{ownFactory}})]
+            public sealed class MyService : IMyService
+            {
+                public static readonly MyService Default = new();
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.MyService.Default");
+            await Assert.That(output).DoesNotContain("MyServiceFactory.Create");
+        }
+    }
+
+    [Test]
+    public async Task Factory_ConstantPath_IsCalledLikeStringLiteral()
+    {
+        // A const Factory is a path like a string literal: called with the service provider, without other dependencies
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Repo<T> : IRepo<T>;
+
+            public static class FactoryPaths
+            {
+                public const string Create = "global::TestNamespace.MyServiceFactory.Create";
+            }
+
+            // A factory given as a path has no known return type, so it returns the implementation type
+            public static class MyServiceFactory
+            {
+                public static MyService Create(IServiceProvider sp) => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Factory = FactoryPaths.Create)]
+            public sealed class MyService(IRepo<string> repo) : IMyService;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.MyServiceFactory.Create(sp)");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Repo<string>");
+    }
+
+    [Test]
     public async Task Factory_WithNoParameters_GeneratesDirectInvocation()
     {
         const string source = """
