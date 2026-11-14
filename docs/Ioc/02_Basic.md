@@ -162,7 +162,7 @@ services.AddMyProject(); // Generated extension method
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC001|Error|`[IocRegister]` or `[IocRegisterFor]` cannot be applied to `private` or `abstract` classes.|
+|SGIOC001|Error|`[IocRegister]` or `[IocRegisterFor]` cannot be applied to `private` or `abstract` classes, or to a type that cannot be constructed without a `Factory` or `Instance`: an interface, or a class without a constructor accessible from the compiled assembly (only `private` / `protected` constructors, or `internal` ones in another assembly without `InternalsVisibleTo`). Such a type is not registered.|
 |SGIOC011|Warning|Duplicated registration detected for the same implementation type, same key, and at least one matching tag.|
 |SGIOC032|Warning|An explicit service type is skipped because its generic shape does not match the implementation (an open generic implementation with a closed service type, or an open generic service type the implementation does not implement). A closed implementation with an open generic service type it implements, such as `typeof(IRepository<>)` on `UserRepository : IRepository<User>`, is registered as the closed form instead.|
 

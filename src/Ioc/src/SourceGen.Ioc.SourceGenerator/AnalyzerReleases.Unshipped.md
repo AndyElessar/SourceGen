@@ -2,7 +2,7 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-SGIOC001 | Usage | Error | Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class.
+SGIOC001 | Usage | Error | Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class, or on a type that cannot be constructed without a Factory or Instance.
 SGIOC002 | Design | Error | Circular Dependency Detected - Circular dependencies are detected among registered services.
 SGIOC003 | Design | Error | Service Lifetime Conflict Detected - Singleton service depending on Scoped service.
 SGIOC004 | Design | Error | Dangerous Service Lifetime Dependency - Singleton service depending on Transient service.

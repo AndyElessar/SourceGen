@@ -530,6 +530,59 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
+    /// <summary>
+    /// SGIOC001 for an implementation type that generated code cannot construct and that has neither a Factory (its own or of
+    /// its best default settings) nor an Instance, which the generator does not register: an interface, or a class without
+    /// a constructor accessible from the compiled assembly. Private and abstract types are reported when collected.
+    /// </summary>
+    private static void AnalyzeUnconstructibleImplementations(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        foreach(var registration in analyzerContext.Registrations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(registration.HasInstance || GetEffectiveFactory(analyzerContext, registration).Factory is not null)
+                continue;
+
+            ReportIfUnconstructible(GetDefinition(registration.Implementation), registration.Location);
+        }
+
+        // Like the generator's CreateRegistrationDataFromDefaultSettings, an open ImplementationTypes entry is created with the
+        // Factory of its default settings, while a closed one never is
+        foreach(var attribute in analyzerContext.DefaultAttributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var implementationTypes = attribute.GetImplementationTypeSymbols();
+            if(implementationTypes.Length == 0)
+                continue;
+
+            var hasFactory = HasFactory(attribute);
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
+            foreach(var implementationType in implementationTypes)
+            {
+                var definition = GetDefinition(implementationType);
+                if(!(hasFactory && definition.IsGenericType && definition.IsDefinition))
+                    ReportIfUnconstructible(definition, location);
+            }
+        }
+
+        void ReportIfUnconstructible(INamedTypeSymbol definition, Location? location)
+        {
+            if(definition.IsConstructibleIn(analyzerContext.Assembly) || AnalyzerHelpers.GetRegistrationInvalidReason(definition).IsInvalid)
+                return;
+
+            var reason = definition.TypeKind switch
+            {
+                TypeKind.Class => "a class without a constructor accessible from this assembly, and has no Factory or Instance",
+                TypeKind.Interface => "an interface without a Factory or Instance",
+                var kind => $"{(kind is TypeKind.Enum ? "an" : "a")} {kind.ToString().ToLowerInvariant()} without a Factory or Instance",
+            };
+            reportDiagnostic(Diagnostic.Create(InvalidAttributeUsage, location, definition.Name, reason));
+        }
+    }
+
     /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
     private static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,

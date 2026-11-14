@@ -508,6 +508,13 @@ partial class IocSourceGenerator
             return false;
         }
 
+        // Like a registration, an implementation type that cannot be constructed without a Factory or Instance is not
+        // registered (SGIOC001), such as an open entry of an imported module without an accessible constructor
+        if(openGenericInfo is { Factory: null, Instance: null } && openImplType.IsNotConstructible)
+        {
+            return false;
+        }
+
         // Build closed implementation type name
         var closedImplTypeName = SubstituteTypeArguments(openImplType.Name, implTypeArgMap);
 

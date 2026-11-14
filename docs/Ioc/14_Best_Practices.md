@@ -287,7 +287,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 
 |Diagnostic|Meaning|First Place to Check|
 |:---|:---|:---|
-|`SGIOC001`|Invalid registration target (`private` / `abstract`)|[Basic Usage](02_Basic.md#diagnostics)|
+|`SGIOC001`|Invalid registration target (`private` / `abstract`, or not constructible without `Factory` / `Instance`)|[Basic Usage](02_Basic.md#diagnostics)|
 |`SGIOC002`|Circular dependency|[Overview](01_Overview.md#compile-time-safety)|
 |`SGIOC003`|Singleton depends on scoped|[Overview](01_Overview.md#compile-time-safety)|
 |`SGIOC004`|Singleton depends on transient|[Overview](01_Overview.md#compile-time-safety)|

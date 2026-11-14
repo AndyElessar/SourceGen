@@ -46,7 +46,7 @@ Handlers of the same symbol kind run in one registered action (one for named typ
 1. Report buffered duplicated defaults (SGIOC012)
 2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
 3. Decorated parameters of the decorators matched while collecting registrations (SGIOC034/035)
-4. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), and service types that the mapping of a generic factory does not match (SGIOC039)
+4. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
 5. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
 
 #### Partial Files
@@ -121,13 +121,14 @@ Format: ID - Level - Category - Description
 
 ### SGIOC001 - Error - Usage - Invalid Attribute Usage
 
-Report when IoCRegisterAttribute or IoCRegisterForAttribute is mark on private or abstract class.
+Report when IoCRegisterAttribute or IoCRegisterForAttribute is mark on private or abstract class, or on a type that generated code cannot construct and that has neither a `Factory` (its own or of its best default settings) nor an `Instance`. The generator does not register such a type in either output.
 
 **Analysis:**
 
 - Collects all types marked with `[IoCRegister]` or `[IoCRegisterFor]` (both assembly-level and type-level).
 - Checks the target type's accessibility modifier and abstract state.
 - Reports when the type is `private` or is an `abstract` class (not interface).
+- At compilation end, over the registrations `RegisterAnalyzer` collects (`AnalyzeUnconstructibleImplementations`): reports an implementation type without a `Factory` (its own, or the `Factory` of its best default settings) or an `Instance` that is an interface, or a class without a constructor accessible from the compiled assembly: only `private` or `protected` constructors, or `internal` ones declared in a referenced assembly that does not give access with `InternalsVisibleTo`. Open generic implementations are checked the same way. The `ImplementationTypes` of default settings are checked too, reported at the default settings attribute: an open one is created with the `Factory` of its settings, while a closed one never is. Types already reported as `private` or `abstract` are not reported again. Like `SGIOC039`, the registrations of imported modules are not analyzed: the closed types of an imported open entry whose constructor is only accessible in the module's assembly are skipped without a diagnostic.
 
 ---
 

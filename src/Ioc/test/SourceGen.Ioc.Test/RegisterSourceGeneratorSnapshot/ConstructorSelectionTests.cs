@@ -170,6 +170,85 @@ public class ConstructorSelectionTests
     }
 
     [Test]
+    [Arguments("PrivateConstructor", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])] public sealed class MyService : IService { private MyService() { } }")]
+    [Arguments("OpenPrivateConstructor", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService<>)])] public sealed class MyService<T> : IService<T> { private MyService() { } }")]
+    public async Task ConstructorSelection_WithoutAccessibleConstructorOrFactory_DoesNotRegister(string scenario, string registration)
+    {
+        // Generated code cannot construct the type without a Factory or Instance (SGIOC001)
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService;
+            public interface IService<T>;
+
+            {{registration}}
+
+            [IocRegister]
+            internal sealed class Consumer(IService<int>? service = null);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).DoesNotContain("global::TestNamespace.MyService");
+        }
+    }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", false)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"MainAssembly\")]", true)]
+    public async Task ConstructorSelection_OnlyInternalConstructorInReferencedAssembly_RegistersOnlyWhenAccessible(string scenario, string internalsVisibleTo, bool registers)
+    {
+        var librarySource = $$"""
+            {{internalsVisibleTo}}
+
+            namespace Library;
+
+            public interface IService;
+
+            public sealed class MyService : IService
+            {
+                internal MyService() { }
+            }
+            """;
+
+        const string mainSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+
+            [assembly: IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+
+            namespace MainApp;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (librarySource, "Library"),
+            (mainSource, "MainAssembly"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output.Contains("global::Library.MyService")).IsEqualTo(registers);
+        }
+    }
+
+    [Test]
     public async Task ConstructorSelection_PrimaryConstructor_TakesPrecedenceOverMostParameters()
     {
         const string source = """

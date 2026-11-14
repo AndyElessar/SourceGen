@@ -105,6 +105,12 @@ partial class IocSourceGenerator
         {
             factory = null;
         }
+        // Generated code cannot create an implementation type it cannot construct without a Factory or Instance, such as one
+        // without an accessible constructor, so it is not registered (SGIOC001)
+        else if(factory is null && registration.ImplementationType.IsNotConstructible)
+        {
+            return new BasicRegistrationResult([], tags, [], []);
+        }
 
         var serviceTypesToRegister = new List<TypeData>
         {

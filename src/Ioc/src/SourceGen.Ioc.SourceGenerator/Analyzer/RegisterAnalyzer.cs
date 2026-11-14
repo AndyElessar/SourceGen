@@ -12,7 +12,8 @@ namespace SourceGen.Ioc;
 public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 {
     /// <summary>
-    /// SGIOC001: Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class.
+    /// SGIOC001: Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class,
+    /// or on a type that cannot be constructed without a Factory or Instance.
     /// </summary>
     public static readonly DiagnosticDescriptor InvalidAttributeUsage = new(
         id: "SGIOC001",
@@ -21,7 +22,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "IoCRegisterAttribute and IoCRegisterForAttribute cannot be applied to private or abstract classes.");
+        description: "IoCRegisterAttribute and IoCRegisterForAttribute cannot be applied to private or abstract classes, or to a type that generated code cannot construct (an interface, or a class without an accessible constructor) without a Factory or Instance.");
 
     /// <summary>
     /// SGIOC002: Circular Dependency Detected - Circular dependencies are detected among registered services.
@@ -634,6 +635,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
         // SGIOC039: Service types that the mapping of a generic factory does not match
         AnalyzeGenericFactoryServiceTypes(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
+
+        // SGIOC001: Implementation types that cannot be constructed without a Factory or Instance
+        AnalyzeUnconstructibleImplementations(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
 
         var asyncInitOnlyServiceTypes = BuildAsyncInitOnlyServiceTypes(analyzerContext);
         if(asyncInitOnlyServiceTypes.Count == 0)
