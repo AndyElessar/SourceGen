@@ -583,6 +583,11 @@ public sealed partial class RegisterAnalyzer
 
             foreach(var typeOf in argument.Expression.DescendantNodesAndSelf().OfType<TypeOfExpressionSyntax>())
             {
+                // Binding every typeof dominates this analysis. An attribute argument can only name an open type as an unbound
+                // generic (Outer<>.Node<>, Outer<>.Plain, Node<>): type parameters are not allowed (CS0416)
+                if(!HasOmittedTypeArgument(typeOf.Type))
+                    continue;
+
                 if(context.SemanticModel.GetTypeInfo(typeOf.Type, context.CancellationToken).Type is not INamedTypeSymbol type)
                     continue;
 
@@ -621,6 +626,14 @@ public sealed partial class RegisterAnalyzer
                 }
             }
         }
+
+        static bool HasOmittedTypeArgument(TypeSyntax type) => type switch
+        {
+            GenericNameSyntax genericName => genericName.IsUnboundGenericName,
+            QualifiedNameSyntax qualifiedName => HasOmittedTypeArgument(qualifiedName.Left) || HasOmittedTypeArgument(qualifiedName.Right),
+            AliasQualifiedNameSyntax aliasQualifiedName => HasOmittedTypeArgument(aliasQualifiedName.Name),
+            _ => false,
+        };
 
         static bool IsDecoratedForm(INamedTypeSymbol decorator, INamedTypeSymbol form)
         {

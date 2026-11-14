@@ -74,6 +74,8 @@ public class SGIOC038Tests
     [Arguments("DefaultSettingsOpenImplementationTypes", "[assembly: IocRegisterDefaults(typeof(IService<>), ServiceLifetime.Singleton, RegisterAllInterfaces = true, ImplementationTypes = [typeof(OpenNode<>)])]", """
         public sealed class OpenNode<T> : IService<T>, Outer<T>.INode<T>;
         """, "typeof(OpenNode<>)", "Outer<O>.INode<T>")]
+    [Arguments("UnboundContainerNonGeneric", "[assembly: IocRegisterFor(typeof(Outer<>.Plain))]", "", "typeof(Outer<>.Plain)", "Outer<O>.Plain")]
+    [Arguments("GlobalQualified", "[assembly: IocRegisterFor(typeof(global::TestNamespace.Outer<>.Mid.Node<>))]", "", "typeof(global::TestNamespace.Outer<>.Mid.Node<>)", "Outer<O>.Mid.Node<T>")]
     [Arguments("RegisterForTarget", "[assembly: IocRegisterFor(typeof(Outer<>.Mid.Node<>))]", "", "typeof(Outer<>.Mid.Node<>)", "Outer<O>.Mid.Node<T>")]
     public async Task SGIOC038_OpenTypeNestedInGenericTypeInAttributeArguments_ReportsAtTypeOf(string scenario, string assemblyAttribute, string declarations, string expectedLocation, string expectedType)
     {
@@ -95,6 +97,8 @@ public class SGIOC038Tests
                     public interface INode<T>;
 
                     public sealed class Decorator<T>(IService<T> inner) : IService<T>;
+
+                    public sealed class Plain;
 
                     public static class Mid
                     {
