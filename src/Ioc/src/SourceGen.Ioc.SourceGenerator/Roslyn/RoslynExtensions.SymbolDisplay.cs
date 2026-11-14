@@ -12,46 +12,25 @@ internal static partial class RoslynExtensions
         /// Builds the fully qualified access path for a symbol, including namespace and containing types. <br/>
         /// For example, for a field <c>Key</c> inside <c>NestClassImpl</c> inside <c>TestNestClass</c> in namespace <c>MyApp.Services</c>,
         /// returns <c>global::MyApp.Services.TestNestClass.NestClassImpl.Key</c>.
+        /// The type arguments of the containing types are kept, such as <c>global::MyApp.Holder&lt;int&gt;.Default</c>
+        /// or <c>global::MyApp.Node&lt;T&gt;.Default</c>.
         /// </summary>
         /// <returns>The fully qualified access path for the symbol.</returns>
         public string FullAccessPath
         {
             get
             {
-                // Build path from the symbol up to its containing types (collect in reverse order, then reverse)
-                List<string> pathParts = [symbol.Name];
-
-                var containingType = symbol.ContainingType;
-                while(containingType is not null)
+                if(symbol.ContainingType is { } containingType)
                 {
-                    pathParts.Add(containingType.Name);
-                    containingType = containingType.ContainingType;
+                    return $"{containingType.FullyQualifiedName}.{symbol.Name}";
                 }
 
-                // Reverse to get correct order (outermost type first)
-                pathParts.Reverse();
-
-                // Add namespace prefix with global::
-                var containingNamespace = symbol.ContainingType?.ContainingNamespace ?? symbol.ContainingNamespace;
-                if(containingNamespace is not null && !containingNamespace.IsGlobalNamespace)
-                {
-                    var namespacePath = containingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return $"{namespacePath}.{string.Join(".", pathParts)}";
-                }
-
-                // For global namespace, just prepend global::
-                return $"global::{string.Join(".", pathParts)}";
+                var containingNamespace = symbol.ContainingNamespace;
+                return containingNamespace is not null && !containingNamespace.IsGlobalNamespace
+                    ? $"{containingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{symbol.Name}"
+                    : $"global::{symbol.Name}";
             }
         }
-
-        /// <summary>
-        /// Builds the fully qualified access path for a member, keeping the type arguments of its containing type,
-        /// such as <c>global::MyApp.Holder&lt;int&gt;.Default</c> or <c>global::MyApp.Node&lt;T&gt;.Default</c>.
-        /// A symbol without a containing type returns <see cref="FullAccessPath"/>.
-        /// </summary>
-        public string MemberAccessPath => symbol.ContainingType is { } containingType
-            ? $"{containingType.FullyQualifiedName}.{symbol.Name}"
-            : symbol.FullAccessPath;
     }
 
     extension(ITypeSymbol typeSymbol)

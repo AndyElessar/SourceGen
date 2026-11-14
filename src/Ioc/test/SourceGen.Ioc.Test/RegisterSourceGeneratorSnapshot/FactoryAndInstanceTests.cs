@@ -125,6 +125,45 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    [Arguments("Method", "nameof(Factories<int>.Create)")]
+    [Arguments("DelegateField", "nameof(Factories<int>.CreateDelegate)")]
+    public async Task Factory_MemberOfClosedGenericType_KeepsTypeArguments(string scenario, string factory)
+    {
+        // A factory method resolved by nameof(), or a member that is not a method, such as a delegate field, keeps the
+        // type arguments of its containing type
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+
+            public static class Factories<T>
+            {
+                public static MyService Create(IServiceProvider sp) => new();
+
+                public static readonly Func<IServiceProvider, MyService> CreateDelegate = static _ => new();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Factory = {{factory}})]
+            public sealed class MyService : IMyService;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.Factories<int>.");
+        }
+    }
+
+    [Test]
     public async Task Instance_MemberOfClosedGenericType_KeepsTypeArguments()
     {
         const string source = """

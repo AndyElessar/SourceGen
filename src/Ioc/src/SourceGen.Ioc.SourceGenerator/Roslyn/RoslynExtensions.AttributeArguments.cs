@@ -69,9 +69,8 @@ internal static partial class RoslynExtensions
         /// </summary>
         /// <param name="argumentName">The name of the argument to find.</param>
         /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
-        /// <param name="keepTypeArguments">Whether the resolved path keeps the type arguments of the member's containing type (see <c>MemberAccessPath</c>).</param>
         /// <returns>The resolved symbol path if it's a <see langword="nameof"/> expression; otherwise, null.</returns>
-        public string? TryGetNameof(string argumentName, SemanticModel? semanticModel = null, bool keepTypeArguments = false)
+        public string? TryGetNameof(string argumentName, SemanticModel? semanticModel = null)
         {
             var syntaxReference = attributeData.ApplicationSyntaxReference;
             if(syntaxReference is null)
@@ -103,7 +102,7 @@ internal static partial class RoslynExtensions
                             // If semantic model is provided, try to resolve the full access path
                             if(semanticModel is not null)
                             {
-                                var resolvedPath = ResolveNameofExpression(nameofArgument, semanticModel, keepTypeArguments);
+                                var resolvedPath = ResolveNameofExpression(nameofArgument, semanticModel);
                                 if(resolvedPath is not null)
                                     return resolvedPath;
                             }

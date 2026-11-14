@@ -529,4 +529,49 @@ public class InjectMembersTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task CsharpKey_MemberOfClosedGenericType_KeepsTypeArguments()
+    {
+        // The key of a registration, an [IocInject] parameter and an InjectMembers element keeps the type arguments of
+        // the member's containing type
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public static class Keys<T>
+            {
+                public static string PrimaryKey => typeof(T).Name;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = nameof(Keys<int>.PrimaryKey), KeyType = KeyType.Csharp)]
+            public class Dependency : IDependency { }
+
+            [IocRegister]
+            public class Consumer([IocInject(nameof(Keys<int>.PrimaryKey), KeyType = KeyType.Csharp)] IDependency dependency);
+
+            [IocRegisterFor(typeof(MyService),
+                InjectMembers = [new object[] { nameof(MyService.Dep), nameof(Keys<int>.PrimaryKey), KeyType.Csharp }])]
+            public class MyService
+            {
+                public IDependency? Dep { get; set; }
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.Keys<int>.PrimaryKey");
+            await Assert.That(output).DoesNotContain("global::TestNamespace.Keys.PrimaryKey");
+        }
+    }
 }

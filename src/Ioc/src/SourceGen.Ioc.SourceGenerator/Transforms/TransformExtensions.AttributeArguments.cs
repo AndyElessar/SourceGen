@@ -381,7 +381,7 @@ internal static partial class TransformExtensions
                     // Try to get original syntax for nameof() expressions with full access path resolution. The path keeps
                     // the type arguments of the containing type, such as Holder<int>.Default, and those of an open
                     // generic implementation type, such as Node<T>.Default, which are closed per registration
-                    return attribute.TryGetNameof("Instance", semanticModel, keepTypeArguments: true)
+                    return attribute.TryGetNameof("Instance", semanticModel)
                         ?? namedArg.Value.Value?.ToString();
                 }
             }
