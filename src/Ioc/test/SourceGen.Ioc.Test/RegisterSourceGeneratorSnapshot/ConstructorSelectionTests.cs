@@ -56,6 +56,120 @@ public class ConstructorSelectionTests
     }
 
     [Test]
+    [Arguments("Internal", "internal", true)]
+    [Arguments("ProtectedInternal", "protected internal", true)]
+    [Arguments("Public", "public", false)]
+    public async Task ConstructorSelection_WithoutPublicConstructor_ConstructsInRegisterOutput(string scenario, string accessibility, bool constructs)
+    {
+        // MS.DI activates a type registration with a public constructor only
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService;
+            public interface IDep;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IDep)])]
+            internal sealed class Dep : IDep;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            internal sealed class MyService : IService
+            {
+                {{accessibility}} MyService(IDep dep) { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource!.Contains("new global::TestNamespace.MyService(")).IsEqualTo(constructs);
+    }
+
+    [Test]
+    public async Task ConstructorSelection_InternalConstructorSelectedOverPublic_ConstructsInRegisterOutput()
+    {
+        // MS.DI would call the public constructor instead of the one the container calls
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService;
+            public interface IDep;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IDep)])]
+            internal sealed class Dep : IDep;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            internal sealed class MyService : IService
+            {
+                public MyService() { }
+                internal MyService(IDep dep) { }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.MyService(p0)");
+    }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", false)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"MainAssembly\")]", true)]
+    public async Task ConstructorSelection_InternalConstructorInReferencedAssembly_SelectedOnlyWhenAccessible(string scenario, string internalsVisibleTo, bool selectsInternal)
+    {
+        var librarySource = $$"""
+            {{internalsVisibleTo}}
+
+            namespace Library;
+
+            public interface IService;
+            public interface IDep;
+
+            public sealed class MyService : IService
+            {
+                public MyService() { }
+                protected internal MyService(IDep dep) { }
+            }
+            """;
+
+        const string mainSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+
+            [assembly: IocRegisterFor<MyService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+
+            namespace MainApp;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IDep)])]
+            internal sealed class Dep : IDep;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (librarySource, "Library"),
+            (mainSource, "MainAssembly"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(containerSource!.Contains("new global::Library.MyService()")).IsEqualTo(!selectsInternal);
+        await Assert.That(containerSource.Contains("new global::Library.MyService(Get")).IsEqualTo(selectsInternal);
+
+        // MS.DI calls the public constructor itself; the internal one is called by generated code
+        await Assert.That(generatedSource!.Contains("new global::Library.MyService(p0)")).IsEqualTo(selectsInternal);
+    }
+
+    [Test]
     public async Task ConstructorSelection_PrimaryConstructor_TakesPrecedenceOverMostParameters()
     {
         const string source = """

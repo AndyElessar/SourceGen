@@ -22,9 +22,9 @@ partial class IocSourceGenerator
                 continue;
 
             // Extract both default settings and open generic entries in a single pass
-            var defaultSettings = ExtractDefaultSettingsFromModule(moduleType, moduleAssembly, ct)
+            var defaultSettings = ExtractDefaultSettingsFromModule(moduleType, moduleAssembly, ctx.SemanticModel.Compilation.Assembly, ct)
                 .ToImmutableEquatableArray();
-            var openGenericEntries = ExtractOpenGenericEntriesFromModuleRecursive(moduleType, [], ct)
+            var openGenericEntries = ExtractOpenGenericEntriesFromModuleRecursive(moduleType, ctx.SemanticModel.Compilation.Assembly, [], ct)
                 .ToImmutableEquatableArray();
 
             yield return new ImportModuleResult(defaultSettings, openGenericEntries);
@@ -51,9 +51,9 @@ partial class IocSourceGenerator
                 continue;
 
             // Extract both default settings and open generic entries in a single pass
-            var defaultSettings = ExtractDefaultSettingsFromModule(moduleType, moduleAssembly, ct)
+            var defaultSettings = ExtractDefaultSettingsFromModule(moduleType, moduleAssembly, ctx.SemanticModel.Compilation.Assembly, ct)
                 .ToImmutableEquatableArray();
-            var openGenericEntries = ExtractOpenGenericEntriesFromModuleRecursive(moduleType, [], ct)
+            var openGenericEntries = ExtractOpenGenericEntriesFromModuleRecursive(moduleType, ctx.SemanticModel.Compilation.Assembly, [], ct)
                 .ToImmutableEquatableArray();
 
             yield return new ImportModuleResult(defaultSettings, openGenericEntries);
@@ -65,6 +65,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static IEnumerable<OpenGenericEntry> ExtractOpenGenericEntriesFromModuleRecursive(
         INamedTypeSymbol moduleType,
+        IAssemblySymbol constructedIn,
         HashSet<string> visitedModules,
         CancellationToken ct)
     {
@@ -76,7 +77,7 @@ partial class IocSourceGenerator
             yield break;
 
         // Extract from this module's IocRegisterFor attributes
-        foreach(var entry in ExtractOpenGenericEntriesFromModule(moduleType))
+        foreach(var entry in ExtractOpenGenericEntriesFromModule(moduleType, constructedIn))
         {
             yield return entry;
         }
@@ -116,7 +117,7 @@ partial class IocSourceGenerator
 
             if(importedModuleType is not null)
             {
-                foreach(var entry in ExtractOpenGenericEntriesFromModuleRecursive(importedModuleType, visitedModules, ct))
+                foreach(var entry in ExtractOpenGenericEntriesFromModuleRecursive(importedModuleType, constructedIn, visitedModules, ct))
                 {
                     yield return entry;
                 }
@@ -127,7 +128,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Extracts open generic entries from IocRegisterFor attributes on a module type.
     /// </summary>
-    private static IEnumerable<OpenGenericEntry> ExtractOpenGenericEntriesFromModule(INamedTypeSymbol moduleType)
+    private static IEnumerable<OpenGenericEntry> ExtractOpenGenericEntriesFromModule(INamedTypeSymbol moduleType, IAssemblySymbol constructedIn)
     {
         foreach(var attr in moduleType.GetAttributes())
         {
@@ -183,7 +184,7 @@ partial class IocSourceGenerator
             var typeToProcess = originalDef;
 
             // Extract the open generic entry
-            var implementationType = typeToProcess.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+            var implementationType = typeToProcess.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: constructedIn);
 
             // Skip nested open generics
             if(implementationType is not GenericTypeData implementationGenericType)
@@ -229,7 +230,7 @@ partial class IocSourceGenerator
 
             // Extract other registration details
             var (hasExplicitLifetime, lifetime) = attr.TryGetLifetime();
-            var decorators = attr.GetDecorators();
+            var decorators = attr.GetDecorators(constructedIn);
             var tags = attr.GetTags();
             var (key, keyType, _) = attr.GetKeyInfo(null);
 
@@ -273,6 +274,7 @@ partial class IocSourceGenerator
     private static IEnumerable<DefaultSettingsModel> ExtractDefaultSettingsFromModule(
         INamedTypeSymbol moduleType,
         IAssemblySymbol moduleAssembly,
+        IAssemblySymbol constructedIn,
         CancellationToken ct)
     {
         // Use OriginalDefinition for generic types to ensure we get the attributes
@@ -288,7 +290,7 @@ partial class IocSourceGenerator
 
             if(IsIoCRegisterDefaultsAttribute(attr))
             {
-                var data = ExtractDefaultSettingsFromAttributeData(attr);
+                var data = ExtractDefaultSettingsFromAttributeData(attr, constructedIn);
                 if(data is not null)
                     yield return data;
             }
@@ -301,7 +303,7 @@ partial class IocSourceGenerator
 
             if(IsIoCRegisterDefaultsAttribute(attr))
             {
-                var data = ExtractDefaultSettingsFromAttributeData(attr);
+                var data = ExtractDefaultSettingsFromAttributeData(attr, constructedIn);
                 if(data is not null)
                     yield return data;
             }
@@ -311,7 +313,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Extracts default settings from an attribute, handling both generic and non-generic variants.
     /// </summary>
-    private static DefaultSettingsModel? ExtractDefaultSettingsFromAttributeData(AttributeData attr)
+    private static DefaultSettingsModel? ExtractDefaultSettingsFromAttributeData(AttributeData attr, IAssemblySymbol constructedIn)
     {
         var attrClass = attr.AttributeClass;
         if(attrClass is null)
@@ -320,11 +322,11 @@ partial class IocSourceGenerator
         // Check if this is a generic version (IoCRegisterDefaultsAttribute<T>)
         if(attrClass.IsGenericType && attrClass.TypeArguments.Length > 0)
         {
-            return attr.ExtractDefaultSettingsFromGenericAttribute();
+            return attr.ExtractDefaultSettingsFromGenericAttribute(constructedIn);
         }
 
         // Non-generic version
-        return attr.ExtractDefaultSettings();
+        return attr.ExtractDefaultSettings(constructedIn);
     }
 
     /// <summary>

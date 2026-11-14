@@ -2,16 +2,16 @@ namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
-    private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel? semanticModel = null)
+    private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel semanticModel)
     {
         // Pass semanticModel to GetTypeData for proper nameof() expression resolution in constructor parameter keys
-        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel);
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel, constructedIn: semanticModel.Compilation.Assembly);
 
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
         var (hasExplicitRegisterAllBaseClasses, registerAllBaseClasses) = attributeData.TryGetRegisterAllBaseClasses();
         var serviceTypes = attributeData.GetServiceTypes();
-        var decorators = attributeData.GetDecorators(semanticModel);
+        var decorators = attributeData.GetDecorators(semanticModel.Compilation.Assembly, semanticModel);
         var tags = attributeData.GetTags();
         var (key, keyType, keyValueTypeSymbol) = attributeData.GetKeyInfo(semanticModel);
         var keyValueType = keyValueTypeSymbol?.GetTypeData();
@@ -56,10 +56,10 @@ partial class IocSourceGenerator
     private static RegistrationData ExtractRegistrationDataFromGenericAttribute(
         INamedTypeSymbol typeSymbol,
         AttributeData attributeData,
-        SemanticModel? semanticModel = null)
+        SemanticModel semanticModel)
     {
         // Pass semanticModel to GetTypeData for proper nameof() expression resolution in constructor parameter keys
-        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel);
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel, constructedIn: semanticModel.Compilation.Assembly);
 
         var (hasExplicitLifetime, lifetime) = attributeData.TryGetLifetime();
         var (hasExplicitRegisterAllInterfaces, registerAllInterfaces) = attributeData.TryGetRegisterAllInterfaces();
@@ -68,7 +68,7 @@ partial class IocSourceGenerator
         // Extract service types from generic type arguments instead of named argument
         var serviceTypes = attributeData.GetServiceTypesFromGenericAttribute();
 
-        var decorators = attributeData.GetDecorators(semanticModel);
+        var decorators = attributeData.GetDecorators(semanticModel.Compilation.Assembly, semanticModel);
         var tags = attributeData.GetTags();
         var (key, keyType, keyValueTypeSymbol) = attributeData.GetKeyInfo(semanticModel);
         var keyValueType = keyValueTypeSymbol?.GetTypeData();

@@ -31,7 +31,7 @@ partial class RegisterAnalyzer
             var (implementation, registrations, decorators, attribute, _, hasInstance, _, _) = registration;
 
             // Built like the generator's open generic entries (ProcessSingleRegistration.CreateOpenGenericEntries)
-            if(implementation.GetTypeData(extractConstructorParams: true, extractHierarchy: true) is not GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } implementationType)
+            if(implementation.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: analyzerContext.Assembly) is not GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } implementationType)
                 continue;
 
             // InjectMembers are merged like the generator's ExtractAndMergeInjectionMembers: [IocInject] takes precedence
@@ -146,7 +146,7 @@ partial class RegisterAnalyzer
             var ownerName = definition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
             // Constructor parameters are extracted from the constructor the generator selects, in order
-            var constructorParameters = definition.SpecifiedOrPrimaryOrMostParametersConstructor?.Parameters ?? [];
+            var constructorParameters = definition.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? [];
             var parameters = owner.TypeData.ConstructorParameters ?? [];
             for(var i = 0; i < parameters.Length && i < constructorParameters.Length; i++)
             {
@@ -269,7 +269,7 @@ partial class RegisterAnalyzer
         {
             if(!decoratorTypeData.TryGetValue(decorator, out var typeData))
             {
-                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true, extractInjectionMembers: true);
+                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true, extractInjectionMembers: true, constructedIn: analyzerContext.Assembly);
                 decoratorTypeData[decorator] = typeData;
             }
 
@@ -340,7 +340,7 @@ partial class RegisterAnalyzer
 
                 // The implementation type is constructed unless it cannot be; an open implementation registers only its
                 // service types with type parameters, matched per closed type, so a type parameter may still match
-                if(SymbolEqualityComparer.Default.Equals(serviceType, definition) ? definition.IsConstructible
+                if(SymbolEqualityComparer.Default.Equals(serviceType, definition) ? definition.IsConstructibleIn(analyzerContext.Assembly)
                     : registration.IsOpenGeneric && !serviceType.ContainsGenericParameters)
                 {
                     continue;
@@ -431,13 +431,13 @@ partial class RegisterAnalyzer
                 continue;
 
             var implementation = registration.Implementation;
-            var implementationType = implementation.GetTypeData(extractConstructorParams: true);
+            var implementationType = implementation.GetTypeData(extractConstructorParams: true, constructedIn: analyzerContext.Assembly);
             var factory = GetEffectiveFactory(analyzerContext, registration).Factory;
             var registeredTypes = EnumerateRegisteredTypes(registration);
 
             // The implementation type is constructed without a factory, or with a generic factory its mapping does not match
             var isConstructed = factory is null
-                || (factory.TypeParameterCount > 0 && implementation.IsConstructible
+                || (factory.TypeParameterCount > 0 && implementation.IsConstructibleIn(analyzerContext.Assembly)
                     && IocSourceGenerator.CloseGenericFactory(factory, implementationType) is null);
             if(isConstructed)
             {

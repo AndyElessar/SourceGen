@@ -15,7 +15,8 @@ internal static partial class TransformExtensions
             bool extractConstructorParams = false,
             bool extractInjectionMembers = false,
             SemanticModel? semanticModel = null,
-            bool extractHierarchy = false)
+            bool extractHierarchy = false,
+            IAssemblySymbol? constructedIn = null)
         {
             foreach(var namedArg in attribute.NamedArguments)
             {
@@ -36,7 +37,8 @@ internal static partial class TransformExtensions
                                 extractConstructorParams,
                                 extractHierarchy,
                                 semanticModel,
-                                extractInjectionMembers));
+                                extractInjectionMembers,
+                                constructedIn));
                         }
                         else if(value.Value is ITypeSymbol typeSymbol)
                         {
@@ -210,9 +212,10 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Gets the Decorators array from the attribute, with constructor parameters, injection members, and the interfaces and base classes used to match them to service types.
         /// </summary>
+        /// <param name="constructedIn">The assembly the generated code is compiled into, which selects the decorator constructors it can call.</param>
         /// <param name="semanticModel">Optional semantic model to resolve nameof() keys on decorator members and constructor parameters.</param>
-        public ImmutableEquatableArray<TypeData> GetDecorators(SemanticModel? semanticModel = null) =>
-            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel, extractHierarchy: true);
+        public ImmutableEquatableArray<TypeData> GetDecorators(IAssemblySymbol constructedIn, SemanticModel? semanticModel = null) =>
+            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel, extractHierarchy: true, constructedIn);
 
         /// <summary>
         /// Gets the ImplementationTypes array from the attribute.

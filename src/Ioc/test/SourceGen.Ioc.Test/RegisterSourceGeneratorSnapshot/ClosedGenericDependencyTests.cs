@@ -741,6 +741,111 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("InternalConstructor", "", false)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"MainAssembly\")]", true)]
+    public async Task ClosedGenericDependency_InternalConstructorInReferencedAssemblyWithGenericFactory_ConstructsOnlyWhenAccessible(string scenario, string internalsVisibleTo, bool constructs)
+    {
+        // An internal constructor of another assembly is accessible only when that assembly gives access to its internals
+        var librarySource = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace Library;
+
+            public interface IRequestHandler<TResponse>;
+            public sealed class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            public sealed class EntityHandler : IRequestHandler<Task<Entity>>
+            {
+                internal EntityHandler() { }
+            }
+            """;
+
+        const string mainSource = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+
+            [assembly: IocRegisterFor<EntityHandler>(ServiceLifetime.Singleton, RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))]
+
+            namespace MainApp;
+
+            [IocRegister]
+            internal sealed class Consumer(IRequestHandler<Task<Entity>> handler);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (librarySource, "Library"),
+            (mainSource, "MainAssembly"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).Contains("global::Library.FactoryContainer.Create<global::Library.Entity>()");
+        }
+
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output.Contains("new global::Library.EntityHandler(")).IsEqualTo(constructs);
+        }
+    }
+
+    [Test]
+    [Arguments("InternalConstructor", "internal Repo() { }")]
+    [Arguments("ProtectedInternalConstructor", "protected internal Repo() { }")]
+    public async Task ClosedGenericDependency_OpenImplementationWithoutPublicConstructor_RegistersOnlyClosedTypes(string scenario, string constructor)
+    {
+        // MS.DI activates an open generic registration with a public constructor only, so only the closed types are registered
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public sealed class Entity;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>
+            {
+                {{constructor}}
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(IRepo<Entity> repo);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("typeof(global::TestNamespace.Repo<>)");
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).Contains("new global::TestNamespace.Repo<global::TestNamespace.Entity>()");
+        }
+    }
+
+    [Test]
     [Arguments("SameTypeArguments", "int", true)]
     [Arguments("DifferentTypeArguments", "string", false)]
     public async Task ClosedGenericDependency_RepeatedPlaceholderOnOpenImplementation_ClosesOnlySameTypeArguments(string scenario, string typeArgument, bool registers)

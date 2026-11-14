@@ -24,6 +24,8 @@ services.AddScoped(typeof(global::MyNamespace.IRepository<>), typeof(global::MyN
 
 </details>
 
+`Microsoft.Extensions.DependencyInjection` only calls public constructors. When the constructor `SourceGen.Ioc` selects is not public (for example, `internal Repository() { }`), the open registration is not emitted. Only the closed types discovered at compile time are registered, and the generated code constructs each of them (`sp => new Repository<User>()`). A closed type that is only requested at runtime cannot be resolved. The same rule applies to non-generic registrations: a type whose selected constructor is internal is registered with a factory that calls the constructor, not by its type.
+
 ## Auto-Discovery
 
 The generator automatically discovers closed generic types used in:

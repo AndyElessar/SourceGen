@@ -778,4 +778,53 @@ public class DecoratorTests
         await Assert.That(generatedSource).Contains("global::TestNamespace.ILogger<global::TestNamespace.LoggingDecorator<int>>");
         await Verify(generatedSource);
     }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", false)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"MainAssembly\")]", true)]
+    public async Task Decorator_InternalConstructorInReferencedAssembly_SelectedOnlyWhenAccessible(string scenario, string internalsVisibleTo, bool selectsInternal)
+    {
+        var librarySource = $$"""
+            {{internalsVisibleTo}}
+
+            namespace Library;
+
+            public interface IService;
+            public interface IDep;
+
+            public class Decorator : IService
+            {
+                public Decorator(IService inner) { }
+                protected internal Decorator(IService inner, IDep dep) { }
+            }
+            """;
+
+        const string mainSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+
+            namespace MainApp;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)], Decorators = [typeof(Decorator)])]
+            internal sealed class Service : IService;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (librarySource, "Library"),
+            (mainSource, "MainAssembly"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        // IDep is only resolved for the decorator's internal constructor
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).Contains("new global::Library.Decorator(");
+            await Assert.That(output.Contains("global::Library.IDep")).IsEqualTo(selectsInternal);
+        }
+    }
 }

@@ -550,7 +550,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Instance` takes precedence.|
 |SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
-|SGIOC039|Warning|A service type of a registration with a generic factory does not match the service type template of the factory's mapping, so the factory cannot be called for it and it is not registered. An implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public or internal constructor), in which case it is not registered either.|
+|SGIOC039|Warning|A service type of a registration with a generic factory does not match the service type template of the factory's mapping, so the factory cannot be called for it and it is not registered. An implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public constructor or an internal one it can access: declared in the same assembly, or in an assembly that gives it access with `InternalsVisibleTo`), in which case it is not registered either.|
 
 ---
 

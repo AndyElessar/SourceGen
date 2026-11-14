@@ -592,7 +592,7 @@ public sealed partial class RegisterAnalyzer
         }
 
         var hasKey = serviceKey is not null;
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
         {
             // Another registration of the type was added concurrently
@@ -660,8 +660,8 @@ public sealed partial class RegisterAnalyzer
             // Use shared method to extract default settings
             // Use different extraction method for generic vs non-generic attributes
             var settings = attributeClass.IsGenericType
-                ? attribute.ExtractDefaultSettingsFromGenericAttribute()
-                : attribute.ExtractDefaultSettings();
+                ? attribute.ExtractDefaultSettingsFromGenericAttribute(compilation.Assembly)
+                : attribute.ExtractDefaultSettings(compilation.Assembly);
             if(settings is not null)
             {
                 var targetTypeName = settings.TargetServiceType.Name;
@@ -807,9 +807,13 @@ public sealed partial class RegisterAnalyzer
         ImmutableArray<AttributeData> defaultAttributes,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes,
-        IocFeatures features)
+        IocFeatures features,
+        IAssemblySymbol assembly)
     {
         public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
+
+        /// <summary>The assembly being compiled, which the generated code is compiled into.</summary>
+        public IAssemblySymbol Assembly { get; } = assembly;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
 
         /// <summary>
@@ -913,7 +917,7 @@ public sealed partial class RegisterAnalyzer
         {
             if(!decoratorTypeData.TryGetValue(decorator, out var typeData))
             {
-                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: Assembly);
                 decoratorTypeData.TryAdd(decorator, typeData);
             }
 
@@ -971,7 +975,7 @@ public sealed partial class RegisterAnalyzer
         private ImmutableArray<ServiceSymbolKey> _asyncDecoratedRegistrations;
 
         /// <summary>
-        /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
+        /// Cached constructor to avoid repeated GetSelectedConstructor lookups.
         /// </summary>
         public IMethodSymbol? Constructor { get; }
 
@@ -990,7 +994,8 @@ public sealed partial class RegisterAnalyzer
             bool hasFactory,
             bool hasInstance,
             ImmutableArray<ServiceSymbolKey> registrations,
-            ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
+            ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
+            IAssemblySymbol assembly)
         {
             Type = type;
             Lifetime = lifetime;
@@ -1004,7 +1009,7 @@ public sealed partial class RegisterAnalyzer
             HasInstance = hasInstance;
 
             // Cache constructor lookup
-            Constructor = type.SpecifiedOrPrimaryOrMostParametersConstructor;
+            Constructor = type.GetSelectedConstructor(assembly);
 
             // Cache injected members
             InjectedMembers = [.. type.GetInjectedMembers()];

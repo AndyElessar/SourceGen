@@ -29,9 +29,17 @@ internal closed record class TypeData(
 
     /// <summary>
     /// Gets whether generated code cannot construct the type: an interface, an abstract or static class, or a class without
-    /// a public or internal constructor. Only recorded with the constructor parameters; <see langword="false"/> otherwise.
+    /// a public constructor or an internal one it can access (declared in the same assembly, or in one that gives it access
+    /// to its internals). Only recorded for implementation types with the constructor parameters; <see langword="false"/> otherwise.
     /// </summary>
     public bool IsNotConstructible { get; init; }
+
+    /// <summary>
+    /// Gets whether Microsoft.Extensions.DependencyInjection cannot activate the type with the constructor generated code
+    /// selects, since it calls public constructors only: the type cannot be constructed, or the selected constructor is not
+    /// public. Recorded like <see cref="IsNotConstructible"/>.
+    /// </summary>
+    public bool IsNotActivatable { get; init; }
 }
 
 /// <summary>

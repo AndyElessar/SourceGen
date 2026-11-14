@@ -18,6 +18,7 @@ Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use 
 - Field/Property/Method has `[IocInject]` attribute
 - Decorator pattern is used
 - Factory or Instance is specified
+- The selected constructor is not public, such as an `internal` one (MS.E.DI calls public constructors only, so it would call another constructor or fail). Constructors are selected among those accessible from the compiled assembly: public ones, and internal ones declared in it or in an assembly that gives it access with `InternalsVisibleTo`; for an open generic implementation, the open registration is not emitted and each closed registration constructs the closed type (see [Generic Registration](Register.Generics.spec.md))
 
 The following cases are handled natively by MS.E.DI and do **NOT** require factory method:
 

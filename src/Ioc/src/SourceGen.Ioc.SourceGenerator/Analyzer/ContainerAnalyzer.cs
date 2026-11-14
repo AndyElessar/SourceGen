@@ -294,7 +294,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
 
         var cancellationToken = context.CancellationToken;
         var registrations = ResolveRegistrations(context.Compilation, analyzerContext, cancellationToken);
-        var asyncInitServiceKeys = BuildAsyncInitServiceKeys(analyzerContext.Features, registrations, cancellationToken);
+        var asyncInitServiceKeys = BuildAsyncInitServiceKeys(analyzerContext.Features, registrations, context.Compilation.Assembly, cancellationToken);
 
         // SGIOC027/029: async-init semantic validation runs on ALL containers
         foreach(var container in analyzerContext.Containers)
@@ -312,7 +312,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
             containers[container.Symbol] = container;
 
         var scopeBuilder = new ContainerScopeBuilder(registrations, containers, context.Compilation.Assembly);
-        var dependencyCache = new DependencyCache();
+        var dependencyCache = new DependencyCache(context.Compilation.Assembly);
 
         // Containers that use every registration of the compilation share the same unresolved dependencies
         List<(Location? Location, string ServiceType)>? sharedUnresolvedDependencies = null;
@@ -354,6 +354,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
     private static HashSet<ServiceSymbolKey> BuildAsyncInitServiceKeys(
         IocFeatures features,
         List<ResolvedRegistration> registrations,
+        IAssemblySymbol assembly,
         CancellationToken cancellationToken)
     {
         var asyncInitServiceKeys = new HashSet<ServiceSymbolKey>();
@@ -374,7 +375,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
 
             foreach(var serviceType in registration.ServiceTypes)
             {
-                if(isAsyncInit || AnalyzerHelpers.HasAsyncDecorator(implementationType, serviceType, registration.Decorators, features))
+                if(isAsyncInit || AnalyzerHelpers.HasAsyncDecorator(implementationType, serviceType, registration.Decorators, features, assembly))
                     asyncInitServiceKeys.Add(new(serviceType, registration.Key));
             }
         }

@@ -1153,7 +1153,8 @@ partial class ContainerAnalyzer
     /// The key of a dependency follows the generator: <c>[FromKeyedServices(key)]</c> takes precedence over the key of
     /// <c>[IocInject]</c> / <c>[Inject]</c> on the parameter, which takes precedence over the key of an injected method.
     /// </summary>
-    private sealed class DependencyCache
+    /// <param name="assembly">The assembly being compiled, which the generated code is compiled into.</param>
+    private sealed class DependencyCache(IAssemblySymbol assembly)
     {
         private readonly Dictionary<ISymbol, List<Dependency>> _cache = new(SymbolEqualityComparer.Default);
 
@@ -1165,7 +1166,7 @@ partial class ContainerAnalyzer
 
             dependencies = [];
 
-            var constructor = implementationType.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var constructor = implementationType.GetSelectedConstructor(assembly);
             if(constructor is not null)
                 AddParameters(dependencies, constructor.Parameters, methodKey: null, location: null);
 

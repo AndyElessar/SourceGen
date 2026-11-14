@@ -44,8 +44,9 @@ partial class IocSourceGenerator
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
 
-        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
-        return TypeData.CreateGeneric(
+        // Type arguments cannot add IDisposable to a class or change its constructors, so the closed type is disposable and
+        // constructible exactly when the open one is
+        var closedImplType = TypeData.CreateGeneric(
             closedImplTypeName,
             openImplType.NameWithoutGeneric,
             IsOpenGeneric: false,
@@ -55,6 +56,10 @@ partial class IocSourceGenerator
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: openImplType.HasInjectConstructor,
             IsKnownNonDisposable: openImplType.IsKnownNonDisposable);
+
+        return openImplType.IsNotActivatable
+            ? closedImplType with { IsNotConstructible = openImplType.IsNotConstructible, IsNotActivatable = true }
+            : closedImplType;
     }
 
     /// <summary>

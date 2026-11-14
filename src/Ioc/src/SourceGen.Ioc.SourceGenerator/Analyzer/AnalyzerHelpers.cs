@@ -213,11 +213,13 @@ internal static class AnalyzerHelpers
     /// generic constraints), and only async decorators are converted for matching.
     /// </summary>
     /// <param name="implementationType">The implementation type; a self-registration is never decorated.</param>
+    /// <param name="assembly">The assembly being compiled, which selects the decorator constructors like the generator.</param>
     public static bool HasAsyncDecorator(
         INamedTypeSymbol implementationType,
         INamedTypeSymbol serviceType,
         ImmutableArray<INamedTypeSymbol> decorators,
-        IocFeatures features)
+        IocFeatures features,
+        IAssemblySymbol assembly)
     {
         if((features & IocFeatures.AsyncMethodInject) == 0
             || decorators.IsDefaultOrEmpty
@@ -233,7 +235,7 @@ internal static class AnalyzerHelpers
                 continue;
 
             serviceTypeData ??= serviceType.GetTypeData();
-            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true), serviceTypeData) is not null)
+            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: assembly), serviceTypeData) is not null)
                 return true;
         }
 
@@ -241,7 +243,7 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
-    /// <see cref="HasAsyncDecorator(INamedTypeSymbol, INamedTypeSymbol, ImmutableArray{INamedTypeSymbol}, IocFeatures)"/>
+    /// <see cref="HasAsyncDecorator(INamedTypeSymbol, INamedTypeSymbol, ImmutableArray{INamedTypeSymbol}, IocFeatures, IAssemblySymbol)"/>
     /// for decorators already extracted by <c>GetDecorators</c> (with injection members and hierarchy), such as the
     /// decorators of default settings.
     /// </summary>

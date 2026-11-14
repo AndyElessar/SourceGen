@@ -58,11 +58,16 @@ internal static partial class TransformExtensions
         /// <param name="extractHierarchy">Whether to extract all interfaces and base classes.</param>
         /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions.</param>
         /// <param name="extractInjectionMembers">Whether to extract injection members (properties, fields, methods with [IocInject] attributes). Used for decorators.</param>
+        /// <param name="constructedIn">
+        /// The assembly the generated code is compiled into. With <paramref name="extractConstructorParams"/>, records
+        /// <see cref="TypeData.IsNotConstructible"/> and <see cref="TypeData.IsNotActivatable"/>; needed for implementation types.
+        /// </param>
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
             bool extractHierarchy = false,
             SemanticModel? semanticModel = null,
-            bool extractInjectionMembers = false)
+            bool extractInjectionMembers = false,
+            IAssemblySymbol? constructedIn = null)
         {
             // Build type name - for unbound generics, use actual type parameter names
             var typeName = typeSymbol.BuildTypeName();
@@ -76,9 +81,10 @@ internal static partial class TransformExtensions
 
             ImmutableEquatableArray<ParameterData>? constructorParams = null;
             bool hasInjectConstructor = false;
+            IMethodSymbol? constructor = null;
             if(extractConstructorParams)
             {
-                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel);
+                (constructorParams, hasInjectConstructor, constructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel, constructedIn);
             }
 
             // Extract injection members if requested (for decorators)
@@ -116,8 +122,15 @@ internal static partial class TransformExtensions
                 allBaseClasses,
                 isKnownNonDisposable);
 
-            return extractConstructorParams && !typeSymbol.IsConstructible
-                ? typeData with { IsNotConstructible = true }
+            if(!extractConstructorParams || constructedIn is null)
+                return typeData;
+
+            // MS.DI calls a public constructor of its own choice, so generated code constructs a type whose selected constructor
+            // is not public (an implicit default constructor of a class is public)
+            var isNotConstructible = !typeSymbol.IsConstructibleIn(constructedIn);
+            var isNotActivatable = isNotConstructible || constructor is { DeclaredAccessibility: not Accessibility.Public };
+            return isNotActivatable
+                ? typeData with { IsNotConstructible = isNotConstructible, IsNotActivatable = true }
                 : typeData;
         }
 

@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SourceGen.Ioc.Test.Analyzer;
 
@@ -155,6 +156,44 @@ public class SGIOC039Tests
 
         await Assert.That(sgioc039).Count().IsEqualTo(1);
         await Assert.That(sgioc039[0]).Contains("Service type 'EntityHandler' of 'EntityHandler'");
+    }
+
+    [Test]
+    [Arguments("InternalConstructor", "", 1)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 0)]
+    public async Task SGIOC039_InternalConstructorInReferencedAssembly_ReportsWhenInaccessible(string scenario, string internalsVisibleTo, int expected)
+    {
+        // An internal constructor of another assembly can be called only when that assembly gives access to its internals
+        var librarySource = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace TestNamespace;
+
+            {{Declarations}}
+
+            public sealed class EntityHandler : IRequestHandler<Task<Entity>>
+            {
+                internal EntityHandler() { }
+            }
+            """;
+        var library = SourceGeneratorTestHelper.CreateCompilation("Library", librarySource);
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor<EntityHandler>(RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))]
+            """;
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
+
+        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).Count().IsEqualTo(expected);
     }
 
     [Test]

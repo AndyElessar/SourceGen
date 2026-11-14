@@ -476,7 +476,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             defaultAttributes.ToImmutable(),
             duplicatedDefaults,
             seenDefaultTargetTypes,
-            features);
+            features,
+            context.Compilation.Assembly);
 
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyRegistrations = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
@@ -659,7 +660,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             context.CancellationToken.ThrowIfCancellationRequested();
 
             var decorator = applied.Key;
-            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var constructor = decorator.GetSelectedConstructor(analyzerContext.Assembly);
             ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = [.. decorator.GetInjectedMembers()];
             foreach(var decoratedParameterIndex in applied.Value.Keys)
             {
@@ -692,7 +693,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             cancellationToken.ThrowIfCancellationRequested();
 
             var decorator = usages.Key;
-            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var constructor = decorator.GetSelectedConstructor(analyzerContext.Assembly);
             var decoratorName = decorator.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
             foreach(var usage in usages.Value)
             {
