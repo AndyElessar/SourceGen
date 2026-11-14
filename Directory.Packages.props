@@ -11,7 +11,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(RoslynVersion)" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="$(RoslynVersion)" />
     <!-- Build Infra & Packaging -->
-    <PackageVersion Include="PolySharp" Version="1.17.0" />
+    <PackageVersion Include="PolySharp" Version="1.17.1" />
     <PackageVersion Include="PolyType.Roslyn" Version="2.0.0-rc.4" />
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.3.180" />
