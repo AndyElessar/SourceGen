@@ -10,7 +10,7 @@ internal static partial class RoslynExtensions
     /// <param name="expression">The expression inside nameof().</param>
     /// <param name="semanticModel">The semantic model to use for symbol resolution.</param>
     /// <returns>The full access path if successfully resolved; otherwise, null.</returns>
-    public static string? ResolveNameofExpression(ExpressionSyntax expression, SemanticModel semanticModel)
+    public static string? ResolveNameofExpression(ExpressionSyntax expression, SemanticModel semanticModel, bool keepTypeArguments = false)
     {
         var symbol = ResolveExpressionSymbol(expression, semanticModel);
 
@@ -19,7 +19,7 @@ internal static partial class RoslynExtensions
 
         // If the expression already contains a member access (e.g., KeyHolder.Key),
         // we need to resolve it to ensure we get the fully qualified path
-        return symbol.FullAccessPath;
+        return keepTypeArguments ? symbol.MemberAccessPath : symbol.FullAccessPath;
     }
 
     /// <summary>

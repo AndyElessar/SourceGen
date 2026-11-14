@@ -46,6 +46,118 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    [Arguments("NonGenericNamesake", "nameof(Node.Default)", "global::TestNamespace.Node.Default")]
+    [Arguments("OtherGenericType", "nameof(Holder<T>.Default)", "global::TestNamespace.Holder<string>.Default")]
+    public async Task Instance_OpenGeneric_ClosesOnlyTypeParametersOfImplementation(string scenario, string instance, string expected)
+    {
+        // Only the implementation's type parameters in the instance path are closed: a non-generic namesake of the
+        // implementation type is kept, and a member of another generic type is read from that type
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public static class Node
+            {
+                public static readonly Node<string> Default = new();
+            }
+
+            public static class Holder<T>
+            {
+                public static readonly Node<T> Default = new();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Instance = {{instance}})]
+            public sealed class Node<T> : INode<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains(expected);
+        }
+    }
+
+    [Test]
+    [Arguments("UnboundNameof", "[IocRegisterFor(typeof(Node<>), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Instance = nameof(Node<>.Default))] public static class Config; public sealed class Node<T> : INode<T> { public static readonly Node<T> Default = new(); }", "global::TestNamespace.Node<string>.Default")]
+    [Arguments("GenericBaseMember", "public abstract class NodeBase<T> { public static readonly Node<T> Default = new(); } [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Instance = nameof(Default))] public sealed class Node<T> : NodeBase<T>, INode<T>;", "global::TestNamespace.NodeBase<string>.Default")]
+    public async Task Instance_OpenGeneric_ReadsMemberOfClosedContainingType(string scenario, string declarations, string expected)
+    {
+        // The containing type of the instance is closed whether it is the implementation type named by an unbound
+        // nameof() or a generic base type declaring the member
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            {{declarations}}
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains(expected);
+        }
+    }
+
+    [Test]
+    public async Task Instance_MemberOfClosedGenericType_KeepsTypeArguments()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+
+            public static class Holder<T>
+            {
+                public static readonly MyService Default = new();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Instance = nameof(Holder<int>.Default))]
+            public sealed class MyService : IMyService;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.Holder<int>.Default");
+        }
+    }
+
+    [Test]
     [Arguments("DefaultFactory", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.MyServiceFactory.Create))]", "")]
     [Arguments("OwnFactory", "", ", Factory = nameof(MyServiceFactory.Create)")]
     public async Task Instance_WithFactory_UsesInstanceInRegisterAndContainer(string scenario, string defaults, string ownFactory)

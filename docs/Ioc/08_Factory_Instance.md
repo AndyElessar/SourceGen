@@ -179,6 +179,8 @@ public sealed class Node<T> : INode<T>
 // A dependency on INode<string> registers Node<string>.Default
 ```
 
+The instance can also be a member of another generic type that uses the implementation's type parameters, such as `Instance = nameof(Holder<T>.Default)`, which reads `Holder<string>.Default` for `Node<string>`. With `IocRegisterFor(typeof(Node<>))`, use the unbound form `Instance = nameof(Node<>.Default)`: a closed form such as `nameof(Node<int>.Default)` reads `Node<int>.Default` for every closed type.
+
 ### Instance with Keyed Service
 
 ```csharp

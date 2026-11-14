@@ -43,6 +43,15 @@ internal static partial class RoslynExtensions
                 return $"global::{string.Join(".", pathParts)}";
             }
         }
+
+        /// <summary>
+        /// Builds the fully qualified access path for a member, keeping the type arguments of its containing type,
+        /// such as <c>global::MyApp.Holder&lt;int&gt;.Default</c> or <c>global::MyApp.Node&lt;T&gt;.Default</c>.
+        /// A symbol without a containing type returns <see cref="FullAccessPath"/>.
+        /// </summary>
+        public string MemberAccessPath => symbol.ContainingType is { } containingType
+            ? $"{containingType.FullyQualifiedName}.{symbol.Name}"
+            : symbol.FullAccessPath;
     }
 
     extension(ITypeSymbol typeSymbol)

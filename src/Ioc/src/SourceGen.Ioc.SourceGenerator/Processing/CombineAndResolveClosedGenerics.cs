@@ -552,8 +552,8 @@ partial class IocSourceGenerator
         var skipImplementation = implFactory is null && openGenericInfo.Factory is not null && openImplType.IsNotConstructible;
         var registrationCountBefore = registrations.Count;
 
-        // An instance declared on the open implementation type, such as Node<T>.Default, is read from the closed type
-        var closedInstance = CloseInstancePath(openGenericInfo.Instance, openImplType, closedImplTypeName);
+        // An instance whose path uses the implementation's type parameters, such as Node<T>.Default, is read from the closed type
+        var closedInstance = openGenericInfo.Instance is { } instance ? SubstituteTypeArguments(instance, implTypeArgMap) : null;
 
         // Injection members are written with the implementation's type parameters, such as IRepo<T> for Outer<T>
         var closedInjectionMembers = SubstituteInjectionMembers(openGenericInfo.InjectionMembers, implTypeArgMap, typeArguments);
@@ -637,19 +637,6 @@ partial class IocSourceGenerator
 
         closingSource = new ClosingSource(openImplType.Name, implTypeArgMap);
         return true; // Successfully generated registration
-    }
-
-    /// <summary>
-    /// Gets the path of an instance for a closed implementation type: a member of the open implementation type, such as
-    /// <c>global::NS.Node.Default</c> for <c>Node&lt;T&gt;</c>, is read from the closed type (<c>global::NS.Node&lt;string&gt;.Default</c>).
-    /// Other paths are kept.
-    /// </summary>
-    private static string? CloseInstancePath(string? instance, GenericTypeData openImplType, string closedImplTypeName)
-    {
-        var prefix = openImplType.NameWithoutGeneric + ".";
-        return instance is not null && instance.StartsWith(prefix, StringComparison.Ordinal)
-            ? closedImplTypeName + instance.Substring(prefix.Length - 1)
-            : instance;
     }
 
     /// <summary>

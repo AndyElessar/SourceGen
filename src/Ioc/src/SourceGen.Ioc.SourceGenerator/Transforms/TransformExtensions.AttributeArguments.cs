@@ -378,8 +378,10 @@ internal static partial class TransformExtensions
                     if(namedArg.Value.IsNull)
                         return null;
 
-                    // Try to get original syntax for nameof() expressions with full access path resolution
-                    return attribute.TryGetNameof("Instance", semanticModel)
+                    // Try to get original syntax for nameof() expressions with full access path resolution. The path keeps
+                    // the type arguments of the containing type, such as Holder<int>.Default, and those of an open
+                    // generic implementation type, such as Node<T>.Default, which are closed per registration
+                    return attribute.TryGetNameof("Instance", semanticModel, keepTypeArguments: true)
                         ?? namedArg.Value.Value?.ToString();
                 }
             }
