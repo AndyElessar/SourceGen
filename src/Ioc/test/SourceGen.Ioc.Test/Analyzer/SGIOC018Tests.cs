@@ -1850,6 +1850,85 @@ public class SGIOC018Tests
     }
 
     [Test]
+    public async Task SGIOC018_InjectMembers_GetterOnlyInterfaceMember_ChecksImplementation()
+    {
+        // The interface property has no setter, but the generator injects its implementation, which has one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Node), ServiceTypes = [typeof(INode)], InjectMembers = [nameof(INode.Repo)])]
+
+            namespace TestNamespace;
+
+            public interface IRepo;
+
+            public interface INode
+            {
+                IRepo Repo { get; }
+            }
+
+            public sealed class Node : INode
+            {
+                public IRepo Repo { get; set; } = null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).Contains("IRepo");
+    }
+
+    [Test]
+    [Arguments("typeof(Node<>)", "nameof(Node<int>.Repo)")]
+    [Arguments("typeof(Node<string>)", "nameof(Node<int>.Repo)")]
+    [Arguments("typeof(Node<>)", "nameof(INode<int>.Repo)")]
+    [Arguments("typeof(Node<string>)", "nameof(INode<int>.Repo)")]
+    public async Task SGIOC018_InjectMembers_NamedWithOtherTypeArguments_ChecksMemberOfRegisteredType(string registeredType, string injectMember)
+    {
+        // nameof(Node<int>.Repo) and nameof(INode<int>.Repo) only name the member: Node<T> injects IRepo<T> (not analyzed,
+        // like its constructor), and Node<string> injects the registered IRepo<string>, not IRepo<int>
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor({{registeredType}}, ServiceTypes = [typeof(INode<>)], InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            public interface INode<T>
+            {
+                IRepo<T>? Repo { get; set; }
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<string>)])]
+            public sealed class StringRepo : IRepo<string>;
+
+            public sealed class Node<T> : INode<T>
+            {
+                public IRepo<T>? Repo { get; set; }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).IsEmpty();
+    }
+
+    [Test]
     public async Task SGIOC018_InjectMembers_OfExternalImplementation_ReportedOnAttribute()
     {
         const string externalSource = """

@@ -50,6 +50,10 @@ Properties and fields marked with `[IocInject]` or `[Inject]` are analyzed for i
 - Nullable annotation (`T?`): Use `GetService<T>()` (non-required) instead of `GetRequiredService<T>()`
 - Property/Field with initializer: Treated as having a default value, use optional resolution. An initializer of `null`, `null!`, `default` or `default!` marks a required member, not a default value.
 
+### InjectMembers
+
+The `InjectMembers` property of a registration attribute lists members to inject like `[IocInject]` members (`[IocInject]` on the member takes precedence). `nameof()` only names a member: the member MUST be resolved as a member of the registered type (or of one of its base classes), whatever type arguments the `nameof()` expression uses. For an open generic registration, `InjectMembers = [nameof(Node<int>.Repo)]` injects `Node<T>.Repo`, so `Node<string>` injects `IRepo<string>`, not `IRepo<int>`; a member inherited from `NodeBase<T>` uses the type arguments `Node<T>` gives its base class. An interface member, such as `nameof(INode<int>.Repo)`, MUST be resolved to its implementation on the registered type (`Node<T>.Repo`). A member that the registered type does not have (declared on an unrelated type, or only as a default interface implementation), or that it implements explicitly, cannot be assigned or called on it and MUST NOT be injected (the analyzer reports `SGIOC024`).
+
 ### Optional Parameter Handling (constructor and method parameters)
 
 When a parameter has a default value, it MUST receive the resolved service, or its default value when the service is not registered. The Register and Container output MUST compile for any parameter type:

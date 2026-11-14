@@ -203,11 +203,13 @@ Report when `IocInjectAttribute`/`InjectAttribute` is mark on:
 - method with an unsupported return type
 - method that is generic (has type parameters)
 - method that is not an ordinary method (e.g., constructor, operator)
+- explicit interface implementation
 
 **Analysis:**
 
 - Checks members (properties, fields, methods) marked with `[IocInject]` or `[Inject]`.
 - Reports when:
+  - Member is an explicit interface implementation, whose name cannot be assigned or called on the type (`it is an explicit interface implementation`).
   - Member is static.
   - Member is not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated code runs in a public static context).
   - Property has no setter or setter is private.
@@ -401,7 +403,7 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
 - Each container is analyzed with its own registrations ([Container Scope](#container-scope)): `ExplicitOnly`, `IncludeTags` and imported modules decide which implementation types are analyzed and which service types resolve a dependency.
 - Analyzes every implementation type of the container's own registrations. Implementations of imported modules are analyzed as part of their own container. Service types that are only exposed by a registration (interfaces, base classes from `RegisterAllBaseClasses`, explicit `ServiceTypes`) are NOT analyzed as implementations, because the generator only constructs the implementation type and injects the members declared on it.
 - The dependencies checked depend on how the container creates the instance of a registration:
-  - Constructor (default): the constructor parameters, the properties, fields and method parameters with `[IocInject]` or `[Inject]`, and the members listed in `InjectMembers` (`[IocInject]` on a member takes precedence). `InjectMembers` dependencies are reported on their attribute element, so they are checked even when the implementation type is declared in another assembly.
+  - Constructor (default): the constructor parameters, the properties, fields and method parameters with `[IocInject]` or `[Inject]`, and the members listed in `InjectMembers` (`[IocInject]` on a member takes precedence). `InjectMembers` dependencies are reported on their attribute element, so they are checked even when the implementation type is declared in another assembly. Like the generator, an `InjectMembers` member is resolved on the registered implementation type whatever type arguments its `nameof()` uses (`nameof(Node<int>.Repo)` of `Node<T>` checks `IRepo<T>`, which is not analyzed because it uses a type parameter).
   - `Factory` (of the registration, otherwise of the matching `[IocRegisterDefaults]`): only the factory method parameters, except `IServiceProvider` and `[ServiceKey]`. The constructor and injected members are not checked. A factory that cannot be resolved (a string, or settings imported from another assembly) is not analyzed. Factory methods declared in another assembly are not analyzed.
   - `Instance`: no dependencies.
 - For each dependency:
@@ -549,8 +551,10 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
 
 **Analysis:**
 
-- Checks members specified via `nameof()` in the `InjectMembers` array.
+- Checks members specified via `nameof()` in the `InjectMembers` array, resolved on the registered type like the generator (see [Injection](../../Spec/Register.Injection.spec.md#injectmembers)): `nameof(Node<int>.Repo)` and `nameof(INode<int>.Repo)` check `Node<T>.Repo`.
 - Reports when the member is:
+  - not a member of the registered type (declared on a type it neither is, inherits, nor implements, or a default interface implementation): `it is not a member of 'Node<T>'`
+  - an explicit interface implementation, whose name cannot be assigned or called on the registered type
   - static
   - not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated registration code runs in a public static context)
   - property without setter or with private setter
@@ -768,7 +772,7 @@ Report when a dependency of an open generic registration (or of one of its decor
 - Builds the open generic registrations of the compilation (implementation, service types, interfaces, decorators, injected members) like the generator's open generic entries, and runs the generator's own analysis on them, so the reported dependencies are the ones the generator does not close.
 - The analysis is static: an expanding dependency is reported whether or not a dependency of a closed registration reaches the open generic registration.
 - A dependency is deferred (`SGIOC037`) when each of its expanding cycles has a dependency wrapped in `Lazy<T>` or `Func<...>` (also inside collections); otherwise `SGIOC036` is reported. Cycles are found among the dependencies without such a wrapper, so a `Lazy<T>` on another cycle does not make an eager expanding cycle deferred.
-- Reports once per constructor parameter, injected property or field, or injected method parameter, at that symbol, when it is declared in source. Injected members whose feature is disabled (`SGIOC022`) are not reported.
+- Reports once per constructor parameter, injected property or field, or injected method parameter, at that symbol, when it is declared in source. A member listed in `InjectMembers` of the registration attribute (resolved on the open generic implementation, like the generator) is reported once at its `InjectMembers` element, unless `[IocInject]` on the member takes precedence. The members are collected by the attribute syntax node action, which has the semantic model that `nameof()` needs. Injected members whose feature is disabled (`SGIOC022`) are not reported.
 
 **Message format:** `Dependency '{DependencyType}' of '{Implementation}' nests type arguments deeper on every round of a dependency cycle without a Lazy<T> or Func<T> dependency, so its object graph is infinite and it is not closed at compile time`
 

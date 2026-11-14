@@ -95,6 +95,77 @@ internal static partial class RoslynExtensions
         }
     }
 
+    extension(ISymbol member)
+    {
+        /// <summary>
+        /// Gets this member as a member of <paramref name="type"/>, so its type uses the type arguments of
+        /// <paramref name="type"/>: <c>Node&lt;T&gt;.Repo</c> for <c>Node&lt;int&gt;.Repo</c> named by
+        /// <c>nameof(Node&lt;int&gt;.Repo)</c>, the member of a base class as <paramref name="type"/> inherits it, and the
+        /// implementation of an interface member, such as <c>Node&lt;T&gt;.Repo</c> for <c>INode&lt;int&gt;.Repo</c> (an
+        /// explicit implementation for an explicitly implemented member).
+        /// </summary>
+        /// <param name="type">The registered type; an unbound generic type is read as its definition.</param>
+        /// <returns><see langword="null"/> when <paramref name="type"/> does not have or implement the member.</returns>
+        public ISymbol? AsMemberOf(INamedTypeSymbol type)
+        {
+            if(member.ContainingType is not { } containingType)
+            {
+                return null;
+            }
+
+            var target = type.IsUnboundGenericType ? type.OriginalDefinition : type;
+            if(containingType.TypeKind == TypeKind.Interface)
+            {
+                // The interface as the type implements it: the same one first, otherwise the first with its definition
+                INamedTypeSymbol? implemented = null;
+                foreach(var iface in target.AllInterfaces)
+                {
+                    if(SymbolEqualityComparer.Default.Equals(iface, containingType))
+                    {
+                        implemented = iface;
+                        break;
+                    }
+
+                    if(implemented is null && SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, containingType.OriginalDefinition))
+                    {
+                        implemented = iface;
+                    }
+                }
+
+                // A default interface implementation is not a member of the type
+                return implemented is not null
+                    && FindMember(implemented) is { } interfaceMember
+                    && target.FindImplementationForInterfaceMember(interfaceMember) is { ContainingType.TypeKind: not TypeKind.Interface } implementation
+                        ? implementation
+                        : null;
+            }
+
+            for(var current = target; current is not null; current = current.BaseType)
+            {
+                if(SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, containingType.OriginalDefinition))
+                {
+                    return FindMember(current);
+                }
+            }
+
+            return null;
+
+            ISymbol? FindMember(INamedTypeSymbol owner)
+            {
+                var memberDefinition = member.OriginalDefinition;
+                foreach(var candidate in owner.GetMembers(member.Name))
+                {
+                    if(SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, memberDefinition))
+                    {
+                        return candidate;
+                    }
+                }
+
+                return null;
+            }
+        }
+    }
+
     /// <summary>
     /// Checks if sourceType is assignable to targetType.
     /// Returns true if a value of sourceType can be assigned to a variable of targetType.

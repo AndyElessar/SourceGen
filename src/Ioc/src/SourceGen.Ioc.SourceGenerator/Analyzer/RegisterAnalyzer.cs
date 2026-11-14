@@ -526,7 +526,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             attributeClass = boundAttributeClass;
         }
 
-        AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, analyzerContext);
+        AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
         ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
     }
 

@@ -180,7 +180,7 @@ public sealed partial class RegisterAnalyzer
 
         // SGIOC036/SGIOC037: open generic registrations are closed on demand for the dependencies the generator discovers
         if(targetType.IsUnboundGenericType || targetType is { IsGenericType: true, IsDefinition: true })
-            analyzerContext.OpenGenericRegistrations.Add((targetType, registrations, decorators));
+            analyzerContext.OpenGenericRegistrations.Add((targetType, registrations, decorators, attribute.ApplicationSyntaxReference));
 
         RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
     }
@@ -461,6 +461,26 @@ public sealed partial class RegisterAnalyzer
                 SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attributeClass)
                 && attr.ApplicationSyntaxReference?.SyntaxTree == syntaxTree
                 && attr.ApplicationSyntaxReference?.Span == attributeSyntax.Span);
+    }
+
+    /// <summary>
+    /// Gets the type a registration attribute registers: the target of <c>[IocRegisterFor]</c>, otherwise the type the
+    /// attribute is applied to.
+    /// </summary>
+    /// <param name="attributeData">The attribute data when known (assembly-level registrations); otherwise looked up.</param>
+    private static INamedTypeSymbol? GetRegistrationTargetType(
+        SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass,
+        AttributeData? attributeData,
+        AnalyzerContext analyzerContext)
+    {
+        if(!AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols))
+            return GetTypeLevelTargetType(context, attributeSyntax);
+
+        // A target type that does not compile is already reported by the compiler
+        attributeData ??= GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
+        return attributeData?.GetTargetTypeFromRegisterForAttribute() is { TypeKind: not TypeKind.Error } targetType ? targetType : null;
     }
 
     private static INamedTypeSymbol? GetTypeLevelTargetType(
@@ -794,7 +814,14 @@ public sealed partial class RegisterAnalyzer
         /// The open generic registrations, with their service types and decorators, whose expanding dependencies are
         /// reported (SGIOC036/SGIOC037).
         /// </summary>
-        public ConcurrentBag<(INamedTypeSymbol Implementation, ImmutableArray<ServiceSymbolKey> Registrations, ImmutableArray<INamedTypeSymbol> Decorators)> OpenGenericRegistrations { get; } = [];
+        public ConcurrentBag<(INamedTypeSymbol Implementation, ImmutableArray<ServiceSymbolKey> Registrations, ImmutableArray<INamedTypeSymbol> Decorators, SyntaxReference? Attribute)> OpenGenericRegistrations { get; } = [];
+
+        /// <summary>
+        /// The injectable members listed in <c>InjectMembers</c> of registration attributes, with the locations of their
+        /// elements, by the span of the attribute. Populated by RegisterSyntaxNodeAction, which has the semantic model that
+        /// <c>nameof()</c> needs; consumed by SGIOC036/SGIOC037 in CompilationEnd.
+        /// </summary>
+        public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), ImmutableArray<(ISymbol Member, Location Location)>> InjectMembers { get; } = new();
 
         private readonly ConcurrentDictionary<INamedTypeSymbol, TypeData> decoratorTypeData = new(SymbolEqualityComparer.Default);
 

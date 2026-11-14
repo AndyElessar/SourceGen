@@ -8,6 +8,40 @@ namespace SourceGen.Ioc.Test.Analyzer;
 public class SGIOC007Tests
 {
     [Test]
+    [Arguments("IRepo IOwner.Repo { get; set; } = null!;")]
+    [Arguments("void IOwner.Initialize(IRepo repo) { }")]
+    public async Task SGIOC007_InjectAttribute_OnExplicitInterfaceImplementation_ReportsDiagnostic(string member)
+    {
+        var source = $$"""
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo;
+
+            public interface IOwner
+            {
+                IRepo Repo { get; set; }
+                void Initialize(IRepo repo);
+            }
+
+            [IocRegister]
+            public sealed class Owner : IOwner
+            {
+                [IocInject]
+                {{member}}
+                {{(member.StartsWith("void") ? "IRepo IOwner.Repo { get; set; } = null!;" : "void IOwner.Initialize(IRepo repo) { }")}}
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc007 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC007").ToList();
+
+        await Assert.That(sgioc007).Count().IsEqualTo(1);
+        await Assert.That(sgioc007[0].GetMessage()).Contains("it is an explicit interface implementation");
+    }
+
+    [Test]
     public async Task SGIOC007_InjectAttribute_OnStaticProperty_ReportsDiagnostic()
     {
         const string source = """

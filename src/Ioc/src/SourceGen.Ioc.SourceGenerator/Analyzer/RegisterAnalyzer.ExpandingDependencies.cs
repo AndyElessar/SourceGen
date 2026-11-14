@@ -19,15 +19,24 @@ partial class RegisterAnalyzer
             return;
 
         var index = new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
-        var owners = new Dictionary<string, (INamedTypeSymbol Symbol, TypeData TypeData)>(StringComparer.Ordinal);
+        var owners = new Dictionary<string, (INamedTypeSymbol Symbol, TypeData TypeData, List<(ISymbol Member, Location Location)> InjectMembers)>(StringComparer.Ordinal);
         var decoratorTypeData = new Dictionary<INamedTypeSymbol, TypeData>(SymbolEqualityComparer.Default);
-        foreach(var (implementation, registrations, decorators) in analyzerContext.OpenGenericRegistrations)
+        foreach(var (implementation, registrations, decorators, attribute) in analyzerContext.OpenGenericRegistrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             // Built like the generator's open generic entries (ProcessSingleRegistration.CreateOpenGenericEntries)
             if(implementation.GetTypeData(extractConstructorParams: true, extractHierarchy: true) is not GenericTypeData { IsOpenGeneric: true, IsNestedOpenGeneric: false } implementationType)
                 continue;
+
+            // InjectMembers are merged like the generator's ExtractAndMergeInjectionMembers: [IocInject] takes precedence
+            var injectedMembers = IocSourceGenerator.ExtractInjectionMembers(implementation);
+            var injectMembers = GetInjectMembers(attribute, injectedMembers);
+            var injectionMembers = injectMembers.Count == 0
+                ? injectedMembers
+                : IocSourceGenerator.MergeInjectionMembers(
+                    injectedMembers,
+                    [.. injectMembers.Select(static m => IocSourceGenerator.CreateInjectionMemberFromSymbol(m.Member, key: null, semanticModel: null)).OfType<InjectionMemberData>()]);
 
             ImmutableEquatableArray<TypeData> decoratorTypes = [.. decorators.Select(GetDecoratorTypeData)];
             ImmutableEquatableArray<TypeData> serviceTypes = [.. registrations.Select(static registration => registration.ServiceType.GetTypeData())];
@@ -41,7 +50,7 @@ partial class RegisterAnalyzer
                 KeyValueType: null,
                 decoratorTypes,
                 Tags: [],
-                IocSourceGenerator.ExtractInjectionMembers(implementation),
+                injectionMembers,
                 Factory: null,
                 Instance: null);
 
@@ -59,18 +68,24 @@ partial class RegisterAnalyzer
                 }
             }
 
-            owners[implementationType.Name] = (implementation, implementationType);
+            // An implementation registered by several attributes reports the InjectMembers of each
+            if(owners.TryGetValue(implementationType.Name, out var owner))
+                owner.InjectMembers.AddRange(injectMembers);
+            else
+                owners[implementationType.Name] = (implementation, implementationType, injectMembers);
+
             for(var i = 0; i < decorators.Length; i++)
             {
-                if(decoratorTypes[i] is GenericTypeData { IsOpenGeneric: true } decoratorType)
-                    owners[decoratorType.Name] = (decorators[i], decoratorType);
+                // A decorator also registered as an implementation keeps the InjectMembers of its registrations
+                if(decoratorTypes[i] is GenericTypeData { IsOpenGeneric: true } decoratorType && !owners.ContainsKey(decoratorType.Name))
+                    owners[decoratorType.Name] = (decorators[i], decoratorType, []);
             }
         }
 
         if(IocSourceGenerator.FindExpandingDependencies(index, EnumerateRootDependencies(analyzerContext), cancellationToken) is not { } expandingDependencies)
             return;
 
-        var reported = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        var reported = new HashSet<Location>();
         var dependencyTypes = new List<(TypeData Type, bool IsDeferred)>();
         foreach(var entry in expandingDependencies)
         {
@@ -85,32 +100,44 @@ partial class RegisterAnalyzer
             var parameters = owner.TypeData.ConstructorParameters ?? [];
             for(var i = 0; i < parameters.Length && i < constructorParameters.Length; i++)
             {
-                Report(constructorParameters[i], parameters[i].Type);
+                Report(constructorParameters[i].Locations.FirstOrDefault(), parameters[i].Type);
             }
 
-            // Members whose injection feature is disabled are not injected (SGIOC022)
             foreach(var (member, _) in definition.GetInjectedMembers())
+            {
+                ReportMember(member, elementLocation: null);
+            }
+
+            // InjectMembers are reported at their attribute elements, like SGIOC018
+            foreach(var (member, location) in owner.InjectMembers)
+            {
+                ReportMember(member, location);
+            }
+
+            // Members whose injection feature is disabled are not injected (SGIOC022). Members are reported at themselves (each
+            // parameter of a method), or at the InjectMembers element that lists them.
+            void ReportMember(ISymbol member, Location? elementLocation)
             {
                 switch(member)
                 {
                     case IPropertySymbol property when IsEnabled(IocFeatures.PropertyInject):
-                        Report(property, property.Type.GetTypeData());
+                        Report(elementLocation ?? property.Locations.FirstOrDefault(), property.Type.GetTypeData());
                         break;
 
                     case IFieldSymbol field when IsEnabled(IocFeatures.FieldInject):
-                        Report(field, field.Type.GetTypeData());
+                        Report(elementLocation ?? field.Locations.FirstOrDefault(), field.Type.GetTypeData());
                         break;
 
                     case IMethodSymbol method when IsEnabled(method.ReturnsVoid ? IocFeatures.MethodInject : IocFeatures.AsyncMethodInject):
                         foreach(var parameter in method.Parameters)
                         {
-                            Report(parameter, parameter.Type.GetTypeData());
+                            Report(elementLocation ?? parameter.Locations.FirstOrDefault(), parameter.Type.GetTypeData());
                         }
                         break;
                 }
             }
 
-            void Report(ISymbol dependencySymbol, TypeData dependencyType)
+            void Report(Location? location, TypeData dependencyType)
             {
                 dependencyTypes.Clear();
                 IocSourceGenerator.CollectDependencyTypes(dependencyType, typeParams, isDeferred: false, dependencyTypes);
@@ -120,8 +147,8 @@ partial class RegisterAnalyzer
                     {
                         if(!site.IsExpanding
                             || site.Dependency != type.Name
-                            || dependencySymbol.Locations.FirstOrDefault() is not { IsInSource: true } location
-                            || !reported.Add(dependencySymbol))
+                            || location is not { IsInSource: true }
+                            || !reported.Add(location))
                         {
                             continue;
                         }
@@ -135,6 +162,29 @@ partial class RegisterAnalyzer
                     }
                 }
             }
+        }
+
+        // Gets the InjectMembers of a registration attribute, already resolved on the implementation (Node<T>.Next for
+        // nameof(Node<int>.Next)) by AnalyzeInjectMembersOnAttribute, without those that [IocInject] already injects
+        List<(ISymbol Member, Location Location)> GetInjectMembers(
+            SyntaxReference? attribute,
+            ImmutableEquatableArray<InjectionMemberData> injectedMembers)
+        {
+            if(attribute is null || !analyzerContext.InjectMembers.TryGetValue((attribute.SyntaxTree, attribute.Span), out var members))
+                return [];
+
+            var injectedNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach(var injectedMember in injectedMembers)
+                injectedNames.Add(injectedMember.Name);
+
+            var result = new List<(ISymbol Member, Location Location)>(members.Length);
+            foreach(var (member, location) in members)
+            {
+                if(!injectedNames.Contains(member.Name))
+                    result.Add((member, location));
+            }
+
+            return result;
         }
 
         TypeData GetDecoratorTypeData(INamedTypeSymbol decorator)
