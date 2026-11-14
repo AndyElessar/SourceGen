@@ -50,8 +50,9 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Gets whether a generic factory with a mapping cannot be called for a service type, which is then not registered: its
-    /// mapping does not determine every factory type parameter. A service type with type parameters is not reported when a
-    /// type parameter stands where the template has a constructed type, since some of its closings may match.
+    /// mapping does not determine every factory type parameter, or a repeated placeholder takes different type arguments. A
+    /// service type with type parameters is not reported when some of its closings may match: a type parameter stands where
+    /// the template has a constructed type, or in a type argument that a repeated placeholder takes.
     /// </summary>
     internal static bool IsUnmatchedByGenericFactory(FactoryMethodData factory, TypeData serviceType)
         => factory.TypeParameterCount > 0
@@ -59,7 +60,10 @@ partial class IocSourceGenerator
             && MapGenericFactoryTypeArguments(factory, serviceType, out var hasTypeParameter) is null
             && !hasTypeParameter;
 
-    /// <param name="hasTypeParameter">Whether a type parameter of the service type stands where the template has a constructed type.</param>
+    /// <param name="hasTypeParameter">
+    /// Whether some closing of the service type's type parameters may still match: a type parameter stands where the template
+    /// has a constructed type, or a repeated placeholder takes type arguments that may become equal (<c>T</c> and <c>int</c>).
+    /// </param>
     private static Dictionary<string, TypeData>? MapGenericFactoryTypeArguments(FactoryMethodData factory, TypeData serviceType, out bool hasTypeParameter)
     {
         hasTypeParameter = false;
@@ -70,15 +74,27 @@ partial class IocSourceGenerator
 
         var typeArguments = new Dictionary<string, TypeData>(StringComparer.Ordinal);
         var blocked = false;
+        var conflicting = false;
         Match(pattern, serviceType);
         hasTypeParameter = blocked;
-        return typeArguments.Count == factory.TypeParameterCount ? typeArguments : null;
+        return !conflicting && typeArguments.Count == factory.TypeParameterCount ? typeArguments : null;
 
-        // Generic types are matched by their definition position by position; other types of the template are not compared
+        // Generic types are matched by their definition position by position; other types of the template are not compared.
+        // A placeholder repeated in the template, such as int in IPair<int, int>, MUST take the same type argument at each
+        // position: IPair<A, B> does not match.
         void Match(TypeData patternType, TypeData closedType)
         {
             if(patternType is TypeParameterTypeData)
             {
+                if(typeArguments.TryGetValue(patternType.Name, out var existing) && existing.Name != closedType.Name)
+                {
+                    conflicting = true;
+
+                    // Closings of a type parameter, such as IPair<T, int> with T = int, may still take the same type argument
+                    blocked |= MayBecomeEqual(existing, closedType);
+                    return;
+                }
+
                 typeArguments[patternType.Name] = closedType;
                 return;
             }
@@ -99,6 +115,46 @@ partial class IocSourceGenerator
                     Match(patternArguments[i].Type, closedArguments[i].Type);
                 }
             }
+        }
+
+        // Whether two types written with type parameters may become the same type for some type arguments: a type parameter
+        // may become any type, while generic types must share their definition and each type argument may become equal
+        static bool MayBecomeEqual(TypeData left, TypeData right)
+        {
+            if(left is TypeParameterTypeData || right is TypeParameterTypeData)
+                return true;
+
+            // Arrays (T[] and int[]) may become equal when their element types may; their rank is conservatively ignored.
+            // An array never becomes a type that is not an array.
+            if(left is ArrayTypeData || right is ArrayTypeData)
+            {
+                return left is ArrayTypeData { TypeParameters: [var leftElement] }
+                    && right is ArrayTypeData { TypeParameters: [var rightElement] }
+                    && MayBecomeEqual(leftElement.Type, rightElement.Type);
+            }
+
+            if(left is GenericTypeData { TypeParameters: { Length: > 0 } leftArguments } leftGeneric
+                && right is GenericTypeData { TypeParameters: { Length: > 0 } rightArguments } rightGeneric)
+            {
+                if(leftGeneric.NameWithoutGeneric != rightGeneric.NameWithoutGeneric || leftArguments.Length != rightArguments.Length)
+                    return false;
+
+                for(var i = 0; i < leftArguments.Length; i++)
+                {
+                    if(!MayBecomeEqual(leftArguments[i].Type, rightArguments[i].Type))
+                        return false;
+                }
+
+                return true;
+            }
+
+            // Other types with type parameters that are not generic types with type arguments are conservatively assumed to
+            // may become equal
+            return left.Name == right.Name || IsOtherOpenType(left) || IsOtherOpenType(right);
+
+            // A constructed generic type such as List<T> never becomes a type of another definition, such as int
+            static bool IsOtherOpenType(TypeData type)
+                => type is GenericTypeData { IsOpenGeneric: true, TypeParameters: null or { Length: 0 } };
         }
     }
 

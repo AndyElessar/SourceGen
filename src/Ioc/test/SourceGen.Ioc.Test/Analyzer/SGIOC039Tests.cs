@@ -110,6 +110,39 @@ public class SGIOC039Tests
     }
 
     [Test]
+    [Arguments("TypeParameterMayMatch", "IPair<T, int>", 0)]
+    [Arguments("NeverMatches", "IPair<List<T>, int>", 1)]
+    [Arguments("ArrayMayMatch", "IPair<T[], int[]>", 0)]
+    [Arguments("ArrayOfGenericMayMatch", "IPair<List<T>[], List<int>[]>", 0)]
+    [Arguments("ArrayNeverMatchesInt", "IPair<T[], int>", 1)]
+    public async Task SGIOC039_RepeatedPlaceholderOnOpenImplementation_ReportsOnlyWhenNoClosingMatches(string scenario, string serviceType, int expected)
+    {
+        // IPair<T, int> matches IPair<int, int> when T is int, while List<T> can never be int
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPair<T1, T2>;
+
+            public static class PairFactory
+            {
+                [IocGenericFactory(typeof(IPair<int, int>), typeof(int))]
+                public static IPair<T, T> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(RegisterAllInterfaces = true, Factory = nameof(PairFactory.Create))]
+            public sealed class Pair<T> : {{serviceType}};
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039).Count()).IsEqualTo(expected);
+    }
+
+    [Test]
     public async Task SGIOC039_ImplementationWithoutAccessibleConstructor_ReportsImplementationType()
     {
         var source = CreateSource("", """

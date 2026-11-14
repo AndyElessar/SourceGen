@@ -415,6 +415,8 @@ When a closed generic type is discovered (e.g., `IRequestHandler<Task<Entity>>`)
 2. Extracts actual types from positions matching placeholder types (`int` → `Entity`)
 3. Substitutes them into the factory method call: `Create<Entity>()`
 
+Each placeholder type must appear in the template at least once, and may appear more than once. For `Create<T>()` with `[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]`, `IPair<Entity, Entity>` calls `Create<Entity>()`, while `IPair<Entity, Dto>` gives `int` two different types, so it is not registered (`SGIOC039`).
+
 A closed registration with a generic factory (its own, or from default settings) works the same way:
 
 - each registered type that matches the template calls the closed factory;

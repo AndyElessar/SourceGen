@@ -741,6 +741,47 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    [Arguments("SameTypeArguments", "int", true)]
+    [Arguments("DifferentTypeArguments", "string", false)]
+    public async Task ClosedGenericDependency_RepeatedPlaceholderOnOpenImplementation_ClosesOnlySameTypeArguments(string scenario, string typeArgument, bool registers)
+    {
+        // Pair<T> : IPair<T, int> closed for IPair<X, int> gives the repeated placeholder X and int
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPair<T1, T2>;
+
+            public static class PairFactory
+            {
+                [IocGenericFactory(typeof(IPair<int, int>), typeof(int))]
+                public static IPair<T, T> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IPair<,>)], Factory = nameof(PairFactory.Create))]
+            public sealed class Pair<T> : IPair<T, int>;
+
+            [IocRegister]
+            internal sealed class Consumer(IPair<{{typeArgument}}, int>? pair = null);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration") ?? "", SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") ?? "" })
+        {
+            await Assert.That(output.Contains("global::TestNamespace.PairFactory.Create<int>()")).IsEqualTo(registers);
+            await Assert.That(output).DoesNotContain("PairFactory.Create<string>");
+        }
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_InterfaceTargetUnmatchedByGenericFactory_IsNotRegistered()
     {
         const string source = """

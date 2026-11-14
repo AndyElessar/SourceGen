@@ -38,18 +38,20 @@ public class SGIOC016Tests
     }
 
     [Test]
-    [Arguments("Attribute", "[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]", "")]
-    [Arguments("TypeMapping", "", ", GenericFactoryTypeMapping = [typeof(IPair<int, int>), typeof(int)]")]
-    public async Task SGIOC016_PlaceholderRepeatedInTemplate_ReportsDiagnosticAndDoesNotGenerate(string scenario, string methodAttribute, string mapping)
+    [Arguments("AttributeSameTypeArguments", "[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]", "", "IPair<string, string>", true)]
+    [Arguments("TypeMappingSameTypeArguments", "", ", GenericFactoryTypeMapping = [typeof(IPair<int, int>), typeof(int)]", "IPair<string, string>", true)]
+    [Arguments("AttributeDifferentTypeArguments", "[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]", "", "IPair<string, int>", false)]
+    [Arguments("TypeMappingDifferentTypeArguments", "", ", GenericFactoryTypeMapping = [typeof(IPair<int, int>), typeof(int)]", "IPair<string, int>", false)]
+    public async Task SGIOC016_PlaceholderRepeatedInTemplate_IsValidAndMatchesSameTypeArguments(string scenario, string methodAttribute, string mapping, string target, bool matches)
     {
-        // IPair<A, B> could give int different type arguments, so the mapping cannot determine T
+        // A placeholder may appear more than once; a service type matches only when it takes the same type argument at each position
         var source = $$"""
             using System;
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
             using TestNamespace;
 
-            [assembly: IocRegisterFor(typeof(IPair<string, string>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create){{mapping}})]
+            [assembly: IocRegisterFor(typeof({{target}}), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create){{mapping}})]
 
             namespace TestNamespace;
 
@@ -60,16 +62,23 @@ public class SGIOC016Tests
                 {{methodAttribute}}
                 public static IPair<T, T> Create<T>() => throw new NotImplementedException();
             }
+
+            [IocContainer]
+            public partial class TestContainer;
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
-        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016").ToList();
 
-        await Assert.That(sgioc016).Count().IsEqualTo(1);
-        await Assert.That(sgioc016[0].GetMessage()).Contains("appears more than once").And.Contains("'IPair<int, int>'");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016")).IsEmpty();
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039).Count()).IsEqualTo(matches ? 0 : 1);
 
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
-        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration") ?? "").DoesNotContain("FactoryContainer.Create");
+        await result.VerifyCompilableAsync();
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration") ?? "", SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") ?? "" })
+        {
+            await Assert.That(output.Contains("global::TestNamespace.FactoryContainer.Create<string>()")).IsEqualTo(matches);
+            await Assert.That(output).DoesNotContain("FactoryContainer.Create<int>");
+        }
     }
 
     [Test]

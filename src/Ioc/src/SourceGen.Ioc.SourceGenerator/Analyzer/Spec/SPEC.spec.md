@@ -367,7 +367,7 @@ Report when:
 - Checks every method marked with `[IocGenericFactory]`, whether or not it is referenced as a factory. Reports when:
   - The mapping has no service type template or no placeholder type.
   - The placeholder count differs from the method's type parameter count.
-  - A placeholder type does not appear in the service type template (at any nesting level, including array element types), or appears more than once, such as `int` in `IPair<int, int>`.
+  - A placeholder type does not appear in the service type template (at any nesting level, including array element types). A placeholder MAY appear more than once; a service type that gives it different type arguments is reported by `SGIOC039`.
 - Applies the same count and template checks to `GenericFactoryTypeMapping` on the registration attribute.
 - Duplicate placeholders are reported by `SGIOC017` instead.
 
@@ -822,7 +822,7 @@ Report when a service type of a registration whose `Factory` (its own, or the `F
 **Analysis:**
 
 - Runs at compilation end over the registrations `RegisterAnalyzer` collects, with the `Factory` method resolved by the attribute syntax node action. Registrations with an `Instance`, factories given as a string, and generic factories without a mapping (`SGIOC016`) are not analyzed.
-- Checks each service type of the registration, matched against the template like the generator. The implementation type of a closed registration is checked only when generated code cannot construct it (an interface, an abstract or static class, or a class without a public or internal constructor), such as the target of `[IocRegisterFor<IRequestHandler<Entity>>]`; otherwise it is constructed when the mapping does not match it. A service type of an open generic registration is reported only when it cannot match for any type arguments: a type parameter where the template has a constructed type, such as `IRequestHandler<T>` for the template `IRequestHandler<Task<int>>`, may match some closings and is not reported.
+- Checks each service type of the registration, matched against the template like the generator. The implementation type of a closed registration is checked only when generated code cannot construct it (an interface, an abstract or static class, or a class without a public or internal constructor), such as the target of `[IocRegisterFor<IRequestHandler<Entity>>]`; otherwise it is constructed when the mapping does not match it. A service type of an open generic registration is reported only when it cannot match for any type arguments: a type parameter where the template has a constructed type, such as `IRequestHandler<T>` for the template `IRequestHandler<Task<int>>`, may match some closings and is not reported. A placeholder repeated in the template, such as `int` in `IPair<int, int>`, is reported when it takes different type arguments (`IPair<Entity, Dto>`), unless they may become equal for some closing (`IPair<T, int>`, or `IPair<T[], int[]>`, but not `IPair<List<T>, int>`).
 - The closed types a registration of `[IocRegisterDefaults]` without an implementation type is closed for are discovered from dependencies, so they are not analyzed.
 - Reported once per service type, at the registration attribute.
 
