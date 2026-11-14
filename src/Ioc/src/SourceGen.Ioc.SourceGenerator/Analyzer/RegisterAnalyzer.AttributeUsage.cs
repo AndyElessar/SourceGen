@@ -525,7 +525,7 @@ public sealed partial class RegisterAnalyzer
                 InvalidAttributeUsage,
                 location,
                 targetType.Name,
-                reason);
+                $"it is {reason}");
             reportDiagnostic(diagnostic);
         }
     }
@@ -575,9 +575,9 @@ public sealed partial class RegisterAnalyzer
 
             var reason = definition.TypeKind switch
             {
-                TypeKind.Class => "a class without a constructor accessible from this assembly, and has no Factory or Instance",
-                TypeKind.Interface => "an interface without a Factory or Instance",
-                var kind => $"{(kind is TypeKind.Enum ? "an" : "a")} {kind.ToString().ToLowerInvariant()} without a Factory or Instance",
+                TypeKind.Class => "it has no constructor accessible from this assembly; specify a Factory or Instance",
+                TypeKind.Interface => "it is an interface; specify a Factory or Instance",
+                var kind => $"it is {(kind is TypeKind.Enum ? "an" : "a")} {kind.ToString().ToLowerInvariant()}; specify a Factory or Instance",
             };
             reportDiagnostic(Diagnostic.Create(InvalidAttributeUsage, location, definition.Name, reason));
         }

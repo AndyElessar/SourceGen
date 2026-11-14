@@ -130,6 +130,8 @@ Report when IoCRegisterAttribute or IoCRegisterForAttribute is mark on private o
 - Reports when the type is `private` or is an `abstract` class (not interface).
 - At compilation end, over the registrations `RegisterAnalyzer` collects (`AnalyzeUnconstructibleImplementations`): reports an implementation type without a `Factory` (its own, or the `Factory` of its best default settings) or an `Instance` that is an interface, or a class without a constructor accessible from the compiled assembly: only `private` or `protected` constructors, or `internal` ones declared in a referenced assembly that does not give access with `InternalsVisibleTo`. Open generic implementations are checked the same way. The `ImplementationTypes` of default settings are checked too, reported at the default settings attribute: an open one is created with the `Factory` of its settings, while a closed one never is. Types already reported as `private` or `abstract` are not reported again. Like `SGIOC039`, the registrations of imported modules are not analyzed: the closed types of an imported open entry whose constructor is only accessible in the module's assembly are skipped without a diagnostic.
 
+**Message format:** `The type '{Type}' cannot be registered because {Reason}`, where the reason is `it is private`, `it is abstract`, `it has no constructor accessible from this assembly; specify a Factory or Instance`, or `it is an interface; specify a Factory or Instance` (another type kind, such as an enum, is named likewise).
+
 ---
 
 ### SGIOC002 - Error - Design - Circular Dependency Detected

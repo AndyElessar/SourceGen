@@ -18,7 +18,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor InvalidAttributeUsage = new(
         id: "SGIOC001",
         title: "Invalid Attribute Usage",
-        messageFormat: "The type '{0}' cannot be registered because it is {1}",
+        messageFormat: "The type '{0}' cannot be registered because {1}",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,

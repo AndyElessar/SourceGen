@@ -209,7 +209,7 @@ public class SGIOC001Tests
         await Assert.That(sgioc001).Count().IsEqualTo(expected);
         if(expected > 0)
         {
-            await Assert.That(sgioc001[0].GetMessage()).Contains("'Service'").And.Contains("Factory or Instance");
+            await Assert.That(sgioc001[0].GetMessage()).Contains("'Service'").And.Contains("; specify a Factory or Instance");
         }
     }
 
