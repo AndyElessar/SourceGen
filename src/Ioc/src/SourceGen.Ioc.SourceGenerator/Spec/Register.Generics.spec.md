@@ -169,6 +169,15 @@ A closed generic registration MUST NOT be generated when a type argument does no
 | `Repo<T> : IRepo<T> where T : struct` | `IRepo<string>` | none |
 | `Repo<T> : IRepo<T> where T : IEntity` | `IRepo<Entity>` (`Entity : IEntity`) | `Repo<Entity>` |
 
+### Types Nested in a Generic Type
+
+Open generic registrations are closed with the type arguments of the registered type itself, so the type arguments of a containing type cannot be closed:
+
+- An open type declared in a generic type, such as `Outer<O>.Node<T>`, `Outer<O>.Plain` or `typeof(Outer<>.Node<>)`, MUST NOT be registered, neither as an open generic registration nor closed for the dependencies discovered later (such as `Outer<int>.INode<string>`). The analyzer reports `SGIOC038`.
+- Such a type MUST also be ignored in the other type arguments of registration and default settings attributes: `ServiceTypes` (also of a closed implementation, so `typeof(Outer<>.INode<>)` does not register `Outer<int>.INode<string>`), `Decorators`, `ImplementationTypes`, and the interfaces and base classes an open implementation is registered as with `RegisterAllInterfaces` / `RegisterAllBaseClasses` (such as `Outer<T>.INode<T>` of `Node<T>`, which is neither registered for the open generic registration nor for the closed `Node<int>`), and the forms an open decorator declares (such as `Outer<T>.INode<T>` of `NodeDecorator<T>`, so the decorator is not applied to `Outer<int>.INode<int>`). `[IocRegisterDefaults]` whose target is such a type MUST be ignored as a whole, including its `ImplementationTypes`. Use their closed types instead, such as `ServiceTypes = [typeof(Outer<int>.INode<string>)]`.
+- A closed type declared in a generic type, such as `[IocRegisterFor(typeof(Outer<int>.Node<string>), ServiceTypes = [typeof(Outer<int>.INode<string>)])]`, MUST be registered like any closed type.
+- A type declared in a generic type MUST NOT be matched as a form of its containing type: a dependency `Outer<int>.INode<string>` does not close an open generic registration of `Outer<T>`.
+
 ## Feature 2: Explicit Closed Generic Discovery
 
 When `IocDiscoverAttribute` (or `IocDiscoverAttribute<T>`) is exists, collect `IocDiscoverAttribute.ClosedGenericType` (or `T`) for generate factory code for open generic registrations.

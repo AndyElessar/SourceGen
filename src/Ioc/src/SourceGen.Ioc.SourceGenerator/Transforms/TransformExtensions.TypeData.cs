@@ -206,7 +206,7 @@ internal static partial class TransformExtensions
             }
 
             // Check if this is a wrapper type (collection or non-collection) for DI
-            var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
+            var nameWithoutGeneric = typeSymbol.GetNameWithoutGeneric(typeName);
             var wrapperKind = typeSymbol.TryGetWrapperInfo(out var wrapperInfo)
                 ? NormalizeGeneratorWrapperKind(wrapperInfo.Kind)
                 : WrapperKind.None;
@@ -292,7 +292,7 @@ internal static partial class TransformExtensions
             // FullyQualifiedName returns "global::Ns.Handler<,>" but we need "global::Ns.Handler<TRequest, TResponse>"
             if(typeSymbol.IsUnboundGenericType && typeSymbol.TypeParametersSource.Length > 0)
             {
-                var nameWithoutGeneric = GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
+                var nameWithoutGeneric = typeSymbol.GetNameWithoutGeneric(typeSymbol.FullyQualifiedName);
                 var typeParamNames = typeSymbol.TypeParametersSource.Select(tp => tp.Name);
                 return $"{nameWithoutGeneric}<{string.Join(", ", typeParamNames)}>";
             }
@@ -379,6 +379,8 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Gets all interfaces implemented by a type.
         /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
+        /// Open types nested in a generic type, such as <c>Outer&lt;T&gt;.INode&lt;T&gt;</c> of <c>Node&lt;T&gt;</c>, are left out:
+        /// they cannot be closed with their containing type's type arguments, so they are neither registered nor matched (SGIOC038).
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetAllInterfaces()
         {
@@ -386,7 +388,10 @@ internal static partial class TransformExtensions
             using var result = new ValueListBuilder<TypeData>(interfaces.Length);
             foreach(var iface in interfaces)
             {
-                result.Add(iface.CreateBasicTypeData());
+                if(!iface.IsOpenNestedInGenericType)
+                {
+                    result.Add(iface.CreateBasicTypeData());
+                }
             }
 
             return result.ToImmutableEquatableArray();
@@ -395,6 +400,7 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Gets all base classes of a type, excluding System.Object.
         /// Creates basic TypeData without recursive type parameter extraction to avoid circular dependencies.
+        /// Open types nested in a generic type are left out, like in <see cref="GetAllInterfaces"/>.
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetAllBaseClasses()
         {
@@ -402,7 +408,11 @@ internal static partial class TransformExtensions
             var baseType = typeSymbol.BaseType;
             while(baseType != null && baseType.SpecialType != SpecialType.System_Object)
             {
-                result.Add(baseType.CreateBasicTypeData());
+                if(!baseType.IsOpenNestedInGenericType)
+                {
+                    result.Add(baseType.CreateBasicTypeData());
+                }
+
                 baseType = baseType.BaseType;
             }
 
@@ -424,7 +434,7 @@ internal static partial class TransformExtensions
             ImmutableEquatableArray<TypeData>? allBaseClasses = null)
         {
             var typeName = typeSymbol.FullyQualifiedName;
-            var nameWithoutGeneric = GetNameWithoutGeneric(typeName);
+            var nameWithoutGeneric = typeSymbol.GetNameWithoutGeneric(typeName);
 
             // Extract type parameters without constraints (to avoid recursion)
             ImmutableEquatableArray<TypeParameter>? typeParameters = null;
@@ -613,7 +623,7 @@ internal static partial class TransformExtensions
                 var name = iface.FullyQualifiedName;
                 return TypeData.CreateGeneric(
                     name,
-                    GetNameWithoutGeneric(name),
+                    iface.GetNameWithoutGeneric(name),
                     iface.ContainsGenericParameters,
                     iface.Arity,
                     false,
@@ -671,7 +681,7 @@ internal static partial class TransformExtensions
                 return iface.IsGenericType || iface.Arity > 0
                     ? TypeData.CreateGeneric(
                         name,
-                        GetNameWithoutGeneric(name),
+                        iface.GetNameWithoutGeneric(name),
                         iface.ContainsGenericParameters,
                         iface.Arity,
                         false)

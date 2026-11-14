@@ -27,13 +27,15 @@ partial class ContainerAnalyzer
 
             if(AnalyzerHelpers.IsIoCRegisterAttribute(attrClass, attributeSymbols))
             {
-                analyzerContext.Registrations.Add(CreateRawRegistration(typeSymbol, attribute, explicitContainer: null));
+                // Like the generator, open types nested in a generic type are not registered (SGIOC038)
+                if(!typeSymbol.IsOpenNestedInGenericType)
+                    analyzerContext.Registrations.Add(CreateRawRegistration(typeSymbol, attribute, explicitContainer: null));
             }
             else if(AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, attributeSymbols))
             {
                 // [IocRegisterFor] on a container class is also an explicit registration of that container (ExplicitOnly)
                 var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
-                if(targetType is not null)
+                if(targetType is { IsOpenNestedInGenericType: false })
                     analyzerContext.Registrations.Add(CreateRawRegistration(targetType, attribute, explicitContainer: typeSymbol));
             }
             else if(AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attrClass, attributeSymbols))
@@ -69,7 +71,7 @@ partial class ContainerAnalyzer
             if(AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, attributeSymbols))
             {
                 var targetType = attribute.GetTargetTypeFromRegisterForAttribute();
-                if(targetType is not null)
+                if(targetType is { IsOpenNestedInGenericType: false })
                     analyzerContext.Registrations.Add(CreateRawRegistration(targetType, attribute, explicitContainer: null));
             }
             else if(AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attrClass, attributeSymbols))
@@ -276,7 +278,8 @@ partial class ContainerAnalyzer
             targetType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         }
 
-        if(targetType is null)
+        // Settings for an open type nested in a generic type do not match the generator's types (SGIOC038)
+        if(targetType is null or { IsOpenNestedInGenericType: true })
             return null;
 
         var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
@@ -474,7 +477,7 @@ partial class ContainerAnalyzer
                 }
 
                 if(!AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, attributeSymbols)
-                    || attribute.GetTargetTypeFromRegisterForAttribute() is not { } targetType
+                    || attribute.GetTargetTypeFromRegisterForAttribute() is not { IsOpenNestedInGenericType: false } targetType
                     || !IsOpenGeneric(targetType))
                 {
                     continue;
@@ -839,6 +842,11 @@ partial class ContainerAnalyzer
         /// </summary>
         public void Add(INamedTypeSymbol serviceType, ServiceKeyValue? key, INamedTypeSymbol implementationType)
         {
+            // Like the generator, an open type nested in a generic type, such as Outer<T>.INode<T> of Node<T> registered
+            // with RegisterAllInterfaces, is not registered (SGIOC038)
+            if(serviceType.IsOpenNestedInGenericType)
+                return;
+
             if(IsOpenGeneric(serviceType))
             {
                 serviceType = serviceType.OriginalDefinition;

@@ -122,6 +122,24 @@ services.AddTransient<global::MyNamespace.IRequestHandler<global::MyNamespace.Ge
 > [!NOTE]  
 > The service interface `IRequestHandler<GenericRequest<Entity>, List<Entity>>` contains nested generic types. `MS.E.DI` cannot resolve this at runtime because it cannot determine how to substitute `T = Entity` into `IRequestHandler<GenericRequest<T>, List<T>>`. `SourceGen.Ioc` handles this through compile-time code generation.
 
+## Types Declared in a Generic Type
+
+Open generic registrations are closed with the type arguments of the registered type only. An open type declared in a generic type, such as `Node<T>` in `Outer<O>`, would need the type arguments of `Outer<O>` too, so it is not registered (`SGIOC038`). The same goes for `typeof(Outer<>.INode<>)` in `ServiceTypes`, `Decorators` and `ImplementationTypes`, for an interface such as `Outer<T>.INode<T>` registered with `RegisterAllInterfaces`, and for an open decorator that decorates it (implements it and takes it as a constructor parameter): it is ignored. `[IocRegisterDefaults(typeof(Outer<>.INode<>), ...)]` is ignored as a whole, including its `ImplementationTypes`. Use the closed types you need instead:
+
+```csharp
+public static class Outer<O>
+{
+    public interface INode<T>;
+
+    // SGIOC038: not registered
+    [IocRegister(ServiceTypes = [typeof(INode<>)])]
+    public sealed class Node<T> : INode<T>;
+}
+
+// Registered like any closed type
+[assembly: IocRegisterFor(typeof(Outer<int>.Node<string>), ServiceTypes = [typeof(Outer<int>.INode<string>)])]
+```
+
 ## Manual Discovery with `[IocDiscover]`
 
 For types not directly referenced in code, use `[IocDiscover]` attribute:
@@ -220,6 +238,7 @@ services.AddSingleton<global::MyNamespace.IRequestHandler<global::MyNamespace.Te
 |:---|:---|:---|
 |SGIOC036|Error|A dependency of an open generic registration nests type arguments deeper on every round of a dependency cycle, and no dependency on the cycle is a `Lazy<T>` or `Func<T>`, so its object graph is infinite. The dependency is not closed at compile time.|
 |SGIOC037|Warning|A dependency of an open generic registration nests type arguments deeper on every round of a dependency cycle behind a `Lazy<T>` or `Func<T>`. The dependency is not closed at compile time, so it is resolved at runtime from the open generic registration (not Native AOT safe), or not at all by a container with `IntegrateServiceProvider = false`.|
+|SGIOC038|Error|A registration or default settings attribute uses an open type declared in a generic type, such as `Outer<O>.Node<T>` or `typeof(Outer<>.INode<>)`. It cannot be closed with the type arguments of its containing type, so it is ignored; use its closed types instead.|
 
 ---
 

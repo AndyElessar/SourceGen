@@ -28,13 +28,14 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
-| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect registrations, validate target type/instance lifetime/explicit service types, track duplicates | SGIOC001, 009, 011, 032 |
+| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect registrations, validate target type/instance lifetime/explicit service types, track duplicates | SGIOC001, 009, 011, 032, 038 |
 | Symbol (NamedType) | `AnalyzeTypeLevelDefaultsAttribute` | Validate duplicate type-level defaults | SGIOC012 |
 | Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
-| SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032 |
+| SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032, 038 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
+| SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
 | CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC002-005, 012-015, 030, 033-037 |
 
@@ -111,7 +112,7 @@ The container's service types are the service types of its own registrations plu
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ## Diagnostics
@@ -789,6 +790,26 @@ Report when each expanding cycle of an expanding dependency (see `SGIOC036`) has
 **Message format:** `Dependency '{DependencyType}' of '{Implementation}' nests type arguments deeper on every round of a dependency cycle, so it is not closed at compile time`
 
 **Fix:** Register the closed forms that are needed explicitly, or break the cycle.
+
+---
+
+### SGIOC038 - Error - Usage - Open type nested in a generic type is not supported
+
+Report when a registration or default settings attribute uses an open type declared in a generic type, such as `Outer<O>.Node<T>`, `Outer<O>.Plain` or `typeof(Outer<>.INode<>)`. The generator closes open generic types with their own type arguments, not with those of their containing type, so it ignores such a type (see [Generic Registration](../../Spec/Register.Generics.spec.md#types-nested-in-a-generic-type)).
+
+**Analysis:**
+
+- Checks the type `[IocRegister]` is applied to, reported at the attribute. Its other arguments are not reported, since the whole registration is ignored.
+- Checks each `typeof()` in the constructor arguments (the target of `[IocRegisterFor]` / `[IocRegisterDefaults]`, and service types) and in `ServiceTypes`, `Decorators` and `ImplementationTypes` of `[IocRegister]`, `[IocRegisterFor]` and `[IocRegisterDefaults]`, reported at the `typeof()` expression (`AnalyzeOpenTypesNestedInGenericType`). Default settings whose target is such a type are ignored as a whole, including their `ImplementationTypes`.
+- Checks the interfaces and base classes an open implementation is registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` (its own or those of its default settings), such as `Outer<T>.INode<T>` of `Node<T> : Outer<T>.INode<T>`, reported at the registration attribute (`CollectAndValidateNamedType`, `AnalyzeAssemblyLevelRegistration`), and those of an open `ImplementationTypes` entry of `[IocRegisterDefaults]` with `RegisterAllInterfaces` / `RegisterAllBaseClasses`, reported at its `typeof()` (`AnalyzeOpenTypesNestedInGenericType`). The implicit check is skipped when the target of `[IocRegisterDefaults]` is itself such a type, since the settings are already ignored as a whole.
+- Checks the interfaces and base classes an open decorator in `Decorators` declares and takes as a constructor parameter, such as `Outer<T>.INode<T>` of `NodeDecorator<T>(Outer<T>.INode<T> inner) : Outer<T>.INode<T>`, reported at its `typeof()` (`AnalyzeOpenTypesNestedInGenericType`): the decorator is not applied to that form. Nested forms it only implements, such as a marker interface, are not reported.
+- A type is reported when one of its containing types is generic and it uses type parameters (its own or its containing types'). The message names the innermost containing type with type parameters, such as `Outer<O>` for `Outer<O>.Mid.Node<T>`.
+- Closed types declared in a generic type, such as `typeof(Outer<int>.Node<string>)`, and generic types declared in a non-generic type are not reported.
+- Like the generator, the analyzers ignore these types: such a registration, service type, decorator, implementation type, or default settings (by their target) is not collected for other diagnostics, so a dependency that only it would resolve is reported by `SGIOC018`.
+
+**Message format:** `'{Type}' is an open type declared in the generic type '{ContainingType}', which the generator cannot close, so it is ignored; use its closed types instead`
+
+**Fix:** Use the closed types that are needed, such as `[IocRegisterFor(typeof(Outer<int>.Node<string>))]` or `ServiceTypes = [typeof(Outer<int>.INode<string>)]`, or move the type out of the generic type.
 
 ---
 ### Known Limitations
