@@ -3,7 +3,7 @@ namespace SourceGen.Ioc;
 /// <summary>
 /// Represents parameter information.
 /// </summary>
-/// <param name="Name">The parameter name.</param>
+/// <param name="Name">The parameter name, escaped with <c>@</c> when it is a keyword (such as <c>@params</c>).</param>
 /// <param name="Type">The type data of the parameter.</param>
 /// <param name="IsNullable">Whether this parameter type is nullable (e.g., IDependency?).</param>
 /// <param name="HasDefaultValue">Whether this parameter has an explicit default value.</param>

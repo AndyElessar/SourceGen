@@ -151,7 +151,7 @@ partial class IocSourceGenerator
         var (hasDefaultValue, defaultValue) = GetPropertyDefaultValue(property);
 
         return new PropertyOrFieldInjectionData(
-            property.Name,
+            property.EscapedName,
             key,
             propertyType,
             IsField: false,
@@ -172,7 +172,7 @@ partial class IocSourceGenerator
         var (hasDefaultValue, defaultValue) = GetFieldDefaultValue(field);
 
         return new PropertyOrFieldInjectionData(
-            field.Name,
+            field.EscapedName,
             key,
             fieldType,
             IsField: true,
@@ -267,7 +267,7 @@ partial class IocSourceGenerator
             {
                 var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo(semanticModel);
                 return new ParameterData(
-                    p.Name,
+                    p.EscapedName,
                     p.Type.GetTypeData(),
                     IsNullable: p.NullableAnnotation == NullableAnnotation.Annotated,
                     HasDefaultValue: p.HasExplicitDefaultValue,
@@ -281,7 +281,7 @@ partial class IocSourceGenerator
 
         // Detect async injection methods: non-generic Task return type → AsyncMethod
         return new MethodInjectionData(
-            method.Name,
+            method.EscapedName,
             key,
             parameters,
             IsAsync: RoslynExtensions.IsNonGenericTaskReturnType(method));

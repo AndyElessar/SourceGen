@@ -202,7 +202,7 @@ partial class IocSourceGenerator
 
         return new PartialAccessorData(
             kind,
-            member.Name,
+            member.EscapedName,
             notAnnotatedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             notAnnotatedType.GetTypeData(),
             returnType.NullableAnnotation == NullableAnnotation.Annotated,

@@ -309,6 +309,64 @@ public class SGIOC036Tests
     }
 
     [Test]
+    public async Task SGIOC036_ExpandingKeywordMemberInInjectMembersWithIocInject_ReportsOnceAtMember()
+    {
+        // A member named by a keyword is matched like any other member
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Node<>), ServiceTypes = [typeof(INode<>)], InjectMembers = [nameof(Node<int>.@event)])]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public sealed class Node<T> : INode<T>
+            {
+                [IocInject]
+                public INode<List<T>>? @event { get; set; }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(1);
+        await Assert.That(sgioc036[0].Location.SourceTree!.GetText().ToString(sgioc036[0].Location.SourceSpan)).IsEqualTo("@event");
+    }
+
+    [Test]
+    public async Task SGIOC036_ExpandingGenericFactoryKeywordParameter_ReportsAtFactoryParameter()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public static class NodeFactory
+            {
+                [IocGenericFactory(typeof(INode<int>), typeof(int))]
+                public static INode<TF> Create<TF>(INode<List<TF>> @event) => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)], Factory = nameof(NodeFactory.Create))]
+            public sealed class Node<T> : INode<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(1);
+        await Assert.That(sgioc036[0].Location.SourceTree!.GetText().ToString(sgioc036[0].Location.SourceSpan)).IsEqualTo("@event");
+    }
+
+    [Test]
     [Arguments("Factory = nameof(NodeFactory.Create)")]
     [Arguments("Lifetime = ServiceLifetime.Singleton, Instance = nameof(Node<int>.Default)")]
     public async Task SGIOC036_ExpandingConstructorDependencyOfFactoryOrInstanceRegistration_NoDiagnostic(string arguments)

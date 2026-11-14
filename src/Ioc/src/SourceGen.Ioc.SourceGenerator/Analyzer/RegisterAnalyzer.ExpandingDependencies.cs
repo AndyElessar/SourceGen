@@ -131,7 +131,8 @@ partial class RegisterAnalyzer
                 // IServiceProvider and [ServiceKey] parameters are not resolved
                 foreach(var parameter in method.Parameters)
                 {
-                    if(additionalParameters.Contains(parameter.Name))
+                    // The model's parameter names are escaped, such as @event
+                    if(additionalParameters.Contains(parameter.EscapedName))
                         Report(entry.Value, factoryTypeParams, factoryName, parameter.Locations.FirstOrDefault(), parameter.Type.GetTypeData());
                 }
 
@@ -258,7 +259,8 @@ partial class RegisterAnalyzer
             var result = new List<(ISymbol Member, Location Location)>(members.Length);
             foreach(var (member, location) in members)
             {
-                if(!injectedNames.Contains(member.Name))
+                // The model's member names are escaped, such as @event
+                if(!injectedNames.Contains(member.EscapedName))
                     result.Add((member, location));
             }
 

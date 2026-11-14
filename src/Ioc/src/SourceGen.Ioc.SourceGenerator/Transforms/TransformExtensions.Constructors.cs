@@ -133,7 +133,7 @@ internal static partial class TransformExtensions
                 var defaultValue = hasDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue, param.Type) : null;
 
                 parameters.Add(new ParameterData(
-                    param.Name,
+                    param.EscapedName,
                     paramTypeData,
                     IsNullable: isNullable,
                     HasDefaultValue: hasDefaultValue,

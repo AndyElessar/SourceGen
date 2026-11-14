@@ -171,7 +171,7 @@ internal static partial class TransformExtensions
                 // Collect additional parameter info using the same logic as [IocInject] methods
                 var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
                 var parameterData = new ParameterData(
-                    param.Name,
+                    param.EscapedName,
                     param.Type.GetTypeData(),
                     IsNullable: param.NullableAnnotation == NullableAnnotation.Annotated,
                     HasDefaultValue: param.HasExplicitDefaultValue,

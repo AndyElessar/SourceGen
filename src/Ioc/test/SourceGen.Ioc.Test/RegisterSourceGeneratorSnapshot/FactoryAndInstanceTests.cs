@@ -164,6 +164,37 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    public async Task Instance_KeywordMemberName_IsEscaped()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Instance = nameof(@default))]
+            public sealed class MyService : IMyService
+            {
+                public static readonly MyService @default = new();
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.MyService.@default");
+        }
+    }
+
+    [Test]
     public async Task Instance_MemberOfClosedGenericType_KeepsTypeArguments()
     {
         const string source = """

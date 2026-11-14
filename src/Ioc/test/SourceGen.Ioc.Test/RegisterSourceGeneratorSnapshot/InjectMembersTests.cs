@@ -531,6 +531,49 @@ public class InjectMembersTests
     }
 
     [Test]
+    public async Task CsharpKey_KeywordMemberName_IsEscaped()
+    {
+        // A member named by a keyword is written with @, like the factory and the key of a registration and its dependency
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public static class Keys
+            {
+                public static string @default => "default";
+            }
+
+            public static class Factories
+            {
+                public static Dependency @new(IServiceProvider sp) => new();
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = nameof(Keys.@default), KeyType = KeyType.Csharp, Factory = nameof(Factories.@new))]
+            public class Dependency : IDependency { }
+
+            [IocRegister]
+            public class Consumer([IocInject(nameof(Keys.@default), KeyType = KeyType.Csharp)] IDependency dependency);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.Keys.@default");
+            await Assert.That(output).Contains("global::TestNamespace.Factories.@new(");
+        }
+    }
+
+    [Test]
     public async Task CsharpKey_MemberOfClosedGenericType_KeepsTypeArguments()
     {
         // The key of a registration, an [IocInject] parameter and an InjectMembers element keeps the type arguments of

@@ -157,6 +157,39 @@ public class BasicRegistrationTests
     }
 
     [Test]
+    public async Task EnumMember_KeywordName_IsEscaped()
+    {
+        // An enum member named by a keyword is written with @, as a key and as a parameter default value
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public enum Kind { @class, @struct }
+
+            public interface IKeyedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IKeyedService)], Key = Kind.@class)]
+            public class KeyedService : IKeyedService { }
+
+            [IocRegister]
+            public class Consumer(Kind kind = Kind.@struct);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.Kind.@class");
+        }
+    }
+
+    [Test]
     public async Task KeyedService_WithCsharpKey_GeneratesKeyedRegistration()
     {
         const string source = """
