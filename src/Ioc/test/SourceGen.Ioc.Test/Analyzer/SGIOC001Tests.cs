@@ -242,4 +242,78 @@ public class SGIOC001Tests
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC001")).Count().IsEqualTo(expected);
     }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", 1)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 0)]
+    public async Task SGIOC001_ImportedOpenRegistrationWithInternalConstructor_ReportsAtImportWhenInaccessible(string scenario, string internalsVisibleTo, int expected)
+    {
+        var librarySource = $$"""
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace Library;
+
+            public interface IRepo<T>;
+
+            public sealed class Repo<T> : IRepo<T>
+            {
+                internal Repo() { }
+            }
+
+            [IocRegisterFor(typeof(Repo<>), ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class InnerModule;
+
+            [IocImportModule(typeof(InnerModule))]
+            public sealed class Module;
+            """;
+        var library = SourceGeneratorTestHelper.CreateCompilation("Library", librarySource);
+
+        const string source = """
+            using SourceGen.Ioc;
+
+            [IocImportModule(typeof(Library.Module))]
+            public sealed class App;
+            """;
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
+
+        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc001 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC001").ToList();
+
+        await Assert.That(sgioc001).Count().IsEqualTo(expected);
+        if(expected > 0)
+        {
+            await Assert.That(sgioc001[0].GetMessage()).Contains("'Repo'").And.Contains("imported from 'Module'");
+        }
+    }
+
+    [Test]
+    public async Task SGIOC001_ImportedModuleInSameCompilation_ReportsOnlyAtRegistration()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            public sealed class Repo<T> : IRepo<T>
+            {
+                private Repo() { }
+            }
+
+            [IocRegisterFor(typeof(Repo<>), ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class Module;
+
+            [IocImportModule(typeof(Module))]
+            public sealed class App;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc001 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC001").ToList();
+
+        await Assert.That(sgioc001).Count().IsEqualTo(1);
+        await Assert.That(sgioc001[0].GetMessage()).DoesNotContain("imported from");
+    }
 }

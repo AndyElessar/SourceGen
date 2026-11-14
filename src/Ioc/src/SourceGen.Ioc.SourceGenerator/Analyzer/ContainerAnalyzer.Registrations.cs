@@ -403,7 +403,7 @@ partial class ContainerAnalyzer
 
         AddDefaultSettingsImplementationTypes(resolved, analyzerContext, semantics, cancellationToken);
         AddFactoryOpenGenericRegistrations(resolved, analyzerContext);
-        AddImportedOpenGenericRegistrations(resolved, analyzerContext, cancellationToken);
+        AddImportedOpenGenericRegistrations(resolved, analyzerContext, compilation.Assembly, cancellationToken);
 
         return resolved;
 
@@ -444,57 +444,22 @@ partial class ContainerAnalyzer
     /// Adds the open generic <c>[IocRegisterFor]</c> registrations of every imported module and, recursively, of the
     /// modules it imports. Like the generator's <c>ExtractOpenGenericEntriesFromModuleRecursive</c>, they are added to
     /// the registrations of the current assembly for every [IocImportModule] of the compilation; they expose the open
-    /// generic <c>ServiceTypes</c> and interfaces of the implementation.
+    /// generic <c>ServiceTypes</c> and interfaces of the implementation. Like the generator, an implementation the
+    /// compiled assembly cannot construct is not closed (SGIOC001).
     /// </summary>
     private static void AddImportedOpenGenericRegistrations(
         List<ResolvedRegistration> resolved,
         ContainerAnalyzerContext analyzerContext,
+        IAssemblySymbol assembly,
         CancellationToken cancellationToken)
     {
-        var attributeSymbols = analyzerContext.AttributeSymbols;
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach(var import in analyzerContext.ModuleImports)
-            AddModule(import.ModuleType);
-
-        void AddModule(INamedTypeSymbol moduleType)
         {
-            if(!visited.Add(moduleType))
-                return;
-
-            foreach(var attribute in moduleType.GetAttributes())
+            foreach(var (attribute, implementationType, serviceTypes) in AnalyzerHelpers.EnumerateImportedOpenRegistrations(
+                import.ModuleType, analyzerContext.AttributeSymbols, visited, cancellationToken))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if(attribute.AttributeClass is not { } attrClass)
-                    continue;
-
-                if(AnalyzerHelpers.IsIocImportModuleAttribute(attrClass, attributeSymbols))
-                {
-                    if(attribute.GetImportedModuleType() is { } importedModule)
-                        AddModule(importedModule);
-
-                    continue;
-                }
-
-                if(!AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, attributeSymbols)
-                    || attribute.GetTargetTypeFromRegisterForAttribute() is not { IsOpenNestedInGenericType: false } targetType
-                    || !IsOpenGeneric(targetType))
-                {
-                    continue;
-                }
-
-                var implementationType = targetType.OriginalDefinition;
-                var explicitServiceTypes = AnalyzerHelpers.GetExplicitServiceTypes(attribute);
-                var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-                foreach(var serviceType in explicitServiceTypes.Count > 0
-                             ? explicitServiceTypes.Concat(implementationType.AllInterfaces)
-                             : implementationType.AllInterfaces)
-                {
-                    if(IsOpenGeneric(serviceType))
-                        serviceTypes.Add(serviceType.OriginalDefinition);
-                }
-
-                if(serviceTypes.Count == 0)
+                if(!implementationType.IsConstructibleIn(assembly))
                     continue;
 
                 var (key, _, _) = attribute.GetKeyInfo();
@@ -619,9 +584,7 @@ partial class ContainerAnalyzer
         }
     }
 
-    private static bool IsOpenGeneric(INamedTypeSymbol type)
-        => type.IsUnboundGenericType
-            || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
+    private static bool IsOpenGeneric(INamedTypeSymbol type) => AnalyzerHelpers.IsOpenGenericType(type);
 
     /// <summary>
     /// Builds the default settings lookup with the generator's precedence: settings of the current assembly

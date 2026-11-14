@@ -497,6 +497,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         {
             CollectAndValidateNamedType(ctx, analyzerContext);
             AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext);
+            AnalyzeImportedOpenRegistrations(ctx, analyzerContext);
         }, SymbolKind.NamedType);
 
         // SGIOC007 + SGIOC022 + SGIOC028: Analyze InjectAttribute usage and feature gating on members

@@ -455,8 +455,8 @@ internal static class AnalyzerHelpers
     /// </summary>
     public static string? GetServiceTypeIncompatibilityReason(INamedTypeSymbol implementationType, INamedTypeSymbol serviceType)
     {
-        var isOpenImplementation = IsOpenGeneric(implementationType);
-        var isOpenServiceType = IsOpenGeneric(serviceType);
+        var isOpenImplementation = IsOpenGenericType(implementationType);
+        var isOpenServiceType = IsOpenGenericType(serviceType);
 
         if(isOpenImplementation && !isOpenServiceType)
             return "an open generic implementation requires an open generic service type";
@@ -490,10 +490,6 @@ internal static class AnalyzerHelpers
         }
 
         return "the implementation does not implement or inherit it";
-
-        static bool IsOpenGeneric(INamedTypeSymbol type)
-            => type.IsUnboundGenericType
-                || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
     }
 
     /// <summary>
@@ -815,5 +811,69 @@ internal static class AnalyzerHelpers
 
         return (false, null);
     }
+
+    /// <summary>
+    /// Enumerates the open generic <c>[IocRegisterFor]</c> registrations of a module and, recursively, of the modules it
+    /// imports, like the generator's <c>ExtractOpenGenericEntriesFromModuleRecursive</c>: each implementation type
+    /// definition with the open generic service types it exposes (explicit <c>ServiceTypes</c> and interfaces).
+    /// </summary>
+    /// <param name="visited">The modules already enumerated, shared across calls to enumerate each module once.</param>
+    public static IEnumerable<(AttributeData Attribute, INamedTypeSymbol ImplementationType, HashSet<INamedTypeSymbol> ServiceTypes)> EnumerateImportedOpenRegistrations(
+        INamedTypeSymbol moduleType,
+        IocAttributeSymbols attributeSymbols,
+        HashSet<INamedTypeSymbol> visited,
+        CancellationToken cancellationToken)
+    {
+        if(!visited.Add(moduleType))
+            yield break;
+
+        foreach(var attribute in moduleType.GetAttributes())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(attribute.AttributeClass is not { } attrClass)
+                continue;
+
+            if(IsIocImportModuleAttribute(attrClass, attributeSymbols))
+            {
+                if(attribute.GetImportedModuleType() is { } importedModule)
+                {
+                    foreach(var registration in EnumerateImportedOpenRegistrations(importedModule, attributeSymbols, visited, cancellationToken))
+                        yield return registration;
+                }
+
+                continue;
+            }
+
+            if(!IsIoCRegisterForAttribute(attrClass, attributeSymbols)
+                || attribute.GetTargetTypeFromRegisterForAttribute() is not { IsOpenNestedInGenericType: false } targetType
+                || !IsOpenGenericType(targetType))
+            {
+                continue;
+            }
+
+            var implementationType = targetType.OriginalDefinition;
+            var explicitServiceTypes = GetExplicitServiceTypes(attribute);
+            var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach(var serviceType in explicitServiceTypes.Count > 0
+                         ? explicitServiceTypes.Concat(implementationType.AllInterfaces)
+                         : implementationType.AllInterfaces)
+            {
+                if(IsOpenGenericType(serviceType))
+                    serviceTypes.Add(serviceType.OriginalDefinition);
+            }
+
+            if(serviceTypes.Count > 0)
+                yield return (attribute, implementationType, serviceTypes);
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the type is an open generic type: unbound (<c>typeof(Repo&lt;&gt;)</c>) or with type parameters as
+    /// type arguments.
+    /// </summary>
+    public static bool IsOpenGenericType(INamedTypeSymbol type)
+        => type.IsUnboundGenericType
+            || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
 }
 

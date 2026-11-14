@@ -583,6 +583,53 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
+    /// <summary>
+    /// SGIOC001 for each open generic registration of an imported module (recursively) that the compiled assembly cannot
+    /// construct, reported at the <c>[IocImportModule]</c> attribute: the generator closes these registrations in the
+    /// importing assembly, without their Factory or Instance, so it does not register their closed types.
+    /// </summary>
+    private static void AnalyzeImportedOpenRegistrations(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
+    {
+        if(context.Symbol is not INamedTypeSymbol typeSymbol)
+            return;
+
+        foreach(var attribute in typeSymbol.GetAttributes())
+        {
+            if(attribute.AttributeClass is not { } attrClass
+                || !AnalyzerHelpers.IsIocImportModuleAttribute(attrClass, analyzerContext.AttributeSymbols)
+                || attribute.GetImportedModuleType() is not { } moduleType)
+            {
+                continue;
+            }
+
+            Location? location = null;
+            string? moduleName = null;
+            var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach(var (registration, implementationType, _) in AnalyzerHelpers.EnumerateImportedOpenRegistrations(
+                moduleType, analyzerContext.AttributeSymbols, visited, context.CancellationToken))
+            {
+                // A registration declared in this compilation is analyzed where it is declared
+                if((registration.ApplicationSyntaxReference is { } syntax && context.Compilation.ContainsSyntaxTree(syntax.SyntaxTree))
+                    || implementationType.IsConstructibleIn(analyzerContext.Assembly))
+                    continue;
+
+                location ??= attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
+                    ?? typeSymbol.Locations.FirstOrDefault();
+                moduleName ??= moduleType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var reason = implementationType switch
+                {
+                    { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false } when implementationType.InstanceConstructors.Any(static ctor =>
+                        ctor.DeclaredAccessibility is Accessibility.Internal or Accessibility.ProtectedOrInternal) =>
+                        $"it has no constructor accessible from this assembly, which closes the open registrations imported from '{moduleName}'; make a constructor public or give this assembly access with InternalsVisibleTo",
+                    { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false } =>
+                        $"it has no constructor accessible from this assembly, which closes the open registrations imported from '{moduleName}'; make a constructor public",
+                    _ => $"this assembly cannot construct it to close the open registrations imported from '{moduleName}', which are closed without their Factory or Instance",
+                };
+                context.ReportDiagnostic(Diagnostic.Create(InvalidAttributeUsage, location, implementationType.Name, reason));
+            }
+        }
+    }
+
     /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
     private static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,

@@ -2096,4 +2096,54 @@ public class SGIOC018Tests
         if(expected > 0)
             await Assert.That(sgioc018[0].GetMessage()).Contains("IDependency (key \"A\")");
     }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", 1)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 0)]
+    public async Task SGIOC018_ImportedOpenRegistrationWithInternalConstructor_ResolvesOnlyWhenAccessible(string scenario, string internalsVisibleTo, int expected)
+    {
+        // Like the generator, an imported open registration the compiled assembly cannot construct is not closed
+        var moduleSource = $$"""
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace ModuleNamespace;
+
+            public interface IRepo<T>;
+
+            public sealed class Repo<T> : IRepo<T>
+            {
+                internal Repo() { }
+            }
+
+            [IocRegisterFor(typeof(Repo<>), ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class SharedModule;
+            """;
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using ModuleNamespace;
+
+            namespace TestNamespace;
+
+            public sealed class Entity;
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Consumer(IRepo<Entity> repo);
+
+            [IocImportModule<SharedModule>]
+            public sealed class Imports;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """;
+
+        var moduleCompilation = SourceGeneratorTestHelper.CreateCompilation("ModuleAssembly", moduleSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [moduleCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")).Count().IsEqualTo(expected);
+    }
 }
