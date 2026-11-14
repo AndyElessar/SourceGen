@@ -144,6 +144,47 @@ public class SGIOC039Tests
     }
 
     [Test]
+    [Arguments("Array", "IFoo<int[]>", "IFoo<Entity[]>", 0)]
+    [Arguments("ArrayOfGeneric", "IFoo<List<int>[]>", "IFoo<List<Entity>[]>", 0)]
+    [Arguments("JaggedArray", "IFoo<int[][]>", "IFoo<Entity[][]>", 0)]
+    [Arguments("Rank2Array", "IFoo<int[,]>", "IFoo<Entity[,]>", 0)]
+    [Arguments("ArrayRankMismatch", "IFoo<int[]>", "IFoo<Entity[,]>", 1)]
+    [Arguments("JaggedMismatch", "IFoo<int[][]>", "IFoo<Entity[]>", 1)]
+    [Arguments("Tuple", "IFoo<(int, string)>", "IFoo<(Entity, string)>", 0)]
+    [Arguments("TupleWithElementNames", "IFoo<(int A, string B)>", "IFoo<(Entity X, string Y)>", 0)]
+    [Arguments("LongTuple", "IFoo<(int, int, int, int, int, int, int, long)>", "IFoo<(int, int, int, int, int, int, int, Entity)>", 0)]
+    [Arguments("TupleArityMismatch", "IFoo<(int, string)>", "IFoo<(Entity, string, string)>", 1)]
+    [Arguments("TupleOtherElement", "IFoo<(int, string)>", "IFoo<(Entity, Entity)>", 0)]
+    public async Task SGIOC039_PlaceholderInArrayOrTuple_ReportsOnlyUnmatchedServiceType(string scenario, string template, string serviceType, int expected)
+    {
+        // Other types of the template, such as string in (int, string), are not compared, like other template types
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public class Entity;
+
+            public static class Factories
+            {
+                [IocGenericFactory(typeof({{template}}), typeof({{(scenario == "LongTuple" ? "long" : "int")}}))]
+                public static object Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof({{serviceType}})], Factory = nameof(Factories.Create))]
+            public sealed class Impl : {{serviceType}};
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC016)).IsEmpty();
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     public async Task SGIOC039_ImplementationWithoutAccessibleConstructor_ReportsImplementationType()
     {
         var source = CreateSource("", """

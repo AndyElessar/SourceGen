@@ -3,11 +3,21 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
-    /// Identifies a registered service by its service type name and key.
+    /// Identifies a registered service by its service type name and key. Service types are compared as runtime types
+    /// (<see cref="TypeNameComparer"/>), so tuples with different element names are the same service type.
     /// </summary>
     /// <param name="ServiceType">The fully-qualified service type name.</param>
     /// <param name="Key">The service key expression, or <see langword="null"/> for a non-keyed service.</param>
-    private readonly record struct ServiceTypeKey(string ServiceType, string? Key);
+    private readonly record struct ServiceTypeKey(string ServiceType, string? Key)
+    {
+        public bool Equals(ServiceTypeKey other) =>
+            TypeNameComparer.Instance.Equals(ServiceType, other.ServiceType)
+            && StringComparer.Ordinal.Equals(Key, other.Key);
+
+        public override int GetHashCode() =>
+            unchecked((TypeNameComparer.Instance.GetHashCode(ServiceType) * 397)
+                ^ StringComparer.Ordinal.GetHashCode(Key ?? string.Empty));
+    }
 
     /// <summary>
     /// Combined container and grouped registrations for pipeline caching.

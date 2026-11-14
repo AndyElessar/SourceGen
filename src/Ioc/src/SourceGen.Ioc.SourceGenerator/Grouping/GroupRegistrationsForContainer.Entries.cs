@@ -291,6 +291,6 @@ partial class IocSourceGenerator
             }
         }
 
-        public Dictionary<string, List<ServiceLookupEntry>> LastKeyedEntriesByServiceType { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, List<ServiceLookupEntry>> LastKeyedEntriesByServiceType { get; } = new(TypeNameComparer.Instance);
     }
 }

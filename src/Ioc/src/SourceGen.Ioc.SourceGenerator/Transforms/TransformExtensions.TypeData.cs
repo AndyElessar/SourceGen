@@ -536,7 +536,8 @@ internal static partial class TransformExtensions
                     TypeParameters: [new TypeParameter("T", elementType)],
                     AllInterfaces: arrayHierarchy.AllInterfaces,
                     AllBaseClasses: arrayHierarchy.AllBaseClasses,
-                    Traits: arrayHierarchy.Traits);
+                    Traits: arrayHierarchy.Traits,
+                    ArrayRank: arrayArg.Rank);
             }
 
             if(typeArg is not null)
@@ -744,7 +745,8 @@ internal static partial class TransformExtensions
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 WrapperKind.Array, // Arrays are collections
                 IsNestedOpenGeneric: false,
-                TypeParameters: typeParameters);
+                TypeParameters: typeParameters,
+                ArrayRank: arrayTypeSymbol.Rank);
         }
     }
 }

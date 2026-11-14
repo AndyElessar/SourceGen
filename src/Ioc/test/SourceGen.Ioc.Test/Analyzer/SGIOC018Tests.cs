@@ -72,6 +72,73 @@ public class SGIOC018Tests
     }
 
     [Test]
+    public async Task SGIOC018_TupleElementNamesDiffer_NoDiagnostic()
+    {
+        // Tuple element names are not part of the runtime type, so the generator resolves these dependencies directly
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public interface IGeneric<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public sealed class NamedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister(ServiceTypes = [typeof(IGeneric<>)])]
+            public sealed class Generic<T> : IGeneric<T>;
+
+            [IocRegister]
+            public sealed class Consumer(
+                IHandler<(Entity A, string B)> handler,
+                IEnumerable<IHandler<(Entity, string)>> handlers,
+                Lazy<IHandler<(Entity, string)>> lazy,
+                IGeneric<IHandler<(Entity A, string B)>> generic);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC018_TupleElementNamesDifferInArray_NoDiagnostic()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<(int, int)[]>)])]
+            public sealed class ArrayOther : IOther<(int, int)[]>;
+
+            [IocRegister]
+            public sealed class Consumer(IOther<(int A, int B)[]> other, IOther<(int A, int B)[][]>? missing = null);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial IOther<(int A, int B)[]> GetOther();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")).IsEmpty();
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021")).IsEmpty();
+    }
+
+    [Test]
     public async Task SGIOC018_UnregisteredDependency_WithIntegrateServiceProviderTrue_NoDiagnostic()
     {
         const string source = """

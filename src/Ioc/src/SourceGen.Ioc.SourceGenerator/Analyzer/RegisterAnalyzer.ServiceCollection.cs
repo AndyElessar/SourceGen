@@ -171,7 +171,7 @@ public sealed partial class RegisterAnalyzer
             reportDiagnostic(Diagnostic.Create(
                 OpenTypeNestedInGenericType,
                 location,
-                definition.ToDisplayString(NestedTypeDisplayFormat),
+                definition.ToDisplayString(AnalyzerHelpers.NestedTypeDisplayFormat),
                 GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
     }

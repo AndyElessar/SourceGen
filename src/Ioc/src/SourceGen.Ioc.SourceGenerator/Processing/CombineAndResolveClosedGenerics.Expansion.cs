@@ -492,6 +492,17 @@ partial class IocSourceGenerator
             return;
         }
 
+        // Arrays are named after their element type, so they are matched by their rank and element type
+        if(pattern is ArrayTypeData { TypeParameters: [var patternElement] } patternArray)
+        {
+            if(type is ArrayTypeData { TypeParameters: [var typeElement] } typeArray && patternArray.Rank == typeArray.Rank)
+            {
+                LinkTypeArguments(patternElement.Type, patternOwner, patternTypeParams, typeElement.Type, typeOwner, typeParams, links);
+            }
+
+            return;
+        }
+
         if(pattern is GenericTypeData { TypeParameters: { Length: > 0 } patternArgs } genericPattern
             && type is GenericTypeData { TypeParameters: { } typeArgs } genericType
             && genericPattern.NameWithoutGeneric == genericType.NameWithoutGeneric

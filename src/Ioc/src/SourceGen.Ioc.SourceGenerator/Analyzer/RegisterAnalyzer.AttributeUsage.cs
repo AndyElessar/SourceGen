@@ -630,12 +630,6 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
-    /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
-    private static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
-        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
-        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
-        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
-
     /// <summary>
     /// SGIOC038: Reports open types declared in a generic type that a registration or default settings attribute uses, which
     /// the generator ignores: the type [IocRegister] is applied to, and each <c>typeof()</c> of its constructor arguments
@@ -775,7 +769,7 @@ public sealed partial class RegisterAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(
                 OpenTypeNestedInGenericType,
                 location,
-                definition.ToDisplayString(NestedTypeDisplayFormat),
+                definition.ToDisplayString(AnalyzerHelpers.NestedTypeDisplayFormat),
                 GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
     }

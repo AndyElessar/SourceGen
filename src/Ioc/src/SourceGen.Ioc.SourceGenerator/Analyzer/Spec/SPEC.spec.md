@@ -370,7 +370,8 @@ Report when:
 - Checks every method marked with `[IocGenericFactory]`, whether or not it is referenced as a factory. Reports when:
   - The mapping has no service type template or no placeholder type.
   - The placeholder count differs from the method's type parameter count.
-  - A placeholder type does not appear in the service type template (at any nesting level, including array element types). A placeholder MAY appear more than once; a service type that gives it different type arguments is reported by `SGIOC039`.
+  - A placeholder type has type arguments or is an array, such as `List<int>`, `int?`, `(int, string)` or `int[]`: the template is matched into their type arguments, so the generator never finds them.
+  - A placeholder type does not appear in the service type template (at any nesting level, including array and tuple element types). The type arguments of a containing type, such as `int` in `Outer<int>.Inner`, are not part of the template, and the message shows the containing types of the template. A placeholder MAY appear more than once; a service type that gives it different type arguments is reported by `SGIOC039`.
 - Applies the same count and template checks to `GenericFactoryTypeMapping` on the registration attribute.
 - Duplicate placeholders are reported by `SGIOC017` instead.
 
@@ -411,7 +412,7 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
   - `Factory` (of the registration, otherwise of the matching `[IocRegisterDefaults]`): only the factory method parameters, except `IServiceProvider` and `[ServiceKey]`. The constructor and injected members are not checked. A factory that cannot be resolved (a string, or settings imported from another assembly) is not analyzed. Factory methods declared in another assembly are not analyzed.
   - `Instance`: no dependencies.
 - For each dependency:
-  - Checks if the dependency type is a service type of the container (including its imported modules).
+  - Checks if the dependency type is a service type of the container (including its imported modules). Like the generator, service types are compared without tuple element names, which are not part of the runtime type (`IHandler<(Entity A, string B)>` is resolved by a registration of `IHandler<(Entity X, string Y)>`); an open generic registration is still closed with the dependency's own type arguments, whose element names constraint checks keep (see [Generic Registration](../../Spec/Register.Generics.spec.md)).
   - Supported wrappers resolve their inner service with the same key, like the generator: collections (`IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`), `Lazy<T>`, `Func<T>` and `KeyValuePair<TKey, T>` unwrap recursively (e.g. `IEnumerable<Lazy<T>>`); `Task<T>` and `Func<..., T>` with input parameters need a registration of `T` itself; `IDictionary<TKey, T>` (and `IReadOnlyDictionary`, `Dictionary`) and collections of `KeyValuePair<TKey, T>` need a non-keyed dependency and a keyed registration of `T`. `ValueTask<T>` and unsupported nesting (e.g. `Task<Lazy<T>>`) are plain service types. Array dependencies are not checked.
   - Injected `IEnumerable<T>` properties are not checked.
   - Checks if the dependency type is a built-in service type (e.g., `IServiceProvider`, `IServiceScopeFactory`).
@@ -824,7 +825,7 @@ Report when a service type of a registration whose `Factory` (its own, or the `F
 
 **Analysis:**
 
-- Runs at compilation end over the registrations `RegisterAnalyzer` collects, with the `Factory` method resolved by the attribute syntax node action. Registrations with an `Instance`, factories given as a string, and generic factories without a mapping (`SGIOC016`) are not analyzed.
+- Runs at compilation end over the registrations `RegisterAnalyzer` collects, with the `Factory` method resolved by the attribute syntax node action. Registrations with an `Instance`, factories given as a string, and generic factories without a valid mapping (`SGIOC016`) are not analyzed.
 - Checks each service type of the registration, matched against the template like the generator. The implementation type of a closed registration is checked only when generated code cannot construct it (an interface, an abstract or static class, or a class without a public constructor or an internal one it can access: declared in the same assembly, or in one that gives it access with `InternalsVisibleTo`), such as the target of `[IocRegisterFor<IRequestHandler<Entity>>]`; otherwise it is constructed when the mapping does not match it. A service type of an open generic registration is reported only when it cannot match for any type arguments: a type parameter where the template has a constructed type, such as `IRequestHandler<T>` for the template `IRequestHandler<Task<int>>`, may match some closings and is not reported. A placeholder repeated in the template, such as `int` in `IPair<int, int>`, is reported when it takes different type arguments (`IPair<Entity, Dto>`), unless they may become equal for some closing (`IPair<T, int>`, or `IPair<T[], int[]>`, but not `IPair<List<T>, int>`).
 - The closed types a registration of `[IocRegisterDefaults]` without an implementation type is closed for are discovered from dependencies, so they are not analyzed.
 - Reported once per service type, at the registration attribute.

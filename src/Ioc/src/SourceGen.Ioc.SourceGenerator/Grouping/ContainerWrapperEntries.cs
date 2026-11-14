@@ -175,7 +175,7 @@ partial class IocSourceGenerator
 
         var wrapperEntries = new List<KvpWrapperContainerEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
-        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
+        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, TypeNameComparer.Instance);
 
         foreach(var kvp in serviceLookup)
         {

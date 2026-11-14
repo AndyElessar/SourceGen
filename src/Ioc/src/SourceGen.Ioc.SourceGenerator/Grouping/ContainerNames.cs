@@ -26,7 +26,7 @@ partial class IocSourceGenerator
         /// <param name="typeNames">The type names known up front; the ones whose short names collide all get a hash suffix.</param>
         public ContainerNames(List<string> typeNames)
         {
-            nameByTypeName = new(typeNames.Count, StringComparer.Ordinal);
+            nameByTypeName = new(typeNames.Count, TypeNameComparer.Instance);
 
             // Whether each short name belongs to more than one type
             var isSharedByShortName = new Dictionary<string, bool>(typeNames.Count, StringComparer.Ordinal);
@@ -36,7 +36,7 @@ partial class IocSourceGenerator
                 if(nameByTypeName.ContainsKey(typeName))
                     continue;
 
-                var shortName = GetShortName(typeName);
+                var shortName = GetShortName(TypeNameComparer.WithoutTupleElementNames(typeName));
                 nameByTypeName[typeName] = shortName;
 
                 if(isSharedByShortName.ContainsKey(shortName))
@@ -58,7 +58,7 @@ partial class IocSourceGenerator
                 var shortName = nameByTypeName[typeName];
                 if(isSharedByShortName[shortName])
                 {
-                    nameByTypeName[typeName] = AppendHash(shortName, typeName);
+                    nameByTypeName[typeName] = AppendHash(shortName, TypeNameComparer.WithoutTupleElementNames(typeName));
                 }
             }
         }
@@ -74,10 +74,12 @@ partial class IocSourceGenerator
 
             usedNames ??= new HashSet<string>(nameByTypeName.Values, StringComparer.Ordinal);
 
-            name = GetShortName(typeName);
+            // Tuples with different element names are the same type, and get the same name
+            var identityName = TypeNameComparer.WithoutTupleElementNames(typeName);
+            name = GetShortName(identityName);
             if(!usedNames.Add(name))
             {
-                name = AppendHash(name, typeName);
+                name = AppendHash(name, identityName);
                 usedNames.Add(name);
             }
 

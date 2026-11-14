@@ -698,7 +698,7 @@ partial class ContainerAnalyzer
             {
                 services = new ServiceIndex();
                 services.UnionWith(own.Services);
-                serviceKeys = [.. own.ServiceKeys];
+                serviceKeys = new(own.ServiceKeys, RuntimeTypeSymbolComparer.ServiceKeyComparer);
                 foreach(var module in container.ImportedModules)
                 {
                     if(!SymbolEqualityComparer.Default.Equals(module.ContainingAssembly, assembly))
@@ -775,7 +775,7 @@ partial class ContainerAnalyzer
         public ServiceIndex Services { get; } = new();
 
         /// <summary>The services by key expression (SGIOC021, which compares keys like the generator's accessor lookup).</summary>
-        public HashSet<ServiceSymbolKey> ServiceKeys { get; } = [];
+        public HashSet<ServiceSymbolKey> ServiceKeys { get; } = new(RuntimeTypeSymbolComparer.ServiceKeyComparer);
     }
 
     /// <param name="Own">The registrations of the container itself.</param>
@@ -791,13 +791,14 @@ partial class ContainerAnalyzer
     /// <summary>
     /// Registered services by type and key value. Generated containers look up keyed services by key value at runtime
     /// (<c>ServiceIdentifier</c>), so keys are compared by constant value; a key given as C# code
-    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key.
+    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key. Service types are compared without
+    /// their tuple element names, which are not part of the runtime type, like the generator.
     /// </summary>
     private sealed class ServiceIndex
     {
-        private readonly HashSet<INamedTypeSymbol> _nonKeyed = new(SymbolEqualityComparer.Default);
-        private readonly HashSet<INamedTypeSymbol> _keyed = new(SymbolEqualityComparer.Default);
-        private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(SymbolEqualityComparer.Default);
+        private readonly HashSet<INamedTypeSymbol> _nonKeyed = new(RuntimeTypeSymbolComparer.Instance);
+        private readonly HashSet<INamedTypeSymbol> _keyed = new(RuntimeTypeSymbolComparer.Instance);
+        private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(RuntimeTypeSymbolComparer.Instance);
         private readonly HashSet<KeyedService> _keyedValues = [];
 
         // The implementations of open generic service types, by generic type definition
@@ -866,6 +867,9 @@ partial class ContainerAnalyzer
             if(ContainsExact(serviceType, key))
                 return true;
 
+            // Open generic registrations are closed with the requested type arguments, whose tuple element names the
+            // generator's constraint checks keep
+
             if(!matchOpenGenerics
                 || !serviceType.IsGenericType
                 || SymbolEqualityComparer.Default.Equals(serviceType, serviceType.OriginalDefinition)
@@ -913,10 +917,10 @@ partial class ContainerAnalyzer
     private readonly record struct KeyedService(INamedTypeSymbol ServiceType, ServiceKeyValue Key)
     {
         public bool Equals(KeyedService other) =>
-            SymbolEqualityComparer.Default.Equals(ServiceType, other.ServiceType) && Key.Equals(other.Key);
+            RuntimeTypeSymbolComparer.Instance.Equals(ServiceType, other.ServiceType) && Key.Equals(other.Key);
 
         public override int GetHashCode() =>
-            unchecked((SymbolEqualityComparer.Default.GetHashCode(ServiceType) * 397) ^ Key.GetHashCode());
+            unchecked((RuntimeTypeSymbolComparer.Instance.GetHashCode(ServiceType) * 397) ^ Key.GetHashCode());
     }
 
     /// <summary>

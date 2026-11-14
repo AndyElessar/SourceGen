@@ -419,6 +419,13 @@ When a closed generic type is discovered (e.g., `IRequestHandler<Task<Entity>>`)
 
 Each placeholder type must appear in the template at least once, and may appear more than once. For `Create<T>()` with `[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]`, `IPair<Entity, Entity>` calls `Create<Entity>()`, while `IPair<Entity, Dto>` gives `int` two different types, so it is not registered (`SGIOC039`).
 
+A placeholder must be a type without type arguments that is not an array, such as `int`; `List<int>`, `int?`, `(int, string)` and `int[]` report `SGIOC016`. Placeholders can be array or tuple elements, though:
+
+- `IFoo<int[]>` matches `IFoo<Entity[]>`, but not an array of another rank, such as `IFoo<Entity[,]>`.
+- `IFoo<(int, string)>` matches `IFoo<(Entity, string)>`, with or without element names.
+
+A placeholder that only appears in the type arguments of a containing type, such as `int` in `IFoo<Outer<int>.Inner>`, is not supported (`SGIOC016`).
+
 A closed registration with a generic factory (its own, or from default settings) works the same way:
 
 - each registered type that matches the template calls the closed factory;

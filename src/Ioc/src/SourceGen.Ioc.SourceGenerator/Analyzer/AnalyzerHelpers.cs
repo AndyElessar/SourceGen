@@ -404,6 +404,12 @@ internal static class AnalyzerHelpers
     public static List<INamedTypeSymbol> GetExplicitServiceTypes(AttributeData attribute)
         => [.. attribute.GetServiceTypeSymbolsFromGenericAttribute(), .. attribute.GetServiceTypeSymbols()];
 
+    /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
+    public static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
+
     /// <summary>
     /// Returns why a generic factory type mapping cannot fill every factory method type parameter,
     /// or <see langword="null"/> when the mapping is valid. Duplicate placeholders are reported separately (SGIOC017).
@@ -426,9 +432,17 @@ internal static class AnalyzerHelpers
         // argument at each position, which the generator checks per service type (SGIOC039)
         foreach(var placeholder in placeholders)
         {
+            // Like the generator, only types without type arguments of their own are placeholders: the template is matched
+            // into the type arguments of List<int>, int?, (int, string) and int[], so they are never found
+            if(placeholder is IArrayTypeSymbol or INamedTypeSymbol { TypeArguments.Length: > 0 })
+            {
+                return $"placeholder type '{placeholder.ToDisplayString(NestedTypeDisplayFormat)}' has type arguments or is an array, so it cannot be a placeholder";
+            }
+
             if(placeholder is not null && !ContainsType(template, placeholder))
             {
-                return $"placeholder type '{placeholder.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' does not appear in the service type template '{template.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'";
+                // Containing types are shown, as a placeholder only in their type arguments (Outer<int>.Inner) is not found
+                return $"placeholder type '{placeholder.ToDisplayString(NestedTypeDisplayFormat)}' does not appear in the service type template '{template.ToDisplayString(NestedTypeDisplayFormat)}'";
             }
         }
 

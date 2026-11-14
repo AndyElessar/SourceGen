@@ -13,7 +13,10 @@ partial class IocSourceGenerator
     /// parameter it stands for, such as <c>IRequestHandler&lt;Task&lt;TF&gt;&gt;</c> for
     /// <c>[IocGenericFactory(typeof(IRequestHandler&lt;Task&lt;int&gt;&gt;), typeof(int))]</c> on <c>Create&lt;TF&gt;</c>.
     /// </summary>
-    /// <returns>The pattern, or <see langword="null"/> when the factory is not generic or has no mapping.</returns>
+    /// <returns>
+    /// The pattern, or <see langword="null"/> when the factory is not generic, has no mapping, or a placeholder does not
+    /// appear in the template (SGIOC016), such as one only in the type arguments of a containing type.
+    /// </returns>
     private static TypeData? GetGenericFactoryPattern(FactoryMethodData factory)
     {
         if(factory is not { GenericTypeMapping: { } mapping, TypeParameterNames: { Length: > 0 } names })
@@ -21,9 +24,12 @@ partial class IocSourceGenerator
             return null;
         }
 
-        return Replace(mapping.ServiceTypeTemplate);
+        var found = new bool[names.Length];
+        var pattern = Replace(mapping.ServiceTypeTemplate);
+        return Array.IndexOf(found, false) < 0 ? pattern : null;
 
-        // Like BuildGenericFactoryTypeArgs, only type arguments without type arguments of their own are placeholders
+        // Like BuildGenericFactoryTypeArgs, only type arguments without type arguments of their own are placeholders.
+        // Array elements and tuple elements are type arguments too.
         TypeData Replace(TypeData type)
         {
             if(type is GenericTypeData { TypeParameters: { Length: > 0 } typeArguments } genericType)
@@ -34,9 +40,13 @@ partial class IocSourceGenerator
                 };
             }
 
-            return mapping.PlaceholderToTypeParamMap.TryGetValue(type.Name, out var index) && index >= 0 && index < names.Length
-                ? TypeData.CreateTypeParameter(names[index])
-                : type;
+            if(mapping.PlaceholderToTypeParamMap.TryGetValue(type.Name, out var index) && index >= 0 && index < names.Length)
+            {
+                found[index] = true;
+                return TypeData.CreateTypeParameter(names[index]);
+            }
+
+            return type;
         }
     }
 
@@ -105,6 +115,17 @@ partial class IocSourceGenerator
                 return;
             }
 
+            // Arrays are named after their element type, so they are matched by their rank and element type
+            if(patternType is ArrayTypeData { TypeParameters: [var patternElement] } patternArray)
+            {
+                if(closedType is ArrayTypeData { TypeParameters: [var closedElement] } closedArray && patternArray.Rank == closedArray.Rank)
+                {
+                    Match(patternElement.Type, closedElement.Type);
+                }
+
+                return;
+            }
+
             if(patternType is GenericTypeData { TypeParameters: { Length: > 0 } patternArguments } genericPattern
                 && closedType is GenericTypeData { TypeParameters: { } closedArguments } genericClosed
                 && genericPattern.NameWithoutGeneric == genericClosed.NameWithoutGeneric
@@ -124,12 +145,13 @@ partial class IocSourceGenerator
             if(left is TypeParameterTypeData || right is TypeParameterTypeData)
                 return true;
 
-            // Arrays (T[] and int[]) may become equal when their element types may; their rank is conservatively ignored.
+            // Arrays (T[] and int[]) may become equal when they have the same rank and their element types may.
             // An array never becomes a type that is not an array.
             if(left is ArrayTypeData || right is ArrayTypeData)
             {
-                return left is ArrayTypeData { TypeParameters: [var leftElement] }
-                    && right is ArrayTypeData { TypeParameters: [var rightElement] }
+                return left is ArrayTypeData { TypeParameters: [var leftElement] } leftArray
+                    && right is ArrayTypeData { TypeParameters: [var rightElement] } rightArray
+                    && leftArray.Rank == rightArray.Rank
                     && MayBecomeEqual(leftElement.Type, rightElement.Type);
             }
 

@@ -483,6 +483,75 @@ public class SGIOC016Tests
     }
 
     [Test]
+    public async Task SGIOC016_PlaceholderOnlyInContainingType_ReportsOnlySgioc016WithContainingType()
+    {
+        // TypeData of Outer<int>.Inner does not carry the type arguments of Outer<int> (issue #187), so the placeholder is
+        // not in the template; the registration is not analyzed by SGIOC039, which only reports service types of valid mappings
+        const string source = """
+            using System;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public class Outer<T> { public class Inner; }
+            public class Entity;
+
+            public static class Factories
+            {
+                [IocGenericFactory(typeof(IFoo<Outer<int>.Inner>), typeof(int))]
+                public static IFoo<Outer<T>.Inner> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IFoo<Outer<Entity>.Inner>)], Factory = nameof(Factories.Create))]
+            public sealed class Impl : IFoo<Outer<Entity>.Inner>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC016).ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("'int'").And.Contains("'IFoo<Outer<int>.Inner>'");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("Generic", "IFoo<List<int>>", "List<int>", "IFoo<List<Entity>>")]
+    [Arguments("Nullable", "IFoo<int?>", "int?", "IFoo<Entity?>")]
+    [Arguments("Tuple", "IFoo<(int, string)>", "(int, string)", "IFoo<(Entity, string)>")]
+    [Arguments("Array", "IFoo<int[]>", "int[]", "IFoo<Entity[]>")]
+    public async Task SGIOC016_PlaceholderWithTypeArguments_ReportsOnlySgioc016(string scenario, string template, string placeholder, string serviceType)
+    {
+        // The generator only takes types without type arguments as placeholders, so it cannot call the factory
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public struct Entity;
+
+            public static class Factories
+            {
+                [IocGenericFactory(typeof({{template}}), typeof({{placeholder}}))]
+                public static object Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof({{serviceType}})], Factory = nameof(Factories.Create))]
+            public sealed class Impl : {{serviceType}};
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC016).ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("has type arguments or is an array");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).IsEmpty();
+    }
+
+    [Test]
     public async Task SGIOC016_GenericFactoryTypeMapping_PlaceholderNotInTemplate_ReportsDiagnostic()
     {
         const string source = """

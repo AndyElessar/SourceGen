@@ -10,6 +10,43 @@ namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 public class ClosedGenericDependencyTests
 {
     [Test]
+    public async Task ClosedGenericDependency_TupleServiceType_ClosesOpenRegistration()
+    {
+        // Tuples are matched as System.ValueTuple element by element, without their element names
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class Handler<T> : IHandler<(T Value, string Name)>;
+
+            public class Entity;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(IHandler<(Entity, string)> handler)
+            {
+                public IHandler<(Entity, string)> Handler => handler;
+            }
+
+            [IocContainer]
+            public sealed partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        await Verify(new
+        {
+            Register = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"),
+            Container = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs"),
+        });
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_GeneratesClosedGenericRegistration()
     {
         const string source = """

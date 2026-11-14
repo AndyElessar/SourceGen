@@ -345,6 +345,7 @@ internal sealed record class ListTypeData(
 /// Represents T[] array wrapper type.
 /// Should be resolved using GetServices&lt;T&gt;().ToArray().
 /// </summary>
+/// <param name="Rank">The rank of the array, such as 2 for <c>T[,]</c>.</param>
 internal sealed record class ArrayTypeData(
     string Name,
     string NameWithoutGeneric,
@@ -357,7 +358,8 @@ internal sealed record class ArrayTypeData(
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
+    int Rank = 1)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
         WrapperKind.Array, Traits,

@@ -1383,6 +1383,65 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    public async Task GenericFactory_PlaceholderInArrayOrTuple_GeneratesGenericFactoryCall()
+    {
+        // Placeholders in array elements and tuple elements are matched like type arguments; an array of another rank
+        // does not match, so RankMismatchHandler is not registered with the factory
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            public static class Factories
+            {
+                [IocGenericFactory(typeof(IHandler<int[]>), typeof(int))]
+                public static IHandler<T[]> CreateArray<T>() => throw new NotImplementedException();
+
+                [IocGenericFactory(typeof(IHandler<int[,]>), typeof(int))]
+                public static IHandler<T[,]> CreateRank2<T>() => throw new NotImplementedException();
+
+                [IocGenericFactory(typeof(IHandler<List<int>[][]>), typeof(int))]
+                public static IHandler<List<T>[][]> CreateJagged<T>() => throw new NotImplementedException();
+
+                [IocGenericFactory(typeof(IHandler<(int, string)>), typeof(int))]
+                public static IHandler<(T, string)> CreateTuple<T>() => throw new NotImplementedException();
+
+                [IocGenericFactory(typeof(IHandler<(int, int, int, int, int, int, int, long)>), typeof(long))]
+                public static IHandler<(int, int, int, int, int, int, int, T)> CreateLongTuple<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<Entity[]>)], Factory = nameof(Factories.CreateArray))]
+            public sealed class ArrayHandler : IHandler<Entity[]>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<Entity[,]>)], Factory = nameof(Factories.CreateRank2))]
+            public sealed class Rank2Handler : IHandler<Entity[,]>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<Entity[,]>)], Factory = nameof(Factories.CreateArray))]
+            public sealed class RankMismatchHandler : IHandler<Entity[,]>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<List<Entity>[][]>)], Factory = nameof(Factories.CreateJagged))]
+            public sealed class JaggedHandler : IHandler<List<Entity>[][]>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity, string)>)], Factory = nameof(Factories.CreateTuple))]
+            public sealed class TupleHandler : IHandler<(Entity, string)>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(int, int, int, int, int, int, int, Entity)>)], Factory = nameof(Factories.CreateLongTuple))]
+            public sealed class LongTupleHandler : IHandler<(int, int, int, int, int, int, int, Entity)>;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task GenericFactory_TypeMappingOnAttribute_SingleTypeParameter_GeneratesGenericFactoryCall()
     {
         const string source = """

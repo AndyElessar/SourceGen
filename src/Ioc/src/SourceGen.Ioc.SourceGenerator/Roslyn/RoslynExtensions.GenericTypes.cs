@@ -63,12 +63,16 @@ internal static partial class RoslynExtensions
         /// Gets the fully qualified name of the type without its own type arguments, such as <c>global::Ns.Repo</c> for
         /// <c>Repo&lt;T&gt;</c>. A type nested in a generic type keeps the type arguments of its containing type
         /// (<c>global::Ns.Outer&lt;int&gt;.Node</c> for <c>Outer&lt;int&gt;.Node&lt;string&gt;</c>), so it is not matched as a
-        /// form of <c>Outer&lt;T&gt;</c>.
+        /// form of <c>Outer&lt;T&gt;</c>. A tuple, whose name is written in tuple syntax such as <c>(int, string)</c>, is
+        /// <c>global::System.ValueTuple</c>, so it is matched with other tuples of the same arity by its type arguments.
         /// </summary>
         /// <param name="typeName">The fully qualified name of the type, already formatted by the caller.</param>
-        public string GetNameWithoutGeneric(string typeName) => typeSymbol.IsNestedInGenericType
-            ? $"{typeSymbol.ContainingType.FullyQualifiedName}.{typeSymbol.Name}"
-            : TransformExtensions.GetNameWithoutGeneric(typeName);
+        public string GetNameWithoutGeneric(string typeName) => typeSymbol switch
+        {
+            { IsTupleType: true } => "global::System.ValueTuple",
+            { IsNestedInGenericType: true } => $"{typeSymbol.ContainingType.FullyQualifiedName}.{typeSymbol.Name}",
+            _ => TransformExtensions.GetNameWithoutGeneric(typeName),
+        };
 
         /// <summary>
         /// Gets the type parameters source for this type symbol.

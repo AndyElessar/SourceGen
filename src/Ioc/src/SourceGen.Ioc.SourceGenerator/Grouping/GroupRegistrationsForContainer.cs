@@ -268,7 +268,7 @@ partial class IocSourceGenerator
         // service types that something requests as a collection (dependencies or IServiceProvider invocations).
         // Async-init services are excluded from collection resolution (only Task<T> can access them).
         var collectionServiceTypes = new List<string>();
-        var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<ServiceLookupEntry>>();
+        var collectionRegistrations = new Dictionary<string, ImmutableEquatableArray<ServiceLookupEntry>>(TypeNameComparer.Instance);
         var demand = WrapperDemand.Scan(featureFilteredRegistrations, partialAccessors);
         var requestedCollectionTypes = demand.CollectionServiceTypes;
         requestedCollectionTypes.UnionWith(requestedCollectionServiceTypes);
@@ -313,8 +313,8 @@ partial class IocSourceGenerator
         var wrapperFields = new WrapperFieldLookup(
             lazyFieldByResolver,
             funcFieldByResolver,
-            new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
-            new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), StringComparer.Ordinal),
+            new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), TypeNameComparer.Instance),
+            new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), TypeNameComparer.Instance),
             names,
             CreateProjectedTasks(lastWinsLookup, serviceLookup, lazyWrapperEntries, funcWrapperEntries, reservedNames, names));
 

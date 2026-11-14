@@ -89,7 +89,8 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
-            TypeTraits Traits = default) => WrapperKind switch
+            TypeTraits Traits = default,
+            int ArrayRank = 1) => WrapperKind switch
             {
                 WrapperKind.Enumerable => new EnumerableTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
@@ -120,7 +121,7 @@ internal static class TypeDataExtensions
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses, ArrayRank),
                 WrapperKind.Lazy => new LazyTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,

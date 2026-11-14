@@ -300,7 +300,8 @@ partial class IocSourceGenerator
                 source.HasInjectConstructor,
                 source.InjectionMembers,
                 source.AllInterfaces,
-                source.AllBaseClasses);
+                source.AllBaseClasses,
+                ArrayRank: (source as ArrayTypeData)?.Rank ?? 1);
         }
 
         if(sourceGenericType is not null && (newIsOpenGeneric || sourceGenericType.GenericArity > 0 || newTypeParameters is { Length: > 0 } || source is TypeParameterTypeData))
