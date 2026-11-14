@@ -24,6 +24,12 @@ internal static partial class TransformExtensions
                     List<TypeData> result = [];
                     foreach(var value in namedArg.Value.Values)
                     {
+                        // An open type nested in a generic type cannot be closed (SGIOC038)
+                        if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: true })
+                        {
+                            continue;
+                        }
+
                         if(value.Value is INamedTypeSymbol namedTypeSymbol)
                         {
                             result.Add(namedTypeSymbol.GetTypeData(
@@ -124,7 +130,7 @@ internal static partial class TransformExtensions
                     List<INamedTypeSymbol> result = [];
                     foreach(var value in ctorArg.Values)
                     {
-                        if(value.Value is INamedTypeSymbol namedTypeSymbol)
+                        if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
                         {
                             result.Add(namedTypeSymbol);
                         }
@@ -236,7 +242,8 @@ internal static partial class TransformExtensions
                     using var result = new ValueListBuilder<INamedTypeSymbol>(namedArg.Value.Values.Length);
                     foreach(var value in namedArg.Value.Values)
                     {
-                        if(value.Value is INamedTypeSymbol namedTypeSymbol)
+                        // An open type nested in a generic type cannot be closed (SGIOC038)
+                        if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
                         {
                             result.Add(namedTypeSymbol);
                         }
@@ -261,7 +268,7 @@ internal static partial class TransformExtensions
                     List<TypeData> result = [];
                     foreach(var value in namedArg.Value.Values)
                     {
-                        if(value.Value is INamedTypeSymbol namedTypeSymbol)
+                        if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
                         {
                             // Extract with constructor params and hierarchy, same as IocRegisterAttribute
                             result.Add(namedTypeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true));

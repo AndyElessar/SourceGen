@@ -367,8 +367,21 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "Closing the dependency needs an open generic implementation on the same cycle closed with a type argument nested deeper, such as Node<List<T>> for Node<T>, so its closed forms never end. A Lazy<T> or Func<T> dependency on the cycle keeps the object graph finite, but the generator does not close the dependency: it is resolved at runtime from the open generic registration of the integrated IServiceProvider (by reflection, not Native AOT safe), and a container that does not integrate one cannot resolve it.",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC038: A registration or default settings attribute uses an open type declared in a generic type, which the generator cannot close.
+    /// </summary>
+    public static readonly DiagnosticDescriptor OpenTypeNestedInGenericType = new(
+        id: "SGIOC038",
+        title: "Open type nested in a generic type is not supported",
+        messageFormat: "'{0}' is an open type declared in the generic type '{1}', which the generator cannot close, so it is ignored; use its closed types instead",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The generator closes open generic types with their own type arguments, not with those of their containing type, so an open type declared in a generic type, such as Outer<O>.Node<T> or typeof(Outer<>.INode<>), is ignored as a registered type, service type, decorator, implementation type or default settings target. A closed type, such as Outer<int>.Node<string>, is used like any type.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
+        OpenTypeNestedInGenericType,
         MultipleDecoratedParameters,
         NoDecoratedParameter,
         InfiniteGenericDependency,
@@ -527,6 +540,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         }
 
         AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
+        AnalyzeOpenTypesNestedInGenericType(context, attributeSyntax, attributeClass, analyzerContext);
         ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
     }
 

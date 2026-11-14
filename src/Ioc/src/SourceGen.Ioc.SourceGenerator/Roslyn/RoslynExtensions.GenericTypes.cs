@@ -48,6 +48,29 @@ internal static partial class RoslynExtensions
     extension(INamedTypeSymbol typeSymbol)
     {
         /// <summary>
+        /// Gets whether the type is declared in a generic type, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.
+        /// </summary>
+        public bool IsNestedInGenericType => typeSymbol.ContainingType is { IsGenericType: true };
+
+        /// <summary>
+        /// Gets whether the type is an open type declared in a generic type, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c> or
+        /// <c>Outer&lt;&gt;.Plain</c>. Such types are not registered (SGIOC038): type data only has the type arguments of the
+        /// type itself, so the type cannot be closed with those of its containing type.
+        /// </summary>
+        public bool IsOpenNestedInGenericType => typeSymbol.IsNestedInGenericType && typeSymbol.ContainsGenericParameters;
+
+        /// <summary>
+        /// Gets the fully qualified name of the type without its own type arguments, such as <c>global::Ns.Repo</c> for
+        /// <c>Repo&lt;T&gt;</c>. A type nested in a generic type keeps the type arguments of its containing type
+        /// (<c>global::Ns.Outer&lt;int&gt;.Node</c> for <c>Outer&lt;int&gt;.Node&lt;string&gt;</c>), so it is not matched as a
+        /// form of <c>Outer&lt;T&gt;</c>.
+        /// </summary>
+        /// <param name="typeName">The fully qualified name of the type, already formatted by the caller.</param>
+        public string GetNameWithoutGeneric(string typeName) => typeSymbol.IsNestedInGenericType
+            ? $"{typeSymbol.ContainingType.FullyQualifiedName}.{typeSymbol.Name}"
+            : TransformExtensions.GetNameWithoutGeneric(typeName);
+
+        /// <summary>
         /// Gets the type parameters source for this type symbol.
         /// For unbound generic types and constructed generic types, returns parameters from the original definition.
         /// This allows matching type parameter names (TRequest, TResponse) with type arguments (TestRequest, List&lt;string&gt;).
@@ -58,15 +81,22 @@ internal static partial class RoslynExtensions
                 : typeSymbol.TypeParameters;
 
         /// <summary>
-        /// Determines whether the type is a nested open generic type.
+        /// Determines whether the type is a nested open generic type, which open generic registrations cannot close.
         /// A nested open generic is a generic type where any type argument itself contains generic parameters.
         /// For example: IGeneric&lt;IGeneric2&lt;T&gt;&gt; is a nested open generic.
         /// But IGeneric&lt;T&gt; or IGeneric&lt;int&gt; are not.
+        /// An open type nested in a generic type, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c> or <c>Outer&lt;O&gt;.Plain</c>, is
+        /// one too: type data only has the type arguments of the type itself, not those of its containing type.
         /// </summary>
         public bool IsNestedOpenGeneric
         {
             get
             {
+                if(typeSymbol.IsOpenNestedInGenericType)
+                {
+                    return true;
+                }
+
                 if(!typeSymbol.IsGenericType)
                 {
                     return false;

@@ -324,6 +324,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC035`|Decorator has no parameter for the inner instance|[Decorators](06_Decorator.md#diagnostics)|
 |`SGIOC036`|Open generic dependency nests type arguments without end (infinite object graph)|[Open Generics](09_OpenGeneric.md#diagnostics)|
 |`SGIOC037`|Open generic dependency nests type arguments without end behind `Lazy<T>` / `Func<T>`|[Open Generics](09_OpenGeneric.md#diagnostics)|
+|`SGIOC038`|Open type declared in a generic type is not supported|[Open Generics](09_OpenGeneric.md#diagnostics)|
 
 ## Production Checklist
 

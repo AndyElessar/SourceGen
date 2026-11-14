@@ -13,7 +13,8 @@ internal static partial class TransformExtensions
         {
             if(attribute.ConstructorArguments.Length < 2)
                 return null;
-            if(attribute.ConstructorArguments[0].Value is not INamedTypeSymbol targetServiceType)
+            // Settings for an open type nested in a generic type are ignored as a whole, with their ImplementationTypes (SGIOC038)
+            if(attribute.ConstructorArguments[0].Value is not INamedTypeSymbol { IsOpenNestedInGenericType: false } targetServiceType)
                 return null;
             if(attribute.ConstructorArguments[1].Value is not int lifetime)
                 return null;
@@ -59,7 +60,8 @@ internal static partial class TransformExtensions
             if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
                 return null;
 
-            if(attrClass.TypeArguments[0] is not INamedTypeSymbol targetServiceType)
+            // Settings for an open type nested in a generic type are ignored as a whole, with their ImplementationTypes (SGIOC038)
+            if(attrClass.TypeArguments[0] is not INamedTypeSymbol { IsOpenNestedInGenericType: false } targetServiceType)
                 return null;
 
             // Lifetime is the first constructor argument for the generic version

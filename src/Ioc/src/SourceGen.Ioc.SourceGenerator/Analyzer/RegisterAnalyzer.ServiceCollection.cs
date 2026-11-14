@@ -135,6 +135,45 @@ public sealed partial class RegisterAnalyzer
 
         // SGIOC032: Check explicit service types that would be skipped
         AnalyzeIncompatibleServiceTypes(reportDiagnostic, explicitServiceTypes, targetType, location);
+
+        // SGIOC038: Check the interfaces and base classes an open implementation is registered as
+        AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
+    }
+
+    /// <summary>
+    /// SGIOC038: Reports the open types nested in a generic type that an open implementation would be registered as through
+    /// <c>RegisterAllInterfaces</c> / <c>RegisterAllBaseClasses</c> (its own or those of its default settings), such as
+    /// <c>Outer&lt;T&gt;.INode&lt;T&gt;</c> of <c>Node&lt;T&gt;</c>. The generator does not register them.
+    /// </summary>
+    private static void AnalyzeImplicitOpenTypesNestedInGenericType(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        AttributeData attribute,
+        INamedTypeSymbol targetType,
+        List<INamedTypeSymbol> explicitServiceTypes,
+        Location? location)
+    {
+        // Closed implementations implement closed types; a target that is itself nested is reported as a whole
+        if(targetType.IsOpenNestedInGenericType || !(targetType.IsUnboundGenericType || targetType is { IsGenericType: true, IsDefinition: true }))
+            return;
+
+        var serviceTypes = new HashSet<INamedTypeSymbol>(
+            AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes),
+            SymbolEqualityComparer.Default);
+        AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
+
+        foreach(var serviceType in serviceTypes)
+        {
+            if(!serviceType.IsOpenNestedInGenericType)
+                continue;
+
+            var definition = serviceType.OriginalDefinition;
+            reportDiagnostic(Diagnostic.Create(
+                OpenTypeNestedInGenericType,
+                location,
+                definition.ToDisplayString(NestedTypeDisplayFormat),
+                GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        }
     }
 
     /// <summary>
@@ -154,6 +193,8 @@ public sealed partial class RegisterAnalyzer
             return;
         if(targetType.DeclaredAccessibility is Accessibility.Private)
             return;
+        if(targetType.IsOpenNestedInGenericType)
+            return;
 
         // Get lifetime of current service (considering default settings)
         var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
@@ -166,6 +207,9 @@ public sealed partial class RegisterAnalyzer
             AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes),
             SymbolEqualityComparer.Default);
         var bestDefaultIndex = AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
+
+        // Like the generator, open types nested in a generic type are not registered (SGIOC038)
+        serviceTypes.RemoveWhere(static serviceType => serviceType.IsOpenNestedInGenericType);
 
         ImmutableArray<ServiceSymbolKey> registrations = [.. serviceTypes.Select(serviceType => new ServiceSymbolKey(serviceType, key))];
 
@@ -246,7 +290,7 @@ public sealed partial class RegisterAnalyzer
             return serviceType is GenericTypeData { IsOpenGeneric: true } openServiceType
                 && candidate is { IsGenericType: true, TypeKind: not TypeKind.Error }
                 && candidate.Arity == openServiceType.GenericArity
-                && TransformExtensions.GetNameWithoutGeneric(name) == openServiceType.NameWithoutGeneric;
+                && candidate.GetNameWithoutGeneric(name) == openServiceType.NameWithoutGeneric;
         }
     }
 
@@ -706,7 +750,7 @@ public sealed partial class RegisterAnalyzer
 
         // Error types have no generic type data
         return type is { IsGenericType: true, TypeKind: not TypeKind.Error }
-            && defaultSettings.TryGetGenericMatches(TransformExtensions.GetNameWithoutGeneric(name), type.Arity, out index);
+            && defaultSettings.TryGetGenericMatches(type.GetNameWithoutGeneric(name), type.Arity, out index);
     }
 
     private readonly struct SymbolLocationComparer : IEqualityComparer<(INamedTypeSymbol Type, Location? Location)>

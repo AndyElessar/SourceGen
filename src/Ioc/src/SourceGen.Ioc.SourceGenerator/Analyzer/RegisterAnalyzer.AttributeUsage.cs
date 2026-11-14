@@ -530,6 +530,153 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
+    /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
+    private static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
+
+    /// <summary>
+    /// SGIOC038: Reports open types declared in a generic type that a registration or default settings attribute uses, which
+    /// the generator ignores: the type [IocRegister] is applied to, and each <c>typeof()</c> of its constructor arguments
+    /// (the target and service types) and of its <c>ServiceTypes</c>, <c>Decorators</c> and <c>ImplementationTypes</c>.
+    /// </summary>
+    private static void AnalyzeOpenTypesNestedInGenericType(
+        SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass,
+        AnalyzerContext analyzerContext)
+    {
+        var attributeSymbols = analyzerContext.AttributeSymbols;
+        var isRegisterAttribute = AnalyzerHelpers.IsIoCRegisterAttribute(attributeClass, attributeSymbols);
+        if(!isRegisterAttribute
+            && !AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, attributeSymbols)
+            && !AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols))
+        {
+            return;
+        }
+
+        // The whole registration is ignored, so its arguments are not reported too
+        if(isRegisterAttribute && GetTypeLevelTargetType(context, attributeSyntax) is { IsOpenNestedInGenericType: true } registeredType)
+        {
+            Report(registeredType, attributeSyntax.GetLocation());
+            return;
+        }
+
+        if(attributeSyntax.ArgumentList is not { } argumentList)
+            return;
+
+        var isDefaultsAttribute = !isRegisterAttribute && AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols);
+        var registerAllInterfaces = isDefaultsAttribute && IsTrue("RegisterAllInterfaces");
+        var registerAllBaseClasses = isDefaultsAttribute && IsTrue("RegisterAllBaseClasses");
+
+        // Default settings for an open type nested in a generic type are ignored as a whole, so the implicit service types
+        // of their ImplementationTypes are not reported too
+        var isIgnoredDefaults = isDefaultsAttribute
+            && attributeClass is { IsGenericType: true, TypeArguments: [INamedTypeSymbol { IsOpenNestedInGenericType: true }, ..] };
+
+        foreach(var argument in argumentList.Arguments)
+        {
+            var name = argument.NameEquals?.Name.Identifier.Text;
+            if(name is not (null or "ServiceTypes" or "Decorators" or "ImplementationTypes"))
+                continue;
+
+            foreach(var typeOf in argument.Expression.DescendantNodesAndSelf().OfType<TypeOfExpressionSyntax>())
+            {
+                if(context.SemanticModel.GetTypeInfo(typeOf.Type, context.CancellationToken).Type is not INamedTypeSymbol type)
+                    continue;
+
+                if(type.IsOpenNestedInGenericType)
+                {
+                    Report(type, typeOf.GetLocation());
+
+                    // The first constructor argument of [IocRegisterDefaults] is its target
+                    if(isDefaultsAttribute && name is null && argument == argumentList.Arguments[0])
+                        isIgnoredDefaults = true;
+
+                    continue;
+                }
+
+                if(!type.IsUnboundGenericType)
+                    continue;
+
+                // An open decorator applies to the forms it declares, so a form nested in a generic type that it decorates
+                // (takes as a constructor parameter), such as Outer<T>.INode<T> of NodeDecorator<T>, is not decorated
+                if(name is "Decorators")
+                {
+                    var definition = type.OriginalDefinition;
+                    ReportNested(AnalyzerHelpers.EnumerateImplicitServiceTypes(definition).Where(form => IsDecoratedForm(definition, form)), typeOf);
+                }
+
+                // An open implementation of default settings is registered as its interfaces and base classes with
+                // RegisterAllInterfaces / RegisterAllBaseClasses, such as Outer<T>.INode<T> of Node<T>
+                else if(name is "ImplementationTypes" && !isIgnoredDefaults && (registerAllInterfaces || registerAllBaseClasses))
+                {
+                    var definition = type.OriginalDefinition;
+                    var implicitTypes = registerAllInterfaces ? definition.AllInterfaces.AsEnumerable() : [];
+                    if(registerAllBaseClasses)
+                        implicitTypes = implicitTypes.Concat(AnalyzerHelpers.EnumerateImplicitServiceTypes(definition).Where(static t => t.TypeKind is not TypeKind.Interface));
+
+                    ReportNested(implicitTypes, typeOf);
+                }
+            }
+        }
+
+        static bool IsDecoratedForm(INamedTypeSymbol decorator, INamedTypeSymbol form)
+        {
+            foreach(var constructor in decorator.InstanceConstructors)
+            {
+                foreach(var parameter in constructor.Parameters)
+                {
+                    if(SymbolEqualityComparer.Default.Equals(parameter.Type, form))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        void ReportNested(IEnumerable<INamedTypeSymbol> types, TypeOfExpressionSyntax typeOf)
+        {
+            foreach(var type in types)
+            {
+                if(type.IsOpenNestedInGenericType)
+                    Report(type, typeOf.GetLocation());
+            }
+        }
+        bool IsTrue(string argumentName)
+        {
+            foreach(var argument in argumentList.Arguments)
+            {
+                if(argument.NameEquals?.Name.Identifier.Text == argumentName)
+                    return context.SemanticModel.GetConstantValue(argument.Expression, context.CancellationToken) is { HasValue: true, Value: true };
+            }
+
+            return false;
+        }
+
+        void Report(INamedTypeSymbol type, Location location)
+        {
+            var definition = type.OriginalDefinition;
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                OpenTypeNestedInGenericType,
+                location,
+                definition.ToDisplayString(NestedTypeDisplayFormat),
+                GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        }
+    }
+
+    /// <summary>The innermost containing type with type parameters, such as <c>Outer&lt;O&gt;</c> for <c>Outer&lt;O&gt;.Mid.Node&lt;T&gt;</c>.</summary>
+    private static INamedTypeSymbol GetGenericContainingType(INamedTypeSymbol type)
+    {
+        var containingType = type.ContainingType;
+        while(containingType is { TypeParameters.Length: 0, ContainingType: { } outer })
+            containingType = outer;
+
+        return containingType.OriginalDefinition;
+    }
+
     /// <summary>
     /// Checks whether the containing type is marked with [IocContainer]/[Container] attribute.
     /// Used to allow [IocInject] on partial methods/properties for keyed service accessor specification.
