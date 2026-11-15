@@ -212,4 +212,34 @@ public class SGIOC004Tests
 
         await Assert.That(sgioc004).IsEmpty();
     }
+
+    [Test]
+    [Arguments("IHandler<(Entity M, string N)>")]
+    [Arguments("Lazy<IHandler<(Entity, string)>>")]
+    public async Task SGIOC004_SingletonDependsOnTransient_TupleElementNamesDiffer_ReportsDiagnostic(string dependency)
+    {
+        // Tuple element names are not part of the runtime type, so the dependency resolves the Transient registration
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public class TransientHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService({{dependency}} dependency);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+        await Assert.That(sgioc004[0].GetMessage()).Contains("SingletonService").And.Contains("TransientHandler");
+    }
 }

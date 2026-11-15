@@ -1404,6 +1404,78 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("UnsatisfyingFirst", "IHandler<(int A, int B), (int X, int Y)> first, IHandler<(int X, int Y), (int X, int Y)> second")]
+    [Arguments("SatisfyingFirst", "IHandler<(int X, int Y), (int X, int Y)> first, IHandler<(int A, int B), (int X, int Y)> second")]
+    [Arguments("SatisfyingInsideLazy", "IHandler<(int A, int B), (int X, int Y)> first, System.Lazy<IHandler<(int X, int Y), (int X, int Y)>> second")]
+    public async Task SGIOC018_OpenGenericRegistration_OtherSpellingOfSameRuntimeTypeSatisfiesConstraints_NoDiagnostic(string scenario, string parameters)
+    {
+        // The generator closes Handler<T, U> with the spelling that satisfies the constraint, and the container resolves the
+        // other spelling, which is the same runtime type, by that closed registration
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            public class Handler<T, U> : IHandler<T, U> where T : U { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer({{parameters}});
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var generated = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var container = SourceGeneratorTestHelper.GetGeneratedSource(generated, "TestContainer");
+        await Assert.That(container).Contains("Handler<(int X, int Y), (int X, int Y)>");
+        await Assert.That(container).DoesNotContain("Handler<(int A, int B), (int X, int Y)>");
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC018)).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC018_OpenGenericRegistration_SatisfyingSpellingOnlyInNonWrapperTypeArgument_ReportsDiagnostic()
+    {
+        // The generator discovers the element types of wrappers, not the type arguments of other generic types, so it does
+        // not close Handler<T, U> with the spelling inside IBar<...>
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U> { }
+            public interface IBar<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            public class Handler<T, U> : IHandler<T, U> where T : U { }
+
+            [IocRegister(ServiceLifetime.Singleton, RegisterAllInterfaces = true)]
+            public class Bar : IBar<IHandler<(int X, int Y), (int X, int Y)>> { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer(IHandler<(int A, int B), (int X, int Y)> first, IBar<IHandler<(int X, int Y), (int X, int Y)>> bar);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var generated = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var container = SourceGeneratorTestHelper.GetGeneratedSource(generated, "TestContainer");
+        await Assert.That(container).DoesNotContain("TestNamespace.Handler<");
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC018)).Count().IsEqualTo(1);
+    }
+
+    [Test]
     public async Task SGIOC018_OpenGenericRegistrationsWithDifferentConstraints_ResolvedBySatisfyingImplementation_NoDiagnostic()
     {
         const string source = """

@@ -347,7 +347,8 @@ public sealed partial class RegisterAnalyzer
 
         private void Build(CancellationToken cancellationToken)
         {
-            var byAssignableType = new Dictionary<ITypeSymbol, List<ServiceInfo>>(SymbolEqualityComparer.Default);
+            // Keyed by runtime type (without tuple element names), like the generator's dependency resolution
+            var byAssignableType = new Dictionary<ITypeSymbol, List<ServiceInfo>>(RuntimeTypeSymbolComparer.Instance);
             var all = new List<ServiceInfo>();
 
             foreach (var kvp in analyzerContext.RegisteredServices)

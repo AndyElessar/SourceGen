@@ -883,6 +883,65 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
+    /// Gets the index of each syntax tree of the compilation, which orders attributes by source like the generator's
+    /// attribute pipelines (see <see cref="GetSourceOrder"/>).
+    /// </summary>
+    public static Dictionary<SyntaxTree, int> GetSyntaxTreeOrder(Compilation compilation)
+    {
+        var treeOrder = new Dictionary<SyntaxTree, int>();
+        var index = 0;
+        foreach(var tree in compilation.SyntaxTrees)
+            treeOrder[tree] = index++;
+
+        return treeOrder;
+    }
+
+    /// <summary>Gets the source position of an attribute; an attribute that is not in the compilation comes last.</summary>
+    public static (int Tree, int Position) GetSourceOrder(SyntaxReference? syntax, Dictionary<SyntaxTree, int> treeOrder)
+    {
+        if(syntax is null)
+            return (int.MaxValue, int.MaxValue);
+
+        return (treeOrder.TryGetValue(syntax.SyntaxTree, out var index) ? index : int.MaxValue, syntax.Span.Start);
+    }
+
+    /// <summary>
+    /// Enumerates the <c>[IocRegisterDefaults]</c> attributes of the modules imported with <c>[IocImportModule]</c>, in the
+    /// order the generator appends their settings after those of the compiled assembly (<c>ExtractDefaultSettingsFromModule</c>):
+    /// the imports in source order (non-generic attributes, then generic ones), and per module the settings on the module
+    /// type, then the assembly-level settings of its assembly. A module of the compiled assembly is skipped: its settings are
+    /// already among those of the compiled assembly, which come first.
+    /// </summary>
+    public static IEnumerable<AttributeData> EnumerateImportedDefaultSettingsAttributes(
+        IEnumerable<AttributeData> importAttributes,
+        IAssemblySymbol assembly,
+        Dictionary<SyntaxTree, int> treeOrder,
+        IocAttributeSymbols attributeSymbols,
+        CancellationToken cancellationToken)
+    {
+        foreach(var import in importAttributes
+                     .OrderBy(static attribute => attribute.AttributeClass?.IsGenericType == true)
+                     .ThenBy(attribute => GetSourceOrder(attribute.ApplicationSyntaxReference, treeOrder)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(import.GetImportedModuleType() is not { } moduleType)
+                continue;
+
+            moduleType = moduleType.IsGenericType ? moduleType.OriginalDefinition : moduleType;
+            var moduleAssembly = moduleType.ContainingAssembly;
+            if(moduleAssembly is null || SymbolEqualityComparer.Default.Equals(moduleAssembly, assembly))
+                continue;
+
+            foreach(var attribute in moduleType.GetAttributes().Concat(moduleAssembly.GetAttributes()))
+            {
+                if(attribute.AttributeClass is { } attrClass && IsIoCRegisterDefaultsAttribute(attrClass, attributeSymbols))
+                    yield return attribute;
+            }
+        }
+    }
+
+    /// <summary>
     /// Gets whether the type is an open generic type: unbound (<c>typeof(Repo&lt;&gt;)</c>) or with type parameters as
     /// type arguments.
     /// </summary>

@@ -86,4 +86,31 @@ public class SGIOC035Tests
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC035)).IsEmpty();
     }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC035_DecoratorOfTypeLevelDefaultSettings_ReportsDiagnostic()
+    {
+        // The decorators of type-level default settings apply to the registrations they match, like assembly-level ones
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegisterDefaults(typeof(IHandler), ServiceLifetime.Transient, Decorators = [typeof(BadDecorator)])]
+            public interface IHandler;
+
+            [IocRegister]
+            public class Handler : IHandler;
+
+            public class BadDecorator : IHandler;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc035 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC035).ToList();
+
+        await Assert.That(sgioc035).Count().IsEqualTo(1);
+        await Assert.That(sgioc035[0].GetMessage()).Contains("BadDecorator").And.Contains("IHandler");
+    }
 }

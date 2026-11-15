@@ -102,11 +102,12 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor InstanceRequiresSingleton = new(
         id: "SGIOC009",
         title: "Invalid Attribute Usage",
-        messageFormat: "Instance registration '{0}' requires Singleton lifetime, but '{1}' was specified",
+        messageFormat: "Instance registration '{0}' requires Singleton lifetime, but its lifetime is '{1}'",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When using Instance to provide a pre-created object, the Lifetime must be Singleton because the same instance will be returned for every resolution.");
+        description: "When using Instance to provide a pre-created object, the lifetime must be Singleton because the same instance will be returned for every resolution. The lifetime is the Lifetime of the attribute, otherwise that of its matching IocRegisterDefaults, otherwise the SourceGenIocDefaultLifetime MSBuild property (Transient when unset).",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC010: Invalid Attribute Usage - Both Factory and Instance are specified on the same attribute.
@@ -142,7 +143,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The same implementation type with the same key and at least one overlapping tag is registered multiple times. Only the last registration will be effective.");
+        description: "The same implementation type with the same key and at least one overlapping tag is registered multiple times. Only the last registration will be effective.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC012: Duplicated IoCRegisterDefaults Detected - Same target type and at least one matching tag has multiple default settings.
@@ -455,32 +457,23 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         if(!attributeSymbols.HasAnyRegistrationAttribute)
             return;
 
-        // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis
-        var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
+        // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis.
+        // Both are keyed by runtime type (without tuple element names), like the generator's dependency resolution.
+        var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(RuntimeTypeSymbolComparer.Instance);
         // Index for service type -> implementation lookup (interfaces/base classes)
-        var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
-        // Collect default settings from IoCRegisterDefaultSettingsAttribute using shared method
-        // Also collect duplicated default settings for SGIOC012 reporting
-        var duplicatedDefaults = new ConcurrentBag<(string TargetTypeName, Location? Location)>();
-        // Track seen (target type, single tag) pairs for SGIOC012 (shared between assembly and type-level)
-        var seenDefaultTargetTypes = new ConcurrentDictionary<(string TargetTypeName, string Tag), Location?>();
-        var defaultDecorators = ImmutableArray.CreateBuilder<ImmutableArray<INamedTypeSymbol>>();
-        var defaultAttributes = ImmutableArray.CreateBuilder<AttributeData>();
-        var defaultSettings = CollectDefaults(context.Compilation, attributeSymbols, duplicatedDefaults, seenDefaultTargetTypes, defaultDecorators, defaultAttributes, context.CancellationToken);
+        var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(RuntimeTypeSymbolComparer.Instance);
 
         var analyzerContext = new AnalyzerContext(
             attributeSymbols,
             registeredServices,
             serviceTypeIndex,
-            defaultSettings,
-            defaultDecorators.ToImmutable(),
-            defaultAttributes.ToImmutable(),
-            duplicatedDefaults,
-            seenDefaultTargetTypes,
             features,
+            IocSourceGenerator.ReadDefaultLifetime(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions) ?? ServiceLifetime.Transient,
             context.Compilation.Assembly);
 
-        // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
+        // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start). Like type-level
+        // registrations, they are resolved against the default settings at compilation end, once type-level default settings
+        // and imported modules are known.
         var assemblyRegistrations = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
         var attributeNameFilter = new IocAttributeNameFilter(
             context.Compilation,
@@ -491,12 +484,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             attributeSymbols.IocRegisterDefaultsAttribute,
             attributeSymbols.IocRegisterDefaultsAttribute_T1);
 
-        // First pass: collect services and do immediate validation (SGIOC001, 009, 011, 032),
-        // and SGIOC012 for IoCRegisterDefaultsAttribute on types (class, struct, interface)
+        // First pass: collect registrations, type-level IoCRegisterDefaultsAttribute (class, struct, interface) and
+        // IocImportModuleAttribute, and do the immediate validation that does not depend on default settings (SGIOC001, 032)
         context.RegisterSymbolAction(ctx =>
         {
             CollectAndValidateNamedType(ctx, analyzerContext);
-            AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext);
             AnalyzeImportedOpenRegistrations(ctx, analyzerContext);
         }, SymbolKind.NamedType);
 
@@ -513,7 +505,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         }, SymbolKind.Method);
 
         // SGIOC008/010/023/024 + nameof() key type resolution for KeyType.Csharp registrations,
-        // and SGIOC001/009/011/032 for assembly-level IoCRegisterFor attributes.
+        // and SGIOC001/032 for assembly-level IoCRegisterFor attributes.
         // Using RegisterSyntaxNodeAction to avoid RS1030 warning (do not use Compilation.GetSemanticModel)
         context.RegisterSyntaxNodeAction(ctx => AnalyzeIocAttributeSyntax(ctx, analyzerContext, assemblyRegistrations, attributeNameFilter), SyntaxKind.Attribute);
 
@@ -584,19 +576,17 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// Analyzes all dependencies after all services have been collected.
     /// This ensures we have a complete picture of all registered services before checking dependencies.
-    /// Also reports SGIOC012 for duplicated IoCRegisterDefaults, SGIOC013-014 for ServiceKey type mismatches,
-    /// and SGIOC015 for KeyValuePair key type mismatches.
+    /// First collects the default settings (SGIOC012 for duplicated IoCRegisterDefaults) and resolves every registration
+    /// against them (SGIOC009, SGIOC011 and SGIOC038, which depend on the default settings). Also reports SGIOC013-014 for
+    /// ServiceKey type mismatches, and SGIOC015 for KeyValuePair key type mismatches.
     /// </summary>
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
     {
-        // SGIOC012: Report duplicated IoCRegisterDefaults
-        foreach(var (targetTypeName, location) in analyzerContext.DuplicatedDefaults)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                DuplicatedDefaultSettings,
-                location,
-                targetTypeName));
-        }
+        // Type-level default settings and imported modules are only known once every symbol action ran, so the default
+        // settings are collected, and the registrations resolved against them, here
+        var treeOrder = AnalyzerHelpers.GetSyntaxTreeOrder(context.Compilation);
+        CollectDefaults(context.ReportDiagnostic, context.Compilation, analyzerContext, treeOrder, context.CancellationToken);
+        ResolveRegistrations(context.ReportDiagnostic, analyzerContext, treeOrder, context.CancellationToken);
 
         // Reuse these collections across all services to reduce allocations
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
@@ -738,6 +728,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
     private static ImmutableHashSet<ServiceSymbolKey> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
     {
+        // Keyed by runtime type, so registrations whose tuple element names differ are the same service
         var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync)>();
 
         foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)

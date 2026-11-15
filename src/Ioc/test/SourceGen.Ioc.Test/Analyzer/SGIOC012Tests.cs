@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.Diagnostics;
+
 namespace SourceGen.Ioc.Test.Analyzer;
 
 /// <summary>
@@ -503,5 +505,74 @@ public class SGIOC012Tests
         var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC012");
 
         await Assert.That(sgioc012).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("TypeLevel", "", "[IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped)]\n[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton)]")]
+    [Arguments("AssemblyAndTypeLevel", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]", "[IocRegisterDefaults<IMyService>(ServiceLifetime.Scoped)]")]
+    public async Task SGIOC012_GenericBeforeNonGenericAttribute_ReportsGenericAttribute(string scenario, string assemblyDefaults, string typeDefaults)
+    {
+        // Like the generator, non-generic attributes take precedence over generic ones, so the generic one is ignored
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{assemblyDefaults}}
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            {{typeDefaults}}
+            public class Holder { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc012 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC012).ToList();
+
+        await Assert.That(sgioc012).Count().IsEqualTo(1);
+        await Assert.That(sgioc012[0].Location.SourceTree!.GetText().ToString(sgioc012[0].Location.SourceSpan)).StartsWith("IocRegisterDefaults<IMyService>");
+    }
+
+    [Test]
+    [Category(Constants.ImportModule)]
+    public async Task SGIOC012_DefaultsOfImportedModule_NoDiagnostic()
+    {
+        // Imported default settings come after those of the current assembly and are not reported
+        const string librarySource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(Library.IMyService), ServiceLifetime.Scoped)]
+
+            namespace Library;
+
+            public interface IMyService;
+
+            [IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Transient)]
+            public sealed class Module;
+            """;
+        var library = SourceGeneratorTestHelper.CreateCompilation("Library", librarySource);
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+
+            [assembly: IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton)]
+
+            namespace TestNamespace;
+
+            [IocImportModule(typeof(Module))]
+            public sealed class App;
+
+            [IocRegister]
+            public class MyService : IMyService;
+            """;
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
+
+        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC012)).IsEmpty();
     }
 }

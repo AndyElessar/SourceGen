@@ -203,7 +203,7 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 </details>
 
 > [!NOTE]  
-> When using `Instance`, only `Singleton` lifetime is allowed. Using `Scoped` or `Transient` will not generate any registration code.
+> When using `Instance`, only `Singleton` lifetime is allowed. Using `Scoped` or `Transient` will not generate any registration code in the Register (`IServiceCollection`) output. A registration without `Lifetime` takes the lifetime of its matching [default settings](03_Defaults.md), otherwise the [`SourceGenIocDefaultLifetime`](13_MSBuild_Configuration.md) property (`Transient` when unset).
 
 ## Factory in Default Settings
 
@@ -555,7 +555,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |ID|Severity|Description|
 |:---|:---|:---|
 |SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
-|SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
+|SGIOC009|Error|`Instance` is specified but the lifetime (the `Lifetime` of the attribute, otherwise of its default settings, otherwise `SourceGenIocDefaultLifetime`) is not `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Instance` takes precedence.|
 |SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
