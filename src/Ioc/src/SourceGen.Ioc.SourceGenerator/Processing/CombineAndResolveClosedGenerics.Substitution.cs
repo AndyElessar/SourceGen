@@ -46,7 +46,7 @@ partial class IocSourceGenerator
 
         // Type arguments cannot add IDisposable to a class or change its constructors, so the closed type is disposable and
         // constructible exactly when the open one is
-        var closedImplType = TypeData.CreateGeneric(
+        return TypeData.CreateGeneric(
             closedImplTypeName,
             openImplType.NameWithoutGeneric,
             IsOpenGeneric: false,
@@ -55,11 +55,8 @@ partial class IocSourceGenerator
             TypeParameters: closedTypeParams,
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: openImplType.HasInjectConstructor,
-            IsKnownNonDisposable: openImplType.IsKnownNonDisposable);
-
-        return openImplType.IsNotActivatable
-            ? closedImplType with { IsNotConstructible = openImplType.IsNotConstructible, IsNotActivatable = true }
-            : closedImplType;
+            IsKnownNonDisposable: openImplType.IsKnownNonDisposable,
+            Constructibility: openImplType.Constructibility);
     }
 
     /// <summary>
@@ -424,7 +421,8 @@ partial class IocSourceGenerator
         // Substitute in type parameters
         var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap, typeArguments);
 
-        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
+        // Type arguments cannot add IDisposable to a class or change its constructors, so the closed type is disposable and
+        // constructible exactly when the open one is
         return TypeData.CreateGeneric(
             closedDecoratorName,
             closedDecoratorNameWithoutGeneric,
@@ -435,7 +433,8 @@ partial class IocSourceGenerator
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: false,
             InjectionMembers: closedInjectionMembers,
-            IsKnownNonDisposable: genericDecorator.IsKnownNonDisposable);
+            IsKnownNonDisposable: genericDecorator.IsKnownNonDisposable,
+            Constructibility: genericDecorator.Constructibility);
     }
 
     /// <summary>

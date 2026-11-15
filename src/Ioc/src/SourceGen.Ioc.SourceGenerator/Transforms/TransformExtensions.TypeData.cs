@@ -60,7 +60,7 @@ internal static partial class TransformExtensions
         /// <param name="extractInjectionMembers">Whether to extract injection members (properties, fields, methods with [IocInject] attributes). Used for decorators.</param>
         /// <param name="constructedIn">
         /// The assembly the generated code is compiled into. With <paramref name="extractConstructorParams"/>, records
-        /// <see cref="TypeData.IsNotConstructible"/> and <see cref="TypeData.IsNotActivatable"/>; needed for implementation types.
+        /// <see cref="TypeData.Constructibility"/>; needed for implementation types.
         /// </param>
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
@@ -81,10 +81,22 @@ internal static partial class TransformExtensions
 
             ImmutableEquatableArray<ParameterData>? constructorParams = null;
             bool hasInjectConstructor = false;
-            IMethodSymbol? constructor = null;
+            var constructibility = Constructibility.Unknown;
             if(extractConstructorParams)
             {
-                (constructorParams, hasInjectConstructor, constructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel, constructedIn);
+                (constructorParams, hasInjectConstructor, var constructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel, constructedIn);
+
+                // MS.DI calls a public constructor of its own choice, so only generated code constructs a type whose selected
+                // constructor is not public (an implicit default constructor of a class is public)
+                if(constructedIn is not null)
+                {
+                    constructibility = (typeSymbol.IsConstructibleIn(constructedIn), constructor) switch
+                    {
+                        (false, _) => Constructibility.NotConstructible,
+                        (true, { DeclaredAccessibility: not Accessibility.Public }) => Constructibility.GeneratedCodeOnly,
+                        _ => Constructibility.Activatable,
+                    };
+                }
             }
 
             // Extract injection members if requested (for decorators)
@@ -112,7 +124,7 @@ internal static partial class TransformExtensions
                 isKnownNonDisposable = hierarchySource.IsKnownNonDisposable();
             }
 
-            var typeData = typeSymbol.CreateTypeData(
+            return typeSymbol.CreateTypeData(
                 typeName,
                 typeParameters,
                 constructorParams,
@@ -120,18 +132,8 @@ internal static partial class TransformExtensions
                 injectionMembers,
                 allInterfaces,
                 allBaseClasses,
-                isKnownNonDisposable);
-
-            if(!extractConstructorParams || constructedIn is null)
-                return typeData;
-
-            // MS.DI calls a public constructor of its own choice, so generated code constructs a type whose selected constructor
-            // is not public (an implicit default constructor of a class is public)
-            var isNotConstructible = !typeSymbol.IsConstructibleIn(constructedIn);
-            var isNotActivatable = isNotConstructible || constructor is { DeclaredAccessibility: not Accessibility.Public };
-            return isNotActivatable
-                ? typeData with { IsNotConstructible = isNotConstructible, IsNotActivatable = true }
-                : typeData;
+                isKnownNonDisposable,
+                constructibility);
         }
 
         /// <summary>
@@ -207,7 +209,8 @@ internal static partial class TransformExtensions
             ImmutableEquatableArray<InjectionMemberData>? injectionMembers,
             ImmutableEquatableArray<TypeData>? allInterfaces,
             ImmutableEquatableArray<TypeData>? allBaseClasses,
-            bool isKnownNonDisposable)
+            bool isKnownNonDisposable,
+            Constructibility constructibility)
         {
             // Error types (e.g., types from other source generators not yet resolved)
             // should be treated as simple types, not open generics
@@ -219,7 +222,8 @@ internal static partial class TransformExtensions
                     hasInjectConstructor,
                     injectionMembers,
                     allInterfaces,
-                    allBaseClasses);
+                    allBaseClasses,
+                    Constructibility: constructibility);
             }
 
             // Check if this is a wrapper type (collection or non-collection) for DI
@@ -268,7 +272,8 @@ internal static partial class TransformExtensions
                     hasInjectConstructor,
                     injectionMembers,
                     allInterfaces,
-                    allBaseClasses);
+                    allBaseClasses,
+                    Constructibility: constructibility);
             }
 
             if(typeSymbol.ContainsGenericParameters || typeSymbol.Arity > 0 || typeParameters is { Length: > 0 })
@@ -285,7 +290,8 @@ internal static partial class TransformExtensions
                     injectionMembers,
                     allInterfaces,
                     allBaseClasses,
-                    IsKnownNonDisposable: isKnownNonDisposable);
+                    IsKnownNonDisposable: isKnownNonDisposable,
+                    Constructibility: constructibility);
             }
 
             return TypeData.CreateSimple(
@@ -295,7 +301,8 @@ internal static partial class TransformExtensions
                 injectionMembers,
                 allInterfaces,
                 allBaseClasses,
-                IsKnownNonDisposable: isKnownNonDisposable);
+                IsKnownNonDisposable: isKnownNonDisposable,
+                Constructibility: constructibility);
         }
 
         /// <summary>

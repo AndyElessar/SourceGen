@@ -19,7 +19,8 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
             TypeTraits Traits = default,
-            bool IsKnownNonDisposable = false) =>
+            bool IsKnownNonDisposable = false,
+            Constructibility Constructibility = default) =>
             new SimpleTypeData(
                 Name,
                 Traits,
@@ -30,6 +31,7 @@ internal static class TypeDataExtensions
                 AllBaseClasses)
             {
                 IsKnownNonDisposable = IsKnownNonDisposable,
+                Constructibility = Constructibility,
             };
 
         /// <summary>
@@ -48,7 +50,8 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
             TypeTraits Traits = default,
-            bool IsKnownNonDisposable = false) =>
+            bool IsKnownNonDisposable = false,
+            Constructibility Constructibility = default) =>
             new NamedGenericTypeData(
                 Name,
                 NameWithoutGeneric,
@@ -64,6 +67,7 @@ internal static class TypeDataExtensions
                 AllBaseClasses)
             {
                 IsKnownNonDisposable = IsKnownNonDisposable,
+                Constructibility = Constructibility,
             };
 
         /// <summary>
@@ -90,69 +94,70 @@ internal static class TypeDataExtensions
             ImmutableEquatableArray<TypeData>? AllInterfaces = null,
             ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
             TypeTraits Traits = default,
-            int ArrayRank = 1) => WrapperKind switch
+            int ArrayRank = 1,
+            Constructibility Constructibility = default) => WrapperKind switch
             {
                 WrapperKind.Enumerable => new EnumerableTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.ReadOnlyCollection => new ReadOnlyCollectionTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.Collection => new CollectionTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.ReadOnlyList => new ReadOnlyListTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.List => new ListTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.Array => new ArrayTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses, ArrayRank),
+                    AllInterfaces, AllBaseClasses, ArrayRank) { Constructibility = Constructibility },
                 WrapperKind.Lazy => new LazyTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.Func => new FuncTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.Dictionary => new DictionaryTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.KeyValuePair => new KeyValuePairTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 WrapperKind.Task => new TaskTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses),
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility },
                 _ => new OtherWrapperTypeData(
                     Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
                     WrapperKind, Traits,
                     IsNestedOpenGeneric, TypeParameters,
                     ConstructorParameters, HasInjectConstructor, InjectionMembers,
-                    AllInterfaces, AllBaseClasses)
+                    AllInterfaces, AllBaseClasses) { Constructibility = Constructibility }
             };
 
         /// <summary>

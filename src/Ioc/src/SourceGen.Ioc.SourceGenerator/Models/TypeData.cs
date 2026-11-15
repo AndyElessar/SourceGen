@@ -28,18 +28,39 @@ internal closed record class TypeData(
     public bool IsKnownNonDisposable { get; init; }
 
     /// <summary>
-    /// Gets whether generated code cannot construct the type: an interface, an abstract or static class, or a class without
-    /// a public constructor or an internal one it can access (declared in the same assembly, or in one that gives it access
-    /// to its internals). Only recorded for implementation types with the constructor parameters; <see langword="false"/> otherwise.
+    /// Gets who can construct the type. Only recorded for implementation types and decorators extracted with their
+    /// constructor parameters, and kept when they are closed; <see cref="Constructibility.Unknown"/> otherwise, such as for
+    /// the service type that stands in for the implementation type of a factory-only registration.
     /// </summary>
-    public bool IsNotConstructible { get; init; }
+    public Constructibility Constructibility { get; init; }
+}
+
+/// <summary>
+/// Who can construct a type with the constructor generated code selects.
+/// </summary>
+internal enum Constructibility
+{
+    /// <summary>
+    /// Not recorded. Not the same as <see cref="Activatable"/>: the type may not be constructible at all.
+    /// </summary>
+    Unknown = 0,
 
     /// <summary>
-    /// Gets whether Microsoft.Extensions.DependencyInjection cannot activate the type with the constructor generated code
-    /// selects, since it calls public constructors only: the type cannot be constructed, or the selected constructor is not
-    /// public. Recorded like <see cref="IsNotConstructible"/>.
+    /// Both generated code and Microsoft.Extensions.DependencyInjection: the selected constructor is public.
     /// </summary>
-    public bool IsNotActivatable { get; init; }
+    Activatable,
+
+    /// <summary>
+    /// Generated code only: the selected constructor is not public, and Microsoft.Extensions.DependencyInjection calls
+    /// public constructors only.
+    /// </summary>
+    GeneratedCodeOnly,
+
+    /// <summary>
+    /// Neither: an interface, an abstract or static class, or a class without a public constructor or an internal one that
+    /// generated code can access (declared in the same assembly, or in one that gives it access to its internals).
+    /// </summary>
+    NotConstructible,
 }
 
 /// <summary>

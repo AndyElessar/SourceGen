@@ -27,7 +27,8 @@ partial class IocSourceGenerator
         var implementationType = registration.ImplementationType;
         var isClosedImplementation = implementationType is not GenericTypeData { IsOpenGeneric: true };
         var isConstructed = factory is null
-            || (factory.TypeParameterCount > 0 && !implementationType.IsNotConstructible
+            || (factory.TypeParameterCount > 0
+                && implementationType.Constructibility is Constructibility.Activatable or Constructibility.GeneratedCodeOnly
                 && (!isClosedImplementation || MapGenericFactoryTypeArguments(factory, implementationType) is null));
 
         if(isConstructed)

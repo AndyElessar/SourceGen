@@ -181,7 +181,7 @@ partial class IocSourceGenerator
         // nor an implementation type it cannot activate is registered open; only their closed registrations are
         if(registration.IsOpenGeneric)
         {
-            return registration.Instance is null && !registration.ImplementationType.IsNotActivatable
+            return registration.Instance is null && registration.ImplementationType.Constructibility is Constructibility.Activatable
                 ? new SimpleRegisterEntry(registration)
                 : null;
         }
@@ -245,7 +245,7 @@ partial class IocSourceGenerator
     private static bool NeedsInjectionConstruction(ServiceRegistrationModel registration) =>
         registration.InjectionMembers.Length > 0
         // MS.DI calls public constructors only, so a type whose selected constructor is not public is constructed by generated code
-        || registration.ImplementationType is { IsNotActivatable: true, IsNotConstructible: false }
+        || registration.ImplementationType.Constructibility is Constructibility.GeneratedCodeOnly
         || registration.ImplementationType.HasInjectConstructor
         || registration.ImplementationType.ConstructorParameters?.Any(static p =>
             p.HasInjectAttribute ||

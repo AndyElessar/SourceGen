@@ -510,7 +510,7 @@ partial class IocSourceGenerator
 
         // Like a registration, an implementation type that cannot be constructed without a Factory or Instance is not
         // registered (SGIOC001), such as an open entry of an imported module without an accessible constructor
-        if(openGenericInfo is { Factory: null, Instance: null } && openImplType.IsNotConstructible)
+        if(openGenericInfo is { Factory: null, Instance: null } && openImplType.Constructibility is Constructibility.NotConstructible)
         {
             return false;
         }
@@ -549,7 +549,7 @@ partial class IocSourceGenerator
         // An implementation type that cannot be constructed is not registered without a factory for it, such as an open
         // interface target whose generic factory's mapping does not match the closed type; its service types the factory
         // creates still are, like a closed registration's
-        var skipImplementation = implFactory is null && openGenericInfo.Factory is not null && openImplType.IsNotConstructible;
+        var skipImplementation = implFactory is null && openGenericInfo.Factory is not null && openImplType.Constructibility is Constructibility.NotConstructible;
         var registrationCountBefore = registrations.Count;
 
         // An instance whose path uses the implementation's type parameters, such as Node<T>.Default, is read from the closed type
@@ -673,7 +673,8 @@ partial class IocSourceGenerator
             closedServiceType);
 
         // For factory-only registration, both ServiceType and ImplementationType are the same (the service type)
-        // The factory method will create the actual instance
+        // The factory method will create the actual instance, so the type is never constructed and its Constructibility
+        // stays Unknown: it comes from a dependency, which is extracted without it
         var serviceModel = new ServiceRegistrationModel(
             closedServiceType,
             closedServiceType, // Use service type as implementation type since factory creates the instance
