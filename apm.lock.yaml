@@ -1,12 +1,12 @@
 lockfile_version: '1'
-apm_version: 0.35.0
+apm_version: 0.35.1
 dependencies:
 - repo_url: thomhurst/tunit
   materialization_repo_url: thomhurst/TUnit
   name: tunit
   host: github.com
-  resolved_commit: adb08b1a5cb4326e3bf4fd1f2e536fbaded1a458
-  resolved_ref: v1.72.16
+  resolved_commit: 399f07cf741e6f7ce0416f660fb68ed0ceccf12e
+  resolved_ref: v1.85.0
   version: unknown
   virtual_path: skills/tunit
   is_virtual: true
