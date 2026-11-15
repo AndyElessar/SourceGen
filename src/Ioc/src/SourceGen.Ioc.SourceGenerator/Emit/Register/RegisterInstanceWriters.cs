@@ -112,15 +112,15 @@ partial class IocSourceGenerator
         var constructorInvocation = BuildConstructorInvocation(implTypeName, constructorArgs, initializerPart);
         writer.WriteLine($"var {instanceVarName} = {constructorInvocation};");
 
-        EmitMethodInvocations(writer, instanceVarName, methodParamResolutions, useAwait: false);
-        EmitMethodInvocations(writer, instanceVarName, asyncMethodParamResolutions, useAwait: true);
+        EmitMethodInvocations(writer, methodParamResolutions, useAwait: false);
+        EmitMethodInvocations(writer, asyncMethodParamResolutions, useAwait: true);
     }
 
     /// <summary>
     /// Resolves method parameters of a given <paramref name="targetType"/> and emits their variable declarations.
     /// Shared by sync (<see cref="InjectionMemberType.Method"/>) and async (<see cref="InjectionMemberType.AsyncMethod"/>) resolution loops.
     /// </summary>
-    private static List<(string MethodName, string?[] ParamVars, string[] ParamNames)> ResolveMethodParamResolutions(
+    private static List<(string InvocationTarget, string?[] ParamVars, string[] ParamNames)> ResolveMethodParamResolutions(
         SourceWriter writer,
         ImmutableEquatableArray<InjectionMemberData> injectionMembers,
         InjectionMemberType targetType,
@@ -131,7 +131,7 @@ partial class IocSourceGenerator
         Func<TypeData, string>? memberTypeNameResolver,
         ImmutableEquatableSet<AsyncInitService>? asyncInitServices)
     {
-        var resolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>();
+        var resolutions = new List<(string InvocationTarget, string?[] ParamVars, string[] ParamNames)>();
         foreach(var member in injectionMembers)
         {
             if(member is not MethodInjectionData method || method.MemberType != targetType)
@@ -166,7 +166,7 @@ partial class IocSourceGenerator
                 memberParamIndex++;
             }
 
-            resolutions.Add((method.Name, mVars, mNames));
+            resolutions.Add((method.GetInvocationTarget(instanceVarName), mVars, mNames));
         }
 
         return resolutions;
@@ -178,11 +178,10 @@ partial class IocSourceGenerator
     /// </summary>
     private static void EmitMethodInvocations(
         SourceWriter writer,
-        string instanceVarName,
-        List<(string MethodName, string?[] ParamVars, string[] ParamNames)> resolutions,
+        List<(string InvocationTarget, string?[] ParamVars, string[] ParamNames)> resolutions,
         bool useAwait)
     {
-        foreach(var (mName, mVars, mNames) in resolutions)
+        foreach(var (invocationTarget, mVars, mNames) in resolutions)
         {
             var entries = new (string Name, string? Value)[mVars.Length];
             for(int i = 0; i < mVars.Length; i++)
@@ -191,7 +190,7 @@ partial class IocSourceGenerator
             }
 
             var args = BuildArgumentListFromEntries(entries);
-            writer.WriteLine($"{(useAwait ? "await " : "")}{instanceVarName}.{mName}({args});");
+            writer.WriteLine($"{(useAwait ? "await " : "")}{invocationTarget}({args});");
         }
     }
 }

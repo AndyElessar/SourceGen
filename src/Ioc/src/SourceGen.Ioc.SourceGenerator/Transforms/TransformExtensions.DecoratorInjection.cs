@@ -9,8 +9,9 @@ internal static partial class TransformExtensions
         /// This is used for both regular registrations and decorators.
         /// </summary>
         /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
+        /// <param name="constructedIn">The assembly the generated code is compiled into, which decides whether a method is called through its declaring type.</param>
         /// <returns>An array of injection member data.</returns>
-        public ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembersForDecorator(SemanticModel? semanticModel = null)
+        public ImmutableEquatableArray<InjectionMemberData> ExtractInjectionMembersForDecorator(SemanticModel? semanticModel = null, IAssemblySymbol? constructedIn = null)
         {
             List<InjectionMemberData>? injectionMembers = null;
 
@@ -23,7 +24,7 @@ internal static partial class TransformExtensions
                 {
                     IPropertySymbol property => CreateDecoratorPropertyInjection(property, key),
                     IFieldSymbol field => CreateDecoratorFieldInjection(field, key),
-                    IMethodSymbol method => CreateDecoratorMethodInjection(method, key, semanticModel),
+                    IMethodSymbol method => CreateDecoratorMethodInjection(method, key, semanticModel, IocSourceGenerator.GetCallThroughType(method, typeSymbol, constructedIn ?? semanticModel?.Compilation.Assembly)),
                     _ => null
                 };
 
@@ -137,7 +138,7 @@ internal static partial class TransformExtensions
             return false;
         }
 
-        private static InjectionMemberData CreateDecoratorMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel)
+        private static InjectionMemberData CreateDecoratorMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel, TypeData? callThroughType)
         {
             var parameters = method.Parameters
                 .Select(p =>
@@ -160,7 +161,8 @@ internal static partial class TransformExtensions
                 method.EscapedName,
                 key,
                 parameters,
-                IsAsync: IsNonGenericTaskReturnType(method));
+                IsAsync: IsNonGenericTaskReturnType(method),
+                callThroughType);
         }
     }
 }
