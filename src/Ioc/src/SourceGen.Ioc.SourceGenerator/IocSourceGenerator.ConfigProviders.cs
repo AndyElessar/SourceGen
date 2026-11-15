@@ -11,23 +11,29 @@ partial class IocSourceGenerator
     private static IncrementalValueProvider<ServiceLifetime?> BuildDefaultLifetimeProvider(
         IncrementalGeneratorInitializationContext context)
         => context.AnalyzerConfigOptionsProvider
-            .Select(static (configOptions, _) =>
-            {
-                if(!configOptions.GlobalOptions.TryGetValue(Constants.SourceGenIocDefaultLifetimeProperty, out var lifetimeStr)
-                    || string.IsNullOrWhiteSpace(lifetimeStr))
-                {
-                    return (ServiceLifetime?)null;
-                }
+            .Select(static (configOptions, _) => ReadDefaultLifetime(configOptions.GlobalOptions));
 
-                var trimmed = lifetimeStr.Trim();
-                return (ServiceLifetime?)(trimmed switch
-                {
-                    _ when trimmed.Equals("singleton", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Singleton,
-                    _ when trimmed.Equals("scoped", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Scoped,
-                    _ when trimmed.Equals("transient", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Transient,
-                    _ => null,
-                });
-            });
+    /// <summary>
+    /// Reads the SourceGenIocDefaultLifetime MSBuild property; shared with <c>RegisterAnalyzer</c>, which resolves lifetimes
+    /// like the generator. Returns <c>null</c> when the property is missing or unrecognised.
+    /// </summary>
+    internal static ServiceLifetime? ReadDefaultLifetime(Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptions globalOptions)
+    {
+        if(!globalOptions.TryGetValue(Constants.SourceGenIocDefaultLifetimeProperty, out var lifetimeStr)
+            || string.IsNullOrWhiteSpace(lifetimeStr))
+        {
+            return null;
+        }
+
+        var trimmed = lifetimeStr.Trim();
+        return trimmed switch
+        {
+            _ when trimmed.Equals("singleton", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Singleton,
+            _ when trimmed.Equals("scoped", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Scoped,
+            _ when trimmed.Equals("transient", StringComparison.OrdinalIgnoreCase) => ServiceLifetime.Transient,
+            _ => null,
+        };
+    }
 
     /// <summary>
     /// Reads MSBuild properties (RootNamespace, SourceGenIocName, SourceGenIocFeatures) into a <see cref="MsBuildProperties"/> record.

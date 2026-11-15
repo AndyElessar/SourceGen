@@ -1261,4 +1261,84 @@ public class SGIOC030Tests
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030)).IsEmpty();
     }
+
+    [Test]
+    [Arguments("(int A, int B)", "(int X, int Y)")]
+    [Arguments("(int X, int Y)", "(int A, int B)")]
+    public async Task SGIOC030_ImplementationTypesDifferingOnlyInTupleElementNames_MergeRegistrations(string first, string second)
+    {
+        // Both attributes register the same runtime implementation type, so the service type of the second one is a
+        // registration of that implementation too
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Impl<{{first}}>))]
+            [assembly: IocRegisterFor(typeof(Impl<{{second}}>), ServiceTypes = [typeof(IHandler<{{second}}>)])]
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            public sealed class Impl<T> : IHandler<T>
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister]
+            public class Consumer(IHandler<(int M, int N)> handler);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'handler'");
+        await Assert.That(diagnostics.Where(d => d.Id is Constants.SGIOC001 or Constants.SGIOC002 or Constants.SGIOC003 or Constants.SGIOC004 or Constants.SGIOC005 or Constants.SGIOC032)).IsEmpty();
+
+        // The same runtime implementation type is registered twice with the same key and tags
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC011)).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("[IocRegisterDefaults(typeof(IMarker), ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)])]\npublic interface IMarker;")]
+    [Arguments("public interface IMarker;\n[IocRegisterDefaults<IMarker>(ServiceLifetime.Singleton, RegisterAllInterfaces = true)]\npublic sealed class Holder;")]
+    [Arguments("public interface IMarker;\n[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton)]\npublic struct Holder;")]
+    public async Task SGIOC030_ServiceTypeFromTypeLevelDefaultSettings_ReportsDiagnostic(string declarations)
+    {
+        // Type-level default settings add service types like assembly-level ones
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+            {{declarations}}
+
+            [IocRegister]
+            public class MyService : IMyService, IMarker
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister]
+            public class Consumer(IMyService service);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("IMyService");
+    }
 }

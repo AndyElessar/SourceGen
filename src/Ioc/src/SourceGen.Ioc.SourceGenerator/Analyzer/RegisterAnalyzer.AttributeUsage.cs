@@ -453,14 +453,20 @@ public sealed partial class RegisterAnalyzer
 
     /// <summary>
     /// SGIOC009: Analyzes Instance registration to ensure Lifetime is Singleton.
-    /// Reports error when Instance is specified but Lifetime is not Singleton.
+    /// Reports error when Instance is specified but the effective lifetime is not Singleton: the Register (MS.DI) output
+    /// does not register such an Instance.
     /// </summary>
     /// <param name="reportDiagnostic">The action to report diagnostics.</param>
     /// <param name="attribute">The IoC registration attribute.</param>
+    /// <param name="lifetime">
+    /// The effective lifetime of the registration: explicit, otherwise of its best default settings, otherwise the MSBuild
+    /// <c>SourceGenIocDefaultLifetime</c> (see <see cref="GetEffectiveLifetime"/>).
+    /// </param>
     /// <param name="location">The location for the diagnostic.</param>
     private static void AnalyzeInstanceLifetime(
         Action<Diagnostic> reportDiagnostic,
         AttributeData attribute,
+        ServiceLifetime lifetime,
         Location? location)
     {
         // Check if Instance is specified
@@ -476,9 +482,6 @@ public sealed partial class RegisterAnalyzer
 
         if (instance is null)
             return;
-
-        // Get the lifetime
-        var (_, lifetime) = attribute.TryGetLifetime();
 
         // If lifetime is Singleton, it's valid
         if (lifetime is ServiceLifetime.Singleton)
