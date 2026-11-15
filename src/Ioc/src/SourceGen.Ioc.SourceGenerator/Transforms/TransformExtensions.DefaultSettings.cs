@@ -20,6 +20,10 @@ internal static partial class TransformExtensions
             if(attribute.ConstructorArguments[1].Value is not int lifetime)
                 return null;
 
+            // Settings whose Factory is given with nameof() of a member of an unbound generic type are ignored as a whole (SGIOC041)
+            if(semanticModel is not null && attribute.HasNameofOfUnboundGenericType(semanticModel))
+                return null;
+
             var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
             var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
             var serviceTypes = attribute.GetServiceTypes();
@@ -72,6 +76,10 @@ internal static partial class TransformExtensions
             if(attribute.ConstructorArguments[0].Value is not int lifetime)
                 return null;
 
+            // Settings whose Factory is given with nameof() of a member of an unbound generic type are ignored as a whole (SGIOC041)
+            if(semanticModel is not null && attribute.HasNameofOfUnboundGenericType(semanticModel))
+                return null;
+
             var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
             var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
             var serviceTypes = attribute.GetServiceTypes();
@@ -100,5 +108,14 @@ internal static partial class TransformExtensions
                 factory,
                 implementationTypes);
         }
+
+        /// <summary>
+        /// Gets whether the <c>Factory</c> of default settings is given with <c>nameof()</c> of a member of an unbound generic
+        /// type, such as <c>nameof(Factories&lt;&gt;.Create)</c>. Default settings apply to other types, so its type arguments
+        /// cannot be determined (SGIOC041).
+        /// </summary>
+        public bool HasNameofOfUnboundGenericType(SemanticModel semanticModel)
+            => attribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attributeSyntax
+                && FindNameofOfUnboundGenericType(attributeSyntax, implementation: null, isCsharpKey: false, semanticModel) is not null;
     }
 }

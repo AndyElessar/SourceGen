@@ -248,6 +248,9 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 
 You can specify a `Factory` in `IocRegisterDefaults` to apply it as the default factory for all services implementing the target type. Explicit `Factory` or `Instance` specified in `IocRegister` takes precedence over the default. With an `Instance`, no `Factory` is called and no `Decorators` are applied.
 
+> [!NOTE]
+> The default factory applies to other types, so `nameof()` of a member of an unbound generic type, such as `Factory = nameof(Factories<>.Create)`, has no type arguments to close, and the default settings are ignored (`SGIOC041`), even when it is the target type's own, such as `nameof(Node<>.Create)` for `IocRegisterDefaults(typeof(Node<>))`. Use a non-generic type or give the type arguments; to call the open generic type's own factory, register it with `[IocRegisterFor(typeof(Node<>), Factory = nameof(Node<>.Create))]` instead.
+
 ```csharp
 [assembly: IocRegisterDefaults(
     typeof(IRepository<>),
@@ -599,7 +602,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
 |SGIOC039|Warning|A service type of a registration with a generic factory does not match the service type template of the factory's mapping, so the factory cannot be called for it and it is not registered. An implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public constructor or an internal one it can access: declared in the same assembly, or in an assembly that gives it access with `InternalsVisibleTo`), in which case it is not registered either.|
-|SGIOC041|Error|`Factory`, `Instance` or a `KeyType.Csharp` `Key` uses `nameof()` of a member of an unbound generic type other than the implementation type, such as `nameof(Factories<>.Create)`. Its type arguments cannot be determined, so the registration is ignored.|
+|SGIOC041|Error|`Factory`, `Instance` or a `KeyType.Csharp` `Key` uses `nameof()` of a member of an unbound generic type other than the implementation type, such as `nameof(Factories<>.Create)`. Its type arguments cannot be determined, so the registration is ignored. The `Factory` of `IocRegisterDefaults` cannot use any unbound generic type, as it applies to other types; such default settings are ignored.|
 
 ---
 

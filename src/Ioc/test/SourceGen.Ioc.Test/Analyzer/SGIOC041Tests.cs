@@ -53,6 +53,69 @@ public class SGIOC041Tests
     }
 
     [Test]
+    [Arguments("Assembly", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.Factories<>.Create))]")]
+    [Arguments("TypeLevel", "[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))] public static class Config;")]
+    [Arguments("Generic", "[IocRegisterDefaults<IMyService>(ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))] public static class Config;")]
+    [Arguments("OpenGenericTarget", "[IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Singleton, Factory = nameof(NodeFactories<>.Create))] public static class Config; public static class NodeFactories<T> { public static INode<T> Create() => throw new NotImplementedException(); }")]
+    [Arguments("TargetOwnType", "[IocRegisterDefaults(typeof(Node<>), ServiceLifetime.Singleton, ImplementationTypes = [typeof(Node<>)], Factory = nameof(Node<>.Create))] public static class Config; public sealed class Node<T> : INode<T> { public static Node<T> Create() => new(); }")]
+    public async Task SGIOC041_DefaultSettings_ReportsError(string scenario, string defaults)
+    {
+        // Default settings apply to registrations of other types, so even the unbound target type is not closed
+        var source = scenario == "Assembly"
+            ? CreateSource("[IocRegister] public sealed class Registered : IMyService;").Replace("namespace TestNamespace;", defaults + "\nnamespace TestNamespace;")
+            : CreateSource(defaults);
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc041 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC041).ToList();
+
+        await Assert.That(sgioc041).Count().IsEqualTo(1);
+        await Assert.That(sgioc041[0].Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(sgioc041[0].GetMessage()).Contains("'Create'").And.Contains("default settings are ignored");
+        var location = sgioc041[0].Location.SourceTree!.GetText().ToString(sgioc041[0].Location.SourceSpan);
+        await Assert.That(location).StartsWith("nameof(").And.EndsWith("<>.Create)");
+    }
+
+    [Test]
+    [Arguments("[IocRegisterDefaults(targetServiceType: typeof(IMyService), lifetime: ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))] public static class Config;")]
+    [Arguments("[IocRegisterDefaults(lifetime: ServiceLifetime.Singleton, targetServiceType: typeof(IMyService), Factory = nameof(Factories<>.Create))] public static class Config;")]
+    public async Task SGIOC041_DefaultSettings_NamedTargetArgument_ReportsError(string defaults)
+    {
+        // The target is read like the generator, whatever order the constructor arguments are named in
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(CreateSource(defaults));
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC041)).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC041_DefaultSettings_AreIgnoredByOtherAnalyses()
+    {
+        // Like the generator, the ignored default settings do not apply, so the later settings for the same target type
+        // are not duplicated (SGIOC012)
+        var source = CreateSource("""
+            [IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))]
+            [IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton)]
+            public static class Config;
+
+            [IocRegister] public sealed class Registered : IMyService;
+            """);
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC041)).Count().IsEqualTo(1);
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC012)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("ClosedType", "[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton, Factory = nameof(Factories<int>.Create))] public static class Config;")]
+    [Arguments("OpenNestedTarget", "public static class Outer<T> { public interface INested; } [IocRegisterDefaults(typeof(Outer<>.INested), ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))] public static class Config;")]
+    public async Task SGIOC041_DefaultSettings_ClosedTypeOrIgnoredSettings_NoDiagnostic(string scenario, string defaults)
+    {
+        // A closed type keeps its type arguments, and default settings for an open type nested in a generic type are
+        // ignored as a whole (SGIOC038)
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(CreateSource(defaults));
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC041)).IsEmpty();
+    }
+
+    [Test]
     [Arguments("ClosedType", "[IocRegisterFor(typeof(MyService), ServiceTypes = [typeof(IMyService)], Factory = nameof(Factories<int>.Create))] public static class Config;")]
     [Arguments("ValueKey", "[IocRegisterFor(typeof(MyService), Key = nameof(Factories<>.Name))] public static class Config;")]
     [Arguments("OwnUnboundType", "[IocRegisterFor(typeof(Node<>), Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Instance = nameof(Node<>.Default))] public static class Config; public sealed class Node<T> : INode<T> { public static readonly Node<T> Default = new(); }")]

@@ -712,6 +712,15 @@ public sealed partial class RegisterAnalyzer
         foreach(var attribute in attributes)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            // Like the generator, settings whose Factory is given with nameof() of a member of an unbound generic type are
+            // ignored as a whole (SGIOC041)
+            if(attribute.ApplicationSyntaxReference is { } reference
+                && analyzerContext.IgnoredDefaultSettings.ContainsKey((reference.SyntaxTree, reference.Span)))
+            {
+                continue;
+            }
+
             if(ExtractDefaultSettings(attribute) is not { } defaults)
                 continue;
 
@@ -977,6 +986,13 @@ public sealed partial class RegisterAnalyzer
         /// consumed by SGIOC036/SGIOC037 in CompilationEnd.
         /// </summary>
         public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), IMethodSymbol> FactoryMethods { get; } = new();
+
+        /// <summary>
+        /// The default settings attributes, by their span, whose <c>Factory</c> is given with <c>nameof()</c> of a member of an
+        /// unbound generic type (SGIOC041), which the generator ignores as a whole. Populated by RegisterSyntaxNodeAction,
+        /// which has the semantic model that <c>nameof()</c> needs; consumed by <c>CollectDefaults</c> in CompilationEnd.
+        /// </summary>
+        public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), byte> IgnoredDefaultSettings { get; } = new();
 
         /// <summary>
         /// The injectable members listed in <c>InjectMembers</c> of registration attributes, with the locations of their

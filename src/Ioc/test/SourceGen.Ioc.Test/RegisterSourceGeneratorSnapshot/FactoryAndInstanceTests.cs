@@ -544,6 +544,95 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    [Arguments("Assembly", "[assembly: IocRegisterDefaults(typeof(TestNamespace.INode<>), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.Factories<>.Create))]")]
+    [Arguments("TypeLevel", "[IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))] public static class Config;")]
+    [Arguments("Generic", "[IocRegisterDefaults<INode<int>>(ServiceLifetime.Singleton, Factory = nameof(Factories<>.Create))] public static class Config;")]
+    [Arguments("ImplementationTypes", "[IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Singleton, ImplementationTypes = [typeof(Other<>)], Factory = nameof(Factories<>.Create))] public static class Config; public sealed class Other<T> : INode<T>;")]
+    public async Task NameofOfUnboundGenericType_DefaultSettings_AreIgnored(string scenario, string defaults)
+    {
+        // Default settings apply to registrations of other types, so the type arguments of an unbound generic type given
+        // with nameof() cannot be determined, and the default settings are ignored as a whole (SGIOC041) instead of
+        // generating Factories<T>.Create
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{(scenario == "Assembly" ? defaults : "")}}
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public static class Factories<T>
+            {
+                public static INode<T> Create() => throw new NotImplementedException();
+            }
+
+            {{(scenario == "Assembly" ? "" : defaults)}}
+
+            [IocRegister]
+            public sealed class Node : INode<int>;
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string>? node = null);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var (_, output) in SourceGeneratorTestHelper.GetGeneratedSources(result))
+        {
+            await Assert.That(output).DoesNotContain("Factories");
+            await Assert.That(output).DoesNotContain("Other");
+        }
+
+        var registration = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        await Assert.That(registration).Contains("global::TestNamespace.Node");
+        await Assert.That(registration).DoesNotContain("AddSingleton");
+    }
+
+    [Test]
+    public async Task NameofOfUnboundGenericType_DefaultSettings_TargetOwnType_AreIgnored()
+    {
+        // The default factory applies to other types, so even the target's own unbound type is not closed (SGIOC041)
+        var source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.Node<>), ServiceLifetime.Singleton, ImplementationTypes = [typeof(TestNamespace.Node<>)], Factory = nameof(TestNamespace.Node<>.Create))]
+
+            namespace TestNamespace;
+
+            public class Node<T>
+            {
+                public static Node<T> Create() => new();
+            }
+
+            public sealed class Sub<U> : Node<U>;
+
+            [IocRegister]
+            internal sealed class Consumer(Node<string>? node = null);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var (_, output) in SourceGeneratorTestHelper.GetGeneratedSources(result))
+        {
+            await Assert.That(output).DoesNotContain(".Create(");
+            await Assert.That(output).DoesNotContain("AddSingleton");
+        }
+    }
+
+    [Test]
     [Arguments("Method", "nameof(Factories<int>.Create)")]
     [Arguments("DelegateField", "nameof(Factories<int>.CreateDelegate)")]
     public async Task Factory_MemberOfClosedGenericType_KeepsTypeArguments(string scenario, string factory)
