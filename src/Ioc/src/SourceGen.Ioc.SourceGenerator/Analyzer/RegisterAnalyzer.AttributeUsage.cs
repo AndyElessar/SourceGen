@@ -809,7 +809,7 @@ public sealed partial class RegisterAnalyzer
     /// SGIOC023 + SGIOC024: Validates InjectMembers array elements on a registration attribute.
     /// SGIOC023: Fires when an element is not nameof(...) or a valid array literal { nameof(...), key [, KeyType] }.
     /// SGIOC024: Fires when the resolved member is not injectable. Like the generator, the member is resolved on the registered
-    /// type, so a member it does not have, or implements explicitly, cannot be injected.
+    /// type, so a member it does not have, implements explicitly, or hides (with <c>new</c>), cannot be injected.
     /// The members the generator injects are recorded for SGIOC036/SGIOC037.
     /// </summary>
     private static void AnalyzeInjectMembersOnAttribute(
@@ -923,9 +923,16 @@ public sealed partial class RegisterAnalyzer
 
             // SGIOC024: Check if member is injectable
             var member = targetType is null ? symbol : symbol.AsMemberOf(targetType);
+            // Generated code names the member on the registered type, where a member hiding it would be bound instead
+            var hidingMember = member is null || targetType is null ? null : member.GetHidingMember(targetType, analyzerContext.Assembly);
             var reason = member is null
                 ? $"it is not a member of '{targetType!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'"
-                : GetMemberInjectabilityIssue(member, asyncMethodInjectEnabled);
+                : hidingMember is not null
+                    // An [IocInject] member of the same name takes precedence, like the generator's MergeInjectionMembers
+                    ? HasIocInjectMemberNamed(targetType!, member.Name)
+                        ? null
+                        : $"it is hidden by '{hidingMember.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}.{hidingMember.Name}'"
+                    : GetMemberInjectabilityIssue(member, asyncMethodInjectEnabled);
             if (reason is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -936,7 +943,7 @@ public sealed partial class RegisterAnalyzer
             }
 
             // The elements the generator's ParseInjectMemberElement injects
-            if (member is not null && IocSourceGenerator.IsInjectableMember(member))
+            if (member is not null && hidingMember is null && IocSourceGenerator.IsInjectableMember(member))
             {
                 injectMembers ??= ImmutableArray.CreateBuilder<(ISymbol, Location)>();
                 injectMembers.Add((member, element.GetLocation()));
@@ -945,6 +952,17 @@ public sealed partial class RegisterAnalyzer
 
         if (injectMembers is not null)
             analyzerContext.InjectMembers[(attributeSyntax.SyntaxTree, attributeSyntax.Span)] = injectMembers.ToImmutable();
+
+        static bool HasIocInjectMemberNamed(INamedTypeSymbol type, string name)
+        {
+            foreach (var (injected, _) in type.GetInjectedMembers())
+            {
+                if (injected.Name == name)
+                    return true;
+            }
+
+            return false;
+        }
     }
 
     /// <summary>

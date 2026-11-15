@@ -576,6 +576,7 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
 - Reports when the member is:
   - not a member of the registered type (declared on a type it neither is, inherits, nor implements, or a default interface implementation): `it is not a member of 'Node<T>'`
   - an explicit interface implementation, whose name cannot be assigned or called on the registered type
+  - hidden on the registered type by a member declared with `new` (see [Injection](../../Spec/Register.Injection.spec.md#injectmembers)), which the generated code would assign or call instead: `it is hidden by 'Derived.X'`. Not reported when the registered type has an `[IocInject]` member with the same name, which takes precedence over the element (the generator injects the `[IocInject]` member).
   - static
   - not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated registration code runs in a public static context)
   - property without setter or with private setter

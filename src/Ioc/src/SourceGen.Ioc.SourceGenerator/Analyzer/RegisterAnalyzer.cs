@@ -253,7 +253,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Members specified in InjectMembers must be injectable: instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods (or non-generic Task-returning when AsyncMethodInject is enabled), all of which must be public, internal, or protected internal.");
+        description: "Members specified in InjectMembers must be injectable: instance properties with accessible setters, non-readonly fields, and ordinary non-generic void-returning methods (or non-generic Task-returning when AsyncMethodInject is enabled), all of which must be public, internal, or protected internal, and not hidden on the registered type by a member declared with new.");
 
     /// <summary>
     /// SGIOC026: AsyncMethodInject feature requires MethodInject to be enabled.
