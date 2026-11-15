@@ -19,6 +19,8 @@ A C# source generator that extends the capabilities of `Microsoft.Extensions.Dep
 dotnet add package SourceGen.Ioc
 ```
 
+Requires the .NET SDK 11.0.100 or later (C# compiler 5.12 or later) and a project targeting .NET 10 or later. With an older SDK the generator does not run and the build reports warning `CS9057`.
+
 ## Quick Start
 
 ```csharp
