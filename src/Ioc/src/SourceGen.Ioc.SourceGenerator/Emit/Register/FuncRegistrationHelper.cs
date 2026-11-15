@@ -219,7 +219,7 @@ partial class IocSourceGenerator
             }
 
             var methodArgs = BuildArgumentListFromEntries(methodEntries);
-            writer.WriteLine($"s0.{method.Name}({methodArgs});");
+            writer.WriteLine($"{method.GetInvocationTarget("s0")}({methodArgs});");
         }
 
         // The input arguments are for the implementation only; decorator dependencies are resolved from DI

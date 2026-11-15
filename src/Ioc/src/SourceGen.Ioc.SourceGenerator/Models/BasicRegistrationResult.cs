@@ -58,10 +58,23 @@ internal sealed record class OpenGenericRegistrationInfo(
 /// <param name="ClosedTypeName">The full name of the closed generic type.</param>
 /// <param name="ClosedType">The closed generic type data.</param>
 /// <param name="OpenGenericKey">The NameWithoutGeneric for looking up the open generic registration.</param>
+/// <param name="Key">
+/// The service key expression the dependency is resolved with, or <see langword="null"/> for a non-keyed dependency.
+/// </param>
+/// <param name="AnyKey">
+/// Whether the key is unknown at compile time (<c>[IocDiscover]</c> and keyed <c>IServiceProvider</c> invocations), so the
+/// dependency closes the first open generic registration that matches, with its key.
+/// </param>
 internal readonly record struct ClosedGenericDependency(
     string ClosedTypeName,
     TypeData ClosedType,
-    string OpenGenericKey);
+    string OpenGenericKey,
+    string? Key = null,
+    bool AnyKey = false)
+{
+    /// <summary>The identity of the dependency: its type as written and its key.</summary>
+    public (string TypeName, string? Key, bool AnyKey) Identity => (ClosedTypeName, Key, AnyKey);
+}
 
 /// <summary>
 /// Dependency information extracted from one IServiceProvider invocation (e.g. <c>GetService&lt;T&gt;()</c>).

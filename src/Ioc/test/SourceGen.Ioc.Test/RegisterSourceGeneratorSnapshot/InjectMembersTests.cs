@@ -1,3 +1,7 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 
 /// <summary>
@@ -340,6 +344,362 @@ public class InjectMembersTests
         else
             await Assert.That(generatedSource).DoesNotContain("<global::TestNamespace.IFoo>()").Because(scenario);
         await Assert.That(generatedSource).DoesNotContain("<global::TestNamespace.IBar>()").Because(scenario);
+    }
+
+    [Test]
+    [Arguments("ObjectOverload", """
+        public class Base { public void Init(IFoo foo) { } public Task InitAsync(IFoo foo) => Task.CompletedTask; }
+        public sealed class Derived : Base { public void Init(object o) { } public Task InitAsync(object o) => Task.CompletedTask; }
+        """)]
+    [Arguments("OptionalParameterOverload", """
+        public class Base { public void Init(IFoo foo) { } public Task InitAsync(IFoo foo) => Task.CompletedTask; }
+        public sealed class Derived : Base { public void Init(IFoo foo, IBar? bar = null) { } public Task InitAsync(IFoo foo, IBar? bar = null) => Task.CompletedTask; }
+        """)]
+    [Arguments("GenericOverload", """
+        public class Base { public void Init(IFoo foo) { } public Task InitAsync(IFoo foo) => Task.CompletedTask; }
+        public sealed class Derived : Base { public void Init<T>(T x) { } public Task InitAsync<T>(T x) => Task.CompletedTask; }
+        """)]
+    [Arguments("OverloadOnIntermediateBase", """
+        public class Base { public void Init(IFoo foo) { } public Task InitAsync(IFoo foo) => Task.CompletedTask; }
+        public class Middle : Base { public void Init(object o) { } public Task InitAsync(object o) => Task.CompletedTask; }
+        public sealed class Derived : Middle;
+        """)]
+    [Arguments("VirtualMethodOverriddenWithOverload", """
+        public class Base { public virtual void Init(IFoo foo) { } public virtual Task InitAsync(IFoo foo) => Task.CompletedTask; }
+        public sealed class Derived : Base
+        {
+            public override void Init(IFoo foo) { } public void Init(object o) { }
+            public override Task InitAsync(IFoo foo) => Task.CompletedTask; public Task InitAsync(object o) => Task.CompletedTask;
+        }
+        """)]
+    public async Task InjectMembers_BaseMethodWithDerivedOverload_CallsBaseMethod(string scenario, string declarations)
+    {
+        // C# removes base methods from overload resolution when a more derived type declares an applicable method of the
+        // same name, so the generated call must bind the injected base method, not the derived overload (#204)
+        var source = $$"""
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [nameof(Base.Init), nameof(Base.InitAsync)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+            public interface IBar;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            {{declarations}}
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+        };
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
+
+        var calls = GetInjectionMethodCalls(result, "Init", "InitAsync");
+        await Assert.That(calls.Select(static c => c.FilePath).Distinct().Count()).IsGreaterThanOrEqualTo(2).Because(scenario);
+        await Assert.That(calls.Select(static c => c.Method).Distinct()).IsEquivalentTo(["Init", "InitAsync"]).Because(scenario);
+        foreach(var (filePath, method, containingType) in calls)
+            await Assert.That(containingType).IsEqualTo("TestNamespace.Base").Because($"{scenario}: {method} in {filePath}");
+    }
+
+    [Test]
+    [Arguments("IocInjectOverrideWithOverload", "", """
+        public class Base { public virtual void Init(IFoo foo) { } }
+        public sealed class Derived : Base { [IocInject] public override void Init(IFoo foo) { } public void Init(object o) { } }
+        """)]
+    [Arguments("InterfaceMemberImplementedByOverrideWithOverload", ", InjectMembers = [nameof(IInit.Init)]", """
+        public interface IInit { void Init(IFoo foo); }
+        public class Base { public virtual void Init(IFoo foo) { } }
+        public sealed class Derived : Base, IInit { public override void Init(IFoo foo) { } public void Init(object o) { } }
+        """)]
+    [Arguments("OverrideWithOverloadOnIntermediateBase", ", InjectMembers = [nameof(Middle.Init)]", """
+        public class Base { public virtual void Init(IFoo foo) { } }
+        public class Middle : Base { public override void Init(IFoo foo) { } public void Init(object o) { } }
+        public sealed class Derived : Middle;
+        """)]
+    [Arguments("KeyedElement", ", InjectMembers = [new object[] { nameof(Base.Init), \"k\" }]", """
+        public class Base { public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { public void Init(object o) { } }
+        """)]
+    [Arguments("StaticOverload", ", InjectMembers = [nameof(Base.Init)]", """
+        public class Base { public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { public static void Init(object o) { } }
+        """)]
+    public async Task InjectedOverride_WithOverloadOnRegisteredType_CallsOriginalMethod(string scenario, string registration, string declarations)
+    {
+        // Overload resolution treats an override as declared on the type of the original virtual method, so an overload
+        // declared next to the override wins over it unless the call is made through the original declaring type
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived){{registration}})]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)], Key = "k")]
+            public sealed class KeyedFoo : IFoo;
+
+            {{declarations}}
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        var calls = GetInjectionMethodCalls(result, "Init");
+        await Assert.That(calls.Select(static c => c.FilePath).Distinct().Count()).IsGreaterThanOrEqualTo(2).Because(scenario);
+        foreach(var (filePath, _, containingType) in calls)
+            await Assert.That(containingType).IsEqualTo("TestNamespace.Base").Because($"{scenario}: {filePath}");
+    }
+
+    [Test]
+    public async Task DecoratorIocInjectOverride_WithOverloadOnDecorator_CallsOriginalMethod()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+            public interface IService;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IService)], Decorators = [typeof(Decorator)])]
+            public sealed class Service : IService;
+
+            public class DecoratorBase { public virtual void Init(IFoo foo) { } }
+            public sealed class Decorator(IService inner) : DecoratorBase, IService
+            {
+                public IService Inner => inner;
+                [IocInject] public override void Init(IFoo foo) { }
+                public void Init(object o) { }
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        var calls = GetInjectionMethodCalls(result, "Init");
+        await Assert.That(calls.Select(static c => c.FilePath).Distinct().Count()).IsGreaterThanOrEqualTo(2);
+        foreach(var (filePath, _, containingType) in calls)
+            await Assert.That(containingType).IsEqualTo("TestNamespace.DecoratorBase").Because(filePath);
+    }
+
+    [Test]
+    public async Task ImportedDecoratorIocInjectOverride_WithOverloadOnDecorator_CallsOriginalMethod()
+    {
+        // Decorators of an imported module are read from metadata, without a semantic model
+        const string sharedSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace SharedModule;
+
+            public interface IFoo;
+            public interface IHandler<T>;
+
+            public class DecoratorBase { public virtual void Init(IFoo foo) { } }
+            public sealed class LoggingDecorator<T>(IHandler<T> inner) : DecoratorBase, IHandler<T>
+            {
+                public IHandler<T> Inner => inner;
+                [IocInject] public override void Init(IFoo foo) { }
+                public void Init(object o) { }
+            }
+
+            [IocRegisterDefaults(typeof(IHandler<>), ServiceLifetime.Transient, Decorators = [typeof(LoggingDecorator<>)])]
+            public interface IHandlerMarker;
+            """;
+
+        var sharedCompilation = SourceGeneratorTestHelper.CreateCompilation("SharedModule", sharedSource);
+
+        const string mainSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using SharedModule;
+
+            namespace MainApp;
+
+            [IocImportModule(typeof(IHandlerMarker))]
+            public sealed class Module;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            public record MyCommand(string Data);
+
+            [IocRegister]
+            public sealed class MyCommandHandler : IHandler<MyCommand>;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(mainSource, "MainApp", [sharedCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
+
+        var calls = GetInjectionMethodCalls(result, "Init");
+        await Assert.That(calls.Select(static c => c.FilePath).Distinct().Count()).IsGreaterThanOrEqualTo(2);
+        foreach(var (filePath, _, containingType) in calls)
+            await Assert.That(containingType).IsEqualTo("SharedModule.DecoratorBase").Because(filePath);
+    }
+
+    [Test]
+    public async Task InjectMembers_BaseMethodWithDerivedOverloadOnOpenGenericRegisteredType_CallsBaseMethod()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived<>), ServiceTypes = [typeof(IDerived<>)], InjectMembers = [nameof(Base<int>.Init)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public interface IDerived<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo<>)])]
+            public sealed class Foo<T> : IFoo<T>;
+
+            public class Base<T> { public void Init(IFoo<T> foo) { } }
+            public sealed class Derived<T> : Base<T>, IDerived<T> { public void Init(object o) { } }
+
+            [IocRegister]
+            public sealed class Consumer(IDerived<string> derived);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        var calls = GetInjectionMethodCalls(result, "Init");
+        await Assert.That(calls).IsNotEmpty();
+        foreach(var (filePath, _, containingType) in calls)
+            await Assert.That(containingType).IsEqualTo("TestNamespace.Base<string>").Because(filePath);
+    }
+
+    [Test]
+    public async Task InjectMembers_BaseMethodWithDerivedOverloadResolvedThroughFuncWithInputParameters_CallsBaseMethod()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), ServiceTypes = [typeof(IDerived)], InjectMembers = [nameof(Base.Init)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+            public interface IDerived;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            public class Base { public void Init(IFoo foo) { } }
+            public sealed class Derived(string name) : Base, IDerived { public string Name => name; public void Init(object o) { } }
+
+            [IocRegister]
+            public sealed class Consumer(Func<string, IDerived> factory);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")).Contains("new global::System.Func<string, global::TestNamespace.IDerived>(");
+        var calls = GetInjectionMethodCalls(result, "Init");
+        await Assert.That(calls.Select(static c => c.FilePath).Distinct().Count()).IsGreaterThanOrEqualTo(2);
+        foreach(var (filePath, _, containingType) in calls)
+            await Assert.That(containingType).IsEqualTo("TestNamespace.Base").Because(filePath);
+    }
+
+    [Test]
+    public async Task InjectMembers_BaseMethodWithoutDerivedOverload_CallsMethodOnInstance()
+    {
+        // The call is only made through the declaring type when a derived type declares a method of the same name
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [nameof(Base.Init)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            public class Base { public void Init(IFoo foo) { } }
+            public sealed class Derived : Base { private void Init(object o) { } protected void Init(string s) { } }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("s0.Init(");
+        await Assert.That(generatedSource).DoesNotContain("((global::TestNamespace.Base)");
+    }
+
+    /// <summary>
+    /// Gets the injection method calls named <paramref name="methodNames"/> in the generated sources, with the containing
+    /// type of the method each call binds to.
+    /// </summary>
+    private static List<(string FilePath, string Method, string? ContainingType)> GetInjectionMethodCalls(GeneratorTestResult result, params string[] methodNames)
+    {
+        var calls = new List<(string, string, string?)>();
+        foreach(var generated in result.Result.GeneratedSources)
+        {
+            var tree = generated.SyntaxTree;
+            var semanticModel = result.OutputCompilation.GetSemanticModel(tree);
+            foreach(var invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                if(invocation.Expression is not MemberAccessExpressionSyntax memberAccess
+                    || !methodNames.Contains(memberAccess.Name.Identifier.Text))
+                {
+                    continue;
+                }
+
+                var method = semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+                calls.Add((generated.HintName, memberAccess.Name.Identifier.Text, method?.ContainingType.ToDisplayString()));
+            }
+        }
+
+        return calls;
     }
 
     [Test]

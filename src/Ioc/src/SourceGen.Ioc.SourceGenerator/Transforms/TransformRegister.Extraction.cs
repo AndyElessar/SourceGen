@@ -144,7 +144,7 @@ partial class IocSourceGenerator
             {
                 IPropertySymbol property => CreatePropertyInjection(property, key),
                 IFieldSymbol field => CreateFieldInjection(field, key),
-                IMethodSymbol method => CreateMethodInjection(method, key, semanticModel),
+                IMethodSymbol method => CreateMethodInjection(method, key, semanticModel, GetCallThroughType(method, typeSymbol, semanticModel?.Compilation.Assembly)),
                 _ => null
             };
 
@@ -279,7 +279,8 @@ partial class IocSourceGenerator
     /// <param name="method">The method symbol to create injection data for.</param>
     /// <param name="key">The key for keyed service resolution from [IocInject] attribute.</param>
     /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
-    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel = null)
+    /// <param name="callThroughType">The declaring type to call the method through, see <see cref="MethodInjectionData.CallThroughType"/>.</param>
+    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel = null, TypeData? callThroughType = null)
     {
         var parameters = method.Parameters
             .Select(p =>
@@ -303,7 +304,8 @@ partial class IocSourceGenerator
             method.EscapedName,
             key,
             parameters,
-            IsAsync: RoslynExtensions.IsNonGenericTaskReturnType(method));
+            IsAsync: RoslynExtensions.IsNonGenericTaskReturnType(method),
+            callThroughType);
     }
 
     /// <summary>
@@ -505,7 +507,7 @@ partial class IocSourceGenerator
         if(IsNameofInvocation(expression))
         {
             var symbol = ResolveInjectMemberSymbolFromNameof(expression, typeSymbol, semanticModel);
-            return symbol is not null && IsInjectableMember(symbol) ? CreateInjectionMemberFromSymbol(symbol, key: null, semanticModel) : null;
+            return symbol is not null && IsInjectableMember(symbol) ? CreateInjectionMemberFromSymbol(symbol, key: null, semanticModel, GetCallThroughType(symbol, typeSymbol, semanticModel?.Compilation.Assembly)) : null;
         }
 
         // Case 2: { nameof(X), key [, KeyType] } — keyed injection
@@ -567,7 +569,7 @@ partial class IocSourceGenerator
             }
         }
 
-        return CreateInjectionMemberFromSymbol(memberSymbol, key, semanticModel);
+        return CreateInjectionMemberFromSymbol(memberSymbol, key, semanticModel, GetCallThroughType(memberSymbol, typeSymbol, semanticModel?.Compilation.Assembly));
     }
 
     /// <summary>
@@ -613,12 +615,24 @@ partial class IocSourceGenerator
         return member is not null && member.GetHidingMember(typeSymbol, semanticModel.Compilation.Assembly) is null ? member : null;
     }
 
-    internal static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel)
+    /// <summary>
+    /// Gets the declaring type to call an injected method through, when the call on an instance of
+    /// <paramref name="typeSymbol"/> could bind to another method with the same name
+    /// (see <see cref="MethodInjectionData.CallThroughType"/>). Without the assembly the generated code is compiled into
+    /// (<paramref name="constructedIn"/>), the method is called on the instance.
+    /// </summary>
+    internal static TypeData? GetCallThroughType(ISymbol member, INamedTypeSymbol typeSymbol, IAssemblySymbol? constructedIn)
+        => constructedIn is not null
+            ? member.GetCallThroughType(typeSymbol, constructedIn)?.GetTypeData()
+            : null;
+
+    /// <param name="callThroughType">The declaring type to call a method through, see <see cref="MethodInjectionData.CallThroughType"/>.</param>
+    internal static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel, TypeData? callThroughType = null)
         => symbol switch
         {
             IPropertySymbol property => CreatePropertyInjection(property, key),
             IFieldSymbol field => CreateFieldInjection(field, key),
-            IMethodSymbol method => CreateMethodInjection(method, key, semanticModel),
+            IMethodSymbol method => CreateMethodInjection(method, key, semanticModel, callThroughType),
             _ => null
         };
 }

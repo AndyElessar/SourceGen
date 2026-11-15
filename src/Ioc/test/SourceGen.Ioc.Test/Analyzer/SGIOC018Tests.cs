@@ -1208,6 +1208,52 @@ public class SGIOC018Tests
     }
 
     [Test]
+    // A registration of the closed type with another key does not block closing for the dependency's key (issue #205)
+    [Arguments("", "[IocRegister(ServiceLifetime.Singleton, Key = \"k\", ServiceTypes = [typeof(IRepository<User>)])] public class KeyedRepository : IRepository<User> { }", "IRepository<User> repository", 0)]
+    [Arguments("", "[IocRegister(ServiceLifetime.Singleton, Key = \"k\", ServiceTypes = [typeof(IRepository<int>)])] public class KeyedRepository : IRepository<int> { }", "IRepository<int> repository", 0)]
+    [Arguments("", "[IocRegisterFor(typeof(Repository<User>), Key = \"k\")] public static class Config { }", "Repository<User> repository", 0)]
+    [Arguments(", Key = \"k\"", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<User>)])] public class UserRepository : IRepository<User> { }", "[IocInject(\"k\")] IRepository<User> repository", 0)]
+    [Arguments("", "[IocRegister(ServiceLifetime.Singleton, Key = \"a\", ServiceTypes = [typeof(IRepository<User>)])] public class RepositoryA : IRepository<User> { } [IocRegister(ServiceLifetime.Singleton, Key = \"b\", ServiceTypes = [typeof(IRepository<User>)])] public class RepositoryB : IRepository<User> { }", "IRepository<User> repository", 0)]
+    // The closing has the key of the open generic registration
+    [Arguments(", Key = \"k\"", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<User>)])] public class UserRepository : IRepository<User> { }", "[IocInject(\"other\")] IRepository<User> repository", 1)]
+    public async Task SGIOC018_OpenGenericRegistration_ClosedRegistrationWithOtherKey_ClosesForDependencyKey(
+        string openGenericKey,
+        string closedRegistration,
+        string parameter,
+        int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class User { }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)]{{openGenericKey}})]
+            public class Repository<T> : IRepository<T> { }
+
+            {{closedRegistration}}
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{parameter}}) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     [Arguments("struct", "IRepository<User>")]
     [Arguments("struct", "IRepository<int?>")]
     [Arguments("class", "IRepository<int>")]
