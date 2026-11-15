@@ -67,7 +67,7 @@ BenchmarkDotNet finds the benchmark project by searching from the current direct
 Use the same machine, SDK, runtime, environment and benchmark arguments for both versions.
 
 ```powershell
-dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --filter '*Count: 500*' --job short --warmupCount 3 --iterationCount 8 --iterationTime 300 --envVars DOTNET_TieredCompilation:0 --exporters json --artifacts "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before"
+dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -f net10.0 -- --filter '*Count: 500*' --job short --warmupCount 3 --iterationCount 8 --iterationTime 300 --envVars DOTNET_TieredCompilation:0 --exporters json --artifacts "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before"
 ```
 
 Repeat after changing the generator, replacing `before` with `after`. `--envVars` disables tiered compilation only in the measured benchmark processes, which avoids JIT tier transitions during short measurements; it is an experimental control, not a recommended production setting. Use `--filter '*'` to include the smaller 100-unit workloads and the generated code benchmarks, or `--filter '*GeneratedCodeBenchmarks*'` for the latter only.
@@ -75,7 +75,7 @@ Repeat after changing the generator, replacing `before` with `after`. `--envVars
 Compare the two runs:
 
 ```powershell
-dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --compare "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before\results" "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-after\results" "$env:TEMP\generator-comparison.md" 5
+dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -f net10.0 -- --compare "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-before\results" "$env:TEMP\SourceGen-Ioc-GeneratorBenchmark-after\results" "$env:TEMP\generator-comparison.md" 5
 ```
 
 The comparison mode reads a BenchmarkDotNet JSON report or every report in a directory and its subdirectories, and writes a Markdown table. A base path that does not exist reports the second run without a baseline. It exits with code 1 when allocated bytes increase by more than the threshold percentage, a benchmark in the first run is missing from the second, or a benchmark in the second run failed or has no allocation data. A time change above the threshold is reported only when the 99.9% confidence intervals do not overlap.
@@ -92,7 +92,7 @@ Options after the threshold:
 The verification mode compiles all scenarios at both sizes, checks for errors, and records each generated file's SHA-256 hash, keyed by scenario, size, edit state (initial or each edit) and hint name, and the total generated characters per state (`.../size`), which shows output growth. It also records a hash of each analyzer's sorted diagnostics on the initial source, keyed by scenario, size and analyzer.
 
 ```powershell
-dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -- --verify "$env:TEMP\generator-before.json"
+dotnet run --project src\Ioc\test\SourceGen.Ioc.GeneratorBenchmark\SourceGen.Ioc.GeneratorBenchmark.csproj -c Release -f net10.0 -- --verify "$env:TEMP\generator-before.json"
 # Repeat on the modified version with generator-after.json.
 Compare-Object (Get-Content "$env:TEMP\generator-before.json") (Get-Content "$env:TEMP\generator-after.json")
 ```

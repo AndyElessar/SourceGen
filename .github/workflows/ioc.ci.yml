@@ -72,12 +72,16 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       - name: Test
-        run: dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -c Release --no-build
+        run: for framework in net10.0 net11.0; do dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -c Release --no-build -f "$framework"; done
 
   aot-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net10.0, net11.0]
 
     steps:
       - name: Checkout
@@ -92,7 +96,7 @@ jobs:
           global-json-file: global.json
 
       - name: Publish AOT
-        run: dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -o ./publish-aot
+        run: dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -f ${{ matrix.framework }} -o ./publish-aot
 
       - name: Run AOT tests
         run: ./publish-aot/SourceGen.Ioc.TestAot

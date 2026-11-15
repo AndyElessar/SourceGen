@@ -300,7 +300,7 @@ jobs:
           global-json-file: global.json
 
       - name: Build comparer
-        run: dotnet build "$COMPARER_PROJECT" -c Release
+        run: dotnet build "$COMPARER_PROJECT" -c Release -f net10.0
 
       # A measure job that failed before uploading leaves its benchmarks missing, which the comparison reports.
       - name: Download benchmark results
@@ -330,7 +330,7 @@ jobs:
           fi
 
           status=0
-          dotnet run --project "$COMPARER_PROJECT" -c Release --no-build -- "${args[@]}" || status=$?
+          dotnet run --project "$COMPARER_PROJECT" -c Release -f net10.0 --no-build -- "${args[@]}" || status=$?
 
           {
             echo "## SourceGen.Ioc NativeAOT benchmark"

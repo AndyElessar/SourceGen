@@ -85,7 +85,7 @@ src/SourceGen.Ioc.SourceGenerator/
 └── Spec/         — this file + per-feature specs
 ```
 
-> **Framework requirements** — The generator assembly targets `netstandard2.0`. Generated code and consumer projects require `.NET 10` (the `SourceGen.Ioc` runtime library targets `net10.0`).
+> **Framework requirements** — The generator assembly targets `netstandard2.0`. Generated code and consumer projects require `.NET 10` (the `SourceGen.Ioc` runtime library targets `net10.0` and `net11.0`).
 
 All types use namespace `SourceGen.Ioc` (except the compiler polyfill in `ClosedHierarchyPolyfills.cs`). Pipeline stages in `Transforms/`, `Processing/`, `Grouping/` and `Emit/` are `partial class IocSourceGenerator`; models, Roslyn helpers and `TransformExtensions` are top-level `internal` types.
 

@@ -19,7 +19,7 @@ The caller tells you what the commit changes, the user's request, and the scope 
 4. For each suspected issue, build a concrete failing input (a user type/attribute shape) and trace it through the code. Drop it if you cannot.
 5. When tracing is not conclusive, confirm the issue with a temporary test:
    - Record `git status --porcelain` first.
-   - Add a new test file with a test class named `ReviewTmp_*` under the relevant test project (never edit existing tests or `*.verified.txt` files), and run it filtered: `dotnet run --project <test.csproj> -- --treenode-filter "/*/*/ReviewTmp_*/*"`.
+   - Add a new test file with a test class named `ReviewTmp_*` under the relevant test project (never edit existing tests or `*.verified.txt` files), and run it filtered: `dotnet run --project <test.csproj> -f net10.0 -- --treenode-filter "/*/*/ReviewTmp_*/*"`.
    - Delete the file and any `*.received.txt`/`*.verified.txt` it produced, and confirm `git status --porcelain` matches the recorded state.
    - Put the test code in the finding so the caller can turn it into the regression test.
    - Never run benchmarks.

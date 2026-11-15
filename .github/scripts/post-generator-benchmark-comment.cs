@@ -1,4 +1,5 @@
 #:property PublishAot=false
+#:property TargetFrameworks=net11.0
 
 using System.Globalization;
 using System.Net;

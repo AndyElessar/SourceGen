@@ -39,7 +39,7 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       - name: Test
-        run: dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -c Release --no-build
+        run: for framework in net10.0 net11.0; do dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -c Release --no-build -f "$framework"; done
 
       - name: Pack SourceGen.Ioc
         run: dotnet pack src/Ioc/src/SourceGen.Ioc/SourceGen.Ioc.csproj --no-build -c Release -o ./artifacts

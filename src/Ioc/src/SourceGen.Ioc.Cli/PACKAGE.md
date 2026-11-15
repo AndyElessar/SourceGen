@@ -4,6 +4,8 @@ A command-line tool that helps you quickly add `[IoCRegister]` attributes to exi
 
 ## Installation
 
+The tool requires the .NET 11 runtime (or SDK).
+
 ```bash
 dotnet tool install -g SourceGen.Ioc.Cli
 ```

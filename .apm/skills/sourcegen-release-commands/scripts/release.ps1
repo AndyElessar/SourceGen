@@ -38,6 +38,7 @@ $config = @{
         Project = "src/Ioc/src/SourceGen.Ioc/SourceGen.Ioc.csproj"
         VersionFile = "src/Ioc/src/SourceGen.Ioc/version.json"
         TestProject = "src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj"
+        Frameworks = @("net10.0", "net11.0")
         TagPrefix = "ioc-v"
         Workflow = "ioc.publish.yml"
     }
@@ -45,6 +46,7 @@ $config = @{
         Project = "src/Ioc/src/SourceGen.Ioc.Cli/SourceGen.Ioc.Cli.csproj"
         VersionFile = "src/Ioc/src/SourceGen.Ioc.Cli/version.json"
         TestProject = "src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj"
+        Frameworks = @("net11.0")
         TagPrefix = "ioc-cli-v"
         Workflow = "ioc.cli.publish.yml"
     }
@@ -80,8 +82,11 @@ if ($versionFile.version -ne $Version)
 Write-Host "Version file verified: $($versionFile.version)"
 
 Write-Host "Running tests"
-Invoke-Native -Description "dotnet run tests" -Command {
-    dotnet run --project $c.TestProject -c Release -- --treenode-filter "/*/*/*/*"
+foreach ($framework in $c.Frameworks)
+{
+    Invoke-Native -Description "dotnet run tests ($framework)" -Command {
+        dotnet run --project $c.TestProject -c Release -f $framework -- --treenode-filter "/*/*/*/*"
+    }
 }
 
 Write-Host "Committing version file"

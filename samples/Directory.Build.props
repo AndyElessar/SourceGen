@@ -3,7 +3,7 @@
 
   <PropertyGroup>
     <!-- Samples target .NET 11 to show generation that needs its APIs, such as IComponentPropertyActivator -->
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFrameworks>net11.0</TargetFrameworks>
     <IsAotCompatible>true</IsAotCompatible>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>

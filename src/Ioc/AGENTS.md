@@ -8,16 +8,19 @@ IoC (Inversion of Control) source generator domain — compile-time dependency i
 # Build
 dotnet build SourceGen.slnx
 
+# Projects target net10.0 and net11.0 (the CLI and its tests: net11.0 only), so run, test and publish commands need -f <tfm>.
+# Use net10.0 while iterating; run the full test projects and the AOT tests on both before finishing.
+
 # Run filtered tests
-dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -- --treenode-filter "/*/*/TestClass/*"
+dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -f net10.0 -- --treenode-filter "/*/*/TestClass/*"
 
 # Run all tests
-dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj
-dotnet run --project src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj
+dotnet run --project src/Ioc/test/SourceGen.Ioc.Test/SourceGen.Ioc.Test.csproj -f net10.0
+dotnet run --project src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.csproj   # CLI and its tests target net11.0 only, so no -f
 
 # AOT tests (publish first, then run the native executable for the current RID).
 # A failed publish leaves the previous executable in place: check the exit code (or the executable's timestamp) before running it.
-dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release
+dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -f net10.0
 ./src/Ioc/test/SourceGen.Ioc.TestAot/bin/Release/net10.0/<rid>/publish/SourceGen.Ioc.TestAot   # e.g. linux-x64; add .exe on win-x64
 ```
 

@@ -31,4 +31,15 @@
     <!-- Samples -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.15" />
   </ItemGroup>
+  <!--
+    Microsoft.Extensions.* and Microsoft.AspNetCore.* follow the target framework's major version.
+    The condition is on items, which are evaluated after every property, so it also sees a TargetFramework set in a project file.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' != '' and $([MSBuild]::VersionGreaterThanOrEquals($([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')), '11.0'))">
+    <PackageVersion Update="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageVersion Update="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0" />
+    <PackageVersion Update="Microsoft.AspNetCore.Components.Web" Version="11.0.0" />
+    <!-- Transitive from ZLogger in the CLI, which targets net11.0 only -->
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="11.0.0" />
+  </ItemGroup>
 </Project>

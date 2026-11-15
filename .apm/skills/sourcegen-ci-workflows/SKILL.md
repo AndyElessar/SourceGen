@@ -27,10 +27,11 @@ Read the existing workflow (and a sibling of the same type) before editing; mirr
 | Setting | Value |
 |---|---|
 | Runner | `ubuntu-latest` |
-| .NET SDK | Build jobs: `actions/setup-dotnet` with `global-json-file: global.json` (.NET 11 RC2) and `dotnet-version: '10.0.x'` for the .NET 10 test runtime; publish-only jobs use .NET 10 |
+| .NET SDK | Build jobs (except the CLI build jobs): `actions/setup-dotnet` with `global-json-file: global.json` (.NET 11) and `dotnet-version: '10.0.x'` for the .NET 10 test runtime; publish-only jobs use .NET 10. The benchmark comment job runs only a file-based script on the `global.json` SDK's runtime, so it has no `dotnet-version` |
 | Workflow env | `DOTNET_NOLOGO`, `DOTNET_SKIP_FIRST_TIME_EXPERIENCE`, `DOTNET_CLI_TELEMETRY_OPTOUT` = `true` |
 | Artifact retention | `retention-days: 7` |
-| Tests | `dotnet run --project <test.csproj> -c Release --no-build` (TUnit) |
+| Target frameworks | Projects target `net10.0` and `net11.0` (samples, `SourceGen.Ioc.Cli` and its tests `net11.0` only, so the CLI build jobs have no `dotnet-version`), so `dotnet run` and `dotnet publish` need `-f <tfm>`. Tests and AOT tests run on both; benchmarks run on `net10.0` |
+| Tests | `dotnet run --project <test.csproj> -c Release --no-build -f <tfm>` for each target framework (TUnit) |
 
 ## Rules
 

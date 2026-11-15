@@ -173,7 +173,7 @@ jobs:
           global-json-file: ${{ steps.base.outputs.dir }}/global.json
 
       - name: Build head
-        run: dotnet build "$BENCHMARK_PROJECT" -c Release
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release -f net10.0
 
       # A base that cannot build, for example when this change fixes its build, leaves the head without a baseline.
       - name: Build base
@@ -181,7 +181,7 @@ jobs:
         if: steps.base.outputs.dir != '' && steps.setup-base.outcome == 'success'
         continue-on-error: true
         working-directory: ${{ steps.base.outputs.dir }}
-        run: dotnet build "$BENCHMARK_PROJECT" -c Release
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release -f net10.0
 
       - name: Run benchmarks
         shell: bash
@@ -196,7 +196,7 @@ jobs:
 
           results="$RUNNER_TEMP/generator-benchmark"
           harness() {
-            (cd "$1" && shift && dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build -- "$@" </dev/null)
+            (cd "$1" && shift && dotnet run --project "$BENCHMARK_PROJECT" -c Release -f net10.0 --no-build -- "$@" </dev/null)
           }
           # Compiling the output in every benchmark process is skipped; GeneratorPerformanceTests compiles it.
           run() {
@@ -284,7 +284,7 @@ jobs:
           global-json-file: global.json
 
       - name: Build head
-        run: dotnet build "$BENCHMARK_PROJECT" -c Release
+        run: dotnet build "$BENCHMARK_PROJECT" -c Release -f net10.0
 
       # A measure job that failed before uploading leaves its benchmarks missing, which the comparison reports.
       - name: Download benchmark results
@@ -314,7 +314,7 @@ jobs:
           fi
 
           status=0
-          dotnet run --project "$BENCHMARK_PROJECT" -c Release --no-build -- "${args[@]}" || status=$?
+          dotnet run --project "$BENCHMARK_PROJECT" -c Release -f net10.0 --no-build -- "${args[@]}" || status=$?
 
           {
             echo "## SourceGen.Ioc generator benchmark"

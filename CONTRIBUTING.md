@@ -6,8 +6,8 @@ Thank you for your interest in contributing to SourceGen! 🎉
 
 ### Prerequisites
 
-- [.NET 11 RC2 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (version specified in `global.json`)
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) for the .NET 10 runtime used by tests and samples
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (version specified in `global.json`)
+- [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0) to run the `net10.0` tests and benchmarks (projects target `net10.0` and `net11.0`)
 - A code editor (VS Code, Visual Studio, or Rider recommended)
 
 ### Building the Project
