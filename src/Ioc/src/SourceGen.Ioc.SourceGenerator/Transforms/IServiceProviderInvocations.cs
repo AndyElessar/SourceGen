@@ -57,9 +57,17 @@ partial class IocSourceGenerator
             return ServiceProviderInvocation.Empty;
         }
 
+        // The key of a keyed invocation is a runtime value, so it closes an open generic registration with any key
+        var methodName = memberAccess.Name.Identifier.ValueText;
+        var dependencies = CollectClosedGenericDependencies(typeSymbol);
+        if(methodName is "GetKeyedService" or "GetRequiredKeyedService" or "GetKeyedServices")
+        {
+            dependencies = dependencies.Select(static dependency => dependency with { AnyKey = true });
+        }
+
         return new ServiceProviderInvocation(
-            CollectClosedGenericDependencies(typeSymbol).ToImmutableEquatableArray(),
-            GetRequestedCollectionElementTypeName(memberAccess.Name.Identifier.ValueText, typeSymbol));
+            dependencies.ToImmutableEquatableArray(),
+            GetRequestedCollectionElementTypeName(methodName, typeSymbol));
     }
 
     /// <summary>
@@ -145,10 +153,12 @@ partial class IocSourceGenerator
         };
         if(wrapperInnerType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericInnerType)
         {
+            // Dictionaries and key value pairs resolve the keyed registrations of their value type with any key
             yield return new ClosedGenericDependency(
                 wrapperInnerType.Name,
                 wrapperInnerType,
-                genericInnerType.NameWithoutGeneric);
+                genericInnerType.NameWithoutGeneric,
+                AnyKey: IsKeyedValueWrapper(typeData));
         }
 
         // Check if this is a collection type — extract element type for closed generic dependency

@@ -22,7 +22,7 @@ partial class IocSourceGenerator
 
         // Created with the first dependency: most registrations have none, and this runs for every registration
         List<ClosedGenericDependency>? dependencies = null;
-        HashSet<string>? addedKeys = null;
+        HashSet<(string TypeName, string? Key, bool AnyKey)>? addedKeys = null;
 
         // The implementation type is constructed without a factory, or with a generic factory its mapping does not match
         var implementationType = registration.ImplementationType;
@@ -36,7 +36,7 @@ partial class IocSourceGenerator
         {
             foreach(var param in implementationType.ConstructorParameters ?? [])
             {
-                CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                CollectClosedGenericDependencyFromType(param.Type, param.ServiceKey, ref dependencies, ref addedKeys);
             }
 
             // Collect from injection members (properties, fields, methods with [Inject] attribute)
@@ -46,14 +46,14 @@ partial class IocSourceGenerator
                 {
                     // For properties and fields, check the member type
                     case PropertyOrFieldInjectionData propertyOrField:
-                        CollectClosedGenericDependencyFromType(propertyOrField.Type, ref dependencies, ref addedKeys);
+                        CollectClosedGenericDependencyFromType(propertyOrField.Type, propertyOrField.Key, ref dependencies, ref addedKeys);
                         break;
 
                     // For methods, check each parameter type
                     case MethodInjectionData method:
                         foreach(var param in method.Parameters)
                         {
-                            CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                            CollectClosedGenericDependencyFromType(param.Type, param.ServiceKey ?? method.Key, ref dependencies, ref addedKeys);
                         }
                         break;
                 }
@@ -70,7 +70,7 @@ partial class IocSourceGenerator
                 {
                     foreach(var param in reg.Factory?.AdditionalParameters ?? [])
                     {
-                        CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                        CollectClosedGenericDependencyFromType(param.Type, param.ServiceKey, ref dependencies, ref addedKeys);
                     }
                 }
             }
@@ -78,7 +78,7 @@ partial class IocSourceGenerator
             {
                 foreach(var param in factory.AdditionalParameters)
                 {
-                    CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                    CollectClosedGenericDependencyFromType(param.Type, param.ServiceKey, ref dependencies, ref addedKeys);
                 }
             }
         }
@@ -97,7 +97,7 @@ partial class IocSourceGenerator
                 // Collect from constructor parameters, except the one that receives the decorated instance
                 foreach(var param in EnumerateDecoratorDependencyParameters(decorator, reg.ServiceType))
                 {
-                    CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                    CollectClosedGenericDependencyFromType(param.Type, param.ServiceKey, ref dependencies, ref addedKeys);
                 }
 
                 // Collect from injection members (properties, fields, methods with [Inject] attribute)
@@ -109,14 +109,14 @@ partial class IocSourceGenerator
                         {
                             // For properties and fields, check the member type
                             case PropertyOrFieldInjectionData propertyOrField:
-                                CollectClosedGenericDependencyFromType(propertyOrField.Type, ref dependencies, ref addedKeys);
+                                CollectClosedGenericDependencyFromType(propertyOrField.Type, propertyOrField.Key, ref dependencies, ref addedKeys);
                                 break;
 
                             // For methods, check each parameter type
                             case MethodInjectionData method:
                                 foreach(var param in method.Parameters)
                                 {
-                                    CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                                    CollectClosedGenericDependencyFromType(param.Type, param.ServiceKey ?? method.Key, ref dependencies, ref addedKeys);
                                 }
                                 break;
                         }
@@ -132,38 +132,54 @@ partial class IocSourceGenerator
     /// Collects closed generic dependency from a type and adds it to the dependencies list.
     /// </summary>
     /// <param name="paramType">The type to check for closed generic dependencies.</param>
+    /// <param name="key">
+    /// The key the type is resolved with, or <see langword="null"/>; wrappers resolve their inner service with the same key,
+    /// except dictionaries and key value pairs, which resolve the keyed registrations of their value type with any key.
+    /// </param>
     /// <param name="dependencies">The list to add dependencies to, created with the first dependency.</param>
-    /// <param name="addedKeys">Set of already added dependency keys to avoid duplicates, created with the first dependency.</param>
+    /// <param name="addedKeys">Set of already added dependency identities to avoid duplicates, created with the first dependency.</param>
+    /// <param name="anyKey">Whether the type is resolved with any key (see <see cref="ClosedGenericDependency.AnyKey"/>).</param>
     private static void CollectClosedGenericDependencyFromType(
         TypeData paramType,
+        string? key,
         ref List<ClosedGenericDependency>? dependencies,
-        ref HashSet<string>? addedKeys)
+        ref HashSet<(string TypeName, string? Key, bool AnyKey)>? addedKeys,
+        bool anyKey = false)
     {
         if(GetWrapperInnerType(paramType) is { } innerType)
         {
             // Recursively collect from the inner type (handles nested wrappers like Lazy<KVP<K,V>>)
-            CollectClosedGenericDependencyFromType(innerType, ref dependencies, ref addedKeys);
+            CollectClosedGenericDependencyFromType(innerType, key, ref dependencies, ref addedKeys, anyKey || IsKeyedValueWrapper(paramType));
         }
 
         if(GetEnumerableElementType(paramType) is { } elementType)
         {
             // Recursively collect from the element type (handles nested wrappers like IEnumerable<Lazy<IHandler<T>>>)
-            CollectClosedGenericDependencyFromType(elementType, ref dependencies, ref addedKeys);
+            CollectClosedGenericDependencyFromType(elementType, key, ref dependencies, ref addedKeys, anyKey);
         }
 
         // Check if this is a closed generic type (has generic arguments but is not open generic)
         if(paramType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericParamType)
         {
             // Add the original type as a dependency (skip arrays as they don't need registration)
-            if(!paramType.IsArrayType && (addedKeys ??= new(StringComparer.Ordinal)).Add(paramType.Name))
+            var dependencyKey = anyKey ? null : key;
+            if(!paramType.IsArrayType && (addedKeys ??= []).Add((paramType.Name, dependencyKey, anyKey)))
             {
                 (dependencies ??= []).Add(new ClosedGenericDependency(
                     paramType.Name,
                     paramType,
-                    genericParamType.NameWithoutGeneric));
+                    genericParamType.NameWithoutGeneric,
+                    dependencyKey,
+                    anyKey));
             }
         }
     }
+
+    /// <summary>
+    /// Gets whether a wrapper resolves the keyed registrations of its value type with any key: <c>IDictionary&lt;TKey, T&gt;</c>
+    /// (and the other dictionary types) and <c>KeyValuePair&lt;TKey, T&gt;</c>.
+    /// </summary>
+    private static bool IsKeyedValueWrapper(TypeData type) => type is DictionaryTypeData or KeyValuePairTypeData;
 
     /// <summary>
     /// Gets the type a wrapper resolves for closed generic dependency discovery, such as <c>IHandler&lt;int&gt;</c> for

@@ -100,9 +100,11 @@ partial class IocSourceGenerator
             return null;
         }
 
+        // [IocDiscover] has no key, so it closes an open generic registration with any key
         return new ClosedGenericDependency(
             typeData.Name,
             typeData,
-            genericTypeData.NameWithoutGeneric);
+            genericTypeData.NameWithoutGeneric,
+            AnyKey: true);
     }
 }
