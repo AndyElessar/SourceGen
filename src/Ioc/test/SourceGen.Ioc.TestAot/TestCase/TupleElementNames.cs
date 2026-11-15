@@ -22,5 +22,31 @@ public sealed class TupleNamesConsumer(
     public IEnumerable<ITupleNamesHandler<(TupleNamesEntity, string)>> Handlers => handlers;
 }
 
+/// <summary>Open generic service type closed for dependencies that differ only in tuple element names.</summary>
+public interface ITupleNamesGenericHandler<T>;
+
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(ITupleNamesGenericHandler<>)])]
+public sealed class TupleNamesGenericHandler<T> : ITupleNamesGenericHandler<T>;
+
+[IocRegister(ServiceLifetime.Transient)]
+public sealed class TupleNamesGenericConsumer(
+    Lazy<ITupleNamesGenericHandler<(TupleNamesEntity A, string B)>> lazy,
+    Func<ITupleNamesGenericHandler<(TupleNamesEntity A, string B)>> func)
+{
+    public ITupleNamesGenericHandler<(TupleNamesEntity A, string B)> Lazy => lazy.Value;
+
+    public ITupleNamesGenericHandler<(TupleNamesEntity A, string B)> Func => func();
+}
+
+[IocRegister(ServiceLifetime.Transient)]
+public sealed class TupleNamesGenericOtherConsumer(
+    Lazy<ITupleNamesGenericHandler<(TupleNamesEntity, string)>> lazy,
+    Func<ITupleNamesGenericHandler<(TupleNamesEntity, string)>> func)
+{
+    public ITupleNamesGenericHandler<(TupleNamesEntity, string)> Lazy => lazy.Value;
+
+    public ITupleNamesGenericHandler<(TupleNamesEntity, string)> Func => func();
+}
+
 [IocContainer]
 public sealed partial class TupleNamesContainer;

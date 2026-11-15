@@ -1069,4 +1069,47 @@ public class WrapperTypeDependencyTests
         await Assert.That(generatedSource).Contains("new global::TestNamespace.Point(arg0)");
         await Assert.That(containerSource).Contains("new global::TestNamespace.Point(arg0)");
     }
+
+    [Test]
+    public async Task OpenGenericDependency_TupleElementNamesDiffer_ClosesOnce()
+    {
+        // Dependencies that differ only in tuple element names are one runtime type, so the open generic registration is
+        // closed once for them, and their Lazy and Func are registered once
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class Handler<T> : IHandler<T>;
+
+            [IocRegister]
+            public sealed class Consumer(Lazy<IHandler<(Entity A, string B)>> lazy, Func<IHandler<(Entity A, string B)>> func);
+
+            [IocRegister]
+            public sealed class OtherConsumer(Lazy<IHandler<(Entity, string)>> lazy, Func<IHandler<(Entity, string)>> func);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs")!;
+
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::TestNamespace.Handler<(")).IsEqualTo(1);
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::TestNamespace.IHandler<(")).IsEqualTo(1);
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::System.Lazy<global::TestNamespace.IHandler<")).IsEqualTo(1);
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::System.Func<global::TestNamespace.IHandler<")).IsEqualTo(1);
+        await Assert.That(Count(containerSource, "new global::TestNamespace.Handler<(")).IsEqualTo(1);
+        await Verify(generatedSource);
+
+        static int Count(string text, string value) => text.Split([value], StringSplitOptions.None).Length - 1;
+    }
 }
