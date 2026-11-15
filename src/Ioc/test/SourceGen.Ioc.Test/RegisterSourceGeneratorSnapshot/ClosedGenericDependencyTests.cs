@@ -2044,10 +2044,10 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
-    public async Task ClosedGenericDependency_KeyedClosedRegistration_DoesNotCloseForNonKeyedDependency()
+    public async Task ClosedGenericDependency_KeyedClosedRegistration_ClosesForNonKeyedDependency()
     {
-        // Documents current behavior (see issue #202 review): a keyed registration of IHandler<Entity> keeps Handler<>
-        // from being closed for a non-keyed IHandler<Entity> dependency, which then has no registration
+        // A registration of IHandler<Entity> with another key does not keep Handler<> from being closed for a non-keyed
+        // IHandler<Entity> dependency (issue #205)
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -2075,12 +2075,275 @@ public class ClosedGenericDependencyTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
         var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs")!;
 
-        // The Register output leaves IHandler<Entity> to MS.DI's open generic registration; the container resolves it from
-        // the fallback provider, so a standalone container throws
-        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Handler<global::TestNamespace.Entity>");
-        await Assert.That(containerSource).DoesNotContain("new global::TestNamespace.Handler<global::TestNamespace.Entity>");
-        await Assert.That(containerSource).Contains("GetRequiredService(typeof(global::TestNamespace.IHandler<global::TestNamespace.Entity>))");
+        // The container constructs Handler<Entity> instead of resolving it from the fallback provider
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(");
+        await Assert.That(containerSource).Contains("new global::TestNamespace.Handler<global::TestNamespace.Entity>(");
+        await Assert.That(containerSource).DoesNotContain("GetRequiredService(typeof(global::TestNamespace.IHandler<global::TestNamespace.Entity>))");
         await Verify(generatedSource);
+    }
+
+    // A: a keyed closed registration and a non-keyed dependency
+    [Arguments(
+        "A",
+        """
+        [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<Entity>)])]
+        internal sealed class KeyedHandler : IHandler<Entity>;
+        """,
+        "IHandler<Entity> handler",
+        "services.AddTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // A2: as A, with a value type argument
+    [Arguments(
+        "A2",
+        """
+        [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<int>)])]
+        internal sealed class KeyedHandler : IHandler<int>;
+        """,
+        "IHandler<int> handler",
+        "services.AddTransient<global::TestNamespace.IHandler<int>>(",
+        "new global::TestNamespace.Handler<int>(")]
+    // B: a keyed registration of the closed implementation type does not block its service type
+    [Arguments(
+        "B",
+        """
+        [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegisterFor(typeof(Handler<Entity>), Key = "k")]
+        internal static class Config;
+        """,
+        "IHandler<Entity> handler",
+        "services.AddTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // B2: as B, with a dependency on the implementation type
+    [Arguments(
+        "B2",
+        """
+        [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegisterFor(typeof(Handler<Entity>), Key = "k")]
+        internal static class Config;
+        """,
+        "Handler<Entity> handler",
+        "services.AddTransient<global::TestNamespace.Handler<global::TestNamespace.Entity>, global::TestNamespace.Handler<global::TestNamespace.Entity>>(",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // C: a keyed open generic registration, a non-keyed closed registration and a keyed dependency
+    [Arguments(
+        "C",
+        """
+        [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegister(ServiceTypes = [typeof(IHandler<Entity>)])]
+        internal sealed class EntityHandler : IHandler<Entity>;
+        """,
+        "[IocInject(\"k\")] IHandler<Entity> handler",
+        "services.AddKeyedTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(\"k\",",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // E: closed registrations with two other keys and a non-keyed dependency
+    [Arguments(
+        "E",
+        """
+        [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegister(Key = "a", ServiceTypes = [typeof(IHandler<Entity>)])]
+        internal sealed class HandlerA : IHandler<Entity>;
+
+        [IocRegister(Key = "b", ServiceTypes = [typeof(IHandler<Entity>)])]
+        internal sealed class HandlerB : IHandler<Entity>;
+        """,
+        "IHandler<Entity> handler",
+        "services.AddTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // E with a keyed dependency: only a registration with the same key blocks closing
+    [Arguments(
+        "EKeyed",
+        """
+        [IocRegister(Key = "b", ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+
+        [IocRegister(Key = "a", ServiceTypes = [typeof(IHandler<Entity>)])]
+        internal sealed class HandlerA : IHandler<Entity>;
+
+        [IocRegister(ServiceTypes = [typeof(IHandler<Entity>)])]
+        internal sealed class PlainHandler : IHandler<Entity>;
+        """,
+        "[IocInject(\"b\")] IHandler<Entity> handler",
+        "services.AddKeyedTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(\"b\",",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // A keyed open generic registration declared first is skipped for a non-keyed dependency
+    [Arguments(
+        "KeyedOpenGenericFirst",
+        """
+        [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class KeyedHandler<T> : IHandler<T>;
+
+        [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class Handler<T> : IHandler<T>;
+        """,
+        "IHandler<Entity> handler",
+        "services.AddTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(",
+        "new global::TestNamespace.Handler<global::TestNamespace.Entity>(")]
+    // An open generic registration with another key declared first is skipped for a keyed dependency
+    [Arguments(
+        "OtherKeyOpenGenericFirst",
+        """
+        [IocRegister(Key = "a", ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class HandlerA<T> : IHandler<T>;
+
+        [IocRegister(Key = "b", ServiceTypes = [typeof(IHandler<>)])]
+        internal sealed class HandlerB<T> : IHandler<T>;
+        """,
+        "[IocInject(\"b\")] IHandler<Entity> handler",
+        "services.AddKeyedTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(\"b\",",
+        "new global::TestNamespace.HandlerB<global::TestNamespace.Entity>(")]
+    [Test]
+    public async Task ClosedGenericDependency_RegistrationWithOtherKey_DoesNotBlockClosing(
+        string scenario,
+        string registrations,
+        string parameter,
+        string expectedRegistration,
+        string expectedConstruction)
+    {
+        _ = scenario;
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            {{registrations}}
+
+            [IocRegister]
+            internal sealed class Consumer({{parameter}});
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            internal partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs")!;
+
+        await Assert.That(generatedSource).Contains(expectedRegistration);
+        await Assert.That(containerSource).Contains(expectedConstruction);
+    }
+
+    [Test]
+    [Arguments("[IocDiscover(typeof(IHandler<Entity>))]", "")]
+    [Arguments("", "public static object? Resolve(System.IServiceProvider sp) => sp.GetKeyedService<IHandler<Entity>>(\"k\");")]
+    public async Task ClosedGenericDependency_DiscoveryOrKeyedInvocation_ClosesForKeyOfOpenGenericRegistration(string discover, string invocation)
+    {
+        // [IocDiscover] and keyed IServiceProvider invocations have no key known at compile time, so they close the first
+        // open generic registration that matches, with its key, unless that type is already registered with that key
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<Entity>)])]
+            internal sealed class EntityHandler : IHandler<Entity>;
+
+            {{discover}}
+            internal static class Resolver
+            {
+                {{invocation}}
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+
+        await Assert.That(generatedSource).Contains("services.AddKeyedTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(\"k\",");
+    }
+
+    [Test]
+    [Arguments("IDictionary<string, IHandler<Entity>> handlers", "")]
+    [Arguments("IEnumerable<KeyValuePair<string, IHandler<Entity>>> handlers", "")]
+    [Arguments("object? handlers", "public static object? Resolve(System.IServiceProvider sp) => sp.GetService<IDictionary<string, IHandler<Entity>>>();")]
+    public async Task ClosedGenericDependency_KeyedCollection_ClosesKeyedOpenGenericRegistration(string parameter, string invocation)
+    {
+        // Dictionaries and key value pairs resolve the keyed registrations of their value type, whatever their key
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            [IocRegister]
+            internal sealed class Consumer({{parameter}});
+
+            internal static class Resolver
+            {
+                {{invocation}}
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            internal partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs")!;
+
+        await Assert.That(generatedSource).Contains("services.AddKeyedTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>(\"k\",");
+        await Assert.That(containerSource).Contains("new global::TestNamespace.Handler<global::TestNamespace.Entity>(");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_KeyedOpenGenericRegistration_DoesNotCloseForNonKeyedDependency()
+    {
+        // A closing is selected by the dependency's key, so a keyed open generic registration is not closed for a non-keyed
+        // dependency, which its keyed registration could not resolve
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IHandler<Entity> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Handler<global::TestNamespace.Entity>");
     }
 
     [Test]

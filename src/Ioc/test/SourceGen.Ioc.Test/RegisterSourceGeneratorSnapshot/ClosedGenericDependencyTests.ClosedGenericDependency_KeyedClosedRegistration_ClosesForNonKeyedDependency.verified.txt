@@ -28,6 +28,8 @@ namespace TestAssembly
                 services.AddKeyedTransient<global::TestNamespace.KeyedHandler, global::TestNamespace.KeyedHandler>("k");
                 services.AddKeyedTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>("k", (global::System.IServiceProvider sp, object? key) => sp.GetRequiredKeyedService<global::TestNamespace.KeyedHandler>(key));
                 services.AddTransient<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
+                services.AddTransient<global::TestNamespace.Handler<global::TestNamespace.Entity>, global::TestNamespace.Handler<global::TestNamespace.Entity>>();
+                services.AddTransient<global::TestNamespace.IHandler<global::TestNamespace.Entity>>((global::System.IServiceProvider sp) => sp.GetRequiredService<global::TestNamespace.Handler<global::TestNamespace.Entity>>());
             }
 
             return services;
