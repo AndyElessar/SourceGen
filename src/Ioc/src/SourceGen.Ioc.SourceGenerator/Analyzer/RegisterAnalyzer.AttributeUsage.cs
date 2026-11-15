@@ -631,6 +631,91 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
+    /// SGIOC041: Reports a <c>Factory</c>, <c>Instance</c> or C# <c>Key</c> of a registration attribute given with
+    /// <c>nameof()</c> of a member of an unbound generic type that the implementation type does not declare, whose
+    /// registration the generator ignores (<c>FindNameofOfUnboundGenericType</c>). SGIOC040: Reports the C# <c>Key</c> of
+    /// an open generic registration that uses the implementation's type parameters, whose open registration the generator
+    /// does not register (<c>KeyUsesTypeParameters</c>); an <c>Instance</c> registration is not registered open anyway.
+    /// </summary>
+    private static void AnalyzeNameofTypeParameters(
+        SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol attributeClass,
+        AttributeData? attributeData,
+        AnalyzerContext analyzerContext)
+    {
+        var attributeSymbols = analyzerContext.AttributeSymbols;
+        if(attributeSyntax.ArgumentList is not { } argumentList
+            || (!AnalyzerHelpers.IsIoCRegisterAttribute(attributeClass, attributeSymbols) && !AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, attributeSymbols)))
+        {
+            return;
+        }
+
+        // A value Key cannot use type parameters, and only an unbound generic type names type parameters out of scope, so
+        // the attribute is bound only when either can be found
+        ExpressionSyntax? key = null;
+        bool hasKeyType = false, hasInstance = false, hasUnboundGenericName = false;
+        foreach(var argument in argumentList.Arguments)
+        {
+            switch(argument.NameEquals?.Name.Identifier.ValueText)
+            {
+                case "Key":
+                    key = argument.Expression;
+                    break;
+                case "KeyType":
+                    hasKeyType = true;
+                    continue;
+                case "Instance":
+                    hasInstance = true;
+                    break;
+                case not "Factory":
+                    continue;
+            }
+
+            hasUnboundGenericName |= argument.Expression.DescendantNodes().OfType<OmittedTypeArgumentSyntax>().Any();
+        }
+
+        var mayUseTypeParameters = key is not null && hasKeyType && !hasInstance;
+        if(!hasUnboundGenericName && !mayUseTypeParameters)
+            return;
+
+        // An open type nested in a generic type is ignored as a whole (SGIOC038)
+        if(GetRegistrationTargetType(context, attributeSyntax, attributeClass, attributeData, analyzerContext) is not { IsOpenNestedInGenericType: false } implementation)
+            return;
+
+        attributeData ??= GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass);
+        if(attributeData is null)
+            return;
+
+        var isCsharpKey = attributeData.GetNamedArgument<int>("KeyType", 0) == 1;
+        if(hasUnboundGenericName
+            && RoslynExtensions.FindNameofOfUnboundGenericType(attributeSyntax, implementation, isCsharpKey, context.SemanticModel) is var (argumentName, nameofArgument, member, containingType))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                NameofOfUnboundGenericType,
+                nameofArgument.GetLocation(),
+                argumentName,
+                member.Name,
+                containingType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            return;
+        }
+
+        var definition = implementation.IsUnboundGenericType ? implementation.OriginalDefinition : implementation;
+        if(!mayUseTypeParameters || !isCsharpKey || definition.TypeParameters.Length == 0 || !SymbolEqualityComparer.Default.Equals(definition, definition.OriginalDefinition))
+            return;
+
+        var (keyPath, _, _) = attributeData.GetKeyInfo(context.SemanticModel);
+        if(ReferencesTypeParameters(keyPath, [.. definition.TypeParameters.Select(static typeParameter => typeParameter.Name)]))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                KeyUsesImplementationTypeParameters,
+                key!.GetLocation(),
+                key.ToString(),
+                definition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        }
+    }
+
+    /// <summary>
     /// SGIOC038: Reports open types declared in a generic type that a registration or default settings attribute uses, which
     /// the generator ignores: the type [IocRegister] is applied to, and each <c>typeof()</c> of its constructor arguments
     /// (the target and service types) and of its <c>ServiceTypes</c>, <c>Decorators</c> and <c>ImplementationTypes</c>.

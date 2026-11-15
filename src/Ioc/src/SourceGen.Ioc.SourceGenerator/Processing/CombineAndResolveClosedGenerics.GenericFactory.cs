@@ -213,12 +213,57 @@ partial class IocSourceGenerator
         };
     }
 
-    /// <summary>Gets the closing source of the dependencies collected from the factory of a closed registration.</summary>
-    private static ClosingSource GetFactoryClosingSource(FactoryMethodData factory, OpenGenericRegistrationInfo registration, TypeData closedServiceType)
+    /// <summary>
+    /// Closes the type parameters of an open generic implementation in the factory of its registration, such as
+    /// <c>Node&lt;string&gt;.Create(IRepo&lt;string&gt;)</c> for <c>Node&lt;T&gt;.Create(IRepo&lt;T&gt;)</c>: its path, return type
+    /// and parameter types. The factory's own type parameters are closed per service type by <see cref="CloseGenericFactory"/>.
+    /// </summary>
+    /// <param name="typeArguments">The matched type argument of each implementation type parameter, when known.</param>
+    private static FactoryMethodData CloseImplementationTypeParameters(
+        FactoryMethodData factory,
+        Dictionary<string, string> implTypeArgMap,
+        Dictionary<string, TypeData>? typeArguments)
     {
-        var typeArgMap = factory.TypeParameterCount > 0 && MapGenericFactoryTypeArguments(factory, closedServiceType) is { } typeArguments
-            ? ToTypeArgMap(typeArguments)
-            : [];
+        // The path names the containing type, which only the implementation's type parameters can be written in
+        var path = SubstituteTypeArguments(factory.Path, implTypeArgMap);
+
+        // The factory's own type parameters hide the implementation's of the same name in its signature
+        if(factory.TypeParameterNames is { } ownTypeParameters && ownTypeParameters.Any(implTypeArgMap.ContainsKey))
+        {
+            implTypeArgMap = implTypeArgMap.Where(entry => !ownTypeParameters.Contains(entry.Key)).ToDictionary(static entry => entry.Key, static entry => entry.Value, StringComparer.Ordinal);
+            typeArguments = typeArguments?.Where(entry => !ownTypeParameters.Contains(entry.Key)).ToDictionary(static entry => entry.Key, static entry => entry.Value, StringComparer.Ordinal);
+        }
+
+        return factory with
+        {
+            Path = path,
+            ReturnTypeName = factory.ReturnTypeName is { } returnTypeName ? SubstituteTypeArguments(returnTypeName, implTypeArgMap) : null,
+            AdditionalParameters = factory.AdditionalParameters.Length == 0
+                ? factory.AdditionalParameters
+                : [.. factory.AdditionalParameters.Select(parameter => parameter with { Type = SubstituteTypeData(parameter.Type, implTypeArgMap, typeArguments) })],
+        };
+    }
+
+    /// <summary>
+    /// Gets the closing source of the dependencies collected from the factory of a closed registration. Its parameters are
+    /// written with its own type parameters and those of the implementation type (see <see cref="FindExpandingDependencies"/>).
+    /// </summary>
+    /// <param name="factory">The factory of the open generic registration, before it is closed.</param>
+    /// <param name="implTypeArgMap">The type argument name of each type parameter of the implementation type.</param>
+    private static ClosingSource GetFactoryClosingSource(
+        FactoryMethodData factory,
+        OpenGenericRegistrationInfo registration,
+        TypeData closedServiceType,
+        Dictionary<string, string>? implTypeArgMap)
+    {
+        var typeArgMap = implTypeArgMap is null ? [] : new Dictionary<string, string>(implTypeArgMap, StringComparer.Ordinal);
+        if(factory.TypeParameterCount > 0 && MapGenericFactoryTypeArguments(factory, closedServiceType) is { } typeArguments)
+        {
+            foreach(var typeArgument in typeArguments)
+            {
+                typeArgMap[typeArgument.Key] = typeArgument.Value.Name;
+            }
+        }
 
         return new ClosingSource(GetFactoryOwner(factory, registration.ImplementationType), typeArgMap);
     }

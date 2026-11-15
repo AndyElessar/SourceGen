@@ -20,7 +20,7 @@ partial class RegisterAnalyzer
 
         var index = new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
         var owners = new Dictionary<string, (INamedTypeSymbol Symbol, TypeData TypeData, List<(ISymbol Member, Location Location)> InjectMembers)>(StringComparer.Ordinal);
-        var factoryOwners = new Dictionary<string, (IMethodSymbol Method, FactoryMethodData Factory)>(StringComparer.Ordinal);
+        var factoryOwners = new Dictionary<string, (IMethodSymbol Method, FactoryMethodData Factory, TypeData Implementation)>(StringComparer.Ordinal);
         var decoratorTypeData = new Dictionary<INamedTypeSymbol, TypeData>(SymbolEqualityComparer.Default);
         foreach(var registration in analyzerContext.Registrations)
         {
@@ -123,8 +123,10 @@ partial class RegisterAnalyzer
         {
             if(factoryOwners.TryGetValue(entry.Key, out var factoryOwner))
             {
-                var (method, factory) = factoryOwner;
-                var factoryTypeParams = new HashSet<string>(method.TypeParameters.Select(static typeParam => typeParam.Name), StringComparer.Ordinal);
+                var (method, factory, implementation) = factoryOwner;
+
+                // Its parameters are written with its own type parameters and those of the implementation type
+                var factoryTypeParams = IocSourceGenerator.GetFactoryTypeParameters(factory, implementation);
                 var additionalParameters = new HashSet<string>(factory.AdditionalParameters.Select(static parameter => parameter.Name), StringComparer.Ordinal);
                 var factoryName = GetFactoryDisplayName(method);
 
@@ -240,7 +242,7 @@ partial class RegisterAnalyzer
         void AddFactoryOwner(IMethodSymbol? method, FactoryMethodData? factory, TypeData implementation)
         {
             if(method is not null && factory is not null)
-                factoryOwners[IocSourceGenerator.GetFactoryOwner(factory, implementation)] = (method, factory);
+                factoryOwners[IocSourceGenerator.GetFactoryOwner(factory, implementation)] = (method, factory, implementation);
         }
 
         // Gets the InjectMembers of a registration attribute, already resolved on the implementation (Node<T>.Next for

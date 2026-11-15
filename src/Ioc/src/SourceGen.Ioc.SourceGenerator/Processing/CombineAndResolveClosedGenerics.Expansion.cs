@@ -50,7 +50,8 @@ partial class IocSourceGenerator
     /// the same way from the service types it decorates, and each factory from the service types its mapping matches.
     /// Only the dependencies of how the closed registrations are created are analyzed: the constructor and injection
     /// members of a constructed implementation, the factory's parameters (written with its own type parameters, which
-    /// are nodes for each registration), and none for an instance.
+    /// are nodes for each registration, and the implementation's, whose nodes are linked both ways to the implementation's
+    /// own), and none for an instance.
     /// </para>
     /// <para>
     /// A cycle with a nested link nests type arguments deeper on every round (the expanding cycles of ECMA-335 II.9.2). A
@@ -327,7 +328,8 @@ partial class IocSourceGenerator
             return names;
         }
 
-        // A factory's dependencies are written with its own type parameters, which are nodes for each registration it serves.
+        // A factory's dependencies are written with its own type parameters, which are nodes for each registration it serves,
+        // and with the implementation's.
         // Its mapping links them to the implementation's type parameters, like a dependency matched against a service type.
         void AddFactoryDependencies(OpenGenericRegistrationInfo info, GenericTypeData implementation, FactoryMethodData factory, HashSet<string> typeParams)
         {
@@ -337,8 +339,19 @@ partial class IocSourceGenerator
                 return;
             }
 
-            var factoryTypeParams = new HashSet<string>(factory.TypeParameterNames ?? [], StringComparer.Ordinal);
+            var factoryTypeParams = GetFactoryTypeParameters(factory, implementation);
             typeParamsByOwner[owner] = factoryTypeParams;
+
+            // The implementation's type parameters in its signature, such as T in Node<T>.Create(INode<List<T>>), are the
+            // implementation's own, so their nodes are linked both ways
+            foreach(var typeParam in typeParams)
+            {
+                if(factory.TypeParameterNames?.Contains(typeParam) != true)
+                {
+                    appliedLinks.Add(new(new(implementation.Name, typeParam), new(owner, typeParam), IsNested: false));
+                    appliedLinks.Add(new(new(owner, typeParam), new(implementation.Name, typeParam), IsNested: false));
+                }
+            }
 
             // A generic factory without a mapping is not called
             var pattern = GetGenericFactoryPattern(factory);
@@ -422,6 +435,21 @@ partial class IocSourceGenerator
                 AddArgumentTypes(typeParam.Type, argumentTypes);
             }
         }
+    }
+
+    /// <summary>
+    /// Gets the type parameters a factory's parameters are written with for an open generic registration: its own, and those
+    /// of the implementation type that they do not hide, such as <c>T</c> of <c>Node&lt;T&gt;.Create(IRepo&lt;T&gt;)</c>.
+    /// </summary>
+    internal static HashSet<string> GetFactoryTypeParameters(FactoryMethodData factory, TypeData implementation)
+    {
+        var typeParams = new HashSet<string>(factory.TypeParameterNames ?? [], StringComparer.Ordinal);
+        foreach(var typeParam in implementation is GenericTypeData { TypeParameters: { } implementationTypeParams } ? implementationTypeParams : [])
+        {
+            typeParams.Add(typeParam.ParameterName);
+        }
+
+        return typeParams;
     }
 
     /// <summary>

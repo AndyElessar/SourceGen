@@ -123,6 +123,36 @@ internal static class TypeParameterSubstitution
         return new TypeParameterRewriter(typeArguments).Visit(parsed).ToFullString();
     }
 
+    /// <summary>
+    /// Gets whether a C# expression copied from source, such as the Key <c>global::Ns.Node&lt;T&gt;.Name</c>, refers to one
+    /// of the type parameters, so <see cref="SubstituteTypeArgumentsInExpression"/> changes it and it does not compile
+    /// where the type parameters are not in scope.
+    /// </summary>
+    public static bool ReferencesTypeParameters(string? expression, IReadOnlyCollection<string> typeParameterNames)
+    {
+        if(expression is null || typeParameterNames.Count == 0 || !typeParameterNames.Any(expression.Contains))
+        {
+            return false;
+        }
+
+        foreach(var node in SyntaxFactory.ParseExpression(expression).DescendantNodesAndSelf())
+        {
+            if(node is IdentifierNameSyntax identifier
+                && typeParameterNames.Contains(identifier.Identifier.ValueText)
+                && !TypeParameterRewriter.IsMemberOrArgumentName(identifier)
+                && !IsNameofOperand(identifier))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // nameof(T) becomes the literal "T" (see TypeParameterRewriter), which is the same for every closed type
+    private static bool IsNameofOperand(IdentifierNameSyntax node)
+        => node.Parent is ArgumentSyntax { Parent: ArgumentListSyntax { Arguments.Count: 1, Parent: InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" } } } };
+
     private sealed class TypeParameterRewriter(Dictionary<string, string> typeArguments) : CSharpSyntaxRewriter
     {
         // nameof(T) is the type parameter's own name, and T does not exist where the expression is emitted
@@ -154,7 +184,7 @@ internal static class TypeParameterSubstitution
             return SyntaxFactory.ParseTypeName(typeArgument).WithTriviaFrom(node);
         }
 
-        private static bool IsMemberOrArgumentName(IdentifierNameSyntax node) => node.Parent switch
+        public static bool IsMemberOrArgumentName(IdentifierNameSyntax node) => node.Parent switch
         {
             MemberAccessExpressionSyntax memberAccess => memberAccess.Name == node,
             QualifiedNameSyntax qualifiedName => qualifiedName.Right == node,

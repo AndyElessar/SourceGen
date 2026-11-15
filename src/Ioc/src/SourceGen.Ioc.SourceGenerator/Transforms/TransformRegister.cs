@@ -43,9 +43,8 @@ partial class IocSourceGenerator
             if(attr.ConstructorArguments[0].Value is not INamedTypeSymbol targetType)
                 continue;
 
-            var data = ExtractRegistrationData(targetType, attr, ctx.SemanticModel);
-
-            yield return data;
+            if(ExtractRegistrationData(targetType, attr, ctx.SemanticModel) is { } data)
+                yield return data;
         }
     }
 
@@ -68,9 +67,8 @@ partial class IocSourceGenerator
 
             // Use ExtractRegistrationData because IoCRegisterForAttribute<T> uses ServiceTypes named argument,
             // not the generic type parameter, for specifying service types.
-            var data = ExtractRegistrationData(targetType, attr, ctx.SemanticModel);
-
-            yield return data;
+            if(ExtractRegistrationData(targetType, attr, ctx.SemanticModel) is { } data)
+                yield return data;
         }
     }
 }

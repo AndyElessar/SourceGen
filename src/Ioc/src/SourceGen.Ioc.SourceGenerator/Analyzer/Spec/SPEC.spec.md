@@ -35,6 +35,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032, 038 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
+| SyntaxNode (Attribute) | `AnalyzeNameofTypeParameters` | `Factory` / `Instance` / C# `Key` given with `nameof()` of a member of an unbound generic type, and C# `Key` of an open generic registration that uses its type parameters | SGIOC040, 041 |
 | SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
 | CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC002-005, 012-015, 030, 033-037, 039 |
@@ -112,7 +113,7 @@ The container's service types are the service types of its own registrations plu
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038, 039, 040, 041 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ## Diagnostics
@@ -775,7 +776,7 @@ Report when a dependency of an open generic registration (or of one of its decor
 **Analysis:**
 
 - Builds the open generic registrations of the compilation (implementation, service types, interfaces, decorators, injected members, `Factory` and `Instance`) like the generator's open generic entries, including the registrations of `[IocRegisterDefaults]` with a `Factory` and an open generic target type, and runs the generator's own analysis on them, so the reported dependencies are the ones the generator does not close. A registration's own `Factory` takes precedence over the `Factory` of its best default settings (`SGIOC010` covers `Factory` with `Instance` on the same attribute); the `Factory` method is resolved by the attribute syntax node action, which has the semantic model that `nameof()` needs. A `Factory` given as a string has no known parameters, like in the generator.
-- Only the dependencies of how the closed registrations are created are analyzed (see [Generic Registration](../../Spec/Register.Generics.spec.md)): the constructor parameters and injected members of a constructed implementation, the `Factory` method parameters except `IServiceProvider` and `[ServiceKey]` parameters, and none for an `Instance` (whose decorators are not analyzed either).
+- Only the dependencies of how the closed registrations are created are analyzed (see [Generic Registration](../../Spec/Register.Generics.spec.md)): the constructor parameters and injected members of a constructed implementation, the `Factory` method parameters except `IServiceProvider` and `[ServiceKey]` parameters (written with the factory's own type parameters and those of the implementation type, such as `INode<List<T>>` of `Node<T>.Create`, which are the implementation's own), and none for an `Instance` (whose decorators are not analyzed either).
 - The closed generic dependencies of closed registrations, which a dependency that is a type parameter can become, are collected like the generator's: by how each registration creates its instance (the constructor and injected members, the `Factory` parameters substituted for each registered type a generic factory's mapping matches, including the implementation type, none for an `Instance`), and the dependencies of the closed decorators applied to them.
 - The analysis is static: an expanding dependency is reported whether or not a dependency of a closed registration reaches the open generic registration.
 - A dependency is deferred (`SGIOC037`) when each of its expanding cycles has a dependency wrapped in `Lazy<T>` or `Func<...>` (also inside collections); otherwise `SGIOC036` is reported. Cycles are found among the dependencies without such a wrapper, and the decorator and factory links, which belong to no dependency, so a `Lazy<T>` on another cycle does not make an eager expanding cycle deferred.
@@ -833,6 +834,40 @@ Report when a service type of a registration whose `Factory` (its own, or the `F
 **Message format:** `Service type '{ServiceType}' of '{Implementation}' does not match the service type template '{Template}' of the generic factory '{Factory}', so it is not registered`
 
 **Fix:** Remove the service type, or register it without the generic factory.
+
+---
+
+### SGIOC040 - Warning - Design - Key uses the type parameters of the open generic implementation
+
+Report when the C# `Key` (`KeyType.Csharp`) of an open generic registration uses the type parameters of the implementation type, such as `Key = nameof(Name)` on `Node<T>` or `Key = nameof(Keys<T>.Name)`. An open generic registration has a single key, while such a key can differ per closed type and does not compile without the type parameters, so the generator does not emit the open registration and registers only the closed types discovered at compile time, each with the key read from its closed type (`Node<string>.Name`) (see [Factory](../../Spec/Register.Factory.spec.md#instance-and-factory-precedence)).
+
+**Analysis:**
+
+- Checks `[IocRegister]` / `[IocRegister<T>]` / `[IocRegisterFor]` / `[IocRegisterFor<T>]` attributes with a `Key` and `KeyType = KeyType.Csharp` whose registered type is an open generic type (the type the attribute is applied to, or an unbound `typeof(Node<>)` target). Open types nested in a generic type are ignored (`SGIOC038`).
+- Reads the key like the generator (`GetKeyInfo` with the semantic model, which resolves `nameof()` to the member's path) and reports when it refers to a type parameter of the implementation type where a type parameter can be written (`ReferencesTypeParameters`, shared with the generator), so member names such as `Keys.T` are not reported, nor is `nameof(T)`, which becomes the literal `"T"` for every closed type. A value `Key` is the member's name, so it is not checked.
+- Does not report a registration with an `Instance`, whose open registration is not emitted anyway.
+- Reported at the `Key` argument.
+
+**Message format:** `Key '{Key}' of '{Implementation}' uses its type parameters, so it can differ per closed type and the open generic registration is not registered; only the closed types discovered at compile time are registered`
+
+**Fix:** Use a key that does not depend on the type parameters, such as a member of a non-generic type, or register the closed types that are needed.
+
+---
+
+### SGIOC041 - Error - Usage - Member of an unbound generic type cannot be used
+
+Report when a `Factory`, `Instance` or C# `Key` (`KeyType.Csharp`) of a registration attribute is given with `nameof()` of a member of an unbound generic type that the implementation type does not declare, such as `nameof(Factories<>.Create)`. Its path would name the type parameters of that type, which are not in scope in generated code and cannot be closed, so the generator ignores the registration in both outputs (see [Factory](../../Spec/Register.Factory.spec.md#instance-and-factory-precedence)).
+
+**Analysis:**
+
+- Checks `[IocRegister]` / `[IocRegister<T>]` / `[IocRegisterFor]` / `[IocRegisterFor<T>]` attributes, binding only the `nameof()` arguments that contain an unbound generic name (`Factories<>`), with the generator's own check (`FindNameofOfUnboundGenericType`).
+- The own unbound type of an open generic implementation type, such as `Instance = nameof(Node<>.Default)` for `[IocRegisterFor(typeof(Node<>))]`, is closed like the implementation type and is not reported; for a closed implementation type, such as `typeof(Node<int>)`, it is reported. Another unbound generic type is reported also on a generic registration whose type parameters have the same names. A value `Key` is the member's name, so it is not checked. Open types nested in a generic type are ignored (`SGIOC038`).
+- Reported once per attribute, at the first such `nameof()` argument. `SGIOC040` is not reported for the same attribute.
+- `[IocRegisterDefaults]` is not checked.
+
+**Message format:** `{Argument} '{Member}' is a member of the unbound generic type '{Type}', whose type arguments cannot be determined, so the registration is ignored; give its type arguments`
+
+**Fix:** Give the type arguments, such as `nameof(Factories<int>.Create)`, or `nameof(Factories<T>.Create)` on an open generic `Node<T>`.
 
 ---
 ### Known Limitations

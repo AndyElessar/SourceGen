@@ -532,6 +532,45 @@ public class ClosedGenericDependencyTests
 
     [Test]
     [Timeout(60_000)]
+    public async Task ClosedGenericDependency_ExpandingFactoryParameterWithImplementationTypeParameter_StopsClosing(CancellationToken cancellationToken)
+    {
+        // Node<T>.Create is closed with the implementation's type arguments: closing INode<string> requires
+        // INode<List<string>>, which would require INode<List<List<string>>>, and so on (SGIOC037)
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)], Factory = nameof(Create))]
+            internal sealed class Node<T> : INode<T>
+            {
+                public static Node<T> Create(Lazy<INode<List<T>>> next) => new();
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.Node<string>.Create(");
+            await Assert.That(output).DoesNotContain("global::TestNamespace.Node<global::System.Collections.Generic.List<string>>.Create(");
+        }
+    }
+
+    [Test]
+    [Timeout(60_000)]
     [Arguments("FactoryOnly", "")]
     [Arguments("Implementation", "[IocRegister] internal sealed class Handler<T> : IRequestHandler<T>;")]
     public async Task ClosedGenericDependency_ExpandingGenericFactoryParameterMappedToPartOfTypeArgument_StopsClosing(string scenario, string implementation, CancellationToken cancellationToken)

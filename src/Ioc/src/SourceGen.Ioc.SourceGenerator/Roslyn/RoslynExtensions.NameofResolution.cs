@@ -23,6 +23,67 @@ internal static partial class RoslynExtensions
     }
 
     /// <summary>
+    /// Finds the first <c>Factory</c>, <c>Instance</c> or C# <c>Key</c> argument of a registration attribute given with
+    /// <c>nameof()</c> of a member of an unbound generic type whose type parameters the implementation type does not
+    /// declare, such as <c>nameof(Factories&lt;&gt;.Create)</c>: its path would keep the unbound <c>Factories&lt;T&gt;</c>, whose
+    /// type arguments cannot be determined. The own unbound type of an open generic implementation type, such as
+    /// <c>nameof(Node&lt;&gt;.Default)</c> for <c>Node&lt;T&gt;</c>, is closed with it; a closed implementation type, such as
+    /// <c>Node&lt;int&gt;</c>, is never closed, so its own unbound type is not either.
+    /// </summary>
+    /// <param name="implementation">The registered implementation type.</param>
+    /// <param name="isCsharpKey">Whether the Key is a C# expression (<c>KeyType.Csharp</c>); a value Key is the member's name.</param>
+    /// <returns>The argument name, the member and the containing type, or <see langword="null"/> when there is none.</returns>
+    public static (string ArgumentName, ExpressionSyntax Argument, ISymbol Member, INamedTypeSymbol ContainingType)? FindNameofOfUnboundGenericType(
+        AttributeSyntax attributeSyntax,
+        INamedTypeSymbol implementation,
+        bool isCsharpKey,
+        SemanticModel semanticModel)
+    {
+        // Only the type parameters of an open generic implementation are closed per closed registration
+        var definition = implementation.OriginalDefinition;
+        var ownDefinition = implementation.IsUnboundGenericType
+            || (definition.TypeParameters.Length > 0 && SymbolEqualityComparer.Default.Equals(implementation, definition))
+            ? definition
+            : null;
+
+        foreach(var argument in attributeSyntax.ArgumentList?.Arguments ?? default)
+        {
+            var name = argument.NameEquals?.Name.Identifier.ValueText;
+            if(name is not ("Factory" or "Instance" or "Key") || (name is "Key" && !isCsharpKey))
+                continue;
+
+            // Only an unbound generic type, such as Factories<>, names type parameters that are not in scope, so the
+            // argument is bound only then
+            if(argument.Expression is not InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" }, ArgumentList.Arguments: [var nameofArgument] }
+                || !nameofArgument.Expression.DescendantNodes().OfType<OmittedTypeArgumentSyntax>().Any()
+                || ResolveExpressionSymbol(nameofArgument.Expression, semanticModel) is not { } member)
+            {
+                continue;
+            }
+
+            for(var containingType = member.ContainingType; containingType is not null; containingType = containingType.ContainingType)
+            {
+                if(UsesOtherTypeParameters(containingType, ownDefinition))
+                    return (name, argument.Expression, member, containingType);
+            }
+        }
+
+        return null;
+
+        // A member looked up on an unbound generic type has error type arguments, which are displayed as the type parameters
+        // of its definition, so only the implementation type's own definition is closed with its type arguments
+        static bool UsesOtherTypeParameters(ITypeSymbol type, INamedTypeSymbol? implementation) => type switch
+        {
+            INamedTypeSymbol namedType when namedType.IsUnboundGenericType || namedType.TypeArguments.Any(static typeArgument => typeArgument.TypeKind is TypeKind.Error)
+                => implementation is null || !SymbolEqualityComparer.Default.Equals(namedType.OriginalDefinition, implementation),
+            ITypeParameterSymbol typeParameter => implementation is null || !SymbolEqualityComparer.Default.Equals(typeParameter.DeclaringType?.OriginalDefinition, implementation),
+            INamedTypeSymbol namedType => namedType.TypeArguments.Any(typeArgument => UsesOtherTypeParameters(typeArgument, implementation)),
+            IArrayTypeSymbol arrayType => UsesOtherTypeParameters(arrayType.ElementType, implementation),
+            _ => false,
+        };
+    }
+
+    /// <summary>
     /// Resolves the method symbol from a nameof() or string expression in an attribute.
     /// </summary>
     /// <param name="expression">The expression inside nameof() or a string literal.</param>

@@ -10,6 +10,40 @@ namespace SourceGen.Ioc.Test.Analyzer;
 public class SGIOC018Tests
 {
     [Test]
+    [Arguments("Constructor", "")]
+    [Arguments("Factory", ", Factory = nameof(Create)")]
+    public async Task SGIOC018_OpenGenericWithTypeParameterNotDeterminedByServiceType_ReportsDiagnostic(string scenario, string factory)
+    {
+        // Base<int> does not determine V of Node<T, V>, so the generator does not close it, with or without a Factory
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public abstract class Base<U>;
+
+            [IocRegister(ServiceTypes = [typeof(Base<>)]{{factory}})]
+            public sealed class Node<T, V> : Base<T>
+            {
+                public static Node<T, V> Create() => new();
+            }
+
+            [IocRegister]
+            public sealed class Consumer(Base<int> node);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).Contains("Base<int>");
+    }
+
+    [Test]
     public async Task SGIOC018_UnregisteredDependency_WithIntegrateServiceProviderFalse_ReportsDiagnostic()
     {
         const string source = """
