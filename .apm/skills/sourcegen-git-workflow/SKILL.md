@@ -56,7 +56,7 @@ When a generator change regenerates `samples/**/Generated/*.g.cs`, commit the re
   - Squash (`gh pr merge <n> --squash --body-file <file>`): the PR lands on `main` as one commit, dropping its intermediate commits such as review fixes.
   - Merge commit (`gh pr merge <n> --merge --body-file <file>`): keeps the PR's commits on `main` under a merge commit.
 - The commit body defaults to empty, but do not leave it empty: always pass a short summary of what the PR changes and why (`--body` or `--body-file`), not the PR template or its checklist.
-- A PR in a GitHub stack (`gh stack link <bottom-pr> ... <top-pr>`) cannot be merged with `gh pr merge`; use `gh stack merge <pr> --yes --squash` (or `--merge`), which merges the stack up to that PR in one all-or-nothing operation.
+- A PR in a GitHub stack (`gh stack link <bottom-pr> ... <top-pr>`) cannot be merged with `gh pr merge`; use `gh stack merge <pr> --yes --squash` (or `--merge`), which merges the stack up to that PR in one all-or-nothing operation. It has no body flag, so the stack's commits land with an empty body; this is the one exception to the summary rule above.
 
 ## Releases
 
