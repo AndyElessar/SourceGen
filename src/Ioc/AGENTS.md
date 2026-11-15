@@ -29,7 +29,7 @@ dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -
 | Spec | Scope |
 | --- | --- |
 | [Generator SPEC](src/SourceGen.Ioc.SourceGenerator/Spec/SPEC.spec.md) | Index — registration, container generation, all sub-specs |
-| [Analyzer SPEC](src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.spec.md) | Diagnostic rules and analyzers |
+| [Analyzer SPEC](src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.spec.md) | Index — analyzer pipelines, diagnostic rules, all sub-specs |
 
 ## Domain Rules
 

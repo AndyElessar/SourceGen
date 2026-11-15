@@ -67,7 +67,7 @@ public sealed partial class RegisterAnalyzer
             if (!hasKey)
             {
                 reportDiagnostic(Diagnostic.Create(
-                    ServiceKeyNotRegistered,
+                    ServiceKeyNotRegisteredForRegistration,
                     location,
                     param.Name));
                 continue;

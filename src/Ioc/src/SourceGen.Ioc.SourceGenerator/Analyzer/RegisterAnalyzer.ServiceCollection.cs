@@ -215,7 +215,7 @@ public sealed partial class RegisterAnalyzer
 
             var definition = serviceType.OriginalDefinition;
             reportDiagnostic(Diagnostic.Create(
-                OpenTypeNestedInGenericType,
+                ImplicitOpenTypeNestedInGenericType,
                 location,
                 definition.ToDisplayString(AnalyzerHelpers.NestedTypeDisplayFormat),
                 GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));

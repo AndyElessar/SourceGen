@@ -422,7 +422,41 @@ public static class SourceGeneratorTestHelper
             : new AnalyzerOptions([], new TestAnalyzerConfigOptionsProvider(analyzerConfigOptions));
         var compilationWithAnalyzers = compilation.WithAnalyzers([analyzer], options: analyzerOptions);
 
-        return await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
+        return await GetCheckedAnalyzerDiagnosticsAsync(compilationWithAnalyzers);
+    }
+
+    /// <summary>
+    /// Returns the analyzer diagnostics after checking that exactly those reported at compilation end, which live analysis
+    /// of a single file does not report, use a descriptor tagged with <see cref="WellKnownDiagnosticTags.CompilationEnd"/>.
+    /// </summary>
+    /// <remarks>
+    /// A diagnostic is taken as reported at compilation end when the syntax and semantic analysis of its file does not report
+    /// it. A file action that reports a diagnostic outside the file it analyzes (in another file, or at <see cref="Location.None"/>)
+    /// would therefore be taken as a compilation end diagnostic; no Ioc analyzer does.
+    /// </remarks>
+    public static async Task<ImmutableArray<Diagnostic>> GetCheckedAnalyzerDiagnosticsAsync(CompilationWithAnalyzers compilationWithAnalyzers)
+    {
+        var diagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
+
+        // Diagnostics of the syntax, symbol and semantic model actions, which analysis of a single file reports
+        var fileDiagnostics = new HashSet<Diagnostic>();
+        foreach (var tree in compilationWithAnalyzers.Compilation.SyntaxTrees)
+        {
+            fileDiagnostics.UnionWith(await compilationWithAnalyzers.GetAnalyzerSyntaxDiagnosticsAsync(tree, CancellationToken.None));
+            fileDiagnostics.UnionWith(await compilationWithAnalyzers.GetAnalyzerSemanticDiagnosticsAsync(
+                compilationWithAnalyzers.Compilation.GetSemanticModel(tree), filterSpan: null, CancellationToken.None));
+        }
+
+        var mistagged = diagnostics
+            .Where(d => fileDiagnostics.Contains(d) == d.Descriptor.CustomTags.Contains(WellKnownDiagnosticTags.CompilationEnd))
+            .Select(d => fileDiagnostics.Contains(d)
+                ? $"{d.Id} is reported by a file action but its descriptor is tagged CompilationEnd: {d}"
+                : $"{d.Id} is reported at compilation end but its descriptor is not tagged CompilationEnd: {d}")
+            .ToArray();
+        if (mistagged.Length > 0)
+            throw new InvalidOperationException(string.Join(Environment.NewLine, mistagged));
+
+        return diagnostics;
     }
 
     /// <summary>
@@ -438,7 +472,7 @@ public static class SourceGeneratorTestHelper
             BaseReferences,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        return await compilation.WithAnalyzers([new TAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        return await GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new TAnalyzer()]));
     }
 
     /// <summary>

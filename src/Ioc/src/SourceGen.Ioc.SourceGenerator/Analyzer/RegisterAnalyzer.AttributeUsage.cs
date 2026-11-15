@@ -582,7 +582,7 @@ public sealed partial class RegisterAnalyzer
                 TypeKind.Interface => "it is an interface; specify a Factory or Instance",
                 var kind => $"it is {(kind is TypeKind.Enum ? "an" : "a")} {kind.ToString().ToLowerInvariant()}; specify a Factory or Instance",
             };
-            reportDiagnostic(Diagnostic.Create(InvalidAttributeUsage, location, definition.Name, reason));
+            reportDiagnostic(Diagnostic.Create(UnconstructibleImplementation, location, definition.Name, reason));
         }
     }
 

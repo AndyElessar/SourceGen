@@ -127,7 +127,7 @@ partial class AppContainer
 
 ## Analyzer Diagnostic
 
-When `IntegrateServiceProvider = false` and a non-nullable partial accessor's return type is registered neither in the container nor in its imported modules, report error `SGIOC021: Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.` See [SGIOC021](../Analyzer/Spec/SPEC.spec.md#sgioc021---error---design---unable-to-resolve-partial-accessor-service) for the full rules.
+When `IntegrateServiceProvider = false` and a non-nullable partial accessor's return type is registered neither in the container nor in its imported modules, report error `SGIOC021: Unable to resolve service '{ServiceType}' for partial accessor '{MemberName}' in container '{ContainerType}'.` See [SGIOC021](../Analyzer/Spec/Diagnostics.Container.spec.md#sgioc021---error---design---unable-to-resolve-partial-accessor-service) for the full rules.
 
 ## See Also
 
