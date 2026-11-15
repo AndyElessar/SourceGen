@@ -13,6 +13,9 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "Microsoft.AspNetCore.*"
         update-types: ["version-update:semver-major"]
+      # Verify changed its license in 33.0, so stay on 32.x.
+      - dependency-name: "Verify.TUnit"
+        versions: [">= 33.0.0"]
 
   - package-ecosystem: github-actions
     directory: "/"
