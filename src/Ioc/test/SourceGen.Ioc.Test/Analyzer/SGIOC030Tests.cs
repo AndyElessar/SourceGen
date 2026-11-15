@@ -1189,4 +1189,76 @@ public class SGIOC030Tests
         await Assert.That(sgioc030).Count().IsEqualTo(1);
         await Assert.That(sgioc030[0].GetMessage()).Contains("async-init").And.Contains("decorator");
     }
+
+    [Test]
+    [Arguments("IHandler<(Entity M, string N)> handler")]
+    [Arguments("Lazy<IHandler<(Entity M, string N)>> handler")]
+    [Arguments("Func<IHandler<(Entity, string)>> handler")]
+    [Arguments("Func<int, IHandler<(Entity M, string N)>> handler")]
+    public async Task SGIOC030_TupleElementNamesDiffer_ReportsDiagnostic(string parameter)
+    {
+        // Tuple element names are not part of the runtime type, so the dependency resolves the async-init registration
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public class AsyncHandler : IHandler<(Entity X, string Y)>
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister]
+            public class Consumer({{parameter}});
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'handler'");
+    }
+
+    [Test]
+    public async Task SGIOC030_SyncRegistrationWithOtherTupleElementNames_NoDiagnostic()
+    {
+        // The synchronous registration has the same runtime type, so the service can be resolved synchronously
+        const string source = """
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public class AsyncHandler : IHandler<(Entity X, string Y)>
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity A, string B)>)])]
+            public class SyncHandler : IHandler<(Entity A, string B)>;
+
+            [IocRegister]
+            public class Consumer(IHandler<(Entity X, string Y)> handler);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030)).IsEmpty();
+    }
 }

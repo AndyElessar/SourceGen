@@ -455,10 +455,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         if(!attributeSymbols.HasAnyRegistrationAttribute)
             return;
 
-        // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis
-        var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
+        // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis.
+        // Both are keyed by runtime type (without tuple element names), like the generator's dependency resolution.
+        var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(RuntimeTypeSymbolComparer.Instance);
         // Index for service type -> implementation lookup (interfaces/base classes)
-        var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(SymbolEqualityComparer.Default);
+        var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(RuntimeTypeSymbolComparer.Instance);
         // Collect default settings from IoCRegisterDefaultSettingsAttribute using shared method
         // Also collect duplicated default settings for SGIOC012 reporting
         var duplicatedDefaults = new ConcurrentBag<(string TargetTypeName, Location? Location)>();
@@ -738,7 +739,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
     private static ImmutableHashSet<ServiceSymbolKey> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
     {
-        var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync)>();
+        // Keyed by runtime type, so registrations whose tuple element names differ are the same service
+        var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync)>(RuntimeTypeSymbolComparer.ServiceKeyComparer);
 
         foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
         {
@@ -756,13 +758,13 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             foreach(var serviceType in serviceTypes)
             {
                 serviceTypeStates.TryGetValue(serviceType, out var state);
-                serviceTypeStates[serviceType] = isAsyncInit || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType)
+                serviceTypeStates[serviceType] = isAsyncInit || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType, RuntimeTypeSymbolComparer.ServiceKeyComparer)
                     ? (HasAsync: true, HasSync: state.HasSync)
                     : (HasAsync: state.HasAsync, HasSync: true);
             }
         }
 
-        var asyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder<ServiceSymbolKey>();
+        var asyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder(RuntimeTypeSymbolComparer.ServiceKeyComparer);
         foreach(var kvp in serviceTypeStates)
         {
             var serviceType = kvp.Key;
