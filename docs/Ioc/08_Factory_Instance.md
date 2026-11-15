@@ -203,7 +203,7 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 </details>
 
 > [!NOTE]  
-> When using `Instance`, only `Singleton` lifetime is allowed. Using `Scoped` or `Transient` will not generate any registration code. A registration without `Lifetime` takes the lifetime of its matching [default settings](03_Defaults.md), otherwise the [`SourceGenIocDefaultLifetime`](13_MSBuild_Configuration.md) property (`Transient` when unset).
+> When using `Instance`, only `Singleton` lifetime is allowed. Using `Scoped` or `Transient` will not generate any registration code in the Register (`IServiceCollection`) output. A registration without `Lifetime` takes the lifetime of its matching [default settings](03_Defaults.md), otherwise the [`SourceGenIocDefaultLifetime`](13_MSBuild_Configuration.md) property (`Transient` when unset).
 
 ## Factory in Default Settings
 
