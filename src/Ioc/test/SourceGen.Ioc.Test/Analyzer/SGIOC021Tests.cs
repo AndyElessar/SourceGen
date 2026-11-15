@@ -1325,7 +1325,7 @@ public class SGIOC021Tests
 
         var moduleCompilation = SourceGeneratorTestHelper.CreateCompilation("ModuleAssembly", moduleSource);
         var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [moduleCompilation.ToMetadataReference()]);
-        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var diagnostics = await SourceGeneratorTestHelper.GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new ContainerAnalyzer()]));
         var sgioc021 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021").ToArray();
 
         await Assert.That(sgioc021).Count().IsEqualTo(expected);

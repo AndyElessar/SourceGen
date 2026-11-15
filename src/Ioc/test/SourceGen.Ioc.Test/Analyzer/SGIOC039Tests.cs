@@ -233,7 +233,7 @@ public class SGIOC039Tests
             """;
         var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
 
-        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var diagnostics = await SourceGeneratorTestHelper.GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new RegisterAnalyzer()]));
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).Count().IsEqualTo(expected);
     }

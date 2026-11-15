@@ -238,7 +238,7 @@ public class SGIOC001Tests
             """;
         var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
 
-        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var diagnostics = await SourceGeneratorTestHelper.GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new RegisterAnalyzer()]));
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC001")).Count().IsEqualTo(expected);
     }
@@ -278,7 +278,7 @@ public class SGIOC001Tests
             """;
         var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
 
-        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var diagnostics = await SourceGeneratorTestHelper.GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new RegisterAnalyzer()]));
         var sgioc001 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC001").ToList();
 
         await Assert.That(sgioc001).Count().IsEqualTo(expected);
@@ -371,7 +371,7 @@ public class SGIOC001Tests
             """;
         var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
 
-        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var diagnostics = await SourceGeneratorTestHelper.GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new RegisterAnalyzer()]));
         var sgioc001 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC001).ToList();
 
         await Assert.That(sgioc001).Count().IsEqualTo(expected);

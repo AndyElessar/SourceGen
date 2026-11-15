@@ -25,6 +25,19 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038, 039, 040, 041 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
+### CompilationEnd Diagnostics
+
+A descriptor whose diagnostics are reported from a `CompilationEnd` action MUST carry `WellKnownDiagnosticTags.CompilationEnd`, and a descriptor reported from a symbol, syntax node or semantic model action MUST NOT. Live analysis of a single file only runs the untagged ones, and a compilation end diagnostic without the tag is never shown there, so the IDE could neither run nor display it correctly. Command-line builds report both alike.
+
+A rule reported from both kinds of actions has two descriptors with the same ID, title, message, severity and category, one of them tagged:
+
+| ID | Symbol / syntax node action | CompilationEnd action |
+| :- | :-------------------------- | :-------------------- |
+| SGIOC001 | `InvalidAttributeUsage`: private or abstract target type, imported open registrations the compiled assembly cannot construct | `UnconstructibleImplementation`: implementation types that cannot be constructed without a `Factory` or `Instance` |
+| SGIOC014 | `ServiceKeyNotRegistered`: `[ServiceKey]` parameters of the registration's own `Factory` | `ServiceKeyNotRegisteredForRegistration`: `[ServiceKey]` constructor and inject method parameters |
+| SGIOC038 | `OpenTypeNestedInGenericType`: open types nested in a generic type used by an attribute | `ImplicitOpenTypeNestedInGenericType`: those an open implementation would be registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` |
+
+The other diagnostics reported at compilation end are SGIOC002-005, 009, 011-013, 015, 026, 030, 033-037 and 039 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027 and 029 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
 
 ## Diagnostics
 

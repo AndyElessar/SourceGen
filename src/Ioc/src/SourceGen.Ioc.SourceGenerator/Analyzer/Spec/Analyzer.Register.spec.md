@@ -31,6 +31,8 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
+The descriptors of the diagnostics reported at compilation end are tagged `CompilationEnd`; SGIOC001, 014 and 038, also reported by file actions, use a second, tagged descriptor there (see [CompilationEnd Diagnostics](SPEC.spec.md#compilationend-diagnostics)).
+
 ## CompilationEnd: AnalyzeAllDependencies
 
 1. Collect the default settings (`CollectDefaults`, see [Default Settings](#default-settings)) and report duplicated defaults of the compiled assembly (SGIOC012)

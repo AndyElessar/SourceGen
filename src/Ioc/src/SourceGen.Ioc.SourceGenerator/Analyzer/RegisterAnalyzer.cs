@@ -25,6 +25,21 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "IoCRegisterAttribute and IoCRegisterForAttribute cannot be applied to private or abstract classes, or to a type that generated code cannot construct (an interface, or a class without an accessible constructor) without a Factory or Instance.");
 
     /// <summary>
+    /// SGIOC001 reported at compilation end, once the Factory of the default settings is known: an implementation type that
+    /// cannot be constructed without a Factory or Instance. Same rule as <see cref="InvalidAttributeUsage"/>, tagged
+    /// <see cref="WellKnownDiagnosticTags.CompilationEnd"/>.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnconstructibleImplementation = new(
+        id: "SGIOC001",
+        title: "Invalid Attribute Usage",
+        messageFormat: "The type '{0}' cannot be registered because {1}",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "IoCRegisterAttribute and IoCRegisterForAttribute cannot be applied to private or abstract classes, or to a type that generated code cannot construct (an interface, or a class without an accessible constructor) without a Factory or Instance.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
     /// SGIOC002: Circular Dependency Detected - Circular dependencies are detected among registered services.
     /// </summary>
     public static readonly DiagnosticDescriptor CircularDependency = new(
@@ -34,7 +49,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Circular dependencies among registered services will cause runtime errors.");
+        description: "Circular dependencies among registered services will cause runtime errors.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC003: Service Lifetime Conflict Detected - Singleton service depending on Scoped service.
@@ -46,7 +62,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A Singleton service should not depend on a Scoped service.");
+        description: "A Singleton service should not depend on a Scoped service.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC004: Dangerous Service Lifetime Dependency - Singleton service depending on Transient service.
@@ -58,7 +75,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A Singleton service should not depend on a Transient service. The Transient instance will be captured and live for the application lifetime.");
+        description: "A Singleton service should not depend on a Transient service. The Transient instance will be captured and live for the application lifetime.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC005: Dangerous Service Lifetime Dependency - Scoped service depending on Transient service.
@@ -70,7 +88,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A Scoped service should not depend on a Transient service. The Transient instance will be captured for the scope lifetime.");
+        description: "A Scoped service should not depend on a Transient service. The Transient instance will be captured for the scope lifetime.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC007: Invalid Attribute Usage - InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
@@ -169,7 +188,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The parameter marked with [ServiceKey] attribute must have a type that matches or is assignable from the registered key type in [IoCRegister] or [IoCRegisterFor] attribute.");
+        description: "The parameter marked with [ServiceKey] attribute must have a type that matches or is assignable from the registered key type in [IoCRegister] or [IoCRegisterFor] attribute.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC014: Key does not exist - ServiceKeyAttribute is marked on parameter but no Key is registered.
@@ -184,6 +204,20 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.");
 
     /// <summary>
+    /// SGIOC014 reported at compilation end for the constructor and inject method parameters of a registration without a Key.
+    /// Same rule as <see cref="ServiceKeyNotRegistered"/>, tagged <see cref="WellKnownDiagnosticTags.CompilationEnd"/>.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ServiceKeyNotRegisteredForRegistration = new(
+        id: "SGIOC014",
+        title: "Key does not exist",
+        messageFormat: "[ServiceKey] parameter '{0}' is used but no Key is specified in [IoCRegister] or [IoCRegisterFor] attribute",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The parameter marked with [ServiceKey] attribute requires a Key to be specified in [IoCRegister] or [IoCRegisterFor] attribute.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
     /// SGIOC015: KeyValuePair's Key type is unmatched - Injected KeyValuePair/Dictionary key type does not match any registered keyed service's key type.
     /// </summary>
     public static readonly DiagnosticDescriptor KeyValuePairKeyTypeMismatch = new(
@@ -193,7 +227,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "When injecting KeyValuePair<K, V>, IDictionary<K, V>, or collection of KeyValuePair<K, V>, the key type K must match the registered key type of at least one keyed service for V.");
+        description: "When injecting KeyValuePair<K, V>, IDictionary<K, V>, or collection of KeyValuePair<K, V>, the key type K must match the registered key type of at least one keyed service for V.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC016: Factory Method is unmatched - Generic factory method has no valid type parameter mapping.
@@ -278,7 +313,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When a service is async-init, because its implementation or a decorator applied to it has async inject methods, consumers must request Task<T> instead of T, Lazy<T> or Func<..., T> because no synchronous resolution path exists.");
+        description: "When a service is async-init, because its implementation or a decorator applied to it has async inject methods, consumers must request Task<T> instead of T, Lazy<T> or Func<..., T> because no synchronous resolution path exists.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC028: [IocInject] method is declared as async void, which cannot be awaited.
@@ -314,7 +350,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A Func<T1, ..., TReturn> with input parameters constructs a new instance from its arguments on every call, so a Singleton or Scoped lifetime of the service does not apply. Register the service as Transient, or depend on the parameterless Func<T> or the service itself to follow its lifetime.");
+        description: "A Func<T1, ..., TReturn> with input parameters constructs a new instance from its arguments on every call, so a Singleton or Scoped lifetime of the service does not apply. Register the service as Transient, or depend on the parameterless Func<T> or the service itself to follow its lifetime.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC034: More than one decorator constructor parameter can receive the decorated instance.
@@ -383,6 +420,21 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "The generator closes open generic types with their own type arguments, not with those of their containing type, so an open type declared in a generic type, such as Outer<O>.Node<T> or typeof(Outer<>.INode<>), is ignored as a registered type, service type, decorator, implementation type or default settings target. A closed type, such as Outer<int>.Node<string>, is used like any type.");
 
     /// <summary>
+    /// SGIOC038 reported at compilation end, once the default settings are known: an open type declared in a generic type that
+    /// an open implementation would be registered as through RegisterAllInterfaces / RegisterAllBaseClasses. Same rule as
+    /// <see cref="OpenTypeNestedInGenericType"/>, tagged <see cref="WellKnownDiagnosticTags.CompilationEnd"/>.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ImplicitOpenTypeNestedInGenericType = new(
+        id: "SGIOC038",
+        title: "Open type nested in a generic type is not supported",
+        messageFormat: "'{0}' is an open type declared in the generic type '{1}', which the generator cannot close, so it is ignored; use its closed types instead",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The generator closes open generic types with their own type arguments, not with those of their containing type, so an open type declared in a generic type, such as Outer<O>.Node<T> or typeof(Outer<>.INode<>), is ignored as a registered type, service type, decorator, implementation type or default settings target. A closed type, such as Outer<int>.Node<string>, is used like any type.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+    /// <summary>
     /// SGIOC039: A service type of a registration with a generic factory does not match the factory's service type template,
     /// so the generator does not register it.
     /// </summary>
@@ -393,7 +445,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Design,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A generic factory is called with the type arguments its mapping ([IocGenericFactory] or GenericFactoryTypeMapping) takes from a service type that matches its service type template. A service type that does not match cannot be created by the factory, so it is not registered; an implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public or internal constructor), in which case it is not registered either.");
+        description: "A generic factory is called with the type arguments its mapping ([IocGenericFactory] or GenericFactoryTypeMapping) takes from a service type that matches its service type template. A service type that does not match cannot be created by the factory, so it is not registered; an implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public or internal constructor), in which case it is not registered either.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <summary>
     /// SGIOC040: The Key of an open generic registration uses the implementation's type parameters, so the open registration
@@ -426,12 +479,14 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         KeyUsesImplementationTypeParameters,
         NameofOfUnboundGenericType,
         OpenTypeNestedInGenericType,
+        ImplicitOpenTypeNestedInGenericType,
         ServiceTypeUnmatchedByGenericFactory,
         MultipleDecoratedParameters,
         NoDecoratedParameter,
         InfiniteGenericDependency,
         DeferredExpandingGenericDependency,
         InvalidAttributeUsage,
+        UnconstructibleImplementation,
         CircularDependency,
         SingletonDependsOnScoped,
         SingletonDependsOnTransient,
@@ -445,6 +500,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         DuplicatedDefaultSettings,
         ServiceKeyTypeMismatch,
         ServiceKeyNotRegistered,
+        ServiceKeyNotRegisteredForRegistration,
         KeyValuePairKeyTypeMismatch,
         GenericFactoryMissingAttribute,
         DuplicatedGenericFactoryPlaceholders,

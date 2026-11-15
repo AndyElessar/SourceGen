@@ -238,7 +238,7 @@ public class SGIOC024Tests
 
         var externalCompilation = SourceGeneratorTestHelper.CreateCompilation("ExternalAssembly", externalSource);
         var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [externalCompilation.ToMetadataReference()]);
-        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var diagnostics = await SourceGeneratorTestHelper.GetCheckedAnalyzerDiagnosticsAsync(compilation.WithAnalyzers([new RegisterAnalyzer()]));
         var sgioc024 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024).ToList();
 
         await Assert.That(sgioc024).Count().IsEqualTo(expectedCount).Because(scenario);
