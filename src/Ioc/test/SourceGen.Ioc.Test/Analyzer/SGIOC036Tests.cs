@@ -715,4 +715,66 @@ public class SGIOC036Tests
         await Assert.That(sgioc036).Count().IsEqualTo(1);
         await Assert.That(sgioc036[0].GetMessage()).Contains("'INode<List<TF>>'").And.Contains("'HandlerFactory.Create<TF>'");
     }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("public sealed class Holder;", "INode<List<TF>> next", Constants.SGIOC036)]
+    [Arguments("public struct Holder;", "INode<List<TF>> next", Constants.SGIOC036)]
+    [Arguments("public interface IHolder;", "INode<List<TF>> next", Constants.SGIOC036)]
+    [Arguments("public sealed class Holder;", "Lazy<INode<List<TF>>> next", Constants.SGIOC037)]
+    public async Task SGIOC036_TypeLevelDefaultsWithFactory_ReportsAtFactoryParameter(string holder, string parameter, string expectedId)
+    {
+        // Type-level default settings with a Factory and an open generic target register the target, like assembly-level ones
+        var source = Usings + $$"""
+            using Microsoft.Extensions.DependencyInjection;
+
+            public interface INode<T>;
+
+            public static class NodeFactory
+            {
+                [IocGenericFactory(typeof(INode<int>), typeof(int))]
+                public static INode<TF> Create<TF>({{parameter}}) => throw new NotImplementedException();
+            }
+
+            [IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, Factory = nameof(NodeFactory.Create))]
+            {{holder}}
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var expected = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, expectedId).ToList();
+
+        await Assert.That(expected).Count().IsEqualTo(1);
+        await Assert.That(expected[0].GetMessage()).Contains("'INode<List<TF>>'").And.Contains("'NodeFactory.Create<TF>'");
+        await Assert.That(expected[0].Location.SourceTree!.GetText().ToString(expected[0].Location.SourceSpan)).IsEqualTo("next");
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC036_TypeLevelDefaultsFactoryOfRegistration_ReportsAtFactoryParameter()
+    {
+        // The registration's best default settings are type-level, so the implementation is created by their Factory
+        var source = Usings + """
+            using Microsoft.Extensions.DependencyInjection;
+
+            public interface INode<T>;
+
+            public static class NodeFactory
+            {
+                [IocGenericFactory(typeof(INode<int>), typeof(int))]
+                public static INode<TF> Create<TF>(INode<List<TF>> next) => throw new NotImplementedException();
+            }
+
+            [IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, Factory = nameof(NodeFactory.Create))]
+            public sealed class Holder;
+
+            [IocRegister]
+            public sealed class Node<T> : INode<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(1);
+        await Assert.That(sgioc036[0].GetMessage()).Contains("'NodeFactory.Create<TF>'");
+    }
 }

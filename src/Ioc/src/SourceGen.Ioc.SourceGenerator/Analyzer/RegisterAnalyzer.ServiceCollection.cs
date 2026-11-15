@@ -42,14 +42,14 @@ public sealed partial class RegisterAnalyzer
             }
 
             var location = syntaxReference?.GetSyntax(cancellationToken).GetLocation();
-            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
+            analyzerContext.PendingRegistrations.Add(new(attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location));
         }
 
         return registrations;
     }
 
     /// <summary>
-    /// SGIOC001, SGIOC009, SGIOC011 and SGIOC032 for an assembly-level IoCRegisterFor attribute.
+    /// SGIOC001 and SGIOC032 for an assembly-level IoCRegisterFor attribute.
     /// </summary>
     private static void AnalyzeAssemblyLevelRegistration(
         Action<Diagnostic> reportDiagnostic,
@@ -66,8 +66,9 @@ public sealed partial class RegisterAnalyzer
             location);
 
     /// <summary>
-    /// First pass: collect services and do immediate validation (SGIOC001, SGIOC009, SGIOC011, SGIOC032).
-    /// Dependency analysis (SGIOC002, SGIOC003-005) is deferred to CompilationEnd.
+    /// First pass: collect registrations, type-level default settings and module imports, and do the immediate validation
+    /// that does not depend on default settings (SGIOC001, SGIOC032). Resolving the registrations
+    /// against the default settings and the dependency analysis (SGIOC002, SGIOC003-005) are deferred to CompilationEnd.
     /// </summary>
     private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
     {
@@ -79,7 +80,17 @@ public sealed partial class RegisterAnalyzer
             context.CancellationToken.ThrowIfCancellationRequested();
 
             if(!TryGetIoCAttribute(attribute, analyzerContext, out var isIoCRegisterFor))
+            {
+                if(attribute.AttributeClass is not { } attributeClass)
+                    continue;
+
+                if(AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, analyzerContext.AttributeSymbols))
+                    analyzerContext.TypeLevelDefaultAttributes.Add(attribute);
+                else if(AnalyzerHelpers.IsIocImportModuleAttribute(attributeClass, analyzerContext.AttributeSymbols))
+                    analyzerContext.ModuleImportAttributes.Add(attribute);
+
                 continue;
+            }
 
             INamedTypeSymbol targetType;
 
@@ -106,14 +117,58 @@ public sealed partial class RegisterAnalyzer
 
             AnalyzeRegistrationAttribute(context.ReportDiagnostic, analyzerContext, attribute, targetType, key, explicitServiceTypes, location);
 
-            // Register service with index for faster lookup
-            // Dependency analysis will be done in CompilationEnd after all services are collected
-            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
+            // Registered in CompilationEnd, once all default settings are known
+            analyzerContext.PendingRegistrations.Add(new(attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location));
         }
     }
 
     /// <summary>
-    /// The checks that run for every registration attribute, type-level or assembly-level.
+    /// Resolves every collected registration against the default settings and registers it for the CompilationEnd
+    /// analyses, in source order so that the analysis does not depend on the order of the symbol actions. Also reports the
+    /// checks that depend on the default settings: an Instance whose effective lifetime is not Singleton (SGIOC009),
+    /// duplicated registrations with their effective tags (SGIOC011), and the open types nested in a generic type the
+    /// registrations would be registered as (SGIOC038).
+    /// </summary>
+    private static void ResolveRegistrations(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        Dictionary<SyntaxTree, int> treeOrder,
+        CancellationToken cancellationToken)
+    {
+        var pending = analyzerContext.PendingRegistrations.ToArray();
+        Array.Sort(pending, (x, y) => GetSourceOrder(x.Location).CompareTo(GetSourceOrder(y.Location)));
+
+        foreach(var (attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location) in pending)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var bestDefaultIndex = FindBestDefaultIndex(analyzerContext, targetType);
+
+            // SGIOC009: Check Instance requires Singleton lifetime
+            AnalyzeInstanceLifetime(reportDiagnostic, attribute, GetEffectiveLifetime(analyzerContext, attribute, bestDefaultIndex), location);
+
+            // SGIOC011: Check for duplicated registrations (same implementation type, key and a tag). Like the generator, a
+            // registration without Tags takes those of its best default settings.
+            var tags = attribute.GetTags();
+            if(tags.Length == 0 && bestDefaultIndex >= 0)
+                tags = analyzerContext.DefaultSettings[bestDefaultIndex].Tags;
+
+            AnalyzeDuplicatedRegistration(reportDiagnostic, analyzerContext, targetType, key, tags, location);
+
+            // SGIOC038: Check the interfaces and base classes an open implementation is registered as
+            AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
+
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
+        }
+
+        (int Tree, int Position) GetSourceOrder(Location? location)
+            => location is { SourceTree: { } tree } && treeOrder.TryGetValue(tree, out var index)
+                ? (index, location.SourceSpan.Start)
+                : (int.MaxValue, int.MaxValue);
+    }
+
+    /// <summary>
+    /// The checks that run for every registration attribute, type-level or assembly-level, and do not depend on default settings.
     /// </summary>
     private static void AnalyzeRegistrationAttribute(
         Action<Diagnostic> reportDiagnostic,
@@ -127,17 +182,8 @@ public sealed partial class RegisterAnalyzer
         // SGIOC001: Check if target type is private or abstract
         AnalyzeInvalidAttributeUsage(reportDiagnostic, targetType, location);
 
-        // SGIOC009: Check Instance requires Singleton lifetime
-        AnalyzeInstanceLifetime(reportDiagnostic, attribute, location);
-
-        // SGIOC011: Check for duplicated registrations (same implementation type and key)
-        AnalyzeDuplicatedRegistration(reportDiagnostic, analyzerContext, attribute, targetType, key, location);
-
         // SGIOC032: Check explicit service types that would be skipped
         AnalyzeIncompatibleServiceTypes(reportDiagnostic, explicitServiceTypes, targetType, location);
-
-        // SGIOC038: Check the interfaces and base classes an open implementation is registered as
-        AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
     }
 
     /// <summary>
@@ -159,7 +205,7 @@ public sealed partial class RegisterAnalyzer
 
         var serviceTypes = new HashSet<INamedTypeSymbol>(
             AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes),
-            SymbolEqualityComparer.Default);
+            RuntimeTypeSymbolComparer.Instance);
         AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
 
         foreach(var serviceType in serviceTypes)
@@ -196,17 +242,16 @@ public sealed partial class RegisterAnalyzer
         if(targetType.IsOpenNestedInGenericType)
             return;
 
-        // Get lifetime of current service (considering default settings)
-        var (hasExplicitLifetime, explicitLifetime) = attribute.TryGetLifetime();
-        var lifetime = GetEffectiveLifetime(analyzerContext, targetType, hasExplicitLifetime, explicitLifetime);
-
         // Check for Factory and Instance (used by ServiceInfo)
         var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
 
+        // Service types are compared as runtime types, like every service type set of the analyzer
         var serviceTypes = new HashSet<INamedTypeSymbol>(
             AnalyzerHelpers.EnumerateRegisteredServiceTypes(targetType, attribute, explicitServiceTypes),
-            SymbolEqualityComparer.Default);
+            RuntimeTypeSymbolComparer.Instance);
         var bestDefaultIndex = AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
+
+        var lifetime = GetEffectiveLifetime(analyzerContext, attribute, bestDefaultIndex);
 
         // Like the generator, open types nested in a generic type are not registered (SGIOC038)
         serviceTypes.RemoveWhere(static serviceType => serviceType.IsOpenNestedInGenericType);
@@ -623,119 +668,125 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Collects default settings from IoCRegisterDefaultSettingsAttribute on the assembly.
-    /// Uses the shared ExtractDefaultSettings method from Constants.
-    /// Also tracks duplicated target types for SGIOC012 reporting.
+    /// Collects the default settings in the order of the generator's <c>DefaultSettingsMap</c>, where the first settings for
+    /// a target type win: the <c>[IocRegisterDefaults]</c> of the compiled assembly, assembly-level and type-level
+    /// (non-generic attributes, then generic attributes, each in source order), then those of the imported modules (see
+    /// <see cref="AnalyzerHelpers.EnumerateImportedDefaultSettingsAttributes"/>). Reports SGIOC012 for each settings of the
+    /// compiled assembly whose target type and a tag were already defined by earlier settings; imported settings are not
+    /// reported.
     /// </summary>
-    /// <param name="decoratorTypes">Receives the <c>Decorators</c> of each collected setting, in the order of the settings.</param>
-    /// <param name="attributes">Receives the attribute of each collected setting, in the order of the settings.</param>
-    private static DefaultSettingsMap CollectDefaults(
+    private static void CollectDefaults(
+        Action<Diagnostic> reportDiagnostic,
         Compilation compilation,
-        IocAttributeSymbols attributeSymbols,
-        ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
-        ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenTargetTypes,
-        ImmutableArray<ImmutableArray<INamedTypeSymbol>>.Builder decoratorTypes,
-        ImmutableArray<AttributeData>.Builder attributes,
+        AnalyzerContext analyzerContext,
+        Dictionary<SyntaxTree, int> treeOrder,
         CancellationToken cancellationToken)
     {
+        var attributeSymbols = analyzerContext.AttributeSymbols;
         if(attributeSymbols.IocRegisterDefaultsAttribute is null && attributeSymbols.IocRegisterDefaultsAttribute_T1 is null)
-            return new DefaultSettingsMap([]);
+            return;
 
-        var settingsBuilder = ImmutableArray.CreateBuilder<DefaultSettingsModel>();
-
+        var attributes = new List<AttributeData>(analyzerContext.TypeLevelDefaultAttributes);
         foreach(var attribute in compilation.Assembly.GetAttributes())
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var attributeClass = attribute.AttributeClass;
-            if(attributeClass is null)
-                continue;
-
-            // Check if this is an IoCRegisterDefaultsAttribute (non-generic or generic)
-            if(!AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols))
-            {
-                continue;
-            }
-
-            // Use shared method to extract default settings
-            // Use different extraction method for generic vs non-generic attributes
-            var settings = attributeClass.IsGenericType
-                ? attribute.ExtractDefaultSettingsFromGenericAttribute(compilation.Assembly)
-                : attribute.ExtractDefaultSettings(compilation.Assembly);
-            if(settings is not null)
-            {
-                var targetTypeName = settings.TargetServiceType.Name;
-                var tags = settings.Tags;
-
-                // Build effective tags list using helper method
-                var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
-
-                // SGIOC012: Check each effective tag for duplicates
-                var hasDuplicate = false;
-                foreach(var tag in effectiveTags)
-                {
-                    var defaultKey = (targetTypeName, tag);
-                    if(!seenTargetTypes.TryAdd(defaultKey, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()))
-                    {
-                        hasDuplicate = true;
-                        break; // Only need to find one duplicate
-                    }
-                }
-
-                if(hasDuplicate)
-                {
-                    var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
-                    duplicatedDefaults.Add((targetTypeName, location));
-                }
-                else
-                {
-                    settingsBuilder.Add(settings);
-                    decoratorTypes.Add(settings.Decorators.Length > 0 ? AnalyzerHelpers.GetDecoratorSymbols(attribute) : []);
-                    attributes.Add(attribute);
-                }
-            }
+            if(attribute.AttributeClass is { } attributeClass && AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols))
+                attributes.Add(attribute);
         }
 
-        return new DefaultSettingsMap(settingsBuilder.ToImmutable());
+        if(attributes.Count == 0 && analyzerContext.ModuleImportAttributes.IsEmpty)
+            return;
+
+        attributes.Sort((x, y) =>
+        {
+            var byKind = (x.AttributeClass?.IsGenericType == true).CompareTo(y.AttributeClass?.IsGenericType == true);
+            return byKind != 0
+                ? byKind
+                : AnalyzerHelpers.GetSourceOrder(x.ApplicationSyntaxReference, treeOrder)
+                    .CompareTo(AnalyzerHelpers.GetSourceOrder(y.ApplicationSyntaxReference, treeOrder));
+        });
+
+        var settings = ImmutableArray.CreateBuilder<DefaultSettingsModel>();
+        var decorators = ImmutableArray.CreateBuilder<ImmutableArray<INamedTypeSymbol>>();
+        var settingsAttributes = ImmutableArray.CreateBuilder<AttributeData>();
+        var seenTargetTypes = new HashSet<(string TargetTypeName, string Tag)>();
+        foreach(var attribute in attributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(ExtractDefaultSettings(attribute) is not { } defaults)
+                continue;
+
+            // SGIOC012: the target type and at least one effective tag are already defined by earlier settings
+            var targetTypeName = defaults.TargetServiceType.Name;
+            foreach(var tag in AnalyzerHelpers.GetEffectiveTags(defaults.Tags))
+            {
+                if(!seenTargetTypes.Add((targetTypeName, tag)))
+                {
+                    reportDiagnostic(Diagnostic.Create(
+                        DuplicatedDefaultSettings,
+                        attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation(),
+                        targetTypeName));
+                    break;
+                }
+            }
+
+            // Like the generator, every settings is kept: the DefaultSettingsMap only matches the first ones for a target type,
+            // while the ImplementationTypes and the Factory of an open generic target of the others are still registered
+            Add(attribute, defaults);
+            settingsAttributes.Add(attribute);
+        }
+
+        // The settings of imported modules follow. Like the generator, which reads them without a semantic model, their
+        // Factory is absent, and their ImplementationTypes add no registration, so they have no entry in DefaultAttributes.
+        foreach(var attribute in AnalyzerHelpers.EnumerateImportedDefaultSettingsAttributes(
+            analyzerContext.ModuleImportAttributes, compilation.Assembly, treeOrder, attributeSymbols, cancellationToken))
+        {
+            if(ExtractDefaultSettings(attribute) is { } defaults)
+                Add(attribute, defaults);
+        }
+
+        analyzerContext.SetDefaultSettings(new DefaultSettingsMap(settings.ToImmutable()), decorators.ToImmutable(), settingsAttributes.ToImmutable());
+
+        void Add(AttributeData attribute, DefaultSettingsModel defaults)
+        {
+            settings.Add(defaults);
+            decorators.Add(defaults.Decorators.Length > 0 ? AnalyzerHelpers.GetDecoratorSymbols(attribute) : []);
+        }
+
+        DefaultSettingsModel? ExtractDefaultSettings(AttributeData attribute)
+            => attribute.AttributeClass?.IsGenericType == true
+                ? attribute.ExtractDefaultSettingsFromGenericAttribute(compilation.Assembly)
+                : attribute.ExtractDefaultSettings(compilation.Assembly);
     }
 
     /// <summary>
-    /// Gets the effective lifetime for a type, considering default settings.
-    /// Uses DefaultSettingsMap for efficient lookups, consistent with RegisterSourceGenerator.
+    /// Finds the best default settings of an implementation, like the generator's <c>FindMatchingDefaults</c>: the first
+    /// base class, then interface, that has default settings. Returns -1 when none matches.
     /// </summary>
-    private static ServiceLifetime GetEffectiveLifetime(
-        AnalyzerContext analyzerContext,
-        INamedTypeSymbol targetType,
-        bool hasExplicitLifetime,
-        ServiceLifetime explicitLifetime)
+    private static int FindBestDefaultIndex(AnalyzerContext analyzerContext, INamedTypeSymbol targetType)
     {
-        // If lifetime is explicitly set, use it
+        if(analyzerContext.DefaultSettings.IsEmpty)
+            return -1;
+
+        foreach(var candidate in EnumerateBaseClasses(targetType).Concat(targetType.AllInterfaces))
+        {
+            if(TryGetDefaultSettingsIndex(analyzerContext, candidate, out var index))
+                return index;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Gets the lifetime of a registration like the generator's <c>MergeSettings</c>: its explicit lifetime, otherwise the
+    /// lifetime of its best default settings, otherwise the MSBuild <c>SourceGenIocDefaultLifetime</c> (Transient when unset).
+    /// </summary>
+    private static ServiceLifetime GetEffectiveLifetime(AnalyzerContext analyzerContext, AttributeData attribute, int bestDefaultIndex)
+    {
+        var (hasExplicitLifetime, lifetime) = attribute.TryGetLifetime();
         if(hasExplicitLifetime)
-            return explicitLifetime;
+            return lifetime;
 
-        var defaultSettings = analyzerContext.DefaultSettings;
-        if(defaultSettings.IsEmpty)
-            return explicitLifetime;
-
-        // Check default settings for matching interfaces
-        foreach(var iface in targetType.AllInterfaces)
-        {
-            if(TryGetDefaultSettingsIndex(analyzerContext, iface, out var index))
-                return defaultSettings[index].Lifetime;
-        }
-
-        // Check default settings for matching base classes
-        var baseType = targetType.BaseType;
-        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
-        {
-            if(TryGetDefaultSettingsIndex(analyzerContext, baseType, out var index))
-                return defaultSettings[index].Lifetime;
-
-            baseType = baseType.BaseType;
-        }
-
-        // Default lifetime is Transient (as defined in TryGetLifetime)
-        return explicitLifetime;
+        return bestDefaultIndex >= 0 ? analyzerContext.DefaultSettings[bestDefaultIndex].Lifetime : analyzerContext.FallbackLifetime;
     }
 
     /// <summary>
@@ -768,15 +819,26 @@ public sealed partial class RegisterAnalyzer
     private readonly struct RegistrationKeyComparer : IEqualityComparer<(INamedTypeSymbol Type, string? Key, string Tag)>
     {
         public bool Equals((INamedTypeSymbol Type, string? Key, string Tag) x, (INamedTypeSymbol Type, string? Key, string Tag) y)
-            => SymbolEqualityComparer.Default.Equals(x.Type, y.Type)
+            => RuntimeTypeSymbolComparer.Instance.Equals(x.Type, y.Type)
                 && StringComparer.Ordinal.Equals(x.Key, y.Key)
                 && StringComparer.Ordinal.Equals(x.Tag, y.Tag);
 
         public int GetHashCode((INamedTypeSymbol Type, string? Key, string Tag) obj)
-            => unchecked((((SymbolEqualityComparer.Default.GetHashCode(obj.Type) * 397)
+            => unchecked((((RuntimeTypeSymbolComparer.Instance.GetHashCode(obj.Type) * 397)
                 ^ StringComparer.Ordinal.GetHashCode(obj.Key ?? string.Empty)) * 397)
                 ^ StringComparer.Ordinal.GetHashCode(obj.Tag));
     }
+
+    /// <summary>
+    /// A registration attribute collected before the default settings are known, registered at compilation end.
+    /// </summary>
+    private readonly record struct PendingRegistration(
+        AttributeData Attribute,
+        INamedTypeSymbol TargetType,
+        string? Key,
+        ITypeSymbol? KeyTypeSymbol,
+        List<INamedTypeSymbol> ExplicitServiceTypes,
+        Location? Location);
 
     /// <summary>
     /// A registration analyzed at compilation end: the expanding dependencies of open generic registrations, the root
@@ -802,15 +864,17 @@ public sealed partial class RegisterAnalyzer
         IocAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
-        DefaultSettingsMap defaultSettings,
-        ImmutableArray<ImmutableArray<INamedTypeSymbol>> defaultDecorators,
-        ImmutableArray<AttributeData> defaultAttributes,
-        ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
-        ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes,
         IocFeatures features,
+        ServiceLifetime fallbackLifetime,
         IAssemblySymbol assembly)
     {
         public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
+
+        /// <summary>
+        /// The lifetime of a registration that neither sets one nor matches default settings: the MSBuild
+        /// <c>SourceGenIocDefaultLifetime</c>, otherwise Transient, like the generator's <c>DefaultSettingsMap.FallbackLifetime</c>.
+        /// </summary>
+        public ServiceLifetime FallbackLifetime { get; } = fallbackLifetime;
 
         /// <summary>The assembly being compiled, which the generated code is compiled into.</summary>
         public IAssemblySymbol Assembly { get; } = assembly;
@@ -823,38 +887,52 @@ public sealed partial class RegisterAnalyzer
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> ServiceTypeIndex { get; } = serviceTypeIndex;
 
         /// <summary>
-        /// Default settings from IoCRegisterDefaultSettingsAttribute, using DefaultSettingsMap for efficient lookups.
+        /// The registrations collected by the symbol and compilation start actions, resolved against the default settings at
+        /// CompilationEnd (<see cref="ResolveRegistrations"/>).
         /// </summary>
-        public DefaultSettingsMap DefaultSettings { get; } = defaultSettings;
+        public ConcurrentBag<PendingRegistration> PendingRegistrations { get; } = [];
+
+        /// <summary>The type-level IoCRegisterDefaultsAttribute (class, struct, interface), collected by the symbol action.</summary>
+        public ConcurrentBag<AttributeData> TypeLevelDefaultAttributes { get; } = [];
+
+        /// <summary>The IocImportModuleAttribute of the compilation, whose modules' default settings apply to registrations.</summary>
+        public ConcurrentBag<AttributeData> ModuleImportAttributes { get; } = [];
+
+        /// <summary>
+        /// Default settings of the compiled assembly, then of the imported modules, using DefaultSettingsMap for efficient
+        /// lookups. Set at CompilationEnd by <see cref="CollectDefaults"/>; empty before.
+        /// </summary>
+        public DefaultSettingsMap DefaultSettings { get; private set; } = new([]);
 
         /// <summary>
         /// The <c>Decorators</c> symbols of each default setting, by the index of the setting in <see cref="DefaultSettings"/>.
         /// </summary>
-        public ImmutableArray<ImmutableArray<INamedTypeSymbol>> DefaultDecorators { get; } = defaultDecorators;
+        public ImmutableArray<ImmutableArray<INamedTypeSymbol>> DefaultDecorators { get; private set; } = [];
 
         /// <summary>
-        /// The attribute of each default setting, by the index of the setting in <see cref="DefaultSettings"/>.
+        /// The attribute of each default setting of the compiled assembly, by the index of the setting in
+        /// <see cref="DefaultSettings"/>. The imported settings follow them in <see cref="DefaultSettings"/> without an
+        /// attribute: like the generator, their <c>Factory</c> and <c>ImplementationTypes</c> are not used.
         /// </summary>
-        public ImmutableArray<AttributeData> DefaultAttributes { get; } = defaultAttributes;
+        public ImmutableArray<AttributeData> DefaultAttributes { get; private set; } = [];
 
-        /// <summary>
-        /// List of duplicated IoCRegisterDefaults for SGIOC012 reporting.
-        /// </summary>
-        public ConcurrentBag<(string TargetTypeName, Location? Location)> DuplicatedDefaults { get; } = duplicatedDefaults;
-
-        /// <summary>
-        /// Tracks seen IoCRegisterDefaults (target type name, single tag) pairs across assembly and type-level attributes (SGIOC012).
-        /// Services without tags use an empty string tag for comparison.
-        /// </summary>
-        public ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> SeenDefaultTargetTypes { get; } = seenDefaultTargetTypes;
+        public void SetDefaultSettings(
+            DefaultSettingsMap defaultSettings,
+            ImmutableArray<ImmutableArray<INamedTypeSymbol>> defaultDecorators,
+            ImmutableArray<AttributeData> defaultAttributes)
+        {
+            DefaultSettings = defaultSettings;
+            DefaultDecorators = defaultDecorators;
+            DefaultAttributes = defaultAttributes;
+        }
 
         /// <summary>
         /// Tracks registered (ImplementationType, Key, single Tag) tuples to detect duplicates (SGIOC011).
         /// Each tag is tracked separately; duplicates are detected when any single tag matches.
         /// Services without tags use an empty string tag for comparison.
-        /// Value is the first registration location for diagnostic reporting.
+        /// Implementation types are compared as runtime types. Filled at CompilationEnd, in source order.
         /// </summary>
-        public ConcurrentDictionary<(INamedTypeSymbol Type, string? Key, string Tag), Location?> RegistrationKeys { get; } = new(new RegistrationKeyComparer());
+        public HashSet<(INamedTypeSymbol Type, string? Key, string Tag)> RegistrationKeys { get; } = new(new RegistrationKeyComparer());
 
         /// <summary>
         /// Stores resolved key type symbols for KeyType.Csharp registrations where nameof() was used.
@@ -891,7 +969,7 @@ public sealed partial class RegisterAnalyzer
         /// The open generic registrations, with their service types and decorators, whose expanding dependencies are
         /// reported (SGIOC036/SGIOC037).
         /// </summary>
-        public ConcurrentBag<AnalyzedRegistration> Registrations { get; } = [];
+        public List<AnalyzedRegistration> Registrations { get; } = [];
 
         /// <summary>
         /// The <c>Factory</c> methods given with <c>nameof()</c> in registration and default settings attributes, by the span of

@@ -230,7 +230,7 @@ services.AddSingleton<global::System.Threading.Tasks.Task<global::MyNamespace.IM
 |SGIOC026|Error|`AsyncMethodInject` feature requires `MethodInject` to be enabled.|
 |SGIOC030|Error|A service or decorator dependency requests `T`, `Lazy<T>` or `Func<..., T>` of an async-init service that has no synchronous registration. Inject `Task<T>` instead.|
 |SGIOC023|Error|An element in the `InjectMembers` array is not in a recognized format. Each element must be `nameof(member)` or `new object[] { nameof(member), key [, KeyType] }`. With `KeyType.Value` (the default), the key must be a non-null constant.|
-|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., not a member of the registered type, an explicit interface implementation, static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method with unsupported return type).|
+|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., not a member of the registered type, an explicit interface implementation, hidden on the registered type by a `new` member, static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method with unsupported return type).|
 
 ## InjectMembers: Attribute-Level Injection Without `[IocInject]`
 
@@ -254,7 +254,7 @@ Each element is one of:
 > [!NOTE]
 > When the same member is specified in both `InjectMembers` and via `[IocInject]` on the member itself, `[IocInject]` takes priority.
 
-`nameof()` only names the member, which is injected as a member of the registered type. An interface member (`nameof(IService.Logger)`) injects its implementation, so it cannot be implemented explicitly. For an open generic registration, any type arguments work: the member is injected with the type arguments of each closed type.
+`nameof()` only names the member, which is injected as a member of the registered type. An interface member (`nameof(IService.Logger)`) injects its implementation, so it cannot be implemented explicitly. A member hidden on the registered type (by a member declared with `new`, such as `public new IOther Logger`) is not injected either, because the generated code would assign the hiding member; `SGIOC024` reports it. If the hiding member has `[IocInject]`, it takes priority as usual: it is injected and no diagnostic is reported. For an open generic registration, any type arguments work: the member is injected with the type arguments of each closed type.
 
 ```csharp
 // Node<string> injects IRepo<string> into Repo

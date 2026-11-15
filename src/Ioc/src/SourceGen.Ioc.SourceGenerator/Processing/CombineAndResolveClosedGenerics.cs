@@ -147,6 +147,16 @@ partial class IocSourceGenerator
         // Track already generated closed generic registrations to avoid duplicates
         var generatedClosedGenerics = new HashSet<string>(StringComparer.Ordinal);
 
+        // Types registered as written are not closed again in any spelling of their tuple element names
+        var registeredTypes = new HashSet<string>(TypeNameComparer.Instance);
+
+        // Each open generic registration is closed once for each runtime type and set of decorators. Dependencies that
+        // differ only in tuple element names are still processed for each spelling: a constraint may be satisfied by one
+        // spelling only (see SatisfiesConstraints), so each spelling selects the first open generic registration it
+        // matches, as for different runtime types, which closes it unless it is already closed for that runtime type
+        // with the same decorators (decorator constraints compare tuple element names too).
+        var closedRegistrations = new HashSet<(OpenGenericRegistrationInfo Registration, string ClosingKey)>(ClosedRegistrationComparer.Instance);
+
         // First, collect all existing registrations to avoid duplicates
         // This includes both implementation types and service types
         foreach(var regWithTags in registrations)
@@ -154,6 +164,8 @@ partial class IocSourceGenerator
             var model = regWithTags.Registration;
             generatedClosedGenerics.Add(model.ImplementationType.Name);
             generatedClosedGenerics.Add(model.ServiceType.Name);
+            registeredTypes.Add(model.ImplementationType.Name);
+            registeredTypes.Add(model.ServiceType.Name);
         }
 
         // Use a queue for iterative processing of dependencies
@@ -195,7 +207,7 @@ partial class IocSourceGenerator
             }
 
             // Skip if this closed generic is already registered
-            if(generatedClosedGenerics.Contains(closedTypeName))
+            if(generatedClosedGenerics.Contains(closedTypeName) || registeredTypes.Contains(closedTypeName))
             {
                 continue;
             }
@@ -220,6 +232,8 @@ partial class IocSourceGenerator
                     openGenericInfo,
                     registrations,
                     generatedClosedGenerics,
+                    registeredTypes,
+                    closedRegistrations,
                     out closingSource))
                 {
                     closedRegistration = openGenericInfo;
@@ -397,14 +411,21 @@ partial class IocSourceGenerator
     /// <summary>
     /// Tries to generate a closed generic registration based on an open generic registration.
     /// The closedServiceType is the closed service type from the dependency (e.g., IRequestHandler&lt;GenericRequest&lt;Entity&gt;, List&lt;Entity&gt;&gt;).
-    /// Returns true if registration was successfully generated, false if type structure is incompatible.
+    /// Returns true if registration was successfully generated, or the registration matches a runtime type it is already
+    /// closed for with the same decorators (nothing is generated then); false if type structure is incompatible.
     /// </summary>
+    /// <param name="registeredTypes">The types registered as written, compared as runtime types.</param>
+    /// <param name="closedRegistrations">
+    /// The open generic registrations and the keys of their closings (see <see cref="GetClosedRegistrationKey"/>).
+    /// </param>
     /// <param name="closingSource">The closing the dependencies of the generated registrations are collected from.</param>
     private static bool TryGenerateClosedGenericRegistration(
         TypeData closedServiceType,
         OpenGenericRegistrationInfo openGenericInfo,
         List<ServiceRegistrationWithTags> registrations,
         HashSet<string> generatedClosedGenerics,
+        HashSet<string> registeredTypes,
+        HashSet<(OpenGenericRegistrationInfo Registration, string ClosingKey)> closedRegistrations,
         out ClosingSource? closingSource)
     {
         closingSource = null;
@@ -512,7 +533,8 @@ partial class IocSourceGenerator
                 openGenericInfo,
                 factoryOnlyTypeArgMap,
                 registrations,
-                generatedClosedGenerics);
+                generatedClosedGenerics,
+                closedRegistrations);
         }
 
         // Build mapping from open implementation type params to closed type args
@@ -566,6 +588,37 @@ partial class IocSourceGenerator
         // called on the closed type
         var implClosedFactory = openGenericInfo.Factory is { } factory ? CloseImplementationTypeParameters(factory, implTypeArgMap, typeArguments) : null;
 
+        // The service types that can be registered, with their factories and decorators: a generic factory cannot be called
+        // for a service type its mapping does not match, and decorators are closed for each service type
+        var closedServices = new List<(TypeData ServiceType, FactoryMethodData? Factory, ImmutableEquatableArray<TypeData> Decorators)>(closedServiceTypes.Count);
+        foreach(var closedSvcType in closedServiceTypes)
+        {
+            // Skip the implementation type and nested open generic service types
+            if(closedSvcType.Name == closedImplTypeName
+                || closedSvcType is GenericTypeData { IsNestedOpenGeneric: true } or GenericTypeData { IsOpenGeneric: true })
+            {
+                continue;
+            }
+
+            var closedSvcTypeWithArguments = WithTypeArgumentsOf(closedSvcType, closedServiceGenericType);
+            FactoryMethodData? serviceFactory = null;
+            if(implClosedFactory is not null && (serviceFactory = CloseGenericFactory(implClosedFactory, closedSvcTypeWithArguments)) is null)
+            {
+                continue;
+            }
+
+            // Use service type's type parameters for decorator substitution
+            closedServices.Add((closedSvcType, serviceFactory, ProcessDecoratorsForServiceType(openGenericInfo.Decorators, closedSvcTypeWithArguments)));
+        }
+
+        // Another spelling of the tuple element names of this runtime type already closed this registration with the
+        // same decorators; decorator constraints compare tuple element names, so other decorators close it again
+        var closedRegistrationKey = GetClosedRegistrationKey(closedImplTypeName, closedServices);
+        if(closedRegistrations.Contains((openGenericInfo, closedRegistrationKey)))
+        {
+            return true;
+        }
+
         // A generic factory is called for the registered types its mapping matches, so the implementation type is constructed
         // unless the mapping matches it; a regular factory creates both the implementation and the service types
         var implFactory = implClosedFactory is not null ? CloseGenericFactory(implClosedFactory, closedImplType) : null;
@@ -607,38 +660,13 @@ partial class IocSourceGenerator
         }
 
         // Create registrations for each closed service type
-        foreach(var closedSvcType in closedServiceTypes)
+        foreach(var (closedSvcType, serviceFactory, serviceTypeDecorators) in closedServices)
         {
-            if(closedSvcType.Name == closedImplType.Name)
-            {
-                continue; // Skip if same as implementation type
-            }
-
             // Skip if already registered
-            if(generatedClosedGenerics.Contains(closedSvcType.Name))
+            if(generatedClosedGenerics.Contains(closedSvcType.Name) || registeredTypes.Contains(closedSvcType.Name))
             {
                 continue;
             }
-
-            // Skip nested open generic service types
-            if(closedSvcType is GenericTypeData { IsNestedOpenGeneric: true } or GenericTypeData { IsOpenGeneric: true })
-            {
-                continue;
-            }
-
-            // A generic factory cannot be called for a service type its mapping does not match, which is not registered
-            var closedSvcTypeWithArguments = WithTypeArgumentsOf(closedSvcType, closedServiceGenericType);
-            FactoryMethodData? serviceFactory = null;
-            if(implClosedFactory is not null && (serviceFactory = CloseGenericFactory(implClosedFactory, closedSvcTypeWithArguments)) is null)
-            {
-                continue;
-            }
-
-            // Process decorators for this specific service type
-            // Use service type's type parameters for decorator substitution
-            var serviceTypeDecorators = ProcessDecoratorsForServiceType(
-                openGenericInfo.Decorators,
-                closedSvcTypeWithArguments);
 
             var serviceModel = new ServiceRegistrationModel(
                 closedSvcType,
@@ -662,6 +690,7 @@ partial class IocSourceGenerator
             return false;
         }
 
+        closedRegistrations.Add((openGenericInfo, closedRegistrationKey));
         closingSource = new ClosingSource(openImplType.Name, implTypeArgMap);
         return true; // Successfully generated registration
     }
@@ -694,7 +723,8 @@ partial class IocSourceGenerator
         OpenGenericRegistrationInfo openGenericInfo,
         Dictionary<string, string> typeArgMap,
         List<ServiceRegistrationWithTags> registrations,
-        HashSet<string> generatedClosedGenerics)
+        HashSet<string> generatedClosedGenerics,
+        HashSet<(OpenGenericRegistrationInfo Registration, string ClosingKey)> closedRegistrations)
     {
         if(closedServiceType is not GenericTypeData { IsNestedOpenGeneric: false, IsOpenGeneric: false })
         {
@@ -721,6 +751,12 @@ partial class IocSourceGenerator
             openGenericInfo.Decorators,
             closedServiceType);
 
+        // Another spelling of the tuple element names of this runtime type already closed this registration with the same decorators
+        if(!closedRegistrations.Add((openGenericInfo, GetClosedRegistrationKey(closedServiceType.Name, [(closedServiceType, factory, serviceTypeDecorators)]))))
+        {
+            return true;
+        }
+
         // For factory-only registration, both ServiceType and ImplementationType are the same (the service type)
         // The factory method will create the actual instance, so the type is never constructed and its Constructibility
         // stays Unknown: it comes from a dependency, which is extracted without it
@@ -741,5 +777,38 @@ partial class IocSourceGenerator
         generatedClosedGenerics.Add(closedServiceType.Name);
 
         return true; // Successfully generated registration
+    }
+
+    /// <summary>
+    /// Gets the key a closing of an open generic registration is compared by: its implementation type, service types and
+    /// their decorators as runtime types (without tuple element names, see <see cref="TypeNameComparer"/>).
+    /// </summary>
+    private static string GetClosedRegistrationKey(
+        string closedImplTypeName,
+        List<(TypeData ServiceType, FactoryMethodData? Factory, ImmutableEquatableArray<TypeData> Decorators)> closedServices)
+    {
+        var builder = new StringBuilder(TypeNameComparer.WithoutTupleElementNames(closedImplTypeName));
+        foreach(var (serviceType, _, decorators) in closedServices)
+        {
+            builder.Append('|').Append(TypeNameComparer.WithoutTupleElementNames(serviceType.Name));
+            foreach(var decorator in decorators)
+            {
+                builder.Append(';').Append(TypeNameComparer.WithoutTupleElementNames(decorator.Name));
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>Compares an open generic registration by reference and the key of its closing ordinally.</summary>
+    private sealed class ClosedRegistrationComparer : IEqualityComparer<(OpenGenericRegistrationInfo Registration, string ClosingKey)>
+    {
+        public static ClosedRegistrationComparer Instance { get; } = new();
+
+        public bool Equals((OpenGenericRegistrationInfo Registration, string ClosingKey) x, (OpenGenericRegistrationInfo Registration, string ClosingKey) y)
+            => ReferenceEquals(x.Registration, y.Registration) && string.Equals(x.ClosingKey, y.ClosingKey, StringComparison.Ordinal);
+
+        public int GetHashCode((OpenGenericRegistrationInfo Registration, string ClosingKey) obj)
+            => unchecked((RuntimeHelpers.GetHashCode(obj.Registration) * 397) ^ StringComparer.Ordinal.GetHashCode(obj.ClosingKey));
     }
 }

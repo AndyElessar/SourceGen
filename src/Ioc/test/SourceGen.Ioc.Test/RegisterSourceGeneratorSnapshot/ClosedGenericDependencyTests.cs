@@ -1891,6 +1891,199 @@ public class ClosedGenericDependencyTests
     }
 
     [Test]
+    public async Task ClosedGenericDependency_TupleElementNamesDiffer_ClosesForSpellingThatSatisfiesConstraint()
+    {
+        // Both dependencies are one runtime type, which is closed once; the first spelling does not satisfy the constraint
+        // for this registration, so it is closed for the second one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class Handler<T, U> : IHandler<T, U> where T : U;
+
+            [IocRegister]
+            internal sealed class Consumer(IHandler<(int A, int B), (int X, int Y)> handler);
+
+            [IocRegister]
+            internal sealed class OtherConsumer(IHandler<(int X, int Y), (int X, int Y)> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+
+        var closedCount = generatedSource.Split(["services.AddTransient<global::TestNamespace.IHandler<("], StringSplitOptions.None).Length - 1;
+        await Assert.That(closedCount).IsEqualTo(1);
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.Handler<(int X, int Y), (int X, int Y)>");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_RegisteredWithOtherTupleElementNames_IsNotClosed()
+    {
+        // IHandler<(Entity, string)> is the runtime type registered as IHandler<(Entity X, string Y)>, like the same spelling
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            internal sealed class NamedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister]
+            internal sealed class Consumer(IHandler<(Entity, string)> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Handler<(");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_TupleElementNamesDiffer_EachOpenRegistrationClosesOnce()
+    {
+        // (int A, int B), (int X, int Y) does not satisfy HandlerA's constraint, so HandlerB is closed for it; the second
+        // spelling satisfies it, so HandlerA is closed too, like for two runtime types. The third spelling is the runtime
+        // type HandlerA is already closed for, so nothing more is closed.
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class HandlerA<T, U> : IHandler<T, U> where T : U;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)])]
+            internal sealed class HandlerB<T, U> : IHandler<T, U>;
+
+            [IocRegister]
+            internal sealed class Consumer(IHandler<(int A, int B), (int X, int Y)> handler);
+
+            [IocRegister]
+            internal sealed class OtherConsumer(IHandler<(int X, int Y), (int X, int Y)> handler);
+
+            [IocRegister]
+            internal sealed class ThirdConsumer(IHandler<(int, int), (int, int)> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::TestNamespace.HandlerB<(int A, int B), (int X, int Y)>")).IsEqualTo(1);
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::TestNamespace.HandlerA<(")).IsEqualTo(1);
+        await Assert.That(generatedSource).Contains("services.AddTransient<global::TestNamespace.HandlerA<(int X, int Y), (int X, int Y)>");
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::TestNamespace.IHandler<(")).IsEqualTo(2);
+
+        static int Count(string text, string value) => text.Split([value], StringSplitOptions.None).Length - 1;
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ClosedGenericDependency_TupleElementNamesDiffer_ClosesAgainWhenDecoratorsDiffer(bool decoratedFirst)
+    {
+        // Deco's constraint is satisfied by the second spelling only, so the two spellings close Handler with different
+        // decorators; Handler is closed for each, like for two runtime types, whichever consumer is declared first
+        const string consumer = """
+            [IocRegister]
+            internal sealed class Consumer(IHandler<(int A, int B), (int X, int Y)> handler);
+            """;
+        const string otherConsumer = """
+            [IocRegister]
+            internal sealed class OtherConsumer(IHandler<(int X, int Y), (int X, int Y)> handler);
+            """;
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<,>)], Decorators = [typeof(Deco<,>)])]
+            internal sealed class Handler<T, U> : IHandler<T, U>;
+
+            internal sealed class Deco<T, U>(IHandler<T, U> inner) : IHandler<T, U> where T : U;
+
+            {{(decoratedFirst ? otherConsumer : consumer)}}
+
+            {{(decoratedFirst ? consumer : otherConsumer)}}
+
+            [IocContainer]
+            internal partial class TestContainer;
+            """;
+
+        // The container output is compiled too
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs")).IsNotNull();
+
+        await Assert.That(Count(generatedSource, "services.AddTransient<global::TestNamespace.IHandler<(")).IsEqualTo(2);
+        await Assert.That(Count(generatedSource, "new global::TestNamespace.Deco<(int X, int Y), (int X, int Y)>(")).IsEqualTo(1);
+        await Assert.That(generatedSource).DoesNotContain("new global::TestNamespace.Deco<(int A, int B), (int X, int Y)>(");
+
+        static int Count(string text, string value) => text.Split([value], StringSplitOptions.None).Length - 1;
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_KeyedClosedRegistration_DoesNotCloseForNonKeyedDependency()
+    {
+        // Documents current behavior (see issue #202 review): a keyed registration of IHandler<Entity> keeps Handler<>
+        // from being closed for a non-keyed IHandler<Entity> dependency, which then has no registration
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<>)])]
+            internal sealed class Handler<T> : IHandler<T>;
+
+            [IocRegister(Key = "k", ServiceTypes = [typeof(IHandler<Entity>)])]
+            internal sealed class KeyedHandler : IHandler<Entity>;
+
+            [IocRegister]
+            internal sealed class Consumer(IHandler<Entity> handler);
+
+            [IocContainer]
+            internal partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs")!;
+
+        // The Register output leaves IHandler<Entity> to MS.DI's open generic registration; the container resolves it from
+        // the fallback provider, so a standalone container throws
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Handler<global::TestNamespace.Entity>");
+        await Assert.That(containerSource).DoesNotContain("new global::TestNamespace.Handler<global::TestNamespace.Entity>");
+        await Assert.That(containerSource).Contains("GetRequiredService(typeof(global::TestNamespace.IHandler<global::TestNamespace.Entity>))");
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_DecoratorOfServiceDiscoveredThroughImplementation_ClosesConstrainedDependency()
     {
         // Service<Entity> is requested directly, so its IService<List<Entity>> is built from the implementation's type

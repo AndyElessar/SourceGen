@@ -545,4 +545,31 @@ public class SGIOC015Tests
         await Assert.That(sgioc015).Count().IsEqualTo(1);
         await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int").And.Contains("IService");
     }
+
+    [Test]
+    public async Task SGIOC015_KVP_TupleElementNamesDiffer_MismatchedKey_ReportsDiagnostic()
+    {
+        // Tuple element names are not part of the runtime type, so the keyed registration is a value of the pair
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Key = "Key1", ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public class KeyedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<int, IHandler<(Entity M, string N)>> kvp);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015").ToList();
+
+        await Assert.That(sgioc015).Count().IsEqualTo(1);
+        await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int");
+    }
 }

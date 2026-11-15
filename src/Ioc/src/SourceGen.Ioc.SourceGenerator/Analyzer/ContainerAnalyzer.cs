@@ -357,7 +357,7 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
         IAssemblySymbol assembly,
         CancellationToken cancellationToken)
     {
-        var asyncInitServiceKeys = new HashSet<ServiceSymbolKey>(RuntimeTypeSymbolComparer.ServiceKeyComparer);
+        var asyncInitServiceKeys = new HashSet<ServiceSymbolKey>();
         if((features & IocFeatures.AsyncMethodInject) == 0)
             return asyncInitServiceKeys;
 
