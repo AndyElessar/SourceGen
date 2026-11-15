@@ -1,6 +1,14 @@
 ﻿<Project>
-  <PropertyGroup>
+  <!--
+    BenchmarkDotNet generates projects under a benchmark's bin folder that set their own TargetFramework.
+    Their ImportDirectoryBuildProps=false comes after Sdk.props, so this file is still imported; an inherited
+    TargetFrameworks would make them multi-target and their NativeAOT publish would produce no executable.
+  -->
+  <PropertyGroup Condition="!$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/bin/'))">
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <LangVersion>15</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
