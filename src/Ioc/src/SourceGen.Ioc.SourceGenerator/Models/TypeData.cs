@@ -38,7 +38,7 @@ internal closed record class TypeData(
 /// <summary>
 /// Who can construct a type with the constructor generated code selects.
 /// </summary>
-internal enum Constructibility
+internal enum Constructibility : byte
 {
     /// <summary>
     /// Not recorded. Not the same as <see cref="Activatable"/>: the type may not be constructible at all.

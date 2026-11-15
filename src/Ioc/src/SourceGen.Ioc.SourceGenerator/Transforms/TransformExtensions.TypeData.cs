@@ -84,13 +84,13 @@ internal static partial class TransformExtensions
             var constructibility = Constructibility.Unknown;
             if(extractConstructorParams)
             {
-                (constructorParams, hasInjectConstructor, var constructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel, constructedIn);
+                (constructorParams, hasInjectConstructor, var constructor, var isConstructible) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel, constructedIn);
 
                 // MS.DI calls a public constructor of its own choice, so only generated code constructs a type whose selected
                 // constructor is not public (an implicit default constructor of a class is public)
                 if(constructedIn is not null)
                 {
-                    constructibility = (typeSymbol.IsConstructibleIn(constructedIn), constructor) switch
+                    constructibility = (isConstructible, constructor) switch
                     {
                         (false, _) => Constructibility.NotConstructible,
                         (true, { DeclaredAccessibility: not Accessibility.Public }) => Constructibility.GeneratedCodeOnly,
