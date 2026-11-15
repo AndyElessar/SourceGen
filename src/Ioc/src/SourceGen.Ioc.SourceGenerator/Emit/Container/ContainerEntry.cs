@@ -173,7 +173,7 @@ partial class IocSourceGenerator
             foreach(var method in methods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"instance.{method.Method.Name}({methodArgs});");
+                writer.WriteLine($"{method.Method.GetInvocationTarget("instance")}({methodArgs});");
             }
         }
 
@@ -285,13 +285,13 @@ partial class IocSourceGenerator
             foreach(var method in syncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"{injectionVar}.{method.Method.Name}({methodArgs});");
+                writer.WriteLine($"{method.Method.GetInvocationTarget(injectionVar)}({methodArgs});");
             }
 
             foreach(var method in asyncMethods)
             {
                 var methodArgs = BuildMethodArguments(method, Registration.Key);
-                writer.WriteLine($"await {injectionVar}.{method.Method.Name}({methodArgs}).ConfigureAwait(false);");
+                writer.WriteLine($"await {method.Method.GetInvocationTarget(injectionVar)}({methodArgs}).ConfigureAwait(false);");
             }
 
             if(hasDecorators)
@@ -396,7 +396,7 @@ partial class IocSourceGenerator
             {
                 if(member is ResolvedMethodInjection { Method.IsAsync: false } method)
                 {
-                    writer.WriteLine($"{variableName}.{method.Method.Name}({BuildMethodArguments(method, registrationKey)});");
+                    writer.WriteLine($"{method.Method.GetInvocationTarget(variableName)}({BuildMethodArguments(method, registrationKey)});");
                 }
             }
 
@@ -408,7 +408,7 @@ partial class IocSourceGenerator
             {
                 if(member is ResolvedMethodInjection { Method.IsAsync: true } method)
                 {
-                    writer.WriteLine($"await {variableName}.{method.Method.Name}({BuildMethodArguments(method, registrationKey)}).ConfigureAwait(false);");
+                    writer.WriteLine($"await {method.Method.GetInvocationTarget(variableName)}({BuildMethodArguments(method, registrationKey)}).ConfigureAwait(false);");
                 }
             }
         }

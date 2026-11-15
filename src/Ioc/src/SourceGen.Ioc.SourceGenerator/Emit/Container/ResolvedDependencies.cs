@@ -158,7 +158,7 @@ partial class IocSourceGenerator
                 }
 
                 var methodArgs = BuildArgumentListFromEntries(methodEntries);
-                statements.Add($"s0.{member.Name}({methodArgs});");
+                statements.Add($"{member.GetInvocationTarget("s0")}({methodArgs});");
             }
 
             if(Decorators.Length > 0)

@@ -477,15 +477,21 @@ partial class IocSourceGenerator
                     DefaultValue = SubstituteTypeArgumentsInExpression(propertyOrField.DefaultValue, typeArgMap),
                 };
 
-            // For methods, substitute each parameter type
-            case MethodInjectionData { Parameters.Length: > 0 } method:
+            // For methods, substitute each parameter type and the declaring type the call is made through
+            case MethodInjectionData method when method.Parameters.Length > 0 || method.CallThroughType is not null:
             {
                 var paramList = new List<ParameterData>(method.Parameters.Length);
                 foreach(var param in method.Parameters)
                 {
                     paramList.Add(param with { Type = SubstituteTypeData(param.Type, typeArgMap, typeArguments) });
                 }
-                return method with { Parameters = paramList.ToImmutableEquatableArray() };
+                return method with
+                {
+                    Parameters = paramList.ToImmutableEquatableArray(),
+                    CallThroughType = method.CallThroughType is { } callThroughType
+                        ? SubstituteTypeData(callThroughType, typeArgMap, typeArguments)
+                        : null,
+                };
             }
 
             default:

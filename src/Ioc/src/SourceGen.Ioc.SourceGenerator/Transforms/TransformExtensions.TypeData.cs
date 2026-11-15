@@ -103,7 +103,7 @@ internal static partial class TransformExtensions
             ImmutableEquatableArray<InjectionMemberData>? injectionMembers = null;
             if(extractInjectionMembers)
             {
-                injectionMembers = typeSymbol.ExtractInjectionMembersForDecorator(semanticModel);
+                injectionMembers = typeSymbol.ExtractInjectionMembersForDecorator(semanticModel, constructedIn);
                 if(injectionMembers.Length == 0)
                 {
                     injectionMembers = null;
