@@ -463,16 +463,16 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// SGIOC041: A Factory, Instance or Key given with nameof() is a member of an unbound generic type whose type arguments
-    /// cannot be determined, so the registration is ignored.
+    /// cannot be determined, so the registration or default settings are ignored.
     /// </summary>
     public static readonly DiagnosticDescriptor NameofOfUnboundGenericType = new(
         id: "SGIOC041",
         title: "Member of an unbound generic type cannot be used",
-        messageFormat: "{0} '{1}' is a member of the unbound generic type '{2}', whose type arguments cannot be determined, so the registration is ignored; give its type arguments",
+        messageFormat: "{0} '{1}' is a member of the unbound generic type '{2}', whose type arguments cannot be determined, so {3}; give its type arguments",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "nameof() accepts an unbound generic type, such as nameof(Factories<>.Create), but generated code must name the member of a closed type. Only the type parameters of the registered open generic implementation type are closed, such as nameof(Node<>.Default) for Node<T>, so a member of another unbound generic type is not supported and the registration is ignored.");
+        description: "nameof() accepts an unbound generic type, such as nameof(Factories<>.Create), but generated code must name the member of a closed type. Only the type parameters of the registered open generic implementation type are closed, such as nameof(Node<>.Default) for Node<T>, so a member of another unbound generic type is not supported and the registration is ignored. Default settings apply to other types, so a Factory of [IocRegisterDefaults] cannot use any unbound generic type and the default settings are ignored.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [

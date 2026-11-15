@@ -132,15 +132,15 @@ Report when the C# `Key` (`KeyType.Csharp`) of an open generic registration uses
 
 ## SGIOC041 - Error - Usage - Member of an unbound generic type cannot be used
 
-Report when a `Factory`, `Instance` or C# `Key` (`KeyType.Csharp`) of a registration attribute is given with `nameof()` of a member of an unbound generic type that the implementation type does not declare, such as `nameof(Factories<>.Create)`. Its path would name the type parameters of that type, which are not in scope in generated code and cannot be closed, so the generator ignores the registration in both outputs (see [Factory](../../Spec/Register.Factory.spec.md#instance-and-factory-precedence)).
+Report when a `Factory`, `Instance` or C# `Key` (`KeyType.Csharp`) of a registration attribute is given with `nameof()` of a member of an unbound generic type that the implementation type does not declare, such as `nameof(Factories<>.Create)`, or the `Factory` of a default settings attribute is given with `nameof()` of a member of any unbound generic type. Its path would name the type parameters of that type, which are not in scope in generated code and cannot be closed, so the generator ignores the registration, or the default settings as a whole, in both outputs (see [Factory](../../Spec/Register.Factory.spec.md#instance-and-factory-precedence)).
 
 **Analysis:**
 
 - Checks `[IocRegister]` / `[IocRegister<T>]` / `[IocRegisterFor]` / `[IocRegisterFor<T>]` attributes, binding only the `nameof()` arguments that contain an unbound generic name (`Factories<>`), with the generator's own check (`FindNameofOfUnboundGenericType`).
 - The own unbound type of an open generic implementation type, such as `Instance = nameof(Node<>.Default)` for `[IocRegisterFor(typeof(Node<>))]`, is closed like the implementation type and is not reported; for a closed implementation type, such as `typeof(Node<int>)`, it is reported. Another unbound generic type is reported also on a generic registration whose type parameters have the same names. A value `Key` is the member's name, so it is not checked. Open types nested in a generic type are ignored (`SGIOC038`).
 - Reported once per attribute, at the first such `nameof()` argument. `SGIOC040` is not reported for the same attribute.
-- `[IocRegisterDefaults]` is not checked.
+- Checks the `Factory` of `[IocRegisterDefaults]` / `[IocRegisterDefaults<T>]` attributes, assembly-level and type-level, with the same check without an implementation type: default settings apply to other types, so no unbound generic type is closed, also not the target type (`nameof(Node<>.Create)` for `typeof(Node<>)`). Default settings for an open type nested in a generic type are ignored as a whole (`SGIOC038`) and not checked. The ignored default settings are not used by the analyses at compilation end either, such as `SGIOC012`, the lifetime and the `ImplementationTypes` of the registrations.
 
-**Message format:** `{Argument} '{Member}' is a member of the unbound generic type '{Type}', whose type arguments cannot be determined, so the registration is ignored; give its type arguments`
+**Message format:** `{Argument} '{Member}' is a member of the unbound generic type '{Type}', whose type arguments cannot be determined, so the registration is ignored; give its type arguments`, with `the default settings are ignored` for default settings
 
 **Fix:** Give the type arguments, such as `nameof(Factories<int>.Create)`, or `nameof(Factories<T>.Create)` on an open generic `Node<T>`.

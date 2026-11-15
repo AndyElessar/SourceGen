@@ -648,11 +648,17 @@ public sealed partial class RegisterAnalyzer
         AnalyzerContext analyzerContext)
     {
         var attributeSymbols = analyzerContext.AttributeSymbols;
-        if(attributeSyntax.ArgumentList is not { } argumentList
-            || (!AnalyzerHelpers.IsIoCRegisterAttribute(attributeClass, attributeSymbols) && !AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, attributeSymbols)))
+        if(attributeSyntax.ArgumentList is not { } argumentList)
+            return;
+
+        if(AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, attributeSymbols))
         {
+            AnalyzeDefaultSettingsNameofOfUnboundGenericType(context, attributeSyntax, argumentList, attributeClass, analyzerContext);
             return;
         }
+
+        if(!AnalyzerHelpers.IsIoCRegisterAttribute(attributeClass, attributeSymbols) && !AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, attributeSymbols))
+            return;
 
         // A value Key cannot use type parameters, and only an unbound generic type names type parameters out of scope, so
         // the attribute is bound only when either can be found
@@ -699,7 +705,8 @@ public sealed partial class RegisterAnalyzer
                 nameofArgument.GetLocation(),
                 argumentName,
                 member.Name,
-                containingType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                containingType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                "the registration is ignored"));
             return;
         }
 
@@ -716,6 +723,53 @@ public sealed partial class RegisterAnalyzer
                 key.ToString(),
                 definition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
+    }
+
+    /// <summary>
+    /// SGIOC041: Reports the <c>Factory</c> of default settings given with <c>nameof()</c> of a member of an unbound generic
+    /// type, such as <c>nameof(Factories&lt;&gt;.Create)</c>. Default settings apply to other types, so no unbound generic type is
+    /// closed, also not the target type, and the generator ignores the settings as a whole (<c>ExtractDefaultSettings</c>);
+    /// they are recorded so that <c>CollectDefaults</c> ignores them too.
+    /// </summary>
+    private static void AnalyzeDefaultSettingsNameofOfUnboundGenericType(
+        SyntaxNodeAnalysisContext context,
+        AttributeSyntax attributeSyntax,
+        AttributeArgumentListSyntax argumentList,
+        INamedTypeSymbol attributeClass,
+        AnalyzerContext analyzerContext)
+    {
+        // Only an unbound generic type names type parameters out of scope, so the attribute is bound only then
+        var hasUnboundGenericName = false;
+        foreach(var argument in argumentList.Arguments)
+        {
+            if(argument.NameEquals?.Name.Identifier.ValueText == "Factory")
+                hasUnboundGenericName |= argument.Expression.DescendantNodes().OfType<OmittedTypeArgumentSyntax>().Any();
+        }
+
+        if(!hasUnboundGenericName)
+            return;
+
+        // Settings for an open type nested in a generic type are ignored as a whole first (SGIOC038)
+        // The target is read like the generator (ConstructorArguments[0]), which also covers named and reordered arguments
+        var targetType = attributeClass.IsGenericType
+            ? attributeClass.TypeArguments.FirstOrDefault()
+            : GetAttributeDataFromSyntax(context, attributeSyntax, attributeClass)?.ConstructorArguments is [{ Value: var target }, ..]
+                ? target
+                : null;
+        if(targetType is not INamedTypeSymbol { IsOpenNestedInGenericType: false })
+            return;
+
+        if(RoslynExtensions.FindNameofOfUnboundGenericType(attributeSyntax, implementation: null, isCsharpKey: false, context.SemanticModel) is not var (argumentName, nameofArgument, member, containingType))
+            return;
+
+        analyzerContext.IgnoredDefaultSettings.TryAdd((attributeSyntax.SyntaxTree, attributeSyntax.Span), 0);
+        context.ReportDiagnostic(Diagnostic.Create(
+            NameofOfUnboundGenericType,
+            nameofArgument.GetLocation(),
+            argumentName,
+            member.Name,
+            containingType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+            "the default settings are ignored"));
     }
 
     /// <summary>

@@ -30,19 +30,23 @@ internal static partial class RoslynExtensions
     /// <c>nameof(Node&lt;&gt;.Default)</c> for <c>Node&lt;T&gt;</c>, is closed with it; a closed implementation type, such as
     /// <c>Node&lt;int&gt;</c>, is never closed, so its own unbound type is not either.
     /// </summary>
-    /// <param name="implementation">The registered implementation type.</param>
+    /// <param name="implementation">
+    /// The registered implementation type, or <see langword="null"/> for default settings, which apply to other types, so
+    /// no unbound generic type is closed.
+    /// </param>
     /// <param name="isCsharpKey">Whether the Key is a C# expression (<c>KeyType.Csharp</c>); a value Key is the member's name.</param>
     /// <returns>The argument name, the member and the containing type, or <see langword="null"/> when there is none.</returns>
     public static (string ArgumentName, ExpressionSyntax Argument, ISymbol Member, INamedTypeSymbol ContainingType)? FindNameofOfUnboundGenericType(
         AttributeSyntax attributeSyntax,
-        INamedTypeSymbol implementation,
+        INamedTypeSymbol? implementation,
         bool isCsharpKey,
         SemanticModel semanticModel)
     {
         // Only the type parameters of an open generic implementation are closed per closed registration
-        var definition = implementation.OriginalDefinition;
-        var ownDefinition = implementation.IsUnboundGenericType
-            || (definition.TypeParameters.Length > 0 && SymbolEqualityComparer.Default.Equals(implementation, definition))
+        var definition = implementation?.OriginalDefinition;
+        var ownDefinition = implementation is not null && definition is not null
+            && (implementation.IsUnboundGenericType
+                || (definition.TypeParameters.Length > 0 && SymbolEqualityComparer.Default.Equals(implementation, definition)))
             ? definition
             : null;
 
