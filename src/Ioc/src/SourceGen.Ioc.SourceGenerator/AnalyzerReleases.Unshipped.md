@@ -2,7 +2,7 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-SGIOC001 | Usage | Error | Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class.
+SGIOC001 | Usage | Error | Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class, or on a type that cannot be constructed without a Factory or Instance.
 SGIOC002 | Design | Error | Circular Dependency Detected - Circular dependencies are detected among registered services.
 SGIOC003 | Design | Error | Service Lifetime Conflict Detected - Singleton service depending on Scoped service.
 SGIOC004 | Design | Error | Dangerous Service Lifetime Dependency - Singleton service depending on Transient service.
@@ -40,3 +40,4 @@ SGIOC035 | Design | Error | Decorator has no parameter for the decorated instanc
 SGIOC036 | Design | Error | Dependency nests type arguments without end - A dependency of an open generic registration nests type arguments deeper on every round of a dependency cycle without a Lazy<T> or Func<T> dependency, so its object graph is infinite; it is not closed at compile time.
 SGIOC037 | Design | Warning | Dependency nests type arguments without end behind a deferred wrapper - A dependency of an open generic registration nests type arguments deeper on every round of a dependency cycle with a Lazy<T> or Func<T> dependency; it is not closed at compile time.
 SGIOC038 | Usage | Error | Open type nested in a generic type is not supported - An open type declared in a generic type, such as Outer<O>.Node<T> or typeof(Outer<>.INode<>), cannot be closed with its containing type's type arguments, so a registration, service type, decorator, implementation type or default settings target that uses it is ignored.
+SGIOC039 | Design | Warning | Service type does not match the generic factory mapping - A service type that the service type template of a generic factory's mapping does not match cannot be created by the factory, so it is not registered.

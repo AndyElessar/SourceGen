@@ -273,10 +273,10 @@ partial class IocSourceGenerator
         }
 
         // Arrays are named after their element type, so match the element type and the rank instead
-        if(pattern is ArrayTypeData { TypeParameters: { Length: 1 } patternElement })
+        if(pattern is ArrayTypeData { TypeParameters: { Length: 1 } patternElement } patternArray)
         {
-            return closed is ArrayTypeData { TypeParameters: { Length: 1 } closedElement }
-                && GetArrayRank(pattern.Name) == GetArrayRank(closed.Name)
+            return closed is ArrayTypeData { TypeParameters: { Length: 1 } closedElement } closedArray
+                && patternArray.Rank == closedArray.Rank
                 && TryMatchTypeArguments(patternElement[0].Type, closedElement[0].Type, typeArguments);
         }
 
@@ -301,9 +301,6 @@ partial class IocSourceGenerator
         }
 
         return pattern.Name == closed.Name;
-
-        // The outermost rank specifier, such as "[]" for T[][] or "[,]" for T[,]
-        static string GetArrayRank(string arrayName) => arrayName[arrayName.LastIndexOf('[')..];
     }
 
     /// <summary>

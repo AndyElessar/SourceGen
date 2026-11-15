@@ -171,7 +171,7 @@ public sealed partial class RegisterAnalyzer
             reportDiagnostic(Diagnostic.Create(
                 OpenTypeNestedInGenericType,
                 location,
-                definition.ToDisplayString(NestedTypeDisplayFormat),
+                definition.ToDisplayString(AnalyzerHelpers.NestedTypeDisplayFormat),
                 GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
     }
@@ -222,9 +222,9 @@ public sealed partial class RegisterAnalyzer
             ? []
             : AnalyzeDecorators(analyzerContext, decorators, targetType, registrations);
 
-        // SGIOC036/SGIOC037: open generic registrations are closed on demand for the dependencies the generator discovers
-        if(targetType.IsUnboundGenericType || targetType is { IsGenericType: true, IsDefinition: true })
-            analyzerContext.OpenGenericRegistrations.Add((targetType, registrations, decorators, attribute.ApplicationSyntaxReference));
+        // SGIOC036/SGIOC037: open generic registrations are closed on demand for the dependencies the generator discovers,
+        // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
+        analyzerContext.Registrations.Add(new(targetType, registrations, decorators, attribute, hasFactory, hasInstance, bestDefaultIndex, location));
 
         RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
     }
@@ -592,7 +592,7 @@ public sealed partial class RegisterAnalyzer
         }
 
         var hasKey = serviceKey is not null;
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
+        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
         {
             // Another registration of the type was added concurrently
@@ -628,12 +628,14 @@ public sealed partial class RegisterAnalyzer
     /// Also tracks duplicated target types for SGIOC012 reporting.
     /// </summary>
     /// <param name="decoratorTypes">Receives the <c>Decorators</c> of each collected setting, in the order of the settings.</param>
+    /// <param name="attributes">Receives the attribute of each collected setting, in the order of the settings.</param>
     private static DefaultSettingsMap CollectDefaults(
         Compilation compilation,
         IocAttributeSymbols attributeSymbols,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenTargetTypes,
         ImmutableArray<ImmutableArray<INamedTypeSymbol>>.Builder decoratorTypes,
+        ImmutableArray<AttributeData>.Builder attributes,
         CancellationToken cancellationToken)
     {
         if(attributeSymbols.IocRegisterDefaultsAttribute is null && attributeSymbols.IocRegisterDefaultsAttribute_T1 is null)
@@ -658,8 +660,8 @@ public sealed partial class RegisterAnalyzer
             // Use shared method to extract default settings
             // Use different extraction method for generic vs non-generic attributes
             var settings = attributeClass.IsGenericType
-                ? attribute.ExtractDefaultSettingsFromGenericAttribute()
-                : attribute.ExtractDefaultSettings();
+                ? attribute.ExtractDefaultSettingsFromGenericAttribute(compilation.Assembly)
+                : attribute.ExtractDefaultSettings(compilation.Assembly);
             if(settings is not null)
             {
                 var targetTypeName = settings.TargetServiceType.Name;
@@ -689,6 +691,7 @@ public sealed partial class RegisterAnalyzer
                 {
                     settingsBuilder.Add(settings);
                     decoratorTypes.Add(settings.Decorators.Length > 0 ? AnalyzerHelpers.GetDecoratorSymbols(attribute) : []);
+                    attributes.Add(attribute);
                 }
             }
         }
@@ -775,17 +778,42 @@ public sealed partial class RegisterAnalyzer
                 ^ StringComparer.Ordinal.GetHashCode(obj.Tag));
     }
 
+    /// <summary>
+    /// A registration analyzed at compilation end: the expanding dependencies of open generic registrations, the root
+    /// dependencies of closed ones (SGIOC036/SGIOC037), and the service types of generic factories (SGIOC039).
+    /// </summary>
+    /// <param name="DefaultIndex">The index of its best default settings, or -1 when none matches.</param>
+    /// <param name="Location">The location of the registration attribute.</param>
+    private sealed record class AnalyzedRegistration(
+        INamedTypeSymbol Implementation,
+        ImmutableArray<ServiceSymbolKey> Registrations,
+        ImmutableArray<INamedTypeSymbol> Decorators,
+        AttributeData Attribute,
+        bool HasFactory,
+        bool HasInstance,
+        int DefaultIndex,
+        Location? Location)
+    {
+        /// <summary>Gets whether the implementation is an open generic type.</summary>
+        public bool IsOpenGeneric => Implementation.IsUnboundGenericType || Implementation is { IsGenericType: true, IsDefinition: true };
+    }
+
     private sealed class AnalyzerContext(
         IocAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         DefaultSettingsMap defaultSettings,
         ImmutableArray<ImmutableArray<INamedTypeSymbol>> defaultDecorators,
+        ImmutableArray<AttributeData> defaultAttributes,
         ConcurrentBag<(string TargetTypeName, Location? Location)> duplicatedDefaults,
         ConcurrentDictionary<(string TargetTypeName, string Tag), Location?> seenDefaultTargetTypes,
-        IocFeatures features)
+        IocFeatures features,
+        IAssemblySymbol assembly)
     {
         public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
+
+        /// <summary>The assembly being compiled, which the generated code is compiled into.</summary>
+        public IAssemblySymbol Assembly { get; } = assembly;
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
 
         /// <summary>
@@ -803,6 +831,11 @@ public sealed partial class RegisterAnalyzer
         /// The <c>Decorators</c> symbols of each default setting, by the index of the setting in <see cref="DefaultSettings"/>.
         /// </summary>
         public ImmutableArray<ImmutableArray<INamedTypeSymbol>> DefaultDecorators { get; } = defaultDecorators;
+
+        /// <summary>
+        /// The attribute of each default setting, by the index of the setting in <see cref="DefaultSettings"/>.
+        /// </summary>
+        public ImmutableArray<AttributeData> DefaultAttributes { get; } = defaultAttributes;
 
         /// <summary>
         /// List of duplicated IoCRegisterDefaults for SGIOC012 reporting.
@@ -858,7 +891,14 @@ public sealed partial class RegisterAnalyzer
         /// The open generic registrations, with their service types and decorators, whose expanding dependencies are
         /// reported (SGIOC036/SGIOC037).
         /// </summary>
-        public ConcurrentBag<(INamedTypeSymbol Implementation, ImmutableArray<ServiceSymbolKey> Registrations, ImmutableArray<INamedTypeSymbol> Decorators, SyntaxReference? Attribute)> OpenGenericRegistrations { get; } = [];
+        public ConcurrentBag<AnalyzedRegistration> Registrations { get; } = [];
+
+        /// <summary>
+        /// The <c>Factory</c> methods given with <c>nameof()</c> in registration and default settings attributes, by the span of
+        /// the attribute. Populated by RegisterSyntaxNodeAction, which has the semantic model that <c>nameof()</c> needs;
+        /// consumed by SGIOC036/SGIOC037 in CompilationEnd.
+        /// </summary>
+        public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), IMethodSymbol> FactoryMethods { get; } = new();
 
         /// <summary>
         /// The injectable members listed in <c>InjectMembers</c> of registration attributes, with the locations of their
@@ -877,7 +917,7 @@ public sealed partial class RegisterAnalyzer
         {
             if(!decoratorTypeData.TryGetValue(decorator, out var typeData))
             {
-                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+                typeData = decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: Assembly);
                 decoratorTypeData.TryAdd(decorator, typeData);
             }
 
@@ -935,7 +975,7 @@ public sealed partial class RegisterAnalyzer
         private ImmutableArray<ServiceSymbolKey> _asyncDecoratedRegistrations;
 
         /// <summary>
-        /// Cached constructor to avoid repeated SpecifiedOrPrimaryOrMostParametersConstructor lookups.
+        /// Cached constructor to avoid repeated GetSelectedConstructor lookups.
         /// </summary>
         public IMethodSymbol? Constructor { get; }
 
@@ -954,7 +994,8 @@ public sealed partial class RegisterAnalyzer
             bool hasFactory,
             bool hasInstance,
             ImmutableArray<ServiceSymbolKey> registrations,
-            ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
+            ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
+            IAssemblySymbol assembly)
         {
             Type = type;
             Lifetime = lifetime;
@@ -968,7 +1009,7 @@ public sealed partial class RegisterAnalyzer
             HasInstance = hasInstance;
 
             // Cache constructor lookup
-            Constructor = type.SpecifiedOrPrimaryOrMostParametersConstructor;
+            Constructor = type.GetSelectedConstructor(assembly);
 
             // Cache injected members
             InjectedMembers = [.. type.GetInjectedMembers()];

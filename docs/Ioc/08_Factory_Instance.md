@@ -31,6 +31,8 @@ services.AddTransient<global::MyNamespace.IMyService>((global::System.IServicePr
 
 The factory is called only by the implementation type's registration. Service types forward to it, so resolving `MyService` and `IMyService` gives the same instance for a singleton or scoped service. `Decorators` wrap that instance, as they do for constructor-created services. Generic factories (see [Generic Factory](#generic-factory)) are called separately for each service type.
 
+A `Factory` given as a constant string instead of `nameof()`, such as a `const string`, is used as the method path and called with the `IServiceProvider` only, since its parameters are unknown.
+
 ### Factory Returning Different Implementations
 
 > [!WARNING]
@@ -165,6 +167,20 @@ services.AddSingleton<global::MyNamespace.IMyService>(global::MyNamespace.MyServ
 
 </details>
 
+An open generic type can provide its instance too. Each closed type used at compile time reads the instance of that closed type. No open registration is added, because Microsoft.Extensions.DependencyInjection would construct the type instead of using the instance:
+
+```csharp
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Instance = nameof(Default))]
+public sealed class Node<T> : INode<T>
+{
+    public static readonly Node<T> Default = new();
+}
+
+// A dependency on INode<string> registers Node<string>.Default
+```
+
+The instance can also be a member of another generic type that uses the implementation's type parameters, such as `Instance = nameof(Holder<T>.Default)`, which reads `Holder<string>.Default` for `Node<string>`. With `IocRegisterFor(typeof(Node<>))`, use the unbound form `Instance = nameof(Node<>.Default)`: a closed form such as `nameof(Node<int>.Default)` reads `Node<int>.Default` for every closed type.
+
 ### Instance with Keyed Service
 
 ```csharp
@@ -191,7 +207,7 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 
 ## Factory in Default Settings
 
-You can specify a `Factory` in `IocRegisterDefaults` to apply it as the default factory for all services implementing the target type. Explicit `Factory` specified in `IocRegister` takes precedence over the default.
+You can specify a `Factory` in `IocRegisterDefaults` to apply it as the default factory for all services implementing the target type. Explicit `Factory` or `Instance` specified in `IocRegister` takes precedence over the default. With an `Instance`, no `Factory` is called and no `Decorators` are applied.
 
 ```csharp
 [assembly: IocRegisterDefaults(
@@ -366,6 +382,9 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 </details>
 
 > [!NOTE]
+> The factory method's parameters can use its type parameters. They are resolved with the type arguments the factory is called with: `Create<T>(IRepo<T> repo)` called as `Create<Entity>` resolves `IRepo<Entity>`, which closes an open generic `IRepo<>` registration.
+
+> [!NOTE]
 > A generic factory creates the instance of the service type it is closed for, so the factory result is not cast to the implementation type. Resolving the implementation type (`Handler<Entity>`) gives its own constructed instance. `Decorators` wrap the factory result, and `Lazy<T>` / `Func<T>` of the service type resolve the same instance through the hidden key.
 
 ### Using `GenericFactoryTypeMapping`
@@ -397,6 +416,27 @@ When a closed generic type is discovered (e.g., `IRequestHandler<Task<Entity>>`)
 1. The generator compares it with the service type template (`IRequestHandler<Task<int>>`)
 2. Extracts actual types from positions matching placeholder types (`int` → `Entity`)
 3. Substitutes them into the factory method call: `Create<Entity>()`
+
+Each placeholder type must appear in the template at least once, and may appear more than once. For `Create<T>()` with `[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]`, `IPair<Entity, Entity>` calls `Create<Entity>()`, while `IPair<Entity, Dto>` gives `int` two different types, so it is not registered (`SGIOC039`).
+
+A placeholder must be a type without type arguments that is not an array, such as `int`; `List<int>`, `int?`, `(int, string)` and `int[]` report `SGIOC016`. Placeholders can be array or tuple elements, though:
+
+- `IFoo<int[]>` matches `IFoo<Entity[]>`, but not an array of another rank, such as `IFoo<Entity[,]>`.
+- `IFoo<(int, string)>` matches `IFoo<(Entity, string)>`, with or without element names.
+
+A placeholder that only appears in the type arguments of a containing type, such as `int` in `IFoo<Outer<int>.Inner>`, is not supported (`SGIOC016`).
+
+A closed registration with a generic factory (its own, or from default settings) works the same way:
+
+- each registered type that matches the template calls the closed factory;
+- the implementation type is constructed when it does not match the template;
+- a service type that does not match, such as `IRequestHandler<Entity>` or `IDisposable` from `RegisterAllInterfaces`, is not registered (`SGIOC039`), because the factory cannot be called for it.
+
+```csharp
+// Registers IRequestHandler<Task<Entity>> with Create<Entity>() and EntityHandler with new EntityHandler()
+[IocRegister(RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))]
+internal sealed class EntityHandler : IRequestHandler<Task<Entity>>;
+```
 
 ### Multiple Type Parameters
 
@@ -516,9 +556,10 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |:---|:---|:---|
 |SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
 |SGIOC009|Error|`Instance` is specified but `Lifetime` is not `Singleton`.|
-|SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Factory` takes precedence.|
+|SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Instance` takes precedence.|
 |SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|
+|SGIOC039|Warning|A service type of a registration with a generic factory does not match the service type template of the factory's mapping, so the factory cannot be called for it and it is not registered. An implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public constructor or an internal one it can access: declared in the same assembly, or in an assembly that gives it access with `InternalsVisibleTo`), in which case it is not registered either.|
 
 ---
 

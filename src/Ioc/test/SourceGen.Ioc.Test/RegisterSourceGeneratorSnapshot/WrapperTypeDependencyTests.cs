@@ -1023,4 +1023,50 @@ public class WrapperTypeDependencyTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task FuncDependency_TupleElementNamesDiffer_RegistersFuncOnce()
+    {
+        // Tuple element names are not part of the runtime type, so both Func dependencies are one service type, created
+        // from the registration whose tuple elements are named differently
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public sealed class NamedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister]
+            public sealed class Consumer(Func<IHandler<(Entity A, string B)>> func);
+
+            [IocRegister]
+            public sealed class OtherConsumer(Func<IHandler<(Entity, string)>> func);
+
+            // The input argument is passed to the constructor parameter of the same runtime type
+            [IocRegister]
+            public sealed class Point((int X, int Y) position);
+
+            [IocRegister]
+            public sealed class PointConsumer(Func<(int A, int B), Point> create);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        var handlerFuncCount = generatedSource.Split(["services.AddTransient<global::System.Func<global::TestNamespace.IHandler<"], StringSplitOptions.None).Length - 1;
+        await Assert.That(handlerFuncCount).IsEqualTo(1);
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Point(arg0)");
+        await Assert.That(containerSource).Contains("new global::TestNamespace.Point(arg0)");
+    }
 }

@@ -26,6 +26,41 @@ internal closed record class TypeData(
     /// from another source generator (partial or error types); <see langword="false"/> when unknown.
     /// </summary>
     public bool IsKnownNonDisposable { get; init; }
+
+    /// <summary>
+    /// Gets who can construct the type. Only recorded for implementation types and decorators extracted with their
+    /// constructor parameters, and kept when they are closed; <see cref="Constructibility.Unknown"/> otherwise, such as for
+    /// the service type that stands in for the implementation type of a factory-only registration.
+    /// </summary>
+    public Constructibility Constructibility { get; init; }
+}
+
+/// <summary>
+/// Who can construct a type with the constructor generated code selects.
+/// </summary>
+internal enum Constructibility : byte
+{
+    /// <summary>
+    /// Not recorded. Not the same as <see cref="Activatable"/>: the type may not be constructible at all.
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>
+    /// Both generated code and Microsoft.Extensions.DependencyInjection: the selected constructor is public.
+    /// </summary>
+    Activatable,
+
+    /// <summary>
+    /// Generated code only: the selected constructor is not public, and Microsoft.Extensions.DependencyInjection calls
+    /// public constructors only.
+    /// </summary>
+    GeneratedCodeOnly,
+
+    /// <summary>
+    /// Neither: an interface, an abstract or static class, or a class without a public constructor or an internal one that
+    /// generated code can access (declared in the same assembly, or in one that gives it access to its internals).
+    /// </summary>
+    NotConstructible,
 }
 
 /// <summary>
@@ -331,6 +366,7 @@ internal sealed record class ListTypeData(
 /// Represents T[] array wrapper type.
 /// Should be resolved using GetServices&lt;T&gt;().ToArray().
 /// </summary>
+/// <param name="Rank">The rank of the array, such as 2 for <c>T[,]</c>.</param>
 internal sealed record class ArrayTypeData(
     string Name,
     string NameWithoutGeneric,
@@ -343,7 +379,8 @@ internal sealed record class ArrayTypeData(
     bool HasInjectConstructor = false,
     ImmutableEquatableArray<InjectionMemberData>? InjectionMembers = null,
     ImmutableEquatableArray<TypeData>? AllInterfaces = null,
-    ImmutableEquatableArray<TypeData>? AllBaseClasses = null)
+    ImmutableEquatableArray<TypeData>? AllBaseClasses = null,
+    int Rank = 1)
     : CollectionWrapperTypeData(
         Name, NameWithoutGeneric, IsOpenGeneric, GenericArity,
         WrapperKind.Array, Traits,

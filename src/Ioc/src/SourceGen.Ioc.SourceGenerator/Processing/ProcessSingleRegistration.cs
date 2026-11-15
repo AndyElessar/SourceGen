@@ -100,6 +100,18 @@ partial class IocSourceGenerator
     {
         ct.ThrowIfCancellationRequested();
 
+        // An instance takes precedence over any Factory, its own (SGIOC010) or of its default settings
+        if(registration.Instance is not null)
+        {
+            factory = null;
+        }
+        // Generated code cannot create an implementation type it cannot construct without a Factory or Instance, such as one
+        // without an accessible constructor, so it is not registered (SGIOC001)
+        else if(factory is null && registration.ImplementationType.Constructibility is Constructibility.NotConstructible)
+        {
+            return new BasicRegistrationResult([], tags, [], []);
+        }
+
         var serviceTypesToRegister = new List<TypeData>
         {
             // Always register the implementation type itself
@@ -166,7 +178,7 @@ partial class IocSourceGenerator
 
         // Collect closed generic dependencies from constructor parameters, injection members, factory params,
         // and also from closed decorators' constructor parameters
-        var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration, serviceRegistrations);
+        var closedGenericDependencies = CollectClosedGenericDependenciesFromRegistration(registration, factory, serviceRegistrations);
 
         return new BasicRegistrationResult(
             serviceRegistrations,
@@ -246,6 +258,20 @@ partial class IocSourceGenerator
             // When serviceType == implementationType (self-registration), decorators cannot be applied
             // because decorators return the interface type, not the implementation type
             var isSelfRegistration = serviceType.Name == implementationType.Name;
+
+            // A closed registration with a generic factory is generated like a closed generic registration: a registered type
+            // the mapping matches calls the closed factory, the implementation type is constructed otherwise, and another
+            // service type is not registered, since the factory cannot be called for it
+            var serviceFactory = factory;
+            if(factory is { TypeParameterCount: > 0 } && !isOpenGenericImplementation)
+            {
+                serviceFactory = CloseGenericFactory(factory, serviceType);
+                if(serviceFactory is null && (!isSelfRegistration || implementationType.Constructibility is Constructibility.NotConstructible))
+                {
+                    continue;
+                }
+            }
+
             var filteredDecorators = isSelfRegistration
                 ? []
                 : FilterDecorators(decorators, serviceType, decoratorFilterCache);
@@ -260,7 +286,7 @@ partial class IocSourceGenerator
                 isOpenGenericImplementation,
                 filteredDecorators,
                 registration.InjectionMembers,
-                factory,
+                serviceFactory,
                 registration.Instance);
 
             registrations.Add(model);
@@ -344,7 +370,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Closes the decorators that can decorate a service type and skips the others.
     /// </summary>
-    private static ImmutableEquatableArray<TypeData> CloseDecoratorsForServiceType(
+    internal static ImmutableEquatableArray<TypeData> CloseDecoratorsForServiceType(
         ImmutableEquatableArray<TypeData> decorators,
         TypeData serviceType)
     {

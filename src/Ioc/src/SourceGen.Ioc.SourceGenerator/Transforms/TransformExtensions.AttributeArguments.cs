@@ -15,7 +15,8 @@ internal static partial class TransformExtensions
             bool extractConstructorParams = false,
             bool extractInjectionMembers = false,
             SemanticModel? semanticModel = null,
-            bool extractHierarchy = false)
+            bool extractHierarchy = false,
+            IAssemblySymbol? constructedIn = null)
         {
             foreach(var namedArg in attribute.NamedArguments)
             {
@@ -36,7 +37,8 @@ internal static partial class TransformExtensions
                                 extractConstructorParams,
                                 extractHierarchy,
                                 semanticModel,
-                                extractInjectionMembers));
+                                extractInjectionMembers,
+                                constructedIn));
                         }
                         else if(value.Value is ITypeSymbol typeSymbol)
                         {
@@ -210,17 +212,17 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Gets the Decorators array from the attribute, with constructor parameters, injection members, and the interfaces and base classes used to match them to service types.
         /// </summary>
+        /// <param name="constructedIn">The assembly the generated code is compiled into, which selects the decorator constructors it can call.</param>
         /// <param name="semanticModel">Optional semantic model to resolve nameof() keys on decorator members and constructor parameters.</param>
-        public ImmutableEquatableArray<TypeData> GetDecorators(SemanticModel? semanticModel = null) =>
-            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel, extractHierarchy: true);
+        public ImmutableEquatableArray<TypeData> GetDecorators(IAssemblySymbol constructedIn, SemanticModel? semanticModel = null) =>
+            attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel, extractHierarchy: true, constructedIn);
 
         /// <summary>
-        /// Gets the ImplementationTypes array from the attribute.
-        /// Extracts implementation types with constructor parameters and hierarchy information,
-        /// using the same parsing logic as IocRegisterAttribute.
+        /// Gets the ImplementationTypes array from the attribute, which identifies the types only. Their registrations are
+        /// created from <see cref="GetImplementationTypeSymbols"/>, with the constructor parameters and hierarchy.
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetImplementationTypes() =>
-            attribute.GetTypeArrayArgumentWithHierarchy("ImplementationTypes");
+            attribute.GetTypeArrayArgument("ImplementationTypes");
 
         /// <summary>
         /// Gets the ImplementationTypes array as INamedTypeSymbol from the attribute.
@@ -246,32 +248,6 @@ internal static partial class TransformExtensions
                         if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
                         {
                             result.Add(namedTypeSymbol);
-                        }
-                    }
-                    return result.ToImmutableEquatableArray();
-                }
-            }
-
-            return [];
-        }
-
-        /// <summary>
-        /// Gets an array of type symbols from a named argument with full hierarchy extraction.
-        /// Used for ImplementationTypes where we need constructor params and all interfaces/base classes.
-        /// </summary>
-        public ImmutableEquatableArray<TypeData> GetTypeArrayArgumentWithHierarchy(string name)
-        {
-            foreach(var namedArg in attribute.NamedArguments)
-            {
-                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
-                {
-                    List<TypeData> result = [];
-                    foreach(var value in namedArg.Value.Values)
-                    {
-                        if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
-                        {
-                            // Extract with constructor params and hierarchy, same as IocRegisterAttribute
-                            result.Add(namedTypeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true));
                         }
                     }
                     return result.ToImmutableEquatableArray();
@@ -375,7 +351,9 @@ internal static partial class TransformExtensions
                     if(namedArg.Value.IsNull)
                         return null;
 
-                    // Try to get original syntax for nameof() expressions with full access path resolution
+                    // Try to get original syntax for nameof() expressions with full access path resolution. The path keeps
+                    // the type arguments of the containing type, such as Holder<int>.Default, and those of an open
+                    // generic implementation type, such as Node<T>.Default, which are closed per registration
                     return attribute.TryGetNameof("Instance", semanticModel)
                         ?? namedArg.Value.Value?.ToString();
                 }

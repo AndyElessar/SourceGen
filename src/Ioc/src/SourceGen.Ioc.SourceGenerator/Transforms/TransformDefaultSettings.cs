@@ -12,7 +12,7 @@ partial class IocSourceGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            var defaultSettings = attr.ExtractDefaultSettings(ctx.SemanticModel);
+            var defaultSettings = attr.ExtractDefaultSettings(ctx.SemanticModel.Compilation.Assembly, ctx.SemanticModel);
             if(defaultSettings is null)
                 continue;
 
@@ -34,7 +34,7 @@ partial class IocSourceGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            var defaultSettings = attr.ExtractDefaultSettingsFromGenericAttribute(ctx.SemanticModel);
+            var defaultSettings = attr.ExtractDefaultSettingsFromGenericAttribute(ctx.SemanticModel.Compilation.Assembly, ctx.SemanticModel);
             if(defaultSettings is null)
                 continue;
 
@@ -94,7 +94,7 @@ partial class IocSourceGenerator
     private static ImmutableEquatableArray<RegistrationData> CreateRegistrationsFromImplementationTypes(
         ImmutableEquatableArray<INamedTypeSymbol> implementationTypeSymbols,
         DefaultSettingsModel defaultSettings,
-        SemanticModel? semanticModel,
+        SemanticModel semanticModel,
         CancellationToken ct)
     {
         if(implementationTypeSymbols.Length == 0)
@@ -118,9 +118,9 @@ partial class IocSourceGenerator
     private static RegistrationData CreateRegistrationDataFromDefaultSettings(
         INamedTypeSymbol typeSymbol,
         DefaultSettingsModel defaultSettings,
-        SemanticModel? semanticModel)
+        SemanticModel semanticModel)
     {
-        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true);
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: semanticModel.Compilation.Assembly);
 
         // Extract injection members (properties, fields, methods marked with IocInjectAttribute/InjectAttribute)
         var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);

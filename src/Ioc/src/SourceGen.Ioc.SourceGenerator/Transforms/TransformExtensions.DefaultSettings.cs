@@ -7,9 +7,10 @@ internal static partial class TransformExtensions
         /// <summary>
         /// Extracts default settings from an IoCRegisterDefaultSettingsAttribute.
         /// </summary>
+        /// <param name="constructedIn">The assembly the generated code is compiled into, which selects the decorator constructors it can call.</param>
         /// <param name="semanticModel">Optional semantic model for resolving Factory method data.</param>
         /// <returns>The default settings model, or null if the attribute data is invalid.</returns>
-        public DefaultSettingsModel? ExtractDefaultSettings(SemanticModel? semanticModel = null)
+        public DefaultSettingsModel? ExtractDefaultSettings(IAssemblySymbol constructedIn, SemanticModel? semanticModel = null)
         {
             if(attribute.ConstructorArguments.Length < 2)
                 return null;
@@ -23,7 +24,7 @@ internal static partial class TransformExtensions
             var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
             var serviceTypes = attribute.GetServiceTypes();
             var typeData = targetServiceType.GetTypeData();
-            var decorators = attribute.GetDecorators(semanticModel);
+            var decorators = attribute.GetDecorators(constructedIn, semanticModel);
             var tags = attribute.GetTags();
 
             // Get factory method data if semantic model is provided
@@ -33,7 +34,7 @@ internal static partial class TransformExtensions
                 factory = attribute.GetFactoryMethodData(semanticModel);
             }
 
-            // Get implementation types with constructor params and hierarchy (same as IocRegisterAttribute)
+            // The implementation types by name; their registrations are created from the symbols
             var implementationTypes = attribute.GetImplementationTypes();
 
             return new DefaultSettingsModel(
@@ -52,9 +53,10 @@ internal static partial class TransformExtensions
         /// Extracts default settings from a generic IoCRegisterDefaultsAttribute (e.g., IoCRegisterDefaultsAttribute&lt;T&gt;).
         /// The target service type is specified via type parameter instead of constructor argument.
         /// </summary>
+        /// <param name="constructedIn">The assembly the generated code is compiled into, which selects the decorator constructors it can call.</param>
         /// <param name="semanticModel">Optional semantic model for resolving Factory method data.</param>
         /// <returns>The default settings model, or null if the attribute data is invalid.</returns>
-        public DefaultSettingsModel? ExtractDefaultSettingsFromGenericAttribute(SemanticModel? semanticModel = null)
+        public DefaultSettingsModel? ExtractDefaultSettingsFromGenericAttribute(IAssemblySymbol constructedIn, SemanticModel? semanticModel = null)
         {
             var attrClass = attribute.AttributeClass;
             if(attrClass?.IsGenericType != true || attrClass.TypeArguments.Length == 0)
@@ -74,7 +76,7 @@ internal static partial class TransformExtensions
             var (_, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
             var serviceTypes = attribute.GetServiceTypes();
             var typeData = targetServiceType.GetTypeData();
-            var decorators = attribute.GetDecorators(semanticModel);
+            var decorators = attribute.GetDecorators(constructedIn, semanticModel);
             var tags = attribute.GetTags();
 
             // Get factory method data if semantic model is provided
@@ -84,7 +86,7 @@ internal static partial class TransformExtensions
                 factory = attribute.GetFactoryMethodData(semanticModel);
             }
 
-            // Get implementation types with constructor params and hierarchy (same as IocRegisterAttribute)
+            // The implementation types by name; their registrations are created from the symbols
             var implementationTypes = attribute.GetImplementationTypes();
 
             return new DefaultSettingsModel(

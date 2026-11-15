@@ -4,6 +4,14 @@
 
 Factory method registration allows creating services through custom factory methods. Instance registration allows registering pre-existing static instances. Both support keying and default settings.
 
+## Instance and Factory Precedence
+
+A registration with an `Instance` MUST use it and ignore any `Factory`, whether its own (reported by `SGIOC010`) or the `Factory` of its default settings, in both the Register and [Container](Container.Factory.spec.md) outputs: it is neither created by the factory nor decorated, and has no dependencies. Otherwise, its own `Factory` MUST take precedence over the `Factory` of its default settings.
+
+`Factory` given with `nameof()` MUST be resolved to the method, whose parameters are analyzed below. Any other constant string, a literal or a `const` such as `Factory = Factories.CreatePath`, or a `nameof()` that does not resolve to a method, MUST be used as the method path: its parameters are unknown, so it is called with the service provider only (`Create(sp)` in the Register output) and has no other dependencies. `Instance` MUST be read the same way.
+
+A `Factory` or `Instance` given with `nameof()` MUST keep the type arguments of the member's containing type, such as `Factories<int>.Create` for `Factory = nameof(Factories<int>.Create)` and `Holder<int>.Default` for `Instance = nameof(Holder<int>.Default)`. An `Instance` of an open generic registration whose containing type uses the implementation type's type parameters, such as `Instance = nameof(Default)` on `Node<T>` with `public static readonly Node<T> Default`, or `Instance = nameof(Holder<T>.Default)`, MUST be read from the containing type closed with the type arguments of each closed implementation type (`Node<string>.Default`, `Holder<string>.Default`) for the closed registrations created from it (see [Generic Registration](Register.Generics.spec.md)). Other members, such as `Node.Default` of a non-generic `Node` next to `Node<T>`, MUST be kept unchanged. Its open registration MUST NOT be emitted in the Register output, since MS.DI would construct the implementation type instead of using the instance, so only the closed types discovered at compile time are registered.
+
 ## Feature 1: Factory Method Registration
 
 When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`:
@@ -21,6 +29,7 @@ When `Factory` is specify in `IocRegisterAttribute` or `IocRegisterForAttribute`
 - Each other service type MUST forward to the implementation type (`sp.GetRequiredService<MyService>()`, or `sp.GetRequiredKeyedService<MyService>(key)` when keyed), so all service types of a singleton or scoped registration share one instance. This matches the [Container](Container.Factory.spec.md).
 - A service type with `Decorators` MUST wrap that shared instance, using the decorator chain from [Decorators](Register.Decorators.spec.md). Decorators on an `Instance` registration are not applied.
 - A generic factory (`TypeParameterCount > 0`, see [Generic Registration](Register.Generics.spec.md)) is closed per service type, so each service type MUST call it separately; its result is the service type's own instance, registered under the hidden key like a decorator chain, and wrapped by the service type's `Decorators`. A registration with async injection methods also calls the factory per service type.
+- A closed registration whose `Factory` (its own or from its default settings) is a generic factory, such as `EntityHandler : IRequestHandler<Task<Entity>>` with the generic `Factory` of `[IocRegisterDefaults(typeof(IRequestHandler<>))]`, MUST be generated like a closed generic registration: each service type the mapping matches MUST call the factory with its type arguments (`Create<Entity>`), its parameters substituted (see [Generic Registration](Register.Generics.spec.md#feature-3-generic-factory-type-mapping)), and a service type the mapping does not match MUST NOT be registered (`SGIOC039`). The implementation type MUST be constructed when the mapping does not match it, or not registered when generated code cannot construct it: an interface, an abstract or static class, or a class without a public constructor or an internal one it can access (declared in the same assembly, or in one that gives it access with `InternalsVisibleTo`) (`SGIOC039`); when the mapping matches it, such as the target of `[IocRegisterFor<IRequestHandler<Task<Entity>>>(Factory = nameof(Create))]`, it MUST call the factory like a service type.
 - A factory that returns a type other than the implementation type fails the cast at resolution. When the factory chooses the implementation, the registration targets the service type itself (`[IocRegisterFor<IMyService>(Factory = ...)]`). The target type is then the only registered type, and the factory result is returned without a cast:
 
 ```csharp
@@ -112,13 +121,13 @@ services.AddSingleton<IMyService>((IServiceProvider sp) => sp.GetRequiredService
 
 ### Factory in DefaultSettings
 
-When `Factory` is specified in `IocRegisterDefaultsAttribute`, it applies as the default factory for all services implementing the target type. Explicit `Factory` specified in `IocRegisterAttribute` takes precedence over the default.
+When `Factory` is specified in `IocRegisterDefaultsAttribute`, it applies as the default factory for all services implementing the target type. Explicit `Factory` or `Instance` specified in `IocRegisterAttribute` takes precedence over the default (see [Instance and Factory Precedence](#instance-and-factory-precedence)).
 
 **Important**: When using Factory in DefaultSettings:
 
 - The factory method must be compatible with all implementations that match the target service type
 - The factory method should typically return the target service type (interface/base class)
-- Factory is only applied when the registration doesn't have its own explicit Factory
+- Factory is only applied when the registration doesn't have its own explicit `Factory` or `Instance`
 
 ```csharp
 #region Define:

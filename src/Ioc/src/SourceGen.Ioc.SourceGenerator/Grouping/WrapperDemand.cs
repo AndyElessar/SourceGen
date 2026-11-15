@@ -19,23 +19,23 @@ partial class IocSourceGenerator
     private sealed class WrapperDemand
     {
         /// <summary>Gets the service types of direct <c>Lazy&lt;T&gt;</c> dependencies, alone or as collection elements.</summary>
-        public HashSet<string> LazyServiceTypes { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LazyServiceTypes { get; } = new(TypeNameComparer.Instance);
 
         /// <summary>Gets the direct <c>Func&lt;…, T&gt;</c> dependencies by Func type name, alone or as collection elements.</summary>
-        public Dictionary<string, FuncTypeData> FuncTypes { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, FuncTypeData> FuncTypes { get; } = new(TypeNameComparer.Instance);
 
         /// <summary>Gets the (key type, value type) pairs of <c>KeyValuePair</c> and dictionary dependencies.</summary>
-        public HashSet<(string KeyTypeName, string ValueTypeName)> KvpPairs { get; } = [];
+        public HashSet<(string KeyTypeName, string ValueTypeName)> KvpPairs { get; } = new(TypeNameComparer.PairComparer);
 
         /// <summary>Gets the element types requested as collections, including inside <c>Lazy</c>/<c>Func</c>/<c>Task</c> wrappers.</summary>
-        public HashSet<string> CollectionServiceTypes { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> CollectionServiceTypes { get; } = new(TypeNameComparer.Instance);
 
         /// <summary>
         /// Gets the return types of direct parameterless <c>Func&lt;T&gt;</c> dependencies, which the Container output backs with fields.
         /// </summary>
         public HashSet<string> GetParameterlessFuncServiceTypes()
         {
-            var serviceTypes = new HashSet<string>(StringComparer.Ordinal);
+            var serviceTypes = new HashSet<string>(TypeNameComparer.Instance);
             foreach(var func in FuncTypes.Values)
             {
                 if(!func.HasInputParameters)

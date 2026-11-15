@@ -69,7 +69,8 @@ partial class IocSourceGenerator
 
         var entries = new List<FuncRegistrationEntry>();
         var addedKeys = new HashSet<(string FuncServiceType, string ImplementationType, string? Key)>();
-        var neededByReturnType = neededFuncTypes.Values.ToLookup(static needed => needed.ReturnType.Name, StringComparer.Ordinal);
+        // By runtime type, like the other wrappers: tuple element names of the registration and the dependency may differ
+        var neededByReturnType = neededFuncTypes.Values.ToLookup(static needed => needed.ReturnType.Name, TypeNameComparer.Instance);
 
         foreach(var regWithTags in registrations)
         {
@@ -244,7 +245,7 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Finds and consumes the first unused Func input argument whose type matches exactly.
+    /// Finds and consumes the first unused Func input argument of the same runtime type (see <see cref="TypeNameComparer"/>).
     /// </summary>
     private static string? TryConsumeMatchingFuncInputArg(
         string requestedTypeName,
@@ -257,7 +258,7 @@ partial class IocSourceGenerator
             if(inputArgUsed[i])
                 continue;
 
-            if(!string.Equals(inputArgTypeNames[i], requestedTypeName, StringComparison.Ordinal))
+            if(!TypeNameComparer.Instance.Equals(inputArgTypeNames[i], requestedTypeName))
                 continue;
 
             inputArgUsed[i] = true;

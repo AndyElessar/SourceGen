@@ -104,11 +104,14 @@ internal static partial class TransformExtensions
                     return new FactoryMethodData(nameofPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
                 }
 
-                // String literal - cannot determine parameters, assume full signature
-                if(argument.Expression is LiteralExpressionSyntax literal &&
-                   literal.Token.Value is string literalPath)
+                // Any other constant string, a literal or a const, is the method path: its parameters are unknown, so it is
+                // called with the service provider only, like an Instance given as a constant
+                foreach(var namedArgument in attribute.NamedArguments)
                 {
-                    return new FactoryMethodData(literalPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
+                    if(namedArgument.Key == "Factory" && namedArgument.Value.Value is string constantPath)
+                    {
+                        return new FactoryMethodData(constantPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
+                    }
                 }
             }
 
@@ -168,7 +171,7 @@ internal static partial class TransformExtensions
                 // Collect additional parameter info using the same logic as [IocInject] methods
                 var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
                 var parameterData = new ParameterData(
-                    param.Name,
+                    param.EscapedName,
                     param.Type.GetTypeData(),
                     IsNullable: param.NullableAnnotation == NullableAnnotation.Annotated,
                     HasDefaultValue: param.HasExplicitDefaultValue,
@@ -187,7 +190,9 @@ internal static partial class TransformExtensions
 
             // Extract [IocGenericFactory] attribute if present
             var genericTypeMapping = methodSymbol.ExtractGenericFactoryMapping();
-            var typeParameterCount = methodSymbol.TypeParameters.Length;
+            ImmutableEquatableArray<string>? typeParameterNames = methodSymbol.TypeParameters.Length > 0
+                ? [.. methodSymbol.TypeParameters.Select(static typeParameter => typeParameter.Name)]
+                : null;
 
             return new FactoryMethodData(
                 path,
@@ -196,7 +201,7 @@ internal static partial class TransformExtensions
                 returnTypeName,
                 additionalParameters?.ToImmutableEquatableArray() ?? [],
                 genericTypeMapping,
-                typeParameterCount);
+                typeParameterNames);
         }
 
         /// <summary>

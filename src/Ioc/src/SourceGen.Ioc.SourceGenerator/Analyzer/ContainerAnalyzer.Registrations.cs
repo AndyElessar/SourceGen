@@ -206,7 +206,12 @@ partial class ContainerAnalyzer
             ServiceKeyValue key;
             if(keyType == 1)
             {
-                key = ServiceKeyValue.Unknown(nested[1].ToString());
+                // Shown like the key of an attribute (GetAttributeServiceKey): its constant value, such as PrimaryKey for
+                // nameof(Keys.PrimaryKey)
+                key = ServiceKeyValue.Unknown(
+                    semanticModel.GetConstantValue(nested[1], cancellationToken) is { HasValue: true, Value: { } csharpKey }
+                        ? csharpKey.ToString()!
+                        : nested[1].ToString());
             }
             else
             {
@@ -403,7 +408,7 @@ partial class ContainerAnalyzer
 
         AddDefaultSettingsImplementationTypes(resolved, analyzerContext, semantics, cancellationToken);
         AddFactoryOpenGenericRegistrations(resolved, analyzerContext);
-        AddImportedOpenGenericRegistrations(resolved, analyzerContext, cancellationToken);
+        AddImportedOpenGenericRegistrations(resolved, analyzerContext, compilation.Assembly, cancellationToken);
 
         return resolved;
 
@@ -444,57 +449,22 @@ partial class ContainerAnalyzer
     /// Adds the open generic <c>[IocRegisterFor]</c> registrations of every imported module and, recursively, of the
     /// modules it imports. Like the generator's <c>ExtractOpenGenericEntriesFromModuleRecursive</c>, they are added to
     /// the registrations of the current assembly for every [IocImportModule] of the compilation; they expose the open
-    /// generic <c>ServiceTypes</c> and interfaces of the implementation.
+    /// generic <c>ServiceTypes</c> and interfaces of the implementation. Like the generator, an implementation the
+    /// compiled assembly cannot construct is not closed (SGIOC001).
     /// </summary>
     private static void AddImportedOpenGenericRegistrations(
         List<ResolvedRegistration> resolved,
         ContainerAnalyzerContext analyzerContext,
+        IAssemblySymbol assembly,
         CancellationToken cancellationToken)
     {
-        var attributeSymbols = analyzerContext.AttributeSymbols;
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach(var import in analyzerContext.ModuleImports)
-            AddModule(import.ModuleType);
-
-        void AddModule(INamedTypeSymbol moduleType)
         {
-            if(!visited.Add(moduleType))
-                return;
-
-            foreach(var attribute in moduleType.GetAttributes())
+            foreach(var (attribute, implementationType, serviceTypes) in AnalyzerHelpers.EnumerateImportedOpenRegistrations(
+                import.ModuleType, analyzerContext.AttributeSymbols, visited, cancellationToken))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if(attribute.AttributeClass is not { } attrClass)
-                    continue;
-
-                if(AnalyzerHelpers.IsIocImportModuleAttribute(attrClass, attributeSymbols))
-                {
-                    if(attribute.GetImportedModuleType() is { } importedModule)
-                        AddModule(importedModule);
-
-                    continue;
-                }
-
-                if(!AnalyzerHelpers.IsIoCRegisterForAttribute(attrClass, attributeSymbols)
-                    || attribute.GetTargetTypeFromRegisterForAttribute() is not { IsOpenNestedInGenericType: false } targetType
-                    || !IsOpenGeneric(targetType))
-                {
-                    continue;
-                }
-
-                var implementationType = targetType.OriginalDefinition;
-                var explicitServiceTypes = AnalyzerHelpers.GetExplicitServiceTypes(attribute);
-                var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-                foreach(var serviceType in explicitServiceTypes.Count > 0
-                             ? explicitServiceTypes.Concat(implementationType.AllInterfaces)
-                             : implementationType.AllInterfaces)
-                {
-                    if(IsOpenGeneric(serviceType))
-                        serviceTypes.Add(serviceType.OriginalDefinition);
-                }
-
-                if(serviceTypes.Count == 0)
+                if(!implementationType.IsConstructibleIn(assembly))
                     continue;
 
                 var (key, _, _) = attribute.GetKeyInfo();
@@ -619,9 +589,7 @@ partial class ContainerAnalyzer
         }
     }
 
-    private static bool IsOpenGeneric(INamedTypeSymbol type)
-        => type.IsUnboundGenericType
-            || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
+    private static bool IsOpenGeneric(INamedTypeSymbol type) => AnalyzerHelpers.IsOpenGenericType(type);
 
     /// <summary>
     /// Builds the default settings lookup with the generator's precedence: settings of the current assembly
@@ -730,7 +698,7 @@ partial class ContainerAnalyzer
             {
                 services = new ServiceIndex();
                 services.UnionWith(own.Services);
-                serviceKeys = [.. own.ServiceKeys];
+                serviceKeys = new(own.ServiceKeys, RuntimeTypeSymbolComparer.ServiceKeyComparer);
                 foreach(var module in container.ImportedModules)
                 {
                     if(!SymbolEqualityComparer.Default.Equals(module.ContainingAssembly, assembly))
@@ -807,7 +775,7 @@ partial class ContainerAnalyzer
         public ServiceIndex Services { get; } = new();
 
         /// <summary>The services by key expression (SGIOC021, which compares keys like the generator's accessor lookup).</summary>
-        public HashSet<ServiceSymbolKey> ServiceKeys { get; } = [];
+        public HashSet<ServiceSymbolKey> ServiceKeys { get; } = new(RuntimeTypeSymbolComparer.ServiceKeyComparer);
     }
 
     /// <param name="Own">The registrations of the container itself.</param>
@@ -823,13 +791,14 @@ partial class ContainerAnalyzer
     /// <summary>
     /// Registered services by type and key value. Generated containers look up keyed services by key value at runtime
     /// (<c>ServiceIdentifier</c>), so keys are compared by constant value; a key given as C# code
-    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key.
+    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key. Service types are compared without
+    /// their tuple element names, which are not part of the runtime type, like the generator.
     /// </summary>
     private sealed class ServiceIndex
     {
-        private readonly HashSet<INamedTypeSymbol> _nonKeyed = new(SymbolEqualityComparer.Default);
-        private readonly HashSet<INamedTypeSymbol> _keyed = new(SymbolEqualityComparer.Default);
-        private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(SymbolEqualityComparer.Default);
+        private readonly HashSet<INamedTypeSymbol> _nonKeyed = new(RuntimeTypeSymbolComparer.Instance);
+        private readonly HashSet<INamedTypeSymbol> _keyed = new(RuntimeTypeSymbolComparer.Instance);
+        private readonly HashSet<INamedTypeSymbol> _unknownKeyed = new(RuntimeTypeSymbolComparer.Instance);
         private readonly HashSet<KeyedService> _keyedValues = [];
 
         // The implementations of open generic service types, by generic type definition
@@ -898,6 +867,9 @@ partial class ContainerAnalyzer
             if(ContainsExact(serviceType, key))
                 return true;
 
+            // Open generic registrations are closed with the requested type arguments, whose tuple element names the
+            // generator's constraint checks keep
+
             if(!matchOpenGenerics
                 || !serviceType.IsGenericType
                 || SymbolEqualityComparer.Default.Equals(serviceType, serviceType.OriginalDefinition)
@@ -945,10 +917,10 @@ partial class ContainerAnalyzer
     private readonly record struct KeyedService(INamedTypeSymbol ServiceType, ServiceKeyValue Key)
     {
         public bool Equals(KeyedService other) =>
-            SymbolEqualityComparer.Default.Equals(ServiceType, other.ServiceType) && Key.Equals(other.Key);
+            RuntimeTypeSymbolComparer.Instance.Equals(ServiceType, other.ServiceType) && Key.Equals(other.Key);
 
         public override int GetHashCode() =>
-            unchecked((SymbolEqualityComparer.Default.GetHashCode(ServiceType) * 397) ^ Key.GetHashCode());
+            unchecked((RuntimeTypeSymbolComparer.Instance.GetHashCode(ServiceType) * 397) ^ Key.GetHashCode());
     }
 
     /// <summary>
@@ -1153,7 +1125,8 @@ partial class ContainerAnalyzer
     /// The key of a dependency follows the generator: <c>[FromKeyedServices(key)]</c> takes precedence over the key of
     /// <c>[IocInject]</c> / <c>[Inject]</c> on the parameter, which takes precedence over the key of an injected method.
     /// </summary>
-    private sealed class DependencyCache
+    /// <param name="assembly">The assembly being compiled, which the generated code is compiled into.</param>
+    private sealed class DependencyCache(IAssemblySymbol assembly)
     {
         private readonly Dictionary<ISymbol, List<Dependency>> _cache = new(SymbolEqualityComparer.Default);
 
@@ -1165,7 +1138,7 @@ partial class ContainerAnalyzer
 
             dependencies = [];
 
-            var constructor = implementationType.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var constructor = implementationType.GetSelectedConstructor(assembly);
             if(constructor is not null)
                 AddParameters(dependencies, constructor.Parameters, methodKey: null, location: null);
 

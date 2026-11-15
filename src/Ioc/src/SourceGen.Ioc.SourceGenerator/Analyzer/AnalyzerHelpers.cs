@@ -213,11 +213,13 @@ internal static class AnalyzerHelpers
     /// generic constraints), and only async decorators are converted for matching.
     /// </summary>
     /// <param name="implementationType">The implementation type; a self-registration is never decorated.</param>
+    /// <param name="assembly">The assembly being compiled, which selects the decorator constructors like the generator.</param>
     public static bool HasAsyncDecorator(
         INamedTypeSymbol implementationType,
         INamedTypeSymbol serviceType,
         ImmutableArray<INamedTypeSymbol> decorators,
-        IocFeatures features)
+        IocFeatures features,
+        IAssemblySymbol assembly)
     {
         if((features & IocFeatures.AsyncMethodInject) == 0
             || decorators.IsDefaultOrEmpty
@@ -233,7 +235,7 @@ internal static class AnalyzerHelpers
                 continue;
 
             serviceTypeData ??= serviceType.GetTypeData();
-            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true), serviceTypeData) is not null)
+            if(IocSourceGenerator.TryCloseDecorator(decorator.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: assembly), serviceTypeData) is not null)
                 return true;
         }
 
@@ -241,7 +243,7 @@ internal static class AnalyzerHelpers
     }
 
     /// <summary>
-    /// <see cref="HasAsyncDecorator(INamedTypeSymbol, INamedTypeSymbol, ImmutableArray{INamedTypeSymbol}, IocFeatures)"/>
+    /// <see cref="HasAsyncDecorator(INamedTypeSymbol, INamedTypeSymbol, ImmutableArray{INamedTypeSymbol}, IocFeatures, IAssemblySymbol)"/>
     /// for decorators already extracted by <c>GetDecorators</c> (with injection members and hierarchy), such as the
     /// decorators of default settings.
     /// </summary>
@@ -402,6 +404,12 @@ internal static class AnalyzerHelpers
     public static List<INamedTypeSymbol> GetExplicitServiceTypes(AttributeData attribute)
         => [.. attribute.GetServiceTypeSymbolsFromGenericAttribute(), .. attribute.GetServiceTypeSymbols()];
 
+    /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
+    public static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
+
     /// <summary>
     /// Returns why a generic factory type mapping cannot fill every factory method type parameter,
     /// or <see langword="null"/> when the mapping is valid. Duplicate placeholders are reported separately (SGIOC017).
@@ -420,11 +428,21 @@ internal static class AnalyzerHelpers
         if(placeholders.Count != typeParameterCount)
             return $"the mapping specifies {placeholders.Count} placeholder type(s) but the method has {typeParameterCount} type parameter(s)";
 
+        // Each placeholder must appear at least once to determine its type argument; a repeated one takes the same type
+        // argument at each position, which the generator checks per service type (SGIOC039)
         foreach(var placeholder in placeholders)
         {
+            // Like the generator, only types without type arguments of their own are placeholders: the template is matched
+            // into the type arguments of List<int>, int?, (int, string) and int[], so they are never found
+            if(placeholder is IArrayTypeSymbol or INamedTypeSymbol { TypeArguments.Length: > 0 })
+            {
+                return $"placeholder type '{placeholder.ToDisplayString(NestedTypeDisplayFormat)}' has type arguments or is an array, so it cannot be a placeholder";
+            }
+
             if(placeholder is not null && !ContainsType(template, placeholder))
             {
-                return $"placeholder type '{placeholder.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' does not appear in the service type template '{template.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'";
+                // Containing types are shown, as a placeholder only in their type arguments (Outer<int>.Inner) is not found
+                return $"placeholder type '{placeholder.ToDisplayString(NestedTypeDisplayFormat)}' does not appear in the service type template '{template.ToDisplayString(NestedTypeDisplayFormat)}'";
             }
         }
 
@@ -451,8 +469,8 @@ internal static class AnalyzerHelpers
     /// </summary>
     public static string? GetServiceTypeIncompatibilityReason(INamedTypeSymbol implementationType, INamedTypeSymbol serviceType)
     {
-        var isOpenImplementation = IsOpenGeneric(implementationType);
-        var isOpenServiceType = IsOpenGeneric(serviceType);
+        var isOpenImplementation = IsOpenGenericType(implementationType);
+        var isOpenServiceType = IsOpenGenericType(serviceType);
 
         if(isOpenImplementation && !isOpenServiceType)
             return "an open generic implementation requires an open generic service type";
@@ -486,10 +504,6 @@ internal static class AnalyzerHelpers
         }
 
         return "the implementation does not implement or inherit it";
-
-        static bool IsOpenGeneric(INamedTypeSymbol type)
-            => type.IsUnboundGenericType
-                || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
     }
 
     /// <summary>
@@ -811,5 +825,69 @@ internal static class AnalyzerHelpers
 
         return (false, null);
     }
+
+    /// <summary>
+    /// Enumerates the open generic <c>[IocRegisterFor]</c> registrations of a module and, recursively, of the modules it
+    /// imports, like the generator's <c>ExtractOpenGenericEntriesFromModuleRecursive</c>: each implementation type
+    /// definition with the open generic service types it exposes (explicit <c>ServiceTypes</c> and interfaces).
+    /// </summary>
+    /// <param name="visited">The modules already enumerated, shared across calls to enumerate each module once.</param>
+    public static IEnumerable<(AttributeData Attribute, INamedTypeSymbol ImplementationType, HashSet<INamedTypeSymbol> ServiceTypes)> EnumerateImportedOpenRegistrations(
+        INamedTypeSymbol moduleType,
+        IocAttributeSymbols attributeSymbols,
+        HashSet<INamedTypeSymbol> visited,
+        CancellationToken cancellationToken)
+    {
+        if(!visited.Add(moduleType))
+            yield break;
+
+        foreach(var attribute in moduleType.GetAttributes())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(attribute.AttributeClass is not { } attrClass)
+                continue;
+
+            if(IsIocImportModuleAttribute(attrClass, attributeSymbols))
+            {
+                if(attribute.GetImportedModuleType() is { } importedModule)
+                {
+                    foreach(var registration in EnumerateImportedOpenRegistrations(importedModule, attributeSymbols, visited, cancellationToken))
+                        yield return registration;
+                }
+
+                continue;
+            }
+
+            if(!IsIoCRegisterForAttribute(attrClass, attributeSymbols)
+                || attribute.GetTargetTypeFromRegisterForAttribute() is not { IsOpenNestedInGenericType: false } targetType
+                || !IsOpenGenericType(targetType))
+            {
+                continue;
+            }
+
+            var implementationType = targetType.OriginalDefinition;
+            var explicitServiceTypes = GetExplicitServiceTypes(attribute);
+            var serviceTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach(var serviceType in explicitServiceTypes.Count > 0
+                         ? explicitServiceTypes.Concat(implementationType.AllInterfaces)
+                         : implementationType.AllInterfaces)
+            {
+                if(IsOpenGenericType(serviceType))
+                    serviceTypes.Add(serviceType.OriginalDefinition);
+            }
+
+            if(serviceTypes.Count > 0)
+                yield return (attribute, implementationType, serviceTypes);
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the type is an open generic type: unbound (<c>typeof(Repo&lt;&gt;)</c>) or with type parameters as
+    /// type arguments.
+    /// </summary>
+    public static bool IsOpenGenericType(INamedTypeSymbol type)
+        => type.IsUnboundGenericType
+            || (type.IsGenericType && type.TypeArguments.Any(static arg => arg.TypeKind == TypeKind.TypeParameter));
 }
 

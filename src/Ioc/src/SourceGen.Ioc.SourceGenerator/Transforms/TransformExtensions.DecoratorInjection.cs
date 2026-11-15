@@ -46,7 +46,7 @@ internal static partial class TransformExtensions
             var (hasDefaultValue, defaultValue) = GetDecoratorPropertyDefaultValue(property);
 
             return new PropertyOrFieldInjectionData(
-                property.Name,
+                property.EscapedName,
                 key,
                 propertyType,
                 IsField: false,
@@ -64,7 +64,7 @@ internal static partial class TransformExtensions
             var (hasDefaultValue, defaultValue) = GetDecoratorFieldDefaultValue(field);
 
             return new PropertyOrFieldInjectionData(
-                field.Name,
+                field.EscapedName,
                 key,
                 fieldType,
                 IsField: true,
@@ -144,7 +144,7 @@ internal static partial class TransformExtensions
                 {
                     var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo(semanticModel);
                     return new ParameterData(
-                        p.Name,
+                        p.EscapedName,
                         p.Type.GetTypeData(),
                         IsNullable: p.NullableAnnotation == NullableAnnotation.Annotated,
                         HasDefaultValue: p.HasExplicitDefaultValue,
@@ -157,7 +157,7 @@ internal static partial class TransformExtensions
                 .ToImmutableEquatableArray();
 
             return new MethodInjectionData(
-                method.Name,
+                method.EscapedName,
                 key,
                 parameters,
                 IsAsync: IsNonGenericTaskReturnType(method));

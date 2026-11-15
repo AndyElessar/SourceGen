@@ -58,11 +58,16 @@ internal static partial class TransformExtensions
         /// <param name="extractHierarchy">Whether to extract all interfaces and base classes.</param>
         /// <param name="semanticModel">Optional semantic model for resolving nameof() expressions.</param>
         /// <param name="extractInjectionMembers">Whether to extract injection members (properties, fields, methods with [IocInject] attributes). Used for decorators.</param>
+        /// <param name="constructedIn">
+        /// The assembly the generated code is compiled into. With <paramref name="extractConstructorParams"/>, records
+        /// <see cref="TypeData.Constructibility"/>; needed for implementation types.
+        /// </param>
         public TypeData GetTypeData(
             bool extractConstructorParams = false,
             bool extractHierarchy = false,
             SemanticModel? semanticModel = null,
-            bool extractInjectionMembers = false)
+            bool extractInjectionMembers = false,
+            IAssemblySymbol? constructedIn = null)
         {
             // Build type name - for unbound generics, use actual type parameter names
             var typeName = typeSymbol.BuildTypeName();
@@ -76,9 +81,22 @@ internal static partial class TransformExtensions
 
             ImmutableEquatableArray<ParameterData>? constructorParams = null;
             bool hasInjectConstructor = false;
+            var constructibility = Constructibility.Unknown;
             if(extractConstructorParams)
             {
-                (constructorParams, hasInjectConstructor) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel);
+                (constructorParams, hasInjectConstructor, var constructor, var isConstructible) = typeSymbol.ExtractConstructorParametersWithInfo(semanticModel, constructedIn);
+
+                // MS.DI calls a public constructor of its own choice, so only generated code constructs a type whose selected
+                // constructor is not public (an implicit default constructor of a class is public)
+                if(constructedIn is not null)
+                {
+                    constructibility = (isConstructible, constructor) switch
+                    {
+                        (false, _) => Constructibility.NotConstructible,
+                        (true, { DeclaredAccessibility: not Accessibility.Public }) => Constructibility.GeneratedCodeOnly,
+                        _ => Constructibility.Activatable,
+                    };
+                }
             }
 
             // Extract injection members if requested (for decorators)
@@ -114,7 +132,8 @@ internal static partial class TransformExtensions
                 injectionMembers,
                 allInterfaces,
                 allBaseClasses,
-                isKnownNonDisposable);
+                isKnownNonDisposable,
+                constructibility);
         }
 
         /// <summary>
@@ -190,7 +209,8 @@ internal static partial class TransformExtensions
             ImmutableEquatableArray<InjectionMemberData>? injectionMembers,
             ImmutableEquatableArray<TypeData>? allInterfaces,
             ImmutableEquatableArray<TypeData>? allBaseClasses,
-            bool isKnownNonDisposable)
+            bool isKnownNonDisposable,
+            Constructibility constructibility)
         {
             // Error types (e.g., types from other source generators not yet resolved)
             // should be treated as simple types, not open generics
@@ -202,7 +222,8 @@ internal static partial class TransformExtensions
                     hasInjectConstructor,
                     injectionMembers,
                     allInterfaces,
-                    allBaseClasses);
+                    allBaseClasses,
+                    Constructibility: constructibility);
             }
 
             // Check if this is a wrapper type (collection or non-collection) for DI
@@ -251,7 +272,8 @@ internal static partial class TransformExtensions
                     hasInjectConstructor,
                     injectionMembers,
                     allInterfaces,
-                    allBaseClasses);
+                    allBaseClasses,
+                    Constructibility: constructibility);
             }
 
             if(typeSymbol.ContainsGenericParameters || typeSymbol.Arity > 0 || typeParameters is { Length: > 0 })
@@ -268,7 +290,8 @@ internal static partial class TransformExtensions
                     injectionMembers,
                     allInterfaces,
                     allBaseClasses,
-                    IsKnownNonDisposable: isKnownNonDisposable);
+                    IsKnownNonDisposable: isKnownNonDisposable,
+                    Constructibility: constructibility);
             }
 
             return TypeData.CreateSimple(
@@ -278,7 +301,8 @@ internal static partial class TransformExtensions
                 injectionMembers,
                 allInterfaces,
                 allBaseClasses,
-                IsKnownNonDisposable: isKnownNonDisposable);
+                IsKnownNonDisposable: isKnownNonDisposable,
+                Constructibility: constructibility);
         }
 
         /// <summary>
@@ -519,7 +543,8 @@ internal static partial class TransformExtensions
                     TypeParameters: [new TypeParameter("T", elementType)],
                     AllInterfaces: arrayHierarchy.AllInterfaces,
                     AllBaseClasses: arrayHierarchy.AllBaseClasses,
-                    Traits: arrayHierarchy.Traits);
+                    Traits: arrayHierarchy.Traits,
+                    ArrayRank: arrayArg.Rank);
             }
 
             if(typeArg is not null)
@@ -727,7 +752,8 @@ internal static partial class TransformExtensions
                 GenericArity: 1, // Arrays have one "type parameter" (the element type)
                 WrapperKind.Array, // Arrays are collections
                 IsNestedOpenGeneric: false,
-                TypeParameters: typeParameters);
+                TypeParameters: typeParameters,
+                ArrayRank: arrayTypeSymbol.Rank);
         }
     }
 }

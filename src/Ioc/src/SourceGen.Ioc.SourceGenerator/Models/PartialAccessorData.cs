@@ -21,7 +21,7 @@ internal enum PartialAccessorKind
 /// that serves as a fast-path accessor for a registered service.
 /// </summary>
 /// <param name="Kind">Whether this is a partial method or partial property.</param>
-/// <param name="Name">The name of the method or property.</param>
+/// <param name="Name">The name of the method or property, escaped with <c>@</c> when it is a keyword (such as <c>@event</c>).</param>
 /// <param name="ReturnTypeName">Fully qualified return type name as declared (e.g., "global::IMyService"), used for the implementation signature.</param>
 /// <param name="ReturnType">The return type data (with wrapper detection), resolved like a dependency of the same type.</param>
 /// <param name="IsNullable">Whether the return type is nullable (optional resolution).</param>

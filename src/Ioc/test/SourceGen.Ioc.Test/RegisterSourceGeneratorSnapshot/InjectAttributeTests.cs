@@ -1500,4 +1500,75 @@ public class InjectAttributeTests
             .OrderBy(static source => source.HintName, StringComparer.Ordinal)
             .Select(static source => $"{source.HintName}\n{source.SourceText}"));
     }
+
+    [Test]
+    public async Task InjectMembers_KeywordNames_AreEscaped()
+    {
+        // Injected properties, fields, methods and parameters named by keywords are written with @
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency;
+
+            [IocRegister]
+            public class Dependency : IDependency;
+
+            [IocRegister]
+            public class Consumer(IDependency @class)
+            {
+                [IocInject]
+                public IDependency? @event { get; set; }
+
+                [IocInject]
+                public IDependency? @fixed;
+
+                [IocInject]
+                public void @checked(IDependency @params, IDependency @default) { }
+            }
+
+            [IocRegisterFor(typeof(Other), InjectMembers = [nameof(Other.@base)])]
+            public class Other
+            {
+                public IDependency? @base { get; set; }
+            }
+
+            public interface IHandler;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler)], Decorators = [typeof(HandlerDecorator)])]
+            public class Handler : IHandler;
+
+            public class HandlerDecorator(IHandler @inner) : IHandler
+            {
+                [IocInject]
+                public IDependency? @operator { get; set; }
+
+                [IocInject]
+                public void @while(IDependency @do) { }
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject"
+        };
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output).Contains("@event = ");
+            await Assert.That(output).Contains("@fixed = ");
+            await Assert.That(output).Contains(".@checked(");
+            await Assert.That(output).Contains("@base = ");
+            await Assert.That(output).Contains("@operator = ");
+            await Assert.That(output).Contains(".@while(");
+        }
+    }
 }

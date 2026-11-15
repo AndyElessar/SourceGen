@@ -72,6 +72,73 @@ public class SGIOC018Tests
     }
 
     [Test]
+    public async Task SGIOC018_TupleElementNamesDiffer_NoDiagnostic()
+    {
+        // Tuple element names are not part of the runtime type, so the generator resolves these dependencies directly
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public interface IGeneric<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public sealed class NamedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister(ServiceTypes = [typeof(IGeneric<>)])]
+            public sealed class Generic<T> : IGeneric<T>;
+
+            [IocRegister]
+            public sealed class Consumer(
+                IHandler<(Entity A, string B)> handler,
+                IEnumerable<IHandler<(Entity, string)>> handlers,
+                Lazy<IHandler<(Entity, string)>> lazy,
+                IGeneric<IHandler<(Entity A, string B)>> generic);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC018_TupleElementNamesDifferInArray_NoDiagnostic()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<(int, int)[]>)])]
+            public sealed class ArrayOther : IOther<(int, int)[]>;
+
+            [IocRegister]
+            public sealed class Consumer(IOther<(int A, int B)[]> other, IOther<(int A, int B)[][]>? missing = null);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial IOther<(int A, int B)[]> GetOther();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")).IsEmpty();
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC021")).IsEmpty();
+    }
+
+    [Test]
     public async Task SGIOC018_UnregisteredDependency_WithIntegrateServiceProviderTrue_NoDiagnostic()
     {
         const string source = """
@@ -1850,6 +1917,43 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("IocInject", "[IocRegister(ServiceLifetime.Singleton)]", "[IocInject(nameof(Keys.PrimaryKey), KeyType = KeyType.Csharp)]")]
+    [Arguments("InjectMembers", "[IocRegisterFor(typeof(Consumer), ServiceLifetime.Singleton, InjectMembers = [new object[] { nameof(Consumer.Dependency), nameof(Keys.PrimaryKey), KeyType.Csharp }])]", "")]
+    public async Task SGIOC018_CsharpKey_ShowsSameKeyForAttributeAndInjectMembers(string scenario, string registration, string injectAttribute)
+    {
+        // A C# key is shown the same way whether it is given by [IocInject] or by an InjectMembers element
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDependency { }
+
+            public static class Keys
+            {
+                public const string PrimaryKey = "primary";
+            }
+
+            {{registration}}
+            public class Consumer
+            {
+                {{injectAttribute}}
+                public IDependency Dependency { get; set; } = null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(1);
+        await Assert.That(sgioc018[0].GetMessage()).IsEqualTo("Unable to resolve service 'IDependency (key PrimaryKey)' for container 'TestContainer'");
+    }
+
+    [Test]
     public async Task SGIOC018_InjectMembers_GetterOnlyInterfaceMember_ChecksImplementation()
     {
         // The interface property has no setter, but the generator injects its implementation, which has one
@@ -2095,5 +2199,55 @@ public class SGIOC018Tests
         await Assert.That(sgioc018).Count().IsEqualTo(expected);
         if(expected > 0)
             await Assert.That(sgioc018[0].GetMessage()).Contains("IDependency (key \"A\")");
+    }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", 1)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 0)]
+    public async Task SGIOC018_ImportedOpenRegistrationWithInternalConstructor_ResolvesOnlyWhenAccessible(string scenario, string internalsVisibleTo, int expected)
+    {
+        // Like the generator, an imported open registration the compiled assembly cannot construct is not closed
+        var moduleSource = $$"""
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace ModuleNamespace;
+
+            public interface IRepo<T>;
+
+            public sealed class Repo<T> : IRepo<T>
+            {
+                internal Repo() { }
+            }
+
+            [IocRegisterFor(typeof(Repo<>), ServiceTypes = [typeof(IRepo<>)])]
+            public sealed class SharedModule;
+            """;
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using ModuleNamespace;
+
+            namespace TestNamespace;
+
+            public sealed class Entity;
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Consumer(IRepo<Entity> repo);
+
+            [IocImportModule<SharedModule>]
+            public sealed class Imports;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """;
+
+        var moduleCompilation = SourceGeneratorTestHelper.CreateCompilation("ModuleAssembly", moduleSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [moduleCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018")).Count().IsEqualTo(expected);
     }
 }

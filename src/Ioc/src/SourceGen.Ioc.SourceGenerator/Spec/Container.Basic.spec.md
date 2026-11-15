@@ -76,6 +76,10 @@ Generated service fields and resolver methods are named after short type names, 
 
 Names are computed while grouping registrations and stored in the container entries, so the emitters never recompute them.
 
+### Known Limitations
+
+- A key becomes part of the member names (`…_{key}`) after every non-identifier character, including the `@` of an escaped keyword, is replaced by `_`. Different keys of one implementation type that map to the same name, such as `Kind.@class` and `Kind._class`, or the string keys `"a.b"` and `"a_b"`, produce duplicate members (`CS0102` / `CS0111`). No `_Resolve` or hash suffix is added for them.
+
 ## Basic Container Example
 
 Generate a container implementing all required interfaces with eager singleton resolution (default behavior):

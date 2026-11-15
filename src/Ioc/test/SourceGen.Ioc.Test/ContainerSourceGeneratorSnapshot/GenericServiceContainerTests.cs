@@ -42,6 +42,88 @@ public class GenericServiceContainerTests
     }
 
     [Test]
+    public async Task Container_TupleElementNames_ResolvesRegistrationsDirectly()
+    {
+        // Tuple element names are not part of the runtime type, so a dependency resolves registrations whose tuple
+        // elements are named differently, without falling back to the service provider
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public sealed class NamedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity, string)>)])]
+            public sealed class UnnamedHandler : IHandler<(Entity, string)>;
+
+            // Nested tuples, and generic types with several type arguments in tuple elements
+            [IocRegister(ServiceTypes = [typeof(IHandler<((Entity A, int B) Inner, Dictionary<int, string> Map)>)])]
+            public sealed class NestedHandler : IHandler<((Entity A, int B) Inner, Dictionary<int, string> Map)>;
+
+            [IocRegister]
+            public sealed class Consumer(
+                IHandler<(Entity A, string B)> handler,
+                IEnumerable<IHandler<(Entity, string)>> handlers,
+                Lazy<IHandler<(Entity X, string Y)>> lazy,
+                Func<IHandler<(Entity, string)>> func,
+                IHandler<((Entity, int), Dictionary<int, string>)> nested);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("GetRequiredService(typeof(global::TestNamespace");
+        await Assert.That(generatedSource).DoesNotContain("GetServices<global::TestNamespace");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_TupleElementNames_KeyedDictionaryResolvesKeyedRegistrations()
+    {
+        // Dictionaries of keyed services are requested with other element names than the registration, and differently
+        // by each consumer; they share one resolver
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity, string)>)], Key = "a")]
+            public sealed class KeyedHandler : IHandler<(Entity, string)>;
+
+            [IocRegister]
+            public sealed class Consumer(IReadOnlyDictionary<string, IHandler<(Entity A, string B)>> handlers);
+
+            [IocRegister]
+            public sealed class OtherConsumer(IReadOnlyDictionary<string, IHandler<(Entity Q, string R)>> handlers);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithGenericService_GeneratesGenericResolution()
     {
         const string source = """

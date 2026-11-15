@@ -10,6 +10,43 @@ namespace SourceGen.Ioc.Test.RegisterSourceGeneratorSnapshot;
 public class ClosedGenericDependencyTests
 {
     [Test]
+    public async Task ClosedGenericDependency_TupleServiceType_ClosesOpenRegistration()
+    {
+        // Tuples are matched as System.ValueTuple element by element, without their element names
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<>)])]
+            public sealed class Handler<T> : IHandler<(T Value, string Name)>;
+
+            public class Entity;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class Consumer(IHandler<(Entity, string)> handler)
+            {
+                public IHandler<(Entity, string)> Handler => handler;
+            }
+
+            [IocContainer]
+            public sealed partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        await Verify(new
+        {
+            Register = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"),
+            Container = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs"),
+        });
+    }
+
+    [Test]
     public async Task ClosedGenericDependency_GeneratesClosedGenericRegistration()
     {
         const string source = """
@@ -342,6 +379,766 @@ public class ClosedGenericDependencyTests
 
         // The token stops the generator if the expansion regresses, instead of leaving it running after the timeout
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    [Arguments("Factory", "Factory = nameof(NodeFactory.Create)")]
+    [Arguments("Instance", "Lifetime = ServiceLifetime.Singleton, Instance = nameof(Node<int>.Default), Decorators = [typeof(Decorator<>)]")]
+    public async Task ClosedGenericDependency_FactoryOrInstanceRegistration_DoesNotCollectConstructorDependencies(string activation, string arguments)
+    {
+        // The closed Node<string> is not constructed, so neither its constructor parameter nor its injected property is
+        // resolved; an instance is not decorated either
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IRepo<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            internal sealed class Other<T> : IOther<T>;
+
+            public static class NodeFactory
+            {
+                public static object Create() => throw new System.NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)], {{arguments}})]
+            internal sealed class Node<T>(IRepo<T> repo) : INode<T>
+            {
+                public static readonly Node<T> Default = null!;
+
+                [IocInject]
+                public IOther<T> Other { get; init; } = null!;
+            }
+
+            internal sealed class Decorator<T>(INode<T> inner, IOther<T> other) : INode<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+
+        // An open generic Instance is written without type arguments (Node.Default), which does not compile
+        if(activation == "Factory")
+            await result.VerifyCompilableAsync();
+
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.Node<string>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Repo<string>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Other<string>");
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    public async Task ClosedGenericDependency_ConstructorOfFactoryRegistrationOnCycle_DoesNotStopClosing(CancellationToken cancellationToken)
+    {
+        // Node<T> is created by its factory, so its IBridge<T> parameter does not close a cycle with Bridge<T>'s INode<List<T>>
+        const string source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+            public interface IBridge<T>;
+
+            public static class NodeFactory
+            {
+                public static object Create() => throw new System.NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)], Factory = nameof(NodeFactory.Create))]
+            internal sealed class Node<T>(IBridge<T> bridge) : INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IBridge<>)])]
+            internal sealed class Bridge<T>(INode<List<T>> node) : IBridge<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(IBridge<string> bridge);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.Node<global::System.Collections.Generic.List<string>>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Bridge<global::System.Collections.Generic.List<string>>");
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    [Arguments("FactoryOnly", "[assembly: IocRegisterDefaults(typeof(TestNamespace.INode<>), ServiceLifetime.Transient, Factory = nameof(TestNamespace.NodeFactory.Create))]", "")]
+    [Arguments("Implementation", "", """
+        [IocRegister(ServiceTypes = [typeof(INode<>)], Factory = nameof(NodeFactory.Create))]
+        internal sealed class Node<T> : INode<T>;
+        """)]
+    public async Task ClosedGenericDependency_ExpandingGenericFactoryParameter_StopsClosing(string scenario, string defaults, string implementation, CancellationToken cancellationToken)
+    {
+        // Closing INode<string> with the factory requires INode<List<string>>, which would require INode<List<List<string>>>, and so on
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{defaults}}
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public static class NodeFactory
+            {
+                [IocGenericFactory(typeof(INode<int>), typeof(int))]
+                public static INode<TF> Create<TF>(Lazy<INode<List<TF>>> next) => throw new NotImplementedException();
+            }
+
+            {{implementation}}
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource, containerSource })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.NodeFactory.Create<string>(");
+            await Assert.That(output).DoesNotContain("global::TestNamespace.NodeFactory.Create<global::System.Collections.Generic.List<string>>");
+        }
+
+        await Verify(generatedSource).UseTextForParameters(scenario);
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    [Arguments("FactoryOnly", "")]
+    [Arguments("Implementation", "[IocRegister] internal sealed class Handler<T> : IRequestHandler<T>;")]
+    public async Task ClosedGenericDependency_ExpandingGenericFactoryParameterMappedToPartOfTypeArgument_StopsClosing(string scenario, string implementation, CancellationToken cancellationToken)
+    {
+        // TF is a part of TResponse (TResponse = Task<TF>); the cycle through INode<List<TF>> is cut at the factory parameter
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Transient, Factory = nameof(HandlerFactory.Create))]
+            [assembly: IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, Factory = nameof(NodeFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public interface INode<T>;
+
+            public static class HandlerFactory
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<TF>> Create<TF>(INode<List<TF>> next) => throw new NotImplementedException();
+            }
+
+            public static class NodeFactory
+            {
+                [IocGenericFactory(typeof(INode<int>), typeof(int))]
+                public static INode<TN> Create<TN>(IRequestHandler<TN> handler) => throw new NotImplementedException();
+            }
+
+            {{implementation}}
+
+            [IocRegister]
+            internal sealed class Consumer(INode<Task<string>> node);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.HandlerFactory.Create<string>(");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.NodeFactory.Create<global::System.Collections.Generic.List<string>>");
+    }
+
+    [Test]
+    [Timeout(60_000)]
+    [Arguments("[assembly: IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Transient, Factory = nameof(HandlerFactory.Create))]", "[IocRegister]")]
+    [Arguments("", "[IocRegister(ServiceTypes = [typeof(IRequestHandler<>)], Factory = nameof(HandlerFactory.Create))]")]
+    public async Task ClosedGenericDependency_GenericFactoryTypeArgumentContainingImplementationTypeParameter_StopsClosing(string defaults, string registration, CancellationToken cancellationToken)
+    {
+        // TF takes Task<T> of Handler<T>, so IOther<TF> -> Other<V> -> IRequestHandler<Task<V>> nests Task deeper on every
+        // round. The nested link from Handler.T to TF belongs to no dependency, so every dependency on the cycle is expanding,
+        // and closing stops at the factory parameter.
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            {{defaults}}
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public interface IOther<V>;
+            public sealed class Entity;
+
+            public static class HandlerFactory
+            {
+                [IocGenericFactory(typeof(IRequestHandler<int>), typeof(int))]
+                public static IRequestHandler<TF> Create<TF>(IOther<TF> other) => throw new NotImplementedException();
+            }
+
+            {{registration}}
+            internal sealed class Handler<T> : IRequestHandler<Task<T>>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            internal sealed class Other<V>(IRequestHandler<Task<V>> handler) : IOther<V>;
+
+            [IocRegister]
+            internal sealed class Consumer(IRequestHandler<Task<Entity>> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, cancellationToken: cancellationToken);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("global::TestNamespace.HandlerFactory.Create<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>(");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Other<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Handler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>");
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ClosedRegistrationWithGenericDefaultFactory_ClosesFactoryForServiceTypes()
+    {
+        // EntityHandler is constructed (closing IRepo<string>), and its service type calls Create<Entity>(IRepo<Entity>)
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(TestNamespace.FactoryContainer.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            public class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>(IRepo<T> repo) => throw new NotImplementedException();
+            }
+
+            [IocRegister]
+            internal sealed class EntityHandler(IRepo<string> other) : IRequestHandler<Task<Entity>>;
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource, containerSource })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>(");
+            await Assert.That(output).Contains("global::TestNamespace.Repo<global::TestNamespace.Entity>");
+            await Assert.That(output).Contains("global::TestNamespace.Repo<string>");
+        }
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_ServiceTypeTargetWithGenericFactory_CallsFactoryForTarget()
+    {
+        // The target is the service type itself, which the mapping matches, so it calls the factory instead of being constructed
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor<IRequestHandler<Task<Entity>>>(ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            public sealed class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>(IServiceProvider sp, IRepo<T> repo) => throw new NotImplementedException();
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource, containerSource })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>(");
+            await Assert.That(output).Contains("global::TestNamespace.Repo<global::TestNamespace.Entity>");
+        }
+    }
+
+    [Test]
+    [Arguments("PrivateConstructor", "[IocRegister(ServiceLifetime.Singleton, RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))] public sealed class EntityHandler : IRequestHandler<Task<Entity>> { private EntityHandler() { } }", "AddSingleton<global::TestNamespace.EntityHandler")]
+    [Arguments("OpenInterfaceTarget", "", "typeof(global::TestNamespace.IRequestHandler<>)")]
+    [Arguments("OpenPrivateConstructor", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRequestHandler<>)], Factory = nameof(FactoryContainer.Create))] public sealed class Handler<T> : IRequestHandler<Task<T>> { private Handler() { } }", "global::TestNamespace.Handler<")]
+    public async Task ClosedGenericDependency_UnconstructibleImplementationWithGenericFactory_RegistersOnlyFactoryCreatedTypes(string scenario, string registration, string unexpected)
+    {
+        // The implementation type cannot be constructed, so only the service types the factory creates are registered
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            {{(scenario == "OpenInterfaceTarget" ? "[assembly: IocRegisterFor(typeof(IRequestHandler<>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]" : "")}}
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public sealed class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            {{registration}}
+
+            [IocRegister]
+            internal sealed class Consumer(IRequestHandler<Task<Entity>> handler);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource ?? "").DoesNotContain(unexpected);
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>()");
+            await Assert.That(output).DoesNotContain("new global::TestNamespace.EntityHandler(");
+            await Assert.That(output).DoesNotContain("new global::TestNamespace.Handler<");
+            await Assert.That(output).DoesNotContain("new global::TestNamespace.IRequestHandler<");
+        }
+    }
+
+    [Test]
+    [Arguments("InternalConstructor", "", false)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"MainAssembly\")]", true)]
+    public async Task ClosedGenericDependency_InternalConstructorInReferencedAssemblyWithGenericFactory_ConstructsOnlyWhenAccessible(string scenario, string internalsVisibleTo, bool constructs)
+    {
+        // An internal constructor of another assembly is accessible only when that assembly gives access to its internals
+        var librarySource = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace Library;
+
+            public interface IRequestHandler<TResponse>;
+            public sealed class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            public sealed class EntityHandler : IRequestHandler<Task<Entity>>
+            {
+                internal EntityHandler() { }
+            }
+            """;
+
+        const string mainSource = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+
+            [assembly: IocRegisterFor<EntityHandler>(ServiceLifetime.Singleton, RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))]
+
+            namespace MainApp;
+
+            [IocRegister]
+            internal sealed class Consumer(IRequestHandler<Task<Entity>> handler);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (librarySource, "Library"),
+            (mainSource, "MainAssembly"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).Contains("global::Library.FactoryContainer.Create<global::Library.Entity>()");
+        }
+
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output.Contains("new global::Library.EntityHandler(")).IsEqualTo(constructs);
+        }
+    }
+
+    [Test]
+    [Arguments("InternalConstructor", "internal Repo() { }")]
+    [Arguments("ProtectedInternalConstructor", "protected internal Repo() { }")]
+    public async Task ClosedGenericDependency_OpenImplementationWithoutPublicConstructor_RegistersOnlyClosedTypes(string scenario, string constructor)
+    {
+        // MS.DI activates an open generic registration with a public constructor only, so only the closed types are registered
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+            public sealed class Entity;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>
+            {
+                {{constructor}}
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(IRepo<Entity> repo);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("typeof(global::TestNamespace.Repo<>)");
+        foreach(var output in new[] { generatedSource ?? "", containerSource ?? "" })
+        {
+            await Assert.That(output).Contains("new global::TestNamespace.Repo<global::TestNamespace.Entity>()");
+        }
+    }
+
+    [Test]
+    [Arguments("SameTypeArguments", "int", true)]
+    [Arguments("DifferentTypeArguments", "string", false)]
+    public async Task ClosedGenericDependency_RepeatedPlaceholderOnOpenImplementation_ClosesOnlySameTypeArguments(string scenario, string typeArgument, bool registers)
+    {
+        // Pair<T> : IPair<T, int> closed for IPair<X, int> gives the repeated placeholder X and int
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPair<T1, T2>;
+
+            public static class PairFactory
+            {
+                [IocGenericFactory(typeof(IPair<int, int>), typeof(int))]
+                public static IPair<T, T> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IPair<,>)], Factory = nameof(PairFactory.Create))]
+            public sealed class Pair<T> : IPair<T, int>;
+
+            [IocRegister]
+            internal sealed class Consumer(IPair<{{typeArgument}}, int>? pair = null);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration") ?? "", SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") ?? "" })
+        {
+            await Assert.That(output.Contains("global::TestNamespace.PairFactory.Create<int>()")).IsEqualTo(registers);
+            await Assert.That(output).DoesNotContain("PairFactory.Create<string>");
+        }
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_InterfaceTargetUnmatchedByGenericFactory_IsNotRegistered()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor<IRequestHandler<Entity>>(ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public sealed class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration"), SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") })
+        {
+            await Assert.That(output ?? "").DoesNotContain("IRequestHandler<global::TestNamespace.Entity>");
+        }
+    }
+
+    [Test]
+    [Arguments("Closed", "[IocRegister(Key = \"k\")] internal sealed class EntityHandler : IRequestHandler<Task<Entity>>;", "[assembly: IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]", "[FromKeyedServices(\"k\")] IRequestHandler<Task<Entity>> handler")]
+    [Arguments("ClosedDecorated", "[IocRegister(Decorators = [typeof(LoggingHandler<>)])] internal sealed class EntityHandler : IRequestHandler<Task<Entity>>;", "[assembly: IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]", "IRequestHandler<Task<Entity>> handler")]
+    [Arguments("OpenKeyed", "[IocRegister(ServiceLifetime.Singleton, Key = \"k\", ServiceTypes = [typeof(IRequestHandler<>)], Factory = nameof(FactoryContainer.Create))] internal sealed class Handler<T> : IRequestHandler<T>;", "", "[FromKeyedServices(\"k\")] IRequestHandler<Task<Entity>> handler")]
+    public async Task ClosedGenericDependency_GenericFactoryServiceType_CallsFactoryInBothOutputs(string scenario, string registration, string defaults, string parameter)
+    {
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            {{defaults}}
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public sealed class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            internal sealed class LoggingHandler<T>(IRequestHandler<T> inner) : IRequestHandler<T>;
+
+            {{registration}}
+
+            [IocRegister]
+            internal sealed class Consumer({{parameter}});
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")).Contains("global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>()");
+        await Verify(containerSource).UseParameters(scenario);
+    }
+
+    [Test]
+    [Arguments("Closed", "[IocRegister(RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))] internal sealed class EntityHandler : IRequestHandler<Task<Entity>>, IRequestHandler<Entity>, IOther;")]
+    [Arguments("Open", "[IocRegister(RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))] internal sealed class Handler<T> : IRequestHandler<Task<T>>, IRequestHandler<System.Collections.Generic.List<T>>;")]
+    public async Task ClosedGenericDependency_ServiceTypeUnmatchedByGenericFactory_IsNotRegistered(string scenario, string registration)
+    {
+        // Only IRequestHandler<Task<Entity>> matches the template, so the factory cannot be called for the other service types
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public interface IOther;
+
+            public class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            {{registration}}
+
+            [IocRegister]
+            internal sealed class Consumer(IRequestHandler<Task<Entity>> handler);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        foreach(var output in new[] { generatedSource, containerSource })
+        {
+            await Assert.That(output).Contains("global::TestNamespace.FactoryContainer.Create<global::TestNamespace.Entity>()");
+            await Assert.That(output).DoesNotContain("global::TestNamespace.FactoryContainer.Create()");
+            await Assert.That(output).DoesNotContain("<global::TestNamespace.IRequestHandler<global::TestNamespace.Entity>>");
+            await Assert.That(output).DoesNotContain("<global::TestNamespace.IRequestHandler<global::System.Collections.Generic.List<global::TestNamespace.Entity>>>");
+            await Assert.That(output).DoesNotContain("<global::TestNamespace.IOther>");
+        }
+    }
+
+    [Test]
+    [Arguments("Factory", "Factory = nameof(MyServiceFactory.Create)", true)]
+    [Arguments("Instance", "Lifetime = ServiceLifetime.Singleton, Instance = nameof(MyService.Default), Decorators = [typeof(Decorator)]", false)]
+    public async Task ClosedGenericDependency_RootFactoryOrInstanceRegistration_CollectsDependenciesOfActivation(string activation, string arguments, bool closesFactoryParameter)
+    {
+        // A root registration created by its factory collects the factory parameters, and an instance collects nothing
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService;
+            public interface IRepo<T>;
+            public interface IOther<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IOther<>)])]
+            internal sealed class Other<T> : IOther<T>;
+
+            public static class MyServiceFactory
+            {
+                public static IMyService Create(IRepo<int> repo) => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], {{arguments}})]
+            internal sealed class MyService(IRepo<string> repo) : IMyService
+            {
+                public static readonly MyService Default = null!;
+
+                [IocInject]
+                public IOther<string> Other { get; init; } = null!;
+            }
+
+            internal sealed class Decorator(IMyService inner, IOther<int> other) : IMyService;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Repo<string>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Other<string>");
+        await Assert.That(generatedSource).DoesNotContain("global::TestNamespace.Other<int>");
+        await Assert.That((generatedSource ?? "").Contains("global::TestNamespace.Repo<int>")).IsEqualTo(closesFactoryParameter);
+    }
+
+    [Test]
+    public async Task ClosedGenericDependency_GenericFactoryParameter_SubstitutesAndClosesTypeArguments()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(TestNamespace.FactoryContainer.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+            public interface IRepo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IRepo<>)])]
+            internal sealed class Repo<T> : IRepo<T>;
+
+            public class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>(IRepo<T> repo, Lazy<IRepo<Task<T>>> lazyRepo)
+                    => throw new NotImplementedException();
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(IRequestHandler<Task<Entity>> handler);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
 

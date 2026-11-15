@@ -174,6 +174,7 @@ All under `Models/` unless noted; all immutable with value equality.
 | **Defaults match priority** | (1) implementation type itself, (2) closest base class, (3) first interface in `AllInterfaces` |
 | **`ImplementationTypes` service derivation** | open generic → `TargetServiceType` + configured `ServiceTypes`; closed/non-generic → matched closed types from `AllInterfaces`/`AllBaseClasses`, falling back to `TargetServiceType` if no match (e.g. when framework metadata is invisible) |
 | **Key interpretation** | `KeyType=Value` → literal; `KeyType=Csharp` → C# expression (`MyClass.Field`, `nameof(...)`) |
+| **`nameof()` member paths** | `Key` (`KeyType=Csharp`), `Factory` and `Instance` given with `nameof()` → the member's fully qualified path, keeping the type arguments of its containing type (`nameof(Keys<int>.Key)` → `global::Ns.Keys<int>.Key`) and escaping a keyword name (`nameof(Keys.@default)` → `global::Ns.Keys.@default`). A containing type that uses the implementation type's type parameters is supported only for an open generic `Instance` (see [Factory](Register.Factory.spec.md)) |
 | **Inject attribute matching** | by name only — `IocInjectAttribute` or `InjectAttribute` (any namespace, e.g. `Microsoft.AspNetCore.Components.InjectAttribute`) |
 | **Constructor selection** | (1) `[IocInject]`-marked, (2) primary, (3) most parameters |
 | **Parameter resolution** | `[ServiceKey]` → registration key; `[FromKeyedServices]`/`[IocInject(Key=…)]` → keyed; `IServiceProvider` → pass through; collection types → element service type |
@@ -205,6 +206,11 @@ Wrappers nest: `IEnumerable<Lazy<IMyService>>` parses to `EnumerableTypeData(Laz
 public static IRequestHandler<T1, T2> Create<T1, T2>() => new Handler<T1, T2>();
 // decimal → T1, int → T2
 ```
+
+### Known limitations
+
+- **Keyword names**: member, parameter, enum member and partial accessor names that are keywords are written with `@` (`@event`). The name of a container class (`[IocContainer] partial class @class`) and type parameter names (`Repo<@class>`, `Create<@class>()`) are not escaped, so they produce code that does not compile.
+- **Member name collisions from keys**: see [Container Member Names](Container.Basic.spec.md#known-limitations).
 
 ---
 

@@ -3,7 +3,7 @@ namespace SourceGen.Ioc;
 /// <summary>
 /// Represents a member (property, field, or method) that should be populated by dependency injection.
 /// </summary>
-/// <param name="Name">The name of the member.</param>
+/// <param name="Name">The name of the member, escaped with <c>@</c> when it is a keyword (such as <c>@event</c>).</param>
 /// <param name="Key">The key for keyed injection; for methods, it applies to parameters without their own key.</param>
 internal closed record class InjectionMemberData(string Name, string? Key)
 {
@@ -16,7 +16,7 @@ internal closed record class InjectionMemberData(string Name, string? Key)
 /// <summary>
 /// A property or field assigned via object initializer.
 /// </summary>
-/// <param name="Name">The name of the member.</param>
+/// <param name="Name">The name of the member, escaped with <c>@</c> when it is a keyword (such as <c>@event</c>).</param>
 /// <param name="Key">The key for keyed injection.</param>
 /// <param name="Type">The type data of the member.</param>
 /// <param name="IsField">Whether the member is a field rather than a property.</param>
@@ -43,7 +43,7 @@ internal sealed record class PropertyOrFieldInjectionData(
 /// <summary>
 /// A method called after object creation.
 /// </summary>
-/// <param name="Name">The name of the method.</param>
+/// <param name="Name">The name of the method, escaped with <c>@</c> when it is a keyword.</param>
 /// <param name="Key">The key applied to parameters without their own key.</param>
 /// <param name="Parameters">The method parameters.</param>
 /// <param name="IsAsync">Whether the method returns <c>Task</c> and is awaited after object creation.</param>

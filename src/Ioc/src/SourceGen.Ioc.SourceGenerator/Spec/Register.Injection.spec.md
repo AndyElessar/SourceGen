@@ -18,6 +18,7 @@ Only check with name `IocInjectAttribute` or `InjectAttribute`, so user can use 
 - Field/Property/Method has `[IocInject]` attribute
 - Decorator pattern is used
 - Factory or Instance is specified
+- The selected constructor is not public, such as an `internal` one (MS.E.DI calls public constructors only, so it would call another constructor or fail). Constructors are selected among those accessible from the compiled assembly: public ones, and internal ones declared in it or in an assembly that gives it access with `InternalsVisibleTo`; for an open generic implementation, the open registration is not emitted and each closed registration constructs the closed type (see [Generic Registration](Register.Generics.spec.md))
 
 The following cases are handled natively by MS.E.DI and do **NOT** require factory method:
 
@@ -110,12 +111,23 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
   - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` — Consumers resolve via `sp.GetServices<Lazy<T>>()` (uses standalone registrations)
   - Collection outer wrapper with 3+ levels (e.g., `IEnumerable<Lazy<Func<T>>>`) is **not** supported. No wrapper registrations are emitted; the consumer is registered with a plain `AddXXX<Consumer, Consumer>()` call and the parameter is left to MS.DI runtime resolution.
   - `ValueTask<T>` is **not** a recognized wrapper type in any context. Only `Task<T>` is supported for async-init wrapping. When used as a partial accessor return type: if the target service uses async-init, `SGIOC029` is reported; otherwise `SGIOC021` is reported.
-- **Multi-parameter Func matching**: For `Func<T1,...,TN-1,TReturn>`, constructor parameters and injectable members are matched by type against Func inputs using first-unused semantics. Unmatched dependencies are resolved from DI.
+- **Multi-parameter Func matching**: For `Func<T1,...,TN-1,TReturn>`, constructor parameters and injectable members are matched by runtime type (without tuple element names) against Func inputs using first-unused semantics. Unmatched dependencies are resolved from DI.
 - **Multi-parameter Func of an async-init registration**: Not supported. A `Func` with input parameters constructs the instance synchronously and cannot await its async inject methods, so no `Func<T1,...,TReturn>` registration MUST be emitted for an async-init registration (the implementation type or a decorator applied to the service type has async inject methods); the Container resolves it from the fallback provider instead. The analyzer reports such a dependency with `SGIOC030`.
 - **Nested multi-parameter Func**: Not supported (e.g., `Lazy<Func<string, IService>>` with input parameters).
 - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
 - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
 - **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
+- **Tuple element names**: For a service type registered as written (a non-generic or closed service type), standalone registrations are emitted once for each runtime type, so dependencies that differ only in tuple element names share one registration (see [Container Injection](Container.Injection.spec.md#overview)). The spelling the registration is written with depends on the wrapper. This only changes the text of the generated code: the runtime type is the same, and the same input always generates the same output.
+
+  | Wrapper Type | Tuple element names written | Depends on the order of the dependencies |
+  | --- | --- | --- |
+  | `Lazy<T>` | Those of the registered service type | No |
+  | `Func<T>` / `Func<T1, ..., TReturn>` | Those of the first scanned dependency | Yes |
+  | `KeyValuePair<K, V>` | Those of the first scanned dependency with the same key type (`KeyValuePair`, dictionary or collection of pairs) | Yes |
+
+  For example, with a registration of `IHandler<(Entity X, string Y)>`, a consumer of `Func<IHandler<(Entity A, string B)>>` declared before a consumer of `Func<IHandler<(Entity, string)>>` registers `Func<IHandler<(Entity A, string B)>>`; declared after it, `Func<IHandler<(Entity, string)>>` is registered instead. `Lazy<IHandler<(Entity X, string Y)>>` is registered in both cases.
+
+  Known limitation: a service type closed from an open generic registration (see [Generic Registration](Register.Generics.spec.md)) is closed once for each spelling of its dependencies, so the closed registrations and their `Lazy<T>` / `Func<T>` registrations are emitted once for each spelling, although they are one runtime type. With `Handler<T> : IHandler<T>` and the two consumers above, `IHandler<(Entity A, string B)>` and `IHandler<(Entity, string)>` are both registered, and `IEnumerable<IHandler<(Entity, string)>>` resolves two instances.
 
 ### Async Method Injection
 

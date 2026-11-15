@@ -177,19 +177,24 @@ partial class IocSourceGenerator
 
     private static RegisterEntry? CreateRegisterEntry(ServiceRegistrationModel registration)
     {
+        // MS.DI constructs the implementation of an open generic registration with a public constructor, so neither an instance
+        // nor an implementation type it cannot activate is registered open; only their closed registrations are
         if(registration.IsOpenGeneric)
         {
-            return new SimpleRegisterEntry(registration);
+            return registration.Instance is null && registration.ImplementationType.Constructibility is Constructibility.Activatable
+                ? new SimpleRegisterEntry(registration)
+                : null;
+        }
+
+        // An instance takes precedence over any Factory, like the container output
+        if(registration.Instance is not null)
+        {
+            return registration.Lifetime == ServiceLifetime.Singleton ? new InstanceRegisterEntry(registration) : null;
         }
 
         if(registration.Factory is not null && !SharesFactoryInstance(registration))
         {
             return new FactoryRegisterEntry(registration);
-        }
-
-        if(registration.Instance is not null)
-        {
-            return registration.Lifetime == ServiceLifetime.Singleton ? new InstanceRegisterEntry(registration) : null;
         }
 
         if(registration.AppliesDecorators)
@@ -239,6 +244,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static bool NeedsInjectionConstruction(ServiceRegistrationModel registration) =>
         registration.InjectionMembers.Length > 0
+        // MS.DI calls public constructors only, so a type whose selected constructor is not public is constructed by generated code
+        || registration.ImplementationType.Constructibility is Constructibility.GeneratedCodeOnly
         || registration.ImplementationType.HasInjectConstructor
         || registration.ImplementationType.ConstructorParameters?.Any(static p =>
             p.HasInjectAttribute ||

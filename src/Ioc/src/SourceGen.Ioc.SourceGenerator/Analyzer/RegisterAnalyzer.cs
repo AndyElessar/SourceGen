@@ -12,16 +12,17 @@ namespace SourceGen.Ioc;
 public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 {
     /// <summary>
-    /// SGIOC001: Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class.
+    /// SGIOC001: Invalid Attribute Usage - IoCRegisterAttribute or IoCRegisterForAttribute is marked on private or abstract class,
+    /// or on a type that cannot be constructed without a Factory or Instance.
     /// </summary>
     public static readonly DiagnosticDescriptor InvalidAttributeUsage = new(
         id: "SGIOC001",
         title: "Invalid Attribute Usage",
-        messageFormat: "The type '{0}' cannot be registered because it is {1}",
+        messageFormat: "The type '{0}' cannot be registered because {1}",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "IoCRegisterAttribute and IoCRegisterForAttribute cannot be applied to private or abstract classes.");
+        description: "IoCRegisterAttribute and IoCRegisterForAttribute cannot be applied to private or abstract classes, or to a type that generated code cannot construct (an interface, or a class without an accessible constructor) without a Factory or Instance.");
 
     /// <summary>
     /// SGIOC002: Circular Dependency Detected - Circular dependencies are detected among registered services.
@@ -113,11 +114,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor FactoryAndInstanceConflict = new(
         id: "SGIOC010",
         title: "Invalid Attribute Usage",
-        messageFormat: "Both Factory and Instance are specified on the same attribute; Factory takes precedence and Instance will be ignored",
+        messageFormat: "Both Factory and Instance are specified on the same attribute; Instance takes precedence and Factory will be ignored",
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When both Factory and Instance are specified on the same IoCRegisterAttribute or IoCRegisterForAttribute, Factory takes precedence and Instance will be ignored. Remove one of them to avoid confusion.");
+        description: "When both Factory and Instance are specified on the same IoCRegisterAttribute or IoCRegisterForAttribute, Instance takes precedence and Factory will be ignored. Remove one of them to avoid confusion.");
 
     /// <summary>
     /// SGIOC006: Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
@@ -379,9 +380,23 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The generator closes open generic types with their own type arguments, not with those of their containing type, so an open type declared in a generic type, such as Outer<O>.Node<T> or typeof(Outer<>.INode<>), is ignored as a registered type, service type, decorator, implementation type or default settings target. A closed type, such as Outer<int>.Node<string>, is used like any type.");
 
+    /// <summary>
+    /// SGIOC039: A service type of a registration with a generic factory does not match the factory's service type template,
+    /// so the generator does not register it.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ServiceTypeUnmatchedByGenericFactory = new(
+        id: "SGIOC039",
+        title: "Service type does not match the generic factory mapping",
+        messageFormat: "Service type '{0}' of '{1}' does not match the service type template '{2}' of the generic factory '{3}', so it is not registered",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "A generic factory is called with the type arguments its mapping ([IocGenericFactory] or GenericFactoryTypeMapping) takes from a service type that matches its service type template. A service type that does not match cannot be created by the factory, so it is not registered; an implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public or internal constructor), in which case it is not registered either.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         OpenTypeNestedInGenericType,
+        ServiceTypeUnmatchedByGenericFactory,
         MultipleDecoratedParameters,
         NoDecoratedParameter,
         InfiniteGenericDependency,
@@ -450,7 +465,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // Track seen (target type, single tag) pairs for SGIOC012 (shared between assembly and type-level)
         var seenDefaultTargetTypes = new ConcurrentDictionary<(string TargetTypeName, string Tag), Location?>();
         var defaultDecorators = ImmutableArray.CreateBuilder<ImmutableArray<INamedTypeSymbol>>();
-        var defaultSettings = CollectDefaults(context.Compilation, attributeSymbols, duplicatedDefaults, seenDefaultTargetTypes, defaultDecorators, context.CancellationToken);
+        var defaultAttributes = ImmutableArray.CreateBuilder<AttributeData>();
+        var defaultSettings = CollectDefaults(context.Compilation, attributeSymbols, duplicatedDefaults, seenDefaultTargetTypes, defaultDecorators, defaultAttributes, context.CancellationToken);
 
         var analyzerContext = new AnalyzerContext(
             attributeSymbols,
@@ -458,9 +474,11 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             serviceTypeIndex,
             defaultSettings,
             defaultDecorators.ToImmutable(),
+            defaultAttributes.ToImmutable(),
             duplicatedDefaults,
             seenDefaultTargetTypes,
-            features);
+            features,
+            context.Compilation.Assembly);
 
         // Collect assembly-level IoCRegisterFor attributes first (synchronously during compilation start)
         var assemblyRegistrations = CollectAssemblyLevelRegistrations(context.Compilation, analyzerContext, context.CancellationToken);
@@ -479,6 +497,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         {
             CollectAndValidateNamedType(ctx, analyzerContext);
             AnalyzeTypeLevelDefaultsAttribute(ctx, analyzerContext);
+            AnalyzeImportedOpenRegistrations(ctx, analyzerContext);
         }, SymbolKind.NamedType);
 
         // SGIOC007 + SGIOC022 + SGIOC028: Analyze InjectAttribute usage and feature gating on members
@@ -542,6 +561,24 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
         AnalyzeOpenTypesNestedInGenericType(context, attributeSyntax, attributeClass, analyzerContext);
         ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
+        ResolveFactoryMethod(context, attributeSyntax, analyzerContext);
+    }
+
+    /// <summary>
+    /// Resolves the <c>Factory</c> method given with <c>nameof()</c>, like the generator's <c>GetFactoryMethodData</c>, for the
+    /// expanding dependencies of open generic registrations (SGIOC036/SGIOC037) at compilation end.
+    /// </summary>
+    private static void ResolveFactoryMethod(SyntaxNodeAnalysisContext context, AttributeSyntax attributeSyntax, AnalyzerContext analyzerContext)
+    {
+        foreach(var argument in attributeSyntax.ArgumentList?.Arguments ?? default)
+        {
+            if(argument.NameEquals?.Name.Identifier.Text == "Factory"
+                && argument.Expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" }, ArgumentList.Arguments: [var nameofArgument] }
+                && RoslynExtensions.ResolveMethodSymbol(nameofArgument.Expression, context.SemanticModel) is { } factory)
+            {
+                analyzerContext.FactoryMethods[(attributeSyntax.SyntaxTree, attributeSyntax.Span)] = factory;
+            }
+        }
     }
 
     /// <summary>
@@ -597,6 +634,12 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC036/SGIOC037: Dependencies of open generic registrations that nest type arguments without end
         AnalyzeExpandingDependencies(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
 
+        // SGIOC039: Service types that the mapping of a generic factory does not match
+        AnalyzeGenericFactoryServiceTypes(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
+
+        // SGIOC001: Implementation types that cannot be constructed without a Factory or Instance
+        AnalyzeUnconstructibleImplementations(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
+
         var asyncInitOnlyServiceTypes = BuildAsyncInitOnlyServiceTypes(analyzerContext);
         if(asyncInitOnlyServiceTypes.Count == 0)
             return;
@@ -622,7 +665,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             context.CancellationToken.ThrowIfCancellationRequested();
 
             var decorator = applied.Key;
-            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var constructor = decorator.GetSelectedConstructor(analyzerContext.Assembly);
             ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = [.. decorator.GetInjectedMembers()];
             foreach(var decoratedParameterIndex in applied.Value.Keys)
             {
@@ -655,7 +698,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             cancellationToken.ThrowIfCancellationRequested();
 
             var decorator = usages.Key;
-            var constructor = decorator.SpecifiedOrPrimaryOrMostParametersConstructor;
+            var constructor = decorator.GetSelectedConstructor(analyzerContext.Assembly);
             var decoratorName = decorator.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
             foreach(var usage in usages.Value)
             {

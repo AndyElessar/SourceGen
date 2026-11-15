@@ -44,7 +44,8 @@ partial class IocSourceGenerator
             closedConstructorParams = newParams.ToImmutableEquatableArray();
         }
 
-        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
+        // Type arguments cannot add IDisposable to a class or change its constructors, so the closed type is disposable and
+        // constructible exactly when the open one is
         return TypeData.CreateGeneric(
             closedImplTypeName,
             openImplType.NameWithoutGeneric,
@@ -54,7 +55,8 @@ partial class IocSourceGenerator
             TypeParameters: closedTypeParams,
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: openImplType.HasInjectConstructor,
-            IsKnownNonDisposable: openImplType.IsKnownNonDisposable);
+            IsKnownNonDisposable: openImplType.IsKnownNonDisposable,
+            Constructibility: openImplType.Constructibility);
     }
 
     /// <summary>
@@ -295,7 +297,8 @@ partial class IocSourceGenerator
                 source.HasInjectConstructor,
                 source.InjectionMembers,
                 source.AllInterfaces,
-                source.AllBaseClasses);
+                source.AllBaseClasses,
+                ArrayRank: (source as ArrayTypeData)?.Rank ?? 1);
         }
 
         if(sourceGenericType is not null && (newIsOpenGeneric || sourceGenericType.GenericArity > 0 || newTypeParameters is { Length: > 0 } || source is TypeParameterTypeData))
@@ -418,7 +421,8 @@ partial class IocSourceGenerator
         // Substitute in type parameters
         var newTypeParams = SubstituteTypeParameters(decoratorTypeParams, typeArgMap, typeArguments);
 
-        // Type arguments cannot add IDisposable to a class, so the closed type is disposable exactly when the open one is
+        // Type arguments cannot add IDisposable to a class or change its constructors, so the closed type is disposable and
+        // constructible exactly when the open one is
         return TypeData.CreateGeneric(
             closedDecoratorName,
             closedDecoratorNameWithoutGeneric,
@@ -429,7 +433,8 @@ partial class IocSourceGenerator
             ConstructorParameters: closedConstructorParams,
             HasInjectConstructor: false,
             InjectionMembers: closedInjectionMembers,
-            IsKnownNonDisposable: genericDecorator.IsKnownNonDisposable);
+            IsKnownNonDisposable: genericDecorator.IsKnownNonDisposable,
+            Constructibility: genericDecorator.Constructibility);
     }
 
     /// <summary>

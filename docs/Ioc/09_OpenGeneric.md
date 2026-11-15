@@ -24,6 +24,8 @@ services.AddScoped(typeof(global::MyNamespace.IRepository<>), typeof(global::MyN
 
 </details>
 
+`Microsoft.Extensions.DependencyInjection` only calls public constructors. When the constructor `SourceGen.Ioc` selects is not public (for example, `internal Repository() { }`), the open registration is not emitted. Only the closed types discovered at compile time are registered, and the generated code constructs each of them (`sp => new Repository<User>()`). A closed type that is only requested at runtime cannot be resolved. The same rule applies to non-generic registrations: a type whose selected constructor is internal is registered with a factory that calls the constructor, not by its type.
+
 ## Auto-Discovery
 
 The generator automatically discovers closed generic types used in:
@@ -45,11 +47,11 @@ The generator automatically discovers closed generic types used in:
   - `GetKeyedServices(typeof(T), Key)`
   - `GetKeyedServices<T>(Key)`
 
-Closed generic registrations created this way are discovered in turn: when `Outer<string>` is closed from `Outer<T>(IRepo<T> repo)`, its `IRepo<string>` dependency is closed too. The same applies to its injected properties, fields, and method parameters.
+Closed generic registrations created this way are discovered in turn: when `Outer<string>` is closed from `Outer<T>(IRepo<T> repo)`, its `IRepo<string>` dependency is closed too. The same applies to its injected properties, fields, and method parameters. Only the dependencies of how the instance is created are closed: a registration with a `Factory` closes the factory method's parameters instead of its constructor and injected members, and a registration with an `Instance` closes none. A generic factory is only called for the registered types its mapping matches, while an implementation type it does not match keeps its own constructed registration (see [Generic Factory](08_Factory_Instance.md#how-the-mapping-works)), so both its constructor dependencies and the factory parameters are closed.
 
 An open generic registration is only closed for type arguments that satisfy its implementation's generic constraints: with `Repo<T> : IRepo<T> where T : struct`, `IRepo<int>` is closed as `Repo<int>`, while `IRepo<string>` is resolved like an unregistered service.
 
-A dependency that nests type arguments deeper on every round of a dependency cycle is not closed, because its closed forms never end: `Node<T>(Lazy<INode<List<T>>> next)` closed as `Node<string>` needs `INode<List<string>>`, which needs `INode<List<List<string>>>`, and so on. `INode<List<string>>` is resolved like an unregistered service (at runtime from the open generic registration, which a container with `IntegrateServiceProvider = false` cannot do), and the analyzer reports `SGIOC036` (no `Lazy<T>` or `Func<T>` on the cycle, so the object graph itself is infinite) or `SGIOC037`. Moving type arguments without nesting them, such as `Pair<T, U>(IPair<U, T> next)`, is closed normally.
+A dependency that nests type arguments deeper on every round of a dependency cycle is not closed, because its closed forms never end: `Node<T>(Lazy<INode<List<T>>> next)` closed as `Node<string>` needs `INode<List<string>>`, which needs `INode<List<List<string>>>`, and so on. `INode<List<string>>` is resolved like an unregistered service (at runtime from the open generic registration, which a container with `IntegrateServiceProvider = false` cannot do), and the analyzer reports `SGIOC036` (no `Lazy<T>` or `Func<T>` on the cycle, so the object graph itself is infinite) or `SGIOC037`. Moving type arguments without nesting them, such as `Pair<T, U>(IPair<U, T> next)`, is closed normally. The parameters of a generic factory are analyzed the same way: `Create<TF>(INode<List<TF>> next)` mapped to `INode<>` is reported at `next`.
 
 ```csharp
 public interface ILogger<T>;

@@ -48,7 +48,7 @@ partial class IocSourceGenerator
         // Find keyed registrations matching those value types
         var entries = new List<KvpRegistrationEntry>();
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
-        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, StringComparer.Ordinal);
+        var neededByValueType = neededPairs.ToLookup(static pair => pair.ValueTypeName, TypeNameComparer.Instance);
 
         foreach(var regWithTags in registrations)
         {

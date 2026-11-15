@@ -287,7 +287,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 
 |Diagnostic|Meaning|First Place to Check|
 |:---|:---|:---|
-|`SGIOC001`|Invalid registration target (`private` / `abstract`)|[Basic Usage](02_Basic.md#diagnostics)|
+|`SGIOC001`|Invalid registration target (`private` / `abstract`, or not constructible without `Factory` / `Instance`)|[Basic Usage](02_Basic.md#diagnostics)|
 |`SGIOC002`|Circular dependency|[Overview](01_Overview.md#compile-time-safety)|
 |`SGIOC003`|Singleton depends on scoped|[Overview](01_Overview.md#compile-time-safety)|
 |`SGIOC004`|Singleton depends on transient|[Overview](01_Overview.md#compile-time-safety)|
@@ -325,6 +325,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC036`|Open generic dependency nests type arguments without end (infinite object graph)|[Open Generics](09_OpenGeneric.md#diagnostics)|
 |`SGIOC037`|Open generic dependency nests type arguments without end behind `Lazy<T>` / `Func<T>`|[Open Generics](09_OpenGeneric.md#diagnostics)|
 |`SGIOC038`|Open type declared in a generic type is not supported|[Open Generics](09_OpenGeneric.md#diagnostics)|
+|`SGIOC039`|Service type does not match the generic factory mapping, so it is not registered|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 
 ## Production Checklist
 

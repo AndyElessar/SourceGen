@@ -214,7 +214,7 @@ public sealed partial class RegisterAnalyzer
 
     /// <summary>
     /// SGIOC010: Analyzes if both Factory and Instance are specified on the same attribute.
-    /// Reports error when both are present, as Factory takes precedence and Instance will be ignored.
+    /// Reports error when both are present, as Instance takes precedence and Factory will be ignored.
     /// </summary>
     private static void AnalyzeFactoryAndInstanceConflict(
         SyntaxNodeAnalysisContext context,
@@ -525,16 +525,110 @@ public sealed partial class RegisterAnalyzer
                 InvalidAttributeUsage,
                 location,
                 targetType.Name,
-                reason);
+                $"it is {reason}");
             reportDiagnostic(diagnostic);
         }
     }
 
-    /// <summary>A type name with its containing types, such as <c>Outer&lt;O&gt;.Node&lt;T&gt;</c>.</summary>
-    private static readonly SymbolDisplayFormat NestedTypeDisplayFormat = new(
-        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
-        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
-        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
+    /// <summary>
+    /// SGIOC001 for an implementation type that generated code cannot construct and that has neither a Factory (its own or of
+    /// its best default settings) nor an Instance, which the generator does not register: an interface, or a class without
+    /// a constructor accessible from the compiled assembly. Private and abstract types are reported when collected.
+    /// </summary>
+    private static void AnalyzeUnconstructibleImplementations(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        foreach(var registration in analyzerContext.Registrations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(registration.HasInstance || GetEffectiveFactory(analyzerContext, registration).Factory is not null)
+                continue;
+
+            ReportIfUnconstructible(GetDefinition(registration.Implementation), registration.Location);
+        }
+
+        // Like the generator's CreateRegistrationDataFromDefaultSettings, an open ImplementationTypes entry is created with the
+        // Factory of its default settings, while a closed one never is
+        foreach(var attribute in analyzerContext.DefaultAttributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var implementationTypes = attribute.GetImplementationTypeSymbols();
+            if(implementationTypes.Length == 0)
+                continue;
+
+            var hasFactory = HasFactory(attribute);
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
+            foreach(var implementationType in implementationTypes)
+            {
+                var definition = GetDefinition(implementationType);
+                if(!(hasFactory && definition.IsGenericType && definition.IsDefinition))
+                    ReportIfUnconstructible(definition, location);
+            }
+        }
+
+        void ReportIfUnconstructible(INamedTypeSymbol definition, Location? location)
+        {
+            if(definition.IsConstructibleIn(analyzerContext.Assembly) || AnalyzerHelpers.GetRegistrationInvalidReason(definition).IsInvalid)
+                return;
+
+            var reason = definition.TypeKind switch
+            {
+                TypeKind.Class => "it has no constructor accessible from this assembly; specify a Factory or Instance",
+                TypeKind.Interface => "it is an interface; specify a Factory or Instance",
+                var kind => $"it is {(kind is TypeKind.Enum ? "an" : "a")} {kind.ToString().ToLowerInvariant()}; specify a Factory or Instance",
+            };
+            reportDiagnostic(Diagnostic.Create(InvalidAttributeUsage, location, definition.Name, reason));
+        }
+    }
+
+    /// <summary>
+    /// SGIOC001 for each open generic registration of an imported module (recursively) that the compiled assembly cannot
+    /// construct, reported at the <c>[IocImportModule]</c> attribute: the generator closes these registrations in the
+    /// importing assembly, without their Factory or Instance, so it does not register their closed types.
+    /// </summary>
+    private static void AnalyzeImportedOpenRegistrations(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
+    {
+        if(context.Symbol is not INamedTypeSymbol typeSymbol)
+            return;
+
+        foreach(var attribute in typeSymbol.GetAttributes())
+        {
+            if(attribute.AttributeClass is not { } attrClass
+                || !AnalyzerHelpers.IsIocImportModuleAttribute(attrClass, analyzerContext.AttributeSymbols)
+                || attribute.GetImportedModuleType() is not { } moduleType)
+            {
+                continue;
+            }
+
+            Location? location = null;
+            string? moduleName = null;
+            var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach(var (registration, implementationType, _) in AnalyzerHelpers.EnumerateImportedOpenRegistrations(
+                moduleType, analyzerContext.AttributeSymbols, visited, context.CancellationToken))
+            {
+                // A registration declared in this compilation is analyzed where it is declared
+                if((registration.ApplicationSyntaxReference is { } syntax && context.Compilation.ContainsSyntaxTree(syntax.SyntaxTree))
+                    || implementationType.IsConstructibleIn(analyzerContext.Assembly))
+                    continue;
+
+                location ??= attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
+                    ?? typeSymbol.Locations.FirstOrDefault();
+                moduleName ??= moduleType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var reason = implementationType switch
+                {
+                    { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false } when implementationType.InstanceConstructors.Any(static ctor =>
+                        ctor.DeclaredAccessibility is Accessibility.Internal or Accessibility.ProtectedOrInternal) =>
+                        $"it has no constructor accessible from this assembly, which closes the open registrations imported from '{moduleName}'; make a constructor public or give this assembly access with InternalsVisibleTo",
+                    { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false } =>
+                        $"it has no constructor accessible from this assembly, which closes the open registrations imported from '{moduleName}'; make a constructor public",
+                    _ => $"this assembly cannot construct it to close the open registrations imported from '{moduleName}', which are closed without their Factory or Instance",
+                };
+                context.ReportDiagnostic(Diagnostic.Create(InvalidAttributeUsage, location, implementationType.Name, reason));
+            }
+        }
+    }
 
     /// <summary>
     /// SGIOC038: Reports open types declared in a generic type that a registration or default settings attribute uses, which
@@ -675,7 +769,7 @@ public sealed partial class RegisterAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(
                 OpenTypeNestedInGenericType,
                 location,
-                definition.ToDisplayString(NestedTypeDisplayFormat),
+                definition.ToDisplayString(AnalyzerHelpers.NestedTypeDisplayFormat),
                 GetGenericContainingType(definition).ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
     }

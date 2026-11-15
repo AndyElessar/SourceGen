@@ -37,8 +37,8 @@ public sealed partial class RegisterAnalyzer
 
             // Extract default settings to get target type name and tags
             var settings = attributeClass.IsGenericType
-                ? attribute.ExtractDefaultSettingsFromGenericAttribute()
-                : attribute.ExtractDefaultSettings();
+                ? attribute.ExtractDefaultSettingsFromGenericAttribute(analyzerContext.Assembly)
+                : attribute.ExtractDefaultSettings(analyzerContext.Assembly);
 
             if (settings is null)
                 continue;

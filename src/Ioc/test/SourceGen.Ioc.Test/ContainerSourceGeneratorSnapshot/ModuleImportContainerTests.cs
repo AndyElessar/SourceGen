@@ -372,4 +372,55 @@ public class ModuleImportContainerTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    [Arguments("NoInternalsVisibleTo", "", false)]
+    [Arguments("InternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"MainApp\")]", true)]
+    public async Task Container_WithImportedOpenRegistrationWithInternalConstructor_ClosesOnlyWhenAccessible(string scenario, string internalsVisibleTo, bool closes)
+    {
+        // The importing assembly closes the module's open registrations, so it must be able to call the constructor
+        var sharedLibSource = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{internalsVisibleTo}}
+
+            namespace SharedLib;
+
+            public interface IRepo<T>;
+
+            public sealed class Repo<T> : IRepo<T>
+            {
+                internal Repo() { }
+            }
+
+            [IocRegisterFor(typeof(Repo<>), ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepo<>)])]
+            [IocContainer]
+            public partial class SharedModule;
+            """;
+
+        const string mainAppSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using SharedLib;
+
+            namespace MainApp;
+
+            public sealed class Entity;
+
+            [IocRegister]
+            public sealed class Consumer(IRepo<Entity> repo);
+
+            [IocImportModule<SharedModule>]
+            [IocContainer]
+            public partial class AppContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource!.Contains("new global::SharedLib.Repo<global::MainApp.Entity>()")).IsEqualTo(closes);
+    }
 }

@@ -239,6 +239,12 @@ partial class IocSourceGenerator
             {
                 var newReg = registrations[i].Registration;
 
+                // An instance is neither constructed nor decorated, so it has no dependencies
+                if(newReg.Instance is not null)
+                {
+                    continue;
+                }
+
                 // Collect from decorator constructor parameters
                 foreach(var decorator in newReg.Decorators)
                 {
@@ -263,6 +269,26 @@ partial class IocSourceGenerator
                         processedDependencies,
                         generatedClosedGenerics,
                         decoratorSource);
+                }
+
+                // A factory creates the instance instead of the constructor, so only its parameters are dependencies; a
+                // generic factory's are written with its own type parameters
+                if(newReg.Factory is { } factory)
+                {
+                    var factorySource = closedRegistration is null
+                        ? closingSource
+                        : GetFactoryClosingSource(factory, closedRegistration, newReg.ServiceType);
+                    foreach(var param in factory.AdditionalParameters)
+                    {
+                        CollectNewDependencyFromType(
+                            param.Type,
+                            pendingDependencies,
+                            processedDependencies,
+                            generatedClosedGenerics,
+                            factorySource);
+                    }
+
+                    continue;
                 }
 
                 // Collect from constructor parameters
@@ -482,8 +508,23 @@ partial class IocSourceGenerator
             return false;
         }
 
+        // Like a registration, an implementation type that cannot be constructed without a Factory or Instance is not
+        // registered (SGIOC001), such as an open entry of an imported module without an accessible constructor
+        if(openGenericInfo is { Factory: null, Instance: null } && openImplType.Constructibility is Constructibility.NotConstructible)
+        {
+            return false;
+        }
+
         // Build closed implementation type name
         var closedImplTypeName = SubstituteTypeArguments(openImplType.Name, implTypeArgMap);
+
+        // A generic factory cannot create the closed service type when its mapping does not match it, so another registration may
+        if(openGenericInfo.Factory is { TypeParameterCount: > 0 } genericFactory
+            && closedServiceType.Name != closedImplTypeName
+            && MapGenericFactoryTypeArguments(genericFactory, closedServiceType) is null)
+        {
+            return false;
+        }
 
         // Build closed implementation type with substituted constructor parameters
         var closedImplType = BuildClosedImplTypeData(
@@ -501,10 +542,18 @@ partial class IocSourceGenerator
             implTypeArgMap,
             typeArguments);
 
-        // For generic factory methods (with [IocGenericFactory]), factory is only applicable to service types
-        // because generic type mapping requires matching service type template.
-        // For regular factories, apply to both implementation and service types.
-        var implFactory = openGenericInfo.Factory?.TypeParameterCount > 0 ? null : openGenericInfo.Factory;
+        // A generic factory is called for the registered types its mapping matches, so the implementation type is constructed
+        // unless the mapping matches it; a regular factory creates both the implementation and the service types
+        var implFactory = openGenericInfo.Factory is { } factory ? CloseGenericFactory(factory, closedImplType) : null;
+
+        // An implementation type that cannot be constructed is not registered without a factory for it, such as an open
+        // interface target whose generic factory's mapping does not match the closed type; its service types the factory
+        // creates still are, like a closed registration's
+        var skipImplementation = implFactory is null && openGenericInfo.Factory is not null && openImplType.Constructibility is Constructibility.NotConstructible;
+        var registrationCountBefore = registrations.Count;
+
+        // An instance whose path uses the implementation's type parameters, such as Node<T>.Default, is read from the closed type
+        var closedInstance = openGenericInfo.Instance is { } instance ? SubstituteTypeArguments(instance, implTypeArgMap) : null;
 
         // Injection members are written with the implementation's type parameters, such as IRepo<T> for Outer<T>
         var closedInjectionMembers = SubstituteInjectionMembers(openGenericInfo.InjectionMembers, implTypeArgMap, typeArguments);
@@ -521,11 +570,14 @@ partial class IocSourceGenerator
             [],
             closedInjectionMembers,
             Factory: implFactory,
-            openGenericInfo.Instance);
+            closedInstance);
 
         // Add registration with tags
-        registrations.Add(new ServiceRegistrationWithTags(implModel, openGenericInfo.Tags));
-        generatedClosedGenerics.Add(closedImplType.Name);
+        if(!skipImplementation)
+        {
+            registrations.Add(new ServiceRegistrationWithTags(implModel, openGenericInfo.Tags));
+            generatedClosedGenerics.Add(closedImplType.Name);
+        }
 
         // Create registrations for each closed service type
         foreach(var closedSvcType in closedServiceTypes)
@@ -547,11 +599,19 @@ partial class IocSourceGenerator
                 continue;
             }
 
+            // A generic factory cannot be called for a service type its mapping does not match, which is not registered
+            var closedSvcTypeWithArguments = WithTypeArgumentsOf(closedSvcType, closedServiceGenericType);
+            FactoryMethodData? serviceFactory = null;
+            if(openGenericInfo.Factory is { } openFactory && (serviceFactory = CloseGenericFactory(openFactory, closedSvcTypeWithArguments)) is null)
+            {
+                continue;
+            }
+
             // Process decorators for this specific service type
             // Use service type's type parameters for decorator substitution
             var serviceTypeDecorators = ProcessDecoratorsForServiceType(
                 openGenericInfo.Decorators,
-                WithTypeArgumentsOf(closedSvcType, closedServiceGenericType));
+                closedSvcTypeWithArguments);
 
             var serviceModel = new ServiceRegistrationModel(
                 closedSvcType,
@@ -563,11 +623,16 @@ partial class IocSourceGenerator
                 IsOpenGeneric: false,
                 serviceTypeDecorators,
                 closedInjectionMembers,
-                openGenericInfo.Factory,
-                openGenericInfo.Instance);
+                serviceFactory,
+                closedInstance);
 
             registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags));
             generatedClosedGenerics.Add(closedSvcType.Name);
+        }
+
+        if(registrations.Count == registrationCountBefore)
+        {
+            return false;
         }
 
         closingSource = new ClosingSource(openImplType.Name, implTypeArgMap);
@@ -596,13 +661,20 @@ partial class IocSourceGenerator
             return true; // Already registered, consider it success
         }
 
+        // A generic factory cannot be called for a closed type its mapping does not match, so another registration may close it
+        if(openGenericInfo.Factory is not { } openFactory || CloseGenericFactory(openFactory, closedServiceType) is not { } factory)
+        {
+            return false;
+        }
+
         // Process decorators for this specific service type
         var serviceTypeDecorators = ProcessDecoratorsForServiceType(
             openGenericInfo.Decorators,
             closedServiceType);
 
         // For factory-only registration, both ServiceType and ImplementationType are the same (the service type)
-        // The factory method will create the actual instance
+        // The factory method will create the actual instance, so the type is never constructed and its Constructibility
+        // stays Unknown: it comes from a dependency, which is extracted without it
         var serviceModel = new ServiceRegistrationModel(
             closedServiceType,
             closedServiceType, // Use service type as implementation type since factory creates the instance
@@ -613,7 +685,7 @@ partial class IocSourceGenerator
             IsOpenGeneric: false,
             serviceTypeDecorators,
             openGenericInfo.InjectionMembers,
-            openGenericInfo.Factory,
+            factory,
             openGenericInfo.Instance);
 
         registrations.Add(new ServiceRegistrationWithTags(serviceModel, openGenericInfo.Tags));

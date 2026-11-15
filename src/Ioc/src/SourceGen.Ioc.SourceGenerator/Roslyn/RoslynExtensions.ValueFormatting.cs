@@ -110,7 +110,7 @@ internal static partial class RoslynExtensions
 
             static string FormatEnumField(IFieldSymbol field)
             {
-                return $"{field.ContainingType.FullyQualifiedName}.{field.Name}";
+                return $"{field.ContainingType.FullyQualifiedName}.{field.EscapedName}";
             }
 
             static ulong ConvertToUInt64(object value)

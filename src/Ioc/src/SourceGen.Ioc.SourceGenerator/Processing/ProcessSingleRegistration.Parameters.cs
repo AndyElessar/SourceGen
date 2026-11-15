@@ -3,89 +3,83 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
-    /// Collects closed generic dependencies from a registration's constructor parameters, injection members,
-    /// factory method parameters, and closed decorators' constructor parameters and injection members.
+    /// Collects closed generic dependencies from how a registration creates its instances (see Register.Generics.spec.md):
+    /// the constructor parameters and injection members of a constructed implementation type, the parameters of the
+    /// factory (closed for each registered type a generic factory's mapping matches), and none for an instance, and from the
+    /// closed decorators' constructor parameters and injection members.
     /// </summary>
+    /// <param name="factory">The factory of the registration, its own or of its default settings; null for an instance.</param>
     private static ImmutableEquatableArray<ClosedGenericDependency> CollectClosedGenericDependenciesFromRegistration(
         RegistrationData registration,
+        FactoryMethodData? factory,
         ImmutableEquatableArray<ServiceRegistrationModel> serviceRegistrations)
     {
-        var constructorParams = registration.ImplementationType.ConstructorParameters;
-        var injectionMembers = registration.InjectionMembers;
-        var factoryParams = registration.Factory?.AdditionalParameters;
-
-        // Check if we have any decorators with constructor parameters or injection members in the service registrations
-        var hasDecoratorDependencies = false;
-        foreach(var reg in serviceRegistrations)
-        {
-            if(reg.IsOpenGeneric)
-                continue;
-
-            foreach(var decorator in reg.Decorators)
-            {
-                // Check constructor parameters (> 1 because one parameter receives the decorated instance)
-                if(decorator.ConstructorParameters is { Length: > 1 })
-                {
-                    hasDecoratorDependencies = true;
-                    break;
-                }
-                // Check injection members
-                if(decorator.InjectionMembers is { Length: > 0 })
-                {
-                    hasDecoratorDependencies = true;
-                    break;
-                }
-            }
-            if(hasDecoratorDependencies) break;
-        }
-
-        // Early exit if no constructor params, no injection members, no factory params, and no decorator dependencies
-        if((constructorParams is null || constructorParams.Length == 0)
-            && injectionMembers.Length == 0
-            && (factoryParams is null || factoryParams.Length == 0)
-            && !hasDecoratorDependencies)
+        // An instance is neither constructed nor decorated
+        if(registration.Instance is not null)
         {
             return [];
         }
 
-        var dependencies = new List<ClosedGenericDependency>();
-        var addedKeys = new HashSet<string>(StringComparer.Ordinal);
+        // Created with the first dependency: most registrations have none, and this runs for every registration
+        List<ClosedGenericDependency>? dependencies = null;
+        HashSet<string>? addedKeys = null;
 
-        // Collect from constructor parameters
-        if(constructorParams is not null)
+        // The implementation type is constructed without a factory, or with a generic factory its mapping does not match
+        var implementationType = registration.ImplementationType;
+        var isClosedImplementation = implementationType is not GenericTypeData { IsOpenGeneric: true };
+        var isConstructed = factory is null
+            || (factory.TypeParameterCount > 0
+                && implementationType.Constructibility is Constructibility.Activatable or Constructibility.GeneratedCodeOnly
+                && (!isClosedImplementation || MapGenericFactoryTypeArguments(factory, implementationType) is null));
+
+        if(isConstructed)
         {
-            foreach(var param in constructorParams)
+            foreach(var param in implementationType.ConstructorParameters ?? [])
             {
-                CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+            }
+
+            // Collect from injection members (properties, fields, methods with [Inject] attribute)
+            foreach(var member in registration.InjectionMembers)
+            {
+                switch(member)
+                {
+                    // For properties and fields, check the member type
+                    case PropertyOrFieldInjectionData propertyOrField:
+                        CollectClosedGenericDependencyFromType(propertyOrField.Type, ref dependencies, ref addedKeys);
+                        break;
+
+                    // For methods, check each parameter type
+                    case MethodInjectionData method:
+                        foreach(var param in method.Parameters)
+                        {
+                            CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                        }
+                        break;
+                }
             }
         }
 
-        // Collect from injection members (properties, fields, methods with [Inject] attribute)
-        foreach(var member in injectionMembers)
+        // The factory of each registered type; those of a generic factory are closed for the type they create. The factory of
+        // an open generic registration keeps its type parameters, which are skipped like the constructor's.
+        if(factory is not null)
         {
-            switch(member)
+            if(isClosedImplementation)
             {
-                // For properties and fields, check the member type
-                case PropertyOrFieldInjectionData propertyOrField:
-                    CollectClosedGenericDependencyFromType(propertyOrField.Type, dependencies, addedKeys);
-                    break;
-
-                // For methods, check each parameter type
-                case MethodInjectionData method:
-                    foreach(var param in method.Parameters)
+                foreach(var reg in serviceRegistrations)
+                {
+                    foreach(var param in reg.Factory?.AdditionalParameters ?? [])
                     {
-                        CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                        CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
                     }
-                    break;
+                }
             }
-        }
-
-        // Collect from factory method's additional parameters
-        if(factoryParams is not null)
-        {
-            foreach(var param in factoryParams)
+            else
             {
-                CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                foreach(var param in factory.AdditionalParameters)
+                {
+                    CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
+                }
             }
         }
 
@@ -103,7 +97,7 @@ partial class IocSourceGenerator
                 // Collect from constructor parameters, except the one that receives the decorated instance
                 foreach(var param in EnumerateDecoratorDependencyParameters(decorator, reg.ServiceType))
                 {
-                    CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                    CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
                 }
 
                 // Collect from injection members (properties, fields, methods with [Inject] attribute)
@@ -115,14 +109,14 @@ partial class IocSourceGenerator
                         {
                             // For properties and fields, check the member type
                             case PropertyOrFieldInjectionData propertyOrField:
-                                CollectClosedGenericDependencyFromType(propertyOrField.Type, dependencies, addedKeys);
+                                CollectClosedGenericDependencyFromType(propertyOrField.Type, ref dependencies, ref addedKeys);
                                 break;
 
                             // For methods, check each parameter type
                             case MethodInjectionData method:
                                 foreach(var param in method.Parameters)
                                 {
-                                    CollectClosedGenericDependencyFromType(param.Type, dependencies, addedKeys);
+                                    CollectClosedGenericDependencyFromType(param.Type, ref dependencies, ref addedKeys);
                                 }
                                 break;
                         }
@@ -131,39 +125,39 @@ partial class IocSourceGenerator
             }
         }
 
-        return dependencies.ToImmutableEquatableArray();
+        return dependencies?.ToImmutableEquatableArray() ?? [];
     }
 
     /// <summary>
     /// Collects closed generic dependency from a type and adds it to the dependencies list.
     /// </summary>
     /// <param name="paramType">The type to check for closed generic dependencies.</param>
-    /// <param name="dependencies">The list to add dependencies to.</param>
-    /// <param name="addedKeys">Set of already added dependency keys to avoid duplicates.</param>
+    /// <param name="dependencies">The list to add dependencies to, created with the first dependency.</param>
+    /// <param name="addedKeys">Set of already added dependency keys to avoid duplicates, created with the first dependency.</param>
     private static void CollectClosedGenericDependencyFromType(
         TypeData paramType,
-        List<ClosedGenericDependency> dependencies,
-        HashSet<string> addedKeys)
+        ref List<ClosedGenericDependency>? dependencies,
+        ref HashSet<string>? addedKeys)
     {
         if(GetWrapperInnerType(paramType) is { } innerType)
         {
             // Recursively collect from the inner type (handles nested wrappers like Lazy<KVP<K,V>>)
-            CollectClosedGenericDependencyFromType(innerType, dependencies, addedKeys);
+            CollectClosedGenericDependencyFromType(innerType, ref dependencies, ref addedKeys);
         }
 
         if(GetEnumerableElementType(paramType) is { } elementType)
         {
             // Recursively collect from the element type (handles nested wrappers like IEnumerable<Lazy<IHandler<T>>>)
-            CollectClosedGenericDependencyFromType(elementType, dependencies, addedKeys);
+            CollectClosedGenericDependencyFromType(elementType, ref dependencies, ref addedKeys);
         }
 
         // Check if this is a closed generic type (has generic arguments but is not open generic)
         if(paramType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericParamType)
         {
             // Add the original type as a dependency (skip arrays as they don't need registration)
-            if(!paramType.IsArrayType && addedKeys.Add(paramType.Name))
+            if(!paramType.IsArrayType && (addedKeys ??= new(StringComparer.Ordinal)).Add(paramType.Name))
             {
-                dependencies.Add(new ClosedGenericDependency(
+                (dependencies ??= []).Add(new ClosedGenericDependency(
                     paramType.Name,
                     paramType,
                     genericParamType.NameWithoutGeneric));

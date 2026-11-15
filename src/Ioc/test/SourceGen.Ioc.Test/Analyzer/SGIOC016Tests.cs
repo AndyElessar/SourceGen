@@ -38,6 +38,50 @@ public class SGIOC016Tests
     }
 
     [Test]
+    [Arguments("AttributeSameTypeArguments", "[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]", "", "IPair<string, string>", true)]
+    [Arguments("TypeMappingSameTypeArguments", "", ", GenericFactoryTypeMapping = [typeof(IPair<int, int>), typeof(int)]", "IPair<string, string>", true)]
+    [Arguments("AttributeDifferentTypeArguments", "[IocGenericFactory(typeof(IPair<int, int>), typeof(int))]", "", "IPair<string, int>", false)]
+    [Arguments("TypeMappingDifferentTypeArguments", "", ", GenericFactoryTypeMapping = [typeof(IPair<int, int>), typeof(int)]", "IPair<string, int>", false)]
+    public async Task SGIOC016_PlaceholderRepeatedInTemplate_IsValidAndMatchesSameTypeArguments(string scenario, string methodAttribute, string mapping, string target, bool matches)
+    {
+        // A placeholder may appear more than once; a service type matches only when it takes the same type argument at each position
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof({{target}}), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create){{mapping}})]
+
+            namespace TestNamespace;
+
+            public interface IPair<T1, T2>;
+
+            public static class FactoryContainer
+            {
+                {{methodAttribute}}
+                public static IPair<T, T> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC016")).IsEmpty();
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039).Count()).IsEqualTo(matches ? 0 : 1);
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        foreach(var output in new[] { SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration") ?? "", SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs") ?? "" })
+        {
+            await Assert.That(output.Contains("global::TestNamespace.FactoryContainer.Create<string>()")).IsEqualTo(matches);
+            await Assert.That(output).DoesNotContain("FactoryContainer.Create<int>");
+        }
+    }
+
+    [Test]
     public async Task SGIOC016_GenericFactory_WithIocGenericFactoryAttribute_NoDiagnostic()
     {
         const string source = """
@@ -436,6 +480,75 @@ public class SGIOC016Tests
 
         await Assert.That(sgioc016).Count().IsEqualTo(1);
         await Assert.That(sgioc016[0].GetMessage()).Contains("'decimal'").And.Contains("does not appear");
+    }
+
+    [Test]
+    public async Task SGIOC016_PlaceholderOnlyInContainingType_ReportsOnlySgioc016WithContainingType()
+    {
+        // TypeData of Outer<int>.Inner does not carry the type arguments of Outer<int> (issue #187), so the placeholder is
+        // not in the template; the registration is not analyzed by SGIOC039, which only reports service types of valid mappings
+        const string source = """
+            using System;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public class Outer<T> { public class Inner; }
+            public class Entity;
+
+            public static class Factories
+            {
+                [IocGenericFactory(typeof(IFoo<Outer<int>.Inner>), typeof(int))]
+                public static IFoo<Outer<T>.Inner> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IFoo<Outer<Entity>.Inner>)], Factory = nameof(Factories.Create))]
+            public sealed class Impl : IFoo<Outer<Entity>.Inner>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC016).ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("'int'").And.Contains("'IFoo<Outer<int>.Inner>'");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("Generic", "IFoo<List<int>>", "List<int>", "IFoo<List<Entity>>")]
+    [Arguments("Nullable", "IFoo<int?>", "int?", "IFoo<Entity?>")]
+    [Arguments("Tuple", "IFoo<(int, string)>", "(int, string)", "IFoo<(Entity, string)>")]
+    [Arguments("Array", "IFoo<int[]>", "int[]", "IFoo<Entity[]>")]
+    public async Task SGIOC016_PlaceholderWithTypeArguments_ReportsOnlySgioc016(string scenario, string template, string placeholder, string serviceType)
+    {
+        // The generator only takes types without type arguments as placeholders, so it cannot call the factory
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public struct Entity;
+
+            public static class Factories
+            {
+                [IocGenericFactory(typeof({{template}}), typeof({{placeholder}}))]
+                public static object Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(ServiceTypes = [typeof({{serviceType}})], Factory = nameof(Factories.Create))]
+            public sealed class Impl : {{serviceType}};
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc016 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC016).ToList();
+
+        await Assert.That(sgioc016).Count().IsEqualTo(1);
+        await Assert.That(sgioc016[0].GetMessage()).Contains("has type arguments or is an array");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC039)).IsEmpty();
     }
 
     [Test]

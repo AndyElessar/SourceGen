@@ -53,6 +53,51 @@ public class GenericFactoryContainerTests
     }
 
     [Test]
+    public async Task Container_WithGenericFactory_GenericParameter_ResolvesClosedParameter()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(
+                typeof(TestNamespace.IRequestHandler<>),
+                ServiceLifetime.Singleton,
+                Factory = nameof(TestNamespace.FactoryContainer.Create))]
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse> { }
+            public interface IRepo<T> { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepo<>)])]
+            public class Repo<T> : IRepo<T> { }
+
+            public class Entity { }
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>(IRepo<T> repo)
+                    => throw new NotImplementedException();
+            }
+
+            public class Handler<T> : IRequestHandler<Task<T>> { }
+
+            [IocDiscover<IRequestHandler<Task<Entity>>>]
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithGenericFactory_MultipleTypeParameters_GeneratesCorrectFactoryCall()
     {
         // Multiple type parameters: Map 'int' -> T1, 'decimal' -> T2
