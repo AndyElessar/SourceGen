@@ -582,6 +582,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Resolves the member named by <c>nameof()</c> as a member of <paramref name="typeSymbol"/>: <c>nameof(Node&lt;int&gt;.Repo)</c>
     /// names <c>Node&lt;int&gt;.Repo</c>, while the registration of <c>Node&lt;T&gt;</c> injects <c>Node&lt;T&gt;.Repo</c>.
+    /// A member hidden on <paramref name="typeSymbol"/> is not resolved, as the generated code would bind the hiding member.
     /// </summary>
     private static ISymbol? ResolveInjectMemberSymbolFromNameof(ExpressionSyntax nameofExpr, INamedTypeSymbol typeSymbol, SemanticModel semanticModel)
     {
@@ -589,7 +590,8 @@ partial class IocSourceGenerator
             return null;
         var inner = invocation.ArgumentList.Arguments[0].Expression;
         var info = semanticModel.GetSymbolInfo(inner);
-        return (info.Symbol ?? info.CandidateSymbols.FirstOrDefault())?.AsMemberOf(typeSymbol);
+        var member = (info.Symbol ?? info.CandidateSymbols.FirstOrDefault())?.AsMemberOf(typeSymbol);
+        return member is not null && member.GetHidingMember(typeSymbol, semanticModel.Compilation.Assembly) is null ? member : null;
     }
 
     internal static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel)

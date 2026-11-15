@@ -1018,7 +1018,7 @@ partial class ContainerAnalyzer
                         AddUnresolved(dependencyCache.GetConstructorAndMembers(implementationType, cancellationToken));
 
                     if(!registration.InjectMembers.IsDefaultOrEmpty)
-                        AddUnresolved(DependencyCache.GetInjectMembers(implementationType, registration.InjectMembers));
+                        AddUnresolved(dependencyCache.GetInjectMembers(implementationType, registration.InjectMembers));
 
                     break;
 
@@ -1175,7 +1175,7 @@ partial class ContainerAnalyzer
         /// Gets the dependencies of the <c>InjectMembers</c> of a registration, reported on their attribute elements.
         /// <c>[IocInject]</c> on a member takes precedence, like the generator's <c>MergeInjectionMembers</c>.
         /// </summary>
-        public static List<Dependency> GetInjectMembers(
+        public List<Dependency> GetInjectMembers(
             INamedTypeSymbol implementationType,
             ImmutableArray<InjectMemberInfo> injectMembers)
         {
@@ -1188,9 +1188,10 @@ partial class ContainerAnalyzer
             {
                 // Like the generator, the member is injected as a member of the implementation type, such as Node<T>.Repo
                 // for nameof(Node<int>.Repo) or nameof(INode<int>.Repo), so an open generic implementation's member uses its
-                // type parameters. A member the type does not have, or implements explicitly, is not injected (SGIOC024).
+                // type parameters. A member the type does not have, implements explicitly, or hides, is not injected (SGIOC024).
                 if(!injectedNames.Contains(injectMember.Member.Name)
                     && injectMember.Member.AsMemberOf(implementationType) is { } member
+                    && member.GetHidingMember(implementationType, assembly) is null
                     && IocSourceGenerator.IsInjectableMember(member))
                 {
                     AddMember(dependencies, member, injectMember.Key, injectMember.Location, useLocationForParameters: true);

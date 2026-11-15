@@ -258,6 +258,226 @@ public class InjectMembersTests
     }
 
     [Test]
+    [Arguments("HiddenProperty", "nameof(Base.X)", """
+        public class Base { public IFoo? X { get; set; } }
+        public sealed class Derived : Base { public new IBar? X { get; set; } }
+        """, false)]
+    [Arguments("HiddenField", "nameof(Base.X)", """
+        public class Base { public IFoo? X; }
+        public sealed class Derived : Base { public new IBar? X; }
+        """, false)]
+    [Arguments("HiddenByMemberOfOtherKind", "nameof(Base.X)", """
+        public class Base { public IFoo? X { get; set; } }
+        public sealed class Derived : Base { public new void X(IBar bar) { } }
+        """, false)]
+    [Arguments("HiddenMethod", "nameof(Base.Init)", """
+        public class Base { public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { public new void Init(IFoo foo) { } }
+        """, false)]
+    [Arguments("HiddenOnIntermediateBase", "nameof(Base.X)", """
+        public class Base { public IFoo? X { get; set; } }
+        public class Middle : Base { public new IBar? X { get; set; } }
+        public sealed class Derived : Middle;
+        """, false)]
+    [Arguments("InterfaceMemberImplementedByBaseAndHidden", "nameof(IHasX.X)", """
+        public interface IHasX { IFoo? X { get; set; } }
+        public class Base : IHasX { public IFoo? X { get; set; } }
+        public sealed class Derived : Base { public new IBar? X { get; set; } }
+        """, false)]
+    [Arguments("OverriddenProperty", "nameof(Base.X)", """
+        public class Base { public virtual IFoo? X { get; set; } }
+        public sealed class Derived : Base { public override IFoo? X { get; set; } }
+        """, true)]
+    [Arguments("InaccessibleHidingMember", "nameof(Base.X)", """
+        public class Base { public IFoo? X { get; set; } }
+        public sealed class Derived : Base { private new IBar? X { get; set; } }
+        """, true)]
+    [Arguments("MethodOverload", "nameof(Base.Init)", """
+        public class Base { public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { public void Init(IBar bar) { } }
+        """, true)]
+    [Arguments("InterfaceMemberReimplementedOnRegisteredType", "nameof(IHasX.X)", """
+        public interface IHasX { IFoo? X { get; set; } }
+        public class Base : IHasX { public IFoo? X { get; set; } }
+        public sealed class Derived : Base, IHasX { public new IFoo? X { get; set; } }
+        """, true)]
+    public async Task InjectMembers_MemberHiddenOnRegisteredType_IsNotInjected(string scenario, string injectMember, string declarations, bool injected)
+    {
+        // The generated code binds the member by name on the registered type, so a member hidden there (with `new`) is not
+        // the member it assigns or calls: it is not injected (SGIOC024)
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+            public interface IBar;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IBar)])]
+            public sealed class Bar : IBar;
+
+            {{declarations}}
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject"
+        };
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        if(injected)
+            await Assert.That(generatedSource).Contains("<global::TestNamespace.IFoo>()").Because(scenario);
+        else
+            await Assert.That(generatedSource).DoesNotContain("<global::TestNamespace.IFoo>()").Because(scenario);
+        await Assert.That(generatedSource).DoesNotContain("<global::TestNamespace.IBar>()").Because(scenario);
+    }
+
+    [Test]
+    [Arguments("nameof(Base<int>.X)", "public new IBar<T>? X { get; set; }", false)]
+    [Arguments("nameof(IHasX<int>.X)", "public new IBar<T>? X { get; set; }", false)]
+    [Arguments("nameof(Base<int>.X)", "", true)]
+    public async Task InjectMembers_MemberHiddenOnOpenGenericRegisteredType_IsNotInjected(string injectMember, string derivedMember, bool injected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived<>), ServiceTypes = [typeof(IDerived<>)], InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+            public interface IBar<T>;
+            public interface IDerived<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo<>)])]
+            public sealed class Foo<T> : IFoo<T>;
+
+            public interface IHasX<T> { IFoo<T>? X { get; set; } }
+            public class Base<T> : IHasX<T> { public IFoo<T>? X { get; set; } }
+            public sealed class Derived<T> : Base<T>, IDerived<T> { {{derivedMember}} }
+
+            [IocRegister]
+            public sealed class Consumer(IDerived<string> derived);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        if(injected)
+            await Assert.That(generatedSource).Contains("<global::TestNamespace.IFoo<string>>()");
+        else
+            await Assert.That(generatedSource).DoesNotContain("<global::TestNamespace.IFoo<string>>()");
+    }
+
+    [Test]
+    [Arguments("Property", "nameof(Base.X)", """
+        public class Base { public IFoo? X { get; set; } }
+        public sealed class Derived : Base { [IocInject] public new IBar? X { get; set; } }
+        """)]
+    [Arguments("Field", "nameof(Base.X)", """
+        public class Base { public IFoo? X; }
+        public sealed class Derived : Base { [IocInject] public new IBar? X; }
+        """)]
+    [Arguments("Method", "nameof(Base.Init)", """
+        public class Base { public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { [IocInject] public new void Init(IFoo foo) { } }
+        """)]
+    public async Task InjectMembers_MemberHiddenByIocInjectMember_InjectsIocInjectMember(string scenario, string injectMember, string declarations)
+    {
+        // [IocInject] on the hiding member takes precedence over the InjectMembers element of the same name
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+            public interface IBar;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IBar)])]
+            public sealed class Bar : IBar;
+
+            {{declarations}}
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject"
+        };
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        // The [IocInject] member is injected once, with its own type
+        var expected = scenario == "Method" ? "<global::TestNamespace.IFoo>()" : "<global::TestNamespace.IBar>()";
+        var other = scenario == "Method" ? "<global::TestNamespace.IBar>()" : "<global::TestNamespace.IFoo>()";
+        await Assert.That(generatedSource).Contains(expected).Because(scenario);
+        await Assert.That(generatedSource!.Split(expected).Length).IsEqualTo(2).Because(scenario);
+        await Assert.That(generatedSource).DoesNotContain(other).Because(scenario);
+    }
+
+    [Test]
+    [Arguments("InternalHidingMemberOfReferencedAssembly", "", true)]
+    [Arguments("InternalHidingMemberVisibleThroughInternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", false)]
+    public async Task InjectMembers_InternalHidingMemberOfReferencedAssembly_HidesOnlyWhenAccessible(string scenario, string externalAttribute, bool injected)
+    {
+        // An internal member of another assembly is not visible to the generated code, so it does not hide Base.X there
+        var externalSource = $$"""
+            {{externalAttribute}}
+
+            namespace External;
+
+            public interface IFoo;
+            public interface IBar;
+
+            public class Base { public IFoo? X { get; set; } }
+            public sealed class Derived : Base { internal new IBar? X { get; set; } }
+            """;
+
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(External.Derived), InjectMembers = [nameof(External.Base.X)])]
+
+            namespace TestNamespace;
+
+            [IocRegister(ServiceTypes = [typeof(External.IFoo)])]
+            public sealed class Foo : External.IFoo;
+            """;
+
+        var externalCompilation = SourceGeneratorTestHelper.CreateCompilation("ExternalAssembly", externalSource);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, additionalReferences: [externalCompilation.ToMetadataReference()]);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        if(injected)
+            await Assert.That(generatedSource).Contains("<global::External.IFoo>()").Because(scenario);
+        else
+            await Assert.That(generatedSource).DoesNotContain("<global::External.IFoo>()").Because(scenario);
+    }
+
+    [Test]
     [Timeout(60_000)]
     public async Task InjectMembers_OpenGenericRegistrationWithExpandingMember_StopsClosing(CancellationToken cancellationToken)
     {

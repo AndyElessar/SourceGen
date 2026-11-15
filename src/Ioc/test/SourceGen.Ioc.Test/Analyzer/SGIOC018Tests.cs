@@ -1990,6 +1990,88 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("nameof(Base.Repo)", "public new IOther Repo { get; set; } = null!;", 0)]
+    [Arguments("nameof(INode.Repo)", "public new IOther Repo { get; set; } = null!;", 0)]
+    [Arguments("nameof(Base.Repo)", "", 1)]
+    [Arguments("nameof(Base.Repo)", "[IocInject] public new IOther Repo { get; set; } = null!;", 1)]
+    public async Task SGIOC018_InjectMembers_MemberHiddenOnRegisteredType_NotChecked(string injectMember, string nodeMember, int expectedCount)
+    {
+        // The generator does not inject a member hidden on the registered type (SGIOC024), so its dependency is not checked
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Node), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IRepo;
+            public interface IOther;
+
+            public interface INode
+            {
+                IRepo Repo { get; set; }
+            }
+
+            public class Base : INode
+            {
+                public IRepo Repo { get; set; } = null!;
+            }
+
+            public sealed class Node : Base
+            {
+                {{nodeMember}}
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expectedCount);
+    }
+
+    [Test]
+    [Arguments("", 1)]
+    [Arguments("[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 0)]
+    public async Task SGIOC018_InjectMembers_InternalHidingMemberOfReferencedAssembly_ChecksOnlyWhenNotAccessible(string externalAttribute, int expectedCount)
+    {
+        // An internal member of another assembly is not visible to the generated code, so Base.X is injected and checked
+        var externalSource = $$"""
+            {{externalAttribute}}
+
+            namespace External;
+
+            public interface IFoo;
+            public interface IBar;
+
+            public class Base { public IFoo X { get; set; } = null!; }
+            public sealed class Derived : Base { internal new IBar X { get; set; } = null!; }
+            """;
+
+        const string source = """
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(External.Derived), InjectMembers = [nameof(External.Base.X)])]
+
+            namespace TestNamespace;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var externalCompilation = SourceGeneratorTestHelper.CreateCompilation("ExternalAssembly", externalSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [externalCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expectedCount);
+    }
+
+    [Test]
     [Arguments("typeof(Node<>)", "nameof(Node<int>.Repo)")]
     [Arguments("typeof(Node<string>)", "nameof(Node<int>.Repo)")]
     [Arguments("typeof(Node<>)", "nameof(INode<int>.Repo)")]
