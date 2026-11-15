@@ -198,6 +198,72 @@ internal static partial class RoslynExtensions
                 return null;
             }
         }
+
+        /// <summary>
+        /// Gets the member that hides this member on <paramref name="type"/>: a member with the same name declared with
+        /// <c>new</c> on <paramref name="type"/> or on a base class between it and the declaring type of this member, which
+        /// generated code naming the member on <paramref name="type"/> (<c>new T() { X = ... }</c>, <c>t.X(...)</c>) binds to
+        /// instead. A method is only hidden by a method with the same parameters; overrides and members that generated code
+        /// compiled into <paramref name="assembly"/> cannot access do not hide it: only <c>public</c> members, and
+        /// <c>internal</c> or <c>protected internal</c> members declared in <paramref name="assembly"/> or in an assembly
+        /// that gives it access to its internals (<c>InternalsVisibleTo</c>), hide it.
+        /// </summary>
+        /// <param name="type">The registered type that this member, as returned by <c>AsMemberOf</c>, is a member of.</param>
+        /// <param name="assembly">The assembly the generated code is compiled into.</param>
+        /// <returns>The hiding member, or <see langword="null"/> when this member is not hidden.</returns>
+        public ISymbol? GetHidingMember(INamedTypeSymbol type, IAssemblySymbol assembly)
+        {
+            if(member.ContainingType is not { } containingType)
+            {
+                return null;
+            }
+
+            var target = type.IsUnboundGenericType ? type.OriginalDefinition : type;
+            for(var current = target;
+                current is not null && !SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, containingType.OriginalDefinition);
+                current = current.BaseType)
+            {
+                foreach(var candidate in current.GetMembers(member.Name))
+                {
+                    if(!candidate.IsOverride
+                        && IsAccessible(candidate, assembly)
+                        && (member is not IMethodSymbol method || candidate is not IMethodSymbol candidateMethod || HasSameParameters(method, candidateMethod)))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            return null;
+
+            static bool IsAccessible(ISymbol candidate, IAssemblySymbol assembly) => candidate.DeclaredAccessibility switch
+            {
+                Accessibility.Public => true,
+                Accessibility.Internal or Accessibility.ProtectedOrInternal =>
+                    SymbolEqualityComparer.Default.Equals(candidate.ContainingAssembly, assembly) || candidate.ContainingAssembly.GivesAccessTo(assembly),
+                _ => false,
+            };
+
+            static bool HasSameParameters(IMethodSymbol method, IMethodSymbol other)
+            {
+                if(method.Arity != other.Arity || method.Parameters.Length != other.Parameters.Length)
+                {
+                    return false;
+                }
+
+                for(var i = 0; i < method.Parameters.Length; i++)
+                {
+                    // Signatures cannot differ only in ref, out and in
+                    if((method.Parameters[i].RefKind == RefKind.None) != (other.Parameters[i].RefKind == RefKind.None)
+                        || !SymbolEqualityComparer.Default.Equals(method.Parameters[i].Type, other.Parameters[i].Type))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
     }
 
     /// <summary>

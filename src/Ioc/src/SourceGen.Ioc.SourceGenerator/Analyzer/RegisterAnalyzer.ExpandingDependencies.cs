@@ -15,7 +15,7 @@ partial class RegisterAnalyzer
         AnalyzerContext analyzerContext,
         CancellationToken cancellationToken)
     {
-        if(analyzerContext.Registrations.IsEmpty && analyzerContext.DefaultAttributes.IsEmpty)
+        if(analyzerContext.Registrations.Count == 0 && analyzerContext.DefaultAttributes.IsEmpty)
             return;
 
         var index = new Dictionary<string, List<OpenGenericRegistrationInfo>>(StringComparer.Ordinal);
@@ -287,6 +287,8 @@ partial class RegisterAnalyzer
     /// <summary>
     /// Gets the factory a registration creates its instances with, like <c>ProcessSingleRegistration</c>: none with an
     /// <c>Instance</c>, otherwise its own Factory, which takes precedence over the Factory of its best default settings.
+    /// Default settings of imported modules (after <see cref="AnalyzerContext.DefaultAttributes"/>) have no Factory, like
+    /// in the generator.
     /// </summary>
     private static (IMethodSymbol? Method, FactoryMethodData? Factory) GetEffectiveFactory(AnalyzerContext analyzerContext, AnalyzedRegistration registration)
     {
@@ -294,7 +296,7 @@ partial class RegisterAnalyzer
             return default;
 
         var attribute = registration.HasFactory ? registration.Attribute
-            : registration.DefaultIndex >= 0 && HasFactory(analyzerContext.DefaultAttributes[registration.DefaultIndex]) ? analyzerContext.DefaultAttributes[registration.DefaultIndex]
+            : registration.DefaultIndex >= 0 && registration.DefaultIndex < analyzerContext.DefaultAttributes.Length && HasFactory(analyzerContext.DefaultAttributes[registration.DefaultIndex]) ? analyzerContext.DefaultAttributes[registration.DefaultIndex]
             : null;
         return attribute is null ? default : GetFactory(analyzerContext, attribute);
     }

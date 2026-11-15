@@ -1404,6 +1404,78 @@ public class SGIOC018Tests
     }
 
     [Test]
+    [Arguments("UnsatisfyingFirst", "IHandler<(int A, int B), (int X, int Y)> first, IHandler<(int X, int Y), (int X, int Y)> second")]
+    [Arguments("SatisfyingFirst", "IHandler<(int X, int Y), (int X, int Y)> first, IHandler<(int A, int B), (int X, int Y)> second")]
+    [Arguments("SatisfyingInsideLazy", "IHandler<(int A, int B), (int X, int Y)> first, System.Lazy<IHandler<(int X, int Y), (int X, int Y)>> second")]
+    public async Task SGIOC018_OpenGenericRegistration_OtherSpellingOfSameRuntimeTypeSatisfiesConstraints_NoDiagnostic(string scenario, string parameters)
+    {
+        // The generator closes Handler<T, U> with the spelling that satisfies the constraint, and the container resolves the
+        // other spelling, which is the same runtime type, by that closed registration
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            public class Handler<T, U> : IHandler<T, U> where T : U { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer({{parameters}});
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var generated = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var container = SourceGeneratorTestHelper.GetGeneratedSource(generated, "TestContainer");
+        await Assert.That(container).Contains("Handler<(int X, int Y), (int X, int Y)>");
+        await Assert.That(container).DoesNotContain("Handler<(int A, int B), (int X, int Y)>");
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC018)).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC018_OpenGenericRegistration_SatisfyingSpellingOnlyInNonWrapperTypeArgument_ReportsDiagnostic()
+    {
+        // The generator discovers the element types of wrappers, not the type arguments of other generic types, so it does
+        // not close Handler<T, U> with the spelling inside IBar<...>
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T, U> { }
+            public interface IBar<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<,>)])]
+            public class Handler<T, U> : IHandler<T, U> where T : U { }
+
+            [IocRegister(ServiceLifetime.Singleton, RegisterAllInterfaces = true)]
+            public class Bar : IBar<IHandler<(int X, int Y), (int X, int Y)>> { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer(IHandler<(int A, int B), (int X, int Y)> first, IBar<IHandler<(int X, int Y), (int X, int Y)>> bar);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var generated = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        var container = SourceGeneratorTestHelper.GetGeneratedSource(generated, "TestContainer");
+        await Assert.That(container).DoesNotContain("TestNamespace.Handler<");
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC018)).Count().IsEqualTo(1);
+    }
+
+    [Test]
     public async Task SGIOC018_OpenGenericRegistrationsWithDifferentConstraints_ResolvedBySatisfyingImplementation_NoDiagnostic()
     {
         const string source = """
@@ -1987,6 +2059,88 @@ public class SGIOC018Tests
 
         await Assert.That(sgioc018).Count().IsEqualTo(1);
         await Assert.That(sgioc018[0].GetMessage()).Contains("IRepo");
+    }
+
+    [Test]
+    [Arguments("nameof(Base.Repo)", "public new IOther Repo { get; set; } = null!;", 0)]
+    [Arguments("nameof(INode.Repo)", "public new IOther Repo { get; set; } = null!;", 0)]
+    [Arguments("nameof(Base.Repo)", "", 1)]
+    [Arguments("nameof(Base.Repo)", "[IocInject] public new IOther Repo { get; set; } = null!;", 1)]
+    public async Task SGIOC018_InjectMembers_MemberHiddenOnRegisteredType_NotChecked(string injectMember, string nodeMember, int expectedCount)
+    {
+        // The generator does not inject a member hidden on the registered type (SGIOC024), so its dependency is not checked
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Node), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IRepo;
+            public interface IOther;
+
+            public interface INode
+            {
+                IRepo Repo { get; set; }
+            }
+
+            public class Base : INode
+            {
+                public IRepo Repo { get; set; } = null!;
+            }
+
+            public sealed class Node : Base
+            {
+                {{nodeMember}}
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expectedCount);
+    }
+
+    [Test]
+    [Arguments("", 1)]
+    [Arguments("[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 0)]
+    public async Task SGIOC018_InjectMembers_InternalHidingMemberOfReferencedAssembly_ChecksOnlyWhenNotAccessible(string externalAttribute, int expectedCount)
+    {
+        // An internal member of another assembly is not visible to the generated code, so Base.X is injected and checked
+        var externalSource = $$"""
+            {{externalAttribute}}
+
+            namespace External;
+
+            public interface IFoo;
+            public interface IBar;
+
+            public class Base { public IFoo X { get; set; } = null!; }
+            public sealed class Derived : Base { internal new IBar X { get; set; } = null!; }
+            """;
+
+        const string source = """
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(External.Derived), InjectMembers = [nameof(External.Base.X)])]
+
+            namespace TestNamespace;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var externalCompilation = SourceGeneratorTestHelper.CreateCompilation("ExternalAssembly", externalSource);
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [externalCompilation.ToMetadataReference()]);
+        var diagnostics = await compilation.WithAnalyzers([new ContainerAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expectedCount);
     }
 
     [Test]

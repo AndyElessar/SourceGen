@@ -43,6 +43,7 @@ public class SGIOC039Tests
     [Test]
     [Arguments("OwnFactory", "", "[IocRegister(RegisterAllInterfaces = true, Factory = nameof(FactoryContainer.Create))]")]
     [Arguments("DefaultFactory", "[assembly: IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]", "[IocRegister(RegisterAllInterfaces = true)]")]
+    [Arguments("TypeLevelDefaultFactory", "", "[IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Singleton, Factory = nameof(FactoryContainer.Create))]\npublic sealed class Holder;\n\n[IocRegister(RegisterAllInterfaces = true)]")]
     public async Task SGIOC039_ClosedServiceTypesUnmatchedByTemplate_ReportsEach(string scenario, string defaults, string attribute)
     {
         var source = CreateSource(defaults, $"{attribute}\npublic sealed class EntityHandler : IRequestHandler<Task<Entity>>, IRequestHandler<Entity>, IOther;");

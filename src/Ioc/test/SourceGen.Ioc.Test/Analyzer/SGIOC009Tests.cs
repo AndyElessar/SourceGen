@@ -304,4 +304,51 @@ public class SGIOC009Tests
     }
 
     #endregion
+
+    #region Effective lifetime
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("AssemblyLevelSingleton", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton)]", "", null, 0, null)]
+    [Arguments("TypeLevelSingleton", "", "[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Singleton)]", null, 0, null)]
+    [Arguments("MsBuildSingleton", "", "", "Singleton", 0, null)]
+    [Arguments("DefaultsOverMsBuild", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]", "", "Singleton", 1, "Scoped")]
+    [Arguments("MsBuildScoped", "", "", "scoped", 1, "Scoped")]
+    [Arguments("NoDefaults", "", "", null, 1, "Transient")]
+    public async Task SGIOC009_InstanceWithoutExplicitLifetime_UsesEffectiveLifetime(
+        string scenario, string assemblyDefaults, string typeDefaults, string? msBuildLifetime, int expected, string? reportedLifetime)
+    {
+        // Like the generator, the lifetime of a registration without one comes from its best default settings, otherwise
+        // from SourceGenIocDefaultLifetime, otherwise Transient; an Instance registration is only registered as Singleton
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{assemblyDefaults}}
+
+            namespace TestNamespace;
+
+            {{typeDefaults}}
+            public interface IMyService { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(MyService.Default))]
+            public class MyService : IMyService
+            {
+                public static readonly MyService Default = new MyService();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: msBuildLifetime is null ? null : new Dictionary<string, string> { ["build_property.SourceGenIocDefaultLifetime"] = msBuildLifetime });
+        var sgioc009 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC009).ToList();
+
+        await Assert.That(sgioc009).Count().IsEqualTo(expected);
+        if(reportedLifetime is not null)
+        {
+            await Assert.That(sgioc009[0].GetMessage()).Contains($"'{reportedLifetime}'");
+        }
+    }
+
+    #endregion
 }

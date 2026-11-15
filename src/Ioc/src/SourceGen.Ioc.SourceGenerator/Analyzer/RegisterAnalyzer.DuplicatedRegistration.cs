@@ -1,94 +1,27 @@
-using Microsoft.CodeAnalysis.Diagnostics;
-
 namespace SourceGen.Ioc;
 
 /// <summary>
-/// Partial class for duplicated registration analysis (SGIOC011, SGIOC012).
+/// Partial class for duplicated registration analysis (SGIOC011). SGIOC012 is reported while collecting the default settings.
 /// </summary>
 public sealed partial class RegisterAnalyzer
 {
     /// <summary>
-    /// SGIOC012: Analyzes IoCRegisterDefaultsAttribute on types (class, struct, interface).
-    /// Reports warning when the same target type with at least one matching tag has multiple default settings.
-    /// Services without tags use an empty string tag for comparison.
-    /// </summary>
-    private static void AnalyzeTypeLevelDefaultsAttribute(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
-    {
-        if (context.Symbol is not INamedTypeSymbol typeSymbol)
-            return;
-
-        // Skip if no IoCRegisterDefaultsAttribute is available
-        if (analyzerContext.AttributeSymbols.IocRegisterDefaultsAttribute is null && analyzerContext.AttributeSymbols.IocRegisterDefaultsAttribute_T1 is null)
-            return;
-
-        foreach (var attribute in typeSymbol.GetAttributes())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
-
-            var attributeClass = attribute.AttributeClass;
-            if (attributeClass is null)
-                continue;
-
-            // Check if this is an IoCRegisterDefaultsAttribute (non-generic or generic)
-            if (!AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attributeClass, analyzerContext.AttributeSymbols))
-            {
-                continue;
-            }
-
-            // Extract default settings to get target type name and tags
-            var settings = attributeClass.IsGenericType
-                ? attribute.ExtractDefaultSettingsFromGenericAttribute(analyzerContext.Assembly)
-                : attribute.ExtractDefaultSettings(analyzerContext.Assembly);
-
-            if (settings is null)
-                continue;
-
-            var targetTypeName = settings.TargetServiceType.Name;
-            var tags = settings.Tags;
-            var location = attribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation();
-
-            // Build effective tags list using helper method
-            var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
-
-            // SGIOC012: Check each effective tag for duplicates (shared with assembly-level)
-            var hasDuplicate = false;
-            foreach (var tag in effectiveTags)
-            {
-                var defaultKey = (targetTypeName, tag);
-                if (!analyzerContext.SeenDefaultTargetTypes.TryAdd(defaultKey, location))
-                {
-                    hasDuplicate = true;
-                    break; // Only need to find one duplicate
-                }
-            }
-
-            if (hasDuplicate)
-            {
-                // Report immediately for type-level attributes
-                context.ReportDiagnostic(Diagnostic.Create(
-                    DuplicatedDefaultSettings,
-                    location,
-                    targetTypeName));
-            }
-        }
-    }
-
-    /// <summary>
     /// SGIOC011: Analyzes for duplicated registrations (same implementation type, key, and at least one matching tag).
     /// Reports warning when registrations share the same (ImplementationType, Key) and have at least one overlapping tag.
-    /// Services without tags use an empty string tag for comparison.
+    /// Implementation types are compared as runtime types, without tuple element names. Services without tags use an
+    /// empty string tag for comparison.
     /// </summary>
+    /// <param name="tags">
+    /// The effective tags of the registration: its own, otherwise those of its best default settings, like the generator.
+    /// </param>
     private static void AnalyzeDuplicatedRegistration(
         Action<Diagnostic> reportDiagnostic,
         AnalyzerContext analyzerContext,
-        AttributeData attribute,
         INamedTypeSymbol targetType,
         string? key,
+        IEnumerable<string> tags,
         Location? location)
     {
-        // Get the registration tags from the attribute
-        var tags = attribute.GetTags();
-
         // Build effective tags list using helper method
         var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
 
@@ -99,7 +32,7 @@ public sealed partial class RegisterAnalyzer
             var registrationKey = (targetType, key, tag);
 
             // Try to add; if already exists, mark as duplicate
-            if (!analyzerContext.RegistrationKeys.TryAdd(registrationKey, location))
+            if (!analyzerContext.RegistrationKeys.Add(registrationKey))
             {
                 hasDuplicate = true;
                 break; // Only need to find one duplicate
