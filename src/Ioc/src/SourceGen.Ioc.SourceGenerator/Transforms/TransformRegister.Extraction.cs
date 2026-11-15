@@ -2,8 +2,15 @@ namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
 {
-    private static RegistrationData ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel semanticModel)
+    /// <returns>
+    /// The registration, or <see langword="null"/> when a <c>Factory</c>, <c>Instance</c> or C# <c>Key</c> given with
+    /// <c>nameof()</c> is a member of an unbound generic type that the implementation type does not declare (SGIOC041).
+    /// </returns>
+    private static RegistrationData? ExtractRegistrationData(INamedTypeSymbol typeSymbol, AttributeData attributeData, SemanticModel semanticModel)
     {
+        if(HasNameofOfUnboundGenericType(typeSymbol, attributeData, semanticModel))
+            return null;
+
         // Pass semanticModel to GetTypeData for proper nameof() expression resolution in constructor parameter keys
         var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel, constructedIn: semanticModel.Compilation.Assembly);
 
@@ -53,11 +60,14 @@ partial class IocSourceGenerator
     /// Extracts registration data from a generic attribute (e.g., IocRegisterAttribute&lt;T&gt;, IocRegisterForAttribute&lt;T&gt;).
     /// The service types are specified via type parameters instead of constructor arguments or named arguments.
     /// </summary>
-    private static RegistrationData ExtractRegistrationDataFromGenericAttribute(
+    private static RegistrationData? ExtractRegistrationDataFromGenericAttribute(
         INamedTypeSymbol typeSymbol,
         AttributeData attributeData,
         SemanticModel semanticModel)
     {
+        if(HasNameofOfUnboundGenericType(typeSymbol, attributeData, semanticModel))
+            return null;
+
         // Pass semanticModel to GetTypeData for proper nameof() expression resolution in constructor parameter keys
         var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, semanticModel: semanticModel, constructedIn: semanticModel.Compilation.Assembly);
 
@@ -105,6 +115,15 @@ partial class IocSourceGenerator
             factory,
             instance);
     }
+
+    /// <summary>
+    /// Gets whether a <c>Factory</c>, <c>Instance</c> or C# <c>Key</c> of a registration attribute is given with
+    /// <c>nameof()</c> of a member of an unbound generic type that the implementation type does not declare, such as
+    /// <c>nameof(Factories&lt;&gt;.Create)</c>, whose type arguments cannot be determined (SGIOC041).
+    /// </summary>
+    private static bool HasNameofOfUnboundGenericType(INamedTypeSymbol implementation, AttributeData attributeData, SemanticModel semanticModel)
+        => attributeData.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attributeSyntax
+            && RoslynExtensions.FindNameofOfUnboundGenericType(attributeSyntax, implementation, attributeData.GetNamedArgument<int>("KeyType", 0) == 1, semanticModel) is not null;
 
     /// <summary>
     /// Extracts injection members (properties, fields, methods) marked with IocInjectAttribute/InjectAttribute.

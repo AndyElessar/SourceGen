@@ -383,8 +383,8 @@ partial class IocSourceGenerator
                 if(attr.ConstructorArguments.Length > 0 &&
                    attr.ConstructorArguments[0].Value is INamedTypeSymbol targetType)
                 {
-                    var data = ExtractRegistrationData(targetType, attr, semanticModel);
-                    registrations.Add(data);
+                    if(ExtractRegistrationData(targetType, attr, semanticModel) is { } data)
+                        registrations.Add(data);
                 }
             }
             // Handle IocRegisterForAttribute<T> (generic)
@@ -393,8 +393,8 @@ partial class IocSourceGenerator
                 if(attrClass.IsGenericType && attrClass.TypeArguments.Length > 0 &&
                    attrClass.TypeArguments[0] is INamedTypeSymbol targetType)
                 {
-                    var data = ExtractRegistrationData(targetType, attr, semanticModel);
-                    registrations.Add(data);
+                    if(ExtractRegistrationData(targetType, attr, semanticModel) is { } data)
+                        registrations.Add(data);
                 }
             }
         }

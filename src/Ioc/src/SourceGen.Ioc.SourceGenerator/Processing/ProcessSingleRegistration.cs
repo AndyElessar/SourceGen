@@ -238,6 +238,14 @@ partial class IocSourceGenerator
             return [];
         }
 
+        // An open registration has a single key, while a key that uses the implementation's type parameters, such as
+        // Node<T>.Name, can differ per closed type and does not compile without them, so only the closed types discovered
+        // at compile time are registered (SGIOC040)
+        if(isOpenGenericImplementation && KeyUsesTypeParameters(registration.Key, implementationType))
+        {
+            return [];
+        }
+
         // Decorator filter cache
         Dictionary<string, ImmutableEquatableArray<TypeData>>? decoratorFilterCache = null;
         if(decorators.Length > 0)
@@ -294,6 +302,15 @@ partial class IocSourceGenerator
 
         return registrations.ToImmutableEquatableArray();
     }
+
+    /// <summary>
+    /// Gets whether a registration's key refers to the type parameters of its open generic implementation type, such as
+    /// <c>global::Ns.Node&lt;T&gt;.Name</c> for <c>Node&lt;T&gt;</c>.
+    /// </summary>
+    internal static bool KeyUsesTypeParameters(string? key, TypeData implementationType)
+        => key is not null
+            && implementationType is GenericTypeData { TypeParameters: { Length: > 0 } typeParameters }
+            && ReferencesTypeParameters(key, [.. typeParameters.Select(static typeParameter => typeParameter.ParameterName)]);
 
     /// <summary>
     /// Validates if a service type can be registered with the given implementation.

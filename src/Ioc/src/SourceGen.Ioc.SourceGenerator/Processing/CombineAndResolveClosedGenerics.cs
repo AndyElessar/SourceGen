@@ -289,9 +289,10 @@ partial class IocSourceGenerator
                 // generic factory's are written with its own type parameters
                 if(newReg.Factory is { } factory)
                 {
+                    // The source is named after the open factory, whose parameters use the implementation's type parameters
                     var factorySource = closedRegistration is null
                         ? closingSource
-                        : GetFactoryClosingSource(factory, closedRegistration, newReg.ServiceType);
+                        : GetFactoryClosingSource(closedRegistration.Factory ?? factory, closedRegistration, newReg.ServiceType, closingSource?.TypeArgumentMap);
                     foreach(var param in factory.AdditionalParameters)
                     {
                         CollectNewDependencyFromType(
@@ -510,10 +511,27 @@ partial class IocSourceGenerator
         // since there's no explicit implementation type to register
         if(isFactoryOnlyRegistration)
         {
-            closingSource = new ClosingSource(openImplType.Name, serviceTypeArgMap);
+            // The registered type's type parameters may be named differently from those of the matched service type, such as
+            // Base<U> of Node<T> : Base<T>, so the form it declares (Base<T>, or the type itself) is matched instead; a target of
+            // default settings is its own service type
+            var registeredTypeArguments = implementedForm is not null
+                ? MatchAllTypeArguments(openImplType, implementedForm, closedServiceGenericType)
+                : null;
+            var factoryOnlyTypeArgMap = registeredTypeArguments is { Count: > 0 } ? ToTypeArgMap(registeredTypeArguments) : serviceTypeArgMap;
+
+            // A type parameter the service type does not determine, such as V of Node<T, V> : Base<T>, cannot be closed, and,
+            // like a closed generic registration, type arguments that violate the constraints would not compile (CS0453 etc.)
+            if(!DeterminesAllTypeParameters(openImplType, factoryOnlyTypeArgMap)
+                || (registeredTypeArguments is { Count: > 0 } && !SatisfiesConstraints(openImplType.TypeParameters ?? [], registeredTypeArguments, factoryOnlyTypeArgMap)))
+            {
+                return false;
+            }
+
+            closingSource = new ClosingSource(openImplType.Name, factoryOnlyTypeArgMap);
             return TryGenerateFactoryOnlyRegistration(
                 closedServiceType,
                 openGenericInfo,
+                factoryOnlyTypeArgMap,
                 registrations,
                 generatedClosedGenerics,
                 closedRegistrations);
@@ -525,7 +543,9 @@ partial class IocSourceGenerator
             openImplType,
             matchingOpenServiceType,
             serviceTypeArgMap);
-        if(implTypeArgMap is not { Count: > 0 })
+        // A type parameter the service type does not determine, such as V of Node<T, V> : Base<T>, cannot be closed: the
+        // closed type, its Factory, Instance and Key would keep it (CS0246)
+        if(implTypeArgMap is not { Count: > 0 } || !DeterminesAllTypeParameters(openImplType, implTypeArgMap))
         {
             return false;
         }
@@ -564,6 +584,10 @@ partial class IocSourceGenerator
             implTypeArgMap,
             typeArguments);
 
+        // A factory whose path or signature uses the implementation's type parameters, such as Node<T>.Create(IRepo<T>), is
+        // called on the closed type
+        var implClosedFactory = openGenericInfo.Factory is { } factory ? CloseImplementationTypeParameters(factory, implTypeArgMap, typeArguments) : null;
+
         // The service types that can be registered, with their factories and decorators: a generic factory cannot be called
         // for a service type its mapping does not match, and decorators are closed for each service type
         var closedServices = new List<(TypeData ServiceType, FactoryMethodData? Factory, ImmutableEquatableArray<TypeData> Decorators)>(closedServiceTypes.Count);
@@ -578,7 +602,7 @@ partial class IocSourceGenerator
 
             var closedSvcTypeWithArguments = WithTypeArgumentsOf(closedSvcType, closedServiceGenericType);
             FactoryMethodData? serviceFactory = null;
-            if(openGenericInfo.Factory is { } openFactory && (serviceFactory = CloseGenericFactory(openFactory, closedSvcTypeWithArguments)) is null)
+            if(implClosedFactory is not null && (serviceFactory = CloseGenericFactory(implClosedFactory, closedSvcTypeWithArguments)) is null)
             {
                 continue;
             }
@@ -597,7 +621,7 @@ partial class IocSourceGenerator
 
         // A generic factory is called for the registered types its mapping matches, so the implementation type is constructed
         // unless the mapping matches it; a regular factory creates both the implementation and the service types
-        var implFactory = openGenericInfo.Factory is { } factory ? CloseGenericFactory(factory, closedImplType) : null;
+        var implFactory = implClosedFactory is not null ? CloseGenericFactory(implClosedFactory, closedImplType) : null;
 
         // An implementation type that cannot be constructed is not registered without a factory for it, such as an open
         // interface target whose generic factory's mapping does not match the closed type; its service types the factory
@@ -608,6 +632,9 @@ partial class IocSourceGenerator
         // An instance whose path uses the implementation's type parameters, such as Node<T>.Default, is read from the closed type
         var closedInstance = openGenericInfo.Instance is { } instance ? SubstituteTypeArguments(instance, implTypeArgMap) : null;
 
+        // So is a key, such as Node<T>.Name; it is a C# expression, so only the identifiers that can be type parameters are closed
+        var closedKey = SubstituteTypeArgumentsInExpression(openGenericInfo.Key, implTypeArgMap);
+
         // Injection members are written with the implementation's type parameters, such as IRepo<T> for Outer<T>
         var closedInjectionMembers = SubstituteInjectionMembers(openGenericInfo.InjectionMembers, implTypeArgMap, typeArguments);
 
@@ -616,7 +643,7 @@ partial class IocSourceGenerator
             closedImplType,
             closedImplType,
             openGenericInfo.Lifetime,
-            openGenericInfo.Key,
+            closedKey,
             openGenericInfo.KeyType,
             openGenericInfo.KeyValueType,
             IsOpenGeneric: false,
@@ -645,7 +672,7 @@ partial class IocSourceGenerator
                 closedSvcType,
                 closedImplType,
                 openGenericInfo.Lifetime,
-                openGenericInfo.Key,
+                closedKey,
                 openGenericInfo.KeyType,
                 openGenericInfo.KeyValueType,
                 IsOpenGeneric: false,
@@ -668,14 +695,33 @@ partial class IocSourceGenerator
         return true; // Successfully generated registration
     }
 
+    /// <summary>Gets whether a type argument map gives a type argument to every type parameter of an open generic type.</summary>
+    private static bool DeterminesAllTypeParameters(GenericTypeData openType, Dictionary<string, string> typeArgMap)
+    {
+        foreach(var typeParam in openType.TypeParameters ?? [])
+        {
+            if(!typeArgMap.ContainsKey(typeParam.ParameterName))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// Generates a factory-only closed generic registration.
     /// This is used when IocRegisterDefaults has a Factory but no explicit ImplementationType.
     /// Only generates service type registration using the factory method.
     /// </summary>
+    /// <param name="typeArgMap">
+    /// The type argument name of each type parameter of the registered type, such as <c>Node&lt;T&gt;</c> registered with a
+    /// factory and without interfaces, which its Factory and Key are closed with.
+    /// </param>
     private static bool TryGenerateFactoryOnlyRegistration(
         TypeData closedServiceType,
         OpenGenericRegistrationInfo openGenericInfo,
+        Dictionary<string, string> typeArgMap,
         List<ServiceRegistrationWithTags> registrations,
         HashSet<string> generatedClosedGenerics,
         HashSet<(OpenGenericRegistrationInfo Registration, string ClosingKey)> closedRegistrations)
@@ -692,7 +738,10 @@ partial class IocSourceGenerator
         }
 
         // A generic factory cannot be called for a closed type its mapping does not match, so another registration may close it
-        if(openGenericInfo.Factory is not { } openFactory || CloseGenericFactory(openFactory, closedServiceType) is not { } factory)
+        // A factory whose path or signature uses the registered type's type parameters, such as Node<T>.Create(IRepo<T>), is
+        // called on the closed type
+        if(openGenericInfo.Factory is not { } openFactory
+            || CloseGenericFactory(CloseImplementationTypeParameters(openFactory, typeArgMap, typeArguments: null), closedServiceType) is not { } factory)
         {
             return false;
         }
@@ -715,7 +764,7 @@ partial class IocSourceGenerator
             closedServiceType,
             closedServiceType, // Use service type as implementation type since factory creates the instance
             openGenericInfo.Lifetime,
-            openGenericInfo.Key,
+            SubstituteTypeArgumentsInExpression(openGenericInfo.Key, typeArgMap),
             openGenericInfo.KeyType,
             openGenericInfo.KeyValueType,
             IsOpenGeneric: false,

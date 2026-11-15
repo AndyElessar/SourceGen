@@ -395,8 +395,36 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "A generic factory is called with the type arguments its mapping ([IocGenericFactory] or GenericFactoryTypeMapping) takes from a service type that matches its service type template. A service type that does not match cannot be created by the factory, so it is not registered; an implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public or internal constructor), in which case it is not registered either.");
 
+    /// <summary>
+    /// SGIOC040: The Key of an open generic registration uses the implementation's type parameters, so the open registration
+    /// is not registered.
+    /// </summary>
+    public static readonly DiagnosticDescriptor KeyUsesImplementationTypeParameters = new(
+        id: "SGIOC040",
+        title: "Key uses the type parameters of the open generic implementation",
+        messageFormat: "Key '{0}' of '{1}' uses its type parameters, so it can differ per closed type and the open generic registration is not registered; only the closed types discovered at compile time are registered",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "An open generic registration has a single key, while a Key that uses the implementation's type parameters, such as Node<T>.Name, is read from each closed type (Node<string>.Name) and does not compile without them. The open generic registration is therefore not registered, so a closed type that is not discovered at compile time, such as one only resolved at runtime, is not registered.");
+
+    /// <summary>
+    /// SGIOC041: A Factory, Instance or Key given with nameof() is a member of an unbound generic type whose type arguments
+    /// cannot be determined, so the registration is ignored.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NameofOfUnboundGenericType = new(
+        id: "SGIOC041",
+        title: "Member of an unbound generic type cannot be used",
+        messageFormat: "{0} '{1}' is a member of the unbound generic type '{2}', whose type arguments cannot be determined, so the registration is ignored; give its type arguments",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "nameof() accepts an unbound generic type, such as nameof(Factories<>.Create), but generated code must name the member of a closed type. Only the type parameters of the registered open generic implementation type are closed, such as nameof(Node<>.Default) for Node<T>, so a member of another unbound generic type is not supported and the registration is ignored.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
+        KeyUsesImplementationTypeParameters,
+        NameofOfUnboundGenericType,
         OpenTypeNestedInGenericType,
         ServiceTypeUnmatchedByGenericFactory,
         MultipleDecoratedParameters,
@@ -551,6 +579,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         }
 
         AnalyzeFactoryAndInstanceOnAttribute(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
+        AnalyzeNameofTypeParameters(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
         AnalyzeOpenTypesNestedInGenericType(context, attributeSyntax, attributeClass, analyzerContext);
         ResolveCsharpKeyTypes(context, attributeSyntax, attributeClass, attributeData, analyzerContext);
         ResolveFactoryMethod(context, attributeSyntax, analyzerContext);

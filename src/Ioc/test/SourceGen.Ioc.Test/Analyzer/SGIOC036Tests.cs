@@ -464,6 +464,35 @@ public class SGIOC036Tests
     }
 
     [Test]
+    [Arguments("INode<List<T>> next", Constants.SGIOC036)]
+    [Arguments("Lazy<INode<List<T>>> next", Constants.SGIOC037)]
+    public async Task SGIOC036_ExpandingFactoryParameterWithImplementationTypeParameter_ReportsAtFactoryParameter(string parameter, string expectedId)
+    {
+        // A factory that is not generic itself is closed with the implementation's type arguments, so INode<List<T>> of
+        // Node<T>.Create closes Node<List<T>>, whose factory needs INode<List<List<T>>>, and so on
+        var source = Usings + $$"""
+            using Microsoft.Extensions.DependencyInjection;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)], Factory = nameof(Create))]
+            public sealed class Node<T> : INode<T>
+            {
+                public static Node<T> Create({{parameter}}) => throw new NotImplementedException();
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var expected = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, expectedId).ToList();
+        var other = expectedId == Constants.SGIOC036 ? Constants.SGIOC037 : Constants.SGIOC036;
+
+        await Assert.That(expected).Count().IsEqualTo(1);
+        await Assert.That(expected[0].GetMessage()).Contains("'INode<List<T>>'").And.Contains("'Node<T>.Create'");
+        await Assert.That(expected[0].Location.SourceTree!.GetText().ToString(expected[0].Location.SourceSpan)).IsEqualTo("next");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, other)).IsEmpty();
+    }
+
+    [Test]
     [Arguments("[assembly: IocRegisterDefaults(typeof(IRequestHandler<>), ServiceLifetime.Transient, Factory = nameof(HandlerFactory.Create))]", "[IocRegister]")]
     [Arguments("", "[IocRegister(ServiceTypes = [typeof(IRequestHandler<>)], Factory = nameof(HandlerFactory.Create))]")]
     public async Task SGIOC036_GenericFactoryTypeArgumentContainingImplementationTypeParameter_ReportsExpandingDependency(string defaults, string registration)

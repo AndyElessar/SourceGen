@@ -326,6 +326,8 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC037`|Open generic dependency nests type arguments without end behind `Lazy<T>` / `Func<T>`|[Open Generics](09_OpenGeneric.md#diagnostics)|
 |`SGIOC038`|Open type declared in a generic type is not supported|[Open Generics](09_OpenGeneric.md#diagnostics)|
 |`SGIOC039`|Service type does not match the generic factory mapping, so it is not registered|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
+|`SGIOC040`|Key uses the open generic implementation's type parameters, so the open registration is not added|[Keyed Services](05_Keyed.md#diagnostics)|
+|`SGIOC041`|`nameof()` of a member of an unbound generic type cannot be used|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 
 ## Production Checklist
 
