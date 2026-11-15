@@ -46,13 +46,34 @@ internal sealed class RuntimeTypeSymbolComparer : IEqualityComparer<ITypeSymbol?
         }
     }
 
-    // Types equal by Default have the same definition; tuples with other element names share theirs (ValueTuple<T1, T2>)
-    public int GetHashCode(ITypeSymbol? obj) => obj switch
+    // Types equal by Default have the same definition; tuples with other element names share theirs (ValueTuple<T1, T2>).
+    // The type arguments are hashed the same way, so the closed forms of one definition, such as IHandler<A> and
+    // IHandler<B>, do not share a hash code.
+    public int GetHashCode(ITypeSymbol? obj)
     {
-        IArrayTypeSymbol array => unchecked((GetHashCode(array.ElementType) * 31) + array.Rank),
-        INamedTypeSymbol { IsGenericType: true } named => SymbolEqualityComparer.Default.GetHashCode(named.OriginalDefinition),
-        _ => SymbolEqualityComparer.Default.GetHashCode(obj),
-    };
+        switch(obj)
+        {
+            case IArrayTypeSymbol array:
+                return unchecked((GetHashCode(array.ElementType) * 31) + array.Rank);
+
+            case INamedTypeSymbol { IsGenericType: true } named:
+                var hash = SymbolEqualityComparer.Default.GetHashCode(named.OriginalDefinition);
+                if(named.ContainingType is { IsGenericType: true } containingType)
+                {
+                    hash = unchecked((hash * 31) + GetHashCode(containingType));
+                }
+
+                foreach(var typeArgument in named.TypeArguments)
+                {
+                    hash = unchecked((hash * 31) + GetHashCode(typeArgument));
+                }
+
+                return hash;
+
+            default:
+                return SymbolEqualityComparer.Default.GetHashCode(obj);
+        }
+    }
 
     private sealed class ServiceSymbolKeyComparer : IEqualityComparer<ServiceSymbolKey>
     {

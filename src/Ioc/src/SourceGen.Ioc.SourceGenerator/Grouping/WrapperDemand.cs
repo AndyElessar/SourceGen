@@ -22,7 +22,7 @@ partial class IocSourceGenerator
         public HashSet<string> LazyServiceTypes { get; } = new(TypeNameComparer.Instance);
 
         /// <summary>Gets the direct <c>Func&lt;…, T&gt;</c> dependencies by Func type name, alone or as collection elements.</summary>
-        public Dictionary<string, FuncTypeData> FuncTypes { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, FuncTypeData> FuncTypes { get; } = new(TypeNameComparer.Instance);
 
         /// <summary>Gets the (key type, value type) pairs of <c>KeyValuePair</c> and dictionary dependencies.</summary>
         public HashSet<(string KeyTypeName, string ValueTypeName)> KvpPairs { get; } = new(TypeNameComparer.PairComparer);
