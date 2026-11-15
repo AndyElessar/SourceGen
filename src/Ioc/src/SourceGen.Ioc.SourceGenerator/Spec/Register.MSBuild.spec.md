@@ -22,7 +22,7 @@ Controls the default lifetime for registrations when not explicitly specified. I
 
 ### SourceGenIocFeatures
 
-Controls which outputs and injection member kinds are generated. See [Feature Flags](SPEC.spec.md#7-feature-flags) for details.
+Controls which outputs and injection member kinds are generated. See [MSBuild properties](SPEC.spec.md#msbuild-properties) for the default flags, and [Feature Gate Mapping](../Analyzer/Spec/Diagnostics.Injection.spec.md#feature-gate-mapping) for the injection member kind each flag enables.
 
 ### Configuration Example
 
@@ -66,5 +66,6 @@ public static class ServiceCollectionExtensions
 
 ## See Also
 
-- [Feature Flags](SPEC.spec.md#7-feature-flags)
-- [Compilation Info](SPEC.spec.md#6-compilation-info)
+- [MSBuild properties](SPEC.spec.md#msbuild-properties)
+- [Inputs and configuration](SPEC.spec.md#inputs-and-configuration)
+- [Feature Gate Mapping](../Analyzer/Spec/Diagnostics.Injection.spec.md#feature-gate-mapping)
