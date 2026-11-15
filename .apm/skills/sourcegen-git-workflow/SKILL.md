@@ -52,9 +52,10 @@ When a generator change regenerates `samples/**/Generated/*.g.cs`, commit the re
 - CI (build, AOT tests, CodeQL, generator and NativeAOT benchmarks) runs on PRs, including stacked PRs, and reruns when a PR is retargeted. Benchmarks take about 25 minutes.
 - Benchmark timings on shared runners swing by 5–20% with unchanged allocations. Judge a change by allocations; the benchmark check fails on allocation increases (above 5%, 10% for `AnalyzerBenchmarks`) and only reports time changes.
 - CI does not rerun when `main` moves. If `main` changed since the last run in a way that can interact with the PR, merge `main` into the branch to rerun CI before merging.
-- The repository allows merge commits and squash merges (not rebase merges), both titled by the PR title (Conventional Commits, see above) with an empty body. Choose per PR, and ask the user which one when they have not said:
-  - Squash (`gh pr merge <n> --squash`): the PR lands on `main` as one commit, dropping its intermediate commits such as review fixes.
-  - Merge commit (`gh pr merge <n> --merge`): keeps the PR's commits on `main` under a merge commit.
+- The repository allows merge commits and squash merges (not rebase merges), both titled by the PR title (Conventional Commits, see above). Choose per PR, and ask the user which one when they have not said:
+  - Squash (`gh pr merge <n> --squash --body-file <file>`): the PR lands on `main` as one commit, dropping its intermediate commits such as review fixes.
+  - Merge commit (`gh pr merge <n> --merge --body-file <file>`): keeps the PR's commits on `main` under a merge commit.
+- The commit body defaults to empty, but do not leave it empty: always pass a short summary of what the PR changes and why (`--body` or `--body-file`), not the PR template or its checklist.
 - A PR in a GitHub stack (`gh stack link <bottom-pr> ... <top-pr>`) cannot be merged with `gh pr merge`; use `gh stack merge <pr> --yes --squash` (or `--merge`), which merges the stack up to that PR in one all-or-nothing operation.
 
 ## Releases
