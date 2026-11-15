@@ -117,7 +117,7 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
 - **Open generic dependencies**: Wrapper inner types that reference closed generics trigger automatic closed generic registration (e.g., `Lazy<IHandler<TestEntity>>` → registers `Handler<TestEntity>`)
 - **Factory method requirement**: Only **nested** wrapper types and **nullable** direct Lazy/Func types trigger factory method registration. Direct non-nullable Lazy/Func types resolve from their standalone registrations.
 - **Tag-awareness**: Standalone `Lazy<T>`/`Func<T>`/`KeyValuePair<K, T>` registrations inherit the tags of the inner service `T` and are emitted within the same tag conditional block.
-- **Tuple element names**: For a service type registered as written (a non-generic or closed service type), standalone registrations are emitted once for each runtime type, so dependencies that differ only in tuple element names share one registration (see [Container Injection](Container.Injection.spec.md#overview)). The spelling the registration is written with depends on the wrapper. This only changes the text of the generated code: the runtime type is the same, and the same input always generates the same output.
+- **Tuple element names**: Standalone registrations are emitted once for each runtime type, so dependencies that differ only in tuple element names share one registration (see [Container Injection](Container.Injection.spec.md#overview)). The spelling the registration is written with depends on the wrapper. This only changes the text of the generated code: the runtime type is the same, and the same input always generates the same output.
 
   | Wrapper Type | Tuple element names written | Depends on the order of the dependencies |
   | --- | --- | --- |
@@ -127,7 +127,7 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
 
   For example, with a registration of `IHandler<(Entity X, string Y)>`, a consumer of `Func<IHandler<(Entity A, string B)>>` declared before a consumer of `Func<IHandler<(Entity, string)>>` registers `Func<IHandler<(Entity A, string B)>>`; declared after it, `Func<IHandler<(Entity, string)>>` is registered instead. `Lazy<IHandler<(Entity X, string Y)>>` is registered in both cases.
 
-  Known limitation: a service type closed from an open generic registration (see [Generic Registration](Register.Generics.spec.md)) is closed once for each spelling of its dependencies, so the closed registrations and their `Lazy<T>` / `Func<T>` registrations are emitted once for each spelling, although they are one runtime type. With `Handler<T> : IHandler<T>` and the two consumers above, `IHandler<(Entity A, string B)>` and `IHandler<(Entity, string)>` are both registered, and `IEnumerable<IHandler<(Entity, string)>>` resolves two instances.
+  An open generic registration is closed once for each runtime type (and set of decorators) too, with the first spelling of its dependencies it is closed for (see [Generic Registration](Register.Generics.spec.md#feature-1-closed-generic-registration-from-open-generic)), and its `Lazy<T>` / `Func<T>` registrations are emitted once. With `Handler<T> : IHandler<T>` registered for `IHandler<>`, a consumer of `Lazy<IHandler<(Entity A, string B)>>` declared before a consumer of `Lazy<IHandler<(Entity, string)>>` registers `Handler<(Entity A, string B)>`, `IHandler<(Entity A, string B)>` and `Lazy<IHandler<(Entity A, string B)>>` once each.
 
 ### Async Method Injection
 
