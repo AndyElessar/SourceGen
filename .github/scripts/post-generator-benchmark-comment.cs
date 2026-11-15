@@ -1,6 +1,4 @@
-#:property TargetFramework=net10.0
 #:property PublishAot=false
-#:property Nullable=enable
 
 using System.Globalization;
 using System.Net;
