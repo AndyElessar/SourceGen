@@ -218,12 +218,11 @@ internal static partial class TransformExtensions
             attribute.GetTypeArrayArgument("Decorators", extractConstructorParams: true, extractInjectionMembers: true, semanticModel, extractHierarchy: true, constructedIn);
 
         /// <summary>
-        /// Gets the ImplementationTypes array from the attribute.
-        /// Extracts implementation types with constructor parameters and hierarchy information,
-        /// using the same parsing logic as IocRegisterAttribute.
+        /// Gets the ImplementationTypes array from the attribute, which identifies the types only. Their registrations are
+        /// created from <see cref="GetImplementationTypeSymbols"/>, with the constructor parameters and hierarchy.
         /// </summary>
         public ImmutableEquatableArray<TypeData> GetImplementationTypes() =>
-            attribute.GetTypeArrayArgumentWithHierarchy("ImplementationTypes");
+            attribute.GetTypeArrayArgument("ImplementationTypes");
 
         /// <summary>
         /// Gets the ImplementationTypes array as INamedTypeSymbol from the attribute.
@@ -249,32 +248,6 @@ internal static partial class TransformExtensions
                         if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
                         {
                             result.Add(namedTypeSymbol);
-                        }
-                    }
-                    return result.ToImmutableEquatableArray();
-                }
-            }
-
-            return [];
-        }
-
-        /// <summary>
-        /// Gets an array of type symbols from a named argument with full hierarchy extraction.
-        /// Used for ImplementationTypes where we need constructor params and all interfaces/base classes.
-        /// </summary>
-        public ImmutableEquatableArray<TypeData> GetTypeArrayArgumentWithHierarchy(string name)
-        {
-            foreach(var namedArg in attribute.NamedArguments)
-            {
-                if(namedArg.Key.Equals(name, StringComparison.Ordinal) && !namedArg.Value.IsNull && namedArg.Value.Kind == TypedConstantKind.Array)
-                {
-                    List<TypeData> result = [];
-                    foreach(var value in namedArg.Value.Values)
-                    {
-                        if(value.Value is INamedTypeSymbol { IsOpenNestedInGenericType: false } namedTypeSymbol)
-                        {
-                            // Extract with constructor params and hierarchy, same as IocRegisterAttribute
-                            result.Add(namedTypeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true));
                         }
                     }
                     return result.ToImmutableEquatableArray();

@@ -34,7 +34,7 @@ internal static partial class TransformExtensions
                 factory = attribute.GetFactoryMethodData(semanticModel);
             }
 
-            // Get implementation types with constructor params and hierarchy (same as IocRegisterAttribute)
+            // The implementation types by name; their registrations are created from the symbols
             var implementationTypes = attribute.GetImplementationTypes();
 
             return new DefaultSettingsModel(
@@ -86,7 +86,7 @@ internal static partial class TransformExtensions
                 factory = attribute.GetFactoryMethodData(semanticModel);
             }
 
-            // Get implementation types with constructor params and hierarchy (same as IocRegisterAttribute)
+            // The implementation types by name; their registrations are created from the symbols
             var implementationTypes = attribute.GetImplementationTypes();
 
             return new DefaultSettingsModel(

@@ -11,7 +11,10 @@ namespace SourceGen.Ioc;
 /// <param name="Decorators">The decorator types to apply by default.</param>
 /// <param name="Tags">The collection of tags associated with this default setting.</param>
 /// <param name="Factory">The factory method data to use for creating instances, or null if not specified.</param>
-/// <param name="ImplementationTypes">Implementation types to directly register with these default settings.</param>
+/// <param name="ImplementationTypes">
+/// Implementation types to directly register with these default settings. They identify the types only, without constructor
+/// parameters, hierarchy or <see cref="TypeData.Constructibility"/>; their registrations carry those.
+/// </param>
 internal sealed record class DefaultSettingsModel(
     TypeData TargetServiceType,
     ServiceLifetime Lifetime,
