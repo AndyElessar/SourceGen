@@ -426,4 +426,64 @@ public class SGIOC011Tests
         await Assert.That(sgioc011).Count().IsEqualTo(1);
         await Assert.That(sgioc011[0].Location.GetLineSpan().StartLinePosition.Line).IsEqualTo(4);
     }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("AssemblyLevelSameTag", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Transient, Tags = [\"tag1\"])]", "", "tag1", 1)]
+    [Arguments("TypeLevelSameTag", "", "[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Transient, Tags = [\"tag1\"])]", "tag1", 1)]
+    [Arguments("DifferentTag", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Transient, Tags = [\"tag1\"])]", "", "tag2", 0)]
+    public async Task SGIOC011_RegistrationWithoutTags_UsesTagsOfBestDefaultSettings(
+        string scenario, string assemblyDefaults, string typeDefaults, string otherTag, int expected)
+    {
+        // Like the generator, a registration without Tags takes the Tags of its best default settings
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{assemblyDefaults}}
+
+            namespace TestNamespace;
+
+            {{typeDefaults}}
+            public interface IMyService { }
+
+            [IocRegister]
+            public class MyService : IMyService { }
+
+            [IocRegisterFor(typeof(MyService), Tags = ["{{otherTag}}"])]
+            public interface IServiceMarker { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC011)).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("SameKey", "", "", 1)]
+    [Arguments("DifferentKeys", ", Key = \"a\"", ", Key = \"b\"", 0)]
+    public async Task SGIOC011_ImplementationTypesDifferingOnlyInTupleElementNames_ComparedAsRuntimeTypes(
+        string scenario, string firstKey, string secondKey, int expected)
+    {
+        // Tuple element names are not part of the runtime type, so both attributes register the same implementation type
+        var source = $$"""
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Impl<(int A, int B)>){{firstKey}})]
+            [assembly: IocRegisterFor(typeof(TestNamespace.Impl<(int X, int Y)>){{secondKey}})]
+
+            namespace TestNamespace;
+
+            public sealed class Impl<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC011).ToList();
+
+        await Assert.That(sgioc011).Count().IsEqualTo(expected);
+        if(expected > 0)
+        {
+            await Assert.That(sgioc011[0].Location.GetLineSpan().StartLinePosition.Line).IsEqualTo(3);
+        }
+    }
 }

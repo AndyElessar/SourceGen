@@ -19,44 +19,54 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 2. Queue SGIOC026 if `AsyncMethodInject` enabled without `MethodInject`
 3. Build `IocAttributeSymbols` cache
 4. Early exit if no registration attributes present
-5. Build concurrent state: `RegisteredServices`, `ServiceTypeIndex`, `DuplicatedDefaults`, `SeenDefaultTargetTypes`, `DefaultSettingsMap`. `RegisteredServices` and `ServiceTypeIndex` are keyed by runtime type (`RuntimeTypeSymbolComparer`), like the generator and `ContainerAnalyzer`: tuple element names are not compared, so a dependency on `IHandler<(Entity A, string B)>` finds a registration of `IHandler<(Entity X, string Y)>` (SGIOC002-005, 033). `KeyedServiceIndex` (SGIOC015) and the async-init pairs (SGIOC030) compare service types the same way.
+5. Build concurrent state: `RegisteredServices`, `ServiceTypeIndex`, and the bags of pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]` attributes. `RegisteredServices` and `ServiceTypeIndex` are keyed by runtime type (`RuntimeTypeSymbolComparer`), like the generator and `ContainerAnalyzer`: tuple element names are not compared, so a dependency on `IHandler<(Entity A, string B)>` finds a registration of `IHandler<(Entity X, string Y)>` (SGIOC002-005, 033). `KeyedServiceIndex` (SGIOC015), the async-init pairs (SGIOC030), the service types of a registration and `ServiceSymbolKey` (whose equality uses `RuntimeTypeSymbolComparer`) compare service types the same way.
 6. Construct `AnalyzerContext`
-7. Pre-collect assembly-level `IocRegisterFor` attributes, indexed by their syntax (tree and span) for the attribute syntax action
+7. Pre-collect assembly-level `IocRegisterFor` attributes as pending registrations, indexed by their syntax (tree and span) for the attribute syntax action
 8. Build `IocAttributeNameFilter` from the IoC attribute names
 
 #### Registered Actions
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
-| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect registrations, validate target type/instance lifetime/explicit service types, track duplicates | SGIOC001, 009, 011, 032, 038 |
-| Symbol (NamedType) | `AnalyzeTypeLevelDefaultsAttribute` | Validate duplicate type-level defaults | SGIOC012 |
+| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]`; validate target type and explicit service types | SGIOC001, 032 |
+| Symbol (NamedType) | `AnalyzeImportedOpenRegistrations` | Imported open generic registrations the compiled assembly cannot construct | SGIOC001 |
 | Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
-| SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 011, 032, 038 |
+| SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 032 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
 | SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| CompilationEnd | `AnalyzeAllDependencies` | Full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC002-005, 012-015, 030, 033-037, 039 |
+| CompilationEnd | `AnalyzeAllDependencies` | Default settings, registration resolution, full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC001-005, 009, 011-015, 030, 033-039 |
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
 #### CompilationEnd: AnalyzeAllDependencies
 
-1. Report buffered duplicated defaults (SGIOC012)
-2. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
-3. Decorated parameters of the decorators matched while collecting registrations (SGIOC034/035)
-4. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
-5. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
+1. Collect the default settings (`CollectDefaults`, see [Default Settings](#default-settings)) and report duplicated defaults of the compiled assembly (SGIOC012)
+2. Resolve every pending registration against the default settings, in source order (`ResolveRegistrations` → `RegisterService`): effective lifetime, service types, decorators and best default index; report an `Instance` whose effective lifetime is not Singleton (SGIOC009), duplicated registrations with their effective tags (SGIOC011), and the open types nested in a generic type that an open implementation would be registered as (SGIOC038)
+3. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
+4. Decorated parameters of the decorators matched while resolving registrations (SGIOC034/035)
+5. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
+6. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
+
+#### Default Settings
+
+Type-level `[IocRegisterDefaults]` (class, struct, interface) and `[IocImportModule]` are only known once every symbol action ran, so registrations are collected as pending registrations and resolved against the complete default settings at compilation end. The settings are ordered like the generator's `DefaultSettingsMap`, where the first settings for a target type win:
+
+- The `[IocRegisterDefaults]` of the compiled assembly, assembly-level and type-level: non-generic attributes, then generic attributes, each in source order. Every settings is kept (a duplicate still registers its `ImplementationTypes` and the open generic target of its `Factory`); SGIOC012 reports the later duplicates.
+- Then the settings of each imported module (`[IocImportModule]` in source order, non-generic attributes first): those on the module type, then the assembly-level settings of its assembly (`AnalyzerHelpers.EnumerateImportedDefaultSettingsAttributes`, shared with `ContainerAnalyzer`). A module of the compiled assembly is skipped, since its settings already come first. Like the generator, which reads them without a semantic model, their `Factory` is absent and their `ImplementationTypes` add no registration; they are not reported by SGIOC012.
+
+A registration matches the settings of its base classes, then its interfaces (exactly, then by generic type definition); the first match is the best default, which supplies the lifetime (unless the registration sets one), `Tags` (unless the registration sets some), `ServiceTypes`, `RegisterAllInterfaces` / `RegisterAllBaseClasses`, `Decorators` and `Factory`, like the generator's `ProcessSingleRegistration`. A registration that neither sets a lifetime nor matches default settings has the MSBuild `SourceGenIocDefaultLifetime` (read from `build_property.SourceGenIocDefaultLifetime` with the generator's `ReadDefaultLifetime`; Transient when unset or unrecognized), like the generator's `DefaultSettingsMap.FallbackLifetime`. This effective lifetime is used by SGIOC003-005, 009 and 033.
 
 #### Partial Files
 
 | File | Responsibility |
 | :--- | :------------- |
-| `RegisterAnalyzer.ServiceCollection.cs` | `AnalyzerContext`, `ServiceInfo`, service collection/indexing, defaults, assembly-level scan |
+| `RegisterAnalyzer.ServiceCollection.cs` | `AnalyzerContext`, `ServiceInfo`, pending registrations, default settings collection, registration resolution/indexing, assembly-level scan |
 | `IocAttributeNameFilter.cs` | Syntactic attribute name pre-check for the attribute syntax action |
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
-| `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration/defaults detection (SGIOC011, 012) |
+| `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration detection (SGIOC011); SGIOC012 is reported by `CollectDefaults` |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
 | `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037), and the service types of generic factory registrations (SGIOC039) |
 | `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |
@@ -112,7 +122,7 @@ The container's service types are the service types of its own registrations plu
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038, 039 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ## Diagnostics
@@ -253,13 +263,16 @@ Report when `IoCRegisterAttribute`/`IoCRegisterForAttribute`/`IoCRegisterDefault
 
 ### SGIOC009 - Error - Usage - Invalid Attribute Usage
 
-Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Instance` and `Lifetime` is not Singleton.
+Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Instance` and the effective lifetime is not Singleton. The Register (MS.DI) output does not register such an `Instance`.
 
 **Analysis:**
 
+- Runs at compilation end, once the default settings are known (`ResolveRegistrations`).
 - Checks registration attributes that specify `Instance`.
-- Gets the `Lifetime` setting from the attribute.
-- Reports when `Lifetime` is explicitly set to a value other than Singleton.
+- Gets the effective lifetime like the generator's `MergeSettings`: the `Lifetime` of the attribute, otherwise the lifetime of its best `[IocRegisterDefaults]`, otherwise the MSBuild `SourceGenIocDefaultLifetime`, otherwise Transient (see [Default Settings](#default-settings)).
+- Reports when the effective lifetime is not Singleton; the message names it.
+
+**Message format:** `Instance registration '{Instance}' requires Singleton lifetime, but its lifetime is '{Lifetime}'`
 
 ---
 
@@ -281,7 +294,9 @@ When TagOnly=false, the registration is considered to have an empty tag for comp
 
 **Analysis:**
 
-- Collects all registrations and builds an index of `(FullyQualifiedTypeName, Key, Tag)`.
+- Runs at compilation end, once the default settings are known (`ResolveRegistrations`), over the registrations in source order, so the later duplicate is reported.
+- Collects all registrations and builds an index of `(ImplementationType, Key, Tag)`. Implementation types are compared as runtime types (`RuntimeTypeSymbolComparer`), so `Impl<(int A, int B)>` and `Impl<(int X, int Y)>` are the same implementation type.
+- The tags of a registration without `Tags` are those of its best `[IocRegisterDefaults]`, like the generator (see [Default Settings](#default-settings)).
 - When `TagOnly=false`, automatically adds an empty string as an additional Tag.
 - Checks each effective Tag; reports if the same combination already exists.
 
@@ -294,7 +309,8 @@ When TagOnly=false, the setting is considered to have an empty tag for compariso
 
 **Analysis:**
 
-- Collects all `[IoCRegisterDefaults]` (both assembly-level and type-level).
+- Collects all `[IoCRegisterDefaults]` of the compiled assembly (both assembly-level and type-level), in the order of the generator (see [Default Settings](#default-settings)): non-generic attributes, then generic attributes, each in source order. The settings the generator ignores, which come later, are reported.
+- The settings of imported modules are not reported.
 - Builds an index of `(TargetTypeName, Tag)`.
 - When `TagOnly=false`, automatically adds an empty string as an additional Tag.
 - Checks each effective Tag; reports if the same combination already exists.
@@ -412,7 +428,7 @@ Report when a container has `IntegrateServiceProvider = false` and a constructor
   - `Factory` (of the registration, otherwise of the matching `[IocRegisterDefaults]`): only the factory method parameters, except `IServiceProvider` and `[ServiceKey]`. The constructor and injected members are not checked. A factory that cannot be resolved (a string, or settings imported from another assembly) is not analyzed. Factory methods declared in another assembly are not analyzed.
   - `Instance`: no dependencies.
 - For each dependency:
-  - Checks if the dependency type is a service type of the container (including its imported modules). Like the generator, service types are compared without tuple element names, which are not part of the runtime type (`IHandler<(Entity A, string B)>` is resolved by a registration of `IHandler<(Entity X, string Y)>`); an open generic registration is still closed with the dependency's own type arguments, whose element names constraint checks keep (see [Generic Registration](../../Spec/Register.Generics.spec.md)).
+  - Checks if the dependency type is a service type of the container (including its imported modules). Like the generator, service types are compared without tuple element names, which are not part of the runtime type (`IHandler<(Entity A, string B)>` is resolved by a registration of `IHandler<(Entity X, string Y)>`); an open generic registration is closed with the type arguments of a dependency, whose element names constraint checks keep (see [Generic Registration](../../Spec/Register.Generics.spec.md)). A dependency is resolved when any spelling of its runtime type among the dependencies of the container's registrations (and the element types of supported wrappers, like the generator's `CollectClosedGenericDependencyFromType`; not the type arguments of other generic types) can close the registration: the generator closes the registration with that spelling, and the container resolves every spelling of the runtime type (`IHandler<(int A, int B), (int X, int Y)>` is resolved through `IHandler<(int X, int Y), (int X, int Y)>` for `Handler<T, U> where T : U`).
   - Supported wrappers resolve their inner service with the same key, like the generator: collections (`IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`), `Lazy<T>`, `Func<T>` and `KeyValuePair<TKey, T>` unwrap recursively (e.g. `IEnumerable<Lazy<T>>`); `Task<T>` and `Func<..., T>` with input parameters need a registration of `T` itself; `IDictionary<TKey, T>` (and `IReadOnlyDictionary`, `Dictionary`) and collections of `KeyValuePair<TKey, T>` need a non-keyed dependency and a keyed registration of `T`. `ValueTask<T>` and unsupported nesting (e.g. `Task<Lazy<T>>`) are plain service types. Array dependencies are not checked.
   - Injected `IEnumerable<T>` properties are not checked.
   - Checks if the dependency type is a built-in service type (e.g., `IServiceProvider`, `IServiceScopeFactory`).
@@ -675,11 +691,11 @@ Report when a consumer requests `TService` but the matched registration can only
 
 **Analysis:**
 
-- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods, of registered services and of decorators. Decorators are the ones the generator applies to registrations (their own `Decorators`, otherwise those of the best assembly-level `[IocRegisterDefaults]`), each analyzed once (an open generic decorator once per closed form, closed with the type arguments found by matching the decorated service type, or through its definition when they cannot all be found); the constructor parameter that receives the decorated instance (see [Decorated Parameter](../../Spec/Register.Decorators.spec.md#decorated-parameter)) is not analyzed. That parameter depends on the decorated service type, so a decorator of several service types is analyzed once per such parameter, and a dependency reported for several of them is reported once.
+- Applies to constructor parameters, injected properties, injected fields, and parameters of `[IocInject]`/`[Inject]` methods, of registered services and of decorators. Decorators are the ones the generator applies to registrations (their own `Decorators`, otherwise those of the best `[IocRegisterDefaults]`), each analyzed once (an open generic decorator once per closed form, closed with the type arguments found by matching the decorated service type, or through its definition when they cannot all be found); the constructor parameter that receives the decorated instance (see [Decorated Parameter](../../Spec/Register.Decorators.spec.md#decorated-parameter)) is not analyzed. That parameter depends on the decorated service type, so a decorator of several service types is analyzed once per such parameter, and a dependency reported for several of them is reported once.
 - Matches the requested service type and key against available registrations.
 - If the matched registration is async-init (see [Async-init Registrations](#async-init-registrations)) and there is no synchronous registration for the same service type/key, the analyzer MUST report `SGIOC030`. Service types are compared without tuple element names, which are not part of the runtime type.
 - `Lazy<T>`, `Func<T>` and `Func<T1, ..., T>` (also nested, e.g. `Lazy<Func<T>>`) are unwrapped first: they create `T` synchronously, so they cannot resolve an async-init service either (the Register output does not register a `Func` with input parameters for it, and the Container resolves these wrappers from the fallback provider). A `Task<T>` inside them (`Lazy<Task<T>>`) is not reported. Collections are not unwrapped, since they exclude async-init registrations.
-- A registration's service types are resolved like the generator's `ProcessSingleRegistration`, including assembly-level `[IocRegisterDefaults]`: each base class (first) and interface of the implementation that has default settings, the `ServiceTypes` of the best (first) match, and its `RegisterAllInterfaces` / `RegisterAllBaseClasses` when the registration does not set them. Type-level `[IocRegisterDefaults]` are not collected by `RegisterAnalyzer`.
+- A registration's service types are resolved like the generator's `ProcessSingleRegistration`, including `[IocRegisterDefaults]` (assembly-level, type-level and of imported modules, see [Default Settings](#default-settings)): each base class (first) and interface of the implementation that has default settings, the `ServiceTypes` of the best (first) match, and its `RegisterAllInterfaces` / `RegisterAllBaseClasses` when the registration does not set them.
 - Consumers SHOULD request `Task<TService>` instead of `TService` in this scenario.
 - Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
 
@@ -742,7 +758,7 @@ Report when more than one constructor parameter of a decorator is of the decorat
 
 **Analysis:**
 
-- Checks each decorator the generator applies to a registration's service type: the registration's own `Decorators`, otherwise those of its best assembly-level `[IocRegisterDefaults]`. Decorators are matched with the generator's own rules (implemented service type, closed generic constraints).
+- Checks each decorator the generator applies to a registration's service type: the registration's own `Decorators`, otherwise those of its best `[IocRegisterDefaults]` (see [Default Settings](#default-settings)). Decorators are matched with the generator's own rules (implemented service type, closed generic constraints).
 - Uses the constructor the generator uses: `[IocInject]`, then the primary constructor, then the one with the most parameters.
 - Reports each extra parameter once per decorator and service type (the definition for generic service types), however many registrations the decorator decorates.
 
@@ -807,7 +823,7 @@ Report when a registration or default settings attribute uses an open type decla
 
 - Checks the type `[IocRegister]` is applied to, reported at the attribute. Its other arguments are not reported, since the whole registration is ignored.
 - Checks each `typeof()` in the constructor arguments (the target of `[IocRegisterFor]` / `[IocRegisterDefaults]`, and service types) and in `ServiceTypes`, `Decorators` and `ImplementationTypes` of `[IocRegister]`, `[IocRegisterFor]` and `[IocRegisterDefaults]`, reported at the `typeof()` expression (`AnalyzeOpenTypesNestedInGenericType`). Default settings whose target is such a type are ignored as a whole, including their `ImplementationTypes`.
-- Checks the interfaces and base classes an open implementation is registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` (its own or those of its default settings), such as `Outer<T>.INode<T>` of `Node<T> : Outer<T>.INode<T>`, reported at the registration attribute (`CollectAndValidateNamedType`, `AnalyzeAssemblyLevelRegistration`), and those of an open `ImplementationTypes` entry of `[IocRegisterDefaults]` with `RegisterAllInterfaces` / `RegisterAllBaseClasses`, reported at its `typeof()` (`AnalyzeOpenTypesNestedInGenericType`). The implicit check is skipped when the target of `[IocRegisterDefaults]` is itself such a type, since the settings are already ignored as a whole.
+- Checks the interfaces and base classes an open implementation is registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` (its own or those of its default settings), such as `Outer<T>.INode<T>` of `Node<T> : Outer<T>.INode<T>`, reported at the registration attribute at compilation end, once the default settings are known (`ResolveRegistrations`), so live IDE analysis without full solution analysis does not show them, and those of an open `ImplementationTypes` entry of `[IocRegisterDefaults]` with `RegisterAllInterfaces` / `RegisterAllBaseClasses`, reported at its `typeof()` (`AnalyzeOpenTypesNestedInGenericType`). The implicit check is skipped when the target of `[IocRegisterDefaults]` is itself such a type, since the settings are already ignored as a whole.
 - Checks the interfaces and base classes an open decorator in `Decorators` declares and takes as a constructor parameter, such as `Outer<T>.INode<T>` of `NodeDecorator<T>(Outer<T>.INode<T> inner) : Outer<T>.INode<T>`, reported at its `typeof()` (`AnalyzeOpenTypesNestedInGenericType`): the decorator is not applied to that form. Nested forms it only implements, such as a marker interface, are not reported.
 - A type is reported when one of its containing types is generic and it uses type parameters (its own or its containing types'). The message names the innermost containing type with type parameters, such as `Outer<O>` for `Outer<O>.Mid.Node<T>`.
 - Closed types declared in a generic type, such as `typeof(Outer<int>.Node<string>)`, and generic types declared in a non-generic type are not reported.
@@ -837,6 +853,6 @@ Report when a service type of a registration whose `Factory` (its own, or the `F
 ---
 ### Known Limitations
 
-- `SGIOC039`: only the registrations `RegisterAnalyzer` collects are analyzed, so the service types the generator skips for implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and for the registrations of imported modules are not reported. It can miss a skipped service type, but does not report one the generator registers.
+- `SGIOC039`: only the registrations `RegisterAnalyzer` collects are analyzed, so the service types the generator skips for implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and for the registrations of imported modules are not reported. The `Factory` of type-level default settings is analyzed like that of assembly-level ones, and the default settings of imported modules have no `Factory`, like in the generator. It can miss a skipped service type, but does not report one the generator registers.
 
-- `SGIOC036` / `SGIOC037`: the analyzer only sees the registrations `RegisterAnalyzer` collects, so open generic implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and the registrations of imported modules are not analyzed. The closed generic types that a dependency of type `T` (a type parameter) can become are taken from the registrations `RegisterAnalyzer` collects, without `IServiceProvider` invocations or `[IocDiscover]`. These limits can miss a dependency the generator does not close, but do not report one it closes. The registrations of all containers are analyzed together, also for `ExplicitOnly` or `IncludeTags` containers whose own registrations do not form the cycle.
+- `SGIOC036` / `SGIOC037`: the analyzer only sees the registrations `RegisterAnalyzer` collects, so open generic implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and the registrations of imported modules are not analyzed. Default settings with a `Factory` and an open generic target are analyzed whether they are assembly-level or type-level; those of imported modules have no `Factory`, like in the generator. The closed generic types that a dependency of type `T` (a type parameter) can become are taken from the registrations `RegisterAnalyzer` collects, without `IServiceProvider` invocations or `[IocDiscover]`. These limits can miss a dependency the generator does not close, but do not report one it closes. The registrations of all containers are analyzed together, also for `ExplicitOnly` or `IncludeTags` containers whose own registrations do not form the cycle.

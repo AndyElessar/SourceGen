@@ -602,56 +602,28 @@ partial class ContainerAnalyzer
         CancellationToken cancellationToken)
     {
         var lookup = new DefaultSettingsLookup();
-        var treeOrder = new Dictionary<SyntaxTree, int>();
-        var treeIndex = 0;
-        foreach(var tree in compilation.SyntaxTrees)
-            treeOrder[tree] = treeIndex++;
+        var treeOrder = AnalyzerHelpers.GetSyntaxTreeOrder(compilation);
 
         foreach(var defaults in analyzerContext.DefaultSettings
                      .OrderBy(static d => d.IsGeneric)
-                     .ThenBy(d => GetSourceOrder(d.Syntax, treeOrder)))
+                     .ThenBy(d => AnalyzerHelpers.GetSourceOrder(d.Syntax, treeOrder)))
         {
             lookup.Add(defaults);
         }
 
         // Imported module assemblies: settings on the module type, then assembly-level settings
-        foreach(var import in analyzerContext.ModuleImports
-                     .OrderBy(static i => i.Attribute.AttributeClass?.IsGenericType == true)
-                     .ThenBy(i => GetSourceOrder(i.Attribute.ApplicationSyntaxReference, treeOrder)))
+        foreach(var attribute in AnalyzerHelpers.EnumerateImportedDefaultSettingsAttributes(
+                     analyzerContext.ModuleImports.Select(static import => import.Attribute),
+                     compilation.Assembly,
+                     treeOrder,
+                     analyzerContext.AttributeSymbols,
+                     cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var moduleType = import.ModuleType.IsGenericType ? import.ModuleType.OriginalDefinition : import.ModuleType;
-            var moduleAssembly = moduleType.ContainingAssembly;
-            if(moduleAssembly is null || SymbolEqualityComparer.Default.Equals(moduleAssembly, compilation.Assembly))
-                continue;
-
-            AddImportedDefaults(moduleType.GetAttributes());
-            AddImportedDefaults(moduleAssembly.GetAttributes());
+            if(CreateDefaultSettings(attribute) is { } defaults)
+                lookup.Add(defaults);
         }
 
         return lookup;
-
-        void AddImportedDefaults(ImmutableArray<AttributeData> attributes)
-        {
-            foreach(var attribute in attributes)
-            {
-                if(attribute.AttributeClass is { } attrClass
-                    && AnalyzerHelpers.IsIoCRegisterDefaultsAttribute(attrClass, analyzerContext.AttributeSymbols)
-                    && CreateDefaultSettings(attribute) is { } defaults)
-                {
-                    lookup.Add(defaults);
-                }
-            }
-        }
-    }
-
-    private static (int Tree, int Position) GetSourceOrder(SyntaxReference? syntax, Dictionary<SyntaxTree, int> treeOrder)
-    {
-        if(syntax is null)
-            return (int.MaxValue, int.MaxValue);
-
-        return (treeOrder.TryGetValue(syntax.SyntaxTree, out var index) ? index : int.MaxValue, syntax.Span.Start);
     }
 
     private static IEnumerable<INamedTypeSymbol> EnumerateBaseClasses(INamedTypeSymbol type)
@@ -698,7 +670,7 @@ partial class ContainerAnalyzer
             {
                 services = new ServiceIndex();
                 services.UnionWith(own.Services);
-                serviceKeys = new(own.ServiceKeys, RuntimeTypeSymbolComparer.ServiceKeyComparer);
+                serviceKeys = new(own.ServiceKeys);
                 foreach(var module in container.ImportedModules)
                 {
                     if(!SymbolEqualityComparer.Default.Equals(module.ContainingAssembly, assembly))
@@ -775,7 +747,7 @@ partial class ContainerAnalyzer
         public ServiceIndex Services { get; } = new();
 
         /// <summary>The services by key expression (SGIOC021, which compares keys like the generator's accessor lookup).</summary>
-        public HashSet<ServiceSymbolKey> ServiceKeys { get; } = new(RuntimeTypeSymbolComparer.ServiceKeyComparer);
+        public HashSet<ServiceSymbolKey> ServiceKeys { get; } = [];
     }
 
     /// <param name="Own">The registrations of the container itself.</param>
@@ -862,7 +834,17 @@ partial class ContainerAnalyzer
         /// of its generic type definition when <paramref name="matchOpenGenerics"/> is <see langword="true"/> and the
         /// registration's implementation can be closed for it, like the generator's closed generic registrations.
         /// </summary>
-        public bool Contains(INamedTypeSymbol serviceType, ServiceKeyValue? key, bool matchOpenGenerics = true)
+        /// <param name="spellings">
+        /// The spellings of each runtime type among the dependencies the generator discovers, which differ in tuple element
+        /// names. The generator closes an open generic registration for a runtime type with a spelling that satisfies its
+        /// constraints (which compare tuple element names), and the container resolves every spelling of that runtime type,
+        /// so the service is registered when any spelling can close the implementation.
+        /// </param>
+        public bool Contains(
+            INamedTypeSymbol serviceType,
+            ServiceKeyValue? key,
+            bool matchOpenGenerics = true,
+            Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>? spellings = null)
         {
             if(ContainsExact(serviceType, key))
                 return true;
@@ -878,10 +860,24 @@ partial class ContainerAnalyzer
                 return false;
             }
 
+            List<INamedTypeSymbol>? otherSpellings = null;
+            spellings?.TryGetValue(serviceType, out otherSpellings);
             foreach(var implementation in implementations)
             {
-                if(KeyMatches(implementation.Key, key) && CanCloseOpenGeneric(implementation.Type, serviceType))
+                if(!KeyMatches(implementation.Key, key))
+                    continue;
+
+                if(CanCloseOpenGeneric(implementation.Type, serviceType))
                     return true;
+
+                if(otherSpellings is null)
+                    continue;
+
+                foreach(var spelling in otherSpellings)
+                {
+                    if(!SymbolEqualityComparer.Default.Equals(spelling, serviceType) && CanCloseOpenGeneric(implementation.Type, spelling))
+                        return true;
+                }
             }
 
             return false;
@@ -1003,7 +999,7 @@ partial class ContainerAnalyzer
         DependencyCache dependencyCache,
         CancellationToken cancellationToken)
     {
-        var unresolvedDependencies = new List<(Location? Location, string ServiceType)>();
+        var dependencies = new List<Dependency>();
         var analyzedSymbols = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
         foreach(var registration in scope.Own.Registrations)
@@ -1015,38 +1011,59 @@ partial class ContainerAnalyzer
                 case ActivationKind.Constructor:
                     var implementationType = registration.ImplementationType;
                     if(IsInSource(implementationType) && analyzedSymbols.Add(implementationType))
-                        AddUnresolved(dependencyCache.GetConstructorAndMembers(implementationType, cancellationToken));
+                        dependencies.AddRange(dependencyCache.GetConstructorAndMembers(implementationType, cancellationToken));
 
                     if(!registration.InjectMembers.IsDefaultOrEmpty)
-                        AddUnresolved(DependencyCache.GetInjectMembers(implementationType, registration.InjectMembers));
+                        dependencies.AddRange(DependencyCache.GetInjectMembers(implementationType, registration.InjectMembers));
 
                     break;
 
                 case ActivationKind.Factory when registration.Activation.Factory is { } factory:
                     if(IsInSource(factory) && analyzedSymbols.Add(factory))
-                        AddUnresolved(dependencyCache.GetFactory(factory));
+                        dependencies.AddRange(dependencyCache.GetFactory(factory));
 
                     break;
             }
         }
 
-        return unresolvedDependencies;
+        // The spellings of each runtime type among the dependencies (and the element types of their wrappers), which
+        // differ in tuple element names: the generator closes an open generic registration for a runtime type with a
+        // spelling that satisfies its constraints, and the container resolves every spelling of that runtime type
+        var spellings = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(RuntimeTypeSymbolComparer.Instance);
+        foreach(var dependency in dependencies)
+            AddSpellings(dependency.Type);
 
-        void AddUnresolved(List<Dependency> dependencies)
+        var unresolvedDependencies = new List<(Location? Location, string ServiceType)>();
+        foreach(var dependency in dependencies)
         {
-            foreach(var dependency in dependencies)
-            {
-                if(ContainsTypeParameter(dependency.Type) || IsServiceRegistered(dependency.Type, dependency.Key, scope.Services))
-                    continue;
+            if(ContainsTypeParameter(dependency.Type) || IsServiceRegistered(dependency.Type, dependency.Key, scope.Services, spellings))
+                continue;
 
-                var serviceType = dependency.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                unresolvedDependencies.Add((
-                    dependency.Location,
-                    dependency.Key is { } key ? $"{serviceType} (key {key.Display})" : serviceType));
-            }
+            var serviceType = dependency.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+            unresolvedDependencies.Add((
+                dependency.Location,
+                dependency.Key is { } key ? $"{serviceType} (key {key.Display})" : serviceType));
         }
 
+        return unresolvedDependencies;
+
         static bool IsInSource(ISymbol symbol) => symbol.Locations.Any(static l => l.IsInSource);
+
+        // Like the generator's CollectClosedGenericDependencyFromType, only the element types of supported wrappers are
+        // discovered, not the type arguments of other generic types
+        void AddSpellings(INamedTypeSymbol type)
+        {
+            if(!type.IsGenericType)
+                return;
+
+            if(!spellings.TryGetValue(type, out var list))
+                spellings.Add(type, [type]);
+            else if(!list.Contains(type, SymbolEqualityComparer.Default))
+                list.Add(type);
+
+            if(TryGetSupportedWrapper(type, out _, out var elementType))
+                AddSpellings(elementType);
+        }
     }
 
     /// <summary>
@@ -1057,9 +1074,14 @@ partial class ContainerAnalyzer
     /// <c>T</c> itself; dictionaries and collections of key value pairs need a non-keyed dependency and a keyed registration
     /// of the value type.
     /// </summary>
-    private static bool IsServiceRegistered(INamedTypeSymbol serviceType, ServiceKeyValue? key, ServiceIndex services)
+    /// <param name="spellings">The spellings of each runtime type among the dependencies (see <see cref="ServiceIndex.Contains"/>).</param>
+    private static bool IsServiceRegistered(
+        INamedTypeSymbol serviceType,
+        ServiceKeyValue? key,
+        ServiceIndex services,
+        Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> spellings)
     {
-        if(services.Contains(serviceType, key))
+        if(services.Contains(serviceType, key, spellings: spellings))
             return true;
 
         if(!TryGetSupportedWrapper(serviceType, out var kind, out var elementType))
@@ -1067,15 +1089,15 @@ partial class ContainerAnalyzer
 
         return kind switch
         {
-            WrapperKind.Task => services.Contains(elementType, key),
-            WrapperKind.Func when serviceType.Arity > 1 => services.Contains(elementType, key),
-            WrapperKind.Lazy or WrapperKind.Func or WrapperKind.KeyValuePair => IsServiceRegistered(elementType, key, services),
+            WrapperKind.Task => services.Contains(elementType, key, spellings: spellings),
+            WrapperKind.Func when serviceType.Arity > 1 => services.Contains(elementType, key, spellings: spellings),
+            WrapperKind.Lazy or WrapperKind.Func or WrapperKind.KeyValuePair => IsServiceRegistered(elementType, key, services, spellings),
             WrapperKind.Dictionary => key is null && services.ContainsKeyed(elementType),
 
             // Collections
             _ when elementType.TryGetWrapperInfo(out var element) && element.Kind is WrapperKind.KeyValuePair
                 => key is null && element.ElementType is { } valueType && services.ContainsKeyed(valueType),
-            _ => IsServiceRegistered(elementType, key, services),
+            _ => IsServiceRegistered(elementType, key, services, spellings),
         };
     }
 

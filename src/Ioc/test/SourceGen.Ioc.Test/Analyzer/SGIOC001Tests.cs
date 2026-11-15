@@ -316,4 +316,99 @@ public class SGIOC001Tests
         await Assert.That(sgioc001).Count().IsEqualTo(1);
         await Assert.That(sgioc001[0].GetMessage()).DoesNotContain("imported from");
     }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Category(Constants.ImportModule)]
+    [Arguments("ModuleType", "", "[IocRegisterDefaults(typeof(ServiceBase), ServiceLifetime.Singleton)]", true, 1)]
+    [Arguments("ModuleAssembly", "[assembly: IocRegisterDefaults(typeof(Library.ServiceBase), ServiceLifetime.Singleton)]", "", true, 1)]
+    [Arguments("NotImported", "", "[IocRegisterDefaults(typeof(ServiceBase), ServiceLifetime.Singleton)]", false, 0)]
+    public async Task SGIOC001_ImportedBestDefaultSettings_HaveNoFactory(
+        string scenario, string assemblyDefaults, string moduleDefaults, bool imported, int expected)
+    {
+        // The best default settings of Service are the imported ones of its base class, whose Factory the generator does not
+        // read, so the generator constructs Service instead of calling the Factory of the less specific local default settings
+        var librarySource = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{assemblyDefaults}}
+
+            namespace Library;
+
+            public abstract class ServiceBase;
+
+            {{moduleDefaults}}
+            public sealed class Module;
+            """;
+        var library = SourceGeneratorTestHelper.CreateCompilation("Library", librarySource);
+
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using Library;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(IService), ServiceLifetime.Transient, Factory = nameof(ServiceFactory.Create))]
+
+            namespace TestNamespace;
+
+            public interface IService;
+
+            public static class ServiceFactory
+            {
+                public static IService Create() => throw new System.NotImplementedException();
+            }
+
+            {{(imported ? "[IocImportModule(typeof(Module))]" : "")}}
+            public sealed class App;
+
+            [IocRegister]
+            public sealed class Service : ServiceBase, IService
+            {
+                private Service() { }
+            }
+            """;
+        var compilation = SourceGeneratorTestHelper.CreateCompilation("TestAssembly", source, [library.ToMetadataReference()]);
+
+        var diagnostics = await compilation.WithAnalyzers([new RegisterAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var sgioc001 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC001).ToList();
+
+        await Assert.That(sgioc001).Count().IsEqualTo(expected);
+        if(expected > 0)
+        {
+            await Assert.That(sgioc001[0].GetMessage()).Contains("'Service'").And.Contains("no constructor accessible");
+        }
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC001_TypeLevelDefaultSettingsFactory_NoDiagnostic()
+    {
+        // The Factory of type-level default settings creates the implementation, so it does not need a constructor
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegisterDefaults(typeof(IService), ServiceLifetime.Transient, Factory = nameof(ServiceFactory.Create))]
+            public interface IService;
+
+            public static class ServiceFactory
+            {
+                public static IService Create() => throw new System.NotImplementedException();
+            }
+
+            [IocRegister]
+            public sealed class Service : IService
+            {
+                private Service() { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC001)).IsEmpty();
+    }
 }

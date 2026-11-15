@@ -9,9 +9,6 @@ internal sealed class RuntimeTypeSymbolComparer : IEqualityComparer<ITypeSymbol?
 {
     public static RuntimeTypeSymbolComparer Instance { get; } = new();
 
-    /// <summary>Compares service keys by their service type like <see cref="Instance"/>, and by their key ordinally.</summary>
-    public static IEqualityComparer<ServiceSymbolKey> ServiceKeyComparer { get; } = new ServiceSymbolKeyComparer();
-
     private RuntimeTypeSymbolComparer()
     {
     }
@@ -73,14 +70,5 @@ internal sealed class RuntimeTypeSymbolComparer : IEqualityComparer<ITypeSymbol?
             default:
                 return SymbolEqualityComparer.Default.GetHashCode(obj);
         }
-    }
-
-    private sealed class ServiceSymbolKeyComparer : IEqualityComparer<ServiceSymbolKey>
-    {
-        public bool Equals(ServiceSymbolKey x, ServiceSymbolKey y)
-            => Instance.Equals(x.ServiceType, y.ServiceType) && StringComparer.Ordinal.Equals(x.Key, y.Key);
-
-        public int GetHashCode(ServiceSymbolKey obj)
-            => unchecked((Instance.GetHashCode(obj.ServiceType) * 397) ^ StringComparer.Ordinal.GetHashCode(obj.Key ?? string.Empty));
     }
 }
