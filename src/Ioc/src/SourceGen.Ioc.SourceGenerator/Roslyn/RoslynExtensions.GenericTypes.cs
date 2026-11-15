@@ -226,7 +226,7 @@ internal static partial class RoslynExtensions
                 foreach(var candidate in current.GetMembers(member.Name))
                 {
                     if(!candidate.IsOverride
-                        && IsAccessible(candidate, assembly)
+                        && IsAccessibleToGeneratedCode(candidate, assembly)
                         && (member is not IMethodSymbol method || candidate is not IMethodSymbol candidateMethod || HasSameParameters(method, candidateMethod)))
                     {
                         return candidate;
@@ -235,14 +235,6 @@ internal static partial class RoslynExtensions
             }
 
             return null;
-
-            static bool IsAccessible(ISymbol candidate, IAssemblySymbol assembly) => candidate.DeclaredAccessibility switch
-            {
-                Accessibility.Public => true,
-                Accessibility.Internal or Accessibility.ProtectedOrInternal =>
-                    SymbolEqualityComparer.Default.Equals(candidate.ContainingAssembly, assembly) || candidate.ContainingAssembly.GivesAccessTo(assembly),
-                _ => false,
-            };
 
             static bool HasSameParameters(IMethodSymbol method, IMethodSymbol other)
             {
@@ -264,7 +256,67 @@ internal static partial class RoslynExtensions
                 return true;
             }
         }
+
+        /// <summary>
+        /// Gets the type to call this method through when generated code calling it on <paramref name="type"/>
+        /// (<c>t.Init(...)</c>) could bind to another method. Overload resolution treats an override as declared on the type
+        /// of the original virtual method, and removes the methods of a type when a more derived type has an applicable
+        /// method with the same name. So when <paramref name="type"/>, or a base class between it and the type declaring the
+        /// original (least-overridden) method, declares an accessible method with the same name that is not an override
+        /// (static methods included, as they are in the method group too), the call must be made through that declaring
+        /// type (<c>((Base)t).Init(...)</c>), which still dispatches to an override.
+        /// </summary>
+        /// <param name="type">The registered type that this method, as returned by <c>AsMemberOf</c>, is a member of.</param>
+        /// <param name="assembly">The assembly the generated code is compiled into.</param>
+        /// <returns>The declaring type of the original method, or <see langword="null"/> to call the method on the instance.</returns>
+        public INamedTypeSymbol? GetCallThroughType(INamedTypeSymbol type, IAssemblySymbol assembly)
+        {
+            if(member is not IMethodSymbol method)
+            {
+                return null;
+            }
+
+            // The overridden method is a member of the constructed base type, with the type arguments the registered type gives it
+            while(method.OverriddenMethod is { } overridden)
+            {
+                method = overridden;
+            }
+
+            if(method.ContainingType is not { } declaringType)
+            {
+                return null;
+            }
+
+            var target = type.IsUnboundGenericType ? type.OriginalDefinition : type;
+            for(var current = target;
+                current is not null && !SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, declaringType.OriginalDefinition);
+                current = current.BaseType)
+            {
+                foreach(var candidate in current.GetMembers(method.Name))
+                {
+                    if(candidate is IMethodSymbol && !candidate.IsOverride && IsAccessibleToGeneratedCode(candidate, assembly))
+                    {
+                        return declaringType;
+                    }
+                }
+            }
+
+            return null;
+        }
     }
+
+    /// <summary>
+    /// Gets whether generated code compiled into <paramref name="assembly"/> can access <paramref name="symbol"/> from
+    /// outside its type hierarchy: <c>public</c> members, and <c>internal</c> or <c>protected internal</c> members declared
+    /// in <paramref name="assembly"/> or in an assembly that gives it access to its internals (<c>InternalsVisibleTo</c>).
+    /// </summary>
+    private static bool IsAccessibleToGeneratedCode(ISymbol symbol, IAssemblySymbol assembly) => symbol.DeclaredAccessibility switch
+    {
+        Accessibility.Public => true,
+        Accessibility.Internal or Accessibility.ProtectedOrInternal =>
+            SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, assembly) || symbol.ContainingAssembly.GivesAccessTo(assembly),
+        _ => false,
+    };
 
     /// <summary>
     /// Checks if sourceType is assignable to targetType.

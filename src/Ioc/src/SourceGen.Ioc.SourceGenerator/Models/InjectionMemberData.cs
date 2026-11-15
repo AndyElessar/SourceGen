@@ -47,13 +47,26 @@ internal sealed record class PropertyOrFieldInjectionData(
 /// <param name="Key">The key applied to parameters without their own key.</param>
 /// <param name="Parameters">The method parameters.</param>
 /// <param name="IsAsync">Whether the method returns <c>Task</c> and is awaited after object creation.</param>
+/// <param name="CallThroughType">
+/// The declaring type of a base class method that the call is made through (<c>((Base)s0).Init(...)</c>), because a more
+/// derived type declares a method with the same name that the call on the instance could bind to instead;
+/// <see langword="null"/> to call the method on the instance.
+/// </param>
 internal sealed record class MethodInjectionData(
     string Name,
     string? Key,
     ImmutableEquatableArray<ParameterData> Parameters,
-    bool IsAsync) : InjectionMemberData(Name, Key)
+    bool IsAsync,
+    TypeData? CallThroughType = null) : InjectionMemberData(Name, Key)
 {
     public override InjectionMemberType MemberType => IsAsync ? InjectionMemberType.AsyncMethod : InjectionMemberType.Method;
+
+    /// <summary>
+    /// Gets the method access on <paramref name="instance"/> to invoke: <c>instance.Init</c>, or
+    /// <c>((global::Base)instance).Init</c> when the call is made through <see cref="CallThroughType"/>.
+    /// </summary>
+    public string GetInvocationTarget(string instance)
+        => CallThroughType is null ? $"{instance}.{Name}" : $"(({CallThroughType.Name}){instance}).{Name}";
 }
 
 /// <summary>

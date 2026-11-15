@@ -447,13 +447,13 @@ partial class IocSourceGenerator
             WriteMethodInvocations(writer, asyncMethodResolutions, useAwait: true);
         }
 
-        private List<(string MethodName, string?[] ParamVars, string[] ParamNames)> ResolveMethodResolutions(
+        private List<(string InvocationTarget, string?[] ParamVars, string[] ParamNames)> ResolveMethodResolutions(
             SourceWriter writer,
             ImmutableEquatableArray<MethodInjectionData> methodMembers,
             ref int memberParamIndex,
             RegisterWriteContext context)
         {
-            var methodResolutions = new List<(string MethodName, string?[] ParamVars, string[] ParamNames)>(methodMembers.Length);
+            var methodResolutions = new List<(string InvocationTarget, string?[] ParamVars, string[] ParamNames)>(methodMembers.Length);
 
             foreach(var method in methodMembers)
             {
@@ -488,7 +488,7 @@ partial class IocSourceGenerator
                     memberParamIndex++;
                 }
 
-                methodResolutions.Add((method.Name, paramVars, paramNames));
+                methodResolutions.Add((method.GetInvocationTarget("s0"), paramVars, paramNames));
             }
 
             return methodResolutions;
@@ -496,10 +496,10 @@ partial class IocSourceGenerator
 
         private static void WriteMethodInvocations(
             SourceWriter writer,
-            List<(string MethodName, string?[] ParamVars, string[] ParamNames)> methodResolutions,
+            List<(string InvocationTarget, string?[] ParamVars, string[] ParamNames)> methodResolutions,
             bool useAwait)
         {
-            foreach(var (methodName, paramVars, paramNames) in methodResolutions)
+            foreach(var (invocationTarget, paramVars, paramNames) in methodResolutions)
             {
                 var entries = new (string Name, string? Value)[paramVars.Length];
 
@@ -509,7 +509,7 @@ partial class IocSourceGenerator
                 }
 
                 string args = BuildArgumentListFromEntries(entries);
-                writer.WriteLine($"{(useAwait ? "await " : "")}s0.{methodName}({args});");
+                writer.WriteLine($"{(useAwait ? "await " : "")}{invocationTarget}({args});");
             }
         }
     }
