@@ -497,4 +497,35 @@ public class SGIOC003Tests
 
         await Assert.That(sgioc003).Count().IsEqualTo(0);
     }
+
+    [Test]
+    [Arguments("IHandler<(Entity M, string N)>")]
+    [Arguments("Func<IHandler<(Entity M, string N)>>")]
+    [Arguments("Lazy<IHandler<(Entity, string)>>")]
+    public async Task SGIOC003_SingletonDependsOnScoped_TupleElementNamesDiffer_ReportsDiagnostic(string dependency)
+    {
+        // Tuple element names are not part of the runtime type, so the dependency resolves the Scoped registration
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public class ScopedHandler : IHandler<(Entity X, string Y)>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService({{dependency}} dependency);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+        await Assert.That(sgioc003[0].GetMessage()).Contains("SingletonService").And.Contains("ScopedHandler");
+    }
 }

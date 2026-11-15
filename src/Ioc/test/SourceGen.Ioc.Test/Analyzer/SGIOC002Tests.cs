@@ -187,4 +187,29 @@ public class SGIOC002Tests
         // Should report lifetime conflict (Singleton depending on Scoped)
         await Assert.That(sgioc003).Count().IsGreaterThanOrEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC002_CircularDependencyViaInterface_TupleElementNamesDiffer_ReportsDiagnostic()
+    {
+        // Tuple element names are not part of the runtime type, so each dependency resolves the other registration
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public class HandlerA(IHandler<(Entity, int)> other) : IHandler<(Entity X, string Y)>;
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<(Entity X, int Y)>)])]
+            public class HandlerB(IHandler<(Entity M, string N)> other) : IHandler<(Entity X, int Y)>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsGreaterThanOrEqualTo(1);
+    }
 }

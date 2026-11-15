@@ -112,4 +112,32 @@ public class SGIOC033Tests
 
         await Assert.That(sgioc033).Count().IsEqualTo(2);
     }
+
+    [Test]
+    public async Task SGIOC033_FuncWithArguments_TupleElementNamesDiffer_ReportsDiagnostic()
+    {
+        // Tuple element names are not part of the runtime type, so the Func creates the registered handler
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+            public class Entity;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler<(Entity X, string Y)>)])]
+            public sealed class NamedHandler(int id) : IHandler<(Entity X, string Y)>;
+
+            [IocRegister]
+            public sealed class Consumer(Func<int, IHandler<(Entity M, string N)>> create);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC033).ToList();
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+        await Assert.That(sgioc033[0].GetMessage()).Contains("registered as Singleton");
+    }
 }
