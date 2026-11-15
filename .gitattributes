@@ -1,8 +1,14 @@
 ###############################################################################
-# Set default behavior to automatically normalize line endings.
+# Normalize line endings and check out every text file (except below) with LF on all platforms,
+# so tools that write LF (such as apm install) do not leave line-ending-only changes.
 ###############################################################################
-* text=auto
-*.verified.txt text eol=lf
+* text=auto eol=lf
+
+# Written by tools with the platform's or the upstream's line endings, so these keep the platform default (CRLF on Windows with core.autocrlf):
+# the generator writes samples' Generated files with the OS newline, and apm copies the external TUnit skill as published (CRLF).
+samples/**/Generated/** !eol
+.agents/skills/tunit/** !eol
+.claude/skills/tunit/** !eol
 
 ###############################################################################
 # Set default behavior for command prompt diff.
