@@ -60,7 +60,7 @@ partial class StandaloneContainer
     {
         ThrowIfDisposed();
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, ServiceIdentifier.NonKeyed), out var resolver))
             return resolver(this);
 
         return null;

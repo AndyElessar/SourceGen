@@ -65,6 +65,137 @@ public class KeyedServiceTests
     }
 
     [Test]
+    [Arguments(false, true)]
+    [Arguments(true, true)]
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    public async Task Container_WithTwoRegistrationsUnderOneKey_GeneratesKeyedCollectionResolverOnlyForThatKey(bool useSwitchStatement, bool integrateServiceProvider)
+    {
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "a")]
+            public class FirstHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "b")]
+            public class SingleHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler)], Key = "a")]
+            public class SecondHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(
+                [IocInject(Key = "a")] IEnumerable<IHandler> many,
+                [IocInject(Key = "a")] IReadOnlyList<IHandler> manyList,
+                [IocInject(Key = "b")] IEnumerable<IHandler> single) { }
+
+            [IocContainer(UseSwitchStatement = {{(useSwitchStatement ? "true" : "false")}}, IntegrateServiceProvider = {{(integrateServiceProvider ? "true" : "false")}})]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource).UseParameters(useSwitchStatement, integrateServiceProvider);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Container_WithRegistrationsUnderAnyKey_ExcludesThemFromKeyedCollections(bool useSwitchStatement)
+    {
+        // Like MS.DI, registrations made with KeyedService.AnyKey as their key are not part of the AnyKey collection,
+        // and get no keyed collection resolver of their own
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "a")]
+            public class KeyedHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey", KeyType = KeyType.Csharp)]
+            public class AnyKeyHandler1 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey", KeyType = KeyType.Csharp)]
+            public class AnyKeyHandler2 : IHandler { }
+
+            [IocContainer(UseSwitchStatement = {{(useSwitchStatement ? "true" : "false")}})]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource).UseParameters(useSwitchStatement);
+    }
+
+    [Test]
+    public async Task Container_WithKeyedCollectionsOfDifferentKeyKinds_NamesResolversAfterKeys()
+    {
+        // Enum and C# expression keys, and string keys whose identifiers collide ("x-y" and "x.y")
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public enum Kind { First }
+
+            public static class Keys
+            {
+                public const string Name = "name";
+            }
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = Kind.First, KeyType = KeyType.Value)]
+            public class EnumHandler1 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = Kind.First, KeyType = KeyType.Value)]
+            public class EnumHandler2 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "global::TestNamespace.Keys.Name", KeyType = KeyType.Csharp)]
+            public class CsharpHandler1 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "global::TestNamespace.Keys.Name", KeyType = KeyType.Csharp)]
+            public class CsharpHandler2 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "x-y")]
+            public class DashHandler1 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "x-y")]
+            public class DashHandler2 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "x.y")]
+            public class DotHandler1 : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "x.y")]
+            public class DotHandler2 : IHandler { }
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithServiceKeyAttribute_InjectsRegistrationKey()
     {
         // When a constructor parameter has [ServiceKey] attribute,

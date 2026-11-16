@@ -553,6 +553,60 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
             GetDefault4(),
         ];
 
+    private global::IocSample.Dependency[] GetAllDependencyArray_AnyKey() =>
+        [
+            GetDependency__1_(),
+        ];
+
+    private global::IocSample.IDependency[] GetAllIDependencyArray_AnyKey() =>
+        [
+            GetDependency__1_(),
+            GetDependency2__2_(),
+            GetDependency3__3_(),
+        ];
+
+    private global::IocSample.Dependency2[] GetAllDependency2Array_AnyKey() =>
+        [
+            GetDependency2__2_(),
+        ];
+
+    private global::IocSample.Dependency3[] GetAllDependency3Array_AnyKey() =>
+        [
+            GetDependency3__3_(),
+        ];
+
+    private global::IocSample.Keyed[] GetAllKeyedArray_AnyKey() =>
+        [
+            GetKeyed__Key_(),
+        ];
+
+    private global::IocSample.IKeyed[] GetAllIKeyedArray_AnyKey() =>
+        [
+            GetKeyed__Key_(),
+            GetKeyedEnum_IocSample_KeyEnum_Key0(),
+            GetKeyedCsharp_IocSample_KeyedExtensions_Key(),
+        ];
+
+    private global::IocSample.KeyedEnum[] GetAllKeyedEnumArray_AnyKey() =>
+        [
+            GetKeyedEnum_IocSample_KeyEnum_Key0(),
+        ];
+
+    private global::IocSample.KeyedCsharp[] GetAllKeyedCsharpArray_AnyKey() =>
+        [
+            GetKeyedCsharp_IocSample_KeyedExtensions_Key(),
+        ];
+
+    private global::IocSample.TestNest.TestNestClass.NestClassImpl[] GetAllNestClassImplArray_AnyKey() =>
+        [
+            GetNestClassImpl_IocSample_TestNest_TestNestClass_NestClassImpl_Key(),
+        ];
+
+    private global::IocSample.TestNest.TestNestClass.INestInterface[] GetAllINestInterfaceArray_AnyKey() =>
+        [
+            GetNestClassImpl_IocSample_TestNest_TestNestClass_NestClassImpl_Key(),
+        ];
+
     // KeyValuePair resolver methods
 
     private global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed> GetKvp_string_IKeyed__Key_() => new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_());
@@ -629,7 +683,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     {
         ThrowIfDisposed();
 
-        if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver))
             return resolver(this);
 
         return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
@@ -644,7 +698,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>)))
             return null;
 
-        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey);
+        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed);
         return _serviceResolvers.TryGetValue(elementId, out var resolver) ? resolver : null;
     }
 
@@ -741,7 +795,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     {
         ThrowIfDisposed();
 
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
@@ -772,7 +826,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public T? GetService<T>() where T : class
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? resolver(this) as T
             : (__ResolveCollection(typeof(T), null) ?? GetFallbackServiceProvider()?.GetService(typeof(T))) as T;
     }
@@ -780,7 +834,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public T GetRequiredService<T>() where T : notnull
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? (T)resolver(this)
             : (T)(__ResolveCollection(typeof(T), null) ?? GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
@@ -788,7 +842,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public global::System.Collections.Generic.IEnumerable<T> GetServices<T>()
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
             : __ResolveCollection<T>(null) ?? GetFallbackServiceProvider()?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
@@ -796,7 +850,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public T? GetKeyedService<T>(object? serviceKey) where T : class
     {
         ThrowIfDisposed();
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? resolver(this) as T
             : (__ResolveCollection(typeof(T), serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey)) as T;
@@ -805,7 +859,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
     {
         ThrowIfDisposed();
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? (T)resolver(this)
             : (T)(__ResolveCollection(typeof(T), serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
@@ -814,7 +868,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     public global::System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
     {
         ThrowIfDisposed();
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
             : __ResolveCollection<T>(serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];
@@ -824,7 +878,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         serviceKey != global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey
         && !typeof(T).IsValueType
         && !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))
-        && _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        && _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? __MergeFallbackServices<T>([(T)resolver(this)], serviceKey)
             : null;
 
@@ -834,7 +888,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     public bool IsService(global::System.Type serviceType)
     {
-        if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed))) return true;
 
         if(__IsCollectionService(serviceType, null)) return true;
 
@@ -843,7 +897,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;
 
@@ -953,6 +1007,26 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         ..__CollectionResolvers<global::IocSample.IDenpendency2>(static c => c.GetAllIDenpendency2Array()),
         ..__CollectionResolvers<global::IocSample.IFactoryService>(static c => c.GetAllIFactoryServiceArray()),
         ..__CollectionResolvers<global::IocSample.IDenpendency3>(static c => c.GetAllIDenpendency3Array()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.Dependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDependencyArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.Dependency[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDependencyArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.IDependency>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIDependencyArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.IDependency[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIDependencyArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.Dependency2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDependency2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.Dependency2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDependency2Array_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.Dependency3>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDependency3Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.Dependency3[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDependency3Array_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.Keyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllKeyedArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.Keyed[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.IKeyed>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIKeyedArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.IKeyed[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIKeyedArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.KeyedEnum>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllKeyedEnumArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.KeyedEnum[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedEnumArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.KeyedCsharp>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllKeyedCsharpArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.KeyedCsharp[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedCsharpArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.TestNest.TestNestClass.NestClassImpl>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllNestClassImplArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.TestNest.TestNestClass.NestClassImpl[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllNestClassImplArray_AnyKey()),
+        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::IocSample.TestNest.TestNestClass.INestInterface>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllINestInterfaceArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+        __KeyedResolver(typeof(global::IocSample.TestNest.TestNestClass.INestInterface[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllINestInterfaceArray_AnyKey()),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
@@ -986,7 +1060,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::IocSample.Module, object> resolver) =>
-        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::IocSample.Module, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
@@ -1008,24 +1082,24 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private static global::System.Collections.Generic.IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<global::IocSample.Module, TModule> module)
     {
-        var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<TModule, object>>();
+        var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>();
         foreach(var entry in resolvers)
         {
-            if(entry.Key.ServiceType.IsArray && entry.Key.Key == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)
-                arrayResolvers[entry.Key.ServiceType.GetElementType()!] = entry.Value;
+            if(entry.Key.ServiceType.IsArray)
+                arrayResolvers[new(entry.Key.ServiceType.GetElementType()!, entry.Key.Key)] = entry.Value;
         }
 
         foreach(var entry in resolvers)
         {
             var serviceType = entry.Key.ServiceType;
             var resolver = entry.Value;
-            if(entry.Key.Key == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey
-                && serviceType.IsConstructedGenericType
+            if(serviceType.IsConstructedGenericType
                 && serviceType.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>)
                 && !serviceType.GenericTypeArguments[0].IsValueType
-                && arrayResolvers.TryGetValue(serviceType.GenericTypeArguments[0], out var arrayResolver))
+                && arrayResolvers.TryGetValue(new(serviceType.GenericTypeArguments[0], entry.Key.Key), out var arrayResolver))
             {
-                yield return new(entry.Key, c => c.__MergeFallbackServices(serviceType, (global::System.Array)arrayResolver(module(c)), null));
+                var serviceKey = entry.Key.Key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : entry.Key.Key;
+                yield return new(entry.Key, c => c.__MergeFallbackServices(serviceType, (global::System.Array)arrayResolver(module(c)), serviceKey));
             }
             else
             {

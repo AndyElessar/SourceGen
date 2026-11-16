@@ -135,7 +135,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>)))
             return null;
 
-        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey);
+        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed);
         global::System.Func<global::TestNamespace.TestContainer, object>? resolver = null;
         foreach(var entry in _localResolvers)
         {
@@ -150,7 +150,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
     private object? __ResolveCollection(global::System.Type serviceType, object? serviceKey)
     {
-        var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey);
+        var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed);
         foreach(var entry in _localResolvers)
         {
             if(entry.Key == collectionId) return entry.Value(this);
@@ -244,7 +244,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     {
         ThrowIfDisposed();
 
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
 
         return __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null);
     }
@@ -312,7 +312,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
+
+        var id = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key);
+        foreach(var entry in _localResolvers)
+        {
+            if(entry.Key == id) return true;
+        }
 
         if(__IsCollectionService(serviceType, serviceKey)) return true;
 
@@ -370,7 +376,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
-        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
     private static __IocResolver[] __CollectionResolvers<T>(global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
     [

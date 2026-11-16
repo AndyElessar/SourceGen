@@ -183,6 +183,9 @@ partial class IocSourceGenerator
         AvoidDerivedServiceNames(closedEntries, reservedNames);
         var decoratedNames = hasSplitDecorators ? new DecoratedServiceNames(closedEntries, reservedNames, names) : null;
 
+        // Keyed registrations by service type, in registration order across keys (for the KeyedService.AnyKey collections)
+        var keyedEntriesByServiceType = new Dictionary<string, List<ServiceLookupEntry>>(TypeNameComparer.Instance);
+
         foreach(var (effectiveRegistration, cached) in closedEntries)
         {
             var serviceCached = cached;
@@ -207,6 +210,7 @@ partial class IocSourceGenerator
             if(effectiveRegistration.Key is not null)
             {
                 hasKeyedServices = true;
+                AddKeyedEntry(keyedEntriesByServiceType, effectiveRegistration.ServiceType.Name, serviceCached);
             }
 
             if(!serviceLookup.TryGetValue(key, out var list))
@@ -229,6 +233,11 @@ partial class IocSourceGenerator
                 }
                 implList.Add(cached);
                 lastWinsLookup[implKey] = cached;
+
+                if(effectiveRegistration.Key is not null)
+                {
+                    AddKeyedEntry(keyedEntriesByServiceType, effectiveRegistration.ImplementationType.Name, cached);
+                }
             }
 
             // Track closed types for IsService checks
@@ -301,6 +310,16 @@ partial class IocSourceGenerator
             }
         }
 
+        var keyedCollections = CreateKeyedCollections(serviceLookup, keyedEntriesByServiceType, collectionServiceTypes, reservedNames, names);
+        var keyedCollectionResolvers = new Dictionary<ServiceTypeKey, string>();
+        foreach(var keyedCollection in keyedCollections)
+        {
+            if(keyedCollection.Key is { } collectionKey)
+            {
+                keyedCollectionResolvers[new ServiceTypeKey(keyedCollection.ServiceType, collectionKey)] = keyedCollection.ArrayMethodName;
+            }
+        }
+
         var serviceLookupEntries = new ServiceLookup(serviceLookup);
 
         var lazyWrapperEntries = CreateLazyWrapperContainerEntries(demand.LazyServiceTypes, serviceLookupEntries, names);
@@ -319,7 +338,8 @@ partial class IocSourceGenerator
             new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), TypeNameComparer.Instance),
             names,
             CreateProjectedTasks(lastWinsLookup, serviceLookup, lazyWrapperEntries, funcWrapperEntries, reservedNames, names),
-            integrateServiceProvider);
+            integrateServiceProvider,
+            keyedCollectionResolvers);
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,
@@ -339,7 +359,7 @@ partial class IocSourceGenerator
             serviceLookupEntries,
             collectionRegistrations,
             wrapperFields);
-        var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations, names);
+        var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations, keyedCollections, names);
         var immutableLastWinsByServiceType = CreateLastWinsByServiceType(
             lastWinsLookup,
             singletonEntries,

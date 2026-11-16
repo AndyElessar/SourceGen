@@ -111,7 +111,7 @@ partial class IocSourceGenerator
         {
             if(entry is CollectionContainerEntry collection)
             {
-                WriteCollectionResolverEntries(writer, collection.ElementServiceTypeName, collection.ArrayMethodName);
+                WriteCollectionResolverEntries(writer, collection, container.IntegrateServiceProvider);
             }
         }
 
@@ -175,8 +175,9 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Writes <c>__ImportModuleResolvers&lt;TModule&gt;</c>, which wraps an imported module's resolvers to resolve with the
-    /// module instance of this container (scope). Its non-keyed <c>IEnumerable&lt;T&gt;</c> entries resolve the module's
-    /// <c>T[]</c> entry instead, which never merges, and merge the fallback services of this container, so a collection
+    /// module instance of this container (scope). Its <c>IEnumerable&lt;T&gt;</c> entries resolve the module's <c>T[]</c> entry
+    /// under the same key instead, which never merges, and merge the fallback services of this container under that key
+    /// (non-keyed, a service key, or <c>KeyedService.AnyKey</c>), so a collection
     /// resolved through the importer merges once, with the importer's fallback provider and fallback scope, whatever the
     /// module's own <c>IntegrateServiceProvider</c> (see Container.ImportModule). Value types (<c>KeyValuePair</c>
     /// collections, which are not merged) and modules without a <c>T[]</c> entry keep the module's entry.
@@ -187,13 +188,13 @@ partial class IocSourceGenerator
         writer.WriteLine($"private static global::System.Collections.Generic.IEnumerable<{ResolverEntryAlias}> {ImportModuleResolversMethodName}<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<{container.ContainerTypeName}, TModule> module)");
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine("var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<TModule, object>>();");
+        writer.WriteLine("var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>();");
         writer.WriteLine("foreach(var entry in resolvers)");
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine($"if(entry.Key.ServiceType.IsArray && entry.Key.Key == {KeyedServiceAnyKey})");
+        writer.WriteLine("if(entry.Key.ServiceType.IsArray)");
         writer.Indentation++;
-        writer.WriteLine("arrayResolvers[entry.Key.ServiceType.GetElementType()!] = entry.Value;");
+        writer.WriteLine("arrayResolvers[new(entry.Key.ServiceType.GetElementType()!, entry.Key.Key)] = entry.Value;");
         writer.Indentation--;
         writer.Indentation--;
         writer.WriteLine("}");
@@ -203,16 +204,17 @@ partial class IocSourceGenerator
         writer.Indentation++;
         writer.WriteLine("var serviceType = entry.Key.ServiceType;");
         writer.WriteLine("var resolver = entry.Value;");
-        writer.WriteLine($"if(entry.Key.Key == {KeyedServiceAnyKey}");
+        writer.WriteLine("if(serviceType.IsConstructedGenericType");
         writer.Indentation++;
-        writer.WriteLine("&& serviceType.IsConstructedGenericType");
         writer.WriteLine("&& serviceType.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>)");
         writer.WriteLine("&& !serviceType.GenericTypeArguments[0].IsValueType");
-        writer.WriteLine("&& arrayResolvers.TryGetValue(serviceType.GenericTypeArguments[0], out var arrayResolver))");
+        writer.WriteLine("&& arrayResolvers.TryGetValue(new(serviceType.GenericTypeArguments[0], entry.Key.Key), out var arrayResolver))");
         writer.Indentation--;
         writer.WriteLine("{");
         writer.Indentation++;
-        writer.WriteLine($"yield return new(entry.Key, c => c.{MergeFallbackServicesMethodName}(serviceType, (global::System.Array)arrayResolver(module(c)), null));");
+        // The fallback services of the same key: null for non-keyed collections, KeyedService.AnyKey for all keyed services
+        writer.WriteLine($"var serviceKey = entry.Key.Key == {NonKeyedServiceKey} ? null : entry.Key.Key;");
+        writer.WriteLine($"yield return new(entry.Key, c => c.{MergeFallbackServicesMethodName}(serviceType, (global::System.Array)arrayResolver(module(c)), serviceKey));");
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine("else");

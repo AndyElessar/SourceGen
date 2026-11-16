@@ -1,3 +1,5 @@
+using static SourceGen.Ioc.Constants;
+
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
@@ -191,11 +193,21 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <param name="Key">The key expression of a keyed collection, or <see langword="null"/> for a non-keyed or <paramref name="AllKeys"/> collection.</param>
+    /// <param name="AllKeys">Whether this is the <c>KeyedService.AnyKey</c> collection of all keyed registrations.</param>
     private sealed record class CollectionContainerEntry(
         string ElementServiceTypeName,
         string ArrayMethodName,
-        ImmutableEquatableArray<ResolvedDependency> ElementResolvers) : ContainerEntry
+        ImmutableEquatableArray<ResolvedDependency> ElementResolvers,
+        string? Key = null,
+        bool AllKeys = false) : ContainerEntry
     {
+        /// <summary>Whether this is a non-keyed collection (<c>GetServices&lt;T&gt;()</c>).</summary>
+        public bool IsNonKeyed => Key is null && !AllKeys;
+
+        /// <summary>The key expression of the collection's resolver entries and fallback merge.</summary>
+        public string KeyExpression => AllKeys ? KeyedServiceAnyKey : Key ?? "null";
+
         public override void WriteResolver(SourceWriter writer)
         {
             writer.WriteLine($"private {ElementServiceTypeName}[] {ArrayMethodName}() =>");

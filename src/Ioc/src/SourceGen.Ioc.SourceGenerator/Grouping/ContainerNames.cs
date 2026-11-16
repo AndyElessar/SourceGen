@@ -181,7 +181,7 @@ partial class IocSourceGenerator
         /// <summary>
         /// Appends the FNV-1a hash of <paramref name="typeName"/> (deterministic, unlike <see cref="string.GetHashCode()"/>).
         /// </summary>
-        private static string AppendHash(string name, string typeName)
+        public static string AppendHash(string name, string typeName)
         {
             var hash = 2166136261u;
             foreach(var ch in typeName)

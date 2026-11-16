@@ -150,6 +150,7 @@ public sealed class CollectionFallbackMergeTests
         await Assert.That(isService.IsService(typeof(IEnumerable<IMultiCollectionService>))).IsTrue();
         await Assert.That(isService.IsService(typeof(IReadOnlyList<IMultiCollectionService>))).IsTrue();
         await Assert.That(isKeyedService.IsKeyedService(typeof(IEnumerable<IKeyedSingleCollectionService>), "alpha")).IsTrue();
+        await Assert.That(isKeyedService.IsKeyedService(typeof(IEnumerable<IKeyedSingleCollectionService>), KeyedService.AnyKey)).IsTrue();
     }
 
     [Test]
@@ -165,6 +166,6 @@ public sealed class CollectionFallbackMergeTests
         await Assert.That(isService.IsService(typeof(IEnumerable<IAsyncSingleCollectionService>))).IsFalse();
         await Assert.That(isService.IsService(typeof(IEnumerable<Task<IAsyncSingleCollectionService>>))).IsFalse();
         await Assert.That(isKeyedService.IsKeyedService(typeof(IEnumerable<IKeyedSingleCollectionService>), "beta")).IsFalse();
-        await Assert.That(isKeyedService.IsKeyedService(typeof(IEnumerable<IKeyedSingleCollectionService>), KeyedService.AnyKey)).IsFalse();
+        await Assert.That(isKeyedService.IsKeyedService(typeof(IEnumerable<ISingleCollectionService>), KeyedService.AnyKey)).IsFalse();
     }
 }

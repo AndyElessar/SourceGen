@@ -39,6 +39,7 @@ partial class IocSourceGenerator
     private const string ResolverEntryMethodName = "__Resolver";
     private const string KeyedResolverEntryMethodName = "__KeyedResolver";
     private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
+    private const string KeyedCollectionResolverEntriesMethodName = "__KeyedCollectionResolvers";
     private const string ResolveCollectionMethodName = "__ResolveCollection";
     private const string FindCollectionElementResolverMethodName = "__FindCollectionElementResolver";
     private const string IsCollectionServiceMethodName = "__IsCollectionService";
@@ -87,6 +88,40 @@ partial class IocSourceGenerator
         writer.WriteLine($"..{CollectionResolverEntriesMethodName}<{elementType}>(static c => c.{arrayMethodName}()),");
 
     /// <summary>
+    /// Writes the resolver entries of a generated collection resolver: the six collection types without key (non-keyed) or
+    /// under the collection's key, or <c>IEnumerable&lt;T&gt;</c> and <c>T[]</c> under <c>KeyedService.AnyKey</c> for the
+    /// collection of all keyed services (<c>MS.DI</c> serves only <c>IEnumerable&lt;T&gt;</c> with <c>AnyKey</c>; <c>T[]</c>
+    /// lets an importing container merge the fallback services, see Container.ImportModule).
+    /// </summary>
+    private static void WriteCollectionResolverEntries(SourceWriter writer, CollectionContainerEntry collection, bool integrateServiceProvider)
+    {
+        var elementType = collection.ElementServiceTypeName;
+        var arrayMethodName = collection.ArrayMethodName;
+
+        if(collection.IsNonKeyed)
+        {
+            WriteCollectionResolverEntries(writer, elementType, arrayMethodName);
+        }
+        else if(collection.Key is { } key)
+        {
+            writer.WriteLine($"..{KeyedCollectionResolverEntriesMethodName}<{elementType}>({key}, static c => c.{arrayMethodName}()),");
+        }
+        else
+        {
+            if(integrateServiceProvider)
+            {
+                writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<{elementType}>), {KeyedServiceAnyKey}, static c => c.{MergeFallbackServicesMethodName}(c.{arrayMethodName}(), {KeyedServiceAnyKey})),");
+            }
+            else
+            {
+                writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<{elementType}>), {KeyedServiceAnyKey}, static c => c.{arrayMethodName}()),");
+            }
+
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof({elementType}[]), {KeyedServiceAnyKey}, static c => c.{arrayMethodName}()),");
+        }
+    }
+
+    /// <summary>
     /// Writes the helpers that build resolver entries, so each entry in <c>_localResolvers</c> stays short.
     /// </summary>
     private static void WriteResolverEntryHelpers(SourceWriter writer, ContainerModel container, ContainerRegistrationGroups groups)
@@ -95,7 +130,7 @@ partial class IocSourceGenerator
 
         writer.WriteLine($"private static {ResolverEntryAlias} {ResolverEntryMethodName}(global::System.Type serviceType, {resolverType} resolver) =>");
         writer.Indentation++;
-        writer.WriteLine($"new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {KeyedServiceAnyKey}), resolver);");
+        writer.WriteLine($"new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {NonKeyedServiceKey}), resolver);");
         writer.Indentation--;
 
         if(groups.LastWinsByServiceType.Keys.Any(static key => key.Key is not null))
@@ -131,6 +166,30 @@ partial class IocSourceGenerator
             writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),");
             writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IList<T>), resolver),");
             writer.WriteLine($"{ResolverEntryMethodName}(typeof(T[]), resolver),");
+            writer.Indentation--;
+            writer.WriteLine("];");
+        }
+
+        if(groups.CollectionEntries.Any(static e => e is CollectionContainerEntry { Key: not null }))
+        {
+            writer.WriteLine();
+            writer.WriteLine($"private static {ResolverEntryAlias}[] {KeyedCollectionResolverEntriesMethodName}<T>(object key, {resolverType} resolver) =>");
+            writer.WriteLine("[");
+            writer.Indentation++;
+            if(container.IntegrateServiceProvider)
+            {
+                // IEnumerable<T> also returns the fallback provider's services under the same key, first (see Container.Collections)
+                writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), key, c => c.{MergeFallbackServicesMethodName}((T[])resolver(c), key)),");
+            }
+            else
+            {
+                writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), key, resolver),");
+            }
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), key, resolver),");
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.ICollection<T>), key, resolver),");
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<T>), key, resolver),");
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(global::System.Collections.Generic.IList<T>), key, resolver),");
+            writer.WriteLine($"{KeyedResolverEntryMethodName}(typeof(T[]), key, resolver),");
             writer.Indentation--;
             writer.WriteLine("];");
         }

@@ -1,3 +1,5 @@
+using static SourceGen.Ioc.Constants;
+
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
@@ -216,42 +218,162 @@ partial class IocSourceGenerator
 
     private static ImmutableEquatableArray<ContainerEntry> CreateCollectionContainerEntries(
         IReadOnlyDictionary<string, ImmutableEquatableArray<ServiceLookupEntry>> collectionRegistrations,
+        List<KeyedCollection> keyedCollections,
         ContainerNames names)
     {
-        var entries = new List<ContainerEntry>(collectionRegistrations.Count);
+        var entries = new List<ContainerEntry>(collectionRegistrations.Count + keyedCollections.Count);
 
         foreach(var kvp in collectionRegistrations)
         {
-            var elementResolvers = new List<ResolvedDependency>(kvp.Value.Length);
-            var uniqueKeys = new HashSet<string>(StringComparer.Ordinal);
-
-            foreach(var cached in kvp.Value)
-            {
-                var uniqueKey = cached.Registration.Instance ?? cached.ResolverMethodName;
-                if(!uniqueKeys.Add(uniqueKey))
-                    continue;
-
-                if(cached.Registration.Instance is not null)
-                {
-                    elementResolvers.Add(new InstanceExpressionDependency(cached.Registration.Instance));
-                }
-                else
-                {
-                    elementResolvers.Add(new DirectServiceDependency(cached.ResolverMethodName));
-                }
-            }
-
-            if(elementResolvers.Count == 0)
+            var elementResolvers = CreateCollectionElementResolvers(kvp.Value);
+            if(elementResolvers.Length == 0)
                 continue;
 
             entries.Add(new CollectionContainerEntry(
                 kvp.Key,
                 names.ArrayResolver(kvp.Key),
-                elementResolvers.ToImmutableEquatableArray()));
+                elementResolvers));
+        }
+
+        foreach(var keyedCollection in keyedCollections)
+        {
+            entries.Add(new CollectionContainerEntry(
+                keyedCollection.ServiceType,
+                keyedCollection.ArrayMethodName,
+                CreateCollectionElementResolvers(keyedCollection.Registrations),
+                keyedCollection.Key,
+                AllKeys: keyedCollection.Key is null));
         }
 
         return entries.ToImmutableEquatableArray();
     }
+
+    /// <summary>
+    /// Gets the elements of a collection resolver in registration order, each unique registration once: its <c>Instance</c>
+    /// expression, or a call of its resolver method.
+    /// </summary>
+    private static ImmutableEquatableArray<ResolvedDependency> CreateCollectionElementResolvers(IReadOnlyList<ServiceLookupEntry> registrations)
+    {
+        var elementResolvers = new List<ResolvedDependency>(registrations.Count);
+        var uniqueKeys = new HashSet<(string? Key, string Resolver)>();
+
+        foreach(var cached in registrations)
+        {
+            // The key keeps instances registered under several keys apart in KeyedService.AnyKey collections
+            if(!uniqueKeys.Add((cached.Registration.Key, cached.Registration.Instance ?? cached.ResolverMethodName)))
+                continue;
+
+            elementResolvers.Add(CreateDirectDependency(cached));
+        }
+
+        return elementResolvers.ToImmutableEquatableArray();
+    }
+
+    private static void AddKeyedEntry(Dictionary<string, List<ServiceLookupEntry>> keyedEntriesByServiceType, string serviceType, ServiceLookupEntry cached)
+    {
+        if(!keyedEntriesByServiceType.TryGetValue(serviceType, out var entries))
+        {
+            entries = [];
+            keyedEntriesByServiceType[serviceType] = entries;
+        }
+
+        entries.Add(cached);
+    }
+
+    /// <summary>
+    /// Creates the keyed collection resolvers, without demand detection (like the non-keyed collections of several
+    /// registrations): one for each key of a service type with two or more unique registrations under that key (a key with
+    /// one registration is served by the single-service collection fallback), and one <c>KeyedService.AnyKey</c> collection
+    /// of all keyed registrations of each keyed service type, in registration order, like <c>MS.DI</c>. Async-init
+    /// registrations and registrations under <c>KeyedService.AnyKey</c> itself are excluded.
+    /// </summary>
+    private static List<KeyedCollection> CreateKeyedCollections(
+        Dictionary<ServiceTypeKey, List<ServiceLookupEntry>> serviceLookup,
+        Dictionary<string, List<ServiceLookupEntry>> keyedEntriesByServiceType,
+        List<string> collectionServiceTypes,
+        ReservedMemberNames reservedNames,
+        ContainerNames names)
+    {
+        var keyedCollections = new List<KeyedCollection>();
+        if(keyedEntriesByServiceType.Count == 0)
+            return keyedCollections;
+
+        // Array method names must not clash with the other generated methods
+        var usedNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach(var serviceType in collectionServiceTypes)
+        {
+            usedNames.Add(names.ArrayResolver(serviceType));
+        }
+
+        foreach(var registrations in serviceLookup.Values)
+        {
+            foreach(var cached in registrations)
+            {
+                usedNames.Add(cached.ResolverMethodName);
+            }
+        }
+
+        foreach(var kvp in serviceLookup)
+        {
+            if(kvp.Key.Key is not { } key || IsAnyKeyExpression(key))
+                continue;
+
+            var registrations = kvp.Value.Where(static c => !c.IsAsyncInit).ToList();
+            var uniqueResolvers = new HashSet<string>(StringComparer.Ordinal);
+            foreach(var cached in registrations)
+            {
+                uniqueResolvers.Add(cached.Registration.Instance ?? cached.ResolverMethodName);
+            }
+
+            if(uniqueResolvers.Count < 2)
+                continue;
+
+            var methodName = GetUniqueKeyedArrayMethodName($"{names.ArrayResolver(kvp.Key.ServiceType)}_{GetSafeIdentifier(key)}", key, usedNames, reservedNames);
+            keyedCollections.Add(new KeyedCollection(kvp.Key.ServiceType, key, methodName, registrations));
+        }
+
+        foreach(var kvp in keyedEntriesByServiceType)
+        {
+            var registrations = kvp.Value.Where(static c => !c.IsAsyncInit && !IsAnyKeyExpression(c.Registration.Key!)).ToList();
+            if(registrations.Count == 0)
+                continue;
+
+            var methodName = GetUniqueKeyedArrayMethodName($"{names.ArrayResolver(kvp.Key)}_AnyKey", KeyedServiceAnyKey, usedNames, reservedNames);
+            keyedCollections.Add(new KeyedCollection(kvp.Key, null, methodName, registrations));
+        }
+
+        return keyedCollections;
+    }
+
+    private static string GetUniqueKeyedArrayMethodName(string methodName, string key, HashSet<string> usedNames, ReservedMemberNames reservedNames)
+    {
+        // Different keys can have the same identifier ("a-b" and "a.b"): the hash of the key tells them apart
+        if(usedNames.Contains(methodName) || reservedNames.IsReservedResolverName(methodName))
+        {
+            methodName = ContainerNames.AppendHash(methodName, key);
+        }
+
+        while(usedNames.Contains(methodName) || reservedNames.IsReservedResolverName(methodName))
+        {
+            methodName = $"{methodName}_Resolve";
+        }
+
+        usedNames.Add(methodName);
+        return methodName;
+    }
+
+    private static bool IsAnyKeyExpression(string key) =>
+        key.EndsWith("KeyedService.AnyKey", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A keyed collection resolver of <paramref name="ServiceType"/>: the registrations under <paramref name="Key"/>, or all
+    /// keyed registrations (<c>KeyedService.AnyKey</c>) when <paramref name="Key"/> is <see langword="null"/>.
+    /// </summary>
+    private sealed record class KeyedCollection(
+        string ServiceType,
+        string? Key,
+        string ArrayMethodName,
+        List<ServiceLookupEntry> Registrations);
 
     /// <param name="InnerResolverMethodName">
     /// For a decorated service entry, the method resolving the undecorated instance it wraps

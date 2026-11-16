@@ -273,13 +273,12 @@ IEnumerable<IPlugin> plugins = container.GetServices<IPlugin>();         // [Plu
 IEnumerable<IPlugin> keyed = container.GetKeyedServices<IPlugin>("beta"); // [BetaPlugin]
 ```
 
-A service type with two or more registrations always gets a generated collection resolver. A service type with a single registration gets one only when the container's project requests it as a collection (a constructor parameter, an accessor, or a `GetServices<T>()` call). Otherwise, and for every keyed collection, the container builds a one-element array from the service's own resolver at runtime, before it asks the fallback provider. The element is the instance that `GetRequiredService<T>()` returns, so a singleton is never created a second time by the fallback provider.
+A service type with two or more registrations always gets a generated collection resolver, and so does each key with two or more registrations of a service type (see [Keyed Collections](05_Keyed.md#keyed-collections)). A service type with a single registration gets one only when the container's project requests it as a collection (a constructor parameter, an accessor, or a `GetServices<T>()` call). Otherwise, and for a key with a single registration, the container builds a one-element array from the service's own resolver at runtime, before it asks the fallback provider. The element is the instance that `GetRequiredService<T>()` returns, so a singleton is never created a second time by the fallback provider.
 
 > [!NOTE]
 > - Only `IEnumerable<T>` gets this runtime fallback; request other collection types (`IReadOnlyList<T>`, `T[]`, …) in the container's project to get a generated resolver.
 > - Async-init services (registered as `Task<T>`) are never part of a collection.
-> - `GetKeyedServices<T>(KeyedService.AnyKey)` is not answered from a single registration and goes to the fallback provider.
-> - Several registrations of one service type under the same key still return only the last one.
+> - `GetKeyedServices<T>(KeyedService.AnyKey)` returns every keyed registration of `T`, like `MS.E.DI` (see [Keyed Collections](05_Keyed.md#keyed-collections)).
 
 `IsService(typeof(IEnumerable<T>))` and `IsKeyedService(typeof(IEnumerable<T>), key)` return `true` for every collection the container resolves, so frameworks that classify parameters with `IServiceProviderIsService` (such as minimal APIs) see it as a service.
 
@@ -577,7 +576,7 @@ partial class ComponentContainer : IComponentPropertyActivator
         if (!_propertyActivatorCache.TryGetValue(componentType, out var activator))
         {
             activator = _serviceResolvers.ContainsKey(
-                    new ServiceIdentifier(componentType, KeyedService.AnyKey))
+                    new ServiceIdentifier(componentType, ServiceIdentifier.NonKeyed))
                 ? static (_, _) => { }
                 : CreateComponentPropertyInjector(componentType);
             _propertyActivatorCache.TryAdd(componentType, activator);
