@@ -48,6 +48,23 @@ public sealed class SwitchStatementTests
     }
 
     [Test]
+    public async Task SwitchStatement_LazyAndFuncWrapperEntries_ResolveLikeDictionaryMode()
+    {
+        using var container = new SwitchStatementContainer();
+
+        var lazy = container.GetService(typeof(Lazy<ISingletonService>)) as Lazy<ISingletonService>;
+        var factory = container.GetService(typeof(Func<ITransientService>)) as Func<ITransientService>;
+
+        await Assert.That(lazy).IsNotNull();
+        await Assert.That(lazy!.Value).IsSameReferenceAs(container.GetRequiredService<ISingletonService>());
+        await Assert.That(container.GetService<Lazy<ISingletonService>>()).IsNotNull();
+        await Assert.That(factory).IsNotNull();
+        await Assert.That(factory!()).IsNotNull();
+        await Assert.That(container.IsService(typeof(Lazy<ISingletonService>))).IsTrue();
+        await Assert.That(container.IsService(typeof(Func<ITransientService>))).IsTrue();
+    }
+
+    [Test]
     public async Task SwitchStatement_ImplementationType_ResolvesSameSingletonAsServiceType()
     {
         using var container = new SwitchStatementContainer();

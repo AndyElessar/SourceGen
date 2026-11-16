@@ -125,6 +125,8 @@ partial class IocSourceGenerator
     /// <item><c>__ResolveCollection</c>: the fallback provider's services of the collection (when integrated) followed by the
     /// element resolved by that resolver. Switch mode first looks for an exact <c>IEnumerable&lt;T&gt;</c> entry, which a
     /// <c>GetKeyedService(…, null)</c> request reaches without the switch.</item>
+    /// <item><c>__MergeFallbackServices(Type, Array, object?)</c> (integrated only): the non-generic merge, also used for the
+    /// collections of imported modules.</item>
     /// </list>
     /// </summary>
     private static void WriteCollectionFallbackMethods(SourceWriter writer, ContainerModel container, bool effectiveUseSwitchStatement)
@@ -196,37 +198,16 @@ partial class IocSourceGenerator
         writer.WriteLine("return null;");
         writer.Indentation--;
         writer.WriteLine();
-        writer.WriteLine("var elementType = serviceType.GenericTypeArguments[0];");
-        writer.WriteLine("var service = resolver(this);");
+        writer.WriteLine("var services = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], 1);");
+        writer.WriteLine("services.SetValue(resolver(this), 0);");
 
         if(container.IntegrateServiceProvider)
         {
             // Fallback services first, like registrations added before the container's (see Container.Collections)
-            writer.WriteLine("global::System.Collections.Generic.List<object?>? fallbackServices = null;");
-            writer.WriteLine($"if({GetFallbackServicesMethodName}(serviceType, serviceKey) is global::System.Collections.IEnumerable enumerable && enumerable is not global::System.Collections.ICollection {{ Count: 0 }})");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            writer.WriteLine("foreach(var item in enumerable)");
-            writer.Indentation++;
-            writer.WriteLine("(fallbackServices ??= []).Add(item);");
-            writer.Indentation--;
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine();
-            writer.WriteLine("var count = fallbackServices?.Count ?? 0;");
-            writer.WriteLine("var services = global::System.Array.CreateInstance(elementType, count + 1);");
-            writer.WriteLine("for(var i = 0; i < count; i++)");
-            writer.Indentation++;
-            writer.WriteLine("services.SetValue(fallbackServices![i], i);");
-            writer.Indentation--;
-            writer.WriteLine();
-            writer.WriteLine("services.SetValue(service, count);");
-            writer.WriteLine("return services;");
+            writer.WriteLine($"return {MergeFallbackServicesMethodName}(serviceType, services, serviceKey);");
         }
         else
         {
-            writer.WriteLine("var services = global::System.Array.CreateInstance(elementType, 1);");
-            writer.WriteLine("services.SetValue(service, 0);");
             writer.WriteLine("return services;");
         }
 
@@ -236,6 +217,43 @@ partial class IocSourceGenerator
 
         if(!container.IntegrateServiceProvider)
             return;
+
+        // __MergeFallbackServices(Type, Array, object?): the non-generic counterpart of __MergeFallbackServices<T>, for the
+        // single-service collection fallback and imported modules' collections, whose element type is known at runtime only
+        writer.WriteLine("[global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"AotAnalysis\", \"IL3050:RequiresDynamicCode\", Justification = \"Arrays are only created for reference element types.\")]");
+        writer.WriteLine($"private global::System.Array {MergeFallbackServicesMethodName}(global::System.Type serviceType, global::System.Array services, object? serviceKey)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"if({GetFallbackServicesMethodName}(serviceType, serviceKey) is not global::System.Collections.IEnumerable fallbackServices)");
+        writer.Indentation++;
+        writer.WriteLine("return services;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("if(fallbackServices is not global::System.Collections.ICollection collection)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("var list = new global::System.Collections.Generic.List<object?>();");
+        writer.WriteLine("foreach(var service in fallbackServices)");
+        writer.Indentation++;
+        writer.WriteLine("list.Add(service);");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("collection = list;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("if(collection.Count == 0)");
+        writer.Indentation++;
+        writer.WriteLine("return services;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("var merged = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], collection.Count + services.Length);");
+        writer.WriteLine("collection.CopyTo(merged, 0);");
+        writer.WriteLine("services.CopyTo(merged, collection.Count);");
+        writer.WriteLine("return merged;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
 
         // __GetFallbackServices: the fallback provider's collection, keyed when a key is given (null means non-keyed, like GetKeyedService)
         writer.WriteLine($"private object? {GetFallbackServicesMethodName}(global::System.Type serviceType, object? serviceKey) =>");
@@ -262,7 +280,8 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Writes the switch-mode branches of the generated collection resolvers (the entries the dictionary mode gets from
-    /// <c>__CollectionResolvers&lt;T&gt;</c> and the <c>KeyValuePair</c> entries): <c>return …;</c> in <c>GetService</c>, or
+    /// <c>__CollectionResolvers&lt;T&gt;</c>, the single <c>Lazy&lt;T&gt;</c> / <c>Func&lt;T&gt;</c> wrapper entries and the
+    /// <c>KeyValuePair</c> entries): <c>return …;</c> in <c>GetService</c>, or
     /// <c>return true;</c> in <c>IsService</c>. <c>IEnumerable&lt;T&gt;</c> of a collection resolver merges the fallback services.
     /// </summary>
     private static void WriteSwitchCollectionBranches(SourceWriter writer, ContainerRegistrationGroups groups, bool integrateServiceProvider, bool isServiceCheck)
@@ -275,10 +294,24 @@ partial class IocSourceGenerator
             }
         }
 
+        // The single Lazy<T> / Func<T> entry of the last non-keyed registration, which carries the collection resolver
         foreach(var lazy in groups.LazyWrapperEntries)
         {
             if(lazy.EmitCollectionResolver)
             {
+                if(isServiceCheck)
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Lazy<{lazy.InnerServiceTypeName}>)) return true;");
+                }
+                else if(lazy.IsShared)
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Lazy<{lazy.InnerServiceTypeName}>)) return {lazy.FieldName};");
+                }
+                else
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Lazy<{lazy.InnerServiceTypeName}>)) return {LazyWrapperContainerEntry.FormatNewLazy(lazy.InnerServiceTypeName, FormatWrappedResolveCall(lazy.InnerInstance, lazy.InnerResolverMethodName, ""))};");
+                }
+
                 WriteSwitchArrayCollectionBranches(writer, $"global::System.Lazy<{lazy.InnerServiceTypeName}>", lazy.ArrayMethodName!, integrateServiceProvider, isServiceCheck);
             }
         }
@@ -287,6 +320,15 @@ partial class IocSourceGenerator
         {
             if(func.EmitCollectionResolver)
             {
+                if(isServiceCheck)
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Func<{func.InnerServiceTypeName}>)) return true;");
+                }
+                else
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Func<{func.InnerServiceTypeName}>)) return {func.FieldName};");
+                }
+
                 WriteSwitchArrayCollectionBranches(writer, $"global::System.Func<{func.InnerServiceTypeName}>", func.ArrayMethodName!, integrateServiceProvider, isServiceCheck);
             }
         }

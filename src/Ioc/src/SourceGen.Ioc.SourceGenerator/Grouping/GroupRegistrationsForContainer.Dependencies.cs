@@ -178,13 +178,18 @@ partial class IocSourceGenerator
     /// <param name="FuncCollectionServiceTypes">Inner service types with a generated <c>Func&lt;T&gt;[]</c> resolver.</param>
     /// <param name="Names">The container's member names for type names.</param>
     /// <param name="ProjectedTasksByResolver">Cached <c>Task&lt;ServiceType&gt;</c> projections of async-init services, by resolver method name.</param>
+    /// <param name="MergeFallbackServices">
+    /// Whether collection dependencies served by a generated array resolver merge the fallback provider's services
+    /// (<c>IntegrateServiceProvider = true</c>), like <c>GetServices&lt;T&gt;()</c>.
+    /// </param>
     private sealed record class WrapperFieldLookup(
         IReadOnlyDictionary<string, string> LazyFieldByResolver,
         IReadOnlyDictionary<string, string> FuncFieldByResolver,
         HashSet<string> LazyCollectionServiceTypes,
         HashSet<string> FuncCollectionServiceTypes,
         ContainerNames Names,
-        IReadOnlyDictionary<string, ImmutableEquatableArray<ProjectedTask>> ProjectedTasksByResolver)
+        IReadOnlyDictionary<string, ImmutableEquatableArray<ProjectedTask>> ProjectedTasksByResolver,
+        bool MergeFallbackServices)
     {
         /// <summary>
         /// Gets the method returning the cached <c>Task&lt;<paramref name="serviceType"/>&gt;</c> projection of the async-init
@@ -307,22 +312,23 @@ partial class IocSourceGenerator
                     : new DictionaryResolverDependency(wrapperFields.Names.KvpDictionaryResolver(kvpElement.KeyType.Name, kvpElement.ValueType.Name));
             }
 
+            // With IntegrateServiceProvider, array resolvers merge the fallback services like GetServices<T>() (see Container.Collections)
             if(collectionRegistrations.ContainsKey(elementTypeName))
             {
-                return new CollectionDependency(wrapperFields.Names.ArrayResolver(elementTypeName));
+                return new CollectionDependency(wrapperFields.Names.ArrayResolver(elementTypeName), wrapperFields.MergeFallbackServices);
             }
 
             // Collections of Lazy<T> / Func<T> call the wrapper array resolver directly instead of GetServices<Lazy<T>>()
             if(collectionType.ElementType is LazyTypeData lazyElement
                 && wrapperFields.LazyCollectionServiceTypes.Contains(lazyElement.InstanceType.Name))
             {
-                return new CollectionDependency(wrapperFields.Names.LazyArrayResolver(lazyElement.InstanceType.Name));
+                return new CollectionDependency(wrapperFields.Names.LazyArrayResolver(lazyElement.InstanceType.Name), wrapperFields.MergeFallbackServices);
             }
 
             if(collectionType.ElementType is FuncTypeData { HasInputParameters: false } funcElement
                 && wrapperFields.FuncCollectionServiceTypes.Contains(funcElement.ReturnType.Name))
             {
-                return new CollectionDependency(wrapperFields.Names.FuncArrayResolver(funcElement.ReturnType.Name));
+                return new CollectionDependency(wrapperFields.Names.FuncArrayResolver(funcElement.ReturnType.Name), wrapperFields.MergeFallbackServices);
             }
 
             return new CollectionFallbackDependency(elementTypeName, IsKeyed: false, Key: null, toArray);

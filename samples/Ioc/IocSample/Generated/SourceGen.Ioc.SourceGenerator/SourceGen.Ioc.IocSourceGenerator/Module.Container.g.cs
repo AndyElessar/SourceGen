@@ -118,7 +118,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private global::IocSample.Consumer CreateConsumer()
     {
-        var instance = new global::IocSample.Consumer(new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication), _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), GetAllLazy_IWrapperService_string_Array());
+        var instance = new global::IocSample.Consumer(new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication), _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), __MergeFallbackServices(GetAllLazy_IWrapperService_string_Array(), null));
 
         _consumer = instance;
         return instance;
@@ -656,22 +656,33 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         if(__FindCollectionElementResolver(serviceType, serviceKey) is not { } resolver)
             return null;
 
-        var elementType = serviceType.GenericTypeArguments[0];
-        var service = resolver(this);
-        global::System.Collections.Generic.List<object?>? fallbackServices = null;
-        if(__GetFallbackServices(serviceType, serviceKey) is global::System.Collections.IEnumerable enumerable && enumerable is not global::System.Collections.ICollection { Count: 0 })
+        var services = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], 1);
+        services.SetValue(resolver(this), 0);
+        return __MergeFallbackServices(serviceType, services, serviceKey);
+    }
+
+    [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+    private global::System.Array __MergeFallbackServices(global::System.Type serviceType, global::System.Array services, object? serviceKey)
+    {
+        if(__GetFallbackServices(serviceType, serviceKey) is not global::System.Collections.IEnumerable fallbackServices)
+            return services;
+
+        if(fallbackServices is not global::System.Collections.ICollection collection)
         {
-            foreach(var item in enumerable)
-                (fallbackServices ??= []).Add(item);
+            var list = new global::System.Collections.Generic.List<object?>();
+            foreach(var service in fallbackServices)
+                list.Add(service);
+
+            collection = list;
         }
 
-        var count = fallbackServices?.Count ?? 0;
-        var services = global::System.Array.CreateInstance(elementType, count + 1);
-        for(var i = 0; i < count; i++)
-            services.SetValue(fallbackServices![i], i);
+        if(collection.Count == 0)
+            return services;
 
-        services.SetValue(service, count);
-        return services;
+        var merged = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], collection.Count + services.Length);
+        collection.CopyTo(merged, 0);
+        services.CopyTo(merged, collection.Count);
+        return merged;
     }
 
     private object? __GetFallbackServices(global::System.Type serviceType, object? serviceKey) =>
@@ -973,9 +984,37 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     ];
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>> _serviceResolvers =
-        global::IocSample.Shared.SharedModule.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>>(kvp.Key, c => kvp.Value(c._iocSample_Shared_SharedModule)))
+        __ImportModuleResolvers(global::IocSample.Shared.SharedModule.Resolvers, static c => c._iocSample_Shared_SharedModule)
         .Concat(_localResolvers)
         .ToFrozenDictionary();
+
+    private static global::System.Collections.Generic.IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<global::IocSample.Module, TModule> module)
+    {
+        var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<TModule, object>>();
+        foreach(var entry in resolvers)
+        {
+            if(entry.Key.ServiceType.IsArray && entry.Key.Key == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)
+                arrayResolvers[entry.Key.ServiceType.GetElementType()!] = entry.Value;
+        }
+
+        foreach(var entry in resolvers)
+        {
+            var serviceType = entry.Key.ServiceType;
+            var resolver = entry.Value;
+            if(entry.Key.Key == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey
+                && serviceType.IsConstructedGenericType
+                && serviceType.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>)
+                && !serviceType.GenericTypeArguments[0].IsValueType
+                && arrayResolvers.TryGetValue(serviceType.GenericTypeArguments[0], out var arrayResolver))
+            {
+                yield return new(entry.Key, c => c.__MergeFallbackServices(serviceType, (global::System.Array)arrayResolver(module(c)), null));
+            }
+            else
+            {
+                yield return new(entry.Key, c => resolver(module(c)));
+            }
+        }
+    }
 
     #endregion
 
