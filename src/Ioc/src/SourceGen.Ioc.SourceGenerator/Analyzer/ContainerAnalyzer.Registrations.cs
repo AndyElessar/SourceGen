@@ -181,15 +181,15 @@ partial class ContainerAnalyzer
         {
             if(GetNameofArgument(element) is { } memberExpression)
             {
-                if(GetMember(memberExpression) is { } member)
-                    result.Add(new(member, Key: null, element.GetLocation()));
+                if(GetMembers(memberExpression) is { IsEmpty: false } members)
+                    result.Add(new(members, Key: null, element.GetLocation()));
 
                 continue;
             }
 
             if(GetArrayElements(element) is not { Length: 2 or 3 } nested
                 || GetNameofArgument(nested[0]) is not { } keyedMemberExpression
-                || GetMember(keyedMemberExpression) is not { } keyedMember)
+                || GetMembers(keyedMemberExpression) is not { IsEmpty: false } keyedMembers)
             {
                 continue;
             }
@@ -225,17 +225,18 @@ partial class ContainerAnalyzer
                     nested[1].ToString());
             }
 
-            result.Add(new(keyedMember, key, element.GetLocation()));
+            result.Add(new(keyedMembers, key, element.GetLocation()));
         }
 
         return result.ToImmutable();
 
         // Whether the member is injectable is checked on the member of the implementation type it resolves to (a getter-only
-        // interface property can be implemented with a setter), see DependencyCache.GetInjectMembers
-        ISymbol? GetMember(ExpressionSyntax memberExpression)
+        // interface property can be implemented with a setter), see DependencyCache.GetInjectMembers. A method group with
+        // several overloads keeps all of them, as only a single injectable overload is injected.
+        ImmutableArray<ISymbol> GetMembers(ExpressionSyntax memberExpression)
         {
             var symbolInfo = semanticModel.GetSymbolInfo(memberExpression, cancellationToken);
-            return symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            return symbolInfo.Symbol is { } symbol ? [symbol] : symbolInfo.CandidateSymbols;
         }
 
         static ExpressionSyntax[]? GetArrayElements(ExpressionSyntax expression) => expression switch
@@ -1213,10 +1214,10 @@ partial class ContainerAnalyzer
                 // Like the generator, the member is injected as a member of the implementation type, such as Node<T>.Repo
                 // for nameof(Node<int>.Repo) or nameof(INode<int>.Repo), so an open generic implementation's member uses its
                 // type parameters. A member the type does not have, implements explicitly, or hides, is not injected (SGIOC024).
-                if(!injectedNames.Contains(injectMember.Member.Name)
-                    && injectMember.Member.AsMemberOf(implementationType) is { } member
-                    && member.GetHidingMember(implementationType, assembly) is null
-                    && IocSourceGenerator.IsInjectableMember(member))
+                // A method group with more than one injectable overload is not injected (SGIOC043).
+                if(!injectedNames.Contains(injectMember.Members[0].Name)
+                    && IocSourceGenerator.GetInjectableMember(injectMember.Members, implementationType, assembly, out var member) == 1
+                    && member is not null)
                 {
                     AddMember(dependencies, member, injectMember.Key, injectMember.Location, useLocationForParameters: true);
                 }
@@ -1375,8 +1376,11 @@ partial class ContainerAnalyzer
         public static RegistrationActivation FromFactory(IMethodSymbol factory) => new(ActivationKind.Factory, factory);
     }
 
-    /// <summary>A member listed in <c>InjectMembers</c>, with its key and the location of its element.</summary>
-    private readonly record struct InjectMemberInfo(ISymbol Member, ServiceKeyValue? Key, Location Location);
+    /// <summary>
+    /// A member listed in <c>InjectMembers</c>, with its key and the location of its element: the symbol named by
+    /// <c>nameof()</c>, or the overloads of its method group.
+    /// </summary>
+    private readonly record struct InjectMemberInfo(ImmutableArray<ISymbol> Members, ServiceKeyValue? Key, Location Location);
 
     /// <param name="Factory">The resolved <c>Factory</c> method, or <see langword="null"/> when it cannot be resolved.</param>
     private sealed record class AttributeSemantics(IMethodSymbol? Factory, ImmutableArray<InjectMemberInfo> InjectMembers);

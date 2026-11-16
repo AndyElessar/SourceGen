@@ -230,7 +230,8 @@ services.AddSingleton<global::System.Threading.Tasks.Task<global::MyNamespace.IM
 |SGIOC026|Error|`AsyncMethodInject` feature requires `MethodInject` to be enabled.|
 |SGIOC030|Error|A service or decorator dependency requests `T`, `Lazy<T>` or `Func<..., T>` of an async-init service that has no synchronous registration. Inject `Task<T>` instead.|
 |SGIOC023|Error|An element in the `InjectMembers` array is not in a recognized format. Each element must be `nameof(member)` or `new object[] { nameof(member), key [, KeyType] }`. With `KeyType.Value` (the default), the key must be a non-null constant.|
-|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., not a member of the registered type, an explicit interface implementation, hidden on the registered type by a `new` member, static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method with unsupported return type).|
+|SGIOC024|Error|A member specified via `InjectMembers` is not injectable (e.g., not a member of the registered type, an explicit interface implementation, hidden on the registered type by a `new` member, static, non-accessible members (`private`, `protected`, `private protected` — but `protected internal` is accepted), no setter or inaccessible setter, `readonly` field, generic method, non-ordinary method, or method with unsupported return type). For an overloaded method, it is reported when none of its overloads can be injected.|
+|SGIOC043|Error|A `nameof()` in `InjectMembers` names a method with more than one injectable overload, so none of them is injected. Mark the overload to inject with `[IocInject]`, or give it a unique name (see [Overloaded Methods](#overloaded-methods)).|
 
 ## InjectMembers: Attribute-Level Injection Without `[IocInject]`
 
@@ -266,6 +267,27 @@ public sealed class Node<T> : INode<T>
     public IRepo<T>? Repo { get; set; }
 }
 ```
+
+### Overloaded Methods
+
+`nameof()` of a method names all of its overloads, including those inherited from base classes, and cannot pick one. If exactly one overload can be injected (the others are, for example, `static`, generic, or do not return `void` or `Task`), that overload is injected. If more than one can be injected, none of them is injected and `SGIOC043` is reported. A method returning `Task` counts as injectable even when `AsyncMethodInject` is not enabled:
+
+```csharp
+// SGIOC043: Init(IFoo) and Init(IBar) can both be injected, so neither is
+[assembly: IocRegisterFor(typeof(Derived), InjectMembers = [nameof(Derived.Init)])]
+
+public class Base
+{
+    public void Init(IFoo foo) { }
+}
+
+public sealed class Derived : Base
+{
+    public void Init(IBar bar) { }
+}
+```
+
+To inject one of them, mark it with `[IocInject]`, which takes priority over the `InjectMembers` element, or give it a unique name. `nameof(Base.Init)` names only the overloads declared on `Base` (and its base classes), so it injects `Base.Init(IFoo)` here.
 
 ---
 
