@@ -91,19 +91,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
-    private global::TestNamespace.FileLogger[] GetAllFileLoggerArray_AnyKey() =>
-        [
-            GetFileLogger__file_(),
-        ];
-
     private global::TestNamespace.ILogger[] GetAllILoggerArray_AnyKey() =>
         [
             GetFileLogger__file_(),
-            GetConsoleLogger__console_(),
-        ];
-
-    private global::TestNamespace.ConsoleLogger[] GetAllConsoleLoggerArray_AnyKey() =>
-        [
             GetConsoleLogger__console_(),
         ];
 
@@ -296,12 +286,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __KeyedResolver(typeof(global::TestNamespace.ConsoleLogger), "console", static c => c.GetConsoleLogger__console_()),
         __KeyedResolver(typeof(global::TestNamespace.ILogger), "console", static c => c.GetConsoleLogger__console_()),
         __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.FileLogger>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllFileLoggerArray_AnyKey()),
-        __KeyedResolver(typeof(global::TestNamespace.FileLogger[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllFileLoggerArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.ILogger>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllILoggerArray_AnyKey()),
-        __KeyedResolver(typeof(global::TestNamespace.ILogger[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllILoggerArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.ConsoleLogger>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllConsoleLoggerArray_AnyKey()),
-        __KeyedResolver(typeof(global::TestNamespace.ConsoleLogger[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllConsoleLoggerArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.FileLogger>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.FileLogger[] { c.GetFileLogger__file_() }),
+        __EnumerableResolver<global::TestNamespace.ILogger>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllILoggerArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.ConsoleLogger>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.ConsoleLogger[] { c.GetConsoleLogger__console_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -309,6 +296,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, resolver).Resolve);
+    }
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

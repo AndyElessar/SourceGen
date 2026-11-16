@@ -136,16 +136,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.KeyedFoo[] GetAllKeyedFooArray_AnyKey() =>
-        [
-            GetKeyedFoo__k_(),
-        ];
-
-    private global::TestNamespace.IFoo[] GetAllIFooArray_AnyKey() =>
-        [
-            GetKeyedFoo__k_(),
-        ];
-
     // KeyValuePair resolver methods
 
     private global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IFoo> GetKvp_string_IFoo__k_() => new global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IFoo>("k", GetKeyedFoo__k_());
@@ -457,10 +447,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.IBar), static c => c.GetBar_As_IBar()),
         __Resolver(typeof(global::TestNamespace.Baz), static c => c.GetBaz_TestNamespace_BazFactory_Create()),
         __Resolver(typeof(global::TestNamespace.IBaz), static c => c.GetBaz_TestNamespace_BazFactory_Create()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedFoo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllKeyedFooArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedFoo[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedFooArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IFoo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIFooArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.IFoo[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIFooArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.KeyedFoo>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedFoo[] { c.GetKeyedFoo__k_() }),
+        __EnumerableResolver<global::TestNamespace.IFoo>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IFoo[] { c.GetKeyedFoo__k_() }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IFoo>>), static c => c.GetAllKvp_string_IFoo_Dictionary()),
@@ -488,9 +476,15 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
 
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
+
     private static __IocResolver[] __CollectionResolvers<T>(global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
     [
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<T>), c => c.__MergeFallbackServices((T[])resolver(c), null)),
+        __EnumerableResolver<T>(global::SourceGen.Ioc.ServiceIdentifier.NonKeyed, resolver),
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), resolver),
         __Resolver(typeof(global::System.Collections.Generic.ICollection<T>), resolver),
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),

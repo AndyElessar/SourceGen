@@ -79,16 +79,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.Connection[] GetAllConnectionArray_AnyKey() =>
-        [
-            GetConnection__main_(),
-        ];
-
-    private global::TestNamespace.IConnection[] GetAllIConnectionArray_AnyKey() =>
-        [
-            GetConnection__main_(),
-        ];
-
     #endregion
 
     #region IServiceProvider
@@ -361,10 +351,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.ILogger), static c => c.GetLogger()),
         __KeyedResolver(typeof(global::TestNamespace.Connection), "main", static c => c.GetConnection__main_()),
         __KeyedResolver(typeof(global::TestNamespace.IConnection), "main", static c => c.GetConnection__main_()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Connection>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllConnectionArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.Connection[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllConnectionArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IConnection>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIConnectionArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.IConnection[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIConnectionArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.Connection>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Connection[] { c.GetConnection__main_() }),
+        __EnumerableResolver<global::TestNamespace.IConnection>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IConnection[] { c.GetConnection__main_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -372,6 +360,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

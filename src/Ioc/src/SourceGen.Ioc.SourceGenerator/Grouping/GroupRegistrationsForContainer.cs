@@ -183,8 +183,10 @@ partial class IocSourceGenerator
         AvoidDerivedServiceNames(closedEntries, reservedNames);
         var decoratedNames = hasSplitDecorators ? new DecoratedServiceNames(closedEntries, reservedNames, names) : null;
 
-        // Keyed registrations by service type, in registration order across keys (for the KeyedService.AnyKey collections)
-        var keyedEntriesByServiceType = new Dictionary<string, List<ServiceLookupEntry>>(TypeNameComparer.Instance);
+        // Keyed registrations by service type, in registration order across keys (for the KeyedService.AnyKey collections),
+        // and the collection types registered explicitly, which win over the generated collections; both built on first use
+        Dictionary<string, List<ServiceLookupEntry>>? keyedEntriesByServiceType = null;
+        Dictionary<ServiceTypeKey, CollectionTypes>? explicitCollectionTypes = null;
 
         foreach(var (effectiveRegistration, cached) in closedEntries)
         {
@@ -210,7 +212,12 @@ partial class IocSourceGenerator
             if(effectiveRegistration.Key is not null)
             {
                 hasKeyedServices = true;
-                AddKeyedEntry(keyedEntriesByServiceType, effectiveRegistration.ServiceType.Name, serviceCached);
+                AddKeyedEntry(ref keyedEntriesByServiceType, effectiveRegistration.ServiceType.Name, serviceCached);
+            }
+
+            if(effectiveRegistration.ServiceType is CollectionWrapperTypeData explicitCollection)
+            {
+                AddExplicitCollectionType(ref explicitCollectionTypes, explicitCollection, effectiveRegistration.Key);
             }
 
             if(!serviceLookup.TryGetValue(key, out var list))
@@ -236,7 +243,7 @@ partial class IocSourceGenerator
 
                 if(effectiveRegistration.Key is not null)
                 {
-                    AddKeyedEntry(keyedEntriesByServiceType, effectiveRegistration.ImplementationType.Name, cached);
+                    AddKeyedEntry(ref keyedEntriesByServiceType, effectiveRegistration.ImplementationType.Name, cached);
                 }
             }
 
@@ -310,13 +317,21 @@ partial class IocSourceGenerator
             }
         }
 
-        var keyedCollections = CreateKeyedCollections(serviceLookup, keyedEntriesByServiceType, collectionServiceTypes, reservedNames, names);
-        var keyedCollectionResolvers = new Dictionary<ServiceTypeKey, string>();
-        foreach(var keyedCollection in keyedCollections)
+        var keyedCollections = keyedEntriesByServiceType is null
+            ? null
+            : CreateKeyedCollections(serviceLookup, keyedEntriesByServiceType, explicitCollectionTypes, collectionServiceTypes, reservedNames, names);
+
+        // Most containers have no key with several registrations
+        Dictionary<ServiceTypeKey, string>? keyedCollectionResolvers = null;
+        if(keyedCollections is not null)
         {
-            if(keyedCollection.Key is { } collectionKey)
+            foreach(var keyedCollection in keyedCollections)
             {
-                keyedCollectionResolvers[new ServiceTypeKey(keyedCollection.ServiceType, collectionKey)] = keyedCollection.ArrayMethodName;
+                if(keyedCollection is { Key: { } collectionKey, ArrayMethodName: not null })
+                {
+                    keyedCollectionResolvers ??= [];
+                    keyedCollectionResolvers[new ServiceTypeKey(keyedCollection.ServiceType, collectionKey)] = keyedCollection.ArrayMethodName!;
+                }
             }
         }
 
@@ -359,7 +374,7 @@ partial class IocSourceGenerator
             serviceLookupEntries,
             collectionRegistrations,
             wrapperFields);
-        var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations, keyedCollections, names);
+        var collectionEntries = CreateCollectionContainerEntries(collectionRegistrations, keyedCollections, explicitCollectionTypes, names);
         var immutableLastWinsByServiceType = CreateLastWinsByServiceType(
             lastWinsLookup,
             singletonEntries,

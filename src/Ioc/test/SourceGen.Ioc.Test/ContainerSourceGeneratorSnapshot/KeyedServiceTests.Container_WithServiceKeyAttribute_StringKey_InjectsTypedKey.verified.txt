@@ -91,19 +91,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return global::System.Threading.Interlocked.CompareExchange(ref field, created, null) ?? created;
     }
 
-    private global::TestNamespace.Handler1[] GetAllHandler1Array_AnyKey() =>
-        [
-            GetHandler1__handler_1_(),
-        ];
-
     private global::TestNamespace.IHandler[] GetAllIHandlerArray_AnyKey() =>
         [
             GetHandler1__handler_1_(),
-            GetHandler2__handler_2_(),
-        ];
-
-    private global::TestNamespace.Handler2[] GetAllHandler2Array_AnyKey() =>
-        [
             GetHandler2__handler_2_(),
         ];
 
@@ -379,12 +369,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler-1", static c => c.GetHandler1__handler_1_()),
         __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler-2", static c => c.GetHandler2__handler_2_()),
         __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler-2", static c => c.GetHandler2__handler_2_()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllHandler1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.Handler1[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllHandler1Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIHandlerArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.Handler2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllHandler2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.Handler2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllHandler2Array_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.Handler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Handler1[] { c.GetHandler1__handler_1_() }),
+        __EnumerableResolver<global::TestNamespace.IHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.Handler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Handler2[] { c.GetHandler2__handler_2_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -392,6 +379,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

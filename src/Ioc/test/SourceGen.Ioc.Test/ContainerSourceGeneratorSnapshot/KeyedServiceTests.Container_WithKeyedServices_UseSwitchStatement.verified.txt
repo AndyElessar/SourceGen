@@ -79,19 +79,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.KeyedService1[] GetAllKeyedService1Array_AnyKey() =>
-        [
-            GetKeyedService1__key1_(),
-        ];
-
     private global::TestNamespace.IKeyedService[] GetAllIKeyedServiceArray_AnyKey() =>
         [
             GetKeyedService1__key1_(),
-            GetKeyedService2__key2_(),
-        ];
-
-    private global::TestNamespace.KeyedService2[] GetAllKeyedService2Array_AnyKey() =>
-        [
             GetKeyedService2__key2_(),
         ];
 
@@ -237,12 +227,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key1") => GetKeyedService1__key1_(),
             (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService2) && Equals(k, "key2") => GetKeyedService2__key2_(),
             (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService) && Equals(k, "key2") => GetKeyedService2__key2_(),
-            (global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedService1>) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => __MergeFallbackServices(GetAllKeyedService1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey),
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService1[]) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => GetAllKeyedService1Array_AnyKey(),
+            (global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedService1>) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => __MergeFallbackServices(new global::TestNamespace.KeyedService1[] { GetKeyedService1__key1_() }, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey),
             (global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IKeyedService>) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => __MergeFallbackServices(GetAllIKeyedServiceArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey),
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.IKeyedService[]) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => GetAllIKeyedServiceArray_AnyKey(),
-            (global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedService2>) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => __MergeFallbackServices(GetAllKeyedService2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey),
-            (global::System.Type t, object k) when t == typeof(global::TestNamespace.KeyedService2[]) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => GetAllKeyedService2Array_AnyKey(),
+            (global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedService2>) && Equals(k, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) => __MergeFallbackServices(new global::TestNamespace.KeyedService2[] { GetKeyedService2__key2_() }, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey),
             _ => __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null)
         };
     }
@@ -360,12 +347,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key1", static c => c.GetKeyedService1__key1_()),
         __KeyedResolver(typeof(global::TestNamespace.KeyedService2), "key2", static c => c.GetKeyedService2__key2_()),
         __KeyedResolver(typeof(global::TestNamespace.IKeyedService), "key2", static c => c.GetKeyedService2__key2_()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedService1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllKeyedService1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedService1[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedService1Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IKeyedService>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIKeyedServiceArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyedService[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIKeyedServiceArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedService2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllKeyedService2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedService2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedService2Array_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.KeyedService1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedService1[] { c.GetKeyedService1__key1_() }),
+        __EnumerableResolver<global::TestNamespace.IKeyedService>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIKeyedServiceArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.KeyedService2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedService2[] { c.GetKeyedService2__key2_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -373,6 +357,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
 
     #endregion
 

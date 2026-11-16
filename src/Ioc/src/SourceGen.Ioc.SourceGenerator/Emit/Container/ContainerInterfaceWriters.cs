@@ -318,9 +318,34 @@ partial class IocSourceGenerator
     {
         foreach(var entry in groups.CollectionEntries)
         {
-            if(entry is CollectionContainerEntry { IsNonKeyed: true } collection)
+            if(entry is not CollectionContainerEntry { IsNonKeyed: true } collection)
+                continue;
+
+            if(collection.ExplicitTypes == CollectionTypes.None || isServiceCheck)
             {
-                WriteSwitchArrayCollectionBranches(writer, collection.ElementServiceTypeName, collection.ArrayMethodName, integrateServiceProvider, isServiceCheck);
+                WriteSwitchArrayCollectionBranches(writer, collection.ElementServiceTypeName, collection.ArrayMethodName!, integrateServiceProvider, isServiceCheck);
+                continue;
+            }
+
+            // Rare: one branch for each collection type that is not registered explicitly (whose own branch comes first anyway)
+            if((collection.ExplicitTypes & CollectionTypes.Enumerable) == 0)
+            {
+                if(integrateServiceProvider)
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{collection.ElementServiceTypeName}>)) return {MergeFallbackServicesMethodName}({collection.ArrayMethodName}(), null);");
+                }
+                else
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{collection.ElementServiceTypeName}>)) return {collection.ArrayMethodName}();");
+                }
+            }
+
+            foreach(var (type, prefix, suffix) in NonEnumerableCollectionTypes)
+            {
+                if((collection.ExplicitTypes & type) == 0)
+                {
+                    writer.WriteLine($"if(serviceType == typeof({prefix}{collection.ElementServiceTypeName}{suffix})) return {collection.ArrayMethodName}();");
+                }
             }
         }
 
@@ -403,9 +428,22 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// The collection types a collection resolver registers besides <c>IEnumerable&lt;T&gt;</c>, as the text around the element type.
+    /// </summary>
+    private static readonly (CollectionTypes Type, string Prefix, string Suffix)[] NonEnumerableCollectionTypes =
+    [
+        (CollectionTypes.ReadOnlyCollection, "global::System.Collections.Generic.IReadOnlyCollection<", ">"),
+        (CollectionTypes.Collection, "global::System.Collections.Generic.ICollection<", ">"),
+        (CollectionTypes.ReadOnlyList, "global::System.Collections.Generic.IReadOnlyList<", ">"),
+        (CollectionTypes.List, "global::System.Collections.Generic.IList<", ">"),
+        (CollectionTypes.Array, "", "[]"),
+    ];
+
+    /// <summary>
     /// Writes the switch-mode arms of the keyed collection resolvers in <c>GetKeyedService</c>: the six collection types under
-    /// a key with several registrations, and <c>IEnumerable&lt;T&gt;</c> / <c>T[]</c> under <c>KeyedService.AnyKey</c>.
-    /// <c>IEnumerable&lt;T&gt;</c> merges the fallback services of the same key.
+    /// a key with several registrations, and <c>IEnumerable&lt;T&gt;</c> under <c>KeyedService.AnyKey</c>.
+    /// <c>IEnumerable&lt;T&gt;</c> merges the fallback services of the same key. A collection type registered explicitly has
+    /// an arm of its own before these, so it wins.
     /// </summary>
     private static void WriteSwitchKeyedCollectionArms(SourceWriter writer, ContainerRegistrationGroups groups, bool integrateServiceProvider)
     {
@@ -415,25 +453,46 @@ partial class IocSourceGenerator
                 continue;
 
             var elementType = collection.ElementServiceTypeName;
-            var arrayMethodName = collection.ArrayMethodName;
             var key = collection.KeyExpression;
+            var explicitTypes = collection.ExplicitTypes;
 
-            if(integrateServiceProvider)
+            if((explicitTypes & CollectionTypes.Enumerable) == 0)
             {
-                writer.WriteLine($"(global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) && Equals(k, {key}) => {MergeFallbackServicesMethodName}({arrayMethodName}(), {key}),");
-            }
-            else
-            {
-                writer.WriteLine($"(global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) && Equals(k, {key}) => {arrayMethodName}(),");
+                // An AnyKey collection of a single registration has no array method: its array is created inline
+                var inlineDependency = collection.ArrayMethodName is null ? collection.ElementResolvers[0] : null;
+                var (arrayPrefix, arrayBody, arraySuffix) = inlineDependency switch
+                {
+                    null => ("", collection.ArrayMethodName!, "()"),
+                    DirectServiceDependency direct => ($"new {elementType}[] {{ ", direct.ResolverMethodName, "() }"),
+                    _ => ($"new {elementType}[] {{ ", inlineDependency.FormatExpression(false), " }"),
+                };
+
+                if(integrateServiceProvider)
+                {
+                    writer.WriteLine($"(global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) && Equals(k, {key}) => {MergeFallbackServicesMethodName}({arrayPrefix}{arrayBody}{arraySuffix}, {key}),");
+                }
+                else
+                {
+                    writer.WriteLine($"(global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) && Equals(k, {key}) => {arrayPrefix}{arrayBody}{arraySuffix},");
+                }
             }
 
             if(collection.AllKeys)
+                continue;
+
+            if(explicitTypes == CollectionTypes.None)
             {
-                writer.WriteLine($"(global::System.Type t, object k) when t == typeof({elementType}[]) && Equals(k, {key}) => {arrayMethodName}(),");
+                writer.WriteLine($"(global::System.Type t, object k) when (t == typeof(global::System.Collections.Generic.IReadOnlyCollection<{elementType}>) || t == typeof(global::System.Collections.Generic.ICollection<{elementType}>) || t == typeof(global::System.Collections.Generic.IReadOnlyList<{elementType}>) || t == typeof(global::System.Collections.Generic.IList<{elementType}>) || t == typeof({elementType}[])) && Equals(k, {key}) => {collection.ArrayMethodName}(),");
+                continue;
             }
-            else
+
+            // Rare: one arm for each collection type that is not registered explicitly (whose own arm comes first anyway)
+            foreach(var (type, prefix, suffix) in NonEnumerableCollectionTypes)
             {
-                writer.WriteLine($"(global::System.Type t, object k) when (t == typeof(global::System.Collections.Generic.IReadOnlyCollection<{elementType}>) || t == typeof(global::System.Collections.Generic.ICollection<{elementType}>) || t == typeof(global::System.Collections.Generic.IReadOnlyList<{elementType}>) || t == typeof(global::System.Collections.Generic.IList<{elementType}>) || t == typeof({elementType}[])) && Equals(k, {key}) => {arrayMethodName}(),");
+                if((explicitTypes & type) == 0)
+                {
+                    writer.WriteLine($"(global::System.Type t, object k) when t == typeof({prefix}{elementType}{suffix}) && Equals(k, {key}) => {collection.ArrayMethodName}(),");
+                }
             }
         }
     }

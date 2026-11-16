@@ -208,7 +208,7 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
 
     // Imported resolvers first, local resolvers last
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Module, object>> _serviceResolvers =
-        global::IocSample.Shared.SharedModule.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::IocSample.Module, object>>(kvp.Key, c => kvp.Value(c._iocSample_Shared_SharedModule)))
+        __ImportModuleResolvers(global::IocSample.Shared.SharedModule.Resolvers, static c => c._iocSample_Shared_SharedModule) // resolves with the module instance; merges its collections once
             .Concat(_localResolvers)
             .ToFrozenDictionary();
 

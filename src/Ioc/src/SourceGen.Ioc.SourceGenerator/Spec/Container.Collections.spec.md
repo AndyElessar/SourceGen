@@ -29,6 +29,19 @@ A request of `IEnumerable<T>` that no collection resolver serves (a single regis
 |Switch mode|`UseSwitchStatement = true` has no dictionary: the element's resolver is searched in `_localResolvers`. `GetKeyedService(typeof(IEnumerable<T>), null)`, which the keyed switch does not dispatch, first looks for the exact `IEnumerable<T>` entry there, so a generated collection resolver wins over the single-service resolver. The generic methods delegate to the non-generic ones.|
 |`IsService`|`IsService(typeof(IEnumerable<T>))` / `IsKeyedService(typeof(IEnumerable<T>), key)` MUST return `true` when this fallback resolves the request (`__IsCollectionService`), so frameworks that classify parameters with `IServiceProviderIsService` (e.g. minimal APIs) treat it as a service. `MS.DI` returns `true` for every closed `IEnumerable<T>`; the container returns `true` only for what it resolves itself and otherwise asks the fallback provider, because without a fallback provider an `IEnumerable<T>` of an unknown `T` resolves as `null`.|
 
+### Explicit Collection Registrations
+
+A collection type registered explicitly as a service type (`IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>` or `T[]`, non-keyed, under a key, or under `KeyedService.AnyKey`) MUST win over the generated collection of `T` under the same key, like `MS.DI`, which takes the exact registration of `IEnumerable<T>` before it builds a collection.
+
+|Rule|Required behavior|
+|:---|:---|
+|Entries|The generated collection (non-keyed, keyed, or the `KeyedService.AnyKey` collection) MUST NOT register the explicitly registered types: it writes one entry for each remaining type instead of `__CollectionResolvers<T>` / `__KeyedCollectionResolvers<T>`. An `AnyKey` collection whose `IEnumerable<T>` is registered explicitly under `KeyedService.AnyKey` is not generated. Without this, `ToFrozenDictionary` (last wins) would let the generated entry silently replace the explicit one.|
+|Switch mode|The generated `GetService` branches and `GetKeyedService` arms MUST leave out the explicitly registered types (the explicit branch comes first anyway). `IsService` keeps the combined branch of the six types, which answers `true` for them either way.|
+|Dependencies|A dependency of an explicitly registered collection type MUST resolve the explicit registration (like a single service), not the generated array.|
+|Other types|The types that are not registered explicitly keep the generated collection, e.g. `T[]` next to an explicit `IEnumerable<T>`.|
+|Imported modules|An explicit `IEnumerable<T>` entry of a module is kept as is by an importer; it is not merged (see [Import Module](Container.ImportModule.spec.md#collections-of-imported-modules)).|
+|Order|Deterministic: the remaining types are written in the fixed order `IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`, `T[]`.|
+
 ### Merging Fallback Services
 
 With `IntegrateServiceProvider = true`, an `IEnumerable<T>` that the container resolves (a generated collection resolver, or the single-service collection fallback above) MUST also contain the fallback provider's `IEnumerable<T>` (keyed with the same key), like `MS.DI` returns every registration of `T`. For example, an `IHostedService` registered in the container joins the hosted services the host registered in the `IServiceCollection`.
@@ -38,7 +51,7 @@ With `IntegrateServiceProvider = true`, an `IEnumerable<T>` that the container r
 |Order|The fallback provider's services come first, then the container's. The container wins single-service resolution (it is asked before the fallback provider), which matches `MS.DI` only when its registrations come after the fallback's, and `MS.DI` lists a collection in registration order, so the instance `GetService<T>()` returns is the collection's last element.|
 |Duplicates|A service registered in both (e.g. the fallback provider is built from an `IServiceCollection` that also contains the Register output of the container's registrations) appears twice, with different instances. This is a misconfiguration: there is no cheap and correct identity to remove duplicates by (implementation type is not one, as `MS.DI` allows the same implementation twice). It is not detected.|
 |Cost|Without a fallback provider (`_fallbackProvider` is `null`), or when it returns an empty `ICollection`, the container's array MUST be returned as is, without allocation. Otherwise the result is a new array. In a scope the request uses (and so creates) the fallback scope. Without `IntegrateServiceProvider` no merging code is generated: the entries, branches and dependencies call the array resolver directly.|
-|Scope of the merge|`IEnumerable<T>` requests through the `IServiceProvider` APIs merge: the `IEnumerable<T>` entry of `__CollectionResolvers<T>`, its switch branch, and the single-service collection fallback. Other collection types (`IReadOnlyList<T>`, `T[]`, …) requested through these APIs are not served by `MS.DI` and stay container-only. `KeyValuePair<K, V>` collections and dictionaries are not merged anywhere.|
+|Scope of the merge|`IEnumerable<T>` requests through the `IServiceProvider` APIs merge: the `IEnumerable<T>` entry of the generated collections (`__EnumerableResolver<T>`), its switch branch, and the single-service collection fallback. Other collection types (`IReadOnlyList<T>`, `T[]`, …) requested through these APIs are not served by `MS.DI` and stay container-only. `KeyValuePair<K, V>` collections and dictionaries are not merged anywhere.|
 |Dependencies|A collection that the container injects MUST contain the same services, in the same order, as `GetServices<T>()` / `GetKeyedServices<T>(key)` of the same scope (see [Injected Collections](#injected-collections)).|
 |Imported modules|A collection of an imported module's services resolved through the importing container MUST merge once, with the fallback provider and fallback scope of the importing container (scope), whatever the module's own `IntegrateServiceProvider` (see [Import Module](Container.ImportModule.spec.md#collections-of-imported-modules)).|
 |Keyed collections|A keyed collection resolver merges the fallback provider's keyed services under the same key; the `KeyedService.AnyKey` collection merges the fallback provider's `AnyKey` collection (all its keyed services), like `MS.DI`. Same order, cost and scope rules as above (see [Keyed Services](Container.KeyedServices.spec.md#keyed-collections)).|
@@ -154,7 +167,7 @@ private T[] __MergeFallbackServices<T>(T[] services, object? serviceKey) =>
 // The IEnumerable<T> entry of the generated collection resolvers merges too (IntegrateServiceProvider only)
 private static __IocResolver[] __CollectionResolvers<T>(Func<AppContainer, object> resolver) =>
 [
-    __Resolver(typeof(IEnumerable<T>), c => c.__MergeFallbackServices((T[])resolver(c), null)),
+    __EnumerableResolver<T>(ServiceIdentifier.NonKeyed, resolver), // IocCollectionResolver: merges with __MergeFallbackServices((T[])resolver(c), null)
     __Resolver(typeof(IReadOnlyCollection<T>), resolver),
     // ...ICollection<T>, IReadOnlyList<T>, IList<T>, T[]
 ];
@@ -250,7 +263,7 @@ partial class AppContainer
 
     private static __IocResolver[] __CollectionResolvers<T>(Func<global::AppContainer, object> resolver) =>
     [
-        __Resolver(typeof(IEnumerable<T>), resolver),
+        __EnumerableResolver<T>(ServiceIdentifier.NonKeyed, resolver), // IocCollectionResolver(resolver, resolver) without IntegrateServiceProvider
         __Resolver(typeof(IReadOnlyCollection<T>), resolver),
         __Resolver(typeof(ICollection<T>), resolver),
         __Resolver(typeof(IReadOnlyList<T>), resolver),

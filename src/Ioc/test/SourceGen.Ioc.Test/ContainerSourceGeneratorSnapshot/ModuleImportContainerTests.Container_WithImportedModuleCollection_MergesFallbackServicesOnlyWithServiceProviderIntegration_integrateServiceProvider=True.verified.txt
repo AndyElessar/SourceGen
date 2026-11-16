@@ -335,24 +335,16 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
 
     private static global::System.Collections.Generic.IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<global::MainApp.AppContainer, TModule> module)
     {
-        var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>();
         foreach(var entry in resolvers)
         {
-            if(entry.Key.ServiceType.IsArray)
-                arrayResolvers[new(entry.Key.ServiceType.GetElementType()!, entry.Key.Key)] = entry.Value;
-        }
-
-        foreach(var entry in resolvers)
-        {
-            var serviceType = entry.Key.ServiceType;
             var resolver = entry.Value;
-            if(serviceType.IsConstructedGenericType
-                && serviceType.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>)
-                && !serviceType.GenericTypeArguments[0].IsValueType
-                && arrayResolvers.TryGetValue(new(serviceType.GenericTypeArguments[0], entry.Key.Key), out var arrayResolver))
+            if(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<TModule> collection)
             {
+                var arrayResolver = collection.ArrayResolver;
+                global::System.Func<global::MainApp.AppContainer, object> array = c => arrayResolver(module(c));
+                var serviceType = entry.Key.ServiceType;
                 var serviceKey = entry.Key.Key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : entry.Key.Key;
-                yield return new(entry.Key, c => c.__MergeFallbackServices(serviceType, (global::System.Array)arrayResolver(module(c)), serviceKey));
+                yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<global::MainApp.AppContainer>(array, c => c.__MergeFallbackServices(serviceType, (global::System.Array)array(c), serviceKey)).Resolve);
             }
             else
             {

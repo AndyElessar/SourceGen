@@ -233,9 +233,27 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer<global::MainApp
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::MainApp.AppContainer, object>> _serviceResolvers =
-        global::SharedLib.SharedModule.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::MainApp.AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedLib_SharedModule)))
+        __ImportModuleResolvers(global::SharedLib.SharedModule.Resolvers, static c => c._sharedLib_SharedModule)
         .Concat(_localResolvers)
         .ToFrozenDictionary();
+
+    private static global::System.Collections.Generic.IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<global::MainApp.AppContainer, TModule> module)
+    {
+        foreach(var entry in resolvers)
+        {
+            var resolver = entry.Value;
+            if(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<TModule> collection)
+            {
+                var arrayResolver = collection.ArrayResolver;
+                global::System.Func<global::MainApp.AppContainer, object> array = c => arrayResolver(module(c));
+                yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<global::MainApp.AppContainer>(array, c => resolver(module(c))).Resolve);
+            }
+            else
+            {
+                yield return new(entry.Key, c => resolver(module(c)));
+            }
+        }
+    }
 
     #endregion
 

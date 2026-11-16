@@ -249,9 +249,27 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers =
-        global::TestNamespace.ServiceModule.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>>(kvp.Key, c => kvp.Value(c._testNamespace_ServiceModule)))
+        __ImportModuleResolvers(global::TestNamespace.ServiceModule.Resolvers, static c => c._testNamespace_ServiceModule)
         .Concat(_localResolvers)
         .ToFrozenDictionary();
+
+    private static global::System.Collections.Generic.IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<global::TestNamespace.TestContainer, TModule> module)
+    {
+        foreach(var entry in resolvers)
+        {
+            var resolver = entry.Value;
+            if(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<TModule> collection)
+            {
+                var arrayResolver = collection.ArrayResolver;
+                global::System.Func<global::TestNamespace.TestContainer, object> array = c => arrayResolver(module(c));
+                yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(array, c => resolver(module(c))).Resolve);
+            }
+            else
+            {
+                yield return new(entry.Key, c => resolver(module(c)));
+            }
+        }
+    }
 
     #endregion
 

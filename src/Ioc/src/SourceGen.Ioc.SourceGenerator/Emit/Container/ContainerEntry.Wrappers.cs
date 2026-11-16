@@ -193,14 +193,21 @@ partial class IocSourceGenerator
         }
     }
 
+    /// <param name="ArrayMethodName">
+    /// The array resolver method, or <see langword="null"/> for an <paramref name="AllKeys"/> collection of a single
+    /// registration, whose array is created inline (<c>new T[] { … }</c>), so the many keyed service types with
+    /// one registration need no method.
+    /// </param>
     /// <param name="Key">The key expression of a keyed collection, or <see langword="null"/> for a non-keyed or <paramref name="AllKeys"/> collection.</param>
     /// <param name="AllKeys">Whether this is the <c>KeyedService.AnyKey</c> collection of all keyed registrations.</param>
+    /// <param name="ExplicitTypes">The collection types registered explicitly under the same key, which this collection does not register.</param>
     private sealed record class CollectionContainerEntry(
         string ElementServiceTypeName,
-        string ArrayMethodName,
+        string? ArrayMethodName,
         ImmutableEquatableArray<ResolvedDependency> ElementResolvers,
         string? Key = null,
-        bool AllKeys = false) : ContainerEntry
+        bool AllKeys = false,
+        CollectionTypes ExplicitTypes = CollectionTypes.None) : ContainerEntry
     {
         /// <summary>Whether this is a non-keyed collection (<c>GetServices&lt;T&gt;()</c>).</summary>
         public bool IsNonKeyed => Key is null && !AllKeys;
@@ -210,6 +217,9 @@ partial class IocSourceGenerator
 
         public override void WriteResolver(SourceWriter writer)
         {
+            if(ArrayMethodName is null)
+                return;
+
             writer.WriteLine($"private {ElementServiceTypeName}[] {ArrayMethodName}() =>");
             writer.Indentation++;
             writer.WriteLine("[");

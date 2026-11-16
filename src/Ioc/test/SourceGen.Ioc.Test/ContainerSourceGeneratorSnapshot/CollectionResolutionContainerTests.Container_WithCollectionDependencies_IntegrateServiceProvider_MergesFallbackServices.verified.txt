@@ -401,9 +401,15 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
+
     private static __IocResolver[] __CollectionResolvers<T>(global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
     [
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<T>), c => c.__MergeFallbackServices((T[])resolver(c), null)),
+        __EnumerableResolver<T>(global::SourceGen.Ioc.ServiceIdentifier.NonKeyed, resolver),
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), resolver),
         __Resolver(typeof(global::System.Collections.Generic.ICollection<T>), resolver),
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),

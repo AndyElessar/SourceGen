@@ -67,16 +67,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return instance;
     }
 
-    private global::TestNamespace.KeyedPlugin[] GetAllKeyedPluginArray_AnyKey() =>
-        [
-            GetKeyedPlugin__keyed_(),
-        ];
-
-    private global::TestNamespace.IPlugin[] GetAllIPluginArray_AnyKey() =>
-        [
-            GetKeyedPlugin__keyed_(),
-        ];
-
     #endregion
 
     #region IServiceProvider
@@ -265,10 +255,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetPlugin()),
         __KeyedResolver(typeof(global::TestNamespace.KeyedPlugin), "keyed", static c => c.GetKeyedPlugin__keyed_()),
         __KeyedResolver(typeof(global::TestNamespace.IPlugin), "keyed", static c => c.GetKeyedPlugin__keyed_()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.KeyedPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedPluginArray_AnyKey()),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllKeyedPluginArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIPluginArray_AnyKey()),
-        __KeyedResolver(typeof(global::TestNamespace.IPlugin[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIPluginArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.KeyedPlugin>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedPlugin[] { c.GetKeyedPlugin__keyed_() }),
+        __EnumerableResolver<global::TestNamespace.IPlugin>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IPlugin[] { c.GetKeyedPlugin__keyed_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -276,6 +264,11 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, resolver).Resolve);
+    }
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

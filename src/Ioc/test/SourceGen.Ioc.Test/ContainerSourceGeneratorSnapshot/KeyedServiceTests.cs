@@ -65,6 +65,89 @@ public class KeyedServiceTests
     }
 
     [Test]
+    [Arguments(false, false)]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    [Arguments(true, true)]
+    public async Task Container_WithExplicitCollectionRegistration_ExplicitRegistrationWinsOverGeneratedCollection(bool keyed, bool useSwitchStatement)
+    {
+        // IEnumerable<T> and ICollection<T> registered explicitly next to two registrations of T (under the same key): like
+        // MS.DI, which takes the exact registration of IEnumerable<T> first, the explicit registrations win
+        var key = keyed ? ", Key = \"a\"" : "";
+        var source = $$"""
+            using System.Collections;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)]{{key}})]
+            public class FirstHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)]{{key}})]
+            public class SecondHandler : IHandler { }
+
+            public sealed class HandlerList : List<IHandler>
+            {
+                public static readonly HandlerList Default = new();
+            }
+
+            [IocRegisterFor<HandlerList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<IHandler>), typeof(ICollection<IHandler>)], Instance = nameof(HandlerList.Default){{key}})]
+            [IocContainer(UseSwitchStatement = {{(useSwitchStatement ? "true" : "false")}})]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource).UseParameters(keyed, useSwitchStatement);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Container_WithExplicitEnumerableUnderAnyKey_GeneratesNoAnyKeyCollection(bool useSwitchStatement)
+    {
+        // IEnumerable<T> registered explicitly under KeyedService.AnyKey wins over the generated AnyKey collection of T
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "a")]
+            public class FirstHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "a")]
+            public class SecondHandler : IHandler { }
+
+            public sealed class HandlerList : List<IHandler>
+            {
+                public static readonly HandlerList Default = new();
+            }
+
+            [IocRegisterFor<HandlerList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<IHandler>)], Instance = nameof(HandlerList.Default), Key = "KeyedService.AnyKey", KeyType = KeyType.Csharp)]
+            [IocContainer(UseSwitchStatement = {{(useSwitchStatement ? "true" : "false")}})]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("GetAllIHandlerArray_AnyKey");
+        await Assert.That(generatedSource).DoesNotContain("__EnumerableResolver<global::TestNamespace.IHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey");
+        await Assert.That(generatedSource).Contains("HandlerList.Default");
+    }
+
+    [Test]
     [Arguments(false, true)]
     [Arguments(true, true)]
     [Arguments(false, false)]

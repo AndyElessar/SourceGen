@@ -28,6 +28,9 @@ partial class IocSourceGenerator
 
         foreach(var entry in groups.CollectionEntries)
         {
+            if(entry is CollectionContainerEntry { ArrayMethodName: null })
+                continue;
+
             entry.WriteResolver(writer);
             writer.WriteLine();
         }

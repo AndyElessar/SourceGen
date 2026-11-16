@@ -344,6 +344,7 @@ container.GetKeyedServices<IHandler>(KeyedService.AnyKey);  // [FirstHandler, Ot
 - A key with a single registration is served at runtime as a one-element `IEnumerable<T>`.
 - `KeyedService.AnyKey` returns every keyed registration of `T`, under any key, like `MS.E.DI`. It does not return the non-keyed registrations (use `GetServices<T>()` or a `null` key for those). `GetKeyedService<T>(KeyedService.AnyKey)` is not a single service: the container asks the fallback provider, where `MS.E.DI` throws.
 - With `IntegrateServiceProvider = true`, `IEnumerable<T>` and keyed collection dependencies also contain the fallback provider's services under the same key, first.
+- A collection type you register explicitly (e.g. your own `IEnumerable<T>` implementation under the same key) wins over the generated collection, like `MS.E.DI`.
 
 <details>
 <summary>Generated Code</summary>
@@ -361,7 +362,7 @@ var instance = new global::MyNamespace.Consumer(__MergeFallbackServices(GetAllIH
 
 // _localResolvers
 ..__KeyedCollectionResolvers<global::MyNamespace.IHandler>("a", static c => c.GetAllIHandlerArray__a_()),
-__KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::MyNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIHandlerArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+__EnumerableResolver<global::MyNamespace.IHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
 ```
 
 </details>

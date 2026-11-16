@@ -181,11 +181,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             GetDotHandler2__x_y_(),
         ];
 
-    private global::TestNamespace.EnumHandler1[] GetAllEnumHandler1Array_AnyKey() =>
-        [
-            GetEnumHandler1_TestNamespace_Kind_First(),
-        ];
-
     private global::TestNamespace.IHandler[] GetAllIHandlerArray_AnyKey() =>
         [
             GetEnumHandler1_TestNamespace_Kind_First(),
@@ -195,41 +190,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
             GetDashHandler1__x_y_(),
             GetDashHandler2__x_y_(),
             GetDotHandler1__x_y_(),
-            GetDotHandler2__x_y_(),
-        ];
-
-    private global::TestNamespace.EnumHandler2[] GetAllEnumHandler2Array_AnyKey() =>
-        [
-            GetEnumHandler2_TestNamespace_Kind_First(),
-        ];
-
-    private global::TestNamespace.CsharpHandler1[] GetAllCsharpHandler1Array_AnyKey() =>
-        [
-            GetCsharpHandler1_TestNamespace_Keys_Name(),
-        ];
-
-    private global::TestNamespace.CsharpHandler2[] GetAllCsharpHandler2Array_AnyKey() =>
-        [
-            GetCsharpHandler2_TestNamespace_Keys_Name(),
-        ];
-
-    private global::TestNamespace.DashHandler1[] GetAllDashHandler1Array_AnyKey() =>
-        [
-            GetDashHandler1__x_y_(),
-        ];
-
-    private global::TestNamespace.DashHandler2[] GetAllDashHandler2Array_AnyKey() =>
-        [
-            GetDashHandler2__x_y_(),
-        ];
-
-    private global::TestNamespace.DotHandler1[] GetAllDotHandler1Array_AnyKey() =>
-        [
-            GetDotHandler1__x_y_(),
-        ];
-
-    private global::TestNamespace.DotHandler2[] GetAllDotHandler2Array_AnyKey() =>
-        [
             GetDotHandler2__x_y_(),
         ];
 
@@ -517,24 +477,15 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         ..__KeyedCollectionResolvers<global::TestNamespace.IHandler>(global::TestNamespace.Keys.Name, static c => c.GetAllIHandlerArray_TestNamespace_Keys_Name()),
         ..__KeyedCollectionResolvers<global::TestNamespace.IHandler>("x-y", static c => c.GetAllIHandlerArray__x_y_()),
         ..__KeyedCollectionResolvers<global::TestNamespace.IHandler>("x.y", static c => c.GetAllIHandlerArray__x_y__8610c19c()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.EnumHandler1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllEnumHandler1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.EnumHandler1[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllEnumHandler1Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIHandlerArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.EnumHandler2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllEnumHandler2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.EnumHandler2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllEnumHandler2Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.CsharpHandler1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllCsharpHandler1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.CsharpHandler1[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllCsharpHandler1Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.CsharpHandler2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllCsharpHandler2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.CsharpHandler2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllCsharpHandler2Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.DashHandler1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDashHandler1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.DashHandler1[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDashHandler1Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.DashHandler2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDashHandler2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.DashHandler2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDashHandler2Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.DotHandler1>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDotHandler1Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.DotHandler1[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDotHandler1Array_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.DotHandler2>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllDotHandler2Array_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.DotHandler2[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllDotHandler2Array_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.EnumHandler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.EnumHandler1[] { c.GetEnumHandler1_TestNamespace_Kind_First() }),
+        __EnumerableResolver<global::TestNamespace.IHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.EnumHandler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.EnumHandler2[] { c.GetEnumHandler2_TestNamespace_Kind_First() }),
+        __EnumerableResolver<global::TestNamespace.CsharpHandler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.CsharpHandler1[] { c.GetCsharpHandler1_TestNamespace_Keys_Name() }),
+        __EnumerableResolver<global::TestNamespace.CsharpHandler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.CsharpHandler2[] { c.GetCsharpHandler2_TestNamespace_Keys_Name() }),
+        __EnumerableResolver<global::TestNamespace.DashHandler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.DashHandler1[] { c.GetDashHandler1__x_y_() }),
+        __EnumerableResolver<global::TestNamespace.DashHandler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.DashHandler2[] { c.GetDashHandler2__x_y_() }),
+        __EnumerableResolver<global::TestNamespace.DotHandler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.DotHandler1[] { c.GetDotHandler1__x_y_() }),
+        __EnumerableResolver<global::TestNamespace.DotHandler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.DotHandler2[] { c.GetDotHandler2__x_y_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -543,9 +494,15 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
 
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
+
     private static __IocResolver[] __KeyedCollectionResolvers<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
     [
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<T>), key, c => c.__MergeFallbackServices((T[])resolver(c), key)),
+        __EnumerableResolver<T>(key, resolver),
         __KeyedResolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), key, resolver),
         __KeyedResolver(typeof(global::System.Collections.Generic.ICollection<T>), key, resolver),
         __KeyedResolver(typeof(global::System.Collections.Generic.IReadOnlyList<T>), key, resolver),

@@ -84,16 +84,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         return new global::TestNamespace.Consumer(GetEntityHandler__k__TestNamespace_FactoryContainer_Create());
     }
 
-    private global::TestNamespace.EntityHandler[] GetAllEntityHandlerArray_AnyKey() =>
-        [
-            GetEntityHandler__k_(),
-        ];
-
-    private global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>[] GetAllIRequestHandler_Task_EntityArray_AnyKey() =>
-        [
-            GetEntityHandler__k__TestNamespace_FactoryContainer_Create(),
-        ];
-
     #endregion
 
     #region IServiceProvider
@@ -365,10 +355,8 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __KeyedResolver(typeof(global::TestNamespace.EntityHandler), "k", static c => c.GetEntityHandler__k_()),
         __KeyedResolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), "k", static c => c.GetEntityHandler__k__TestNamespace_FactoryContainer_Create()),
         __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.EntityHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllEntityHandlerArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.EntityHandler[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllEntityHandlerArray_AnyKey()),
-        __KeyedResolver(typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.__MergeFallbackServices(c.GetAllIRequestHandler_Task_EntityArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
-        __KeyedResolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>[]), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIRequestHandler_Task_EntityArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.EntityHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.EntityHandler[] { c.GetEntityHandler__k_() }),
+        __EnumerableResolver<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>[] { c.GetEntityHandler__k__TestNamespace_FactoryContainer_Create() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
@@ -376,6 +364,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private static __IocResolver __KeyedResolver(global::System.Type serviceType, object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
         new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), resolver);
+
+    private static __IocResolver __EnumerableResolver<T>(object key, global::System.Func<global::TestNamespace.TestContainer, object> resolver)
+    {
+        var serviceKey = key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : key;
+        return new(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), new global::SourceGen.Ioc.IocCollectionResolver<global::TestNamespace.TestContainer>(resolver, c => c.__MergeFallbackServices((T[])resolver(c), serviceKey)).Resolve);
+    }
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::TestNamespace.TestContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 
