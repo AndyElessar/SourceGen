@@ -23,7 +23,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 | Analyzer | Diagnostics |
 | :------- | :---------- |
 | RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038, 039, 040, 041, 042, 043, 044 |
-| ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
+| ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031, 045 |
 
 ### CompilationEnd Diagnostics
 
@@ -37,7 +37,7 @@ A rule reported from both kinds of actions has two descriptors with the same ID,
 | SGIOC014 | `ServiceKeyNotRegistered`: `[ServiceKey]` parameters of the registration's own `Factory` | `ServiceKeyNotRegisteredForRegistration`: `[ServiceKey]` constructor and inject method parameters |
 | SGIOC038 | `OpenTypeNestedInGenericType`: open types nested in a generic type used by an attribute | `ImplicitOpenTypeNestedInGenericType`: those an open implementation would be registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` |
 
-The other diagnostics reported at compilation end are SGIOC002-005, 011-013, 015, 026, 030, 033-037, 039 and 042 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027 and 029 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
+The other diagnostics reported at compilation end are SGIOC002-005, 011-013, 015, 026, 030, 033-037, 039 and 042 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027, 029 and 045 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
 
 ## Diagnostics
 
@@ -50,7 +50,7 @@ Format: ID - Level - Category - Description
 | [Injection](Diagnostics.Injection.spec.md) | SGIOC006, SGIOC007, SGIOC022, SGIOC023, SGIOC024, SGIOC028, SGIOC043 |
 | [Key](Diagnostics.Keys.spec.md) | SGIOC013, SGIOC014, SGIOC015 |
 | [Factory](Diagnostics.Factory.spec.md) | SGIOC008, SGIOC016, SGIOC017, SGIOC039, SGIOC042, SGIOC044 |
-| [Container](Diagnostics.Container.spec.md) | SGIOC018, SGIOC019, SGIOC020, SGIOC021, SGIOC025, SGIOC031 |
+| [Container](Diagnostics.Container.spec.md) | SGIOC018, SGIOC019, SGIOC020, SGIOC021, SGIOC025, SGIOC031, SGIOC045 |
 | [Async-init](Diagnostics.AsyncInit.spec.md) | SGIOC026, SGIOC027, SGIOC029, SGIOC030 |
 | [Decorator](Diagnostics.Decorators.spec.md) | SGIOC034, SGIOC035 |
 | [Generic Dependency](Diagnostics.Generics.spec.md) | SGIOC036, SGIOC037 |

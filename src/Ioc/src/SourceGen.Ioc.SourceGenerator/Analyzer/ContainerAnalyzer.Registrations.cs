@@ -92,12 +92,14 @@ partial class ContainerAnalyzer
         var (hasRegisterAllBaseClasses, registerAllBaseClasses) = attribute.TryGetRegisterAllBaseClasses();
         var (hasFactory, hasInstance) = attribute.HasFactoryOrInstance();
         var hasInjectMembers = attribute.NamedArguments.Any(static a => a.Key == "InjectMembers" && !a.Value.IsNull);
+        var (hasExplicitLifetime, lifetime) = attribute.TryGetLifetime();
 
         return new RawRegistration(
             implementationType,
             key,
             GetAttributeServiceKey(attribute),
             [.. AnalyzerHelpers.GetExplicitServiceTypes(attribute)],
+            hasExplicitLifetime ? lifetime : null,
             hasRegisterAllInterfaces,
             registerAllInterfaces,
             hasRegisterAllBaseClasses,
@@ -269,12 +271,14 @@ partial class ContainerAnalyzer
             return null;
 
         INamedTypeSymbol? targetType;
+        object? lifetime;
         if(attrClass.IsGenericType)
         {
             if(attrClass.TypeArguments.Length == 0 || attribute.ConstructorArguments.Length < 1)
                 return null;
 
             targetType = attrClass.TypeArguments[0] as INamedTypeSymbol;
+            lifetime = attribute.ConstructorArguments[0].Value;
         }
         else
         {
@@ -282,7 +286,12 @@ partial class ContainerAnalyzer
                 return null;
 
             targetType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
+            lifetime = attribute.ConstructorArguments[1].Value;
         }
+
+        // Like the generator's ExtractDefaultSettings, settings without a lifetime are ignored
+        if(lifetime is not int lifetimeValue)
+            return null;
 
         // Settings for an open type nested in a generic type do not match the generator's types (SGIOC038)
         if(targetType is null or { IsOpenNestedInGenericType: true })
@@ -293,6 +302,7 @@ partial class ContainerAnalyzer
 
         return new DefaultSettings(
             targetType,
+            (ServiceLifetime)lifetimeValue,
             [.. attribute.GetServiceTypeSymbols()],
             registerAllInterfaces,
             registerAllBaseClasses,
@@ -371,6 +381,10 @@ partial class ContainerAnalyzer
                 _ => RegistrationActivation.Constructor,
             };
 
+            // Like the generator's MergeSettings: explicit, then Singleton for an Instance, then default settings, then fallback
+            var lifetime = registration.Lifetime
+                ?? (registration.HasInstance ? ServiceLifetime.Singleton : best?.Lifetime ?? analyzerContext.FallbackLifetime);
+
             resolved.Add(new ResolvedRegistration(
                 implementationType,
                 registration.Key,
@@ -385,7 +399,9 @@ partial class ContainerAnalyzer
                 // Like the generator, a registration's own decorators replace the default ones; an Instance is not decorated
                 registration.HasInstance ? []
                     : registration.Decorators.Length > 0 ? registration.Decorators
-                    : best?.Decorators ?? []));
+                    : best?.Decorators ?? [],
+                lifetime,
+                registration.Syntax));
 
             void MatchDefaults(INamedTypeSymbol candidate)
             {
@@ -531,7 +547,9 @@ partial class ContainerAnalyzer
                     defaults.Tags,
                     ExplicitContainer: null,
                     activation,
-                    Decorators: defaults.Decorators));
+                    Decorators: defaults.Decorators,
+                    Lifetime: defaults.Lifetime,
+                    Syntax: defaults.Syntax));
             }
         }
 
@@ -1320,6 +1338,7 @@ partial class ContainerAnalyzer
         string? Key,
         ServiceKeyValue? KeyValue,
         ImmutableArray<INamedTypeSymbol> ExplicitServiceTypes,
+        ServiceLifetime? Lifetime,
         bool HasExplicitRegisterAllInterfaces,
         bool RegisterAllInterfaces,
         bool HasExplicitRegisterAllBaseClasses,
@@ -1337,6 +1356,8 @@ partial class ContainerAnalyzer
     /// <param name="Activation">How the container creates the instance; the default is the constructor.</param>
     /// <param name="InjectMembers">The members of the <c>InjectMembers</c> attribute property (constructor activation only).</param>
     /// <param name="Decorators">The decorator types of the registration, or of its best default settings (SGIOC027/029).</param>
+    /// <param name="Lifetime">The effective lifetime (SGIOC045).</param>
+    /// <param name="Syntax">The attribute that declares the registration, where SGIOC045 is reported; <see langword="null"/> to not report it.</param>
     private sealed record class ResolvedRegistration(
         INamedTypeSymbol ImplementationType,
         string? Key,
@@ -1346,7 +1367,9 @@ partial class ContainerAnalyzer
         INamedTypeSymbol? ExplicitContainer,
         RegistrationActivation Activation = default,
         ImmutableArray<InjectMemberInfo> InjectMembers = default,
-        ImmutableArray<INamedTypeSymbol> Decorators = default);
+        ImmutableArray<INamedTypeSymbol> Decorators = default,
+        ServiceLifetime? Lifetime = null,
+        SyntaxReference? Syntax = null);
 
     private enum ActivationKind
     {
@@ -1391,6 +1414,7 @@ partial class ContainerAnalyzer
     /// </summary>
     private sealed class DefaultSettings(
         INamedTypeSymbol targetType,
+        ServiceLifetime lifetime,
         ImmutableArray<INamedTypeSymbol> serviceTypes,
         bool registerAllInterfaces,
         bool registerAllBaseClasses,
@@ -1402,6 +1426,7 @@ partial class ContainerAnalyzer
         SyntaxReference? syntax)
     {
         public INamedTypeSymbol TargetType { get; } = targetType;
+        public ServiceLifetime Lifetime { get; } = lifetime;
         public ImmutableArray<INamedTypeSymbol> ServiceTypes { get; } = serviceTypes;
         public bool RegisterAllInterfaces { get; } = registerAllInterfaces;
         public bool RegisterAllBaseClasses { get; } = registerAllBaseClasses;
@@ -1457,10 +1482,16 @@ partial class ContainerAnalyzer
         ImmutableArray<string> IncludeTags,
         ImmutableArray<INamedTypeSymbol> ImportedModules);
 
-    private sealed class ContainerAnalyzerContext(IocAttributeSymbols attributeSymbols, IocFeatures features)
+    private sealed class ContainerAnalyzerContext(IocAttributeSymbols attributeSymbols, IocFeatures features, ServiceLifetime fallbackLifetime)
     {
         public IocAttributeSymbols AttributeSymbols { get; } = attributeSymbols;
         public IocFeatures Features { get; } = features;
+
+        /// <summary>
+        /// The lifetime of a registration that neither sets one nor matches default settings: the MSBuild
+        /// <c>SourceGenIocDefaultLifetime</c>, otherwise Transient.
+        /// </summary>
+        public ServiceLifetime FallbackLifetime { get; } = fallbackLifetime;
         public ConcurrentBag<RawRegistration> Registrations { get; } = [];
         public ConcurrentBag<DefaultSettings> DefaultSettings { get; } = [];
         public ConcurrentBag<ModuleImport> ModuleImports { get; } = [];

@@ -110,6 +110,19 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "When SourceGenIocFeatures does not include Container, classes marked with [IocContainer] are ignored during generation.");
 
+    /// <summary>
+    /// SGIOC045: Container does not dispose a transient service that implements IDisposable or IAsyncDisposable.
+    /// </summary>
+    public static readonly DiagnosticDescriptor TransientDisposableNotDisposed = new(
+        id: "SGIOC045",
+        title: "Container does not dispose transient service",
+        messageFormat: "Container '{0}' does not dispose transient service '{1}', which implements IDisposable or IAsyncDisposable. Dispose it in the caller, or register it as Scoped or Singleton.",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Generated containers do not track transient services, so neither the container nor its scopes dispose them, unlike Microsoft.Extensions.DependencyInjection, which disposes them with the scope that resolved them.",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     private static readonly SymbolDisplayFormat s_qualifiedFormat = new(
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
 
@@ -122,7 +135,8 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
         CircularModuleImport,
         PartialAccessorMustReturnTask,
         UnsupportedAsyncPartialAccessorType,
-        ContainerFeatureDisabled
+        ContainerFeatureDisabled,
+        TransientDisposableNotDisposed
     ];
 
     public override void Initialize(AnalysisContext context)
@@ -141,7 +155,9 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
         if(!attributeSymbols.HasContainerAttribute)
             return;
 
-        var analyzerContext = new ContainerAnalyzerContext(attributeSymbols, features);
+        var fallbackLifetime = IocSourceGenerator.ReadDefaultLifetime(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions)
+            ?? ServiceLifetime.Transient;
+        var analyzerContext = new ContainerAnalyzerContext(attributeSymbols, features, fallbackLifetime);
 
         // Collect assembly-level [IocRegisterFor] registrations and [IocRegisterDefaults] settings
         CollectAssemblyLevelAttributes(context.Compilation, analyzerContext, context.CancellationToken);
@@ -303,8 +319,9 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
             AnalyzeAsyncPartialAccessors(context, asyncInitServiceKeys, container.Symbol);
         }
 
-        // SGIOC018/021: registration resolution checks only when IntegrateServiceProvider = false
-        if(!analyzerContext.Containers.Any(static c => !c.IntegrateServiceProvider))
+        // SGIOC045 runs on all generated containers; SGIOC018/021 only when IntegrateServiceProvider = false
+        var analyzeTransientDisposables = (analyzerContext.Features & IocFeatures.Container) != 0;
+        if(!analyzeTransientDisposables && !analyzerContext.Containers.Any(static c => !c.IntegrateServiceProvider))
             return;
 
         var containers = new Dictionary<INamedTypeSymbol, ContainerInfo>(SymbolEqualityComparer.Default);
@@ -313,6 +330,15 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
 
         var scopeBuilder = new ContainerScopeBuilder(registrations, containers, context.Compilation.Assembly);
         var dependencyCache = new DependencyCache(context.Compilation.Assembly);
+
+        if(analyzeTransientDisposables)
+        {
+            foreach(var container in analyzerContext.Containers)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                AnalyzeTransientDisposables(context, scopeBuilder.GetScope(container), container.Symbol);
+            }
+        }
 
         // Containers that use every registration of the compilation share the same unresolved dependencies
         List<(Location? Location, string ServiceType)>? sharedUnresolvedDependencies = null;
@@ -345,6 +371,49 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
 
             AnalyzePartialAccessorDependencies(context, scope, asyncInitServiceKeys, container.Symbol);
         }
+    }
+
+    /// <summary>
+    /// SGIOC045: Reports the container's own transient registrations whose instance is disposable: the implementation type
+    /// for constructor activation, or the declared return type of the factory method.
+    /// </summary>
+    private static void AnalyzeTransientDisposables(
+        CompilationAnalysisContext context,
+        ContainerScope scope,
+        INamedTypeSymbol containerSymbol)
+    {
+        foreach(var registration in scope.Own.Registrations)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            if(registration is not { Lifetime: ServiceLifetime.Transient, Syntax: { } syntax })
+                continue;
+
+            // Like the generator, an implementation that cannot be constructed without a Factory is not registered (SGIOC001)
+            var createdType = registration.Activation.Kind switch
+            {
+                ActivationKind.Constructor when registration.ImplementationType.IsConstructibleIn(context.Compilation.Assembly)
+                    => registration.ImplementationType,
+                ActivationKind.Factory => registration.Activation.Factory?.ReturnType as INamedTypeSymbol,
+                _ => null,
+            };
+
+            if(createdType is null || !IsDisposable(createdType))
+                continue;
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                TransientDisposableNotDisposed,
+                syntax.GetSyntax(context.CancellationToken).GetLocation(),
+                containerSymbol.Name,
+                createdType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        }
+
+        static bool IsDisposable(INamedTypeSymbol type)
+            => IsDisposableInterface(type) || type.AllInterfaces.Any(IsDisposableInterface);
+
+        static bool IsDisposableInterface(INamedTypeSymbol type)
+            => type.SpecialType is SpecialType.System_IDisposable
+                || type is { Name: "IAsyncDisposable", Arity: 0, ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } };
     }
 
     /// <summary>
