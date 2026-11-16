@@ -105,6 +105,6 @@ partial class IocSourceGenerator
             typeData.Name,
             typeData,
             genericTypeData.NameWithoutGeneric,
-            AnyKey: true);
+            KeyKind: DependencyKeyKind.Unknown);
     }
 }

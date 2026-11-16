@@ -12,7 +12,8 @@ internal static partial class TransformExtensions
         /// <returns>
         /// A tuple containing:
         /// - Key: The key string, or null if no key is specified.
-        /// - KeyType: The key type (0 = Value, 1 = Csharp).
+        /// - KeyType: The key type as declared (0 = Value, 1 = Csharp); the key is C# code either way, a value key being
+        ///   its constant written as C# code.
         /// - KeyValueTypeSymbol: The type symbol of the key value, or null when the type cannot be determined.
         /// </returns>
         public (string? Key, int KeyType, ITypeSymbol? KeyValueTypeSymbol) GetKeyInfo(SemanticModel? semanticModel = null)
@@ -39,8 +40,8 @@ internal static partial class TransformExtensions
                         return (key, keyType, keyValueType);
                     }
 
-                    // Value key: treat the primitive constant as CSharp code
-                    return (ctorArg.GetPrimitiveConstantString(), 1, ctorArg.Type);
+                    // Value key: the primitive constant written as C# code, still a value key (closings compare it as written)
+                    return (ctorArg.GetPrimitiveConstantString(), 0, ctorArg.Type);
                 }
             }
 
@@ -62,8 +63,8 @@ internal static partial class TransformExtensions
                     return (key, keyType, keyValueType);
                 }
 
-                // Value key: treat the primitive constant as CSharp code
-                return (namedArg.Value.GetPrimitiveConstantString(), 1, namedArg.Value.Type);
+                // Value key: the primitive constant written as C# code, still a value key (closings compare it as written)
+                return (namedArg.Value.GetPrimitiveConstantString(), 0, namedArg.Value.Type);
             }
 
             return (null, keyType, null);

@@ -7,7 +7,7 @@ partial class IocSourceGenerator
         ImmutableArray<ClosedGenericDependency> discoveries,
         CancellationToken ct)
     {
-        var seen = new HashSet<(string TypeName, string? Key, bool AnyKey)>();
+        var seen = new HashSet<(string TypeName, string? Key, DependencyKeyKind KeyKind)>();
         var dependencies = new List<ClosedGenericDependency>();
         Add(invocations);
         Add(discoveries);
@@ -44,7 +44,7 @@ partial class IocSourceGenerator
         // Use List to allow multiple implementations per service type key
         // (e.g., GenericRequestHandler<T> and GenericRequestHandler2<T> both implement IRequestHandler<,>)
         Dictionary<string, List<OpenGenericRegistrationInfo>>? openGenericIndex = null;
-        Dictionary<(string TypeName, string? Key, bool AnyKey), ClosedGenericDependency>? closedGenericDependencies = null;
+        Dictionary<(string TypeName, string? Key, DependencyKeyKind KeyKind), ClosedGenericDependency>? closedGenericDependencies = null;
 
         // Process each basic result
         foreach(var result in basicResults)
@@ -134,7 +134,7 @@ partial class IocSourceGenerator
     /// </summary>
     private static void GenerateClosedGenericFactoryRegistrations(
         Dictionary<string, List<OpenGenericRegistrationInfo>> openGenericIndex,
-        Dictionary<(string TypeName, string? Key, bool AnyKey), ClosedGenericDependency>? closedGenericDependencies,
+        Dictionary<(string TypeName, string? Key, DependencyKeyKind KeyKind), ClosedGenericDependency>? closedGenericDependencies,
         List<ServiceRegistrationWithTags> registrations,
         CancellationToken ct)
     {
@@ -178,7 +178,7 @@ partial class IocSourceGenerator
                 pendingDependencies.Enqueue(new(dependency, Source: null));
             }
         }
-        var processedDependencies = new HashSet<(string TypeName, string? Key, bool AnyKey)>();
+        var processedDependencies = new HashSet<(string TypeName, string? Key, DependencyKeyKind KeyKind)>();
 
         // No dependencies to process - nothing to do
         if(pendingDependencies.Count == 0)
@@ -222,36 +222,49 @@ partial class IocSourceGenerator
             // Track registration count before generating
             var registrationCountBefore = registrations.Count;
 
-            // Try each open generic registration to find one that matches the closed type structure and the dependency's key.
-            // Keys are compared as written, so a keyed dependency that no registration matches with its key, such as one
-            // resolved by a key given as C# code (Key = nameof(Node<T>.Name)), then selects the first keyed registration.
+            // Try each open generic registration to find one that matches the closed type structure and the dependency's key
+            // (see MatchesDependencyKey). Keys are compared as written, so a keyed dependency that no registration matches
+            // with its key then selects the first keyed registration whose key or the dependency's is given as C# code
+            // (Key = nameof(Node<T>.Name)), and a keyed invocation the first registration without a key. The value type of a
+            // dictionary or key value pair closes every keyed registration, each collecting the dependencies of its closing.
             ClosingSource? closingSource = null;
             OpenGenericRegistrationInfo? closedRegistration = null;
-            var anyKeyedRegistration = false;
+            var closesEveryRegistration = dependency.KeyKind is DependencyKeyKind.AllKeyed;
+            var collectedCount = registrationCountBefore;
+            var fallback = false;
             do
             {
                 foreach(var openGenericInfo in isExpanding ? [] : openGenericInfoList)
                 {
                     // Generate the closed generic factory registration
                     // Returns true if successful, allowing us to break early
-                    if(TryGenerateClosedGenericRegistration(
+                    if(!TryGenerateClosedGenericRegistration(
                         dependency,
-                        anyKeyedRegistration,
+                        fallback,
                         openGenericInfo,
                         registrations,
                         generatedClosedGenerics,
                         registeredTypes,
                         closedRegistrations,
-                        out closingSource))
+                        out var registrationSource))
                     {
-                        closedRegistration = openGenericInfo;
+                        continue;
+                    }
+
+                    closedRegistration = openGenericInfo;
+                    closingSource = registrationSource;
+                    if(!closesEveryRegistration)
+                    {
                         break; // Found a matching registration, stop searching
                     }
+
+                    CollectDependenciesOfNewRegistrations(collectedCount, closedRegistration, closingSource);
+                    collectedCount = registrations.Count;
                 }
 
-                anyKeyedRegistration = !anyKeyedRegistration && closedRegistration is null && dependency is { AnyKey: false, Key: not null };
+                fallback = !fallback && closedRegistration is null && HasFallbackKeyMatch(dependency);
             }
-            while(anyKeyedRegistration);
+            while(fallback);
 
             // A closing rejected for this registration, such as an expanding one, may succeed for another, so the
             // dependency is processed again when another registration collects it. Each registration collects it once.
@@ -260,8 +273,13 @@ partial class IocSourceGenerator
                 processedDependencies.Remove(dependency.Identity);
             }
 
-            // Collect new dependencies from newly generated registrations (including decorator parameters)
-            for(var i = registrationCountBefore; i < registrations.Count; i++)
+            CollectDependenciesOfNewRegistrations(collectedCount, closedRegistration, closingSource);
+        }
+
+        // Collect new dependencies from newly generated registrations (including decorator parameters)
+        void CollectDependenciesOfNewRegistrations(int start, OpenGenericRegistrationInfo? closedRegistration, ClosingSource? closingSource)
+        {
+            for(var i = start; i < registrations.Count; i++)
             {
                 var newReg = registrations[i].Registration;
 
@@ -280,9 +298,9 @@ partial class IocSourceGenerator
                     // Skip the parameter that receives the decorated instance
                     foreach(var param in EnumerateDecoratorDependencyParameters(decorator, newReg.ServiceType))
                     {
-                        CollectNewDependencyFromType(
-                            param.Type,
-                            param.ServiceKey,
+                        CollectNewDependencyFromParameter(
+                            param,
+                            method: null,
                             pendingDependencies,
                             processedDependencies,
                             generatedClosedGenerics,
@@ -308,9 +326,9 @@ partial class IocSourceGenerator
                         : GetFactoryClosingSource(closedRegistration.Factory ?? factory, closedRegistration, newReg.ServiceType, closingSource?.TypeArgumentMap);
                     foreach(var param in factory.AdditionalParameters)
                     {
-                        CollectNewDependencyFromType(
-                            param.Type,
-                            param.ServiceKey,
+                        CollectNewDependencyFromParameter(
+                            param,
+                            method: null,
                             pendingDependencies,
                             processedDependencies,
                             generatedClosedGenerics,
@@ -325,9 +343,9 @@ partial class IocSourceGenerator
                 {
                     foreach(var param in newReg.ImplementationType.ConstructorParameters)
                     {
-                        CollectNewDependencyFromType(
-                            param.Type,
-                            param.ServiceKey,
+                        CollectNewDependencyFromParameter(
+                            param,
+                            method: null,
                             pendingDependencies,
                             processedDependencies,
                             generatedClosedGenerics,
@@ -352,7 +370,7 @@ partial class IocSourceGenerator
     private static void CollectNewDependenciesFromInjectionMembers(
         ImmutableEquatableArray<InjectionMemberData>? injectionMembers,
         Queue<PendingDependency> pendingDependencies,
-        HashSet<(string TypeName, string? Key, bool AnyKey)> processedDependencies,
+        HashSet<(string TypeName, string? Key, DependencyKeyKind KeyKind)> processedDependencies,
         HashSet<(string TypeName, string? Key)> generatedClosedGenerics,
         ClosingSource? source)
     {
@@ -361,13 +379,20 @@ partial class IocSourceGenerator
             switch(member)
             {
                 case PropertyOrFieldInjectionData propertyOrField:
-                    CollectNewDependencyFromType(propertyOrField.Type, propertyOrField.Key, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
+                    CollectNewDependencyFromType(
+                        propertyOrField.Type,
+                        propertyOrField.Key,
+                        pendingDependencies,
+                        processedDependencies,
+                        generatedClosedGenerics,
+                        source,
+                        ClosedGenericDependency.GetKeyKind(propertyOrField.Key, propertyOrField.IsCsharpKey));
                     break;
 
                 case MethodInjectionData method:
                     foreach(var param in method.Parameters)
                     {
-                        CollectNewDependencyFromType(param.Type, param.ServiceKey ?? method.Key, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
+                        CollectNewDependencyFromParameter(param, method, pendingDependencies, processedDependencies, generatedClosedGenerics, source);
                     }
                     break;
             }
@@ -375,33 +400,52 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// Collects a new closed generic dependency from a parameter, resolved with its own key or, without one, the key of its
+    /// injected method.
+    /// </summary>
+    private static void CollectNewDependencyFromParameter(
+        ParameterData param,
+        MethodInjectionData? method,
+        Queue<PendingDependency> pendingDependencies,
+        HashSet<(string TypeName, string? Key, DependencyKeyKind KeyKind)> processedDependencies,
+        HashSet<(string TypeName, string? Key)> generatedClosedGenerics,
+        ClosingSource? source)
+    {
+        var (key, keyKind) = GetParameterKey(param, method);
+        CollectNewDependencyFromType(param.Type, key, pendingDependencies, processedDependencies, generatedClosedGenerics, source, keyKind);
+    }
+
+    /// <summary>
     /// Collects a new closed generic dependency from a type and adds it to the pending queue.
     /// </summary>
     /// <param name="key">
     /// The key the type is resolved with, or <see langword="null"/>; wrappers resolve their inner service with the same key,
-    /// except dictionaries and key value pairs, which resolve the keyed registrations of their value type with any key.
+    /// except dictionaries and collections of key value pairs, which resolve every keyed registration of their value type.
     /// </param>
-    /// <param name="anyKey">Whether the type is resolved with any key (see <see cref="ClosedGenericDependency.AnyKey"/>).</param>
+    /// <param name="keyKind">How the type is resolved with <paramref name="key"/> (see <see cref="DependencyKeyKind"/>).</param>
+    /// <param name="isPairOfEveryKey">Whether a key value pair type is the element of a collection (see <see cref="GetInnerKeyKind"/>).</param>
     private static void CollectNewDependencyFromType(
         TypeData paramType,
         string? key,
         Queue<PendingDependency> pendingDependencies,
-        HashSet<(string TypeName, string? Key, bool AnyKey)> processedDependencies,
+        HashSet<(string TypeName, string? Key, DependencyKeyKind KeyKind)> processedDependencies,
         HashSet<(string TypeName, string? Key)> generatedClosedGenerics,
         ClosingSource? source,
-        bool anyKey = false)
+        DependencyKeyKind keyKind,
+        bool isPairOfEveryKey = false)
     {
         // Unwrap wrappers like direct dependencies do, such as IRepo<string> in Lazy<IRepo<string>> or IEnumerable<IRepo<string>>
         if(GetWrapperInnerType(paramType) is { } innerType)
         {
-            CollectNewDependencyFromType(innerType, key, pendingDependencies, processedDependencies, generatedClosedGenerics, source, anyKey || IsKeyedValueWrapper(paramType));
+            CollectNewDependencyFromType(innerType, key, pendingDependencies, processedDependencies, generatedClosedGenerics, source, GetInnerKeyKind(paramType, keyKind, isPairOfEveryKey));
         }
 
         if(GetEnumerableElementType(paramType) is { } elementType)
         {
-            CollectNewDependencyFromType(elementType, key, pendingDependencies, processedDependencies, generatedClosedGenerics, source, anyKey);
+            CollectNewDependencyFromType(elementType, key, pendingDependencies, processedDependencies, generatedClosedGenerics, source, keyKind, isPairOfEveryKey: true);
         }
 
+        var anyKey = keyKind >= DependencyKeyKind.Unknown;
         if(anyKey)
         {
             key = null;
@@ -420,7 +464,7 @@ partial class IocSourceGenerator
 
         // Skip if already processed or registered with the same key; a dependency with any key is checked against the key of
         // the registration it selects
-        if(processedDependencies.Contains((paramType.Name, key, anyKey)) || (!anyKey && generatedClosedGenerics.Contains((paramType.Name, key))))
+        if(processedDependencies.Contains((paramType.Name, key, keyKind)) || (!anyKey && generatedClosedGenerics.Contains((paramType.Name, key))))
         {
             return;
         }
@@ -431,7 +475,7 @@ partial class IocSourceGenerator
             paramType,
             genericParamType.NameWithoutGeneric,
             key,
-            anyKey);
+            keyKind);
         pendingDependencies.Enqueue(new(dependency, source));
     }
 
@@ -447,8 +491,9 @@ partial class IocSourceGenerator
     /// dependency.
     /// </summary>
     /// <param name="dependency">The closed generic dependency, whose key the closed registration must have.</param>
-    /// <param name="anyKeyedRegistration">
-    /// Whether a registration with any key resolves the keyed dependency, after no registration matched with its key.
+    /// <param name="fallback">
+    /// Whether the registration's key is matched as a fallback, after no registration matched the dependency's key (see
+    /// <see cref="MatchesDependencyKey"/>).
     /// </param>
     /// <param name="registeredTypes">The types registered as written, with their keys, compared as runtime types.</param>
     /// <param name="closedRegistrations">
@@ -457,7 +502,7 @@ partial class IocSourceGenerator
     /// <param name="closingSource">The closing the dependencies of the generated registrations are collected from.</param>
     private static bool TryGenerateClosedGenericRegistration(
         in ClosedGenericDependency dependency,
-        bool anyKeyedRegistration,
+        bool fallback,
         OpenGenericRegistrationInfo openGenericInfo,
         List<ServiceRegistrationWithTags> registrations,
         HashSet<(string TypeName, string? Key)> generatedClosedGenerics,
@@ -568,7 +613,7 @@ partial class IocSourceGenerator
             closingSource = new ClosingSource(openImplType.Name, factoryOnlyTypeArgMap);
             return TryGenerateFactoryOnlyRegistration(
                 dependency,
-                anyKeyedRegistration,
+                fallback,
                 openGenericInfo,
                 factoryOnlyTypeArgMap,
                 registrations,
@@ -594,7 +639,7 @@ partial class IocSourceGenerator
         // expression, so only the identifiers that can be type parameters are closed. A registration with another key than
         // the dependency's does not resolve it, so another registration may.
         var closedKey = SubstituteTypeArgumentsInExpression(openGenericInfo.Key, implTypeArgMap);
-        if(!MatchesDependencyKey(dependency, closedKey, anyKeyedRegistration))
+        if(!MatchesDependencyKey(dependency, closedKey, openGenericInfo.IsCsharpKey, fallback))
         {
             return false;
         }
@@ -749,14 +794,38 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Gets whether a closed registration with a key resolves a dependency: a dependency with any key is resolved with the key
-    /// of the registration it selects, and any other dependency with its own key (or without a key for a non-keyed one),
-    /// compared as written, or, when <paramref name="anyKeyedRegistration"/> is set, a keyed dependency with any key.
+    /// Gets whether a closed registration with a key resolves a dependency (see <see cref="DependencyKeyKind"/>):
+    /// <list type="bullet">
+    /// <item>A dependency with its own key (or without a key for a non-keyed one) is resolved by a registration with the same
+    /// key, compared as written; as a <paramref name="fallback"/>, a keyed dependency is resolved by a keyed registration
+    /// when either key is given as C# code, which may equal the other at runtime, while two value keys never do.</item>
+    /// <item>A dependency with a key unknown at compile time (<c>[IocDiscover]</c>) is resolved by any registration, with
+    /// its key.</item>
+    /// <item>A keyed invocation is resolved by a keyed registration, or as a <paramref name="fallback"/> by any
+    /// registration.</item>
+    /// <item>The value type of a dictionary or key value pair is resolved by every keyed registration.</item>
+    /// </list>
     /// </summary>
-    private static bool MatchesDependencyKey(in ClosedGenericDependency dependency, string? closedKey, bool anyKeyedRegistration)
-        => dependency.AnyKey
-            || string.Equals(dependency.Key, closedKey, StringComparison.Ordinal)
-            || (anyKeyedRegistration && dependency.Key is not null && closedKey is not null);
+    /// <param name="isCsharpKey">Whether the registration's key is given as C# code (<c>KeyType.Csharp</c>).</param>
+    private static bool MatchesDependencyKey(in ClosedGenericDependency dependency, string? closedKey, bool isCsharpKey, bool fallback)
+        => dependency.KeyKind switch
+        {
+            DependencyKeyKind.Unknown => true,
+            DependencyKeyKind.UnknownKeyed => fallback || closedKey is not null,
+            DependencyKeyKind.AllKeyed => closedKey is not null,
+            _ when !fallback => string.Equals(dependency.Key, closedKey, StringComparison.Ordinal),
+            _ => dependency.Key is not null
+                && closedKey is not null
+                && (dependency.KeyKind is DependencyKeyKind.Csharp || isCsharpKey),
+        };
+
+    /// <summary>
+    /// Gets whether a dependency that no registration matches selects a registration in a fallback pass (see
+    /// <see cref="MatchesDependencyKey"/>): a keyed dependency or a keyed invocation.
+    /// </summary>
+    private static bool HasFallbackKeyMatch(in ClosedGenericDependency dependency)
+        => dependency.KeyKind is DependencyKeyKind.UnknownKeyed
+            || (dependency.KeyKind is DependencyKeyKind.Value or DependencyKeyKind.Csharp && dependency.Key is not null);
 
     /// <summary>
     /// Gets whether a type is already registered with a key: generated as written, or registered in any spelling of its tuple
@@ -794,7 +863,7 @@ partial class IocSourceGenerator
     /// </param>
     private static bool TryGenerateFactoryOnlyRegistration(
         in ClosedGenericDependency dependency,
-        bool anyKeyedRegistration,
+        bool fallback,
         OpenGenericRegistrationInfo openGenericInfo,
         Dictionary<string, string> typeArgMap,
         List<ServiceRegistrationWithTags> registrations,
@@ -810,7 +879,7 @@ partial class IocSourceGenerator
 
         // A registration with another key than the dependency's does not resolve it, so another registration may
         var closedKey = SubstituteTypeArgumentsInExpression(openGenericInfo.Key, typeArgMap);
-        if(!MatchesDependencyKey(dependency, closedKey, anyKeyedRegistration))
+        if(!MatchesDependencyKey(dependency, closedKey, openGenericInfo.IsCsharpKey, fallback))
         {
             return false;
         }

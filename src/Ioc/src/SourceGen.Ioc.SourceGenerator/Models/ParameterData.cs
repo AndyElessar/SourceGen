@@ -12,6 +12,10 @@ namespace SourceGen.Ioc;
 /// <param name="HasInjectAttribute">Whether this parameter has [Inject] attribute (not [FromKeyedServices], which MS.DI handles automatically).</param>
 /// <param name="HasServiceKeyAttribute">Whether this parameter has [ServiceKey] attribute from Microsoft.Extensions.DependencyInjection.</param>
 /// <param name="HasFromKeyedServicesAttribute">Whether this parameter has [FromKeyedServices] attribute from Microsoft.Extensions.DependencyInjection.</param>
+/// <param name="IsCsharpKey">
+/// Whether <see cref="ServiceKey"/> is given as C# code (<c>KeyType = KeyType.Csharp</c>) rather than a constant value, so it
+/// cannot be compared with other keys at compile time.
+/// </param>
 internal sealed record class ParameterData(
     string Name,
     TypeData Type,
@@ -21,7 +25,8 @@ internal sealed record class ParameterData(
     string? ServiceKey = null,
     bool HasInjectAttribute = false,
     bool HasServiceKeyAttribute = false,
-    bool HasFromKeyedServicesAttribute = false)
+    bool HasFromKeyedServicesAttribute = false,
+    bool IsCsharpKey = false)
 {
     /// <summary>
     /// Whether the parameter is optional (nullable type or has default value).

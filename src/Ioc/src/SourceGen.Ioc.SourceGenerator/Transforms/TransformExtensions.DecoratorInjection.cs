@@ -18,13 +18,14 @@ internal static partial class TransformExtensions
             foreach(var (member, injectAttribute) in typeSymbol.GetInjectedMembers())
             {
                 // Extract key information from IocInjectAttribute/InjectAttribute
-                var (key, _, _) = injectAttribute.GetKeyInfo(semanticModel);
+                var (key, keyType, _) = injectAttribute.GetKeyInfo(semanticModel);
+                var isCsharpKey = key is not null && keyType == 1;
 
                 InjectionMemberData? memberData = member switch
                 {
-                    IPropertySymbol property => CreateDecoratorPropertyInjection(property, key),
-                    IFieldSymbol field => CreateDecoratorFieldInjection(field, key),
-                    IMethodSymbol method => CreateDecoratorMethodInjection(method, key, semanticModel, IocSourceGenerator.GetCallThroughType(method, typeSymbol, constructedIn ?? semanticModel?.Compilation.Assembly)),
+                    IPropertySymbol property => CreateDecoratorPropertyInjection(property, key, isCsharpKey),
+                    IFieldSymbol field => CreateDecoratorFieldInjection(field, key, isCsharpKey),
+                    IMethodSymbol method => CreateDecoratorMethodInjection(method, key, isCsharpKey, semanticModel, IocSourceGenerator.GetCallThroughType(method, typeSymbol, constructedIn ?? semanticModel?.Compilation.Assembly)),
                     _ => null
                 };
 
@@ -38,7 +39,7 @@ internal static partial class TransformExtensions
             return injectionMembers?.ToImmutableEquatableArray() ?? [];
         }
 
-        private static InjectionMemberData CreateDecoratorPropertyInjection(IPropertySymbol property, string? key)
+        private static InjectionMemberData CreateDecoratorPropertyInjection(IPropertySymbol property, string? key, bool isCsharpKey)
         {
             var propertyType = property.Type.GetTypeData();
             var isNullable = property.NullableAnnotation == NullableAnnotation.Annotated;
@@ -53,10 +54,11 @@ internal static partial class TransformExtensions
                 IsField: false,
                 isNullable,
                 hasDefaultValue,
-                defaultValue);
+                defaultValue,
+                isCsharpKey);
         }
 
-        private static InjectionMemberData CreateDecoratorFieldInjection(IFieldSymbol field, string? key)
+        private static InjectionMemberData CreateDecoratorFieldInjection(IFieldSymbol field, string? key, bool isCsharpKey)
         {
             var fieldType = field.Type.GetTypeData();
             var isNullable = field.NullableAnnotation == NullableAnnotation.Annotated;
@@ -71,7 +73,8 @@ internal static partial class TransformExtensions
                 IsField: true,
                 isNullable,
                 hasDefaultValue,
-                defaultValue);
+                defaultValue,
+                isCsharpKey);
         }
 
         private static (bool HasDefaultValue, string? DefaultValue) GetDecoratorPropertyDefaultValue(IPropertySymbol property)
@@ -138,12 +141,12 @@ internal static partial class TransformExtensions
             return false;
         }
 
-        private static InjectionMemberData CreateDecoratorMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel, TypeData? callThroughType)
+        private static InjectionMemberData CreateDecoratorMethodInjection(IMethodSymbol method, string? key, bool isCsharpKey, SemanticModel? semanticModel, TypeData? callThroughType)
         {
             var parameters = method.Parameters
                 .Select(p =>
                 {
-                    var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo(semanticModel);
+                    var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute, isCsharpServiceKey) = p.GetServiceKeyAndAttributeInfo(semanticModel);
                     return new ParameterData(
                         p.EscapedName,
                         p.Type.GetTypeData(),
@@ -153,7 +156,8 @@ internal static partial class TransformExtensions
                         ServiceKey: serviceKey,
                         HasInjectAttribute: hasInjectAttribute,
                         HasServiceKeyAttribute: hasServiceKeyAttribute,
-                        HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute);
+                        HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute,
+                        IsCsharpKey: isCsharpServiceKey);
                 })
                 .ToImmutableEquatableArray();
 
@@ -162,7 +166,8 @@ internal static partial class TransformExtensions
                 key,
                 parameters,
                 IsAsync: IsNonGenericTaskReturnType(method),
-                callThroughType);
+                callThroughType,
+                isCsharpKey);
         }
     }
 }

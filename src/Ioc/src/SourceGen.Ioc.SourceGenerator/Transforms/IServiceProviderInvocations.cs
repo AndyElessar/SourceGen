@@ -57,16 +57,14 @@ partial class IocSourceGenerator
             return ServiceProviderInvocation.Empty;
         }
 
-        // The key of a keyed invocation is a runtime value, so it closes an open generic registration with any key
+        // The key of a keyed invocation is a runtime value, so it closes a keyed open generic registration with its key
         var methodName = memberAccess.Name.Identifier.ValueText;
-        var dependencies = CollectClosedGenericDependencies(typeSymbol);
-        if(methodName is "GetKeyedService" or "GetRequiredKeyedService" or "GetKeyedServices")
-        {
-            dependencies = dependencies.Select(static dependency => dependency with { AnyKey = true });
-        }
+        var keyKind = methodName is "GetKeyedService" or "GetRequiredKeyedService" or "GetKeyedServices"
+            ? DependencyKeyKind.UnknownKeyed
+            : DependencyKeyKind.Value;
 
         return new ServiceProviderInvocation(
-            dependencies.ToImmutableEquatableArray(),
+            CollectClosedGenericDependencies(typeSymbol, keyKind),
             GetRequestedCollectionElementTypeName(methodName, typeSymbol));
     }
 
@@ -93,99 +91,36 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Collects the closed generic types a requested type depends on.
-    /// Only closed generic types are collected; for wrapper and collection types the inner/element type is also extracted.
+    /// Collects the closed generic types a requested type depends on: the type itself and, like constructor parameters
+    /// (see <see cref="CollectClosedGenericDependencyFromType"/>), the types its wrappers and collections resolve,
+    /// recursively, such as <c>IHandler&lt;Entity&gt;</c> of <c>IEnumerable&lt;KeyValuePair&lt;string, IHandler&lt;Entity&gt;&gt;&gt;</c>.
     /// </summary>
-    private static IEnumerable<ClosedGenericDependency> CollectClosedGenericDependencies(ITypeSymbol typeSymbol)
+    /// <param name="keyKind">How the requested type is resolved with a key: without one, or by a keyed invocation.</param>
+    private static ImmutableEquatableArray<ClosedGenericDependency> CollectClosedGenericDependencies(ITypeSymbol typeSymbol, DependencyKeyKind keyKind)
     {
-        // Handle array types (e.g., GetService<IHandler<T>[]>())
-        if(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
+        // Only closed types are collected, such as IHandler<Entity>[], not IService<> or IHandler<T>
+        if(typeSymbol.ContainsGenericParameters)
         {
-            var elementTypeSymbol = arrayTypeSymbol.ElementType;
-            if(elementTypeSymbol is INamedTypeSymbol namedElementType
-                && namedElementType.IsGenericType
-                && !namedElementType.IsUnboundGenericType
-                && !namedElementType.ContainsGenericParameters)
-            {
-                var elementTypeData = namedElementType.CreateBasicTypeData();
-                if(elementTypeData is not GenericTypeData genericElementTypeData)
-                {
-                    yield break;
-                }
-
-                yield return new ClosedGenericDependency(
-                    elementTypeData.Name,
-                    elementTypeData,
-                    genericElementTypeData.NameWithoutGeneric);
-            }
-            yield break;
+            return [];
         }
 
-        if(typeSymbol is not INamedTypeSymbol namedTypeSymbol)
+        // Arrays are named after their element type, which is resolved like the element of a collection
+        while(typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
         {
-            yield break;
+            typeSymbol = arrayTypeSymbol.ElementType;
         }
 
-        // Only process closed generic types (has generic arguments but is not open generic)
-        // Skip if it's an open generic (e.g., IService<>) or non-generic type
-        if(!namedTypeSymbol.IsGenericType || namedTypeSymbol.IsUnboundGenericType)
+        if(typeSymbol is not INamedTypeSymbol { IsGenericType: true, IsUnboundGenericType: false } namedTypeSymbol)
         {
-            yield break;
+            return [];
         }
 
-        // Skip if it contains unresolved type parameters (nested open generic)
-        if(namedTypeSymbol.ContainsGenericParameters)
-        {
-            yield break;
-        }
-
-        // Create TypeData with type parameters for closed generic resolution
-        var typeData = namedTypeSymbol.CreateBasicTypeData();
-
-        // Extract inner types from wrapper types for closed generic dependency discovery
-        var wrapperInnerType = typeData switch
-        {
-            LazyTypeData l => l.InstanceType,
-            FuncTypeData f => f.ReturnType,
-            DictionaryTypeData d => d.ValueType,
-            KeyValuePairTypeData k => k.ValueType,
-            _ => (TypeData?)null
-        };
-        if(wrapperInnerType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericInnerType)
-        {
-            // Dictionaries and key value pairs resolve the keyed registrations of their value type with any key
-            yield return new ClosedGenericDependency(
-                wrapperInnerType.Name,
-                wrapperInnerType,
-                genericInnerType.NameWithoutGeneric,
-                AnyKey: IsKeyedValueWrapper(typeData));
-        }
-
-        // Check if this is a collection type — extract element type for closed generic dependency
-        var collectionElementType = typeData switch
-        {
-            CollectionWrapperTypeData c => c.ElementType,
-            _ => null
-        };
-        if(collectionElementType is GenericTypeData { GenericArity: > 0, IsOpenGeneric: false, IsNestedOpenGeneric: false } genericElementType)
-        {
-            // Yield the element type as a dependency (e.g., IHandler<T> from IEnumerable<IHandler<T>>)
-            yield return new ClosedGenericDependency(
-                collectionElementType.Name,
-                collectionElementType,
-                genericElementType.NameWithoutGeneric);
-        }
-
-        // Yield the original type as a dependency
-        if(typeData is not GenericTypeData genericTypeData)
-        {
-            yield break;
-        }
-
-        yield return new ClosedGenericDependency(
-            typeData.Name,
-            typeData,
-            genericTypeData.NameWithoutGeneric);
+        // Create TypeData with type parameters for closed generic resolution. A requested key value pair (or array of them) is
+        // resolved through the key value pairs of every keyed registration, like the element of a collection.
+        List<ClosedGenericDependency>? dependencies = null;
+        HashSet<(string TypeName, string? Key, DependencyKeyKind KeyKind)>? addedKeys = null;
+        CollectClosedGenericDependencyFromType(namedTypeSymbol.CreateBasicTypeData(), key: null, ref dependencies, ref addedKeys, keyKind, isPairOfEveryKey: true);
+        return dependencies?.ToImmutableEquatableArray() ?? [];
     }
 
     /// <summary>
