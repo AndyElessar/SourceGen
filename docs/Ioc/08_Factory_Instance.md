@@ -33,6 +33,24 @@ The factory is called only by the implementation type's registration. Service ty
 
 A `Factory` given as a constant string instead of `nameof()`, such as a `const string`, is used as the method path and called with the `IServiceProvider` only, since its parameters are unknown.
 
+### Overloaded Factory Methods
+
+`nameof()` of a method names all of its overloads, including those inherited from base classes, and cannot pick one. Only an overload that can be a factory counts: `static`, accessible (not `private` or `protected`, and not declared in a `private` type), returning a value, and, when generic, with a type mapping (`[IocGenericFactory]` or `GenericFactoryTypeMapping`). If exactly one overload counts, it is the factory, and the generated code casts each argument to its parameter type so that the call binds that overload. If more than one counts, none is chosen and `SGIOC044` is reported:
+
+```csharp
+// SGIOC044: both Create overloads can be the factory
+[IocRegister<IMyService>(Factory = nameof(MyServiceFactory.Create))]
+internal class MyService : IMyService;
+
+public static class MyServiceFactory
+{
+    public static IMyService Create(IServiceProvider sp) => new MyService();
+    public static IMyService Create(IDependency dependency) => new MyService();
+}
+```
+
+Give the factory method a unique name. Until then, the generated code calls `MyServiceFactory.Create(sp)` with the `IServiceProvider` only, like a `Factory` given as a string.
+
 ### Factory of an Open Generic Type
 
 On an open generic registration, the factory can use the implementation's type parameters. Each closed type used at compile time calls the factory of that closed type, and its parameters are resolved with the closed types:
@@ -598,7 +616,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 
 |ID|Severity|Description|
 |:---|:---|:---|
-|SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
+|SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible. For an overloaded `Factory` method, it is reported when none of its overloads can be the factory.|
 |SGIOC009|Error|`Instance` is specified with an explicit `Lifetime` that is not `Singleton`. Without `Lifetime`, an `Instance` is `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Instance` takes precedence.|
 |SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
@@ -606,6 +624,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |SGIOC039|Warning|A service type of a registration with a generic factory does not match the service type template of the factory's mapping, so the factory cannot be called for it and it is not registered. An implementation type that does not match is constructed instead, unless it cannot be constructed (an interface, an abstract or static class, or a class without a public constructor or an internal one it can access: declared in the same assembly, or in an assembly that gives it access with `InternalsVisibleTo`), in which case it is not registered either.|
 |SGIOC041|Error|`Factory`, `Instance` or a `KeyType.Csharp` `Key` uses `nameof()` of a member of an unbound generic type other than the implementation type, such as `nameof(Factories<>.Create)`. Its type arguments cannot be determined, so the registration is ignored. The `Factory` of `IocRegisterDefaults` cannot use any unbound generic type, as it applies to other types; such default settings are ignored.|
 |SGIOC042|Warning|The closed types of an open generic registration call its `Factory` (its own or from default settings), so no open registration is added: Microsoft.Extensions.DependencyInjection would construct the type without the factory. Only the closed types used at compile time are registered, and a closed type that is only requested at runtime cannot be resolved. Use it in a dependency, register it, or discover it with `[IocDiscover]`.|
+|SGIOC044|Error|`Factory` uses `nameof()` of a method with more than one overload that can be the factory, so none of them is chosen. Give the factory method a unique name (see [Overloaded Factory Methods](#overloaded-factory-methods)).|
 
 ---
 

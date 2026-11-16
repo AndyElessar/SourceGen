@@ -81,11 +81,22 @@ internal static partial class TransformExtensions
                    invocation.ArgumentList.Arguments.Count == 1)
                 {
                     var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
-                    var methodSymbol = ResolveMethodSymbol(nameofArgument, semanticModel);
+                    // A method group with no or several usable overloads is called by its path (SGIOC008, SGIOC044)
+                    var methodSymbol = ResolveFactoryMethod(nameofArgument, argumentList, semanticModel, out var isOverloaded);
 
                     if(methodSymbol is not null)
                     {
                         var factoryData = CreateFactoryMethodData(methodSymbol, semanticModel);
+
+                        // The generated arguments could make the call bind another overload than the resolved one
+                        if(isOverloaded)
+                        {
+                            factoryData = factoryData with
+                            {
+                                CastArguments = true,
+                                KeyParameterTypeName = factoryData.HasKey ? methodSymbol.Parameters[factoryData.KeyPosition].Type.FullyQualifiedName : null,
+                            };
+                        }
 
                         // Fallback: if method is generic but has no [IocGenericFactory], check attribute's GenericFactoryTypeMapping
                         if(factoryData.GenericTypeMapping is null && methodSymbol.TypeParameters.Length > 0)
@@ -98,10 +109,12 @@ internal static partial class TransformExtensions
                         return factoryData;
                     }
 
-                    // Fallback: get path from nameof expression
+                    // Fallback: get path from nameof expression. The overloads of an ambiguous method group that all return
+                    // the same type keep the cast of their result.
                     var nameofPath = ResolveNameofExpression(nameofArgument, semanticModel)
                                      ?? nameofArgument.ToFullString().Trim();
-                    return new FactoryMethodData(nameofPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: null, AdditionalParameters: []);
+                    var returnTypeName = GetFactoryOverloadsReturnType(nameofArgument, argumentList, semanticModel)?.FullyQualifiedName;
+                    return new FactoryMethodData(nameofPath, ServiceProviderPosition: 0, KeyPosition: -1, ReturnTypeName: returnTypeName, AdditionalParameters: []);
                 }
 
                 // Any other constant string, a literal or a const, is the method path: its parameters are unknown, so it is

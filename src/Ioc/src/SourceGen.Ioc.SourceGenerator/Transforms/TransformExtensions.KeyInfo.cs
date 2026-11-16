@@ -124,7 +124,8 @@ internal static partial class TransformExtensions
 
         /// <summary>
         /// If the expression is a nameof() invocation, resolves the referenced symbol's type.
-        /// Returns null for non-nameof expressions.
+        /// Returns null for non-nameof expressions, and for a method group with several overloads, which nameof() cannot
+        /// choose between, rather than the type of whichever overload comes first.
         /// </summary>
         private static ITypeSymbol? ResolveNameofExpressionType(ExpressionSyntax expression, SemanticModel semanticModel)
         {
@@ -138,7 +139,7 @@ internal static partial class TransformExtensions
 
             var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
             var symbolInfo = semanticModel.ForTreeOf(nameofArgument).GetSymbolInfo(nameofArgument);
-            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            var symbol = symbolInfo.Symbol ?? (symbolInfo.CandidateSymbols is [var candidate] ? candidate : null);
 
             return symbol switch
             {

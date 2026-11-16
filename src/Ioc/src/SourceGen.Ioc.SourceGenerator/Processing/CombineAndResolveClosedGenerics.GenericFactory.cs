@@ -225,7 +225,7 @@ partial class IocSourceGenerator
             return null;
         }
 
-        if(factory.AdditionalParameters.Length == 0)
+        if(factory.AdditionalParameters.Length == 0 && factory.KeyParameterTypeName is null)
         {
             return factory;
         }
@@ -234,6 +234,7 @@ partial class IocSourceGenerator
         return factory with
         {
             AdditionalParameters = [.. factory.AdditionalParameters.Select(parameter => parameter with { Type = SubstituteTypeData(parameter.Type, typeArgMap, typeArguments) })],
+            KeyParameterTypeName = factory.KeyParameterTypeName is { } keyParameterTypeName ? SubstituteTypeArguments(keyParameterTypeName, typeArgMap) : null,
         };
     }
 
@@ -262,6 +263,7 @@ partial class IocSourceGenerator
         {
             Path = path,
             ReturnTypeName = factory.ReturnTypeName is { } returnTypeName ? SubstituteTypeArguments(returnTypeName, implTypeArgMap) : null,
+            KeyParameterTypeName = factory.KeyParameterTypeName is { } keyParameterTypeName ? SubstituteTypeArguments(keyParameterTypeName, implTypeArgMap) : null,
             AdditionalParameters = factory.AdditionalParameters.Length == 0
                 ? factory.AdditionalParameters
                 : [.. factory.AdditionalParameters.Select(parameter => parameter with { Type = SubstituteTypeData(parameter.Type, implTypeArgMap, typeArguments) })],

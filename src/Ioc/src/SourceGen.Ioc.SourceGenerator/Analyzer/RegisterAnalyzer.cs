@@ -499,10 +499,23 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "nameof() of a method names its method group and cannot choose an overload. When more than one overload of the method can be injected into the registered type, including overloads inherited from base classes, the element is ambiguous and nothing is injected for it. Mark the overload to inject with [IocInject], which takes precedence over the InjectMembers element, or rename it.");
 
+    /// <summary>
+    /// SGIOC044: A Factory given with nameof() names a method group with more than one usable overload, so none is chosen.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FactoryAmbiguousMethodGroup = new(
+        id: "SGIOC044",
+        title: "Factory names a method with several usable overloads",
+        messageFormat: "Factory method '{0}' specified via nameof() has more than one overload that can be used as the factory, so none of them is chosen; give the factory method a unique name",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "nameof() of a method names its method group and cannot choose an overload. When more than one overload is static, accessible, returns a value and, when generic, has a type mapping ([IocGenericFactory] or GenericFactoryTypeMapping), including overloads inherited from base classes, the Factory is ambiguous: its parameters are not resolved, and it is called by its path with the service provider only, like a Factory given as a string. Give the factory method a unique name.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         FactoryOpenGenericNotRegisteredOpen,
         InjectMembersAmbiguousMethodGroup,
+        FactoryAmbiguousMethodGroup,
         KeyUsesImplementationTypeParameters,
         NameofOfUnboundGenericType,
         OpenTypeNestedInGenericType,
@@ -678,7 +691,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         {
             if(argument.NameEquals?.Name.Identifier.Text == "Factory"
                 && argument.Expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" }, ArgumentList.Arguments: [var nameofArgument] }
-                && RoslynExtensions.ResolveMethodSymbol(nameofArgument.Expression, context.SemanticModel) is { } factory)
+                && RoslynExtensions.ResolveFactoryMethod(nameofArgument.Expression, attributeSyntax.ArgumentList, context.SemanticModel) is { } factory)
             {
                 analyzerContext.FactoryMethods[(attributeSyntax.SyntaxTree, attributeSyntax.Span)] = factory;
             }

@@ -23,7 +23,7 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 032 |
-| SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024, 043 |
+| SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 014, 016, 017, 023, 024, 043, 044 |
 | SyntaxNode (Attribute) | `AnalyzeNameofTypeParameters` | `Factory` / `Instance` / C# `Key` given with `nameof()` of a member of an unbound generic type, and C# `Key` of an open generic registration that uses its type parameters; records the registration attributes they keep from being registered open for SGIOC042 | SGIOC040, 041 |
 | SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |

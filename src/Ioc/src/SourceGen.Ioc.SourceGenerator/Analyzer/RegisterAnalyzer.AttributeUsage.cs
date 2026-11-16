@@ -197,8 +197,8 @@ public sealed partial class RegisterAnalyzer
         if (factoryArgument is null || factoryNameof is null)
             return;
 
-        var symbolInfo = context.SemanticModel.GetSymbolInfo(factoryNameof, context.CancellationToken);
-        if ((symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is not IMethodSymbol factory)
+        // The overload the generator calls; a method group without a single usable overload is not checked (SGIOC044)
+        if (RoslynExtensions.ResolveFactoryMethod(factoryNameof, argumentList, context.SemanticModel) is not { } factory)
             return;
 
         // Reported on the Factory argument: the factory method may be declared in another file or assembly
@@ -273,9 +273,28 @@ public sealed partial class RegisterAnalyzer
 
             var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
 
-            // Resolve the symbol using the SemanticModel from context
-            var symbolInfo = context.SemanticModel.GetSymbolInfo(nameofArgument, context.CancellationToken);
-            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            ISymbol? symbol;
+            if (memberKind == "Factory")
+            {
+                // A Factory is resolved like the generator: the method, or the single usable overload of a method group
+                var candidates = RoslynExtensions.ResolveExpressionSymbols(nameofArgument, context.SemanticModel);
+                var count = RoslynExtensions.GetFactoryMethod(candidates, RoslynExtensions.HasGenericFactoryTypeMapping(argumentList), out var factory);
+                if (candidates.Length > 1 && count != 1)
+                {
+                    context.ReportDiagnostic(count > 1
+                        ? Diagnostic.Create(FactoryAmbiguousMethodGroup, invocation.GetLocation(), candidates[0].Name)
+                        : Diagnostic.Create(InvalidFactoryOrInstanceMember, location, memberKind, candidates[0].Name, "an overloaded method none of whose overloads can be the factory (static, accessible, returning a value, and generic only with a type mapping)"));
+                    return;
+                }
+
+                symbol = factory ?? candidates.FirstOrDefault();
+            }
+            else
+            {
+                // Resolve the symbol using the SemanticModel from context
+                var symbolInfo = context.SemanticModel.GetSymbolInfo(nameofArgument, context.CancellationToken);
+                symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            }
 
             if (symbol is null)
                 return;
