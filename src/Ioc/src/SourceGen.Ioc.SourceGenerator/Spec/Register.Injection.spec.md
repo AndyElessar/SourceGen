@@ -170,7 +170,33 @@ flowchart LR
 
 #### Register-Path Generation
 
-When a registration contains one or more async inject methods, the registration generator MUST emit a `Task<TImplementation>` registration, and a `Task<TService>` registration for each service type that awaits it. The `Task<TImplementation>` factory MUST create an `async Task<TImplementation> Init()` local function, perform synchronous injection first, then `await` each async inject method in stage order.
+When a registration contains one or more async inject methods, the registration generator MUST emit a `Task<TImplementation>` registration, and a `Task<TService>` registration for each service type that awaits it. The `Init()` local function MUST perform synchronous injection first, then `await` each async inject method in stage order.
+
+##### Disposal through `AsyncInitHolder<T, TImplementation>`
+
+MS.DI tracks and disposes the object a factory returns, so a factory returning `Task<T>` would leave the `T` it creates undisposed. Every `Task<T>` registration whose factory creates an instance (the `Task<TImplementation>` above, and an async-init decorator chain, see [Async Decorators](Register.Decorators.spec.md#async-decorators)) MUST therefore be emitted as two registrations:
+
+|Registration|Required behavior|
+|:-----------|:----------------|
+|`AsyncInitHolder<T, TImplementation>`|Registered with the registration's lifetime and key (non-keyed when the registration is). Its factory MUST create the `async Task<T> Init()` local function and return `new global::SourceGen.Ioc.AsyncInitHolder<T, TImplementation>(Init())`. `TImplementation` is the registration's implementation type: it only identifies the registration, so that registrations of the same `Task<T>` and key (two implementation types of a decorated service type under one key) each get a holder of their own.|
+|`Task<T>`|Registered with the same lifetime and key, as `sp.GetRequiredService<AsyncInitHolder<T, TImplementation>>().Task` (keyed: `sp.GetRequiredKeyedService<AsyncInitHolder<T, TImplementation>>(key).Task`, with the lambda's `key`, so `KeyedService.AnyKey` registrations get one holder per requested key).|
+
+Because the holder has the service's lifetime, a singleton holder is disposed with the root provider, and a scoped or transient holder with the scope that resolved it (MS.DI tracks disposable transients); resolving the holder never resolves a scoped service from the root. One instance per lifetime is unchanged: the holder caches the task, and a transient `Task<T>` creates a new holder per resolution. A `Task<TService>` registration that forwards to `Task<TImplementation>` creates no instance and has no holder.
+
+`AsyncInitHolder<T, TImplementation>` is a runtime type of the `SourceGen.Ioc` package marked `[Experimental("SGIOCEXP001")]`; a generated Register file that has an async-init registration MUST emit `#pragma warning disable SGIOCEXP001` after the nullable directives, and other Register files MUST NOT.
+
+The holder disposes only the task's result, like the Container output disposes an async-init field (see [Disposal of Async-init Fields](Container.Injection.spec.md#disposal-of-async-init-fields)):
+
+|Holder method|Required behavior|
+|:------------|:----------------|
+|`Dispose()`|When the task completed successfully, dispose the result with `IDisposable.Dispose()`; a result that implements only `IAsyncDisposable` causes an `InvalidOperationException`. Any exception MUST be passed to `IocContainerGlobalOptions.OnDisposeException` and not rethrown.|
+|`DisposeAsync()`|When the task completed successfully and the result is disposable, prefer `IAsyncDisposable.DisposeAsync()`, otherwise `Dispose()`. Any exception MUST be passed to `IocContainerGlobalOptions.OnDisposeException` and not rethrown. MUST NOT allocate a state machine when there is nothing to dispose.|
+|Pending, faulted or canceled task|MUST NOT be awaited and MUST NOT dispose anything, even if the task completes later.|
+|Repeated calls|Only the first `Dispose()` or `DisposeAsync()` call disposes the result.|
+
+A decorator chain disposes its outermost decorator. The instance it wraps is disposed by its own registration, after the decorator: the implementation type's holder, or MS.DI for a synchronous implementation type. An instance that a factory creates inside the chain's `Init()` has no registration of its own and is not disposed. Intermediate decorators are not disposed either, as in the synchronous decorator registration and the Container output.
+
+> **Known limitation**: MS.DI also tracks the `Task<T>` the factory returns (`Task` implements `IDisposable`), and disposes it before the holder. `Task.Dispose()` throws `InvalidOperationException` for a task that has not completed, so disposing a scope or provider while an initialization is still pending throws, unlike the Container output. This is MS.DI behavior that the generated registrations cannot avoid, and it predates the holder.
 
 ```csharp
 #region Define:
@@ -204,7 +230,7 @@ public class MyService : IMyService
 #endregion
 
 #region Generate:
-services.AddSingleton<Task<MyService>>((IServiceProvider sp) =>
+services.AddSingleton<AsyncInitHolder<MyService, MyService>>((IServiceProvider sp) =>
 {
     async Task<MyService> Init()
     {
@@ -215,9 +241,9 @@ services.AddSingleton<Task<MyService>>((IServiceProvider sp) =>
         await s0.InitializeAsync(s0_m1);
         return s0;
     }
-
-    return Init();
+    return new AsyncInitHolder<MyService, MyService>(Init());
 });
+services.AddSingleton<Task<MyService>>((IServiceProvider sp) => sp.GetRequiredService<AsyncInitHolder<MyService, MyService>>().Task);
 services.AddSingleton<Task<IMyService>>(async (IServiceProvider sp) => await sp.GetRequiredService<Task<MyService>>());
 #endregion
 ```

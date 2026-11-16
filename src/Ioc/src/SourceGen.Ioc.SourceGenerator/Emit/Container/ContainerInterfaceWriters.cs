@@ -96,14 +96,44 @@ partial class IocSourceGenerator
         writer.WriteLine("private global::Microsoft.Extensions.DependencyInjection.IServiceScope? CreateFallbackScope(global::System.IServiceProvider fallbackProvider)");
         writer.WriteLine("{");
         writer.Indentation++;
+        writer.WriteLine("ThrowIfDisposed();");
         writer.WriteLine("if(fallbackProvider.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) is not global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory) return null;");
         writer.WriteLine();
         writer.WriteLine("var scope = scopeFactory.CreateScope();");
         writer.WriteLine("var existing = global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, scope, null);");
-        writer.WriteLine("if(existing is null) return scope;");
-        writer.WriteLine();
+        writer.WriteLine("if(existing is not null)");
+        writer.WriteLine("{");
+        writer.Indentation++;
         writer.WriteLine("scope.Dispose();");
         writer.WriteLine("return existing;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        // Dispose sets _disposed before it takes _fallbackScope, so a scope published after Dispose took it
+        // is seen here; whichever of Dispose and this method takes the scope out of the field disposes it
+        writer.WriteLine("if(global::System.Threading.Volatile.Read(ref _disposed) == 0) return scope;");
+        writer.WriteLine();
+        // Another resolution may have used the published scope meanwhile (e.g. left an IAsyncDisposable-only
+        // service in it), so a disposal error is reported instead of replacing the ObjectDisposedException
+        writer.WriteLine("if(global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("try");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("scope.Dispose();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("catch(global::System.Exception ex)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("throw new global::System.ObjectDisposedException(GetType().FullName);");
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();

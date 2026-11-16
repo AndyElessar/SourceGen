@@ -104,7 +104,7 @@ partial class IocSourceGenerator
         foreach(var typeSymbol in implementationTypeSymbols)
         {
             ct.ThrowIfCancellationRequested();
-            var registration = CreateRegistrationDataFromDefaultSettings(typeSymbol, defaultSettings, semanticModel);
+            var registration = CreateRegistrationDataFromDefaultSettings(typeSymbol, defaultSettings, semanticModel.Compilation.Assembly, semanticModel);
             registrations.Add(registration);
         }
 
@@ -113,14 +113,17 @@ partial class IocSourceGenerator
 
     /// <summary>
     /// Creates a RegistrationData from an implementation type symbol and its default settings.
-    /// Uses the same parsing logic as IocRegisterAttribute.
+    /// Uses the same parsing logic as IocRegisterAttribute. <c>RegisterAnalyzer</c> creates them the same way (SGIOC036/SGIOC037).
     /// </summary>
-    private static RegistrationData CreateRegistrationDataFromDefaultSettings(
+    /// <param name="constructedIn">The assembly the generated code is compiled into.</param>
+    /// <param name="semanticModel">Optional semantic model to resolve the keys of injected members given with nameof().</param>
+    internal static RegistrationData CreateRegistrationDataFromDefaultSettings(
         INamedTypeSymbol typeSymbol,
         DefaultSettingsModel defaultSettings,
-        SemanticModel semanticModel)
+        IAssemblySymbol constructedIn,
+        SemanticModel? semanticModel)
     {
-        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: semanticModel.Compilation.Assembly);
+        var implementationType = typeSymbol.GetTypeData(extractConstructorParams: true, extractHierarchy: true, constructedIn: constructedIn);
 
         // Extract injection members (properties, fields, methods marked with IocInjectAttribute/InjectAttribute)
         var injectionMembers = ExtractInjectionMembers(typeSymbol, semanticModel);

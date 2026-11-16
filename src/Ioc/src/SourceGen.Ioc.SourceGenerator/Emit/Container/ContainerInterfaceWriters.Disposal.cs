@@ -81,10 +81,11 @@ partial class IocSourceGenerator
 
         WriteModuleDisposalCalls(writer, container.ImportedModules, isAsync);
 
-        // Fallback scope last: container services may depend on its services
+        // Fallback scope last: container services may depend on its services. Taking it out of the field
+        // (after _disposed is set) leaves a scope published concurrently to CreateFallbackScope to dispose
         if(container.IntegrateServiceProvider)
         {
-            WriteDisposeCall(writer, "_fallbackScope", isAsync);
+            WriteDisposeCall(writer, "global::System.Threading.Interlocked.Exchange(ref _fallbackScope, null)", isAsync);
         }
 
         writer.WriteLine("return;");

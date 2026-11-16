@@ -36,7 +36,7 @@ A decorated service type is async-init when its implementation type has async in
 
 |Rule|Required behavior|
 |:---|:----------------|
-|Registration|The service type has no synchronous registration: the decorator chain MUST be registered as `Task<ServiceType>` under the registration's own key (no hidden key and no forwarder). Registering `ServiceType` would hand out a decorator whose initialization never ran.|
+|Registration|The service type has no synchronous registration: the decorator chain MUST be registered as `Task<ServiceType>` under the registration's own key (no hidden key and no forwarder), through an `AsyncInitHolder<ServiceType, ImplementationType>` that disposes the outermost decorator with the registration's lifetime (see [Disposal through `AsyncInitHolder<T, TImplementation>`](Register.Injection.spec.md#disposal-through-asyncinitholdert-timplementation)). Registering `ServiceType` would hand out a decorator whose initialization never ran.|
 |Inner instance|The `async Task<ServiceType> Init()` local function MUST await the implementation type's `Task<ImplementationType>` when the implementation type is async-init (`sp.GetRequiredService<Task<MyService>>()`, keyed: `sp.GetRequiredKeyedService<Task<MyService>>(key)`), otherwise resolve the implementation type synchronously.|
 |Order|Decorators MUST be applied innermost (last) first. Each decorator is constructed, its properties and fields assigned, its synchronous inject methods called, and its async inject methods awaited in source declaration order, before the next decorator wraps it, so every decorator wraps a fully initialized instance.|
 
@@ -58,7 +58,7 @@ public class WarmupDecorator(IMyService inner) : IMyService
 
 #region Generate:
 services.AddSingleton<MyService, MyService>();
-services.AddSingleton<Task<IMyService>>((IServiceProvider sp) =>
+services.AddSingleton<AsyncInitHolder<IMyService, MyService>>((IServiceProvider sp) =>
 {
     async Task<IMyService> Init()
     {
@@ -69,8 +69,9 @@ services.AddSingleton<Task<IMyService>>((IServiceProvider sp) =>
         var s2 = new LoggingDecorator(s1);
         return s2;
     }
-    return Init();
+    return new AsyncInitHolder<IMyService, MyService>(Init());
 });
+services.AddSingleton<Task<IMyService>>((IServiceProvider sp) => sp.GetRequiredService<AsyncInitHolder<IMyService, MyService>>().Task);
 #endregion
 ```
 

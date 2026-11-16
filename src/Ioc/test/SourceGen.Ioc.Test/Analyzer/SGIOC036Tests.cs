@@ -580,6 +580,7 @@ public class SGIOC036Tests
     [Arguments("GenericFactoryForOpenServiceType", "public interface IHandler<T>; public static class HF { [IocGenericFactory(typeof(IHandler<int>), typeof(int))] public static IHandler<TF> Create<TF>(IA<IB<TF>> a) => throw new NotImplementedException(); } [IocRegister(ServiceTypes = [typeof(IHandler<>)], Factory = nameof(HF.Create))] public sealed class Consumer : IHandler<string>;", true)]
     [Arguments("GenericFactoryUnmatched","public interface IHandler<T>; public static class HF { [IocGenericFactory(typeof(IHandler<int>), typeof(int))] public static IHandler<TF> Create<TF>(IA<IB<TF>> a) => throw new NotImplementedException(); } [IocRegister(Factory = nameof(HF.Create))] public sealed class Consumer;", false)]
     [Arguments("ConstructorOfInstance","[IocRegister(ServiceLifetime.Singleton, Instance = nameof(Default))] public sealed class Consumer(IA<IB<string>> a) { public static readonly Consumer Default = null!; }", false)]
+    [Arguments("DefaultsImplementationType", "[IocRegisterDefaults(typeof(IConsumer), ServiceLifetime.Transient, ImplementationTypes = [typeof(Consumer)])] public interface IConsumer; public sealed class Consumer(IA<IB<string>> a) : IConsumer;", true)]
     public async Task SGIOC036_RootDependencyByActivation_LinksTypeParameterDependency(string scenario, string consumer, bool reports)
     {
         // A's T can only become IB<...> through the root dependency IA<IB<string>>, which closes the cycle through B's IA<List<X>>
@@ -776,5 +777,202 @@ public class SGIOC036Tests
 
         await Assert.That(sgioc036).Count().IsEqualTo(1);
         await Assert.That(sgioc036[0].GetMessage()).Contains("'NodeFactory.Create<TF>'");
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("[assembly: IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Node<>)])]", "", "INode<List<T>> next", Constants.SGIOC036)]
+    [Arguments("[assembly: IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Node<>)])]", "", "Lazy<INode<List<T>>> next", Constants.SGIOC037)]
+    [Arguments("[assembly: IocRegisterDefaults<INodeBase>(ServiceLifetime.Transient, ServiceTypes = [typeof(INode<>)], ImplementationTypes = [typeof(Node<>)])]", "", "INode<List<T>> next", Constants.SGIOC036)]
+    [Arguments("[assembly: IocRegisterDefaults<INodeBase>(ServiceLifetime.Transient, ServiceTypes = [typeof(INode<>)], ImplementationTypes = [typeof(Node<>)])]", "", "Func<INode<List<T>>> next", Constants.SGIOC037)]
+    [Arguments("", "[IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Node<>)])]", "INode<List<T>> next", Constants.SGIOC036)]
+    [Arguments("", "[IocRegisterDefaults<INodeBase>(ServiceLifetime.Transient, ServiceTypes = [typeof(INode<>)], ImplementationTypes = [typeof(Node<>)])]", "Lazy<INode<List<T>>> next", Constants.SGIOC037)]
+    public async Task SGIOC036_ExpandingDependencyOfDefaultsImplementationType_ReportsAtParameter(
+        string assemblyDefaults, string typeLevelDefaults, string parameter, string expectedId)
+    {
+        // An open generic implementation added by ImplementationTypes of default settings is registered like [IocRegister]
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            {{assemblyDefaults}}
+
+            namespace TestNamespace;
+
+            public interface INodeBase;
+
+            {{typeLevelDefaults}}
+            public interface INode<T>;
+
+            public sealed class Node<T>({{parameter}}) : INode<T>, INodeBase;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var expected = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, expectedId).ToList();
+        var other = expectedId == Constants.SGIOC036 ? Constants.SGIOC037 : Constants.SGIOC036;
+
+        await Assert.That(expected).Count().IsEqualTo(1);
+        await Assert.That(expected[0].GetMessage()).Contains("'Node<T>'").And.Contains("'INode<List<T>>'");
+        await Assert.That(expected[0].Location.SourceTree!.GetText().ToString(expected[0].Location.SourceSpan)).IsEqualTo("next");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, other)).IsEmpty();
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC036_ExpandingDecoratorDependencyOfDefaultsImplementationType_ReportsAtDecoratorParameter()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(IService<>), ServiceLifetime.Transient, Decorators = [typeof(Decorator<>)], ImplementationTypes = [typeof(Service<>)])]
+
+            namespace TestNamespace;
+
+            public interface IService<T>;
+
+            public sealed class Service<T> : IService<T>;
+
+            public sealed class Decorator<T>(IService<T> inner, IService<List<T>> other) : IService<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(1);
+        await Assert.That(sgioc036[0].GetMessage()).Contains("Decorator<T>").And.Contains("IService<List<T>>");
+        await Assert.That(sgioc036[0].Location.SourceTree!.GetText().ToString(sgioc036[0].Location.SourceSpan)).IsEqualTo("other");
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("public static object Create(IServiceProvider sp) => null!;", 0)]
+    [Arguments("[IocGenericFactory(typeof(INode<int>), typeof(int))] public static INode<TF> Create<TF>(INode<List<TF>> next) => null!;", 2)]
+    public async Task SGIOC036_DefaultsFactoryWithOpenImplementationType_AnalyzesHowItIsCreated(string method, int expectedCount)
+    {
+        // A non-generic Factory creates every closed Node<T>, so its constructor is not a dependency; a generic factory with a
+        // mapping does not match the implementation type, which is still constructed
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, Factory = nameof(F.Create), ImplementationTypes = [typeof(Node<>)])]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public static class F { {{method}} }
+
+            public sealed class Node<T>(INode<List<T>> next) : INode<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(expectedCount);
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC037)).IsEmpty();
+        if(expectedCount > 0)
+        {
+            await Assert.That(sgioc036.Any(d => d.GetMessage().Contains("'F.Create<TF>'"))).IsTrue();
+            await Assert.That(sgioc036.Any(d => d.GetMessage().Contains("'Node<T>'"))).IsTrue();
+        }
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC036_ExpandingInjectedMemberOfDefaultsImplementationType_ReportsAtMember()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Node<>)])]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            public sealed class Node<T> : INode<T>
+            {
+                [IocInject]
+                public INode<List<T>> Next { get; init; } = null!;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc036 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036).ToList();
+
+        await Assert.That(sgioc036).Count().IsEqualTo(1);
+        await Assert.That(sgioc036[0].GetMessage()).Contains("'Node<T>'").And.Contains("'INode<List<T>>'");
+        await Assert.That(sgioc036[0].Location.SourceTree!.GetText().ToString(sgioc036[0].Location.SourceSpan)).IsEqualTo("Next");
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task SGIOC036_ExpandingDependencyOfDefaultsImplementationTypeAlsoRegistered_ReportsOnce()
+    {
+        // The implementation is registered both by [IocRegister] and by ImplementationTypes, and its parameter reported once
+        var source = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(INode<>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Node<>)])]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)])]
+            public sealed class Node<T>(INode<List<T>> next) : INode<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC036)).Count().IsEqualTo(1);
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC037)).IsEmpty();
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("public sealed class Pair<T, U>(IPair<U, T> next) : IPair<T, U>;")]
+    [Arguments("public sealed class Pair<T, U>(IOther<List<T>> other) : IPair<T, U>;")]
+    public async Task SGIOC036_FiniteClosingsOfDefaultsImplementationTypes_NoDiagnostic(string pair)
+    {
+        // Swapping type arguments ends, and List<T> is not on a cycle
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterDefaults(typeof(IPair<,>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Pair<,>)])]
+            [assembly: IocRegisterDefaults(typeof(IOther<>), ServiceLifetime.Transient, ImplementationTypes = [typeof(Other<>)])]
+
+            namespace TestNamespace;
+
+            public interface IPair<T, U>;
+            public interface IOther<T>;
+
+            {{pair}}
+
+            public sealed class Other<T> : IOther<T>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(diagnostics.Where(d => d.Id is Constants.SGIOC036 or Constants.SGIOC037)).IsEmpty();
     }
 }
