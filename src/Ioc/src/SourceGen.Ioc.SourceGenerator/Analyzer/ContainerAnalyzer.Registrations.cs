@@ -883,11 +883,12 @@ partial class ContainerAnalyzer
             return false;
         }
 
-        // Mirrors ContainsExact: a key given as C# code matches any key
+        // Like the generator's closing: a non-keyed dependency only closes a non-keyed registration, and a keyed dependency
+        // a keyed registration with the same key, or any keyed registration when either key is given as C# code
         private static bool KeyMatches(ServiceKeyValue? registered, ServiceKeyValue? requested)
             => requested is not { } requestedKey
                 ? registered is null
-                : requestedKey.IsUnknown || registered is { } registeredKey && (registeredKey.IsUnknown || registeredKey.Equals(requestedKey));
+                : registered is { } registeredKey && (requestedKey.IsUnknown || registeredKey.IsUnknown || registeredKey.Equals(requestedKey));
 
         /// <summary>Gets whether a service has a keyed registration (dictionary and key value pair collection checks).</summary>
         public bool ContainsKeyed(INamedTypeSymbol serviceType)

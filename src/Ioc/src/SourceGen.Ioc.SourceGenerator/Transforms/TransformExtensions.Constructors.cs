@@ -160,7 +160,7 @@ internal static partial class TransformExtensions
 
                 // Check for [FromKeyedServices], [Inject], or [ServiceKey] attribute
                 // SemanticModel is used to resolve nameof() expressions for top-level parameters
-                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute, isCsharpKey) = param.GetServiceKeyAndAttributeInfo(semanticModel);
 
                 // Get the C# code representation of the default value
                 var defaultValue = hasDefaultValue ? ToDefaultValueCodeString(param.ExplicitDefaultValue, param.Type) : null;
@@ -174,7 +174,8 @@ internal static partial class TransformExtensions
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: hasServiceKeyAttribute,
-                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute));
+                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute,
+                    IsCsharpKey: isCsharpKey));
             }
 
             return (parameters.ToImmutableEquatableArray(), hasInjectConstructor, constructor, isConstructible);

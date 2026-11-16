@@ -26,4 +26,33 @@ public sealed class KeyedClosedGenericTests
         await Assert.That(provider.GetRequiredService<KeyedClosingConsumer>().Handler).IsTypeOf<KeyedClosingHandler<int>>();
         await Assert.That(provider.GetRequiredService<KeyedOpenConsumer>().Handler).IsTypeOf<KeyedOpenHandler<int>>();
     }
+
+    [Test]
+    public async Task KeyedClosedGeneric_StandaloneContainer_SelectsKeyedRegistrations()
+    {
+        using var container = new KeyedClosedGenericContainer();
+
+        // A value key without a same-key registration falls back to the C# code key, not to another value key (issue #217)
+        await Assert.That(container.GetRequiredService<KeyedFallbackConsumer>().Handler).IsTypeOf<CodeKeyFallbackHandler<int>>();
+
+        // A dictionary closes every keyed registration of its value type
+        var handlers = container.GetRequiredService<KeyedDictionaryConsumer>().Handlers;
+        await Assert.That(handlers.Count).IsEqualTo(2);
+        await Assert.That(handlers["a"]).IsTypeOf<ADictionaryHandler<int>>();
+        await Assert.That(handlers["b"]).IsTypeOf<BDictionaryHandler<int>>();
+
+        // A keyed invocation closes the keyed registration, not the non-keyed one declared first
+        await Assert.That(container.GetRequiredKeyedService<IKeyedInvocationHandler<int>>("k")).IsTypeOf<KeyedInvocationHandler<int>>();
+    }
+
+    [Test]
+    public async Task KeyedClosedGeneric_MsDi_SelectsKeyedRegistrations()
+    {
+        var services = new ServiceCollection();
+        services.AddSourceGen_Ioc_TestAot();
+        await using var provider = services.BuildServiceProvider();
+
+        await Assert.That(provider.GetRequiredService<KeyedFallbackConsumer>().Handler).IsTypeOf<CodeKeyFallbackHandler<int>>();
+        await Assert.That(provider.GetRequiredKeyedService<IKeyedInvocationHandler<int>>("k")).IsTypeOf<KeyedInvocationHandler<int>>();
+    }
 }

@@ -138,13 +138,14 @@ partial class IocSourceGenerator
         foreach(var (member, injectAttribute) in typeSymbol.GetInjectedMembers())
         {
             // Extract key information from IocInjectAttribute/InjectAttribute
-            var (key, _, _) = injectAttribute.GetKeyInfo(semanticModel);
+            var (key, keyType, _) = injectAttribute.GetKeyInfo(semanticModel);
+            var isCsharpKey = key is not null && keyType == 1;
 
             InjectionMemberData? memberData = member switch
             {
-                IPropertySymbol property => CreatePropertyInjection(property, key),
-                IFieldSymbol field => CreateFieldInjection(field, key),
-                IMethodSymbol method => CreateMethodInjection(method, key, semanticModel, GetCallThroughType(method, typeSymbol, semanticModel?.Compilation.Assembly)),
+                IPropertySymbol property => CreatePropertyInjection(property, key, isCsharpKey),
+                IFieldSymbol field => CreateFieldInjection(field, key, isCsharpKey),
+                IMethodSymbol method => CreateMethodInjection(method, key, isCsharpKey, semanticModel, GetCallThroughType(method, typeSymbol, semanticModel?.Compilation.Assembly)),
                 _ => null
             };
 
@@ -161,7 +162,7 @@ partial class IocSourceGenerator
     /// <summary>
     /// Creates injection data for a property.
     /// </summary>
-    private static InjectionMemberData CreatePropertyInjection(IPropertySymbol property, string? key)
+    private static InjectionMemberData CreatePropertyInjection(IPropertySymbol property, string? key, bool isCsharpKey)
     {
         var propertyType = property.Type.GetTypeData();
         var isNullable = property.NullableAnnotation == NullableAnnotation.Annotated;
@@ -176,13 +177,14 @@ partial class IocSourceGenerator
             IsField: false,
             isNullable,
             hasDefaultValue,
-            defaultValue);
+            defaultValue,
+            isCsharpKey);
     }
 
     /// <summary>
     /// Creates injection data for a field.
     /// </summary>
-    private static InjectionMemberData CreateFieldInjection(IFieldSymbol field, string? key)
+    private static InjectionMemberData CreateFieldInjection(IFieldSymbol field, string? key, bool isCsharpKey)
     {
         var fieldType = field.Type.GetTypeData();
         var isNullable = field.NullableAnnotation == NullableAnnotation.Annotated;
@@ -197,7 +199,8 @@ partial class IocSourceGenerator
             IsField: true,
             isNullable,
             hasDefaultValue,
-            defaultValue);
+            defaultValue,
+            isCsharpKey);
     }
 
     /// <summary>
@@ -278,14 +281,15 @@ partial class IocSourceGenerator
     /// </summary>
     /// <param name="method">The method symbol to create injection data for.</param>
     /// <param name="key">The key for keyed service resolution from [IocInject] attribute.</param>
+    /// <param name="isCsharpKey">Whether <paramref name="key"/> is given as C# code rather than a constant value.</param>
     /// <param name="semanticModel">Optional semantic model to resolve full access paths for nameof() expressions.</param>
     /// <param name="callThroughType">The declaring type to call the method through, see <see cref="MethodInjectionData.CallThroughType"/>.</param>
-    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, SemanticModel? semanticModel = null, TypeData? callThroughType = null)
+    private static InjectionMemberData CreateMethodInjection(IMethodSymbol method, string? key, bool isCsharpKey, SemanticModel? semanticModel = null, TypeData? callThroughType = null)
     {
         var parameters = method.Parameters
             .Select(p =>
             {
-                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute) = p.GetServiceKeyAndAttributeInfo(semanticModel);
+                var (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute, isCsharpServiceKey) = p.GetServiceKeyAndAttributeInfo(semanticModel);
                 return new ParameterData(
                     p.EscapedName,
                     p.Type.GetTypeData(),
@@ -295,7 +299,8 @@ partial class IocSourceGenerator
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: hasServiceKeyAttribute,
-                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute);
+                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute,
+                    IsCsharpKey: isCsharpServiceKey);
             })
             .ToImmutableEquatableArray();
 
@@ -305,7 +310,8 @@ partial class IocSourceGenerator
             key,
             parameters,
             IsAsync: RoslynExtensions.IsNonGenericTaskReturnType(method),
-            callThroughType);
+            callThroughType,
+            isCsharpKey);
     }
 
     /// <summary>
@@ -569,7 +575,7 @@ partial class IocSourceGenerator
             }
         }
 
-        return CreateInjectionMemberFromSymbol(memberSymbol, key, semanticModel, GetCallThroughType(memberSymbol, typeSymbol, semanticModel?.Compilation.Assembly));
+        return CreateInjectionMemberFromSymbol(memberSymbol, key, semanticModel, GetCallThroughType(memberSymbol, typeSymbol, semanticModel?.Compilation.Assembly), isCsharpKey: keyType == 1);
     }
 
     /// <summary>
@@ -627,12 +633,13 @@ partial class IocSourceGenerator
             : null;
 
     /// <param name="callThroughType">The declaring type to call a method through, see <see cref="MethodInjectionData.CallThroughType"/>.</param>
-    internal static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel, TypeData? callThroughType = null)
+    /// <param name="isCsharpKey">Whether <paramref name="key"/> is given as C# code rather than a constant value.</param>
+    internal static InjectionMemberData? CreateInjectionMemberFromSymbol(ISymbol symbol, string? key, SemanticModel? semanticModel, TypeData? callThroughType = null, bool isCsharpKey = false)
         => symbol switch
         {
-            IPropertySymbol property => CreatePropertyInjection(property, key),
-            IFieldSymbol field => CreateFieldInjection(field, key),
-            IMethodSymbol method => CreateMethodInjection(method, key, semanticModel, callThroughType),
+            IPropertySymbol property => CreatePropertyInjection(property, key, isCsharpKey),
+            IFieldSymbol field => CreateFieldInjection(field, key, isCsharpKey),
+            IMethodSymbol method => CreateMethodInjection(method, key, isCsharpKey, semanticModel, callThroughType),
             _ => null
         };
 }

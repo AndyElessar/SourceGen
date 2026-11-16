@@ -169,7 +169,7 @@ internal static partial class TransformExtensions
                     continue;
 
                 // Collect additional parameter info using the same logic as [IocInject] methods
-                var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute) = param.GetServiceKeyAndAttributeInfo(semanticModel);
+                var (serviceKey, hasInjectAttribute, _, hasFromKeyedServicesAttribute, isCsharpKey) = param.GetServiceKeyAndAttributeInfo(semanticModel);
                 var parameterData = new ParameterData(
                     param.EscapedName,
                     param.Type.GetTypeData(),
@@ -179,7 +179,8 @@ internal static partial class TransformExtensions
                     ServiceKey: serviceKey,
                     HasInjectAttribute: hasInjectAttribute,
                     HasServiceKeyAttribute: false, // Already handled above
-                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute);
+                    HasFromKeyedServicesAttribute: hasFromKeyedServicesAttribute,
+                    IsCsharpKey: isCsharpKey);
 
                 additionalParameters ??= [];
                 additionalParameters.Add(parameterData);

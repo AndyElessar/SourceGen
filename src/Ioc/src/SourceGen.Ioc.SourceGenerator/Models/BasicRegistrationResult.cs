@@ -31,7 +31,7 @@ internal readonly record struct OpenGenericEntry(
 /// <param name="AllInterfaces">All interfaces implemented by the implementation type.</param>
 /// <param name="Lifetime">The service lifetime.</param>
 /// <param name="Key">The registration key.</param>
-/// <param name="KeyType">The key type.</param>
+/// <param name="KeyType">The key type as declared: 0 for a value, 1 for a key given as C# code (<c>KeyType.Csharp</c>).</param>
 /// <param name="KeyValueType">The type data of the key value, or null if unknown.</param>
 /// <param name="Decorators">The decorators to apply.</param>
 /// <param name="Tags">The tags for method grouping.</param>
@@ -50,7 +50,47 @@ internal sealed record class OpenGenericRegistrationInfo(
     ImmutableEquatableArray<string> Tags,
     ImmutableEquatableArray<InjectionMemberData> InjectionMembers,
     FactoryMethodData? Factory,
-    string? Instance);
+    string? Instance)
+{
+    /// <summary>Whether <see cref="Key"/> is given as C# code (<c>KeyType.Csharp</c>), which may equal any key at runtime.</summary>
+    public bool IsCsharpKey => Key is not null && KeyType == 1;
+}
+
+/// <summary>
+/// How a closed generic dependency is resolved with a key, which decides the open generic registrations it closes.
+/// </summary>
+internal enum DependencyKeyKind : byte
+{
+    /// <summary>
+    /// Resolved with <see cref="ClosedGenericDependency.Key"/>, a constant value, or without a key when it is
+    /// <see langword="null"/>.
+    /// </summary>
+    Value,
+
+    /// <summary>
+    /// Resolved with <see cref="ClosedGenericDependency.Key"/>, given as C# code (<c>KeyType.Csharp</c>), which may equal
+    /// any key at runtime.
+    /// </summary>
+    Csharp,
+
+    /// <summary>
+    /// Resolved with a key unknown at compile time, or without a key (<c>[IocDiscover]</c>): closes the first open generic
+    /// registration that matches, with its key.
+    /// </summary>
+    Unknown,
+
+    /// <summary>
+    /// Resolved with a key unknown at compile time (keyed <c>IServiceProvider</c> invocations): closes the first keyed open
+    /// generic registration that matches, otherwise the first registration that matches.
+    /// </summary>
+    UnknownKeyed,
+
+    /// <summary>
+    /// Resolved with every key (the value type of dictionaries and key value pairs): closes every keyed open generic
+    /// registration that matches.
+    /// </summary>
+    AllKeyed,
+}
 
 /// <summary>
 /// Represents a closed generic dependency found in a constructor parameter.
@@ -59,21 +99,26 @@ internal sealed record class OpenGenericRegistrationInfo(
 /// <param name="ClosedType">The closed generic type data.</param>
 /// <param name="OpenGenericKey">The NameWithoutGeneric for looking up the open generic registration.</param>
 /// <param name="Key">
-/// The service key expression the dependency is resolved with, or <see langword="null"/> for a non-keyed dependency.
+/// The service key expression the dependency is resolved with, or <see langword="null"/> for a non-keyed dependency or
+/// a dependency with any key (see <paramref name="KeyKind"/>).
 /// </param>
-/// <param name="AnyKey">
-/// Whether the key is unknown at compile time (<c>[IocDiscover]</c> and keyed <c>IServiceProvider</c> invocations), so the
-/// dependency closes the first open generic registration that matches, with its key.
-/// </param>
+/// <param name="KeyKind">How the dependency is resolved with a key.</param>
 internal readonly record struct ClosedGenericDependency(
     string ClosedTypeName,
     TypeData ClosedType,
     string OpenGenericKey,
     string? Key = null,
-    bool AnyKey = false)
+    DependencyKeyKind KeyKind = DependencyKeyKind.Value)
 {
-    /// <summary>The identity of the dependency: its type as written and its key.</summary>
-    public (string TypeName, string? Key, bool AnyKey) Identity => (ClosedTypeName, Key, AnyKey);
+    /// <summary>Whether the dependency is resolved with a key that is not known at compile time.</summary>
+    public bool AnyKey => KeyKind >= DependencyKeyKind.Unknown;
+
+    /// <summary>The identity of the dependency: its type as written, its key and how it is resolved with it.</summary>
+    public (string TypeName, string? Key, DependencyKeyKind KeyKind) Identity => (ClosedTypeName, Key, KeyKind);
+
+    /// <summary>Gets how a dependency resolved with <paramref name="key"/> is resolved with it.</summary>
+    public static DependencyKeyKind GetKeyKind(string? key, bool isCsharpKey)
+        => key is not null && isCsharpKey ? DependencyKeyKind.Csharp : DependencyKeyKind.Value;
 }
 
 /// <summary>

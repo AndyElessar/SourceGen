@@ -1254,6 +1254,55 @@ public class SGIOC018Tests
     }
 
     [Test]
+    // A keyed dependency is never resolved by a non-keyed open generic registration, whatever its key (issue #217)
+    [Arguments("", "[IocInject(Key = \"MyKeys.X\", KeyType = KeyType.Csharp)]", 1)]
+    [Arguments("", "[IocInject(nameof(MyKeys.X), KeyType = KeyType.Csharp)]", 1)]
+    [Arguments("", "[IocInject(\"x\")]", 1)]
+    // A key given as C# code may equal any other key
+    [Arguments(", Key = \"y\"", "[IocInject(nameof(MyKeys.X), KeyType = KeyType.Csharp)]", 0)]
+    [Arguments(", Key = nameof(MyKeys.X), KeyType = KeyType.Csharp", "[IocInject(\"y\")]", 0)]
+    // Two value keys are compared by value
+    [Arguments(", Key = \"y\"", "[IocInject(\"x\")]", 1)]
+    public async Task SGIOC018_OpenGenericRegistration_KeyedDependency_RequiresKeyedRegistration(
+        string openGenericKey,
+        string injectAttribute,
+        int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public class User { }
+
+            public static class MyKeys
+            {
+                public const string X = "x";
+            }
+
+            public interface IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)]{{openGenericKey}})]
+            public class Repository<T> : IRepository<T> { }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public class Consumer
+            {
+                public Consumer({{injectAttribute}} IRepository<User> repository) { }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     [Arguments("struct", "IRepository<User>")]
     [Arguments("struct", "IRepository<int?>")]
     [Arguments("class", "IRepository<int>")]
