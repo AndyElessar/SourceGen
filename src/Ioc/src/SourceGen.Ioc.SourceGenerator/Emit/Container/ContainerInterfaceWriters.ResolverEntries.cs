@@ -39,6 +39,7 @@ partial class IocSourceGenerator
     private const string ResolverEntryMethodName = "__Resolver";
     private const string KeyedResolverEntryMethodName = "__KeyedResolver";
     private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
+    private const string ResolveCollectionMethodName = "__ResolveCollection";
 
     /// <summary>
     /// Writes the <c>_localResolvers</c> entry resolving <paramref name="serviceType"/> (with <paramref name="key"/> when keyed) through <paramref name="entry"/>.

@@ -77,7 +77,23 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider()?.GetService(serviceType);
+        return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+    private object? __ResolveCollection(global::System.Type serviceType, object? serviceKey)
+    {
+        if(serviceKey == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey || !serviceType.IsConstructedGenericType || serviceType.GetGenericTypeDefinition() != typeof(global::System.Collections.Generic.IEnumerable<>))
+            return null;
+
+        var elementType = serviceType.GenericTypeArguments[0];
+        if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))
+            || !_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+            return null;
+
+        var services = global::System.Array.CreateInstance(elementType, 1);
+        services.SetValue(resolver(this), 0);
+        return services;
     }
 
     private global::System.IServiceProvider? GetFallbackServiceProvider()
@@ -113,7 +129,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null);
     }
 
     public object GetRequiredKeyedService(global::System.Type serviceType, object? serviceKey)
@@ -141,7 +157,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? resolver(this) as T
-            : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
+            : (__ResolveCollection(typeof(T), null) ?? GetFallbackServiceProvider()?.GetService(typeof(T))) as T;
     }
 
     public T GetRequiredService<T>() where T : notnull
@@ -149,7 +165,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (T)resolver(this)
-            : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
+            : (T)(__ResolveCollection(typeof(T), null) ?? GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
 
     public global::System.Collections.Generic.IEnumerable<T> GetServices<T>()
@@ -157,7 +173,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         ThrowIfDisposed();
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : GetFallbackServiceProvider()?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];
+            : __ResolveCollection<T>(null) ?? GetFallbackServiceProvider()?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
 
     public T? GetKeyedService<T>(object? serviceKey) where T : class
@@ -166,7 +182,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? resolver(this) as T
-            : (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) as T;
+            : (__ResolveCollection(typeof(T), serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey)) as T;
     }
 
     public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
@@ -175,7 +191,7 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? (T)resolver(this)
-            : (T)((GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
+            : (T)(__ResolveCollection(typeof(T), serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
     }
 
     public global::System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
@@ -184,8 +200,16 @@ partial class ExplicitContainer : global::SourceGen.Ioc.IIocContainer<global::Te
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
-            : (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];
+            : __ResolveCollection<T>(serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
+
+    private T[]? __ResolveCollection<T>(object? serviceKey) =>
+        serviceKey != global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey
+        && !typeof(T).IsValueType
+        && !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))
+        && _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+            ? [(T)resolver(this)]
+            : null;
 
     #endregion
 

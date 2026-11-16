@@ -66,7 +66,33 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         if(serviceType == typeof(TestContainer)) return this;
 
 
-        return GetFallbackServiceProvider()?.GetService(serviceType);
+        return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
+    }
+
+    [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+    private object? __ResolveCollection(global::System.Type serviceType, object? serviceKey)
+    {
+        if(serviceKey == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey || !serviceType.IsConstructedGenericType || serviceType.GetGenericTypeDefinition() != typeof(global::System.Collections.Generic.IEnumerable<>))
+            return null;
+
+        var elementType = serviceType.GenericTypeArguments[0];
+        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key);
+        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, key);
+        global::System.Func<global::TestNamespace.TestContainer, object>? resolver = null;
+
+        foreach(var entry in _localResolvers)
+        {
+            if(entry.Key == collectionId) return entry.Value(this);
+            if(entry.Key == elementId) resolver = entry.Value;
+        }
+
+        if(resolver is null || elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>)))
+            return null;
+
+        var services = global::System.Array.CreateInstance(elementType, 1);
+        services.SetValue(resolver(this), 0);
+        return services;
     }
 
     private global::System.IServiceProvider? GetFallbackServiceProvider()
@@ -99,7 +125,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
         var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
 
-        return GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null);
     }
 
     public object GetRequiredKeyedService(global::System.Type serviceType, object? serviceKey)

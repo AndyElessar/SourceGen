@@ -13,7 +13,61 @@ Support for collection resolution when multiple implementations are registered f
 |Two or more unique implementations|MUST be generated.|
 |Exactly one|MUST be generated only when something requests `T` as a collection. The sources MUST match closed-generic discovery: a constructor, factory or decorator parameter, an injection member, or the return type of a container's partial accessor (including inside `Lazy`/`Func`/`Task` wrappers); an `IServiceProvider` invocation (`GetServices<T>()`, `GetServices(typeof(T))`, or `GetService`/`GetRequiredService` of a collection of `T`); or `[IocDiscover]` of a collection of `T`. Otherwise it MUST NOT be generated, to keep the resolver table small.|
 
-> **Note**: Invocation discovery uses a single syntax provider (`TransformInvocation`) whose result feeds both closed-generic resolution (`ClosedGenericDependencies`) and collection resolver generation (`CollectionElementTypeName`). Keyed collection requests are not counted, because keyed collections resolve through `GetKeyedServices`. Without a generated collection resolver, `GetServices<T>()` falls back to the fallback provider, and a dependency of a collection type other than `IEnumerable<T>` resolves as `GetServices<T>().ToArray()` (or `GetKeyedServices<T>(key).ToArray()`) so that it converts to the requested type. Only invocations visible to the generator (in the compilation that declares the container) are detected.
+> **Note**: Invocation discovery uses a single syntax provider (`TransformInvocation`) whose result feeds both closed-generic resolution (`ClosedGenericDependencies`) and collection resolver generation (`CollectionElementTypeName`). Keyed collection requests are not counted, because keyed collections resolve through `GetKeyedServices`. Without a generated collection resolver, `GetServices<T>()` resolves through the [single-service collection fallback](#single-service-collection-fallback), and a dependency of a collection type other than `IEnumerable<T>` resolves as `GetServices<T>().ToArray()` (or `GetKeyedServices<T>(key).ToArray()`) so that it converts to the requested type. Only invocations visible to the generator (in the compilation that declares the container) are detected; requests made elsewhere (another project, a framework) are served by the single-service collection fallback.
+
+### Single-Service Collection Fallback
+
+A request of `IEnumerable<T>` that no collection resolver serves (a single registration that the declaring compilation never requests as a collection, or any keyed collection, which never gets a collection resolver) MUST resolve as a one-element `T[]` of the single-service resolver of `T` under the same key, before the fallback provider is asked. The element is the same instance that `GetService<T>()` / `GetKeyedService<T>(key)` returns, so the result neither depends on the fallback provider (empty `IEnumerable<T>` from an `MS.DI` provider that lacks the registration) nor creates a second instance there.
+
+|Rule|Required behavior|
+|:---|:---|
+|Order|The generated collection resolver (the fast path) MUST win. The fallback runs only on a miss and before the fallback provider; the container's result is not merged with the fallback provider's.|
+|Entry points|`GetService(typeof(IEnumerable<T>))`, `GetKeyedService(typeof(IEnumerable<T>), key)` (and so `GetRequiredService` / `GetRequiredKeyedService`), the generated `GetServices<T>()` / `GetKeyedServices<T>(key)`, which keyed `IEnumerable<T>` dependencies call, and the generated `GetService<T>` / `GetRequiredService<T>` / `GetKeyedService<T>` / `GetRequiredKeyedService<T>` of `T = IEnumerable<TElement>` (through the non-generic helper), so generic and non-generic calls agree. Other collection types (`IReadOnlyList<T>`, `T[]`, …) are not served.|
+|Keys|A `null` key means the non-keyed registration, like `GetKeyedService`. `KeyedService.AnyKey` MUST NOT be served (in `MS.DI` it requests all keyed registrations) and goes to the fallback provider. Keys match like the single-service lookup (`ServiceIdentifier` equality).|
+|Excluded elements|`Task<T>` elements (async-init services, which collections exclude, see [Injection](Container.Injection.spec.md)) and value types MUST NOT be wrapped.|
+|AOT|The generic methods create `T[]` directly. The non-generic path creates the array with `Array.CreateInstance` for reference element types only, with `IL3050` suppressed by `UnconditionalSuppressMessage`, like `MS.DI`'s runtime resolver.|
+|Switch mode|`UseSwitchStatement = true` has no dictionary: the fallback searches `_localResolvers`, where an exact `IEnumerable<T>` entry (a generated collection resolver, which the switch does not dispatch) wins over the single-service resolver of `T`. The generic methods delegate to the non-generic ones.|
+
+Generated members (`__ResolveCollection` is a reserved name, see [Basic](Container.Basic.spec.md#member-names)):
+
+```csharp
+public object? GetService(global::System.Type serviceType)
+{
+    ThrowIfDisposed();
+
+    if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
+        return resolver(this);
+
+    return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
+}
+
+[UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+private object? __ResolveCollection(Type serviceType, object? serviceKey)
+{
+    if(serviceKey == KeyedService.AnyKey || !serviceType.IsConstructedGenericType || serviceType.GetGenericTypeDefinition() != typeof(IEnumerable<>))
+        return null;
+
+    var elementType = serviceType.GenericTypeArguments[0];
+    if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(Task<>))
+        || !_serviceResolvers.TryGetValue(new ServiceIdentifier(elementType, serviceKey ?? KeyedService.AnyKey), out var resolver))
+        return null;
+
+    var services = Array.CreateInstance(elementType, 1);
+    services.SetValue(resolver(this), 0);
+    return services;
+}
+
+// Used by GetServices<T>() (null key) and GetKeyedServices<T>(serviceKey) on a miss
+private T[]? __ResolveCollection<T>(object? serviceKey) =>
+    serviceKey != KeyedService.AnyKey
+    && !typeof(T).IsValueType
+    && !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(Task<>))
+    && _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), serviceKey ?? KeyedService.AnyKey), out var resolver)
+        ? [(T)resolver(this)]
+        : null;
+```
+
+> **Note**: Multiple keyed registrations of `T` under one key still resolve as the last one (one-element array); collecting all of them is not supported yet.
 
 ### Supported Collection Types
 
@@ -24,7 +78,7 @@ Support for collection resolution when multiple implementations are registered f
 |`IReadOnlyList<T>`|Returns array|Supports indexer access|
 |`T[]`|Returns array|Native array type|
 
-> **Note**: Collection resolution only generates for service types with multiple distinct implementations (excluding self-registrations), or with a single implementation that a dependency or an `IServiceProvider` invocation requests as a collection.
+> **Note**: Collection resolution only generates for service types with multiple distinct implementations (excluding self-registrations), or with a single implementation that a dependency or an `IServiceProvider` invocation requests as a collection. Other `IEnumerable<T>` requests use the [single-service collection fallback](#single-service-collection-fallback).
 
 ```csharp
 #region Define:

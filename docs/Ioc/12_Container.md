@@ -250,6 +250,39 @@ When the same service type and key is registered in more than one place, the **l
 > [!NOTE]
 > `IncludeTags` and `ExplicitOnly` do not filter imported services; the module's own options decide what it contains.
 
+## Resolving Collections
+
+`GetServices<T>()`, `GetService(typeof(IEnumerable<T>))` and their keyed forms return the container's own instances:
+
+```csharp
+public interface IPlugin;
+
+[IocRegister<IPlugin>(ServiceLifetime.Singleton)]
+public class Plugin : IPlugin;
+
+[IocRegister<IPlugin>(ServiceLifetime.Singleton, Key = "beta")]
+public class BetaPlugin : IPlugin;
+
+[IocContainer]
+public partial class AppContainer;
+
+// In another project, which the generator of AppContainer does not see:
+using var container = new AppContainer();
+IEnumerable<IPlugin> plugins = container.GetServices<IPlugin>();         // [Plugin], the same instance as GetRequiredService<IPlugin>()
+IEnumerable<IPlugin> keyed = container.GetKeyedServices<IPlugin>("beta"); // [BetaPlugin]
+```
+
+A service type with two or more registrations always gets a generated collection resolver. A service type with a single registration gets one only when the container's project requests it as a collection (a constructor parameter, an accessor, or a `GetServices<T>()` call). Otherwise, and for every keyed collection, the container builds a one-element array from the service's own resolver at runtime, before it asks the fallback provider. The element is the instance that `GetRequiredService<T>()` returns, so a singleton is never created a second time by the fallback provider.
+
+> [!NOTE]
+> - Only `IEnumerable<T>` gets this runtime fallback; request other collection types (`IReadOnlyList<T>`, `T[]`, …) in the container's project to get a generated resolver.
+> - Async-init services (registered as `Task<T>`) are never part of a collection.
+> - `GetKeyedServices<T>(KeyedService.AnyKey)` is not answered from a single registration and goes to the fallback provider.
+> - Several registrations of one service type under the same key still return only the last one.
+
+> [!WARNING]
+> A collection the container resolves is not merged with the fallback provider's registrations of the same service type. For example, registering an `IHostedService` in the container hides the hosted services the framework registered in the `IServiceCollection` from `GetServices<IHostedService>()`. Register such framework-extended service types in the `IServiceCollection` (the Register output) instead.
+
 ## Thread Safety Strategy
 
 `ThreadSafeStrategy` controls singleton/scoped cache initialization for lazy services:

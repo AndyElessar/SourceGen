@@ -214,6 +214,65 @@ public class CollectionResolutionContainerTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Assert.That(generatedSource).DoesNotContain("GetAllIPluginArray");
+        await Assert.That(generatedSource).Contains("return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithSingleRegistrationNotRequestedAsCollection_UseSwitchStatement_ResolvesCollectionFromLocalResolvers()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)], Key = "keyed")]
+            public class KeyedPlugin : IPlugin { }
+
+            [IocContainer(UseSwitchStatement = true)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("foreach(var entry in _localResolvers)");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithSingleRegistrationNotRequestedAsCollection_WithoutServiceProviderIntegration_ResolvesCollectionWithoutFallback()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)], Key = "keyed")]
+            public class KeyedPlugin : IPlugin { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains(": __ResolveCollection<T>(serviceKey) ?? [];");
         await Verify(generatedSource);
     }
 }
