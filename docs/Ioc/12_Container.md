@@ -105,7 +105,7 @@ The generated container can implement the following interfaces (depending on opt
 |`IServiceScopeFactory`|Creates child scopes.|
 |`IServiceScope`|Container instance is also a scope.|
 |`IServiceProviderFactory<IServiceCollection>`|Implemented by the nested `AppContainer.ServiceProviderFactory` type, not by the container. Generated only when `IntegrateServiceProvider = true` and `MS.E.DI` package support is available; integrates the generated container with `IServiceCollection` (`CreateBuilder` / `CreateServiceProvider`).|
-|`IDisposable` / `IAsyncDisposable`|Disposes tracked services and scope resources: scoped services (a scope's own, or those resolved directly from the root), then singletons in the root. Transient services are **not** tracked or disposed; dispose them yourself. Synchronous `Dispose` throws `InvalidOperationException` when a tracked service only implements `IAsyncDisposable` — use `DisposeAsync` in that case.|
+|`IDisposable` / `IAsyncDisposable`|Disposes tracked services and scope resources: scoped services (a scope's own, or those resolved directly from the root), then singletons in the root. Transient services are **not** tracked or disposed; dispose them yourself (analyzer `SGIOC045` warns about disposable transient services). Synchronous `Dispose` throws `InvalidOperationException` when a tracked service only implements `IAsyncDisposable` — use `DisposeAsync` in that case.|
 
 ## Container Options
 
@@ -596,13 +596,22 @@ partial class ComponentContainer : IComponentPropertyActivator
             foreach (var property in type.GetProperties(flags))
             {
                 if (property.DeclaringType != type) continue;
-                var injectAttr = property.GetCustomAttributes(true)
-                    .FirstOrDefault(a =>
-                        a.GetType().Name is "InjectAttribute" or "IocInjectAttribute");
-                if (injectAttr is null) continue;
 
-                var keyProp = injectAttr.GetType().GetProperty("Key");
-                var key = keyProp?.GetValue(injectAttr);
+                object? key;
+                if (property.GetCustomAttribute<InjectAttribute>(false) is { } injectAttr)
+                {
+                    key = injectAttr.Key;
+                }
+                else if (property.GetCustomAttribute<IocInjectAttribute>(false) is { } iocInjectAttr)
+                {
+                    if (iocInjectAttr.KeyType is KeyType.Csharp) continue;
+                    key = iocInjectAttr.Key;
+                }
+                else
+                {
+                    continue;
+                }
+
                 injectables ??= new();
                 injectables.Add((property, key));
             }
@@ -651,6 +660,21 @@ partial class ComponentContainer : IComponentPropertyActivator
 ```
 
 </details>
+
+The reflection-based fallback, like ASP.NET Core's `DefaultComponentPropertyActivator`, finds the attributes by type
+and reads their `Key` directly, so it stays trim- and Native AOT-safe:
+
+|Attribute on the property|Behavior|
+|:---|:---|
+|`Microsoft.AspNetCore.Components.InjectAttribute`|Injected; keyed when `Key` is set|
+|`SourceGen.Ioc.IocInjectAttribute` (`KeyType.Value`, the default)|Injected; keyed when `Key` is set|
+|`SourceGen.Ioc.IocInjectAttribute` with `KeyType = KeyType.Csharp`|**Skipped** — the key is a C# expression that cannot be evaluated at runtime|
+|Any other attribute, even one named `InjectAttribute` in another namespace|Ignored|
+
+> [!WARNING]
+> For an unregistered component, a property marked `[IocInject(..., KeyType = KeyType.Csharp)]` is not injected by
+> `IComponentPropertyActivator`. Use a constant key instead (for example, `[IocInject("my-key")]` or `[Inject(Key = "my-key")]`),
+> or register the component so the container injects it at compile time.
 
 > [!TIP]
 > When implementing `IComponentPropertyActivator` **without** `IComponentActivator`, the no-op optimization
@@ -932,6 +956,7 @@ partial class TestContainer
 |SGIOC027|Error|Partial accessor returns `T` directly, but the service is async-init (its implementation or a decorator has async inject methods). Return `Task<T>` instead.|
 |SGIOC029|Error|Partial accessor targets an async-init service with a return type other than `Task<T>` (for example `ValueTask<T>` or `Lazy<Task<T>>`).|
 |SGIOC031|Warning|Container is not generated because `Container` is not enabled in `SourceGenIocFeatures`.|
+|SGIOC045|Warning|Container creates a transient service that implements `IDisposable` or `IAsyncDisposable` (its implementation type, or the return type of its `Factory`) but never disposes it. Dispose it in the caller, or register it as `Scoped` or `Singleton`.|
 
 ---
 

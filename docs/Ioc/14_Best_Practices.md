@@ -331,6 +331,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC042`|Open generic registration with a `Factory` is not registered open, so closed types only requested at runtime cannot be resolved|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 |`SGIOC043`|`InjectMembers` names a method with more than one injectable overload, so none is injected|[Injection](04_Field_Property_Method_Injection.md#diagnostics)|
 |`SGIOC044`|`Factory` names a method with more than one overload that can be the factory, so none is chosen|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
+|`SGIOC045`|Container never disposes a disposable transient service|[Container](12_Container.md#diagnostics)|
 
 ## Production Checklist
 

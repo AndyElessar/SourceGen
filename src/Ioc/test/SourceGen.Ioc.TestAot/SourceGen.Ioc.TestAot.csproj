@@ -21,4 +21,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
+  <!-- IComponentPropertyActivator exists from Microsoft.AspNetCore.Components 11 -->
+  <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net11.0'))">
+    <PackageReference Include="Microsoft.AspNetCore.Components" />
+  </ItemGroup>
+
 </Project>

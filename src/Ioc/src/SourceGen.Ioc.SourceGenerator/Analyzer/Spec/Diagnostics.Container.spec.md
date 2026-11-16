@@ -1,6 +1,6 @@
 # Container Diagnostics
 
-Diagnostics reported by ContainerAnalyzer for container classes: declaration, feature gating, resolvability and module imports. Index: [Ioc Analyzer](SPEC.spec.md).
+Diagnostics reported by ContainerAnalyzer for container classes: declaration, feature gating, resolvability, module imports and disposal. Index: [Ioc Analyzer](SPEC.spec.md).
 
 Format: ID - Level - Category - Description
 
@@ -142,3 +142,25 @@ Report when a class is marked with `[IocContainer]` but `SourceGenIocFeatures` d
 - Reports on the `[IocContainer]` attribute when the `Container` feature is disabled, because the generator skips every container.
 
 **Message format:** `Container '{ContainerType}' will not be generated because the Container feature is not enabled. Add 'Container' to <SourceGenIocFeatures> in your project file.`
+
+---
+
+## SGIOC045 - Warning - Usage - Container does not dispose transient service
+
+Report when a container creates a disposable service with the Transient lifetime. Generated containers do not track transient services, so neither the container nor its scopes dispose them ([Lifetime](../../Spec/Container.Lifetime.spec.md)), unlike MS.DI, which disposes them with the scope that resolved them.
+
+**Analysis:**
+
+- Applies to every container when the `Container` feature is enabled, whatever `IntegrateServiceProvider` is.
+- Each container is analyzed with its own registrations ([Container Scope](Analyzer.Container.spec.md#container-scope)). Registrations of imported modules are reported for their own container.
+- The lifetime of a registration follows the generator's `MergeSettings`: its explicit `Lifetime`, otherwise Singleton for an `Instance`, otherwise the lifetime of its best `[IocRegisterDefaults]`, otherwise the MSBuild `SourceGenIocDefaultLifetime` (Transient when unset). A registration of `[IocRegisterDefaults(ImplementationTypes = ...)]` uses the lifetime of those settings.
+- A transient registration is disposable when the container creates a disposable instance:
+  - Constructor: the implementation type implements `IDisposable` or `IAsyncDisposable`, including an async-init implementation. An implementation that cannot be constructed (SGIOC001) is not registered by the generator and is not reported.
+  - `Factory`: the declared return type of the factory method is, or implements, `IDisposable` or `IAsyncDisposable`. A factory that cannot be resolved, or that returns a type parameter, is not analyzed.
+  - `Instance`: not analyzed (the container never disposes instances).
+  - Decorators are not analyzed.
+- Reported on the registration attribute (the `[IocRegisterDefaults]` attribute for its `ImplementationTypes`), once per container that includes the registration. The open generic registrations a container takes from imported modules are reported only for the module's own container in the compilation, and open generic `[IocRegisterDefaults]` with a `Factory` are not reported.
+
+`{CreatedType}` is the implementation type, or the return type of the factory method.
+
+**Message format:** `Container '{ContainerType}' does not dispose transient service '{CreatedType}', which implements IDisposable or IAsyncDisposable. Dispose it in the caller, or register it as Scoped or Singleton.`
