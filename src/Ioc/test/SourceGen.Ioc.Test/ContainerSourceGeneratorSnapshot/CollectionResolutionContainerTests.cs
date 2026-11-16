@@ -312,4 +312,103 @@ public class CollectionResolutionContainerTests
         await Assert.That(generatedSource).Contains("if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>)) return __MergeFallbackServices(GetAllIPluginArray(), null);");
         await Verify(generatedSource);
     }
+
+    /// <summary>CS8795: the partial accessor's implementation is generated.</summary>
+    private static readonly IReadOnlySet<string> SuppressedPartialDiagnostics = new HashSet<string>(["CS8795"]);
+
+    private const string CollectionDependenciesSource = """
+        using System;
+        using System.Collections.Generic;
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        namespace TestNamespace;
+
+        public interface IPlugin { }
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+        public class Plugin1 : IPlugin { }
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+        public class Plugin2 : IPlugin { }
+
+        [IocRegister(Lifetime = ServiceLifetime.Transient)]
+        public class Consumer(
+            IEnumerable<IPlugin> enumerable,
+            IReadOnlyList<IPlugin> list,
+            IPlugin[] array,
+            Lazy<IEnumerable<IPlugin>> lazyEnumerable,
+            IEnumerable<Lazy<IPlugin>> lazyPlugins)
+        {
+            [IocInject]
+            public IEnumerable<IPlugin> Injected { get; set; } = null!;
+        }
+
+        [IocContainer(IntegrateServiceProvider = {0})]
+        public partial class TestContainer
+        {
+            public partial IEnumerable<IPlugin> GetPlugins();
+        }
+        """;
+
+    [Test]
+    public async Task Container_WithCollectionDependencies_IntegrateServiceProvider_MergesFallbackServices()
+    {
+        var source = CollectionDependenciesSource.Replace("{0}", "true");
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Consumer(__MergeFallbackServices(GetAllIPluginArray(), null), __MergeFallbackServices(GetAllIPluginArray(), null), __MergeFallbackServices(GetAllIPluginArray(), null), new global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>>(() => __MergeFallbackServices(GetAllIPluginArray(), null)");
+        await Assert.That(generatedSource).Contains("__MergeFallbackServices(GetAllLazy_IPlugin_Array(), null)");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithCollectionDependencies_WithoutIntegrateServiceProvider_CallsArrayResolvers()
+    {
+        var source = CollectionDependenciesSource.Replace("{0}", "false");
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, suppressedInitialDiagnosticIds: SuppressedPartialDiagnostics);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Consumer(GetAllIPluginArray(), GetAllIPluginArray(), GetAllIPluginArray(), new global::System.Lazy<global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>>(() => GetAllIPluginArray()");
+        await Assert.That(generatedSource).DoesNotContain("__MergeFallbackServices");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Container_WithWrapperEntries_UseSwitchStatement_DispatchesLazyAndFunc()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin1 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Lazy<IPlugin> lazy, Func<IPlugin> factory) { }
+
+            [IocContainer(UseSwitchStatement = true)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("if(serviceType == typeof(global::System.Lazy<global::TestNamespace.IPlugin>)) return _lazy_IPlugin_plugin1;");
+        await Assert.That(generatedSource).Contains("if(serviceType == typeof(global::System.Func<global::TestNamespace.IPlugin>)) return _func_IPlugin_plugin1;");
+        await Assert.That(generatedSource).Contains("if(serviceType == typeof(global::System.Lazy<global::TestNamespace.IPlugin>)) return true;");
+        await Verify(generatedSource);
+    }
 }

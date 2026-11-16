@@ -1,3 +1,5 @@
+using static SourceGen.Ioc.Constants;
+
 namespace SourceGen.Ioc;
 
 partial class IocSourceGenerator
@@ -139,13 +141,26 @@ partial class IocSourceGenerator
                     var fieldName = GetModuleFieldName(module.Type.Name);
 
                     // Every module after the first is appended with .Concat(...)
-                    writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{module.Type.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))){(isFirst ? "" : ")")}");
+                    if(container.IntegrateServiceProvider)
+                    {
+                        writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{ImportModuleResolversMethodName}({module.Type.Name}.Resolvers, static c => c.{fieldName}){(isFirst ? "" : ")")}");
+                    }
+                    else
+                    {
+                        writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{module.Type.Name}.Resolvers.Select(static kvp => new global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>>(kvp.Key, c => kvp.Value(c.{fieldName}))){(isFirst ? "" : ")")}");
+                    }
+
                     isFirst = false;
                 }
 
                 writer.WriteLine(".Concat(_localResolvers)");
                 writer.WriteLine(".ToFrozenDictionary();");
                 writer.Indentation--;
+
+                if(container.IntegrateServiceProvider)
+                {
+                    WriteImportModuleResolversMethod(writer, container);
+                }
             }
             else
             {
@@ -156,6 +171,60 @@ partial class IocSourceGenerator
         writer.WriteLine();
         writer.WriteLine("#endregion");
         writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes <c>__ImportModuleResolvers&lt;TModule&gt;</c>, which wraps an imported module's resolvers to resolve with the
+    /// module instance of this container (scope). Its non-keyed <c>IEnumerable&lt;T&gt;</c> entries resolve the module's
+    /// <c>T[]</c> entry instead, which never merges, and merge the fallback services of this container, so a collection
+    /// resolved through the importer merges once, with the importer's fallback provider and fallback scope, whatever the
+    /// module's own <c>IntegrateServiceProvider</c> (see Container.ImportModule). Value types (<c>KeyValuePair</c>
+    /// collections, which are not merged) and modules without a <c>T[]</c> entry keep the module's entry.
+    /// </summary>
+    private static void WriteImportModuleResolversMethod(SourceWriter writer, ContainerModel container)
+    {
+        writer.WriteLine();
+        writer.WriteLine($"private static global::System.Collections.Generic.IEnumerable<{ResolverEntryAlias}> {ImportModuleResolversMethodName}<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<{container.ContainerTypeName}, TModule> module)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("var arrayResolvers = new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<TModule, object>>();");
+        writer.WriteLine("foreach(var entry in resolvers)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"if(entry.Key.ServiceType.IsArray && entry.Key.Key == {KeyedServiceAnyKey})");
+        writer.Indentation++;
+        writer.WriteLine("arrayResolvers[entry.Key.ServiceType.GetElementType()!] = entry.Value;");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("foreach(var entry in resolvers)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("var serviceType = entry.Key.ServiceType;");
+        writer.WriteLine("var resolver = entry.Value;");
+        writer.WriteLine($"if(entry.Key.Key == {KeyedServiceAnyKey}");
+        writer.Indentation++;
+        writer.WriteLine("&& serviceType.IsConstructedGenericType");
+        writer.WriteLine("&& serviceType.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>)");
+        writer.WriteLine("&& !serviceType.GenericTypeArguments[0].IsValueType");
+        writer.WriteLine("&& arrayResolvers.TryGetValue(serviceType.GenericTypeArguments[0], out var arrayResolver))");
+        writer.Indentation--;
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"yield return new(entry.Key, c => c.{MergeFallbackServicesMethodName}(serviceType, (global::System.Array)arrayResolver(module(c)), null));");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("else");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("yield return new(entry.Key, c => resolver(module(c)));");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
     }
 
     /// <summary>

@@ -19,7 +19,7 @@ partial class IocSourceGenerator
         ProjectTaskMethodName, CreateLockMethodName, CreateSemaphoreMethodName,
         ResolverEntryMethodName, KeyedResolverEntryMethodName, CollectionResolverEntriesMethodName, ResolveCollectionMethodName,
         FindCollectionElementResolverMethodName, IsCollectionServiceMethodName, GetFallbackServicesMethodName, MergeFallbackServicesMethodName,
-        Constants.ResolverEntryAlias, HotReloadHandlerTypeName,
+        ImportModuleResolversMethodName, Constants.ResolverEntryAlias, HotReloadHandlerTypeName,
     ];
 
     private static ReservedMemberNames GetReservedNames(ContainerModel container)

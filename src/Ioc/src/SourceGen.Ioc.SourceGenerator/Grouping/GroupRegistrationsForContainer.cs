@@ -15,7 +15,7 @@ partial class IocSourceGenerator
         var reservedNames = GetReservedNames(container);
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes, container.PartialAccessors);
+        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes, container.PartialAccessors, container.IntegrateServiceProvider);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -94,7 +94,8 @@ partial class IocSourceGenerator
             container.EagerResolveOptions,
             reservedNames,
             requestedCollectionServiceTypes,
-            container.PartialAccessors);
+            container.PartialAccessors,
+            container.IntegrateServiceProvider);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -110,7 +111,8 @@ partial class IocSourceGenerator
         EagerResolveOptions eagerResolveOptions,
         ReservedMemberNames reservedNames,
         ImmutableEquatableArray<string> requestedCollectionServiceTypes,
-        ImmutableEquatableArray<PartialAccessorData> partialAccessors)
+        ImmutableEquatableArray<PartialAccessorData> partialAccessors,
+        bool integrateServiceProvider)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
         var serviceLookup = new Dictionary<ServiceTypeKey, List<ServiceLookupEntry>>();
@@ -316,7 +318,8 @@ partial class IocSourceGenerator
             new HashSet<string>(lazyWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), TypeNameComparer.Instance),
             new HashSet<string>(funcWrapperEntries.Where(static e => e.EmitCollectionResolver).Select(static e => e.InnerServiceTypeName), TypeNameComparer.Instance),
             names,
-            CreateProjectedTasks(lastWinsLookup, serviceLookup, lazyWrapperEntries, funcWrapperEntries, reservedNames, names));
+            CreateProjectedTasks(lastWinsLookup, serviceLookup, lazyWrapperEntries, funcWrapperEntries, reservedNames, names),
+            integrateServiceProvider);
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,

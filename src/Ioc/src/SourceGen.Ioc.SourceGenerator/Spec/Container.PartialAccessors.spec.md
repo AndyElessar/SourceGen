@@ -15,7 +15,7 @@ Users can declare partial methods or partial properties in the `[IocContainer]` 
 |Task of an async-init service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial Task<IMyService> GetMyServiceAsync() => GetMyService_ResolveAsync_As_IMyService();` (no `async` modifier: returns the cached task, or its cached `Task<IMyService>` projection; a transient service returns `__ProjectTask<IMyService, MyService>(CreateMyService_ResolveAsync())`)|
 |Task of a synchronous service|`public partial Task<IMyService> GetMyServiceAsync();`|`public partial Task<IMyService> GetMyServiceAsync() => Task.FromResult((IMyService)GetMyService());` (no `async` modifier: only an awaited resolver needs it)|
 |Wrapper of a service|`public partial Lazy<IMyService> LazyService { get; }`, `public partial Func<IMyService> GetFactory();`|The container's shared `Lazy<IMyService>` / `Func<IMyService>` field, like a constructor dependency of that type|
-|Collection of a service|`public partial IEnumerable<IMyService> GetServices();`, `public partial IMyService[] Services { get; }`|The container's collection resolver (a new array per call)|
+|Collection of a service|`public partial IEnumerable<IMyService> GetServices();`, `public partial IMyService[] Services { get; }`|The container's collection resolver (a new array per call), after the fallback provider's services when `IntegrateServiceProvider = true` (see [Injected Collections](Container.Collections.spec.md#injected-collections))|
 |Service of an imported module|`public partial IModuleService GetModuleService();`|`(IModuleService)GetRequiredService(typeof(IModuleService))`, which looks the service up in the merged resolvers|
 
 ## Resolution Rules

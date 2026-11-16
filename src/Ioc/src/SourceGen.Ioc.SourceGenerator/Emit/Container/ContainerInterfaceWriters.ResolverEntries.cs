@@ -44,6 +44,7 @@ partial class IocSourceGenerator
     private const string IsCollectionServiceMethodName = "__IsCollectionService";
     private const string GetFallbackServicesMethodName = "__GetFallbackServices";
     private const string MergeFallbackServicesMethodName = "__MergeFallbackServices";
+    private const string ImportModuleResolversMethodName = "__ImportModuleResolvers";
 
     /// <summary>
     /// Writes the <c>_localResolvers</c> entry resolving <paramref name="serviceType"/> (with <paramref name="key"/> when keyed) through <paramref name="entry"/>.
@@ -207,6 +208,8 @@ partial class IocSourceGenerator
             }
         }
 
+        // The entries of each inner service type are written by its last non-keyed wrapper (EmitCollectionResolver), which a
+        // keyed wrapper of the same type may follow; the other wrappers write nothing
         var lazyEntries = groups.LazyWrapperEntries;
 
         if(lazyEntries.Length > 0)
@@ -216,7 +219,7 @@ partial class IocSourceGenerator
 
             foreach(var group in lazyEntries.GroupBy(static entry => entry.InnerServiceTypeName))
             {
-                group.Last().WriteLocalResolverEntries(writer);
+                group.FirstOrDefault(static entry => entry.EmitCollectionResolver)?.WriteLocalResolverEntries(writer);
             }
         }
 
@@ -229,7 +232,7 @@ partial class IocSourceGenerator
 
             foreach(var group in funcEntries.GroupBy(static entry => entry.InnerServiceTypeName))
             {
-                group.Last().WriteLocalResolverEntries(writer);
+                group.FirstOrDefault(static entry => entry.EmitCollectionResolver)?.WriteLocalResolverEntries(writer);
             }
         }
     }

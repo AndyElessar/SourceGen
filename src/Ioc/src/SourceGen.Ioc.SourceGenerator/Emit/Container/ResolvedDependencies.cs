@@ -15,11 +15,17 @@ partial class IocSourceGenerator
         }
     }
 
-    private sealed record class CollectionDependency(string ArrayMethodName) : ResolvedDependency
+    /// <param name="MergeFallbackServices">
+    /// Whether the fallback provider's services come first (<c>IntegrateServiceProvider = true</c>), like
+    /// <c>GetServices&lt;T&gt;()</c>; the merged array still converts to every collection type.
+    /// </param>
+    private sealed record class CollectionDependency(string ArrayMethodName, bool MergeFallbackServices) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
         {
-            return $"{ArrayMethodName}()";
+            return MergeFallbackServices
+                ? $"{MergeFallbackServicesMethodName}({ArrayMethodName}(), null)"
+                : $"{ArrayMethodName}()";
         }
     }
 
