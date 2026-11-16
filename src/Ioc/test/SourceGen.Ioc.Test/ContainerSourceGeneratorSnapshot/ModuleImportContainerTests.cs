@@ -423,4 +423,54 @@ public class ModuleImportContainerTests
 
         await Assert.That(generatedSource!.Contains("new global::SharedLib.Repo<global::MainApp.Entity>()")).IsEqualTo(closes);
     }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Container_WithImportedModuleCollection_MergesFallbackServicesOnlyWithServiceProviderIntegration(bool integrateServiceProvider)
+    {
+        const string sharedLibSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace SharedLib;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin1 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin2 : IPlugin { }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class SharedModule { }
+            """;
+
+        var mainAppSource = $$"""
+            using SourceGen.Ioc;
+
+            namespace MainApp;
+
+            [IocImportModule<SharedLib.SharedModule>]
+            [IocContainer(IntegrateServiceProvider = {{(integrateServiceProvider ? "true" : "false")}})]
+            public partial class AppContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        if(integrateServiceProvider)
+        {
+            await Assert.That(generatedSource).Contains("__ImportModuleResolvers(global::SharedLib.SharedModule.Resolvers, static c => c._sharedLib_SharedModule)");
+        }
+        else
+        {
+            await Assert.That(generatedSource).DoesNotContain("__ImportModuleResolvers");
+        }
+
+        await Verify(generatedSource).UseParameters(integrateServiceProvider);
+    }
 }

@@ -37,9 +37,33 @@ With `IntegrateServiceProvider = true`, an `IEnumerable<T>` that the container r
 |:---|:---|
 |Order|The fallback provider's services come first, then the container's. The container wins single-service resolution (it is asked before the fallback provider), which matches `MS.DI` only when its registrations come after the fallback's, and `MS.DI` lists a collection in registration order, so the instance `GetService<T>()` returns is the collection's last element.|
 |Duplicates|A service registered in both (e.g. the fallback provider is built from an `IServiceCollection` that also contains the Register output of the container's registrations) appears twice, with different instances. This is a misconfiguration: there is no cheap and correct identity to remove duplicates by (implementation type is not one, as `MS.DI` allows the same implementation twice). It is not detected.|
-|Cost|Without a fallback provider (`_fallbackProvider` is `null`), or when it returns an empty `ICollection`, the container's array MUST be returned as is, without allocation. Otherwise the result is a new array. In a scope the request uses (and so creates) the fallback scope.|
-|Scope of the merge|Only `IEnumerable<T>` requests through the `IServiceProvider` APIs merge: the `IEnumerable<T>` entry of `__CollectionResolvers<T>` (also used by imported modules' resolvers), its switch branch, and the single-service collection fallback. Other collection types (`IReadOnlyList<T>`, `T[]`, …) are not served by `MS.DI` and stay container-only. `KeyValuePair<K, V>` collections and dictionaries are not merged. Dependencies of container services (and partial accessors) that call a generated array resolver directly (`GetAllT_Array()`) do not merge; keyed collection dependencies of any collection type, which call `GetKeyedServices<T>(key)` (`.ToArray()` for types other than `IEnumerable<T>`), do. Imported modules' collection entries merge according to the module's own fallback provider and fallback scope.|
+|Cost|Without a fallback provider (`_fallbackProvider` is `null`), or when it returns an empty `ICollection`, the container's array MUST be returned as is, without allocation. Otherwise the result is a new array. In a scope the request uses (and so creates) the fallback scope. Without `IntegrateServiceProvider` no merging code is generated: the entries, branches and dependencies call the array resolver directly.|
+|Scope of the merge|`IEnumerable<T>` requests through the `IServiceProvider` APIs merge: the `IEnumerable<T>` entry of `__CollectionResolvers<T>`, its switch branch, and the single-service collection fallback. Other collection types (`IReadOnlyList<T>`, `T[]`, …) requested through these APIs are not served by `MS.DI` and stay container-only. `KeyValuePair<K, V>` collections and dictionaries are not merged anywhere.|
+|Dependencies|A collection that the container injects MUST contain the same services, in the same order, as `GetServices<T>()` / `GetKeyedServices<T>(key)` of the same scope (see [Injected Collections](#injected-collections)).|
+|Imported modules|A collection of an imported module's services resolved through the importing container MUST merge once, with the fallback provider and fallback scope of the importing container (scope), whatever the module's own `IntegrateServiceProvider` (see [Import Module](Container.ImportModule.spec.md#collections-of-imported-modules)).|
 |`AnyKey`|Not served by the single-service collection fallback. Because non-keyed entries use `KeyedService.AnyKey` as their key, `GetKeyedServices<T>(KeyedService.AnyKey)` still hits a non-keyed generated collection resolver (existing behavior, which differs from `MS.DI`'s "all keyed services").|
+
+#### Injected Collections
+
+With `IntegrateServiceProvider = true`, every collection that a constructor parameter, injected member, decorator or factory parameter, or partial accessor gets from a generated array resolver MUST merge the fallback services through `__MergeFallbackServices(GetAllT_Array(), null)`, which returns a `T[]`, so it converts to every collection type:
+
+|Dependency|Generated expression|
+|:---|:---|
+|`IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`, `T[]` (non-keyed, `T` with a collection resolver)|`__MergeFallbackServices(GetAllT_Array(), null)`|
+|`Lazy<IEnumerable<T>>`, `Func<IEnumerable<T>>` (and the other collection types)|The wrapper over the same expression, evaluated when the wrapper is|
+|`IEnumerable<Lazy<T>>`, `IEnumerable<Func<T>>` (and the other collection types)|`__MergeFallbackServices(GetAllLazy_T_Array(), null)` / `__MergeFallbackServices(GetAllFunc_T_Array(), null)`: the fallback provider's `IEnumerable<Lazy<T>>`, like `GetServices<Lazy<T>>()`. `MS.DI` registers no `Lazy<T>` or `Func<T>`, so these usually stay container-only|
+|Non-keyed collection without collection resolver (`T` not registered by the container, e.g. a service of an imported module)|`GetServices<T>()` (`.ToArray()` for types other than `IEnumerable<T>`), which merges|
+|Keyed collection (`[IocInject(Key = "k")]`)|`GetKeyedServices<T>("k")` (`.ToArray()` for types other than `IEnumerable<T>`), which merges|
+|`KeyValuePair<K, V>` collections and dictionaries|Unchanged: the container's `GetAllKvp_…` resolvers, not merged, like the `IServiceProvider` APIs|
+
+The merge uses `GetFallbackServiceProvider()`, so a scoped service resolves the fallback services from the fallback scope of its container scope, and a singleton (resolved by the root) from the root fallback provider. A container without `IntegrateServiceProvider` MUST keep calling `GetAllT_Array()`.
+
+```csharp
+// IntegrateServiceProvider = true
+var instance = new global::Consumer(__MergeFallbackServices(GetAllIPluginArray(), null));
+// IntegrateServiceProvider = false
+var instance = new global::Consumer(GetAllIPluginArray());
+```
 
 Generated members (`__ResolveCollection`, `__FindCollectionElementResolver`, `__IsCollectionService`, `__GetFallbackServices` and `__MergeFallbackServices` are reserved names, see [Basic](Container.Basic.spec.md#member-names)):
 
@@ -76,23 +100,34 @@ private object? __ResolveCollection(Type serviceType, object? serviceKey)
     if(__FindCollectionElementResolver(serviceType, serviceKey) is not { } resolver)
         return null;
 
-    var elementType = serviceType.GenericTypeArguments[0];
-    var service = resolver(this);
-    // Without IntegrateServiceProvider: a one-element array of service
-    List<object?>? fallbackServices = null;
-    if(__GetFallbackServices(serviceType, serviceKey) is IEnumerable enumerable && enumerable is not ICollection { Count: 0 })
+    var services = Array.CreateInstance(serviceType.GenericTypeArguments[0], 1);
+    services.SetValue(resolver(this), 0);
+    return __MergeFallbackServices(serviceType, services, serviceKey); // without IntegrateServiceProvider: services
+}
+
+// IntegrateServiceProvider only: the non-generic merge, for element types known at runtime only
+[UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+private Array __MergeFallbackServices(Type serviceType, Array services, object? serviceKey)
+{
+    if(__GetFallbackServices(serviceType, serviceKey) is not IEnumerable fallbackServices)
+        return services;
+
+    if(fallbackServices is not ICollection collection)
     {
-        foreach(var item in enumerable)
-            (fallbackServices ??= []).Add(item);
+        var list = new List<object?>();
+        foreach(var service in fallbackServices)
+            list.Add(service);
+
+        collection = list;
     }
 
-    var count = fallbackServices?.Count ?? 0;
-    var services = Array.CreateInstance(elementType, count + 1);
-    for(var i = 0; i < count; i++)
-        services.SetValue(fallbackServices![i], i);
+    if(collection.Count == 0)
+        return services;
 
-    services.SetValue(service, count);
-    return services;
+    var merged = Array.CreateInstance(serviceType.GenericTypeArguments[0], collection.Count + services.Length);
+    collection.CopyTo(merged, 0);
+    services.CopyTo(merged, collection.Count);
+    return merged;
 }
 
 // Used by GetServices<T>() (null key) and GetKeyedServices<T>(serviceKey) on a miss
@@ -126,12 +161,16 @@ private static __IocResolver[] __CollectionResolvers<T>(Func<AppContainer, objec
 
 ### Switch-Mode Collection Branches
 
-`UseSwitchStatement = true` MUST dispatch every generated collection entry that the dictionary mode registers in `_localResolvers`, in `GetService` and in `IsService`: the six types of `__CollectionResolvers<T>` for each collection resolver and `Lazy<T>` / `Func<T>` collection resolver (`IEnumerable<T>` merging the fallback services), and the `KeyValuePair<K, V>` collection and dictionary types:
+`UseSwitchStatement = true` MUST dispatch every generated collection and wrapper entry that the dictionary mode registers in `_localResolvers`, in `GetService` and in `IsService`: the six types of `__CollectionResolvers<T>` for each collection resolver and `Lazy<T>` / `Func<T>` collection resolver (`IEnumerable<T>` merging the fallback services), the single `Lazy<T>` / `Func<T>` entry of the last non-keyed registration of `T` (its shared field, or a new `Lazy<T>` for a transient service), and the `KeyValuePair<K, V>` collection and dictionary types:
 
 ```csharp
 if(serviceType == typeof(IEnumerable<IPlugin>)) return __MergeFallbackServices(GetAllIPluginArray(), null);
 if(serviceType == typeof(IReadOnlyCollection<IPlugin>) || serviceType == typeof(ICollection<IPlugin>) || serviceType == typeof(IReadOnlyList<IPlugin>) || serviceType == typeof(IList<IPlugin>) || serviceType == typeof(IPlugin[])) return GetAllIPluginArray();
+if(serviceType == typeof(Lazy<IPlugin>)) return _lazy_IPlugin_plugin2;
+if(serviceType == typeof(Func<IPlugin>)) return _func_IPlugin_plugin2;
 ```
+
+The dictionary mode writes these `Lazy<T>` / `Func<T>` entries from the same wrapper (the one that carries the collection resolver), also when a keyed registration of `T` follows it.
 
 > **Note**: Multiple keyed registrations of `T` under one key still resolve as the last one (one-element array); collecting all of them is not supported yet.
 
@@ -248,7 +287,7 @@ A `Lazy<T>` of a transient registration MUST NOT be shared: no field is generate
 > - `Lazy<Func<T>>` → `new Lazy<Func<T>>(() => new Func<T>(() => GetMyService()))`
 > - `Func<Lazy<T>>` → `new Func<Lazy<T>>(() => new Lazy<T>(() => GetMyService()))`
 > - `Lazy<IEnumerable<T>>` → `new Lazy<IEnumerable<T>>(() => GetServices<T>())`
-> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` (non-keyed, parameterless `Func<T>`) — MUST call the generated wrapper array resolver directly (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`) when one exists, so the switch-statement container (which has no wrapper dictionary entries) resolves them too. Otherwise they fall back to `GetServices<Lazy<T>>()`.
+> - `IEnumerable<Lazy<T>>` / `IEnumerable<Func<T>>` (non-keyed, parameterless `Func<T>`) — MUST call the generated wrapper array resolver directly (`GetAllLazy_T_Array()` / `GetAllFunc_T_Array()`, merged with the fallback services when `IntegrateServiceProvider = true`, see [Injected Collections](#injected-collections)) when one exists, so the switch-statement container (which has no wrapper dictionary entries) resolves them too. Otherwise they fall back to `GetServices<Lazy<T>>()`.
 >
 > **Design rationale (inline nested wrappers):**
 >

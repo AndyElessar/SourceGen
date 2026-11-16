@@ -257,8 +257,9 @@ partial class AppContainer
         if(serviceType == typeof(IService2)) return GetService2();
         if(serviceType == typeof(Service3)) return GetService3();
         if(serviceType == typeof(IService3)) return GetService3();
+        // ...generated collection and wrapper entries (see Container.Collections)
 
-        return GetFallbackServiceProvider()?.GetService(serviceType);
+        return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
     }
 }
 #endregion
