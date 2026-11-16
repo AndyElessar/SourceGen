@@ -763,7 +763,8 @@ partial class ContainerAnalyzer
     /// <summary>
     /// Registered services by type and key value. Generated containers look up keyed services by key value at runtime
     /// (<c>ServiceIdentifier</c>), so keys are compared by constant value; a key given as C# code
-    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key. Service types are compared without
+    /// (<c>KeyType = KeyType.Csharp</c>) cannot be evaluated and matches any key, but never a non-keyed registration.
+    /// Service types are compared without
     /// their tuple element names, which are not part of the runtime type, like the generator.
     /// </summary>
     private sealed class ServiceIndex
@@ -900,9 +901,9 @@ partial class ContainerAnalyzer
             if(key is not { } keyValue)
                 return _nonKeyed.Contains(serviceType);
 
-            // A key given as C# code is matched by any registration of the type
+            // A key given as C# code is matched by any keyed registration of the type, like KeyMatches
             if(keyValue.IsUnknown)
-                return _keyed.Contains(serviceType) || _nonKeyed.Contains(serviceType);
+                return _keyed.Contains(serviceType);
 
             return _keyedValues.Contains(new(serviceType, keyValue)) || _unknownKeyed.Contains(serviceType);
         }

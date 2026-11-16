@@ -1135,7 +1135,7 @@ public class SGIOC018Tests
     }
 
     [Test]
-    public async Task SGIOC018_CsharpKey_MatchesAnyRegistrationOfType_NoDiagnostic()
+    public async Task SGIOC018_CsharpKeyRegistration_MatchesAnyKeyedDependency_NoDiagnostic()
     {
         const string source = """
             using Microsoft.Extensions.DependencyInjection;
@@ -1167,6 +1167,59 @@ public class SGIOC018Tests
         var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
 
         await Assert.That(sgioc018).Count().IsEqualTo(0);
+    }
+
+    private const string AttributeConsumer = "[IocRegister(ServiceLifetime.Singleton)]";
+
+    private const string InjectMembersConsumer =
+        "[IocRegisterFor(typeof(Consumer), ServiceLifetime.Singleton, InjectMembers = [new object[] { nameof(Consumer.Dependency), \"MyKeys.X\", KeyType.Csharp }])]";
+
+    [Test]
+    // A dependency with a key given as C# code is never resolved by a non-keyed registration (issue #224)
+    [Arguments("", AttributeConsumer, "[IocInject(\"MyKeys.X\", KeyType = KeyType.Csharp)]", 1)]
+    [Arguments("", InjectMembersConsumer, "", 1)]
+    // A key given as C# code may equal any other key
+    [Arguments(", Key = \"y\"", AttributeConsumer, "[IocInject(\"MyKeys.X\", KeyType = KeyType.Csharp)]", 0)]
+    [Arguments(", Key = \"MyKeys.Y\", KeyType = KeyType.Csharp", AttributeConsumer, "[IocInject(\"MyKeys.X\", KeyType = KeyType.Csharp)]", 0)]
+    [Arguments(", Key = \"y\"", InjectMembersConsumer, "", 0)]
+    public async Task SGIOC018_CsharpKeyDependency_RequiresKeyedRegistration(
+        string registrationKey,
+        string consumerRegistration,
+        string injectAttribute,
+        int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public static class MyKeys
+            {
+                public const string X = "x";
+                public const string Y = "y";
+            }
+
+            public interface IRepo { }
+
+            [IocRegister<IRepo>(ServiceLifetime.Singleton{{registrationKey}})]
+            public class Repo : IRepo { }
+
+            {{consumerRegistration}}
+            public class Consumer
+            {
+                {{injectAttribute}}
+                public IRepo? Dependency { get; set; }
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected);
     }
 
     [Test]
