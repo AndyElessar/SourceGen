@@ -240,7 +240,7 @@ Cached async-init singleton/scoped services use fields of type `Task<T>?`. Gener
 
 If accessing the cached task result or disposing the resolved service throws, the generated code MUST catch the exception, invoke `global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex)`, and continue disposal without rethrowing.
 
-`global::SourceGen.Ioc.IocContainerGlobalOptions` is a static configuration type in the `SourceGen.Ioc` namespace. It exposes `public static Action<Exception>? OnDisposeException`, which users MAY assign to observe or log disposal-time exceptions.
+`global::SourceGen.Ioc.IocContainerGlobalOptions` is a static configuration type in the `SourceGen.Ioc` namespace. It exposes `public static Action<Exception>? OnDisposeException`, which users MAY assign to observe or log disposal-time exceptions. It is also invoked for a fallback scope that a resolution disposes after losing a race with the container scope's disposal (see the Fallback scope rule in [Container.Basic](Container.Basic.spec.md)).
 
 ### Disposal Rules
 
