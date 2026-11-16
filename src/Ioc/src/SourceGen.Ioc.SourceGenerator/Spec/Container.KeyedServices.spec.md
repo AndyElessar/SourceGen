@@ -60,7 +60,8 @@ partial class AppContainer
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        // IEnumerable<T> with a keyed registration of T under this key: the fallback's keyed services, then that registration (see Container.Collections)
+        return __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null);
     }
 
     public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
@@ -69,11 +70,18 @@ partial class AppContainer
 
         if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;
 
+        // IEnumerable<T> that __ResolveCollection resolves
+        if(__IsCollectionService(serviceType, serviceKey)) return true;
+
         return _fallbackProvider is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService isKeyed && isKeyed.IsKeyedService(serviceType, serviceKey);
     }
 }
 #endregion
 ```
+
+## Keyed Collections
+
+Keyed collections never get a generated collection resolver. `GetKeyedServices<T>(key)`, `GetKeyedService(typeof(IEnumerable<T>), key)` and keyed `IEnumerable<T>` dependencies (`[IocInject(Key = "k")] IEnumerable<T>`, emitted as `GetKeyedServices<T>("k")`) MUST resolve as the keyed registration of `T` under that key through the [single-service collection fallback](Container.Collections.spec.md#single-service-collection-fallback), after the fallback provider's keyed services of `T` under that key ([merged](Container.Collections.spec.md#merging-fallback-services) when `IntegrateServiceProvider = true`). `KeyedService.AnyKey` MUST NOT be served this way. Several registrations of `T` under one key resolve as the last one; collecting all of them is out of scope.
 
 ## See Also
 

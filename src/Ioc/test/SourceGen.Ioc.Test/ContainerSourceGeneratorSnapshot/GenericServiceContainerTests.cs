@@ -38,7 +38,8 @@ public class GenericServiceContainerTests
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
         await Assert.That(generatedSource).Contains("new global::TestNamespace.Node<string[]>()");
-        await Assert.That(generatedSource).DoesNotContain("T[]");
+        // The open form must not be closed with the type parameter itself (the container's own helpers use T[])
+        await Assert.That(generatedSource).DoesNotContain("<T[]>");
     }
 
     [Test]

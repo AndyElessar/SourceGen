@@ -17,7 +17,8 @@ partial class IocSourceGenerator
         "_localResolvers", "_serviceResolvers", "_controllerFactoryCache", "_componentFactoryCache", "_propertyActivatorCache",
         // Helpers and the resolver entry alias, which a container member of the same name would hide
         ProjectTaskMethodName, CreateLockMethodName, CreateSemaphoreMethodName,
-        ResolverEntryMethodName, KeyedResolverEntryMethodName, CollectionResolverEntriesMethodName,
+        ResolverEntryMethodName, KeyedResolverEntryMethodName, CollectionResolverEntriesMethodName, ResolveCollectionMethodName,
+        FindCollectionElementResolverMethodName, IsCollectionServiceMethodName, GetFallbackServicesMethodName, MergeFallbackServicesMethodName,
         Constants.ResolverEntryAlias, HotReloadHandlerTypeName,
     ];
 

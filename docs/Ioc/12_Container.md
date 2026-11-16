@@ -250,6 +250,62 @@ When the same service type and key is registered in more than one place, the **l
 > [!NOTE]
 > `IncludeTags` and `ExplicitOnly` do not filter imported services; the module's own options decide what it contains.
 
+## Resolving Collections
+
+`GetServices<T>()`, `GetService(typeof(IEnumerable<T>))` and their keyed forms return the container's own instances:
+
+```csharp
+public interface IPlugin;
+
+[IocRegister<IPlugin>(ServiceLifetime.Singleton)]
+public class Plugin : IPlugin;
+
+[IocRegister<IPlugin>(ServiceLifetime.Singleton, Key = "beta")]
+public class BetaPlugin : IPlugin;
+
+[IocContainer]
+public partial class AppContainer;
+
+// In another project, which the generator of AppContainer does not see:
+using var container = new AppContainer();
+IEnumerable<IPlugin> plugins = container.GetServices<IPlugin>();         // [Plugin], the same instance as GetRequiredService<IPlugin>()
+IEnumerable<IPlugin> keyed = container.GetKeyedServices<IPlugin>("beta"); // [BetaPlugin]
+```
+
+A service type with two or more registrations always gets a generated collection resolver. A service type with a single registration gets one only when the container's project requests it as a collection (a constructor parameter, an accessor, or a `GetServices<T>()` call). Otherwise, and for every keyed collection, the container builds a one-element array from the service's own resolver at runtime, before it asks the fallback provider. The element is the instance that `GetRequiredService<T>()` returns, so a singleton is never created a second time by the fallback provider.
+
+> [!NOTE]
+> - Only `IEnumerable<T>` gets this runtime fallback; request other collection types (`IReadOnlyList<T>`, `T[]`, …) in the container's project to get a generated resolver.
+> - Async-init services (registered as `Task<T>`) are never part of a collection.
+> - `GetKeyedServices<T>(KeyedService.AnyKey)` is not answered from a single registration and goes to the fallback provider.
+> - Several registrations of one service type under the same key still return only the last one.
+
+`IsService(typeof(IEnumerable<T>))` and `IsKeyedService(typeof(IEnumerable<T>), key)` return `true` for every collection the container resolves, so frameworks that classify parameters with `IServiceProviderIsService` (such as minimal APIs) see it as a service.
+
+### Collections and the Fallback Provider
+
+With `IntegrateServiceProvider = true` (the default), an `IEnumerable<T>` also contains the fallback provider's services of `T`, like `MS.E.DI` returns every registration. For example, a worker registered in the container runs next to the hosted services the host registered:
+
+```csharp
+[IocRegister<IHostedService>(ServiceLifetime.Singleton)]
+public class Worker : BackgroundService { /* ... */ }
+
+[IocContainer]
+public partial class AppContainer;
+
+// builder.Host.UseServiceProviderFactory(new AppContainer.ServiceProviderFactory());
+// GetServices<IHostedService>() returns the host's hosted services, then Worker
+```
+
+The fallback provider's services come first and the container's last, because the container wins when a single `T` is resolved, and `MS.E.DI` lists the registration that wins last.
+
+> [!WARNING]
+> Register each service either in the container or in the `IServiceCollection` of the fallback provider, not in both. A service registered in both appears twice in its collections, as two different instances.
+
+> [!NOTE]
+> - Only `IEnumerable<T>` requests through the `IServiceProvider` methods merge. Other collection types (`IReadOnlyList<T>`, `T[]`, …) and `KeyValuePair` collections and dictionaries requested from the container contain the container's services only.
+> - A non-keyed collection constructor parameter, injected member or partial accessor of the container, whose `T` the container registers, contains the container's services only. Keyed collection dependencies (`[IocInject(Key = "k")] IEnumerable<T>`, `IReadOnlyList<T>`, `T[]`, …) resolve through `GetKeyedServices<T>("k")` and do merge.
+
 ## Thread Safety Strategy
 
 `ThreadSafeStrategy` controls singleton/scoped cache initialization for lazy services:
