@@ -285,6 +285,31 @@ services.AddSingleton<IMyService>(MyService.Default);
 #endregion
 ```
 
+### Instance Lifetime
+
+An `Instance` is a single pre-existing object, so its registration MUST be Singleton:
+
+- Without an explicit `Lifetime` on the registration attribute (a `ServiceLifetime` constructor argument or the `Lifetime` named argument), the lifetime MUST be Singleton. The lifetime of its `[IocRegisterDefaults]`, the MSBuild `SourceGenIocDefaultLifetime` and the `Transient` fallback MUST NOT apply to it (other default settings, such as `ServiceTypes` and `Tags`, still apply). Both the Register and [Container](Container.Factory.spec.md) outputs, and the lifetime checks of the analyzer, MUST use Singleton.
+- An explicit non-Singleton `Lifetime` is reported by `SGIOC009` (Error). The Register output MUST NOT register such an `Instance`; the Container output keeps returning the instance.
+
+```csharp
+#region Define:
+[assembly: IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Scoped)]
+
+// No Lifetime: Singleton, the Scoped default settings do not apply to its lifetime
+[IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(Default))]
+internal sealed class MyService : IMyService
+{
+    public static readonly MyService Default = new();
+}
+#endregion
+
+#region Generate:
+services.AddSingleton<MyService>(MyService.Default);
+services.AddSingleton<IMyService>(MyService.Default);
+#endregion
+```
+
 ## See Also
 
 - [Generic Registration](Register.Generics.spec.md)

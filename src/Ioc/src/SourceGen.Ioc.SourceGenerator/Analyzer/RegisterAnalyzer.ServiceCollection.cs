@@ -49,7 +49,7 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// SGIOC001 and SGIOC032 for an assembly-level IoCRegisterFor attribute.
+    /// SGIOC001, SGIOC009 and SGIOC032 for an assembly-level IoCRegisterFor attribute.
     /// </summary>
     private static void AnalyzeAssemblyLevelRegistration(
         Action<Diagnostic> reportDiagnostic,
@@ -67,7 +67,7 @@ public sealed partial class RegisterAnalyzer
 
     /// <summary>
     /// First pass: collect registrations, type-level default settings and module imports, and do the immediate validation
-    /// that does not depend on default settings (SGIOC001, SGIOC032). Resolving the registrations
+    /// that does not depend on default settings (SGIOC001, SGIOC009, SGIOC032). Resolving the registrations
     /// against the default settings and the dependency analysis (SGIOC002, SGIOC003-005) are deferred to CompilationEnd.
     /// </summary>
     private static void CollectAndValidateNamedType(SymbolAnalysisContext context, AnalyzerContext analyzerContext)
@@ -125,9 +125,8 @@ public sealed partial class RegisterAnalyzer
     /// <summary>
     /// Resolves every collected registration against the default settings and registers it for the CompilationEnd
     /// analyses, in source order so that the analysis does not depend on the order of the symbol actions. Also reports the
-    /// checks that depend on the default settings: an Instance whose effective lifetime is not Singleton (SGIOC009),
-    /// duplicated registrations with their effective tags (SGIOC011), and the open types nested in a generic type the
-    /// registrations would be registered as (SGIOC038).
+    /// checks that depend on the default settings: duplicated registrations with their effective tags (SGIOC011), and the
+    /// open types nested in a generic type the registrations would be registered as (SGIOC038).
     /// </summary>
     private static void ResolveRegistrations(
         Action<Diagnostic> reportDiagnostic,
@@ -143,9 +142,6 @@ public sealed partial class RegisterAnalyzer
             cancellationToken.ThrowIfCancellationRequested();
 
             var bestDefaultIndex = FindBestDefaultIndex(analyzerContext, targetType);
-
-            // SGIOC009: Check Instance requires Singleton lifetime
-            AnalyzeInstanceLifetime(reportDiagnostic, attribute, GetEffectiveLifetime(analyzerContext, attribute, bestDefaultIndex), location);
 
             // SGIOC011: Check for duplicated registrations (same implementation type, key and a tag). Like the generator, a
             // registration without Tags takes those of its best default settings.
@@ -184,6 +180,9 @@ public sealed partial class RegisterAnalyzer
 
         // SGIOC032: Check explicit service types that would be skipped
         AnalyzeIncompatibleServiceTypes(reportDiagnostic, explicitServiceTypes, targetType, location);
+
+        // SGIOC009: Check an Instance has no explicit non-Singleton lifetime
+        AnalyzeInstanceLifetime(reportDiagnostic, attribute, location);
     }
 
     /// <summary>
@@ -251,7 +250,7 @@ public sealed partial class RegisterAnalyzer
             RuntimeTypeSymbolComparer.Instance);
         var bestDefaultIndex = AddDefaultSettingsServiceTypes(analyzerContext, attribute, targetType, serviceTypes);
 
-        var lifetime = GetEffectiveLifetime(analyzerContext, attribute, bestDefaultIndex);
+        var lifetime = GetEffectiveLifetime(analyzerContext, attribute, hasInstance, bestDefaultIndex);
 
         // Like the generator, open types nested in a generic type are not registered (SGIOC038)
         serviceTypes.RemoveWhere(static serviceType => serviceType.IsOpenNestedInGenericType);
@@ -786,14 +785,18 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Gets the lifetime of a registration like the generator's <c>MergeSettings</c>: its explicit lifetime, otherwise the
-    /// lifetime of its best default settings, otherwise the MSBuild <c>SourceGenIocDefaultLifetime</c> (Transient when unset).
+    /// Gets the lifetime of a registration like the generator's <c>MergeSettings</c>: its explicit lifetime, otherwise
+    /// Singleton for an <c>Instance</c> registration, otherwise the lifetime of its best default settings, otherwise the
+    /// MSBuild <c>SourceGenIocDefaultLifetime</c> (Transient when unset).
     /// </summary>
-    private static ServiceLifetime GetEffectiveLifetime(AnalyzerContext analyzerContext, AttributeData attribute, int bestDefaultIndex)
+    private static ServiceLifetime GetEffectiveLifetime(AnalyzerContext analyzerContext, AttributeData attribute, bool hasInstance, int bestDefaultIndex)
     {
         var (hasExplicitLifetime, lifetime) = attribute.TryGetLifetime();
         if(hasExplicitLifetime)
             return lifetime;
+
+        if(hasInstance)
+            return ServiceLifetime.Singleton;
 
         return bestDefaultIndex >= 0 ? analyzerContext.DefaultSettings[bestDefaultIndex].Lifetime : analyzerContext.FallbackLifetime;
     }

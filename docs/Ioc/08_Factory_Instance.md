@@ -186,10 +186,10 @@ services.AddKeyedScoped<global::MyNamespace.IMyService>("myKey", (global::System
 
 ## Static Instance
 
-Register a static instance (only allows `Singleton` lifetime):
+Register a static instance. An instance is always a singleton, so `Lifetime` can be omitted:
 
 ```csharp
-[IocRegister<IMyService>(ServiceLifetime.Singleton, Instance = nameof(Default))]
+[IocRegister<IMyService>(Instance = nameof(Default))]
 internal class MyService : IMyService
 {
     public static readonly MyService Default = new();
@@ -243,7 +243,7 @@ services.AddKeyedSingleton<global::MyNamespace.IMyService>("myKey", global::MyNa
 </details>
 
 > [!NOTE]  
-> When using `Instance`, only `Singleton` lifetime is allowed. Using `Scoped` or `Transient` will not generate any registration code in the Register (`IServiceCollection`) output. A registration without `Lifetime` takes the lifetime of its matching [default settings](03_Defaults.md), otherwise the [`SourceGenIocDefaultLifetime`](13_MSBuild_Configuration.md) property (`Transient` when unset).
+> When using `Instance`, only `Singleton` lifetime is allowed. An `Instance` registration without `Lifetime` is `Singleton`: the lifetime of its matching [default settings](03_Defaults.md) and the [`SourceGenIocDefaultLifetime`](13_MSBuild_Configuration.md) property do not apply to it. An explicit `Scoped` or `Transient` lifetime is reported by `SGIOC009` and will not generate any registration code in the Register (`IServiceCollection`) output.
 
 ## Factory in Default Settings
 
@@ -599,7 +599,7 @@ services.AddSingleton<global::TestNamespace.IRequestHandler<global::System.Threa
 |ID|Severity|Description|
 |:---|:---|:---|
 |SGIOC008|Error|`Factory` or `Instance` uses `nameof()`, but the referenced field/property/method is not `static` or is inaccessible.|
-|SGIOC009|Error|`Instance` is specified but the lifetime (the `Lifetime` of the attribute, otherwise of its default settings, otherwise `SourceGenIocDefaultLifetime`) is not `Singleton`.|
+|SGIOC009|Error|`Instance` is specified with an explicit `Lifetime` that is not `Singleton`. Without `Lifetime`, an `Instance` is `Singleton`.|
 |SGIOC010|Error|Both `Factory` and `Instance` are specified on the same attribute. `Instance` takes precedence.|
 |SGIOC016|Error|Generic factory method has no valid type parameter mapping: neither `[IocGenericFactory]` nor `GenericFactoryTypeMapping` is specified, the placeholder count does not match the factory method's type parameters, or a placeholder type does not appear in the service type template.|
 |SGIOC017|Error|Placeholder types in `[IocGenericFactory]` or `GenericFactoryTypeMapping` are duplicated. Each placeholder type must be unique within its mapping.|

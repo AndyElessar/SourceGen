@@ -10,7 +10,7 @@ SGIOC005 | Design | Error | Dangerous Service Lifetime Dependency - Scoped servi
 SGIOC006 | Usage | Warning | Duplicated Attribute Usage - Both FromKeyedServicesAttribute and InjectAttribute are marked on the same parameter.
 SGIOC007 | Usage | Error | Invalid Attribute Usage - InjectAttribute is marked on static member, inaccessible member, or method that does not return void.
 SGIOC008 | Usage | Error | Invalid Attribute Usage - Factory or Instance uses nameof() but the referenced member is not static or is inaccessible.
-SGIOC009 | Usage | Error | Invalid Attribute Usage - Instance is specified but its lifetime is not Singleton.
+SGIOC009 | Usage | Error | Invalid Attribute Usage - Instance is specified with an explicit Lifetime that is not Singleton.
 SGIOC010 | Usage | Error | Invalid Attribute Usage - Both Factory and Instance are specified on the same attribute.
 SGIOC011 | Design | Warning | Duplicated Registration Detected - Same implementation type and key are registered multiple times.
 SGIOC012 | Design | Warning | Duplicated IoCRegisterDefaults Detected - Same target type has multiple default settings.

@@ -258,6 +258,8 @@ When applying settings to a registration, the merge order is:
 3. MSBuild `SourceGenIocDefaultLifetime` (for lifetime fallback)
 4. Built-in fallback `Transient`
 
+A registration with an [`Instance`](08_Factory_Instance.md#static-instance) and no explicit `Lifetime` is always `Singleton`: steps 2-4 do not apply to its lifetime.
+
 ### 2) Registration mechanism for discovered closed generics
 
 When a closed generic type is discovered (for example via `[IocDiscover]` or dependency analysis), generation uses:

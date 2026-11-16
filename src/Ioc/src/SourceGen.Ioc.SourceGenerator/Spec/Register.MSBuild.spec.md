@@ -18,7 +18,7 @@ Controls the method name suffix. If not set, uses assembly name.
 
 ### SourceGenIocDefaultLifetime
 
-Controls the default lifetime for registrations when not explicitly specified. If not set, uses `Transient`.
+Controls the default lifetime for registrations when not explicitly specified. If not set, uses `Transient`. It does not apply to an `Instance` registration, which is `Singleton` (see [Instance Lifetime](Register.Factory.spec.md#instance-lifetime)).
 
 ### SourceGenIocFeatures
 

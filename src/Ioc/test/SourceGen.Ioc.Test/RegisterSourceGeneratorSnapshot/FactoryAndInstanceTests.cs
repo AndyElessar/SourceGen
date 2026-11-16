@@ -1342,6 +1342,88 @@ public class FactoryAndInstanceTests
     }
 
     [Test]
+    [Category(Constants.Defaults)]
+    [Arguments("NoDefaults", "", "", null)]
+    [Arguments("ScopedDefaults", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]", "", null)]
+    [Arguments("TransientTypeLevelDefaults", "", "[IocRegisterDefaults(typeof(IMyService), ServiceLifetime.Transient)]", null)]
+    [Arguments("MsBuildScoped", "", "", "Scoped")]
+    [Arguments("ScopedDefaultsAndMsBuildTransient", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Scoped)]", "", "Transient")]
+    public async Task Instance_WithoutExplicitLifetime_IsRegisteredAsSingleton(string scenario, string assemblyDefaults, string typeDefaults, string? msBuildLifetime)
+    {
+        // An Instance is a singleton: without an explicit Lifetime, its default settings and SourceGenIocDefaultLifetime
+        // do not apply (issue #207)
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{assemblyDefaults}}
+
+            namespace TestNamespace;
+
+            {{typeDefaults}}
+            public interface IMyService;
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(Default))]
+            public sealed class MyService : IMyService
+            {
+                public static readonly MyService Default = new();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Consumer(Lazy<IMyService> service);
+
+            [IocContainer]
+            public partial class TestContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: msBuildLifetime is null ? null : new Dictionary<string, string> { ["build_property.SourceGenIocDefaultLifetime"] = msBuildLifetime });
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+        var containerSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("services.AddSingleton<global::TestNamespace.MyService>(global::TestNamespace.MyService.Default)");
+        await Assert.That(generatedSource).Contains("services.AddSingleton<global::TestNamespace.IMyService>(global::TestNamespace.MyService.Default)");
+        await Assert.That(generatedSource).Contains("services.AddSingleton<global::System.Lazy<global::TestNamespace.IMyService>>");
+        // The container shares one Lazy<IMyService> like for any singleton, instead of creating one per resolution
+        await Assert.That(containerSource).Contains("private readonly global::System.Lazy<global::TestNamespace.IMyService> _lazy_IMyService_");
+    }
+
+    [Test]
+    [Category(Constants.Defaults)]
+    public async Task Instance_OpenGenericWithoutExplicitLifetime_ClosedRegistrationsAreSingleton()
+    {
+        // The closed registrations keep the Singleton lifetime of the open Instance registration, not its Scoped defaults
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.INode<>), ServiceLifetime.Scoped)]
+
+            namespace TestNamespace;
+
+            public interface INode<T>;
+
+            [IocRegister(ServiceTypes = [typeof(INode<>)], Instance = nameof(Default))]
+            public sealed class Node<T> : INode<T>
+            {
+                public static readonly Node<T> Default = new();
+            }
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Consumer(INode<string> node);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("services.AddSingleton<global::TestNamespace.INode<string>>(global::TestNamespace.Node<string>.Default)");
+    }
+
+    [Test]
     public async Task Factory_WithDifferentReturnType_GeneratesCast()
     {
         const string source = """

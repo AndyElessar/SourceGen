@@ -116,7 +116,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "When using nameof() to specify a Factory or Instance, the referenced field or property must be static and accessible.");
 
     /// <summary>
-    /// SGIOC009: Invalid Attribute Usage - Instance is specified but Lifetime is not Singleton.
+    /// SGIOC009: Invalid Attribute Usage - Instance is specified with an explicit Lifetime that is not Singleton.
     /// </summary>
     public static readonly DiagnosticDescriptor InstanceRequiresSingleton = new(
         id: "SGIOC009",
@@ -125,8 +125,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         category: Constants.Category_Usage,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "When using Instance to provide a pre-created object, the lifetime must be Singleton because the same instance will be returned for every resolution. The lifetime is the Lifetime of the attribute, otherwise that of its matching IocRegisterDefaults, otherwise the SourceGenIocDefaultLifetime MSBuild property (Transient when unset).",
-        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+        description: "When using Instance to provide a pre-created object, the lifetime must be Singleton because the same instance will be returned for every resolution. An Instance registration without a Lifetime is Singleton; IocRegisterDefaults and the SourceGenIocDefaultLifetime MSBuild property do not apply to it.");
 
     /// <summary>
     /// SGIOC010: Invalid Attribute Usage - Both Factory and Instance are specified on the same attribute.
@@ -677,7 +676,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     /// Analyzes all dependencies after all services have been collected.
     /// This ensures we have a complete picture of all registered services before checking dependencies.
     /// First collects the default settings (SGIOC012 for duplicated IoCRegisterDefaults) and resolves every registration
-    /// against them (SGIOC009, SGIOC011 and SGIOC038, which depend on the default settings). Also reports SGIOC013-014 for
+    /// against them (SGIOC011 and SGIOC038, which depend on the default settings). Also reports SGIOC013-014 for
     /// ServiceKey type mismatches, and SGIOC015 for KeyValuePair key type mismatches.
     /// </summary>
     private static void AnalyzeAllDependencies(CompilationAnalysisContext context, AnalyzerContext analyzerContext)
