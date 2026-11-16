@@ -102,7 +102,18 @@ partial class MainContainer : global::SourceGen.Ioc.IIocContainer<global::MainAp
 
         if(global::System.Threading.Volatile.Read(ref _disposed) == 0) return scope;
 
-        if(global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope) scope.Dispose();
+        if(global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope)
+        {
+            try
+            {
+                scope.Dispose();
+            }
+            catch(global::System.Exception ex)
+            {
+                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
+            }
+        }
+
         throw new global::System.ObjectDisposedException(GetType().FullName);
     }
 

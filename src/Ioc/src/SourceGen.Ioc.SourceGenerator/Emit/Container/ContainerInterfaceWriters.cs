@@ -113,7 +113,26 @@ partial class IocSourceGenerator
         // is seen here; whichever of Dispose and this method takes the scope out of the field disposes it
         writer.WriteLine("if(global::System.Threading.Volatile.Read(ref _disposed) == 0) return scope;");
         writer.WriteLine();
-        writer.WriteLine("if(global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope) scope.Dispose();");
+        // Another resolution may have used the published scope meanwhile (e.g. left an IAsyncDisposable-only
+        // service in it), so a disposal error is reported instead of replacing the ObjectDisposedException
+        writer.WriteLine("if(global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("try");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("scope.Dispose();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("catch(global::System.Exception ex)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
         writer.WriteLine("throw new global::System.ObjectDisposedException(GetType().FullName);");
         writer.Indentation--;
         writer.WriteLine("}");

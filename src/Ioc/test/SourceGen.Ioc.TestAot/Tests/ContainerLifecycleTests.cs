@@ -165,6 +165,48 @@ public sealed class ContainerLifecycleTests
     }
 
     [Test]
+    [NotInParallel(nameof(IocContainerGlobalOptions.OnDisposeException))]
+    public async Task FallbackProvider_ScopeDisposedDuringFirstFallbackResolution_ReportsAsyncOnlyDisposalErrorAndThrowsObjectDisposed()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<LifecycleExternalService>();
+        services.AddScoped<AsyncOnlyExternalService>();
+        using var inner = services.BuildServiceProvider();
+        // Stands in for another resolution through the published fallback scope before CreateFallbackScope takes it back:
+        // it leaves an IAsyncDisposable-only service in the scope, so the scope's synchronous Dispose throws
+        var fallback = new BlockingScopeFactoryProvider(inner)
+        {
+            OnScopeCreated = static provider => provider.GetRequiredService<AsyncOnlyExternalService>(),
+        };
+        using var container = new FallbackScopeContainer(fallback);
+        var scope = container.CreateScope();
+        var disposeExceptions = new List<Exception>();
+        var previousHandler = IocContainerGlobalOptions.OnDisposeException;
+        IocContainerGlobalOptions.OnDisposeException = ex =>
+        {
+            lock(disposeExceptions)
+                disposeExceptions.Add(ex);
+        };
+
+        try
+        {
+            var resolve = Task.Run(() => scope.ServiceProvider.GetService(typeof(LifecycleExternalService)));
+            fallback.Entered.Wait();
+            scope.Dispose();
+            fallback.Release.Set();
+            await ((Task)resolve).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
+            await Assert.That(resolve.Exception?.InnerException).IsTypeOf<ObjectDisposedException>();
+            await Assert.That(fallback.CreatedScope!.DisposeCount).IsEqualTo(1);
+            await Assert.That(disposeExceptions).Contains(static ex => ex is InvalidOperationException);
+        }
+        finally
+        {
+            IocContainerGlobalOptions.OnDisposeException = previousHandler;
+        }
+    }
+
+    [Test]
     public async Task FallbackProvider_RequestedAfterScopeDisposal_CreatesNoFallbackScope()
     {
         var services = new ServiceCollection();
@@ -367,12 +409,23 @@ public sealed class ContainerLifecycleTests
         public object? GetService(Type serviceType) =>
             serviceType == typeof(IServiceScopeFactory) ? this : inner.GetService(serviceType);
 
+        /// <summary>Runs on the created scope before it is returned, e.g. to resolve services from it.</summary>
+        public Action<IServiceProvider>? OnScopeCreated { get; init; }
+
         public IServiceScope CreateScope()
         {
             Entered.Set();
             Release.Wait();
-            return CreatedScope = new TrackingScope(inner.GetRequiredService<IServiceScopeFactory>().CreateScope());
+            CreatedScope = new TrackingScope(inner.GetRequiredService<IServiceScopeFactory>().CreateScope());
+            OnScopeCreated?.Invoke(CreatedScope.ServiceProvider);
+            return CreatedScope;
         }
+    }
+
+    /// <summary>Fallback scoped service that only implements <see cref="IAsyncDisposable"/>.</summary>
+    private sealed class AsyncOnlyExternalService : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class TrackingScope(IServiceScope inner) : IServiceScope, IAsyncDisposable

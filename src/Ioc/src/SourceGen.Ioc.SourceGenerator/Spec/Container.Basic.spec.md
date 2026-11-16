@@ -49,7 +49,7 @@ The container generates generic instance methods matching the signatures from `S
 |Resolver entries|Resolver entries and switch branches MUST call the service's resolver method (e.g. `GetMyService()`), never read an eager field directly: a factory or `IServiceProvider` call running during construction may resolve a service whose eager field is still unset.|
 |Resolver shape|Synchronous singleton/scoped resolvers MUST be split into an expression-bodied fast path `GetX() => _x ?? CreateX();` and a slow-path `CreateX()` that holds creation, synchronization, and root delegation, so the fast path stays small enough to inline.|
 |Singletons in scopes|A scope MUST NOT create a singleton. Lazily created singletons (non-eager, including async-init) MUST delegate to the root container through `_root` (see [Lifetime](Container.Lifetime.spec.md)).|
-|Fallback scope|When `IntegrateServiceProvider = true`, fallback resolution MUST go through `GetFallbackServiceProvider()`. In a container scope it MUST lazily create one scope on the fallback provider (via its `IServiceScopeFactory`, if available) on the first fallback resolution, publish it with `Interlocked.CompareExchange`, and dispose a losing duplicate. Scopes that never use the fallback provider MUST NOT create one. The scope MUST dispose the fallback scope after its own scoped services. A disposed scope MUST NOT create a fallback scope, and exactly one party MUST dispose a published one even when `Dispose`/`DisposeAsync` races the first fallback resolution: disposal sets `_disposed` before it takes the scope with `Interlocked.Exchange(ref _fallbackScope, null)`, and `CreateFallbackScope` reads `_disposed` after publishing; if the scope was disposed meanwhile, it takes its scope back with `Interlocked.CompareExchange`, disposes it only if that succeeds, and throws `ObjectDisposedException`. The hot path (`_fallbackScope ?? CreateFallbackScope(...)`) MUST stay a plain field read. `IsService`/`IsKeyedService` MAY query the root fallback provider directly.|
+|Fallback scope|When `IntegrateServiceProvider = true`, fallback resolution MUST go through `GetFallbackServiceProvider()`. In a container scope it MUST lazily create one scope on the fallback provider (via its `IServiceScopeFactory`, if available) on the first fallback resolution, publish it with `Interlocked.CompareExchange`, and dispose a losing duplicate. Scopes that never use the fallback provider MUST NOT create one. The scope MUST dispose the fallback scope after its own scoped services. A disposed scope MUST NOT create a fallback scope, and exactly one party MUST dispose a published one even when `Dispose`/`DisposeAsync` races the first fallback resolution: disposal sets `_disposed` before it takes the scope with `Interlocked.Exchange(ref _fallbackScope, null)`, and `CreateFallbackScope` reads `_disposed` after publishing; if the scope was disposed meanwhile, it takes its scope back with `Interlocked.CompareExchange`, disposes it synchronously only if that succeeds, and throws `ObjectDisposedException`. Another fallback resolution may have used the scope between its publication and this take-back, so an exception from that `Dispose` (e.g. `InvalidOperationException` for an `IAsyncDisposable`-only service) MUST be passed to `IocContainerGlobalOptions.OnDisposeException` instead of being thrown; it MUST NOT block on `DisposeAsync`. A losing `CompareExchange` duplicate was never exposed and is disposed directly. The hot path (`_fallbackScope ?? CreateFallbackScope(...)`) MUST stay a plain field read. `IsService`/`IsKeyedService` MAY query the root fallback provider directly.|
 |Fallback scope owner|When `IntegrateServiceProvider = true`, the container MUST implement `IIocFallbackScopeOwner` explicitly. The private scope constructor MUST take the owner (`null` for `CreateScope()`) and store it in `_fallbackScopeOwner` before eager services are initialized, since they may resolve fallback services. A scope created through `IIocFallbackScopeOwner.CreateScope(owner)` MUST resolve fallback services through `owner.GetFallbackServiceProvider()` and MUST NOT create or dispose a fallback scope of its own. See [Fallback Scope of Imported Modules](Container.ImportModule.spec.md#fallback-scope-of-imported-modules).|
 |Fallback ownership|The provider built by `ServiceProviderFactory.CreateServiceProvider` MUST be disposed by the returned root container. A provider passed to the public constructor is owned by the caller and MUST NOT be disposed.|
 |Service provider factory|`IServiceProviderFactory<IServiceCollection>` MUST be implemented by a nested `public sealed class ServiceProviderFactory`, not by the container, so that building a container from an `IServiceCollection` does not first construct a container instance. Such an instance would create eager services, which can fail without a fallback provider.|
@@ -226,7 +226,20 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         // is seen here; whichever of Dispose and this method takes the scope out of the field disposes it
         if(Volatile.Read(ref _disposed) == 0) return scope;
 
-        if(Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope) scope.Dispose();
+        // Another resolution may have used the published scope meanwhile (e.g. left an IAsyncDisposable-only
+        // service in it), so a disposal error is reported instead of replacing the ObjectDisposedException
+        if(Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope)
+        {
+            try
+            {
+                scope.Dispose();
+            }
+            catch(Exception ex)
+            {
+                IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
+            }
+        }
+
         throw new ObjectDisposedException(GetType().FullName);
     }
 
