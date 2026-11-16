@@ -10,7 +10,7 @@ The container can generate host-specific activator implementations for ASP.NET C
 |:---|:---|:---|
 |`IControllerActivator`|Container partial class declares `IControllerActivator` **AND** `Microsoft.AspNetCore.Mvc.Core` is referenced|Generates controller activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`|
 |`IComponentActivator`|Container partial class declares `IComponentActivator` **AND** `Microsoft.AspNetCore.Components` is referenced|Generates component activation using `ActivatorUtilities.CreateFactory` and caches factories in `ConcurrentDictionary<Type, ObjectFactory>`; includes hot reload cache invalidation handler|
-|`IComponentPropertyActivator`|Container partial class declares `IComponentPropertyActivator` **AND** `Microsoft.AspNetCore.Components` ≥ 11 (which exposes the type)|For registered components (when also implementing `IComponentActivator`): returns no-op delegate. For unregistered/unknown components: uses reflection to inject `[Inject]`/`[InjectAttribute]` properties, caching activators in `ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>>`; includes hot reload cache invalidation handler|
+|`IComponentPropertyActivator`|Container partial class declares `IComponentPropertyActivator` **AND** `Microsoft.AspNetCore.Components` ≥ 11 (which exposes the type)|For registered components (when also implementing `IComponentActivator`): returns no-op delegate. For unregistered/unknown components: uses reflection to inject properties marked with `Microsoft.AspNetCore.Components.InjectAttribute` or `SourceGen.Ioc.IocInjectAttribute` (matched by type; see Key Design Notes), caching activators in `ConcurrentDictionary<Type, Action<IServiceProvider, IComponent>>`; includes hot reload cache invalidation handler|
 
 Both activators use the container instance (`this`) as the service provider when invoking cached factories.
 
@@ -171,9 +171,23 @@ partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /
     private static Action<IServiceProvider, IComponent> CreateComponentPropertyInjector(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType)
     {
-        // Uses reflection to find [InjectAttribute] properties and create injection delegate
-        // Supports keyed services via InjectAttribute.Key
-        // ...
+        // Walks the type hierarchy; for each property declared on the visited type:
+        object? key;
+        if (property.GetCustomAttribute<InjectAttribute>(false) is { } injectAttr)
+        {
+            key = injectAttr.Key;
+        }
+        else if (property.GetCustomAttribute<IocInjectAttribute>(false) is { } iocInjectAttr)
+        {
+            if (iocInjectAttr.KeyType is KeyType.Csharp) continue; // cannot evaluate a C# expression at runtime
+            key = iocInjectAttr.Key;
+        }
+        else
+        {
+            continue;
+        }
+        // ... collects (property, key) and returns a delegate that resolves keyed (Key not null)
+        // or non-keyed services and sets each property
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -196,9 +210,20 @@ partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /
 
 2. **No-op Optimization**: When the container also implements `IComponentActivator`, registered components already have their `[Inject]` properties injected during `CreateInstance` (which routes through the container's resolver with property/field/method injection). In this case, `GetActivator` returns a no-op delegate to avoid redundant injection.
 
-3. **Reflection Fallback**: For unregistered components (not in `_serviceResolvers`), or when only `IComponentPropertyActivator` is implemented without `IComponentActivator`, the generator produces a reflection-based fallback that walks the type hierarchy for `[InjectAttribute]` properties and injects them at runtime. This mirrors `DefaultComponentPropertyActivator` from ASP.NET Core.
+3. **Reflection Fallback**: For unregistered components (not in `_serviceResolvers`), or when only `IComponentPropertyActivator` is implemented without `IComponentActivator`, the generator produces a reflection-based fallback that walks the type hierarchy for properties with an inject attribute (see note 4) and injects them at runtime. This mirrors `DefaultComponentPropertyActivator` from ASP.NET Core.
 
-4. **Important Note**: When implementing only `IComponentPropertyActivator` without `IComponentActivator`, the no-op optimization is NOT applied because there's no guarantee the component's constructor injection went through the container. All components use the reflection fallback in this case.
+4. **Inject Attribute Matching**: The reflection fallback MUST match inject attributes by type, never by name, and MUST read `Key` directly from the typed attribute (no reflection on the attribute type), so the generated code raises no trim or Native AOT warnings and keyed injection survives trimming:
+
+   |Attribute on the property|Behavior|
+   |:---|:---|
+   |`Microsoft.AspNetCore.Components.InjectAttribute`|Injected with `InjectAttribute.Key` (keyed when not `null`); takes precedence when both attributes are present|
+   |`SourceGen.Ioc.IocInjectAttribute` with `KeyType.Value`|Injected with `IocInjectAttribute.Key` (keyed when not `null`)|
+   |`SourceGen.Ioc.IocInjectAttribute` with `KeyType.Csharp`|Skipped: `Key` holds a C# expression that the runtime cannot evaluate|
+   |Any other attribute, including one named `InjectAttribute` in another namespace|Ignored|
+
+   Attributes are read with `inherit: false`; the hierarchy walk visits each declaring type, so a property is matched by the attributes of its own declaration. `[IocInject]` is visible at runtime only when the `SOURCEGEN` constant is defined (its `[Conditional("SOURCEGEN")]` is satisfied), which the `SourceGen.Ioc` package does by default. `InjectAttribute.Key` exists in every `Microsoft.AspNetCore.Components` version that exposes `IComponentPropertyActivator` (v11+).
+
+5. **Important Note**: When implementing only `IComponentPropertyActivator` without `IComponentActivator`, the no-op optimization is NOT applied because there's no guarantee the component's constructor injection went through the container. All components use the reflection fallback in this case.
 
 ## Explicit Interface Implementation Notes
 

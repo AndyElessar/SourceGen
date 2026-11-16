@@ -203,12 +203,33 @@ partial class IocSourceGenerator
         writer.Indentation++;
 
         writer.WriteLine("if (property.DeclaringType != type) continue;");
-        writer.WriteLine("var injectAttr = property.GetCustomAttributes(true)");
-        writer.WriteLine("    .FirstOrDefault(a => a.GetType().Name is \"InjectAttribute\" or \"IocInjectAttribute\");");
-        writer.WriteLine("if (injectAttr is null) continue;");
         writer.WriteLine();
-        writer.WriteLine("var keyProp = injectAttr.GetType().GetProperty(\"Key\");");
-        writer.WriteLine("var key = keyProp?.GetValue(injectAttr);");
+
+        // Match the attributes by type and read Key directly, like ASP.NET Core's DefaultComponentPropertyActivator,
+        // so trimming cannot remove the Key getter. inherit: false matches the previous GetCustomAttributes(true),
+        // which ignores inherit for properties; the hierarchy walk already visits each declaring type.
+        // [IocInject] with KeyType.Csharp is skipped: its Key is a C# expression the runtime cannot evaluate.
+        writer.WriteLine("object? key;");
+        writer.WriteLine("if (global::System.Reflection.CustomAttributeExtensions.GetCustomAttribute<global::Microsoft.AspNetCore.Components.InjectAttribute>(property, false) is { } injectAttr)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("key = injectAttr.Key;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("else if (global::System.Reflection.CustomAttributeExtensions.GetCustomAttribute<global::SourceGen.Ioc.IocInjectAttribute>(property, false) is { } iocInjectAttr)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if (iocInjectAttr.KeyType is global::SourceGen.Ioc.KeyType.Csharp) continue;");
+        writer.WriteLine("key = iocInjectAttr.Key;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("else");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("continue;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
         writer.WriteLine("injectables ??= new();");
         writer.WriteLine("injectables.Add((property, key));");
 

@@ -597,13 +597,22 @@ partial class ComponentContainer : IComponentPropertyActivator
             foreach (var property in type.GetProperties(flags))
             {
                 if (property.DeclaringType != type) continue;
-                var injectAttr = property.GetCustomAttributes(true)
-                    .FirstOrDefault(a =>
-                        a.GetType().Name is "InjectAttribute" or "IocInjectAttribute");
-                if (injectAttr is null) continue;
 
-                var keyProp = injectAttr.GetType().GetProperty("Key");
-                var key = keyProp?.GetValue(injectAttr);
+                object? key;
+                if (property.GetCustomAttribute<InjectAttribute>(false) is { } injectAttr)
+                {
+                    key = injectAttr.Key;
+                }
+                else if (property.GetCustomAttribute<IocInjectAttribute>(false) is { } iocInjectAttr)
+                {
+                    if (iocInjectAttr.KeyType is KeyType.Csharp) continue;
+                    key = iocInjectAttr.Key;
+                }
+                else
+                {
+                    continue;
+                }
+
                 injectables ??= new();
                 injectables.Add((property, key));
             }
@@ -652,6 +661,21 @@ partial class ComponentContainer : IComponentPropertyActivator
 ```
 
 </details>
+
+The reflection-based fallback, like ASP.NET Core's `DefaultComponentPropertyActivator`, finds the attributes by type
+and reads their `Key` directly, so it stays trim- and Native AOT-safe:
+
+|Attribute on the property|Behavior|
+|:---|:---|
+|`Microsoft.AspNetCore.Components.InjectAttribute`|Injected; keyed when `Key` is set|
+|`SourceGen.Ioc.IocInjectAttribute` (`KeyType.Value`, the default)|Injected; keyed when `Key` is set|
+|`SourceGen.Ioc.IocInjectAttribute` with `KeyType = KeyType.Csharp`|**Skipped** — the key is a C# expression that cannot be evaluated at runtime|
+|Any other attribute, even one named `InjectAttribute` in another namespace|Ignored|
+
+> [!WARNING]
+> For an unregistered component, a property marked `[IocInject(..., KeyType = KeyType.Csharp)]` is not injected by
+> `IComponentPropertyActivator`. Use a constant key instead (for example, `[IocInject("my-key")]` or `[Inject(Key = "my-key")]`),
+> or register the component so the container injects it at compile time.
 
 > [!TIP]
 > When implementing `IComponentPropertyActivator` **without** `IComponentActivator`, the no-op optimization

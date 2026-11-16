@@ -471,12 +471,22 @@ partial class ComponentContainer : global::SourceGen.Ioc.IIocContainer<global::I
             foreach (var property in type.GetProperties(flags))
             {
                 if (property.DeclaringType != type) continue;
-                var injectAttr = property.GetCustomAttributes(true)
-                    .FirstOrDefault(a => a.GetType().Name is "InjectAttribute" or "IocInjectAttribute");
-                if (injectAttr is null) continue;
 
-                var keyProp = injectAttr.GetType().GetProperty("Key");
-                var key = keyProp?.GetValue(injectAttr);
+                object? key;
+                if (global::System.Reflection.CustomAttributeExtensions.GetCustomAttribute<global::Microsoft.AspNetCore.Components.InjectAttribute>(property, false) is { } injectAttr)
+                {
+                    key = injectAttr.Key;
+                }
+                else if (global::System.Reflection.CustomAttributeExtensions.GetCustomAttribute<global::SourceGen.Ioc.IocInjectAttribute>(property, false) is { } iocInjectAttr)
+                {
+                    if (iocInjectAttr.KeyType is global::SourceGen.Ioc.KeyType.Csharp) continue;
+                    key = iocInjectAttr.Key;
+                }
+                else
+                {
+                    continue;
+                }
+
                 injectables ??= new();
                 injectables.Add((property, key));
             }
