@@ -37,7 +37,7 @@ A rule reported from both kinds of actions has two descriptors with the same ID,
 | SGIOC014 | `ServiceKeyNotRegistered`: `[ServiceKey]` parameters of the registration's own `Factory` | `ServiceKeyNotRegisteredForRegistration`: `[ServiceKey]` constructor and inject method parameters |
 | SGIOC038 | `OpenTypeNestedInGenericType`: open types nested in a generic type used by an attribute | `ImplicitOpenTypeNestedInGenericType`: those an open implementation would be registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` |
 
-The other diagnostics reported at compilation end are SGIOC002-005, 009, 011-013, 015, 026, 030, 033-037 and 039 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027 and 029 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
+The other diagnostics reported at compilation end are SGIOC002-005, 011-013, 015, 026, 030, 033-037 and 039 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027 and 029 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
 
 ## Diagnostics
 

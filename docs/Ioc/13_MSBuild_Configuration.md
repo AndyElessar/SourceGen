@@ -63,6 +63,8 @@ Lifetime decision order is:
 3. `SourceGenIocDefaultLifetime`
 4. Built-in fallback `Transient`
 
+A registration with an [`Instance`](08_Factory_Instance.md#static-instance) and no explicit lifetime is always `Singleton`: steps 2-4 do not apply to it.
+
 <details>
 <summary>Generated Code</summary>
 

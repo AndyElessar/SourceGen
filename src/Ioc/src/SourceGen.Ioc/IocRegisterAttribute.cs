@@ -92,6 +92,7 @@ public sealed class IocRegisterAttribute : Attribute
     /// <summary>
     /// Gets the instance name to be used for creating instances of the service.<br/>
     /// Use string or nameof() to specify the instance name.<br/>
+    /// An Instance registration is Singleton when <see cref="Lifetime"/> is not set; a non-Singleton <see cref="Lifetime"/> is reported by SGIOC009.
     /// </summary>
     public string? Instance { get; init; }
 }
