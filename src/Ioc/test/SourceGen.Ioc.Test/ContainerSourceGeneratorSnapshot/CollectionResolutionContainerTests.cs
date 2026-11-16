@@ -275,4 +275,41 @@ public class CollectionResolutionContainerTests
         await Assert.That(generatedSource).Contains(": __ResolveCollection<T>(serviceKey) ?? [];");
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task Container_WithCollectionResolvers_UseSwitchStatement_DispatchesAllCollectionTypes()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin1 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin2 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)], Key = "keyed")]
+            public class KeyedPlugin : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(IEnumerable<Lazy<IPlugin>> lazyPlugins, IDictionary<string, IPlugin> keyedPlugins) { }
+
+            [IocContainer(UseSwitchStatement = true)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<global::TestNamespace.IPlugin>)) return __MergeFallbackServices(GetAllIPluginArray(), null);");
+        await Verify(generatedSource);
+    }
 }

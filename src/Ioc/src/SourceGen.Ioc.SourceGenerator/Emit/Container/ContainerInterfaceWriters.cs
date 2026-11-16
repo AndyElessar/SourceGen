@@ -41,6 +41,9 @@ partial class IocSourceGenerator
                 writer.WriteLine($"if(serviceType == typeof({mapping.ServiceType})) return {mapping.ResolverExpression};");
             }
 
+            // Generated collection resolvers, which the dictionary mode registers in _localResolvers
+            WriteSwitchCollectionBranches(writer, groups, container.IntegrateServiceProvider, isServiceCheck: false);
+
             writer.WriteLine();
         }
         else
@@ -66,7 +69,7 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.WriteLine();
 
-        WriteResolveCollectionMethod(writer, container, effectiveUseSwitchStatement);
+        WriteCollectionFallbackMethods(writer, container, effectiveUseSwitchStatement);
 
         if(container.IntegrateServiceProvider)
         {
@@ -112,18 +115,24 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Writes <c>__ResolveCollection(Type, object?)</c>, which <c>GetService</c> and <c>GetKeyedService</c> call before the fallback
-    /// provider: an <c>IEnumerable&lt;T&gt;</c> without collection resolver (no compile-time collection request of a single
-    /// registration, or a keyed collection) resolves as a one-element array of the single-service resolver of <c>T</c>, under the
-    /// same key. <c>KeyedService.AnyKey</c> (all keyed services), value types and <c>Task&lt;T&gt;</c> (async-init services, which
-    /// collections exclude) are not served. In switch mode the resolvers are searched in <c>_localResolvers</c>, and a collection
-    /// resolver there, which the switch does not dispatch, wins over the single-service resolver.
+    /// Writes the collection helpers that <c>GetService</c>, <c>GetKeyedService</c> and <c>IsService</c> / <c>IsKeyedService</c> use
+    /// when no generated collection resolver serves an <c>IEnumerable&lt;T&gt;</c>:
+    /// <list type="bullet">
+    /// <item><c>__FindCollectionElementResolver</c>: the single-service resolver of <c>T</c> under the same key, unless the key is
+    /// <c>KeyedService.AnyKey</c> (all keyed services) or <c>T</c> is a value type or <c>Task&lt;T&gt;</c> (async-init services,
+    /// which collections exclude). Switch mode searches <c>_localResolvers</c>, as it has no dictionary.</item>
+    /// <item><c>__IsCollectionService</c>: whether that resolver exists.</item>
+    /// <item><c>__ResolveCollection</c>: the fallback provider's services of the collection (when integrated) followed by the
+    /// element resolved by that resolver. Switch mode first looks for an exact <c>IEnumerable&lt;T&gt;</c> entry, which a
+    /// <c>GetKeyedService(…, null)</c> request reaches without the switch.</item>
+    /// </list>
     /// </summary>
-    private static void WriteResolveCollectionMethod(SourceWriter writer, ContainerModel container, bool effectiveUseSwitchStatement)
+    private static void WriteCollectionFallbackMethods(SourceWriter writer, ContainerModel container, bool effectiveUseSwitchStatement)
     {
-        // Array.CreateInstance is RequiresDynamicCode, but the array code of a reference element type is shared (as in MS.DI)
-        writer.WriteLine("[global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"AotAnalysis\", \"IL3050:RequiresDynamicCode\", Justification = \"Arrays are only created for reference element types.\")]");
-        writer.WriteLine($"private object? {ResolveCollectionMethodName}(global::System.Type serviceType, object? serviceKey)");
+        var resolverType = $"global::System.Func<{container.ContainerTypeName}, object>";
+
+        // __FindCollectionElementResolver
+        writer.WriteLine($"private static {resolverType}? {FindCollectionElementResolverMethodName}(global::System.Type serviceType, object? serviceKey)");
         writer.WriteLine("{");
         writer.Indentation++;
         writer.WriteLine($"if(serviceKey == {KeyedServiceAnyKey} || !serviceType.IsConstructedGenericType || serviceType.GetGenericTypeDefinition() != typeof(global::System.Collections.Generic.IEnumerable<>))");
@@ -132,42 +141,193 @@ partial class IocSourceGenerator
         writer.Indentation--;
         writer.WriteLine();
         writer.WriteLine("var elementType = serviceType.GenericTypeArguments[0];");
-
-        if(effectiveUseSwitchStatement)
-        {
-            writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
-            writer.WriteLine("var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key);");
-            writer.WriteLine("var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, key);");
-            writer.WriteLine($"global::System.Func<{container.ContainerTypeName}, object>? resolver = null;");
-            writer.WriteLine();
-            writer.WriteLine("foreach(var entry in _localResolvers)");
-            writer.WriteLine("{");
-            writer.Indentation++;
-            writer.WriteLine("if(entry.Key == collectionId) return entry.Value(this);");
-            writer.WriteLine("if(entry.Key == elementId) resolver = entry.Value;");
-            writer.Indentation--;
-            writer.WriteLine("}");
-            writer.WriteLine();
-            writer.WriteLine("if(resolver is null || elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>)))");
-        }
-        else
-        {
-            writer.WriteLine("if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))");
-            writer.Indentation++;
-            writer.WriteLine($"|| !_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? {KeyedServiceAnyKey}), out var resolver))");
-            writer.Indentation--;
-        }
-
+        writer.WriteLine("if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>)))");
         writer.Indentation++;
         writer.WriteLine("return null;");
         writer.Indentation--;
         writer.WriteLine();
-        writer.WriteLine("var services = global::System.Array.CreateInstance(elementType, 1);");
-        writer.WriteLine("services.SetValue(resolver(this), 0);");
-        writer.WriteLine("return services;");
+        writer.WriteLine($"var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? {KeyedServiceAnyKey});");
+
+        if(effectiveUseSwitchStatement)
+        {
+            writer.WriteLine($"{resolverType}? resolver = null;");
+            writer.WriteLine("foreach(var entry in _localResolvers)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("if(entry.Key == elementId) resolver = entry.Value;");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+            writer.WriteLine("return resolver;");
+        }
+        else
+        {
+            writer.WriteLine("return _serviceResolvers.TryGetValue(elementId, out var resolver) ? resolver : null;");
+        }
+
         writer.Indentation--;
         writer.WriteLine("}");
         writer.WriteLine();
+
+        // __IsCollectionService
+        writer.WriteLine($"private static bool {IsCollectionServiceMethodName}(global::System.Type serviceType, object? serviceKey) => {FindCollectionElementResolverMethodName}(serviceType, serviceKey) is not null;");
+        writer.WriteLine();
+
+        // __ResolveCollection: Array.CreateInstance is RequiresDynamicCode, but the array code of a reference element type is shared (as in MS.DI)
+        writer.WriteLine("[global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"AotAnalysis\", \"IL3050:RequiresDynamicCode\", Justification = \"Arrays are only created for reference element types.\")]");
+        writer.WriteLine($"private object? {ResolveCollectionMethodName}(global::System.Type serviceType, object? serviceKey)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+
+        if(effectiveUseSwitchStatement)
+        {
+            writer.WriteLine($"var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, serviceKey ?? {KeyedServiceAnyKey});");
+            writer.WriteLine("foreach(var entry in _localResolvers)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("if(entry.Key == collectionId) return entry.Value(this);");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+        }
+
+        writer.WriteLine($"if({FindCollectionElementResolverMethodName}(serviceType, serviceKey) is not {{ }} resolver)");
+        writer.Indentation++;
+        writer.WriteLine("return null;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("var elementType = serviceType.GenericTypeArguments[0];");
+        writer.WriteLine("var service = resolver(this);");
+
+        if(container.IntegrateServiceProvider)
+        {
+            // Fallback services first, like registrations added before the container's (see Container.Collections)
+            writer.WriteLine("global::System.Collections.Generic.List<object?>? fallbackServices = null;");
+            writer.WriteLine($"if({GetFallbackServicesMethodName}(serviceType, serviceKey) is global::System.Collections.IEnumerable enumerable && enumerable is not global::System.Collections.ICollection {{ Count: 0 }})");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("foreach(var item in enumerable)");
+            writer.Indentation++;
+            writer.WriteLine("(fallbackServices ??= []).Add(item);");
+            writer.Indentation--;
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+            writer.WriteLine("var count = fallbackServices?.Count ?? 0;");
+            writer.WriteLine("var services = global::System.Array.CreateInstance(elementType, count + 1);");
+            writer.WriteLine("for(var i = 0; i < count; i++)");
+            writer.Indentation++;
+            writer.WriteLine("services.SetValue(fallbackServices![i], i);");
+            writer.Indentation--;
+            writer.WriteLine();
+            writer.WriteLine("services.SetValue(service, count);");
+            writer.WriteLine("return services;");
+        }
+        else
+        {
+            writer.WriteLine("var services = global::System.Array.CreateInstance(elementType, 1);");
+            writer.WriteLine("services.SetValue(service, 0);");
+            writer.WriteLine("return services;");
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+
+        if(!container.IntegrateServiceProvider)
+            return;
+
+        // __GetFallbackServices: the fallback provider's collection, keyed when a key is given (null means non-keyed, like GetKeyedService)
+        writer.WriteLine($"private object? {GetFallbackServicesMethodName}(global::System.Type serviceType, object? serviceKey) =>");
+        writer.Indentation++;
+        writer.WriteLine("serviceKey is null");
+        writer.Indentation++;
+        writer.WriteLine("? GetFallbackServiceProvider()?.GetService(serviceType)");
+        writer.WriteLine(": (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(serviceType, serviceKey);");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine();
+
+        // __MergeFallbackServices<T>: the generated collection resolvers' and the generic methods' counterpart
+        writer.WriteLine($"private T[] {MergeFallbackServicesMethodName}<T>(T[] services, object? serviceKey) =>");
+        writer.Indentation++;
+        writer.WriteLine($"{GetFallbackServicesMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) is global::System.Collections.Generic.IEnumerable<T> fallbackServices && fallbackServices is not global::System.Collections.Generic.ICollection<T> {{ Count: 0 }}");
+        writer.Indentation++;
+        writer.WriteLine("? [.. fallbackServices, .. services]");
+        writer.WriteLine(": services;");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Writes the switch-mode branches of the generated collection resolvers (the entries the dictionary mode gets from
+    /// <c>__CollectionResolvers&lt;T&gt;</c> and the <c>KeyValuePair</c> entries): <c>return …;</c> in <c>GetService</c>, or
+    /// <c>return true;</c> in <c>IsService</c>. <c>IEnumerable&lt;T&gt;</c> of a collection resolver merges the fallback services.
+    /// </summary>
+    private static void WriteSwitchCollectionBranches(SourceWriter writer, ContainerRegistrationGroups groups, bool integrateServiceProvider, bool isServiceCheck)
+    {
+        foreach(var entry in groups.CollectionEntries)
+        {
+            if(entry is CollectionContainerEntry collection)
+            {
+                WriteSwitchArrayCollectionBranches(writer, collection.ElementServiceTypeName, collection.ArrayMethodName, integrateServiceProvider, isServiceCheck);
+            }
+        }
+
+        foreach(var lazy in groups.LazyWrapperEntries)
+        {
+            if(lazy.EmitCollectionResolver)
+            {
+                WriteSwitchArrayCollectionBranches(writer, $"global::System.Lazy<{lazy.InnerServiceTypeName}>", lazy.ArrayMethodName!, integrateServiceProvider, isServiceCheck);
+            }
+        }
+
+        foreach(var func in groups.FuncWrapperEntries)
+        {
+            if(func.EmitCollectionResolver)
+            {
+                WriteSwitchArrayCollectionBranches(writer, $"global::System.Func<{func.InnerServiceTypeName}>", func.ArrayMethodName!, integrateServiceProvider, isServiceCheck);
+            }
+        }
+
+        foreach(var group in groups.KvpWrapperEntries.GroupBy(static entry => (entry.KeyTypeName, entry.ValueTypeName)))
+        {
+            var kvp = group.First();
+            var kvpType = $"global::System.Collections.Generic.KeyValuePair<{kvp.KeyTypeName}, {kvp.ValueTypeName}>";
+
+            if(isServiceCheck)
+            {
+                writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.ICollection<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.IReadOnlyList<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.IList<{kvpType}>) || serviceType == typeof({kvpType}[])) return true;");
+                writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IReadOnlyDictionary<{kvp.KeyTypeName}, {kvp.ValueTypeName}>) || serviceType == typeof(global::System.Collections.Generic.IDictionary<{kvp.KeyTypeName}, {kvp.ValueTypeName}>) || serviceType == typeof(global::System.Collections.Generic.Dictionary<{kvp.KeyTypeName}, {kvp.ValueTypeName}>)) return true;");
+            }
+            else
+            {
+                writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.IReadOnlyCollection<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.ICollection<{kvpType}>)) return {kvp.DictionaryMethodName}();");
+                writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IReadOnlyList<{kvpType}>) || serviceType == typeof(global::System.Collections.Generic.IList<{kvpType}>) || serviceType == typeof({kvpType}[])) return {kvp.ArrayMethodName}();");
+                writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IReadOnlyDictionary<{kvp.KeyTypeName}, {kvp.ValueTypeName}>) || serviceType == typeof(global::System.Collections.Generic.IDictionary<{kvp.KeyTypeName}, {kvp.ValueTypeName}>) || serviceType == typeof(global::System.Collections.Generic.Dictionary<{kvp.KeyTypeName}, {kvp.ValueTypeName}>)) return {kvp.DictionaryMethodName}();");
+            }
+        }
+    }
+
+    private static void WriteSwitchArrayCollectionBranches(SourceWriter writer, string elementType, string arrayMethodName, bool integrateServiceProvider, bool isServiceCheck)
+    {
+        if(isServiceCheck)
+        {
+            writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.IReadOnlyCollection<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.ICollection<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.IReadOnlyList<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.IList<{elementType}>) || serviceType == typeof({elementType}[])) return true;");
+            return;
+        }
+
+        if(integrateServiceProvider)
+        {
+            writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>)) return {MergeFallbackServicesMethodName}({arrayMethodName}(), null);");
+        }
+        else
+        {
+            writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>)) return {arrayMethodName}();");
+        }
+
+        writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IReadOnlyCollection<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.ICollection<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.IReadOnlyList<{elementType}>) || serviceType == typeof(global::System.Collections.Generic.IList<{elementType}>) || serviceType == typeof({elementType}[])) return {arrayMethodName}();");
     }
 
     /// <summary>
@@ -431,7 +591,14 @@ partial class IocSourceGenerator
         writer.WriteLine("&& !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))");
         writer.WriteLine($"&& _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? {KeyedServiceAnyKey}), out var resolver)");
         writer.Indentation++;
-        writer.WriteLine("? [(T)resolver(this)]");
+        if(integrateServiceProvider)
+        {
+            writer.WriteLine($"? {MergeFallbackServicesMethodName}<T>([(T)resolver(this)], serviceKey)");
+        }
+        else
+        {
+            writer.WriteLine("? [(T)resolver(this)]");
+        }
         writer.WriteLine(": null;");
         writer.Indentation--;
         writer.Indentation--;
@@ -500,6 +667,8 @@ partial class IocSourceGenerator
                     : serviceType;
                 writer.WriteLine($"if(serviceType == typeof({exposedType})) return true;");
             }
+
+            WriteSwitchCollectionBranches(writer, groups, container.IntegrateServiceProvider, isServiceCheck: true);
             writer.WriteLine();
         }
         else
@@ -507,6 +676,10 @@ partial class IocSourceGenerator
             writer.WriteLine($"if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {KeyedServiceAnyKey}))) return true;");
             writer.WriteLine();
         }
+
+        // An IEnumerable<T> that the container resolves from the single-service resolver of T
+        writer.WriteLine($"if({IsCollectionServiceMethodName}(serviceType, null)) return true;");
+        writer.WriteLine();
 
         if(container.IntegrateServiceProvider)
         {
@@ -534,6 +707,8 @@ partial class IocSourceGenerator
             writer.WriteLine("if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;");
         }
 
+        writer.WriteLine();
+        writer.WriteLine($"if({IsCollectionServiceMethodName}(serviceType, serviceKey)) return true;");
         writer.WriteLine();
 
         if(container.IntegrateServiceProvider)

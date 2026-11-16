@@ -21,14 +21,27 @@ A request of `IEnumerable<T>` that no collection resolver serves (a single regis
 
 |Rule|Required behavior|
 |:---|:---|
-|Order|The generated collection resolver (the fast path) MUST win. The fallback runs only on a miss and before the fallback provider; the container's result is not merged with the fallback provider's.|
+|Order|The generated collection resolver (the fast path) MUST win. The fallback runs only on a miss and before the fallback provider is asked alone.|
 |Entry points|`GetService(typeof(IEnumerable<T>))`, `GetKeyedService(typeof(IEnumerable<T>), key)` (and so `GetRequiredService` / `GetRequiredKeyedService`), the generated `GetServices<T>()` / `GetKeyedServices<T>(key)`, which keyed `IEnumerable<T>` dependencies call, and the generated `GetService<T>` / `GetRequiredService<T>` / `GetKeyedService<T>` / `GetRequiredKeyedService<T>` of `T = IEnumerable<TElement>` (through the non-generic helper), so generic and non-generic calls agree. Other collection types (`IReadOnlyList<T>`, `T[]`, …) are not served.|
 |Keys|A `null` key means the non-keyed registration, like `GetKeyedService`. `KeyedService.AnyKey` MUST NOT be served (in `MS.DI` it requests all keyed registrations) and goes to the fallback provider. Keys match like the single-service lookup (`ServiceIdentifier` equality).|
 |Excluded elements|`Task<T>` elements (async-init services, which collections exclude, see [Injection](Container.Injection.spec.md)) and value types MUST NOT be wrapped.|
 |AOT|The generic methods create `T[]` directly. The non-generic path creates the array with `Array.CreateInstance` for reference element types only, with `IL3050` suppressed by `UnconditionalSuppressMessage`, like `MS.DI`'s runtime resolver.|
-|Switch mode|`UseSwitchStatement = true` has no dictionary: the fallback searches `_localResolvers`, where an exact `IEnumerable<T>` entry (a generated collection resolver, which the switch does not dispatch) wins over the single-service resolver of `T`. The generic methods delegate to the non-generic ones.|
+|Switch mode|`UseSwitchStatement = true` has no dictionary: the element's resolver is searched in `_localResolvers`. `GetKeyedService(typeof(IEnumerable<T>), null)`, which the keyed switch does not dispatch, first looks for the exact `IEnumerable<T>` entry there, so a generated collection resolver wins over the single-service resolver. The generic methods delegate to the non-generic ones.|
+|`IsService`|`IsService(typeof(IEnumerable<T>))` / `IsKeyedService(typeof(IEnumerable<T>), key)` MUST return `true` when this fallback resolves the request (`__IsCollectionService`), so frameworks that classify parameters with `IServiceProviderIsService` (e.g. minimal APIs) treat it as a service. `MS.DI` returns `true` for every closed `IEnumerable<T>`; the container returns `true` only for what it resolves itself and otherwise asks the fallback provider, because without a fallback provider an `IEnumerable<T>` of an unknown `T` resolves as `null`.|
 
-Generated members (`__ResolveCollection` is a reserved name, see [Basic](Container.Basic.spec.md#member-names)):
+### Merging Fallback Services
+
+With `IntegrateServiceProvider = true`, an `IEnumerable<T>` that the container resolves (a generated collection resolver, or the single-service collection fallback above) MUST also contain the fallback provider's `IEnumerable<T>` (keyed with the same key), like `MS.DI` returns every registration of `T`. For example, an `IHostedService` registered in the container joins the hosted services the host registered in the `IServiceCollection`.
+
+|Rule|Required behavior|
+|:---|:---|
+|Order|The fallback provider's services come first, then the container's. The container wins single-service resolution (it is asked before the fallback provider), which matches `MS.DI` only when its registrations come after the fallback's, and `MS.DI` lists a collection in registration order, so the instance `GetService<T>()` returns is the collection's last element.|
+|Duplicates|A service registered in both (e.g. the fallback provider is built from an `IServiceCollection` that also contains the Register output of the container's registrations) appears twice, with different instances. This is a misconfiguration: there is no cheap and correct identity to remove duplicates by (implementation type is not one, as `MS.DI` allows the same implementation twice). It is not detected.|
+|Cost|Without a fallback provider (`_fallbackProvider` is `null`), or when it returns an empty `ICollection`, the container's array MUST be returned as is, without allocation. Otherwise the result is a new array. In a scope the request uses (and so creates) the fallback scope.|
+|Scope of the merge|Only `IEnumerable<T>` requests through the `IServiceProvider` APIs merge: the `IEnumerable<T>` entry of `__CollectionResolvers<T>` (also used by imported modules' resolvers), its switch branch, and the single-service collection fallback. Other collection types (`IReadOnlyList<T>`, `T[]`, …) are not served by `MS.DI` and stay container-only. `KeyValuePair<K, V>` collections and dictionaries are not merged. Dependencies of container services (and partial accessors) that call a generated array resolver directly (`GetAllT_Array()`) do not merge; keyed collection dependencies of any collection type, which call `GetKeyedServices<T>(key)` (`.ToArray()` for types other than `IEnumerable<T>`), do. Imported modules' collection entries merge according to the module's own fallback provider and fallback scope.|
+|`AnyKey`|Not served by the single-service collection fallback. Because non-keyed entries use `KeyedService.AnyKey` as their key, `GetKeyedServices<T>(KeyedService.AnyKey)` still hits a non-keyed generated collection resolver (existing behavior, which differs from `MS.DI`'s "all keyed services").|
+
+Generated members (`__ResolveCollection`, `__FindCollectionElementResolver`, `__IsCollectionService`, `__GetFallbackServices` and `__MergeFallbackServices` are reserved names, see [Basic](Container.Basic.spec.md#member-names)):
 
 ```csharp
 public object? GetService(global::System.Type serviceType)
@@ -41,19 +54,44 @@ public object? GetService(global::System.Type serviceType)
     return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
 }
 
-[UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
-private object? __ResolveCollection(Type serviceType, object? serviceKey)
+private static Func<AppContainer, object>? __FindCollectionElementResolver(Type serviceType, object? serviceKey)
 {
     if(serviceKey == KeyedService.AnyKey || !serviceType.IsConstructedGenericType || serviceType.GetGenericTypeDefinition() != typeof(IEnumerable<>))
         return null;
 
     var elementType = serviceType.GenericTypeArguments[0];
-    if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(Task<>))
-        || !_serviceResolvers.TryGetValue(new ServiceIdentifier(elementType, serviceKey ?? KeyedService.AnyKey), out var resolver))
+    if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(Task<>)))
         return null;
 
-    var services = Array.CreateInstance(elementType, 1);
-    services.SetValue(resolver(this), 0);
+    var elementId = new ServiceIdentifier(elementType, serviceKey ?? KeyedService.AnyKey);
+    return _serviceResolvers.TryGetValue(elementId, out var resolver) ? resolver : null; // switch mode: last match in _localResolvers
+}
+
+// Used by IsService / IsKeyedService
+private static bool __IsCollectionService(Type serviceType, object? serviceKey) => __FindCollectionElementResolver(serviceType, serviceKey) is not null;
+
+[UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+private object? __ResolveCollection(Type serviceType, object? serviceKey)
+{
+    if(__FindCollectionElementResolver(serviceType, serviceKey) is not { } resolver)
+        return null;
+
+    var elementType = serviceType.GenericTypeArguments[0];
+    var service = resolver(this);
+    // Without IntegrateServiceProvider: a one-element array of service
+    List<object?>? fallbackServices = null;
+    if(__GetFallbackServices(serviceType, serviceKey) is IEnumerable enumerable && enumerable is not ICollection { Count: 0 })
+    {
+        foreach(var item in enumerable)
+            (fallbackServices ??= []).Add(item);
+    }
+
+    var count = fallbackServices?.Count ?? 0;
+    var services = Array.CreateInstance(elementType, count + 1);
+    for(var i = 0; i < count; i++)
+        services.SetValue(fallbackServices![i], i);
+
+    services.SetValue(service, count);
     return services;
 }
 
@@ -63,8 +101,36 @@ private T[]? __ResolveCollection<T>(object? serviceKey) =>
     && !typeof(T).IsValueType
     && !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(Task<>))
     && _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), serviceKey ?? KeyedService.AnyKey), out var resolver)
-        ? [(T)resolver(this)]
+        ? __MergeFallbackServices<T>([(T)resolver(this)], serviceKey) // without IntegrateServiceProvider: [(T)resolver(this)]
         : null;
+
+// IntegrateServiceProvider only
+private object? __GetFallbackServices(Type serviceType, object? serviceKey) =>
+    serviceKey is null
+        ? GetFallbackServiceProvider()?.GetService(serviceType)
+        : (GetFallbackServiceProvider() as IKeyedServiceProvider)?.GetKeyedService(serviceType, serviceKey);
+
+private T[] __MergeFallbackServices<T>(T[] services, object? serviceKey) =>
+    __GetFallbackServices(typeof(IEnumerable<T>), serviceKey) is IEnumerable<T> fallbackServices && fallbackServices is not ICollection<T> { Count: 0 }
+        ? [.. fallbackServices, .. services]
+        : services;
+
+// The IEnumerable<T> entry of the generated collection resolvers merges too (IntegrateServiceProvider only)
+private static __IocResolver[] __CollectionResolvers<T>(Func<AppContainer, object> resolver) =>
+[
+    __Resolver(typeof(IEnumerable<T>), c => c.__MergeFallbackServices((T[])resolver(c), null)),
+    __Resolver(typeof(IReadOnlyCollection<T>), resolver),
+    // ...ICollection<T>, IReadOnlyList<T>, IList<T>, T[]
+];
+```
+
+### Switch-Mode Collection Branches
+
+`UseSwitchStatement = true` MUST dispatch every generated collection entry that the dictionary mode registers in `_localResolvers`, in `GetService` and in `IsService`: the six types of `__CollectionResolvers<T>` for each collection resolver and `Lazy<T>` / `Func<T>` collection resolver (`IEnumerable<T>` merging the fallback services), and the `KeyValuePair<K, V>` collection and dictionary types:
+
+```csharp
+if(serviceType == typeof(IEnumerable<IPlugin>)) return __MergeFallbackServices(GetAllIPluginArray(), null);
+if(serviceType == typeof(IReadOnlyCollection<IPlugin>) || serviceType == typeof(ICollection<IPlugin>) || serviceType == typeof(IReadOnlyList<IPlugin>) || serviceType == typeof(IList<IPlugin>) || serviceType == typeof(IPlugin[])) return GetAllIPluginArray();
 ```
 
 > **Note**: Multiple keyed registrations of `T` under one key still resolve as the last one (one-element array); collecting all of them is not supported yet.

@@ -280,8 +280,31 @@ A service type with two or more registrations always gets a generated collection
 > - `GetKeyedServices<T>(KeyedService.AnyKey)` is not answered from a single registration and goes to the fallback provider.
 > - Several registrations of one service type under the same key still return only the last one.
 
+`IsService(typeof(IEnumerable<T>))` and `IsKeyedService(typeof(IEnumerable<T>), key)` return `true` for every collection the container resolves, so frameworks that classify parameters with `IServiceProviderIsService` (such as minimal APIs) see it as a service.
+
+### Collections and the Fallback Provider
+
+With `IntegrateServiceProvider = true` (the default), an `IEnumerable<T>` also contains the fallback provider's services of `T`, like `MS.E.DI` returns every registration. For example, a worker registered in the container runs next to the hosted services the host registered:
+
+```csharp
+[IocRegister<IHostedService>(ServiceLifetime.Singleton)]
+public class Worker : BackgroundService { /* ... */ }
+
+[IocContainer]
+public partial class AppContainer;
+
+// builder.Host.UseServiceProviderFactory(new AppContainer.ServiceProviderFactory());
+// GetServices<IHostedService>() returns the host's hosted services, then Worker
+```
+
+The fallback provider's services come first and the container's last, because the container wins when a single `T` is resolved, and `MS.E.DI` lists the registration that wins last.
+
 > [!WARNING]
-> A collection the container resolves is not merged with the fallback provider's registrations of the same service type. For example, registering an `IHostedService` in the container hides the hosted services the framework registered in the `IServiceCollection` from `GetServices<IHostedService>()`. Register such framework-extended service types in the `IServiceCollection` (the Register output) instead.
+> Register each service either in the container or in the `IServiceCollection` of the fallback provider, not in both. A service registered in both appears twice in its collections, as two different instances.
+
+> [!NOTE]
+> - Only `IEnumerable<T>` requests through the `IServiceProvider` methods merge. Other collection types (`IReadOnlyList<T>`, `T[]`, …) and `KeyValuePair` collections and dictionaries requested from the container contain the container's services only.
+> - A non-keyed collection constructor parameter, injected member or partial accessor of the container, whose `T` the container registers, contains the container's services only. Keyed collection dependencies (`[IocInject(Key = "k")] IEnumerable<T>`, `IReadOnlyList<T>`, `T[]`, …) resolve through `GetKeyedServices<T>("k")` and do merge.
 
 ## Thread Safety Strategy
 

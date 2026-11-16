@@ -40,6 +40,10 @@ partial class IocSourceGenerator
     private const string KeyedResolverEntryMethodName = "__KeyedResolver";
     private const string CollectionResolverEntriesMethodName = "__CollectionResolvers";
     private const string ResolveCollectionMethodName = "__ResolveCollection";
+    private const string FindCollectionElementResolverMethodName = "__FindCollectionElementResolver";
+    private const string IsCollectionServiceMethodName = "__IsCollectionService";
+    private const string GetFallbackServicesMethodName = "__GetFallbackServices";
+    private const string MergeFallbackServicesMethodName = "__MergeFallbackServices";
 
     /// <summary>
     /// Writes the <c>_localResolvers</c> entry resolving <paramref name="serviceType"/> (with <paramref name="key"/> when keyed) through <paramref name="entry"/>.
@@ -112,7 +116,15 @@ partial class IocSourceGenerator
             writer.WriteLine($"private static {ResolverEntryAlias}[] {CollectionResolverEntriesMethodName}<T>({resolverType} resolver) =>");
             writer.WriteLine("[");
             writer.Indentation++;
-            writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), resolver),");
+            if(container.IntegrateServiceProvider)
+            {
+                // IEnumerable<T> also returns the fallback provider's services, first (see Container.Collections)
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), c => c.{MergeFallbackServicesMethodName}((T[])resolver(c), null)),");
+            }
+            else
+            {
+                writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IEnumerable<T>), resolver),");
+            }
             writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyCollection<T>), resolver),");
             writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.ICollection<T>), resolver),");
             writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::System.Collections.Generic.IReadOnlyList<T>), resolver),");
