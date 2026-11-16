@@ -11,10 +11,14 @@ internal static partial class TransformExtensions
         /// HasServiceKeyAttribute indicates the parameter is marked with [ServiceKey] from Microsoft.Extensions.DependencyInjection.
         /// HasFromKeyedServicesAttribute indicates the parameter is marked with [FromKeyedServices] from Microsoft.Extensions.DependencyInjection.
         /// </summary>
-        /// <returns>A tuple containing the service key (if any), whether the parameter has [Inject] attribute, [ServiceKey] attribute, and [FromKeyedServices] attribute.</returns>
-        public (string? ServiceKey, bool HasInjectAttribute, bool HasServiceKeyAttribute, bool HasFromKeyedServicesAttribute) GetServiceKeyAndAttributeInfo(SemanticModel? semanticModel = null)
+        /// <returns>
+        /// A tuple containing the service key (if any), whether the parameter has [Inject] attribute, [ServiceKey] attribute,
+        /// and [FromKeyedServices] attribute, and whether the service key is given as C# code (<c>KeyType = KeyType.Csharp</c>).
+        /// </returns>
+        public (string? ServiceKey, bool HasInjectAttribute, bool HasServiceKeyAttribute, bool HasFromKeyedServicesAttribute, bool IsCsharpKey) GetServiceKeyAndAttributeInfo(SemanticModel? semanticModel = null)
         {
             string? serviceKey = null;
+            bool isCsharpKey = false;
             bool hasInjectAttribute = false;
             bool hasServiceKeyAttribute = false;
             bool hasFromKeyedServicesAttribute = false;
@@ -46,6 +50,7 @@ internal static partial class TransformExtensions
                         if(!keyArg.IsNull && keyArg.Value is not null)
                         {
                             serviceKey = keyArg.GetPrimitiveConstantString();
+                            isCsharpKey = false;
                         }
                     }
 
@@ -60,13 +65,14 @@ internal static partial class TransformExtensions
                     // Only use [Inject] key if no [FromKeyedServices] key was found
                     if(serviceKey is null)
                     {
-                        var (key, _, _) = attribute.GetKeyInfo(semanticModel);
+                        var (key, keyType, _) = attribute.GetKeyInfo(semanticModel);
                         serviceKey = key;
+                        isCsharpKey = key is not null && keyType == 1;
                     }
                 }
             }
 
-            return (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute);
+            return (serviceKey, hasInjectAttribute, hasServiceKeyAttribute, hasFromKeyedServicesAttribute, isCsharpKey);
         }
     }
 }

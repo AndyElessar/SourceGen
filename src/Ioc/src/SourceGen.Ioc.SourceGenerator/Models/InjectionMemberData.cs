@@ -5,7 +5,10 @@ namespace SourceGen.Ioc;
 /// </summary>
 /// <param name="Name">The name of the member, escaped with <c>@</c> when it is a keyword (such as <c>@event</c>).</param>
 /// <param name="Key">The key for keyed injection; for methods, it applies to parameters without their own key.</param>
-internal closed record class InjectionMemberData(string Name, string? Key)
+/// <param name="IsCsharpKey">
+/// Whether <see cref="Key"/> is given as C# code (<c>KeyType = KeyType.Csharp</c>) rather than a constant value.
+/// </param>
+internal closed record class InjectionMemberData(string Name, string? Key, bool IsCsharpKey)
 {
     /// <summary>
     /// The kind of member, which also orders injection stages (Property → Field → Method → AsyncMethod).
@@ -23,6 +26,7 @@ internal closed record class InjectionMemberData(string Name, string? Key)
 /// <param name="IsNullable">Whether this member type is nullable (e.g., IDependency?).</param>
 /// <param name="HasDefaultValue">Whether this property/field has an initializer with default value.</param>
 /// <param name="DefaultValue">The C# code representation of the default value. Null means the default value is null or no initializer.</param>
+/// <param name="IsCsharpKey">Whether <paramref name="Key"/> is given as C# code rather than a constant value.</param>
 internal sealed record class PropertyOrFieldInjectionData(
     string Name,
     string? Key,
@@ -30,7 +34,8 @@ internal sealed record class PropertyOrFieldInjectionData(
     bool IsField,
     bool IsNullable = false,
     bool HasDefaultValue = false,
-    string? DefaultValue = null) : InjectionMemberData(Name, Key)
+    string? DefaultValue = null,
+    bool IsCsharpKey = false) : InjectionMemberData(Name, Key, IsCsharpKey)
 {
     public override InjectionMemberType MemberType => IsField ? InjectionMemberType.Field : InjectionMemberType.Property;
 
@@ -52,12 +57,14 @@ internal sealed record class PropertyOrFieldInjectionData(
 /// derived type declares a method with the same name that the call on the instance could bind to instead;
 /// <see langword="null"/> to call the method on the instance.
 /// </param>
+/// <param name="IsCsharpKey">Whether <paramref name="Key"/> is given as C# code rather than a constant value.</param>
 internal sealed record class MethodInjectionData(
     string Name,
     string? Key,
     ImmutableEquatableArray<ParameterData> Parameters,
     bool IsAsync,
-    TypeData? CallThroughType = null) : InjectionMemberData(Name, Key)
+    TypeData? CallThroughType = null,
+    bool IsCsharpKey = false) : InjectionMemberData(Name, Key, IsCsharpKey)
 {
     public override InjectionMemberType MemberType => IsAsync ? InjectionMemberType.AsyncMethod : InjectionMemberType.Method;
 
