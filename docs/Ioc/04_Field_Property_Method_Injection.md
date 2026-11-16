@@ -253,7 +253,7 @@ Each element is one of:
 | `new object[] { nameof(T.Member), nameof(SomeKey), KeyType.Csharp }` | Inject using a C# expression key |
 
 > [!NOTE]
-> When the same member is specified in both `InjectMembers` and via `[IocInject]` on the member itself, `[IocInject]` takes priority.
+> When the same member is specified in both `InjectMembers` and via `[IocInject]` on the member itself, `[IocInject]` takes priority. Elements are matched by name: an element named like an `[IocInject]` member declared on the registered type is ignored, whatever member it names, and no diagnostic is reported for it.
 
 `nameof()` only names the member, which is injected as a member of the registered type. An interface member (`nameof(IService.Logger)`) injects its implementation, so it cannot be implemented explicitly. A member hidden on the registered type (by a member declared with `new`, such as `public new IOther Logger`) is not injected either, because the generated code would assign the hiding member; `SGIOC024` reports it. If the hiding member has `[IocInject]`, it takes priority as usual: it is injected and no diagnostic is reported. A base class method is called through its declaring type, such as `((global::MyNamespace.Base)s0).Init(s0_m0)`, when the registered type also declares a method with the same name (an overload such as `Init(object o)`), so that C# overload resolution does not pick the derived overload instead. The same applies to an injected `override` (including an `[IocInject]` one) with such an overload next to it: it is called through the type that declares the original virtual method, and the override still runs. For an open generic registration, any type arguments work: the member is injected with the type arguments of each closed type.
 
@@ -270,7 +270,7 @@ public sealed class Node<T> : INode<T>
 
 ### Overloaded Methods
 
-`nameof()` of a method names all of its overloads, including those inherited from base classes, and cannot pick one. If exactly one overload can be injected (the others are, for example, `static`, generic, or do not return `void` or `Task`), that overload is injected. If more than one can be injected, none of them is injected and `SGIOC043` is reported. A method returning `Task` counts as injectable even when `AsyncMethodInject` is not enabled:
+`nameof()` of a method names all of its overloads, including those inherited from base classes, and cannot pick one. If exactly one overload can be injected (the others are, for example, `static`, generic, or do not return `void` or `Task`), that overload is injected. If more than one can be injected, none of them is injected and `SGIOC043` is reported:
 
 ```csharp
 // SGIOC043: Init(IFoo) and Init(IBar) can both be injected, so neither is
@@ -287,7 +287,10 @@ public sealed class Derived : Base
 }
 ```
 
-To inject one of them, mark it with `[IocInject]`, which takes priority over the `InjectMembers` element, or give it a unique name. `nameof(Base.Init)` names only the overloads declared on `Base` (and its base classes), so it injects `Base.Init(IFoo)` here.
+To inject an overload declared on the registered type, mark it with `[IocInject]`, which takes priority over the `InjectMembers` element, or give it a unique name. `[IocInject]` on a base class method is not read for the registered type, so it does not help for `Base.Init(IFoo)`. Use `nameof(Base.Init)` instead: it names only the overloads declared on `Base` (and its base classes), so it injects `Base.Init(IFoo)` here.
+
+> [!NOTE]
+> An overload returning `Task` always counts when looking for more than one injectable overload, so a `void` overload next to a `Task` overload reports `SGIOC043` even when `AsyncMethodInject` is not enabled. Injecting a `Task` overload still requires `AsyncMethodInject`: when it is the only injectable overload and the feature is not enabled, `SGIOC024` is reported and it is not injected.
 
 ---
 

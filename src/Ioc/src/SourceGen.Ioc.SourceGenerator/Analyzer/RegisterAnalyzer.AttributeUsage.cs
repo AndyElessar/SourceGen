@@ -1054,6 +1054,15 @@ public sealed partial class RegisterAnalyzer
             var inner = nameofInvocation.ArgumentList.Arguments[0].Expression;
             var symbolInfo = context.SemanticModel.GetSymbolInfo(inner, context.CancellationToken);
 
+            // An [IocInject] member of the registered type with the same name takes precedence: the generator's
+            // MergeInjectionMembers drops the element by name, whatever member it names, so it is not checked
+            if (targetType is not null
+                && (symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is { } named
+                && HasIocInjectMemberNamed(targetType, named.Name))
+            {
+                continue;
+            }
+
             // A method group with several overloads: nameof() cannot choose one, so like the generator's
             // GetInjectableMember, only a single injectable overload is injected
             if (symbolInfo.Symbol is null && symbolInfo.CandidateSymbols.Length > 1 && targetType is not null)
@@ -1075,8 +1084,7 @@ public sealed partial class RegisterAnalyzer
                         injectMembers ??= ImmutableArray.CreateBuilder<(ISymbol, Location)>();
                         injectMembers.Add((overload!, element.GetLocation()));
                         break;
-                    // An [IocInject] member of the same name takes precedence, like the generator's MergeInjectionMembers
-                    case > 1 when !HasIocInjectMemberNamed(targetType, methodName):
+                    case > 1:
                         context.ReportDiagnostic(Diagnostic.Create(
                             InjectMembersAmbiguousMethodGroup,
                             nameofExpr.GetLocation(),
@@ -1109,10 +1117,7 @@ public sealed partial class RegisterAnalyzer
             var reason = member is null
                 ? $"it is not a member of '{targetType!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'"
                 : hidingMember is not null
-                    // An [IocInject] member of the same name takes precedence, like the generator's MergeInjectionMembers
-                    ? HasIocInjectMemberNamed(targetType!, member.Name)
-                        ? null
-                        : $"it is hidden by '{hidingMember.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}.{hidingMember.Name}'"
+                    ? $"it is hidden by '{hidingMember.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}.{hidingMember.Name}'"
                     : GetMemberInjectabilityIssue(member, asyncMethodInjectEnabled);
             if (reason is not null)
             {

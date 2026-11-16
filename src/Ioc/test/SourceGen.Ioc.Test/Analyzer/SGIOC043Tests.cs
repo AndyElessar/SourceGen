@@ -38,6 +38,11 @@ public class SGIOC043Tests
         public interface IInit { void Init(IFoo foo); void Init(IBar bar); }
         public sealed class Derived : IInit { public void Init(IFoo foo) { } public void Init(IBar bar) { } }
         """)]
+    // [IocInject] is only read from the registered type's own members, so it does not resolve a base class overload
+    [Arguments("IocInjectOnBaseOverload", "nameof(Derived.Init)", """
+        public class Base { [IocInject] public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { public void Init(IBar bar) { } }
+        """)]
     public async Task SGIOC043_MethodGroupWithSeveralInjectableOverloads_ReportsDiagnostic(string scenario, string injectMember, string declarations)
     {
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(CreateSource(injectMember, declarations));
