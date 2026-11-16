@@ -512,4 +512,122 @@ public class AsyncMethodInjectTests
             .And.Contains("global::System.Threading.Tasks.Task.FromResult(sp.GetRequiredService<global::TestNamespace.IOtherService>())");
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task AsyncMethodInject_TransientAndTaggedAsyncInit_RegistersHolderWithServiceLifetime()
+    {
+        // The AsyncInitHolder<T, TImplementation> that disposes the instance is registered with the lifetime, key and tags of its Task<T>
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient, ServiceTypes = [typeof(IMyService)])]
+            public class TransientService : IMyService, System.IDisposable
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+
+                public void Dispose() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IMyService)], Key = "tagged", Tags = ["Tag1"], Decorators = [typeof(AsyncDecorator)])]
+            public class TaggedService : IMyService { }
+
+            public class AsyncDecorator(IMyService inner) : IMyService, System.IAsyncDisposable
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+
+                public ValueTask DisposeAsync() => default;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("#pragma warning disable SGIOCEXP001")
+            .And.Contains("services.AddTransient<global::SourceGen.Ioc.AsyncInitHolder<global::TestNamespace.TransientService, global::TestNamespace.TransientService>>(")
+            .And.Contains("services.AddKeyedScoped<global::SourceGen.Ioc.AsyncInitHolder<global::TestNamespace.IMyService, global::TestNamespace.TaggedService>>(\"tagged\", ");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_TwoAsyncDecoratedImplementationsUnderSameKey_RegisterHolderPerImplementation()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "k", Decorators = [typeof(AsyncDecorator)])]
+            public class FirstService : IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Key = "k", Decorators = [typeof(AsyncDecorator)])]
+            public class SecondService : IMyService { }
+
+            public class AsyncDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("sp.GetRequiredKeyedService<global::SourceGen.Ioc.AsyncInitHolder<global::TestNamespace.IMyService, global::TestNamespace.FirstService>>(key).Task")
+            .And.Contains("sp.GetRequiredKeyedService<global::SourceGen.Ioc.AsyncInitHolder<global::TestNamespace.IMyService, global::TestNamespace.SecondService>>(key).Task");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task AsyncMethodInject_WithoutAsyncInitServices_DoesNotSuppressExperimentalDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class MyService { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain("SGIOCEXP001");
+    }
 }
