@@ -57,24 +57,16 @@ partial class IocSourceGenerator
     /// the service type forwards to it, sharing the instance. The body still resolves non-keyed.
     /// <para>
     /// An async-init decorator chain (<see cref="RegistersAsyncDecoratorChain"/>) is registered as <c>Task&lt;ServiceType&gt;</c>
-    /// instead: the body is an <c>async</c> local function, so <c>s0</c> may be awaited. The service type has no synchronous
-    /// registration, so the chain is registered under the registration's own key, without a hidden key.
+    /// instead, through an <c>AsyncInitHolder&lt;ServiceType, ImplementationType&gt;</c> (see <see cref="WriteAsyncInitHolderOpen"/>): the body is
+    /// an <c>async</c> local function, so <c>s0</c> may be awaited. The service type has no synchronous registration, so
+    /// <c>Task&lt;ServiceType&gt;</c> is registered under the registration's own key, without a hidden key.
     /// </para>
     /// </remarks>
     private static string? WriteOwnServiceInstanceOpen(SourceWriter writer, ServiceRegistrationModel registration, string lifetime)
     {
         if(RegistersAsyncDecoratorChain(registration))
         {
-            var serviceTypeName = registration.ServiceType.Name;
-            writer.WriteServiceLambdaOpen(lifetime, $"global::System.Threading.Tasks.Task<{serviceTypeName}>", registration.Key);
-
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"async global::System.Threading.Tasks.Task<{serviceTypeName}> Init()");
-            writer.WriteLine("{");
-            writer.Indentation++;
-
+            WriteAsyncInitHolderOpen(writer, lifetime, registration.ServiceType.Name, registration.ImplementationType.Name, registration.Key);
             return null;
         }
 
@@ -104,10 +96,8 @@ partial class IocSourceGenerator
 
         if(isAsync)
         {
-            writer.Indentation--;
-            writer.WriteLine("}");
-
-            writer.WriteLine("return Init();");
+            WriteAsyncInitHolderClose(writer, lifetime, registration.ServiceType.Name, registration.ImplementationType.Name, registration.Key);
+            return;
         }
 
         writer.Indentation--;
