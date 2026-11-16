@@ -24,10 +24,10 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 032 |
 | SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
-| SyntaxNode (Attribute) | `AnalyzeNameofTypeParameters` | `Factory` / `Instance` / C# `Key` given with `nameof()` of a member of an unbound generic type, and C# `Key` of an open generic registration that uses its type parameters | SGIOC040, 041 |
+| SyntaxNode (Attribute) | `AnalyzeNameofTypeParameters` | `Factory` / `Instance` / C# `Key` given with `nameof()` of a member of an unbound generic type, and C# `Key` of an open generic registration that uses its type parameters; records the registration attributes they keep from being registered open for SGIOC042 | SGIOC040, 041 |
 | SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
-| CompilationEnd | `AnalyzeAllDependencies` | Default settings, registration resolution, full-graph dependency/key/async-init/decorator/expanding generic analysis | SGIOC001-005, 011-015, 030, 033-039 |
+| CompilationEnd | `AnalyzeAllDependencies` | Default settings, registration resolution, full-graph dependency/key/async-init/decorator/expanding generic analysis, open generic registrations whose open registration a Factory omits | SGIOC001-005, 011-015, 030, 033-039, 042 |
 
 Handlers of the same symbol kind run in one registered action (one for named types, one for methods, one for properties and fields), and the attribute syntax handlers run in `AnalyzeIocAttributeSyntax`. That action binds an attribute only when `IocAttributeNameFilter` accepts its name: an IoC attribute name, with or without the `Attribute` suffix and optionally qualified, or a using alias in any file whose target is named like an IoC attribute.
 
@@ -39,7 +39,7 @@ The descriptors of the diagnostics reported at compilation end are tagged `Compi
 2. Resolve every pending registration against the default settings, in source order (`ResolveRegistrations` → `RegisterService`): effective lifetime, service types, decorators and best default index; report duplicated registrations with their effective tags (SGIOC011), and the open types nested in a generic type that an open implementation would be registered as (SGIOC038)
 3. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
 4. Decorated parameters of the decorators matched while resolving registrations (SGIOC034/035)
-5. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
+5. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), open generic registrations whose open registration is not registered because their closed types call the Factory (SGIOC042), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
 6. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
 
 ## Default Settings
@@ -60,5 +60,5 @@ A registration matches the settings of its base classes, then its interfaces (ex
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration detection (SGIOC011); SGIOC012 is reported by `CollectDefaults` |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
-| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037), and the service types of generic factory registrations (SGIOC039) |
+| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037), the service types of generic factory registrations (SGIOC039), and the open generic registrations whose Factory omits their open registration (SGIOC042) |
 | `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |

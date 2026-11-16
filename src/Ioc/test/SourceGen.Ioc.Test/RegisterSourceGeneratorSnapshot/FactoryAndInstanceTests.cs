@@ -45,6 +45,98 @@ public class FactoryAndInstanceTests
         await Assert.That(containerSource).Contains("global::TestNamespace.Node<string>.Default");
     }
 
+    private const string OpenGenericFactoryDeclarations = """
+        public interface INode<T>;
+
+        public static class Factories
+        {
+            public static object CreateNode(IServiceProvider sp) => throw new NotImplementedException();
+
+            [IocGenericFactory(typeof(INode<int>), typeof(int))]
+            public static INode<T> CreateServiceType<T>() => new Node<T>();
+
+            [IocGenericFactory(typeof(Node<int>), typeof(int))]
+            public static Node<T> CreateImplementation<T>() => new();
+        }
+
+        public static class Factories<T>
+        {
+            public static Node<T> Create() => new();
+        }
+        """;
+
+    [Test]
+    [Arguments("OwnFactory", "", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Factory = nameof(Create))]", "global::TestNamespace.Node<string>.Create(")]
+    [Arguments("OtherGenericType", "", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Factory = nameof(Factories<T>.Create))]", "global::TestNamespace.Factories<string>.Create(")]
+    [Arguments("StringFactory", "", "[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Factory = \"global::TestNamespace.Node<T>.CreateWith\")]", "global::TestNamespace.Node<string>.CreateWith(sp)")]
+    [Arguments("DefaultFactory", "[assembly: IocRegisterDefaults(typeof(TestNamespace.INode<>), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.Factories.CreateNode))]", "[IocRegister]", "global::TestNamespace.Factories.CreateNode(sp)")]
+    [Arguments("DefaultsImplementationTypes", "[assembly: IocRegisterDefaults(typeof(TestNamespace.INode<>), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.Factories.CreateNode), ImplementationTypes = [typeof(TestNamespace.Node<>)])]", "", "global::TestNamespace.Factories.CreateNode(sp)")]
+    [Arguments("GenericFactoryOfImplementation", "","[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Factory = nameof(Factories.CreateImplementation))]", "global::TestNamespace.Factories.CreateImplementation<string>(")]
+    public async Task Factory_OpenGeneric_DoesNotGenerateOpenRegistration(string scenario, string assemblyAttributes, string attribute, string expected)
+    {
+        // MS.DI would construct Node<T> for an open registration instead of calling the factory, so only the closed types
+        // discovered at compile time are registered, and they call the factory
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            {{assemblyAttributes}}
+
+            namespace TestNamespace;
+
+            {{OpenGenericFactoryDeclarations}}
+
+            {{attribute}}
+            public sealed class Node<T> : INode<T>
+            {
+                public static Node<T> Create() => new();
+
+                public static Node<T> CreateWith(IServiceProvider sp) => new();
+            }
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node, Node<string> implementation);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain("typeof(global::TestNamespace.Node<>)");
+        await Assert.That(generatedSource).DoesNotContain("typeof(global::TestNamespace.INode<>)");
+        await Assert.That(generatedSource).Contains(expected);
+    }
+
+    [Test]
+    public async Task Factory_OpenGenericWithGenericFactory_KeepsOpenRegistrationOfConstructedImplementation()
+    {
+        // A generic factory is called for the service types its mapping matches: INode<string> calls it, so INode<> is not
+        // registered open, while the implementation type is constructed (the mapping never matches Node<T>), like its open
+        // registration
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            {{OpenGenericFactoryDeclarations}}
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Factory = nameof(Factories.CreateServiceType))]
+            public sealed class Node<T> : INode<T>;
+
+            [IocRegister]
+            internal sealed class Consumer(INode<string> node, Node<string> implementation);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
     [Test]
     [Arguments("NonGenericNamesake", "nameof(Node.Default)", "global::TestNamespace.Node.Default")]
     [Arguments("OtherGenericType", "nameof(Holder<T>.Default)", "global::TestNamespace.Holder<string>.Default")]

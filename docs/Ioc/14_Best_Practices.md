@@ -328,6 +328,7 @@ This writes all source generator output to the `Generated/` folder. You can chec
 |`SGIOC039`|Service type does not match the generic factory mapping, so it is not registered|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 |`SGIOC040`|Key uses the open generic implementation's type parameters, so the open registration is not added|[Keyed Services](05_Keyed.md#diagnostics)|
 |`SGIOC041`|`nameof()` of a member of an unbound generic type cannot be used|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
+|`SGIOC042`|Open generic registration with a `Factory` is not registered open, so closed types only requested at runtime cannot be resolved|[Factory & Instance](08_Factory_Instance.md#diagnostics)|
 
 ## Production Checklist
 

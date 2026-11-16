@@ -14,10 +14,45 @@ A `Factory` or `Instance` given with `nameof()` MUST keep the type arguments of 
 
 The implementation type's type parameters MUST be closed the same way in a `Factory` and a C# `Key` (`KeyType.Csharp`, see [Key interpretation](SPEC.spec.md)) of the closed registrations created from an open generic registration, also of an open generic type registered only as itself, which is closed like a factory-only registration:
 
-- **Factory**: a factory whose path or signature uses the implementation type's type parameters, such as `Factory = nameof(Create)` on `Node<T>` with `public static Node<T> Create(IRepo<T> repo)`, or `Factory = nameof(Factories<T>.Create)`, MUST be called on the closed containing type (`Node<string>.Create`), with its return type and parameter types substituted (`IRepo<string>`). The substituted parameters MUST be resolved and collected as closed generic dependencies (see [Generic Registration](Register.Generics.spec.md)), and the expanding dependency analysis (`SGIOC036` / `SGIOC037`) MUST treat the implementation type's type parameters in the factory's parameters as the implementation's own. A generic factory's own type parameters hide those of the implementation type with the same names in its signature, and are closed by its mapping as before. A closed service type that does not determine every type parameter of the implementation type, such as `Base<int>` for `Node<T, V> : Base<T>`, MUST NOT be closed (see [Type Argument Mapping](Register.Generics.spec.md#type-argument-mapping)), so no closed `Factory`, `Instance` or `Key` keeps an undetermined type parameter. The open registration still constructs the implementation type in the Register output, without the factory.
+- **Factory**: a factory whose path or signature uses the implementation type's type parameters, such as `Factory = nameof(Create)` on `Node<T>` with `public static Node<T> Create(IRepo<T> repo)`, or `Factory = nameof(Factories<T>.Create)`, MUST be called on the closed containing type (`Node<string>.Create`), with its return type and parameter types substituted (`IRepo<string>`). The substituted parameters MUST be resolved and collected as closed generic dependencies (see [Generic Registration](Register.Generics.spec.md)), and the expanding dependency analysis (`SGIOC036` / `SGIOC037`) MUST treat the implementation type's type parameters in the factory's parameters as the implementation's own. A generic factory's own type parameters hide those of the implementation type with the same names in its signature, and are closed by its mapping as before. A closed service type that does not determine every type parameter of the implementation type, such as `Base<int>` for `Node<T, V> : Base<T>`, MUST NOT be closed (see [Type Argument Mapping](Register.Generics.spec.md#type-argument-mapping)), so no closed `Factory`, `Instance` or `Key` keeps an undetermined type parameter. See [Open Registration of a Factory](#open-registration-of-a-factory) for the open registration.
 - **Key**: a C# `Key` that uses the implementation type's type parameters, such as `Key = nameof(Name)` on `Node<T>` with `public const string Name`, or `Key = nameof(Keys<T>.Name)`, MUST be read from the closed type (`Node<string>.Name`) for each closed registration; only identifiers that can be type parameters are substituted (see [Generic Registration](Register.Generics.spec.md)). An open generic registration has a single key, while such a key can differ per closed type, so its open registration MUST NOT be emitted in either output and only the closed types discovered at compile time are registered. The analyzer reports `SGIOC040`, unless the registration has an `Instance`, which is not registered open anyway.
 
 A `Factory`, `Instance` or C# `Key` given with `nameof()` of a member of an unbound generic type, such as `nameof(Factories<>.Create)`, names the type parameters of that type, which are not in scope where the generated code calls it. Only the own unbound type of an open generic implementation type, such as `Instance = nameof(Node<>.Default)` for `[IocRegisterFor(typeof(Node<>))]`, MUST be closed like the implementation type; a closed implementation type, such as `typeof(Node<int>)`, is not closed per registration, so its own unbound type is not supported either. A member of another unbound generic type, also on a generic registration whose type parameters have the same names, has no type arguments to close it with, so the registration MUST be ignored in both outputs; the analyzer reports `SGIOC041`. A value `Key` is the member's name, so it is not affected. The `Factory` of default settings applies to the registrations of other types, so no unbound generic type is closed in it, also not its target type: default settings whose `Factory` is given with `nameof()` of a member of an unbound generic type MUST be ignored as a whole, with their `ImplementationTypes`, like default settings for an open type nested in a generic type (`SGIOC038`); the analyzer reports `SGIOC041`.
+
+## Open Registration of a Factory
+
+The open registration of the Register output (`services.AddSingleton(typeof(INode<>), typeof(Node<>))`) is constructed by MS.DI, which would bypass the factory, its generic mapping and its dependencies. An open generic registration MUST NOT emit the open registration of a registered type whose closed registrations call the `Factory` (its own or the `Factory` of its default settings), so only the closed types discovered at compile time are registered, and they call the factory; a closed type that is only requested at runtime is not registered. The analyzer reports `SGIOC042` for each such registration. A registered type's closed registrations call the factory when:
+
+- the factory is not generic (also a `Factory` given as a string): the implementation type calls it, and every service type forwards to the implementation type;
+- the factory is a generic factory with a valid mapping (`[IocGenericFactory]` or `GenericFactoryTypeMapping`): each service type calls it (a service type the mapping never matches is not registered at all, `SGIOC039`, so its open registration is omitted too), while the implementation type calls it only when the mapping's service type template may match it for some type arguments, such as `Node<T>` for the template `Node<int>` (see [Generic Registration](Register.Generics.spec.md#feature-3-generic-factory-type-mapping)). The open registration of an implementation type the template never matches, such as `Handler<T>` for the template `IRequestHandler<Task<int>>`, MUST still be emitted: its closed registrations construct it too.
+
+A generic factory without a valid mapping (`SGIOC016`) is never called, so it MUST NOT omit any open registration. The open registration is not emitted either for an `Instance`, an implementation type MS.DI cannot construct, or a `Key` that uses the implementation's type parameters (see [Generic Registration](Register.Generics.spec.md#open-registrations-msdi-cannot-construct)); `SGIOC042` is not reported for them.
+
+This is a behavior change: earlier versions emitted the open registration, so a closed type only requested at runtime was constructed without the factory. Register such types closed, use them in dependencies, or discover them with `[IocDiscover]`.
+
+The Container output never emits open registrations: a closed type it did not discover at compile time is resolved from the fallback `IServiceProvider` when `IntegrateServiceProvider` is enabled, which resolves it only when that provider registers it itself (a provider built from the Register output no longer does for a factory registration), and is not resolved at all otherwise. The Container output is therefore unchanged.
+
+```csharp
+#region Define:
+public interface INode<T>;
+
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(INode<>)], Factory = nameof(Create))]
+public sealed class Node<T> : INode<T>
+{
+    public static Node<T> Create() => new();
+}
+
+[IocRegister]
+internal sealed class Consumer(INode<string> node);
+#endregion
+
+#region Generate:
+// No services.AddSingleton(typeof(Node<>), typeof(Node<>)) or services.AddSingleton(typeof(INode<>), typeof(Node<>))
+services.AddTransient<Consumer, Consumer>();
+services.AddSingleton<Node<string>>((IServiceProvider sp) => Node<string>.Create());
+services.AddSingleton<INode<string>>((IServiceProvider sp) => sp.GetRequiredService<Node<string>>());
+#endregion
+```
 
 ## Feature 1: Factory Method Registration
 

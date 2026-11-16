@@ -177,11 +177,14 @@ partial class IocSourceGenerator
 
     private static RegisterEntry? CreateRegisterEntry(ServiceRegistrationModel registration)
     {
-        // MS.DI constructs the implementation of an open generic registration with a public constructor, so neither an instance
-        // nor an implementation type it cannot activate is registered open; only their closed registrations are
+        // MS.DI constructs the implementation of an open generic registration with a public constructor, so neither an instance,
+        // a type whose closed registrations call the factory (SGIOC042), nor an implementation type it cannot activate is
+        // registered open; only their closed registrations are
         if(registration.IsOpenGeneric)
         {
-            return registration.Instance is null && registration.ImplementationType.Constructibility is Constructibility.Activatable
+            return registration.Instance is null
+                && !IsCreatedByFactory(registration)
+                && registration.ImplementationType.Constructibility is Constructibility.Activatable
                 ? new SimpleRegisterEntry(registration)
                 : null;
         }
@@ -216,6 +219,14 @@ partial class IocSourceGenerator
 
         return new SimpleRegisterEntry(registration);
     }
+
+    /// <summary>
+    /// Gets whether the closed registrations of an open generic registration call its factory, which MS.DI would bypass for
+    /// the closed types the open registration creates (see <see cref="IsOpenRegistrationCreatedByFactory"/>).
+    /// </summary>
+    private static bool IsCreatedByFactory(ServiceRegistrationModel registration) =>
+        registration.Factory is { } factory
+        && IsOpenRegistrationCreatedByFactory(factory, registration.ServiceType, registration.ImplementationType);
 
     /// <summary>
     /// Gets whether a factory registration's service type shares the instance that the factory creates for the implementation
