@@ -24,7 +24,6 @@ namespace TestAssembly
             if (!tags.Any())
             {
                 services.AddTransient(typeof(global::TestNamespace.Node<>), typeof(global::TestNamespace.Node<>));
-                services.AddTransient(typeof(global::TestNamespace.INode<>), typeof(global::TestNamespace.Node<>));
                 services.AddTransient<global::TestNamespace.Consumer, global::TestNamespace.Consumer>();
                 services.AddTransient<global::TestNamespace.Node<string>, global::TestNamespace.Node<string>>();
                 services.AddKeyedTransient<global::TestNamespace.INode<string>>("SourceGen.Ioc.Decorated:TestNamespace.INode<string>|TestNamespace.Node<string>", (global::System.IServiceProvider sp, object? key) =>

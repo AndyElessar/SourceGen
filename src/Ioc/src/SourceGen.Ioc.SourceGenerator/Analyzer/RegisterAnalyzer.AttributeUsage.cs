@@ -707,6 +707,7 @@ public sealed partial class RegisterAnalyzer
                 member.Name,
                 containingType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                 "the registration is ignored"));
+            analyzerContext.RegistrationsNotRegisteredOpen.TryAdd((attributeSyntax.SyntaxTree, attributeSyntax.Span), 0);
             return;
         }
 
@@ -717,6 +718,7 @@ public sealed partial class RegisterAnalyzer
         var (keyPath, _, _) = attributeData.GetKeyInfo(context.SemanticModel);
         if(ReferencesTypeParameters(keyPath, [.. definition.TypeParameters.Select(static typeParameter => typeParameter.Name)]))
         {
+            analyzerContext.RegistrationsNotRegisteredOpen.TryAdd((attributeSyntax.SyntaxTree, attributeSyntax.Span), 0);
             context.ReportDiagnostic(Diagnostic.Create(
                 KeyUsesImplementationTypeParameters,
                 key!.GetLocation(),

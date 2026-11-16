@@ -26,6 +26,8 @@ services.AddScoped(typeof(global::MyNamespace.IRepository<>), typeof(global::MyN
 
 `Microsoft.Extensions.DependencyInjection` only calls public constructors. When the constructor `SourceGen.Ioc` selects is not public (for example, `internal Repository() { }`), the open registration is not emitted. Only the closed types discovered at compile time are registered, and the generated code constructs each of them (`sp => new Repository<User>()`). A closed type that is only requested at runtime cannot be resolved. The same rule applies to non-generic registrations: a type whose selected constructor is internal is registered with a factory that calls the constructor, not by its type.
 
+For the same reason, no open registration is emitted for an open generic registration with an `Instance`, a `Factory` (`SGIOC042`, see [Factory of an Open Generic Type](08_Factory_Instance.md#factory-of-an-open-generic-type)), or a `KeyType.Csharp` key that uses its type parameters (`SGIOC040`). Microsoft.Extensions.DependencyInjection would construct the type without the instance or factory, and an open registration has a single key. Discover the closed types that are only requested at runtime with [`[IocDiscover]`](#manual-discovery-with-iocdiscover).
+
 ## Auto-Discovery
 
 The generator automatically discovers closed generic types used in:

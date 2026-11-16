@@ -81,6 +81,28 @@ Report when a service type of a registration whose `Factory` (its own, or the `F
 
 ---
 
+## SGIOC042 - Warning - Design - Open generic registration with a Factory is not registered open
+
+Report when the generator does not emit the open registration of an open generic registration in the Register output because its closed types call its `Factory` (its own, or the `Factory` of its best default settings): MS.DI would construct the implementation type without the factory (see [Factory](../../Spec/Register.Factory.spec.md#open-registration-of-a-factory)). Only the closed types discovered at compile time are registered, so a closed type that is only requested at runtime cannot be resolved.
+
+Warning, like `SGIOC040`, which reports the same consequence for a `Key`: it is a behavior change (earlier versions emitted the open registration) that makes a service that resolved before fail at runtime, and an `Info` diagnostic is not shown in builds.
+
+**Analysis:**
+
+- Runs at compilation end over the open generic registrations `RegisterAnalyzer` collects, with the `Factory` method resolved by the attribute syntax node action, like `SGIOC039`.
+- Not reported when the generator would not emit the open registration anyway: the `Register` feature is disabled, the registration has an `Instance` (which takes precedence over any `Factory`), the implementation type MS.DI cannot construct (an interface, an abstract or static class, or a class whose selected constructor is not public), a C# `Key` uses the implementation's type parameters (`SGIOC040`), or the registration is ignored (`SGIOC041`). The attribute syntax node action records the registrations of the last two.
+- A factory that is not generic, also one given as a string, is called for every closed type, so the registration is reported.
+- A generic factory is reported when its mapping is valid and it creates an open registered type: a service type whose type arguments are the implementation's type parameters in order (the only open service types the generator registers), or the implementation type when the service type template may match it for some type arguments (`IocSourceGenerator.IsOpenRegistrationCreatedByFactory`, shared with the generator). An implementation type the template never matches, such as `Handler<T>` for the template `IRequestHandler<Task<int>>`, is constructed for every closed type and keeps its open registration. A generic factory without a valid mapping (`SGIOC016`) is never called and is not reported.
+- Open generic `ImplementationTypes` of `[IocRegisterDefaults]` whose settings have a `Factory` are analyzed the same way, registered as the settings' target type and `ServiceTypes` (and all interfaces / base classes with `RegisterAllInterfaces` / `RegisterAllBaseClasses`), like the generator's `CreateRegistrationDataFromDefaultSettings`; reported at the default settings attribute.
+- Reported once per registration attribute, and once per implementation type of default settings.
+
+**Message format:** `The closed types of '{Implementation}' are created by the factory '{Factory}', so an open generic registration of it is not registered and a closed type that is only requested at runtime cannot be resolved; only the closed types discovered at compile time are registered`
+
+**Fix:** Use the closed types in dependencies, register them, or discover them with `[IocDiscover]`. Suppress the warning when every closed type is discovered at compile time.
+
+---
+
 ## Known Limitations
 
+- `SGIOC042`: the service types that the best default settings of an `ImplementationTypes` entry add are not considered for a generic factory, and the open registrations of imported modules are not analyzed.
 - `SGIOC039`: only the registrations `RegisterAnalyzer` collects are analyzed, so the service types the generator skips for implementations added by `[IocRegisterDefaults(ImplementationTypes = ...)]` and for the registrations of imported modules are not reported. The `Factory` of type-level default settings is analyzed like that of assembly-level ones, and the default settings of imported modules have no `Factory`, like in the generator. It can miss a skipped service type, but does not report one the generator registers.

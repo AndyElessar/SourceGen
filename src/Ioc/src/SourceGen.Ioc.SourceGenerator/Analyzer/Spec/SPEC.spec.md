@@ -37,7 +37,7 @@ A rule reported from both kinds of actions has two descriptors with the same ID,
 | SGIOC014 | `ServiceKeyNotRegistered`: `[ServiceKey]` parameters of the registration's own `Factory` | `ServiceKeyNotRegisteredForRegistration`: `[ServiceKey]` constructor and inject method parameters |
 | SGIOC038 | `OpenTypeNestedInGenericType`: open types nested in a generic type used by an attribute | `ImplicitOpenTypeNestedInGenericType`: those an open implementation would be registered as through `RegisterAllInterfaces` / `RegisterAllBaseClasses` |
 
-The other diagnostics reported at compilation end are SGIOC002-005, 009, 011-013, 015, 026, 030, 033-037 and 039 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027 and 029 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
+The other diagnostics reported at compilation end are SGIOC002-005, 009, 011-013, 015, 026, 030, 033-037, 039 and 042 (`RegisterAnalyzer`) and SGIOC018, 021, 025, 027 and 029 (`ContainerAnalyzer`). The analyzer tests check every reported diagnostic: those that the syntax and semantic analysis of their file reports MUST NOT be tagged, and the others MUST be.
 
 ## Diagnostics
 
@@ -49,7 +49,7 @@ Format: ID - Level - Category - Description
 | [Dependency](Diagnostics.Dependencies.spec.md) | SGIOC002, SGIOC003, SGIOC004, SGIOC005, SGIOC033 |
 | [Injection](Diagnostics.Injection.spec.md) | SGIOC006, SGIOC007, SGIOC022, SGIOC023, SGIOC024, SGIOC028 |
 | [Key](Diagnostics.Keys.spec.md) | SGIOC013, SGIOC014, SGIOC015 |
-| [Factory](Diagnostics.Factory.spec.md) | SGIOC008, SGIOC016, SGIOC017, SGIOC039 |
+| [Factory](Diagnostics.Factory.spec.md) | SGIOC008, SGIOC016, SGIOC017, SGIOC039, SGIOC042 |
 | [Container](Diagnostics.Container.spec.md) | SGIOC018, SGIOC019, SGIOC020, SGIOC021, SGIOC025, SGIOC031 |
 | [Async-init](Diagnostics.AsyncInit.spec.md) | SGIOC026, SGIOC027, SGIOC029, SGIOC030 |
 | [Decorator](Diagnostics.Decorators.spec.md) | SGIOC034, SGIOC035 |

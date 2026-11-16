@@ -988,6 +988,14 @@ public sealed partial class RegisterAnalyzer
         public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), IMethodSymbol> FactoryMethods { get; } = new();
 
         /// <summary>
+        /// The registration attributes, by their span, that the generator ignores (SGIOC041) or does not register open for a Key
+        /// that uses the implementation's type parameters (SGIOC040), so their Factory does not omit an open registration
+        /// (SGIOC042). Populated by RegisterSyntaxNodeAction, which has the semantic model that <c>nameof()</c> needs; consumed in
+        /// CompilationEnd.
+        /// </summary>
+        public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), byte> RegistrationsNotRegisteredOpen { get; } = new();
+
+        /// <summary>
         /// The default settings attributes, by their span, whose <c>Factory</c> is given with <c>nameof()</c> of a member of an
         /// unbound generic type (SGIOC041), which the generator ignores as a whole. Populated by RegisterSyntaxNodeAction,
         /// which has the semantic model that <c>nameof()</c> needs; consumed by <c>CollectDefaults</c> in CompilationEnd.

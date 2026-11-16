@@ -474,8 +474,23 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "nameof() accepts an unbound generic type, such as nameof(Factories<>.Create), but generated code must name the member of a closed type. Only the type parameters of the registered open generic implementation type are closed, such as nameof(Node<>.Default) for Node<T>, so a member of another unbound generic type is not supported and the registration is ignored. Default settings apply to other types, so a Factory of [IocRegisterDefaults] cannot use any unbound generic type and the default settings are ignored.");
 
+    /// <summary>
+    /// SGIOC042: The closed registrations of an open generic registration call its Factory, so the open registration, which
+    /// MS.DI would construct without the factory, is not registered.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FactoryOpenGenericNotRegisteredOpen = new(
+        id: "SGIOC042",
+        title: "Open generic registration with a Factory is not registered open",
+        messageFormat: "The closed types of '{0}' are created by the factory '{1}', so an open generic registration of it is not registered and a closed type that is only requested at runtime cannot be resolved; only the closed types discovered at compile time are registered",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Microsoft.Extensions.DependencyInjection constructs the implementation type of an open generic registration, such as services.AddSingleton(typeof(INode<>), typeof(Node<>)), without calling the factory. The open generic registration of a registration whose closed types call its Factory (its own or that of its default settings) is therefore not registered, so the factory is never bypassed: the closed types discovered at compile time call it, and a closed type that is only requested at runtime is not registered. Use the closed types in dependencies, register them, or discover them with [IocDiscover].",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
+        FactoryOpenGenericNotRegisteredOpen,
         KeyUsesImplementationTypeParameters,
         NameofOfUnboundGenericType,
         OpenTypeNestedInGenericType,
@@ -711,6 +726,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
 
         // SGIOC039: Service types that the mapping of a generic factory does not match
         AnalyzeGenericFactoryServiceTypes(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
+
+        // SGIOC042: Open generic registrations whose open registration is not registered, since their closed types call the factory
+        AnalyzeFactoryOpenRegistrations(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
 
         // SGIOC001: Implementation types that cannot be constructed without a Factory or Instance
         AnalyzeUnconstructibleImplementations(context.ReportDiagnostic, analyzerContext, context.CancellationToken);

@@ -293,14 +293,17 @@ partial class RegisterAnalyzer
     /// in the generator.
     /// </summary>
     private static (IMethodSymbol? Method, FactoryMethodData? Factory) GetEffectiveFactory(AnalyzerContext analyzerContext, AnalyzedRegistration registration)
+        => GetEffectiveFactoryAttribute(analyzerContext, registration) is { } attribute ? GetFactory(analyzerContext, attribute) : default;
+
+    /// <summary>Gets the attribute whose Factory is the effective factory of a registration (see <see cref="GetEffectiveFactory"/>).</summary>
+    private static AttributeData? GetEffectiveFactoryAttribute(AnalyzerContext analyzerContext, AnalyzedRegistration registration)
     {
         if(registration.HasInstance)
-            return default;
+            return null;
 
-        var attribute = registration.HasFactory ? registration.Attribute
+        return registration.HasFactory ? registration.Attribute
             : registration.DefaultIndex >= 0 && registration.DefaultIndex < analyzerContext.DefaultAttributes.Length && HasFactory(analyzerContext.DefaultAttributes[registration.DefaultIndex]) ? analyzerContext.DefaultAttributes[registration.DefaultIndex]
             : null;
-        return attribute is null ? default : GetFactory(analyzerContext, attribute);
     }
 
     /// <summary>
@@ -363,6 +366,125 @@ partial class RegisterAnalyzer
                     GetDisplayName(mapping.ServiceTypeTemplate.Name),
                     GetFactoryDisplayName(method)));
             }
+        }
+    }
+
+    /// <summary>
+    /// SGIOC042: Reports the open generic registrations whose closed types call their factory, so the Register output does not
+    /// register them open (see <c>IocSourceGenerator.IsOpenRegistrationCreatedByFactory</c>). Only the open registrations the
+    /// Register output would otherwise register count: none without the Register feature, with an <c>Instance</c>, for an
+    /// implementation type MS.DI cannot construct (no public selected constructor), for a Key that uses the implementation's
+    /// type parameters (SGIOC040), or for an ignored registration (SGIOC041).
+    /// </summary>
+    private static void AnalyzeFactoryOpenRegistrations(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        if((analyzerContext.Features & IocFeatures.Register) == 0)
+            return;
+
+        foreach(var registration in analyzerContext.Registrations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(!registration.IsOpenGeneric
+                || GetEffectiveFactoryAttribute(analyzerContext, registration) is not { } factoryAttribute
+                || (registration.Attribute.ApplicationSyntaxReference is { } syntax
+                    && analyzerContext.RegistrationsNotRegisteredOpen.ContainsKey((syntax.SyntaxTree, syntax.Span))))
+            {
+                continue;
+            }
+
+            var definition = GetDefinition(registration.Implementation);
+            ReportIfCreatedByFactory(definition, factoryAttribute, EnumerateRegisteredTypes(registration).Skip(1), registration.Location);
+        }
+
+        // Like the generator's CreateRegistrationDataFromDefaultSettings, an open ImplementationTypes entry of default settings is
+        // created with their Factory and registered as their target type and ServiceTypes, and RegisterAllInterfaces /
+        // RegisterAllBaseClasses; default settings ignored for SGIOC041 are not in DefaultAttributes
+        foreach(var attribute in analyzerContext.DefaultAttributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(!HasFactory(attribute))
+                continue;
+
+            var implementationTypes = attribute.GetImplementationTypeSymbols();
+            if(implementationTypes.Length == 0)
+                continue;
+
+            var targetType = attribute.AttributeClass is { IsGenericType: true } attributeClass
+                ? attributeClass.TypeArguments.FirstOrDefault() as INamedTypeSymbol
+                : attribute.ConstructorArguments is [{ Value: INamedTypeSymbol target }, ..] ? target : null;
+            var declaredDefinitions = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach(var serviceType in AnalyzerHelpers.GetExplicitServiceTypes(attribute).Append(targetType))
+            {
+                if(serviceType is not null)
+                    declaredDefinitions.Add(serviceType.OriginalDefinition);
+            }
+
+            var registerAllInterfaces = attribute.GetNamedArgument<bool>("RegisterAllInterfaces");
+            var registerAllBaseClasses = attribute.GetNamedArgument<bool>("RegisterAllBaseClasses");
+            Location? location = null;
+            foreach(var implementationType in implementationTypes)
+            {
+                var definition = GetDefinition(implementationType);
+                if(!(definition.IsGenericType && definition.IsDefinition))
+                    continue;
+
+                var serviceTypes = definition.AllInterfaces
+                    .Where(serviceType => registerAllInterfaces || declaredDefinitions.Contains(serviceType.OriginalDefinition))
+                    .Concat(EnumerateBaseTypes(definition).Where(serviceType => registerAllBaseClasses || declaredDefinitions.Contains(serviceType.OriginalDefinition)));
+                location ??= attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
+                ReportIfCreatedByFactory(definition, attribute, serviceTypes, location);
+            }
+        }
+
+        void ReportIfCreatedByFactory(INamedTypeSymbol definition, AttributeData factoryAttribute, IEnumerable<INamedTypeSymbol> serviceTypes, Location? location)
+        {
+            // MS.DI calls public constructors only, so another implementation type is not registered open anyway
+            if(!definition.IsConstructibleIn(analyzerContext.Assembly)
+                || definition.GetSelectedConstructor(analyzerContext.Assembly) is { DeclaredAccessibility: not Accessibility.Public })
+            {
+                return;
+            }
+
+            var (method, factory) = GetFactory(analyzerContext, factoryAttribute);
+            if(!IsAnyOpenRegistrationCreatedByFactory(definition, factory, serviceTypes))
+                return;
+
+            reportDiagnostic(Diagnostic.Create(
+                FactoryOpenGenericNotRegisteredOpen,
+                location,
+                definition.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                method is not null ? GetFactoryDisplayName(method) : factoryAttribute.GetNamedArgument<string>("Factory")));
+        }
+
+        // The implementation type is registered open, and each service type whose type arguments are the implementation's type
+        // parameters in order (BuildValidOpenGenericServiceTypes)
+        static bool IsAnyOpenRegistrationCreatedByFactory(INamedTypeSymbol definition, FactoryMethodData factory, IEnumerable<INamedTypeSymbol> serviceTypes)
+        {
+            if(factory.TypeParameterCount == 0)
+                return true;
+
+            var implementationType = definition.GetTypeData();
+            if(IocSourceGenerator.IsOpenRegistrationCreatedByFactory(factory, implementationType, implementationType))
+                return true;
+
+            foreach(var serviceType in serviceTypes)
+            {
+                if(Enumerable.SequenceEqual<ITypeSymbol>(serviceType.TypeArguments, definition.TypeParameters, SymbolEqualityComparer.Default))
+                {
+                    return IocSourceGenerator.IsOpenRegistrationCreatedByFactory(factory, serviceType.GetTypeData(), implementationType);
+                }
+            }
+
+            return false;
+        }
+
+        static IEnumerable<INamedTypeSymbol> EnumerateBaseTypes(INamedTypeSymbol type)
+        {
+            for(var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+                yield return baseType;
         }
     }
 

@@ -70,6 +70,30 @@ partial class IocSourceGenerator
             && MapGenericFactoryTypeArguments(factory, serviceType, out var hasTypeParameter) is null
             && !hasTypeParameter;
 
+    /// <summary>
+    /// Gets whether the closed registrations of an open generic registration call its factory for a service type, so its open
+    /// registration, which MS.DI constructs, is not registered (SGIOC042). A regular factory creates the implementation type
+    /// and every service type. A generic factory is called for the service types, and for the implementation type only when
+    /// its mapping matches it (see <see cref="CloseGenericFactory"/>), so an implementation type whose closed types are all
+    /// constructed keeps its open registration; a generic factory without a valid mapping (SGIOC016) is never called.
+    /// </summary>
+    internal static bool IsOpenRegistrationCreatedByFactory(FactoryMethodData factory, TypeData serviceType, TypeData implementationType)
+    {
+        if(factory.TypeParameterCount == 0)
+        {
+            return true;
+        }
+
+        if(GetGenericFactoryPattern(factory) is null)
+        {
+            return false;
+        }
+
+        return serviceType.Name != implementationType.Name
+            || MapGenericFactoryTypeArguments(factory, implementationType, out var hasTypeParameter) is not null
+            || hasTypeParameter;
+    }
+
     /// <param name="hasTypeParameter">
     /// Whether some closing of the service type's type parameters may still match: a type parameter stands where the template
     /// has a constructed type, or a repeated placeholder takes type arguments that may become equal (<c>T</c> and <c>int</c>).
