@@ -59,11 +59,17 @@ internal static partial class RoslynExtensions
             // Only an unbound generic type, such as Factories<>, names type parameters that are not in scope, so the
             // argument is bound only then
             if(argument.Expression is not InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" }, ArgumentList.Arguments: [var nameofArgument] }
-                || !nameofArgument.Expression.DescendantNodes().OfType<OmittedTypeArgumentSyntax>().Any()
-                || ResolveExpressionSymbol(nameofArgument.Expression, semanticModel) is not { } member)
+                || !nameofArgument.Expression.DescendantNodes().OfType<OmittedTypeArgumentSyntax>().Any())
             {
                 continue;
             }
+
+            // The Factory is the overload the generator calls, or the member whose path it calls when none is resolved
+            var member = name is "Factory" && ResolveFactoryMethod(nameofArgument.Expression, attributeSyntax.ArgumentList, semanticModel) is { } factory
+                ? factory
+                : ResolveExpressionSymbol(nameofArgument.Expression, semanticModel);
+            if(member is null)
+                continue;
 
             for(var containingType = member.ContainingType; containingType is not null; containingType = containingType.ContainingType)
             {
@@ -88,16 +94,188 @@ internal static partial class RoslynExtensions
     }
 
     /// <summary>
-    /// Resolves the method symbol from a nameof() or string expression in an attribute.
+    /// Resolves the <c>Factory</c> method named by the expression inside <c>nameof()</c>: the method, or the only usable
+    /// overload of a method group (see <see cref="GetFactoryMethod"/>). Shared by the generator and the analyzers.
     /// </summary>
-    /// <param name="expression">The expression inside nameof() or a string literal.</param>
+    /// <param name="expression">The expression inside nameof().</param>
+    /// <param name="arguments">The arguments of the attribute, whose <c>GenericFactoryTypeMapping</c> makes a generic overload usable.</param>
     /// <param name="semanticModel">The semantic model to use for symbol resolution.</param>
-    /// <returns>The method symbol if found; otherwise, null.</returns>
-    public static IMethodSymbol? ResolveMethodSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
-        => ResolveExpressionSymbol(expression, semanticModel) as IMethodSymbol;
+    /// <returns>
+    /// The factory method, or <see langword="null"/> when the expression is not a method, or is a method group with no or more
+    /// than one usable overload (SGIOC008, SGIOC044); the factory is then called by its path like a Factory given as a string.
+    /// </returns>
+    public static IMethodSymbol? ResolveFactoryMethod(ExpressionSyntax expression, AttributeArgumentListSyntax? arguments, SemanticModel semanticModel)
+        => ResolveFactoryMethod(expression, arguments, semanticModel, out _);
+
+    /// <inheritdoc cref="ResolveFactoryMethod(ExpressionSyntax, AttributeArgumentListSyntax?, SemanticModel)"/>
+    /// <param name="isOverloaded">
+    /// Whether the expression names a method group with several overloads, so a call of the factory by its path must cast its
+    /// arguments to bind the resolved overload (<see cref="FactoryMethodData.CastArguments"/>).
+    /// </param>
+    public static IMethodSymbol? ResolveFactoryMethod(ExpressionSyntax expression, AttributeArgumentListSyntax? arguments, SemanticModel semanticModel, out bool isOverloaded)
+    {
+        var candidates = ResolveExpressionSymbols(expression, semanticModel);
+        isOverloaded = candidates.Length > 1;
+        return GetFactoryMethod(candidates, HasGenericFactoryTypeMapping(arguments), out var method) == 1 ? method : null;
+    }
 
     /// <summary>
-    /// Resolves the symbol an expression refers to, or its first candidate.
+    /// Gets the factory method among the symbols a <c>Factory</c> <c>nameof()</c> names: its symbol, or the overloads of a
+    /// method group, which <c>nameof()</c> cannot choose between. A single symbol is the factory when it is a method, whether
+    /// usable or not (SGIOC008 and SGIOC016 report it). Of several overloads, only a usable one can be the factory: an ordinary
+    /// static method returning a value that the generated code can access (<see cref="GetFactoryOrInstanceIssue"/>), and,
+    /// when generic, with a type mapping (<c>[IocGenericFactory]</c>, or <c>GenericFactoryTypeMapping</c> on the attribute).
+    /// Only a single usable overload is used, never one chosen by the order of the candidates; more than one is reported by
+    /// the analyzer (SGIOC044).
+    /// </summary>
+    /// <param name="candidates">The symbol named by <c>nameof()</c>, or the candidates of its method group.</param>
+    /// <param name="hasGenericFactoryTypeMapping">Whether the attribute specifies <c>GenericFactoryTypeMapping</c>.</param>
+    /// <param name="method">The factory method, when there is a single one.</param>
+    /// <returns>The number of factory methods: 0, 1, or 2 for more than one.</returns>
+    public static int GetFactoryMethod(ImmutableArray<ISymbol> candidates, bool hasGenericFactoryTypeMapping, out IMethodSymbol? method)
+    {
+        if(candidates is [var single])
+        {
+            method = single as IMethodSymbol;
+            return method is null ? 0 : 1;
+        }
+
+        method = null;
+        foreach(var candidate in candidates)
+        {
+            if(!IsUsableFactoryOverload(candidate, hasGenericFactoryTypeMapping, out var overload)
+                || SymbolEqualityComparer.Default.Equals(overload, method))
+            {
+                continue;
+            }
+
+            if(method is not null)
+            {
+                method = null;
+                return 2;
+            }
+
+            method = overload;
+        }
+
+        return method is null ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Gets the return type shared by every usable overload of a <c>Factory</c> method group (see <see cref="GetFactoryMethod"/>),
+    /// so that a factory called by its path without a resolved overload (SGIOC044) still casts its result to the
+    /// implementation type; <see langword="null"/> when they return different types, or the expression is not a method group.
+    /// </summary>
+    public static ITypeSymbol? GetFactoryOverloadsReturnType(ExpressionSyntax expression, AttributeArgumentListSyntax? arguments, SemanticModel semanticModel)
+    {
+        var candidates = ResolveExpressionSymbols(expression, semanticModel);
+        if(candidates.Length <= 1)
+            return null;
+
+        var hasGenericFactoryTypeMapping = HasGenericFactoryTypeMapping(arguments);
+        ITypeSymbol? returnType = null;
+        foreach(var candidate in candidates)
+        {
+            if(!IsUsableFactoryOverload(candidate, hasGenericFactoryTypeMapping, out var overload))
+                continue;
+
+            if(returnType is not null && !SymbolEqualityComparer.Default.Equals(returnType, overload.ReturnType))
+                return null;
+
+            returnType = overload.ReturnType;
+        }
+
+        return returnType;
+    }
+
+    /// <summary>Gets whether an overload of a <c>Factory</c> method group can be the factory (see <see cref="GetFactoryMethod"/>).</summary>
+    private static bool IsUsableFactoryOverload(ISymbol candidate, bool hasGenericFactoryTypeMapping, [NotNullWhen(true)] out IMethodSymbol? overload)
+    {
+        overload = candidate as IMethodSymbol;
+        return overload is { MethodKind: MethodKind.Ordinary, ReturnsVoid: false }
+            && GetFactoryOrInstanceIssue(overload) is null
+            && (overload.TypeParameters.Length == 0 || hasGenericFactoryTypeMapping || HasIocGenericFactoryAttribute(overload));
+
+        static bool HasIocGenericFactoryAttribute(IMethodSymbol method)
+            => method.GetAttributes().Any(static attribute => attribute.AttributeClass?.ToDisplayString() == Constants.IocGenericFactoryAttributeFullName);
+    }
+
+    /// <summary>
+    /// Gets whether the attribute arguments specify <c>GenericFactoryTypeMapping</c>, which makes a generic <c>Factory</c>
+    /// overload usable without <c>[IocGenericFactory]</c>. Whether the mapping is valid is reported on the factory (SGIOC016).
+    /// </summary>
+    public static bool HasGenericFactoryTypeMapping(AttributeArgumentListSyntax? arguments)
+    {
+        foreach(var argument in arguments?.Arguments ?? default)
+        {
+            if(argument.NameEquals?.Name.Identifier.ValueText == "GenericFactoryTypeMapping")
+                return !argument.Expression.IsKind(SyntaxKind.NullLiteralExpression);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets why a <c>Factory</c> or <c>Instance</c> member given with <c>nameof()</c> cannot be used by the generated code
+    /// (SGIOC008), or <see langword="null"/> when it can: it must be static, not private or protected, and not declared in a
+    /// private type.
+    /// </summary>
+    public static string? GetFactoryOrInstanceIssue(ISymbol symbol)
+    {
+        if(!symbol.IsStatic)
+            return "not static";
+
+        // Private and protected members cannot be accessed from the generated code, which is not a derived class
+        switch(symbol.DeclaredAccessibility)
+        {
+            case Accessibility.Private:
+                return "private";
+            case Accessibility.ProtectedAndInternal:
+            case Accessibility.Protected:
+                return "protected and not accessible from generated code";
+        }
+
+        for(var containingType = symbol.ContainingType; containingType is not null; containingType = containingType.ContainingType)
+        {
+            if(containingType.DeclaredAccessibility is Accessibility.Private)
+                return "declared in a private type";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves the symbol an expression refers to. For a method group with several overloads, which <c>nameof()</c> cannot
+    /// choose between, it is the overload declared on the most derived type, so its path is that of the type the method
+    /// group is looked up on (<c>nameof(Derived.Create)</c> → <c>Derived.Create</c>), whatever the order of the candidates.
+    /// </summary>
+    private static ISymbol? ResolveExpressionSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
+    {
+        var symbols = ResolveExpressionSymbols(expression, semanticModel);
+        if(symbols.Length <= 1)
+            return symbols.FirstOrDefault();
+
+        ISymbol? result = null;
+        var resultDepth = -1;
+        string? resultName = null;
+        foreach(var symbol in symbols)
+        {
+            var depth = 0;
+            for(var type = symbol.ContainingType?.BaseType; type is not null; type = type.BaseType)
+                depth++;
+
+            var name = symbol.ToDisplayString();
+            if(depth > resultDepth || (depth == resultDepth && string.CompareOrdinal(name, resultName) < 0))
+            {
+                (result, resultDepth, resultName) = (symbol, depth, name);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves the symbol an expression refers to, or the candidates of a method group with several overloads.
     /// </summary>
     /// <remarks>
     /// Speculative binding binds only the expression at its own position, so names are looked up in the same scope.
@@ -105,19 +283,21 @@ internal static partial class RoslynExtensions
     /// enclosing attribute instead, and transforms receive a new semantic model on every run, so that work repeats
     /// on every edit. It remains the fallback when speculative binding finds nothing.
     /// </remarks>
-    private static ISymbol? ResolveExpressionSymbol(ExpressionSyntax expression, SemanticModel semanticModel)
+    public static ImmutableArray<ISymbol> ResolveExpressionSymbols(ExpressionSyntax expression, SemanticModel semanticModel)
     {
         var model = semanticModel.ForTreeOf(expression);
         if(expression is MemberAccessExpressionSyntax { Name: IdentifierNameSyntax name } memberAccess
             && ResolveSingleTypeMember(model, memberAccess.Expression, name.Identifier.ValueText) is { } member)
-            return member;
+            return [member];
 
         var speculative = model.GetSpeculativeSymbolInfo(expression.SpanStart, expression, SpeculativeBindingOption.BindAsExpression);
-        if((speculative.Symbol ?? speculative.CandidateSymbols.FirstOrDefault()) is { } speculativeSymbol)
-            return speculativeSymbol;
+        if(speculative.Symbol is { } speculativeSymbol)
+            return [speculativeSymbol];
+        if(!speculative.CandidateSymbols.IsEmpty)
+            return speculative.CandidateSymbols;
 
         var symbolInfo = model.GetSymbolInfo(expression);
-        return symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+        return symbolInfo.Symbol is { } symbol ? [symbol] : symbolInfo.CandidateSymbols;
     }
 
     /// <summary>

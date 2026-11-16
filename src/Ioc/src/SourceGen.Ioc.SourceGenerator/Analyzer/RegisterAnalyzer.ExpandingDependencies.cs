@@ -71,12 +71,7 @@ partial class RegisterAnalyzer
             else
                 owners[implementationType.Name] = (implementation, implementationType, injectMembers);
 
-            for(var i = 0; i < decorators.Length; i++)
-            {
-                // A decorator also registered as an implementation keeps the InjectMembers of its registrations
-                if(decoratorTypes[i] is GenericTypeData { IsOpenGeneric: true } decoratorType && !owners.ContainsKey(decoratorType.Name))
-                    owners[decoratorType.Name] = (decorators[i], decoratorType, []);
-            }
+            AddDecoratorOwners(decorators, decoratorTypes);
         }
 
         // Default settings with a Factory and an open generic target type register the target type, which the factory creates,
@@ -109,8 +104,54 @@ partial class RegisterAnalyzer
             AddFactoryOwner(factoryMethod, factory, targetType);
         }
 
+        // The ImplementationTypes of default settings are registered with the generator's own CreateRegistrationDataFromDefaultSettings
+        // and ProcessSingleRegistrationFromDefaults, with the Factory of the settings (which only an open implementation uses):
+        // open implementations are indexed like the generator's open generic entries, and closed ones add root dependencies.
+        // Default settings of imported modules have no attribute here, so their ImplementationTypes add no registration, like
+        // in the generator.
+        var rootDependencies = EnumerateRootDependencies(analyzerContext, GetDecoratorTypeData);
+        for(var i = 0; i < analyzerContext.DefaultAttributes.Length; i++)
+        {
+            var attribute = analyzerContext.DefaultAttributes[i];
+            var implementationTypes = attribute.GetImplementationTypeSymbols();
+            if(implementationTypes.Length == 0)
+                continue;
+
+            var (factoryMethod, factory) = HasFactory(attribute) ? GetFactory(analyzerContext, attribute) : default;
+            var decorators = analyzerContext.DefaultDecorators[i];
+            var settings = analyzerContext.DefaultSettings[i] with
+            {
+                Decorators = [.. decorators.Select(GetDecoratorTypeData)],
+                Factory = factory,
+            };
+
+            var hasOpenEntries = false;
+            foreach(var implementation in implementationTypes)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var registration = IocSourceGenerator.CreateRegistrationDataFromDefaultSettings(implementation, settings, analyzerContext.Assembly, semanticModel: null);
+                var result = IocSourceGenerator.ProcessSingleRegistrationFromDefaults(registration, cancellationToken);
+                rootDependencies.AddRange(result.ClosedGenericDependencies);
+                if(result.OpenGenericEntries.Length == 0)
+                    continue;
+
+                hasOpenEntries = true;
+                foreach(var entry in result.OpenGenericEntries)
+                    AddEntry(entry.ServiceTypeKey, entry.RegistrationInfo);
+
+                AddFactoryOwner(factoryMethod, registration.Factory, registration.ImplementationType);
+
+                // An implementation also registered by an attribute keeps the InjectMembers of that attribute
+                if(!owners.ContainsKey(registration.ImplementationType.Name))
+                    owners[registration.ImplementationType.Name] = (implementation, registration.ImplementationType, []);
+            }
+
+            if(hasOpenEntries)
+                AddDecoratorOwners(decorators, settings.Decorators);
+        }
+
         if(index.Count == 0
-            || IocSourceGenerator.FindExpandingDependencies(index, EnumerateRootDependencies(analyzerContext, GetDecoratorTypeData), cancellationToken) is not { } expandingDependencies)
+            || IocSourceGenerator.FindExpandingDependencies(index, rootDependencies, cancellationToken) is not { } expandingDependencies)
         {
             return;
         }
@@ -228,14 +269,27 @@ partial class RegisterAnalyzer
             foreach(var serviceType in types)
             {
                 if(serviceType is GenericTypeData { IsOpenGeneric: true } genericServiceType && keys.Add(genericServiceType.NameWithoutGeneric))
-                {
-                    if(!index.TryGetValue(genericServiceType.NameWithoutGeneric, out var list))
-                    {
-                        list = [];
-                        index[genericServiceType.NameWithoutGeneric] = list;
-                    }
-                    list.Add(info);
-                }
+                    AddEntry(genericServiceType.NameWithoutGeneric, info);
+            }
+        }
+
+        void AddEntry(string key, OpenGenericRegistrationInfo info)
+        {
+            if(!index.TryGetValue(key, out var list))
+            {
+                list = [];
+                index[key] = list;
+            }
+            list.Add(info);
+        }
+
+        void AddDecoratorOwners(ImmutableArray<INamedTypeSymbol> decorators, ImmutableEquatableArray<TypeData> decoratorTypes)
+        {
+            for(var i = 0; i < decorators.Length && i < decoratorTypes.Length; i++)
+            {
+                // A decorator also registered as an implementation keeps the InjectMembers of its registrations
+                if(decoratorTypes[i] is GenericTypeData { IsOpenGeneric: true } decoratorType && !owners.ContainsKey(decoratorType.Name))
+                    owners[decoratorType.Name] = (decorators[i], decoratorType, []);
             }
         }
 

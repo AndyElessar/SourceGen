@@ -347,6 +347,108 @@ public class InjectMembersTests
     }
 
     [Test]
+    [Arguments("OverloadsAcrossBaseAndDerived", "nameof(Derived.Init)", """
+        public class Base { public void Init(IFoo foo) { } }
+        public sealed class Derived : Base { public void Init(IBar bar) { } }
+        """, false)]
+    [Arguments("OverloadsAcrossBaseAndDerivedReversed", "nameof(Derived.Init)", """
+        public class Base { public void Init(IBar bar) { } }
+        public sealed class Derived : Base { public void Init(IFoo foo) { } }
+        """, false)]
+    [Arguments("OverloadsOnSameType", "nameof(Derived.Init)", """
+        public sealed class Derived { public void Init(IFoo foo) { } public void Init(IBar bar) { } }
+        """, false)]
+    [Arguments("KeyedElement", "new object[] { nameof(Derived.Init), \"key\" }", """
+        public sealed class Derived { public void Init(IFoo foo) { } public void Init(IBar bar) { } }
+        """, false)]
+    [Arguments("StaticOverload", "nameof(Derived.Init)", """
+        public sealed class Derived { public static void Init(IBar bar) { } public void Init(IFoo foo) { } }
+        """, true)]
+    [Arguments("NonVoidOverloadOnBase", "nameof(Derived.Init)", """
+        public class Base { public int Init(IBar bar) => 0; }
+        public sealed class Derived : Base { public void Init(IFoo foo) { } }
+        """, true)]
+    [Arguments("GenericOverload", "nameof(Derived.Init)", """
+        public sealed class Derived { public void Init<T>(T value) { } public void Init(IFoo foo) { } }
+        """, true)]
+    public async Task InjectMembers_OverloadedMethodGroup_InjectsOnlyTheSingleInjectableOverload(string scenario, string injectMember, string declarations, bool injected)
+    {
+        // nameof() of a method group cannot name an overload: with more than one injectable overload, none is injected
+        // (SGIOC043), whatever the order of the candidates
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+            public interface IBar;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IBar)])]
+            public sealed class Bar : IBar;
+
+            {{declarations}}
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        if(injected)
+            await Assert.That(generatedSource).Contains("Init(").And.Contains("Service<global::TestNamespace.IFoo>(").Because(scenario);
+        else
+            await Assert.That(generatedSource).DoesNotContain("Init(").Because(scenario);
+        await Assert.That(generatedSource).DoesNotContain("Service<global::TestNamespace.IBar>(").Because(scenario);
+    }
+
+    [Test]
+    [Arguments("StaticMethod", "nameof(Base.Init)", """
+        public class Base { public static void Init(int value) { } }
+        public sealed class Derived : Base { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    [Arguments("MemberOfOtherType", "nameof(Other.Init)", """
+        public sealed class Other { public void Init(int value) { } }
+        public sealed class Derived { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    [Arguments("OverloadsWithoutInjectableOverload", "nameof(Base.Init)", """
+        public class Base { public static void Init(int value) { } public static void Init(string value) { } }
+        public sealed class Derived : Base { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    public async Task InjectMembers_ElementNamedLikeIocInjectMember_InjectsIocInjectMember(string scenario, string injectMember, string declarations)
+    {
+        // An [IocInject] member of the registered type takes precedence over an InjectMembers element of the same name,
+        // whatever member the element names (SGIOC024 is not reported for it)
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)])]
+            public sealed class Foo : IFoo;
+
+            {{declarations}}
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("Init(").And.Contains("Service<global::TestNamespace.IFoo>(").Because(scenario);
+    }
+
+    [Test]
     [Arguments("ObjectOverload", """
         public class Base { public void Init(IFoo foo) { } public Task InitAsync(IFoo foo) => Task.CompletedTask; }
         public sealed class Derived : Base { public void Init(object o) { } public Task InitAsync(object o) => Task.CompletedTask; }
@@ -425,7 +527,7 @@ public class InjectMembersTests
         """)]
     [Arguments("OverrideWithOverloadOnIntermediateBase", ", InjectMembers = [nameof(Middle.Init)]", """
         public class Base { public virtual void Init(IFoo foo) { } }
-        public class Middle : Base { public override void Init(IFoo foo) { } public void Init(object o) { } }
+        public class Middle : Base { public override void Init(IFoo foo) { } public void Init<T>(T value) { } }
         public sealed class Derived : Middle;
         """)]
     [Arguments("KeyedElement", ", InjectMembers = [new object[] { nameof(Base.Init), \"k\" }]", """

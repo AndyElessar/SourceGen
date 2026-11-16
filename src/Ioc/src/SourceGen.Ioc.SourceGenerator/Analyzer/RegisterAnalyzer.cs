@@ -487,9 +487,35 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "Microsoft.Extensions.DependencyInjection constructs the implementation type of an open generic registration, such as services.AddSingleton(typeof(INode<>), typeof(Node<>)), without calling the factory. The open generic registration of a registration whose closed types call its Factory (its own or that of its default settings) is therefore not registered, so the factory is never bypassed: the closed types discovered at compile time call it, and a closed type that is only requested at runtime is not registered. Use the closed types in dependencies, register them, or discover them with [IocDiscover].",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC043: A nameof() in InjectMembers names a method group with more than one injectable overload, so none is injected.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectMembersAmbiguousMethodGroup = new(
+        id: "SGIOC043",
+        title: "InjectMembers names a method with several injectable overloads",
+        messageFormat: "Method '{0}' specified in InjectMembers has more than one injectable overload on '{1}', so none of them is injected; mark the overload to inject with [IocInject] instead, or give it a unique name",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "nameof() of a method names its method group and cannot choose an overload. When more than one overload of the method can be injected into the registered type, including overloads inherited from base classes, the element is ambiguous and nothing is injected for it. Mark the overload to inject with [IocInject], which takes precedence over the InjectMembers element, or rename it.");
+
+    /// <summary>
+    /// SGIOC044: A Factory given with nameof() names a method group with more than one usable overload, so none is chosen.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FactoryAmbiguousMethodGroup = new(
+        id: "SGIOC044",
+        title: "Factory names a method with several usable overloads",
+        messageFormat: "Factory method '{0}' specified via nameof() has more than one overload that can be used as the factory, so none of them is chosen; give the factory method a unique name",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "nameof() of a method names its method group and cannot choose an overload. When more than one overload is static, accessible, returns a value and, when generic, has a type mapping ([IocGenericFactory] or GenericFactoryTypeMapping), including overloads inherited from base classes, the Factory is ambiguous: its parameters are not resolved, and it is called by its path with the service provider only, like a Factory given as a string. Give the factory method a unique name.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         FactoryOpenGenericNotRegisteredOpen,
+        InjectMembersAmbiguousMethodGroup,
+        FactoryAmbiguousMethodGroup,
         KeyUsesImplementationTypeParameters,
         NameofOfUnboundGenericType,
         OpenTypeNestedInGenericType,
@@ -665,7 +691,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         {
             if(argument.NameEquals?.Name.Identifier.Text == "Factory"
                 && argument.Expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" }, ArgumentList.Arguments: [var nameofArgument] }
-                && RoslynExtensions.ResolveMethodSymbol(nameofArgument.Expression, context.SemanticModel) is { } factory)
+                && RoslynExtensions.ResolveFactoryMethod(nameofArgument.Expression, attributeSyntax.ArgumentList, context.SemanticModel) is { } factory)
             {
                 analyzerContext.FactoryMethods[(attributeSyntax.SyntaxTree, attributeSyntax.Span)] = factory;
             }

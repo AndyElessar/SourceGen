@@ -10,6 +10,12 @@ namespace SourceGen.Ioc;
 /// <param name="AdditionalParameters">Parameters that need to be resolved from the service provider (excluding IServiceProvider and [ServiceKey] parameters), in declaration order.</param>
 /// <param name="GenericTypeMapping">The generic type mapping for generic factory methods marked with [IocGenericFactory], or null if not a generic factory.</param>
 /// <param name="TypeParameterNames">The names of the type parameters of the factory method, which its parameter types are written with.</param>
+/// <param name="CastArguments">
+/// Whether each argument is cast to its parameter type, so that the call binds the resolved overload of an overloaded factory
+/// method: the generated arguments, such as <c>this</c> or a concrete service type, could otherwise make C# overload
+/// resolution prefer another overload, such as <c>Create&lt;T&gt;(T value)</c> or one that is not usable as a factory.
+/// </param>
+/// <param name="KeyParameterTypeName">The fully qualified type of the [ServiceKey] parameter, when <paramref name="CastArguments"/> is set.</param>
 internal sealed record class FactoryMethodData(
     string Path,
     int ServiceProviderPosition,
@@ -17,7 +23,9 @@ internal sealed record class FactoryMethodData(
     string? ReturnTypeName,
     ImmutableEquatableArray<ParameterData> AdditionalParameters,
     GenericFactoryTypeMapping? GenericTypeMapping = null,
-    ImmutableEquatableArray<string>? TypeParameterNames = null)
+    ImmutableEquatableArray<string>? TypeParameterNames = null,
+    bool CastArguments = false,
+    string? KeyParameterTypeName = null)
 {
     /// <summary>The number of type parameters on the generic factory method.</summary>
     public int TypeParameterCount => TypeParameterNames?.Length ?? 0;
@@ -43,19 +51,23 @@ internal sealed record class FactoryMethodData(
         {
             if(position == ServiceProviderPosition)
             {
-                arguments.Add(serviceProvider);
+                arguments.Add(Cast("global::System.IServiceProvider", serviceProvider));
             }
             else if(position == KeyPosition)
             {
                 // A non-keyed registration has no key; default compiles for any parameter type
-                arguments.Add(key ?? "default!");
+                arguments.Add(Cast(KeyParameterTypeName, key ?? "default!"));
             }
             else
             {
-                arguments.Add(additionalArguments[next++]);
+                // A reference type is cast without its nullable annotation, which does not affect overload resolution
+                arguments.Add(Cast(AdditionalParameters[next].Type.Name, additionalArguments[next]));
+                next++;
             }
         }
 
         return arguments;
+
+        string Cast(string? typeName, string argument) => CastArguments && typeName is not null ? $"({typeName})({argument})" : argument;
     }
 }

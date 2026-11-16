@@ -521,46 +521,35 @@ partial class IocSourceGenerator
     {
         private readonly InjectionRegisterEntry injectionEntry;
 
-        public string TaskServiceTypeName { get; }
-
-        public string TaskImplementationTypeName { get; }
-
         public ImmutableEquatableArray<MethodInjectionData> AsyncMethodInjectionMembers { get; }
 
         public AsyncInjectionRegisterEntry(ServiceRegistrationModel registration)
             : base(registration)
         {
             injectionEntry = new InjectionRegisterEntry(registration);
-            TaskServiceTypeName = $"global::System.Threading.Tasks.Task<{registration.ServiceType.Name}>";
-            TaskImplementationTypeName = $"global::System.Threading.Tasks.Task<{registration.ImplementationType.Name}>";
             AsyncMethodInjectionMembers = registration.InjectionMembers
                 .OfType<MethodInjectionData>()
                 .Where(static member => member.IsAsync)
                 .ToImmutableEquatableArray();
         }
 
+        /// <remarks>
+        /// The registration's service type is its implementation type (a service type alias forwards to it), so the
+        /// <c>Task&lt;ImplementationType&gt;</c> is registered with an <c>AsyncInitHolder</c> of its own (see
+        /// <see cref="WriteAsyncInitHolderOpen"/>).
+        /// </remarks>
         public override void WriteRegistration(SourceWriter writer, RegisterWriteContext context)
         {
-            writer.WriteServiceLambdaOpen(Registration.Lifetime.Name, TaskServiceTypeName, Registration.Key);
+            var lifetime = Registration.Lifetime.Name;
+            var implementationTypeName = Registration.ImplementationType.Name;
 
-            writer.WriteLine("{");
-            writer.Indentation++;
-
-            writer.WriteLine($"async {TaskImplementationTypeName} Init()");
-            writer.WriteLine("{");
-            writer.Indentation++;
+            WriteAsyncInitHolderOpen(writer, lifetime, implementationTypeName, implementationTypeName, Registration.Key);
 
             injectionEntry.WriteInjectionBody(writer, context, AsyncMethodInjectionMembers);
 
             writer.WriteLine("return s0;");
 
-            writer.Indentation--;
-            writer.WriteLine("}");
-
-            writer.WriteLine("return Init();");
-
-            writer.Indentation--;
-            writer.WriteLine("});");
+            WriteAsyncInitHolderClose(writer, lifetime, implementationTypeName, implementationTypeName, Registration.Key);
         }
     }
 

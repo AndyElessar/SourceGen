@@ -657,39 +657,7 @@ internal static class AnalyzerHelpers
     /// <param name="symbol">The symbol to validate.</param>
     /// <returns>A tuple indicating whether the symbol is valid and the error reason if not.</returns>
     public static (bool IsValid, string? ErrorReason) ValidateFactoryOrInstanceSymbol(ISymbol symbol)
-    {
-        // Check if the symbol is static
-        if(!symbol.IsStatic)
-        {
-            return (false, "not static");
-        }
-
-        // Check accessibility - must be at least internal to be accessible
-        // Private members cannot be accessed from the generated code
-        switch(symbol.DeclaredAccessibility)
-        {
-            case Accessibility.Private:
-                return (false, "private");
-            case Accessibility.ProtectedAndInternal:
-            case Accessibility.Protected:
-                // Protected members are only accessible in derived classes
-                // Since generated code is not a derived class, treat as inaccessible
-                return (false, "protected and not accessible from generated code");
-        }
-
-        // Also check containing type accessibility
-        var containingType = symbol.ContainingType;
-        while(containingType is not null)
-        {
-            if(containingType.DeclaredAccessibility is Accessibility.Private)
-            {
-                return (false, "declared in a private type");
-            }
-            containingType = containingType.ContainingType;
-        }
-
-        return (true, null);
-    }
+        => RoslynExtensions.GetFactoryOrInstanceIssue(symbol) is { } issue ? (false, issue) : (true, null);
 
     /// <summary>
     /// Checks if a dependency type is resolvable for a parameter.

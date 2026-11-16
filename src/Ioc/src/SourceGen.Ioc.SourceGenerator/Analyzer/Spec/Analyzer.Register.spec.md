@@ -23,7 +23,7 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
 | Symbol (Method) | `AnalyzeIocGenericFactoryAttribute` | Duplicate placeholders and incomplete generic factory mapping | SGIOC016, 017 |
 | SyntaxNode (Attribute) | `AnalyzeAssemblyLevelRegistration` | Assembly-level register-for attributes, looked up by syntax instead of bound again | SGIOC001, 009, 032 |
-| SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 016, 017, 023, 024 |
+| SyntaxNode (Attribute) | `AnalyzeFactoryAndInstanceOnAttribute` | Factory/Instance member references, InjectMembers validation | SGIOC008, 010, 014, 016, 017, 023, 024, 043, 044 |
 | SyntaxNode (Attribute) | `AnalyzeNameofTypeParameters` | `Factory` / `Instance` / C# `Key` given with `nameof()` of a member of an unbound generic type, and C# `Key` of an open generic registration that uses its type parameters; records the registration attributes they keep from being registered open for SGIOC042 | SGIOC040, 041 |
 | SyntaxNode (Attribute) | `AnalyzeOpenTypesNestedInGenericType` | Open types nested in a generic type used by registration and default settings attributes | SGIOC038 |
 | SyntaxNode (Attribute) | `ResolveCsharpKeyTypes` | Resolve nameof-based key type symbols | Enables SGIOC013/015 |
@@ -60,5 +60,5 @@ A registration matches the settings of its base classes, then its interfaces (ex
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration detection (SGIOC011); SGIOC012 is reported by `CollectDefaults` |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |
-| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037), the service types of generic factory registrations (SGIOC039), and the open generic registrations whose Factory omits their open registration (SGIOC042) |
+| `RegisterAnalyzer.ExpandingDependencies.cs` | Open generic registrations, including the `ImplementationTypes` of default settings (registered with the generator's `CreateRegistrationDataFromDefaultSettings`), analyzed with the generator's `FindExpandingDependencies` (SGIOC036, 037), the service types of generic factory registrations (SGIOC039), and the open generic registrations whose Factory omits their open registration (SGIOC042) |
 | `RegisterAnalyzer.UnresolvableMembers.cs` | ServiceKey type matching, KeyValuePair/Dictionary key analysis, `KeyedServiceIndex` (keyed registrations by assignable type) |

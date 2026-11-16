@@ -197,8 +197,8 @@ public sealed partial class RegisterAnalyzer
         if (factoryArgument is null || factoryNameof is null)
             return;
 
-        var symbolInfo = context.SemanticModel.GetSymbolInfo(factoryNameof, context.CancellationToken);
-        if ((symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is not IMethodSymbol factory)
+        // The overload the generator calls; a method group without a single usable overload is not checked (SGIOC044)
+        if (RoslynExtensions.ResolveFactoryMethod(factoryNameof, argumentList, context.SemanticModel) is not { } factory)
             return;
 
         // Reported on the Factory argument: the factory method may be declared in another file or assembly
@@ -273,9 +273,28 @@ public sealed partial class RegisterAnalyzer
 
             var nameofArgument = invocation.ArgumentList.Arguments[0].Expression;
 
-            // Resolve the symbol using the SemanticModel from context
-            var symbolInfo = context.SemanticModel.GetSymbolInfo(nameofArgument, context.CancellationToken);
-            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            ISymbol? symbol;
+            if (memberKind == "Factory")
+            {
+                // A Factory is resolved like the generator: the method, or the single usable overload of a method group
+                var candidates = RoslynExtensions.ResolveExpressionSymbols(nameofArgument, context.SemanticModel);
+                var count = RoslynExtensions.GetFactoryMethod(candidates, RoslynExtensions.HasGenericFactoryTypeMapping(argumentList), out var factory);
+                if (candidates.Length > 1 && count != 1)
+                {
+                    context.ReportDiagnostic(count > 1
+                        ? Diagnostic.Create(FactoryAmbiguousMethodGroup, invocation.GetLocation(), candidates[0].Name)
+                        : Diagnostic.Create(InvalidFactoryOrInstanceMember, location, memberKind, candidates[0].Name, "an overloaded method none of whose overloads can be the factory (static, accessible, returning a value, and generic only with a type mapping)"));
+                    return;
+                }
+
+                symbol = factory ?? candidates.FirstOrDefault();
+            }
+            else
+            {
+                // Resolve the symbol using the SemanticModel from context
+                var symbolInfo = context.SemanticModel.GetSymbolInfo(nameofArgument, context.CancellationToken);
+                symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            }
 
             if (symbol is null)
                 return;
@@ -1053,6 +1072,58 @@ public sealed partial class RegisterAnalyzer
 
             var inner = nameofInvocation.ArgumentList.Arguments[0].Expression;
             var symbolInfo = context.SemanticModel.GetSymbolInfo(inner, context.CancellationToken);
+
+            // An [IocInject] member of the registered type with the same name takes precedence: the generator's
+            // MergeInjectionMembers drops the element by name, whatever member it names, so it is not checked
+            if (targetType is not null
+                && (symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()) is { } named
+                && HasIocInjectMemberNamed(targetType, named.Name))
+            {
+                continue;
+            }
+
+            // A method group with several overloads: nameof() cannot choose one, so like the generator's
+            // GetInjectableMember, only a single injectable overload is injected
+            if (symbolInfo.Symbol is null && symbolInfo.CandidateSymbols.Length > 1 && targetType is not null)
+            {
+                var methodName = symbolInfo.CandidateSymbols[0].Name;
+                switch (IocSourceGenerator.GetInjectableMember(symbolInfo.CandidateSymbols, targetType, analyzerContext.Assembly, out var overload))
+                {
+                    case 1:
+                        // A Task overload without AsyncMethodInject, like a single member (the generator skips it)
+                        if (GetMemberInjectabilityIssue(overload!, asyncMethodInjectEnabled) is { } overloadIssue)
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(
+                                InjectMembersNonInjectableMember,
+                                nameofExpr.GetLocation(),
+                                methodName,
+                                overloadIssue));
+                        }
+
+                        injectMembers ??= ImmutableArray.CreateBuilder<(ISymbol, Location)>();
+                        injectMembers.Add((overload!, element.GetLocation()));
+                        break;
+                    case > 1:
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InjectMembersAmbiguousMethodGroup,
+                            nameofExpr.GetLocation(),
+                            methodName,
+                            targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        break;
+                    case 0:
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InjectMembersNonInjectableMember,
+                            nameofExpr.GetLocation(),
+                            methodName,
+                            symbolInfo.CandidateSymbols.All(c => c.AsMemberOf(targetType) is null)
+                                ? $"it is not a member of '{targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'"
+                                : "none of its overloads can be injected"));
+                        break;
+                }
+
+                continue;
+            }
+
             var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
 
             if (symbol is null)
@@ -1065,10 +1136,7 @@ public sealed partial class RegisterAnalyzer
             var reason = member is null
                 ? $"it is not a member of '{targetType!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'"
                 : hidingMember is not null
-                    // An [IocInject] member of the same name takes precedence, like the generator's MergeInjectionMembers
-                    ? HasIocInjectMemberNamed(targetType!, member.Name)
-                        ? null
-                        : $"it is hidden by '{hidingMember.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}.{hidingMember.Name}'"
+                    ? $"it is hidden by '{hidingMember.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}.{hidingMember.Name}'"
                     : GetMemberInjectabilityIssue(member, asyncMethodInjectEnabled);
             if (reason is not null)
             {

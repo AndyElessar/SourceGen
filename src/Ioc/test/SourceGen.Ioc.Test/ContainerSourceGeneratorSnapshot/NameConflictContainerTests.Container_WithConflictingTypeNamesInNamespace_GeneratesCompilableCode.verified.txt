@@ -278,14 +278,32 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
 
     private global::Microsoft.Extensions.DependencyInjection.IServiceScope? CreateFallbackScope(global::System.IServiceProvider fallbackProvider)
     {
+        ThrowIfDisposed();
         if(fallbackProvider.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) is not global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory) return null;
 
         var scope = scopeFactory.CreateScope();
         var existing = global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, scope, null);
-        if(existing is null) return scope;
+        if(existing is not null)
+        {
+            scope.Dispose();
+            return existing;
+        }
 
-        scope.Dispose();
-        return existing;
+        if(global::System.Threading.Volatile.Read(ref _disposed) == 0) return scope;
+
+        if(global::System.Threading.Interlocked.CompareExchange(ref _fallbackScope, null, scope) == scope)
+        {
+            try
+            {
+                scope.Dispose();
+            }
+            catch(global::System.Exception ex)
+            {
+                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(ex);
+            }
+        }
+
+        throw new global::System.ObjectDisposedException(GetType().FullName);
     }
 
     #endregion
@@ -530,7 +548,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         DisposeService(_scoped);
         if(!_isRootScope)
         {
-            DisposeService(_fallbackScope);
+            DisposeService(global::System.Threading.Interlocked.Exchange(ref _fallbackScope, null));
             return;
         }
 
@@ -544,7 +562,7 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         await DisposeServiceAsync(_scoped).ConfigureAwait(false);
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
+            await DisposeServiceAsync(global::System.Threading.Interlocked.Exchange(ref _fallbackScope, null)).ConfigureAwait(false);
             return;
         }
 
