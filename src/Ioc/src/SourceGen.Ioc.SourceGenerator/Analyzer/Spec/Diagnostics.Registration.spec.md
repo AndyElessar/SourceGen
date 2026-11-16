@@ -21,14 +21,14 @@ Report when IoCRegisterAttribute or IoCRegisterForAttribute is mark on private o
 
 ## SGIOC009 - Error - Usage - Invalid Attribute Usage
 
-Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Instance` and the effective lifetime is not Singleton. The Register (MS.DI) output does not register such an `Instance`.
+Report when `IoCRegisterAttribute` or `IoCRegisterForAttribute` has specify `Instance` and an explicit `Lifetime` that is not Singleton. The Register (MS.DI) output does not register such an `Instance`. An `Instance` without explicit `Lifetime` is Singleton (see [Instance Lifetime](../../Spec/Register.Factory.spec.md#instance-lifetime)), so it is not reported whatever its `[IocRegisterDefaults]` or the MSBuild `SourceGenIocDefaultLifetime`.
 
 **Analysis:**
 
-- Runs at compilation end, once the default settings are known (`ResolveRegistrations`).
+- Depends on the attribute only, so it is reported by the file actions, once per attribute, and its descriptor is not tagged `CompilationEnd`: type-level attributes by `CollectAndValidateNamedType`, assembly-level `IocRegisterFor` attributes by `AnalyzeAssemblyLevelRegistration` (`AnalyzeRegistrationAttribute`).
 - Checks registration attributes that specify `Instance`.
-- Gets the effective lifetime like the generator's `MergeSettings`: the `Lifetime` of the attribute, otherwise the lifetime of its best `[IocRegisterDefaults]`, otherwise the MSBuild `SourceGenIocDefaultLifetime`, otherwise Transient (see [Default Settings](Analyzer.Register.spec.md#default-settings)).
-- Reports when the effective lifetime is not Singleton; the message names it.
+- Reads the explicit `Lifetime` of the attribute like the generator's `MergeSettings`: a `ServiceLifetime` constructor argument, such as `[IocRegister<IMyService>(ServiceLifetime.Scoped)]`, or the `Lifetime` named argument. Without one, the `Instance` is Singleton (see [Default Settings](Analyzer.Register.spec.md#default-settings)) and is not reported.
+- Reports when the explicit `Lifetime` is not Singleton; the message names it.
 
 **Message format:** `Instance registration '{Instance}' requires Singleton lifetime, but its lifetime is '{Lifetime}'`
 

@@ -82,7 +82,9 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
-    /// Merges registration settings with default settings.
+    /// Merges registration settings with default settings. The lifetime is the explicit one, otherwise Singleton for an
+    /// <c>Instance</c> registration (its default settings and fallback lifetime do not apply), otherwise that of the default
+    /// settings, otherwise the fallback lifetime.
     /// </summary>
     private static (ServiceLifetime Lifetime, bool RegisterAllInterfaces, bool RegisterAllBaseClasses) MergeSettings(
         RegistrationData registration,
@@ -91,7 +93,9 @@ partial class IocSourceGenerator
     {
         var lifetime = registration.HasExplicitLifetime
             ? registration.Lifetime
-            : (matchingDefault?.Lifetime ?? fallbackLifetime);
+            : registration.Instance is not null
+                ? ServiceLifetime.Singleton
+                : (matchingDefault?.Lifetime ?? fallbackLifetime);
 
         var registerAllInterfaces = registration.HasExplicitRegisterAllInterfaces
             ? registration.RegisterAllInterfaces
