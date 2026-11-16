@@ -110,3 +110,13 @@ public sealed partial class NestedPluginModule;
 [IocImportModule<NestedPluginModule>]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class NestedPluginModuleImporter;
+
+/// <summary>Module without fallback provider that imports <see cref="IntegratedPluginModule"/>.</summary>
+[IocImportModule<IntegratedPluginModule>]
+[IocContainer(ExplicitOnly = true, IntegrateServiceProvider = false)]
+public sealed partial class NonIntegratedNestedPluginModule;
+
+/// <summary>Container importing <see cref="IntegratedPluginModule"/> through <see cref="NonIntegratedNestedPluginModule"/>.</summary>
+[IocImportModule<NonIntegratedNestedPluginModule>]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class NonIntegratedNestedPluginModuleImporter;

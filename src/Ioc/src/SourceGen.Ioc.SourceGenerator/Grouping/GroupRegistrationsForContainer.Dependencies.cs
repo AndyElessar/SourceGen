@@ -182,6 +182,7 @@ partial class IocSourceGenerator
     /// Whether collection dependencies served by a generated array resolver merge the fallback provider's services
     /// (<c>IntegrateServiceProvider = true</c>), like <c>GetServices&lt;T&gt;()</c>.
     /// </param>
+    /// <param name="KeyedCollectionResolvers">The array method of each keyed collection resolver, by element service type and key; <see langword="null"/> when there is none.</param>
     private sealed record class WrapperFieldLookup(
         IReadOnlyDictionary<string, string> LazyFieldByResolver,
         IReadOnlyDictionary<string, string> FuncFieldByResolver,
@@ -189,7 +190,8 @@ partial class IocSourceGenerator
         HashSet<string> FuncCollectionServiceTypes,
         ContainerNames Names,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ProjectedTask>> ProjectedTasksByResolver,
-        bool MergeFallbackServices)
+        bool MergeFallbackServices,
+        IReadOnlyDictionary<ServiceTypeKey, string>? KeyedCollectionResolvers)
     {
         /// <summary>
         /// Gets the method returning the cached <c>Task&lt;<paramref name="serviceType"/>&gt;</c> projection of the async-init
@@ -293,14 +295,19 @@ partial class IocSourceGenerator
         WrapperFieldLookup wrapperFields,
         string? fallbackValue = null)
     {
-        if(type is CollectionWrapperTypeData collectionType)
+        // A collection type registered explicitly resolves as that registration, like MS.DI (see Container.Collections)
+        if(type is CollectionWrapperTypeData collectionType && !serviceLookup.ContainsKey(new(type.Name, key)))
         {
             var elementTypeName = collectionType.ElementType.Name;
             var toArray = collectionType.WrapperKind is not WrapperKind.Enumerable;
 
             if(key is not null)
             {
-                return new CollectionFallbackDependency(elementTypeName, IsKeyed: true, Key: key, toArray);
+                // A key with several registrations has a keyed array resolver; one registration resolves through GetKeyedServices
+                return wrapperFields.KeyedCollectionResolvers is { } keyedCollectionResolvers
+                    && keyedCollectionResolvers.TryGetValue(new(elementTypeName, key), out var keyedArrayMethodName)
+                    ? new CollectionDependency(keyedArrayMethodName, wrapperFields.MergeFallbackServices, key)
+                    : new CollectionFallbackDependency(elementTypeName, IsKeyed: true, Key: key, toArray);
             }
 
             if(collectionType.ElementType is KeyValuePairTypeData kvpElement

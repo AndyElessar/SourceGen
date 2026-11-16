@@ -48,7 +48,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine($"if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {KeyedServiceAnyKey}), out var resolver))");
+            writer.WriteLine($"if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {NonKeyedServiceKey}), out var resolver))");
             writer.Indentation++;
             writer.WriteLine("return resolver(this);");
             writer.Indentation--;
@@ -178,7 +178,7 @@ partial class IocSourceGenerator
         writer.WriteLine("return null;");
         writer.Indentation--;
         writer.WriteLine();
-        writer.WriteLine($"var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? {KeyedServiceAnyKey});");
+        writer.WriteLine($"var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? {NonKeyedServiceKey});");
 
         if(effectiveUseSwitchStatement)
         {
@@ -213,7 +213,7 @@ partial class IocSourceGenerator
 
         if(effectiveUseSwitchStatement)
         {
-            writer.WriteLine($"var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, serviceKey ?? {KeyedServiceAnyKey});");
+            writer.WriteLine($"var collectionId = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, serviceKey ?? {NonKeyedServiceKey});");
             writer.WriteLine("foreach(var entry in _localResolvers)");
             writer.WriteLine("{");
             writer.Indentation++;
@@ -318,9 +318,34 @@ partial class IocSourceGenerator
     {
         foreach(var entry in groups.CollectionEntries)
         {
-            if(entry is CollectionContainerEntry collection)
+            if(entry is not CollectionContainerEntry { IsNonKeyed: true } collection)
+                continue;
+
+            if(collection.ExplicitTypes == CollectionTypes.None || isServiceCheck)
             {
-                WriteSwitchArrayCollectionBranches(writer, collection.ElementServiceTypeName, collection.ArrayMethodName, integrateServiceProvider, isServiceCheck);
+                WriteSwitchArrayCollectionBranches(writer, collection.ElementServiceTypeName, collection.ArrayMethodName!, integrateServiceProvider, isServiceCheck);
+                continue;
+            }
+
+            // Rare: one branch for each collection type that is not registered explicitly (whose own branch comes first anyway)
+            if((collection.ExplicitTypes & CollectionTypes.Enumerable) == 0)
+            {
+                if(integrateServiceProvider)
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{collection.ElementServiceTypeName}>)) return {MergeFallbackServicesMethodName}({collection.ArrayMethodName}(), null);");
+                }
+                else
+                {
+                    writer.WriteLine($"if(serviceType == typeof(global::System.Collections.Generic.IEnumerable<{collection.ElementServiceTypeName}>)) return {collection.ArrayMethodName}();");
+                }
+            }
+
+            foreach(var (type, prefix, suffix) in NonEnumerableCollectionTypes)
+            {
+                if((collection.ExplicitTypes & type) == 0)
+                {
+                    writer.WriteLine($"if(serviceType == typeof({prefix}{collection.ElementServiceTypeName}{suffix})) return {collection.ArrayMethodName}();");
+                }
             }
         }
 
@@ -403,6 +428,76 @@ partial class IocSourceGenerator
     }
 
     /// <summary>
+    /// The collection types a collection resolver registers besides <c>IEnumerable&lt;T&gt;</c>, as the text around the element type.
+    /// </summary>
+    private static readonly (CollectionTypes Type, string Prefix, string Suffix)[] NonEnumerableCollectionTypes =
+    [
+        (CollectionTypes.ReadOnlyCollection, "global::System.Collections.Generic.IReadOnlyCollection<", ">"),
+        (CollectionTypes.Collection, "global::System.Collections.Generic.ICollection<", ">"),
+        (CollectionTypes.ReadOnlyList, "global::System.Collections.Generic.IReadOnlyList<", ">"),
+        (CollectionTypes.List, "global::System.Collections.Generic.IList<", ">"),
+        (CollectionTypes.Array, "", "[]"),
+    ];
+
+    /// <summary>
+    /// Writes the switch-mode arms of the keyed collection resolvers in <c>GetKeyedService</c>: the six collection types under
+    /// a key with several registrations, and <c>IEnumerable&lt;T&gt;</c> under <c>KeyedService.AnyKey</c>.
+    /// <c>IEnumerable&lt;T&gt;</c> merges the fallback services of the same key. A collection type registered explicitly has
+    /// an arm of its own before these, so it wins.
+    /// </summary>
+    private static void WriteSwitchKeyedCollectionArms(SourceWriter writer, ContainerRegistrationGroups groups, bool integrateServiceProvider)
+    {
+        foreach(var entry in groups.CollectionEntries)
+        {
+            if(entry is not CollectionContainerEntry { IsNonKeyed: false } collection)
+                continue;
+
+            var elementType = collection.ElementServiceTypeName;
+            var key = collection.KeyExpression;
+            var explicitTypes = collection.ExplicitTypes;
+
+            if((explicitTypes & CollectionTypes.Enumerable) == 0)
+            {
+                // An AnyKey collection of a single registration has no array method: its array is created inline
+                var inlineDependency = collection.ArrayMethodName is null ? collection.ElementResolvers[0] : null;
+                var (arrayPrefix, arrayBody, arraySuffix) = inlineDependency switch
+                {
+                    null => ("", collection.ArrayMethodName!, "()"),
+                    DirectServiceDependency direct => ($"new {elementType}[] {{ ", direct.ResolverMethodName, "() }"),
+                    _ => ($"new {elementType}[] {{ ", inlineDependency.FormatExpression(false), " }"),
+                };
+
+                if(integrateServiceProvider)
+                {
+                    writer.WriteLine($"(global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) && Equals(k, {key}) => {MergeFallbackServicesMethodName}({arrayPrefix}{arrayBody}{arraySuffix}, {key}),");
+                }
+                else
+                {
+                    writer.WriteLine($"(global::System.Type t, object k) when t == typeof(global::System.Collections.Generic.IEnumerable<{elementType}>) && Equals(k, {key}) => {arrayPrefix}{arrayBody}{arraySuffix},");
+                }
+            }
+
+            if(collection.AllKeys)
+                continue;
+
+            if(explicitTypes == CollectionTypes.None)
+            {
+                writer.WriteLine($"(global::System.Type t, object k) when (t == typeof(global::System.Collections.Generic.IReadOnlyCollection<{elementType}>) || t == typeof(global::System.Collections.Generic.ICollection<{elementType}>) || t == typeof(global::System.Collections.Generic.IReadOnlyList<{elementType}>) || t == typeof(global::System.Collections.Generic.IList<{elementType}>) || t == typeof({elementType}[])) && Equals(k, {key}) => {collection.ArrayMethodName}(),");
+                continue;
+            }
+
+            // Rare: one arm for each collection type that is not registered explicitly (whose own arm comes first anyway)
+            foreach(var (type, prefix, suffix) in NonEnumerableCollectionTypes)
+            {
+                if((explicitTypes & type) == 0)
+                {
+                    writer.WriteLine($"(global::System.Type t, object k) when t == typeof({prefix}{elementType}{suffix}) && Equals(k, {key}) => {collection.ArrayMethodName}(),");
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Writes IKeyedServiceProvider implementation.
     /// </summary>
     private static void WriteIKeyedServiceProviderImplementation(
@@ -421,7 +516,7 @@ partial class IocSourceGenerator
         writer.WriteLine("ThrowIfDisposed();");
         writer.WriteLine();
 
-        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+        writer.WriteLine($"var key = serviceKey ?? {NonKeyedServiceKey};");
         writer.WriteLine();
 
         // On a miss: a collection without collection resolver, then the fallback (constants, so nothing is allocated)
@@ -446,6 +541,9 @@ partial class IocSourceGenerator
 
                     writer.WriteLine($"(global::System.Type t, object k) when t == typeof({mapping.ServiceType}) && Equals(k, {mapping.Key}) => {mapping.ResolverExpression},");
                 }
+
+                // Keyed collection resolvers, which the dictionary mode registers in _localResolvers
+                WriteSwitchKeyedCollectionArms(writer, groups, container.IntegrateServiceProvider);
 
                 // Miss in switch default case
                 writer.WriteLine($"_ => {missExpr}");
@@ -661,7 +759,7 @@ partial class IocSourceGenerator
         writer.WriteLine($"serviceKey != {KeyedServiceAnyKey}");
         writer.WriteLine("&& !typeof(T).IsValueType");
         writer.WriteLine("&& !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))");
-        writer.WriteLine($"&& _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? {KeyedServiceAnyKey}), out var resolver)");
+        writer.WriteLine($"&& _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? {NonKeyedServiceKey}), out var resolver)");
         writer.Indentation++;
         if(integrateServiceProvider)
         {
@@ -692,10 +790,10 @@ partial class IocSourceGenerator
 
         if(keyed)
         {
-            writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+            writer.WriteLine($"var key = serviceKey ?? {NonKeyedServiceKey};");
         }
 
-        var keyExpr = keyed ? "key" : KeyedServiceAnyKey;
+        var keyExpr = keyed ? "key" : NonKeyedServiceKey;
         writer.WriteLine($"return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier({serviceTypeExpr}, {keyExpr}), out var resolver)");
         writer.Indentation++;
         writer.WriteLine(hitExpr);
@@ -745,7 +843,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            writer.WriteLine($"if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {KeyedServiceAnyKey}))) return true;");
+            writer.WriteLine($"if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, {NonKeyedServiceKey}))) return true;");
             writer.WriteLine();
         }
 
@@ -771,11 +869,22 @@ partial class IocSourceGenerator
         writer.WriteLine("{");
         writer.Indentation++;
 
-        writer.WriteLine($"var key = serviceKey ?? {KeyedServiceAnyKey};");
+        writer.WriteLine($"var key = serviceKey ?? {NonKeyedServiceKey};");
+        writer.WriteLine();
 
-        if(!effectiveUseSwitchStatement)
+        if(effectiveUseSwitchStatement)
         {
-            writer.WriteLine();
+            // Switch mode has no dictionary: its keyed services and keyed collections are the keyed entries of _localResolvers
+            writer.WriteLine("var id = new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key);");
+            writer.WriteLine("foreach(var entry in _localResolvers)");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("if(entry.Key == id) return true;");
+            writer.Indentation--;
+            writer.WriteLine("}");
+        }
+        else
+        {
             writer.WriteLine("if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;");
         }
 

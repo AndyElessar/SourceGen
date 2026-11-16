@@ -160,7 +160,7 @@ partial class AppContainer : IComponentActivator, IComponentPropertyActivator, /
         {
             // When also implementing IComponentActivator, registered components
             // already have property injection done by the container's resolver → no-op
-            activator = _serviceResolvers.ContainsKey(new ServiceIdentifier(componentType, KeyedService.AnyKey))
+            activator = _serviceResolvers.ContainsKey(new ServiceIdentifier(componentType, ServiceIdentifier.NonKeyed))
                 ? static (_, _) => { }
                 : CreateComponentPropertyInjector(componentType);
             _propertyActivatorCache.TryAdd(componentType, activator);

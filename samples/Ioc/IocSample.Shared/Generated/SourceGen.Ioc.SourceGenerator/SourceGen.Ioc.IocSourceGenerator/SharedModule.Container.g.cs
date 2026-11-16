@@ -214,7 +214,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     {
         ThrowIfDisposed();
 
-        if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver))
             return resolver(this);
 
         return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
@@ -229,7 +229,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
         if(elementType.IsValueType || (elementType.IsConstructedGenericType && elementType.GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>)))
             return null;
 
-        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey);
+        var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed);
         return _serviceResolvers.TryGetValue(elementId, out var resolver) ? resolver : null;
     }
 
@@ -326,7 +326,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     {
         ThrowIfDisposed();
 
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
@@ -357,7 +357,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     public T? GetService<T>() where T : class
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? resolver(this) as T
             : (__ResolveCollection(typeof(T), null) ?? GetFallbackServiceProvider()?.GetService(typeof(T))) as T;
     }
@@ -365,7 +365,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     public T GetRequiredService<T>() where T : notnull
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? (T)resolver(this)
             : (T)(__ResolveCollection(typeof(T), null) ?? GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
@@ -373,7 +373,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     public global::System.Collections.Generic.IEnumerable<T> GetServices<T>()
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
             : __ResolveCollection<T>(null) ?? GetFallbackServiceProvider()?.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) as global::System.Collections.Generic.IEnumerable<T> ?? [];
     }
@@ -381,7 +381,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     public T? GetKeyedService<T>(object? serviceKey) where T : class
     {
         ThrowIfDisposed();
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? resolver(this) as T
             : (__ResolveCollection(typeof(T), serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey)) as T;
@@ -390,7 +390,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     public T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
     {
         ThrowIfDisposed();
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), key), out var resolver)
             ? (T)resolver(this)
             : (T)(__ResolveCollection(typeof(T), serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(T), serviceKey) ?? throw new global::System.InvalidOperationException($"No service for type '{typeof(T)}' with key '{serviceKey}' has been registered."));
@@ -399,7 +399,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     public global::System.Collections.Generic.IEnumerable<T> GetKeyedServices<T>(object? serviceKey)
     {
         ThrowIfDisposed();
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
         return _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(global::System.Collections.Generic.IEnumerable<T>), key), out var resolver)
             ? (global::System.Collections.Generic.IEnumerable<T>)resolver(this)
             : __ResolveCollection<T>(serviceKey) ?? (GetFallbackServiceProvider() as global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider)?.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), serviceKey) as global::System.Collections.Generic.IEnumerable<T> ?? [];
@@ -409,7 +409,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
         serviceKey != global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey
         && !typeof(T).IsValueType
         && !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))
-        && _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), out var resolver)
+        && _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
             ? __MergeFallbackServices<T>([(T)resolver(this)], serviceKey)
             : null;
 
@@ -419,7 +419,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
 
     public bool IsService(global::System.Type serviceType)
     {
-        if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed))) return true;
 
         if(__IsCollectionService(serviceType, null)) return true;
 
@@ -428,7 +428,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
 
     public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey;
+        var key = serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, key))) return true;
 
@@ -493,7 +493,7 @@ partial class SharedModule : global::SourceGen.Ioc.IIocContainer<global::IocSamp
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::IocSample.Shared.SharedModule, object> resolver) =>
-        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Shared.SharedModule, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
 

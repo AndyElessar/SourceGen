@@ -90,6 +90,9 @@ partial class IocSourceGenerator
         /// <summary>Gets the <c>T[]</c> resolver method name for collections of <paramref name="serviceType"/>.</summary>
         public string ArrayResolver(string serviceType) => $"GetAll{Get(serviceType)}Array";
 
+        /// <summary>Gets the <c>T[]</c> resolver method name for keyed collections of <paramref name="serviceType"/> (<c>GetAll{T}Array_{suffix}</c>).</summary>
+        public string KeyedArrayResolver(string serviceType, string suffix) => $"GetAll{Get(serviceType)}Array_{suffix}";
+
         /// <summary>Gets the <c>Lazy&lt;T&gt;[]</c> resolver method name.</summary>
         public string LazyArrayResolver(string innerServiceType) => $"GetAllLazy_{Get(innerServiceType)}_Array";
 
@@ -181,7 +184,7 @@ partial class IocSourceGenerator
         /// <summary>
         /// Appends the FNV-1a hash of <paramref name="typeName"/> (deterministic, unlike <see cref="string.GetHashCode()"/>).
         /// </summary>
-        private static string AppendHash(string name, string typeName)
+        public static string AppendHash(string name, string typeName)
         {
             var hash = 2166136261u;
             foreach(var ch in typeName)

@@ -94,6 +94,12 @@ internal static class Constants
     public const string KeyedServiceAnyKey = "global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey";
 
     /// <summary>
+    /// The container's key of non-keyed services in <c>ServiceIdentifier</c>. It is not <c>KeyedService.AnyKey</c>, which
+    /// requests the services registered under any key (see Container.KeyedServices).
+    /// </summary>
+    public const string NonKeyedServiceKey = "global::SourceGen.Ioc.ServiceIdentifier.NonKeyed";
+
+    /// <summary>
     /// File-level alias for a container resolver entry, <c>KeyValuePair&lt;ServiceIdentifier, Func&lt;TContainer, object&gt;&gt;</c>.
     /// Explicitly typed entries bind much faster than target-typed <c>new(...)</c> in large nullable-enabled array initializers.
     /// </summary>

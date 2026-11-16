@@ -21,8 +21,8 @@ public interface IIocContainer<TContainer> :
 {
     /// <summary>
     /// Gets all resolvers with their composite keys and factory functions.<br/>
-    /// The key is a <see cref="ServiceIdentifier"/> where Key is <see cref="KeyedService.AnyKey"/>
-    /// for non-keyed services.<br/>
+    /// The key is a <see cref="ServiceIdentifier"/> where Key is <see cref="ServiceIdentifier.NonKeyed"/>
+    /// for non-keyed services, and <see cref="KeyedService.AnyKey"/> for the collections of all keyed services.<br/>
     /// The factory function takes the container instance and returns the resolver.
     /// </summary>
     [Experimental("SGIOCEXP001", Message = "This API is used by SourceGen.Ioc and may change or be removed in future versions.")]

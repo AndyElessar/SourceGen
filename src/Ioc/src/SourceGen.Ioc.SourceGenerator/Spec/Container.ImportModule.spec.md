@@ -72,7 +72,6 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     ];
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers =
-        // Without IntegrateServiceProvider: Resolvers.Select(static kvp => new KeyValuePair<…>(kvp.Key, c => kvp.Value(c._sharedModule1)))
         __ImportModuleResolvers(global::SharedModule1.Resolvers, static c => c._sharedModule1) // see Collections of Imported Modules
         .Concat(__ImportModuleResolvers(global::SharedModule2.Resolvers, static c => c._sharedModule2))
         .Concat(_localResolvers)
@@ -91,7 +90,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         ThrowIfDisposed();
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, ServiceIdentifier.NonKeyed), out var resolver))
             return resolver(this);
 
         // IEnumerable<T> without collection resolver, then the fallback provider (see Container.Collections)
@@ -104,7 +103,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? KeyedService.AnyKey;
+        var key = serviceKey ?? ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
@@ -134,9 +133,9 @@ What the generator emits for an imported module depends on the members the modul
 
 ## Collections of Imported Modules
 
-With `IntegrateServiceProvider = true`, an `IEnumerable<T>` of an imported module's services resolved through the importing container (its `GetService`, `GetServices<T>()`, and dependencies that call them) MUST [merge the fallback services](Container.Collections.spec.md#merging-fallback-services) exactly once, with the importing container's fallback provider and, in a scope, the importing scope's fallback scope, whatever the module's own settings: a module with `IntegrateServiceProvider = false` (created with `new Module()`), a module built by an earlier generator version, and a module that integrates the fallback provider all give the same result.
+With `IntegrateServiceProvider = true`, an `IEnumerable<T>` of an imported module's services resolved through the importing container (its `GetService`, `GetServices<T>()`, and dependencies that call them) MUST [merge the fallback services](Container.Collections.spec.md#merging-fallback-services) exactly once, with the importing container's fallback provider and, in a scope, the importing scope's fallback scope, whatever the module's own settings: a module with `IntegrateServiceProvider = false` (created with `new Module()`) and a module that integrates the fallback provider give the same result. The module MUST be built with the same SourceGen.Ioc version as the importer: a module built before `ServiceIdentifier.NonKeyed` keys its non-keyed entries with `KeyedService.AnyKey`, so the importer would miss its non-keyed services and treat its non-keyed collections as `AnyKey` collections (see [Keyed Services](Container.KeyedServices.spec.md#non-keyed-key-and-keyedserviceanykey)).
 
-The importer therefore does not call the module's `IEnumerable<T>` entry, which merges according to the module's settings. `__ImportModuleResolvers<TModule>` wraps the module's `Resolvers` once, when `_serviceResolvers` is built: a non-keyed `IEnumerable<T>` entry of a reference type `T` resolves the module's `T[]` entry, which never merges (`__CollectionResolvers<T>` registers both with the same array resolver), and merges it with the non-generic `__MergeFallbackServices(Type, Array, object?)` of the importer. Every other entry resolves with the module instance of the importing container (scope), as before. An `IEnumerable<T>` entry without a matching `T[]` entry (a module that does not come from this generator), and value types (`KeyValuePair<K, V>` collections, which are not merged), keep the module's entry. Nested imports wrap at each level, so the outermost importer merges.
+The importer therefore does not call the module's merging resolver. The `IEnumerable<T>` entry of every generated collection (`__EnumerableResolver<T>`, used by `__CollectionResolvers<T>`, `__KeyedCollectionResolvers<T>`, the `KeyedService.AnyKey` collection, and the collections with explicitly registered collection types) is the `Resolve` method of an `IocCollectionResolver<TContainer>` (runtime library, `[EditorBrowsable(Never)]`), which carries the collection's array resolver, which never merges. `__ImportModuleResolvers<TModule>` wraps the module's `Resolvers` once, when `_serviceResolvers` is built: an entry whose delegate target is an `IocCollectionResolver<TModule>` resolves its array resolver with the module instance and, with `IntegrateServiceProvider = true`, merges it with the non-generic `__MergeFallbackServices(Type, Array, object?)` of the importer, under the same key (`null` for non-keyed entries, keyed with the entry's key, including `KeyedService.AnyKey`). Keyed collections of a module therefore merge once too. The wrapped entry is again an `IocCollectionResolver<TContainer>` of the importer, so nested imports merge only at the outermost importer. Every other entry, including an explicit registration of `IEnumerable<T>` (see [Explicit Collection Registrations](Container.Collections.spec.md#explicit-collection-registrations)) and an entry of a module that does not come from this generator, resolves with the module instance of the importing container (scope), as before. The pairing does not depend on a `T[]` entry, so a module whose `T[]` is registered explicitly still merges once.
 
 ```csharp
 // IntegrateServiceProvider = true
@@ -148,24 +147,17 @@ private static readonly FrozenDictionary<ServiceIdentifier, Func<AppContainer, o
 
 private static IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(IReadOnlyCollection<KeyValuePair<ServiceIdentifier, Func<TModule, object>>> resolvers, Func<AppContainer, TModule> module)
 {
-    var arrayResolvers = new Dictionary<Type, Func<TModule, object>>();
     foreach(var entry in resolvers)
     {
-        if(entry.Key.ServiceType.IsArray && entry.Key.Key == KeyedService.AnyKey)
-            arrayResolvers[entry.Key.ServiceType.GetElementType()!] = entry.Value;
-    }
-
-    foreach(var entry in resolvers)
-    {
-        var serviceType = entry.Key.ServiceType;
         var resolver = entry.Value;
-        if(entry.Key.Key == KeyedService.AnyKey
-            && serviceType.IsConstructedGenericType
-            && serviceType.GetGenericTypeDefinition() == typeof(IEnumerable<>)
-            && !serviceType.GenericTypeArguments[0].IsValueType
-            && arrayResolvers.TryGetValue(serviceType.GenericTypeArguments[0], out var arrayResolver))
+        if(resolver.Target is IocCollectionResolver<TModule> collection)
         {
-            yield return new(entry.Key, c => c.__MergeFallbackServices(serviceType, (Array)arrayResolver(module(c)), null));
+            var arrayResolver = collection.ArrayResolver;
+            Func<AppContainer, object> array = c => arrayResolver(module(c));
+            var serviceType = entry.Key.ServiceType;
+            var serviceKey = entry.Key.Key == ServiceIdentifier.NonKeyed ? null : entry.Key.Key;
+            yield return new(entry.Key, new IocCollectionResolver<AppContainer>(array, c => c.__MergeFallbackServices(serviceType, (Array)array(c), serviceKey)).Resolve);
+            // without IntegrateServiceProvider: new IocCollectionResolver<AppContainer>(array, c => resolver(module(c))).Resolve
         }
         else
         {
@@ -175,7 +167,7 @@ private static IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(IRead
 }
 ```
 
-- Without `IntegrateServiceProvider`, the importer keeps `Module.Resolvers.Select(…)` and generates no helper.
+- Without `IntegrateServiceProvider`, the importer uses the same helper, so the collections it re-exports stay recognizable for an outer importer; it never merges.
 - Other collection types of the module (`IReadOnlyList<T>`, `T[]`, …) stay container-only, like the importer's own.
 - The services of a module inject their own collections inside the module, through the module's generated code: they merge according to the module's `IntegrateServiceProvider`, with the module's fallback scope, which is the importing scope's when the module shares it (see [Fallback Scope of Imported Modules](#fallback-scope-of-imported-modules)). A module without `IntegrateServiceProvider` never asks the fallback provider, for collections or for single services.
 

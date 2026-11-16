@@ -19,12 +19,13 @@ partial class IocSourceGenerator
     /// Whether the fallback provider's services come first (<c>IntegrateServiceProvider = true</c>), like
     /// <c>GetServices&lt;T&gt;()</c>; the merged array still converts to every collection type.
     /// </param>
-    private sealed record class CollectionDependency(string ArrayMethodName, bool MergeFallbackServices) : ResolvedDependency
+    /// <param name="Key">The key expression of a keyed collection, whose fallback services are merged under that key; <see langword="null"/> when non-keyed.</param>
+    private sealed record class CollectionDependency(string ArrayMethodName, bool MergeFallbackServices, string? Key = null) : ResolvedDependency
     {
         public override string FormatExpression(bool isOptional)
         {
             return MergeFallbackServices
-                ? $"{MergeFallbackServicesMethodName}({ArrayMethodName}(), null)"
+                ? $"{MergeFallbackServicesMethodName}({ArrayMethodName}(), {Key ?? "null"})"
                 : $"{ArrayMethodName}()";
         }
     }

@@ -118,14 +118,16 @@ public sealed class SingleServiceCollectionTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
-    public async Task GetKeyedService_EnumerableWithAnyKey_DoesNotReturnSingleRegistration(bool useSwitchStatement)
+    public async Task GetKeyedService_EnumerableWithAnyKey_ReturnsKeyedRegistrationsOnly(bool useSwitchStatement)
     {
         await using var container = (IAsyncDisposable)CreateContainer(useSwitchStatement);
         var provider = (IKeyedServiceProvider)container;
 
-        var services = provider.GetKeyedService(typeof(IEnumerable<IKeyedSingleCollectionService>), KeyedService.AnyKey);
+        // Like MS.DI, AnyKey requests the keyed registrations, not the non-keyed one
+        var services = (IEnumerable<IKeyedSingleCollectionService>?)provider.GetKeyedService(typeof(IEnumerable<IKeyedSingleCollectionService>), KeyedService.AnyKey);
 
-        await Assert.That(services).IsNull();
+        await Assert.That(services).IsNotNull();
+        await Assert.That(services!.Single().Name).IsEqualTo("Alpha");
     }
 
     [Test]
@@ -180,7 +182,7 @@ public sealed class SingleServiceCollectionTests
 
         await Assert.That(container.GetServices<ISingleCollectionService>().Single()).IsSameReferenceAs(container.GetRequiredService<ISingleCollectionService>());
         await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>("alpha").Single().Name).IsEqualTo("Alpha");
-        await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>(KeyedService.AnyKey)).IsEmpty();
+        await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>(KeyedService.AnyKey).Single().Name).IsEqualTo("Alpha");
         await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>(null).Single().Name).IsEqualTo("Default");
         await Assert.That(container.GetServices<IAsyncSingleCollectionService>()).IsEmpty();
         await Assert.That(container.GetServices<Task<IAsyncSingleCollectionService>>()).IsEmpty();
@@ -194,7 +196,7 @@ public sealed class SingleServiceCollectionTests
 
         await Assert.That(container.GetServices<ISingleCollectionService>().Single()).IsSameReferenceAs(container.GetRequiredService<ISingleCollectionService>());
         await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>("alpha").Single().Name).IsEqualTo("Alpha");
-        await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>(KeyedService.AnyKey)).IsEmpty();
+        await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>(KeyedService.AnyKey).Single().Name).IsEqualTo("Alpha");
         await Assert.That(container.GetKeyedServices<IKeyedSingleCollectionService>(null).Single().Name).IsEqualTo("Default");
         await Assert.That(container.GetServices<IAsyncSingleCollectionService>()).IsEmpty();
         await Assert.That(container.GetServices<Task<IAsyncSingleCollectionService>>()).IsEmpty();

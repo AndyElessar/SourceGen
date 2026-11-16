@@ -224,6 +224,21 @@ public sealed class InjectedCollectionFallbackMergeTests
     }
 
     [Test]
+    public async Task NestedImporter_ThroughModuleWithoutFallbackProvider_MergesFallbackServicesOnce()
+    {
+        // The middle module does not merge, but re-exports the collection so that the outermost importer merges once
+        await using var fallbackProvider = CreateFallbackProvider();
+        await using var container = new NonIntegratedNestedPluginModuleImporter(fallbackProvider);
+        using var scope = container.CreateScope();
+
+        var services = scope.ServiceProvider.GetServices<IIntegratedModulePlugin>().ToList();
+
+        await Assert.That(services.Count).IsEqualTo(3);
+        await Assert.That(services[0]).IsTypeOf<FallbackIntegratedModulePlugin>();
+        await Assert.That(services.Count(static s => s is FallbackIntegratedModulePlugin)).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task Importer_WithoutFallbackProvider_ContainsModuleServicesOnly()
     {
         await using var container = new PluginModuleImporter();

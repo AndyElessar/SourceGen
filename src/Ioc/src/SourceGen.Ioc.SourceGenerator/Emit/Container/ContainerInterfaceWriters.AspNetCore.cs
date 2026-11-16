@@ -152,11 +152,11 @@ partial class IocSourceGenerator
         {
             if(effectiveUseSwitchStatement)
             {
-                writer.WriteLine("activator = global::System.Array.Exists(_localResolvers, e => e.Key.Equals(new global::SourceGen.Ioc.ServiceIdentifier(componentType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)))");
+                writer.WriteLine("activator = global::System.Array.Exists(_localResolvers, e => e.Key.Equals(new global::SourceGen.Ioc.ServiceIdentifier(componentType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed)))");
             }
             else
             {
-                writer.WriteLine("activator = _serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(componentType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey))");
+                writer.WriteLine("activator = _serviceResolvers.ContainsKey(new global::SourceGen.Ioc.ServiceIdentifier(componentType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed))");
             }
             writer.WriteLine("    ? static (_, _) => { }");
             writer.WriteLine("    : CreateComponentPropertyInjector(componentType);");

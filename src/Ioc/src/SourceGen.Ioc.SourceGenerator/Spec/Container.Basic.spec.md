@@ -69,7 +69,7 @@ Generated service fields and resolver methods are named after short type names, 
 |Collisions|When different types of one container get the same short name, each of them MUST get `_` and the 8-digit hex FNV-1a hash of its fully qualified name appended (e.g. `Service_4b7ca1a9`). The hash MUST be deterministic (not `string.GetHashCode`).|
 |Length|A short name longer than 80 characters MUST be truncated to 60 characters and get the hash appended.|
 |Members|Resolver `Get{Name}()` (creation `Create{Name}()`, async `Get{Name}Async()` / `Create{Name}Async()`), field `_{name}` (synchronization `_{name}Lock` / `Semaphore` / `SpinLock`), keyed `…_{key}`, decorated service type `…_As_{ServiceName}`, wrapper fields `_lazy_{ServiceName}{field}` / `_func_{ServiceName}{field}`, collections `GetAll{Name}Array()`, `GetAllLazy_{Name}_Array()`, `GetAllFunc_{Name}_Array()`, `GetAllKvp_{Key}_{Value}_Array()` / `_Dictionary()`.|
-|Reserved names|A resolver or field name MUST get `_Resolve` appended when it, or a member derived from it (e.g. `Create…`, `…Async`, `Init…Async`, `…Async_As_{ServiceType}`), equals a member the user declares on the container class or its base classes (including partial accessors), an imported module field, or a member of the generated container infrastructure (e.g. `GetService`, `CreateScope`, `_root`, and the `__`-prefixed helpers `__Resolver`, `__KeyedResolver`, `__CollectionResolvers`, `__ResolveCollection`, `__FindCollectionElementResolver`, `__IsCollectionService`, `__GetFallbackServices`, `__MergeFallbackServices`, `__ImportModuleResolvers`, `__ProjectTask`, `__CreateLock`, `__CreateSemaphore`, `__HotReloadHandler` and the `__IocResolver` alias, which a service named e.g. `_Resolver` would otherwise produce).|
+|Reserved names|A resolver or field name MUST get `_Resolve` appended when it, or a member derived from it (e.g. `Create…`, `…Async`, `Init…Async`, `…Async_As_{ServiceType}`), equals a member the user declares on the container class or its base classes (including partial accessors), an imported module field, or a member of the generated container infrastructure (e.g. `GetService`, `CreateScope`, `_root`, and the `__`-prefixed helpers `__Resolver`, `__KeyedResolver`, `__CollectionResolvers`, `__KeyedCollectionResolvers`, `__EnumerableResolver`, `__ResolveCollection`, `__FindCollectionElementResolver`, `__IsCollectionService`, `__GetFallbackServices`, `__MergeFallbackServices`, `__ImportModuleResolvers`, `__ProjectTask`, `__CreateLock`, `__CreateSemaphore`, `__HotReloadHandler` and the `__IocResolver` alias, which a service named e.g. `_Resolver` would otherwise produce).|
 |Derived member names|A service's members (its resolver, `Create…`, `…Async`, `Init…Async` methods, its field and synchronization fields) MUST NOT equal those of another service. The service with the longer name MUST get `_Resolve` appended to its resolver when the resolver is another resolver + `Async` (`GetFooAsync` of `FooAsync` is the async resolver of `Foo`), and to its field when the field is another field + `Lock`, `Semaphore`, `SpinLock` or `Spin` (`_fooLock` of `FooLock` is the lock field of `Foo`; async-init services use `…Lock` under the SpinLock strategy), repeatedly until no member collides. The other service keeps its names, so the result does not depend on registration order.|
 |Decorated service type names|The resolver (`{resolver}_As_{ServiceType}`) and field (`{field}_As_{ServiceType}`) of a decorated service type entry MUST additionally get `_Resolve` appended, repeatedly until unique, while they or their derived members equal a member generated for an undecorated service (its resolver, `Create…`, `…Async`, `Init…Async` methods, its field and synchronization fields) or for another decorated service type entry, e.g. the resolver of a service named `Foo_As_IFoo`, or of `Foo` keyed with the expression `As.IFoo`, or the field of `Foo_As_IFooLock`. Registrations of one implementation (same key) for one service type MUST share the names.|
 |Cached `Task<ServiceType>` projection names|The projection field (`{field}Task_As_{ServiceType}`) and method (`{resolver}Async_As_{ServiceType}`) of an async-init service MUST additionally get `_Resolve` appended, repeatedly until unique, while they equal a member generated for another service (its resolver, `Create…`, `…Async`, `Init…Async` methods, its field and synchronization fields) or a Lazy/Func wrapper field, e.g. the field of a service named `FooTask_As_IFoo`.|
@@ -195,7 +195,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     {
         ThrowIfDisposed();
 
-        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
+        if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, ServiceIdentifier.NonKeyed), out var resolver))
             return resolver(this);
 
         // IEnumerable<T> without collection resolver, then the fallback provider (see Container.Collections)
@@ -250,7 +250,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public object? GetKeyedService(Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? KeyedService.AnyKey;
+        var key = serviceKey ?? ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
@@ -281,7 +281,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     public T? GetService<T>() where T : class
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), ServiceIdentifier.NonKeyed), out var resolver)
             ? resolver(this) as T
             : GetFallbackServiceProvider()?.GetService(typeof(T)) as T;
     }
@@ -289,7 +289,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     public T GetRequiredService<T>() where T : notnull
     {
         ThrowIfDisposed();
-        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), KeyedService.AnyKey), out var resolver)
+        return _serviceResolvers.TryGetValue(new ServiceIdentifier(typeof(T), ServiceIdentifier.NonKeyed), out var resolver)
             ? (T)resolver(this)
             : (T)(GetFallbackServiceProvider()?.GetService(typeof(T)) ?? throw new InvalidOperationException($"No service for type '{typeof(T)}' has been registered."));
     }
@@ -305,14 +305,14 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     public bool IsService(Type serviceType)
     {
-        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, KeyedService.AnyKey))) return true;
+        if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, ServiceIdentifier.NonKeyed))) return true;
 
         return _fallbackProvider is IServiceProviderIsService isService && isService.IsService(serviceType);
     }
 
     public bool IsKeyedService(Type serviceType, object? serviceKey)
     {
-        var key = serviceKey ?? KeyedService.AnyKey;
+        var key = serviceKey ?? ServiceIdentifier.NonKeyed;
 
         if(_serviceResolvers.ContainsKey(new ServiceIdentifier(serviceType, key))) return true;
 
@@ -367,7 +367,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
 
     // Entry helper (see Container.Performance.spec.md for __KeyedResolver and __CollectionResolvers<T>)
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::AppContainer, object> resolver) =>
-        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), resolver);
+        new(new global::SourceGen.Ioc.ServiceIdentifier(serviceType, global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), resolver);
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers = _localResolvers.ToFrozenDictionary();
     // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. If reversed, _localResolvers would be null when _serviceResolvers initializes.

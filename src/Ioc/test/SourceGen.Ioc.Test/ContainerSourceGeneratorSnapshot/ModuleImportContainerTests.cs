@@ -462,13 +462,15 @@ public class ModuleImportContainerTests
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
 
+        // Both wrap the module's collections; only an integrating importer merges the fallback services
+        await Assert.That(generatedSource).Contains("__ImportModuleResolvers(global::SharedLib.SharedModule.Resolvers, static c => c._sharedLib_SharedModule)");
         if(integrateServiceProvider)
         {
-            await Assert.That(generatedSource).Contains("__ImportModuleResolvers(global::SharedLib.SharedModule.Resolvers, static c => c._sharedLib_SharedModule)");
+            await Assert.That(generatedSource).Contains("__MergeFallbackServices(serviceType, (global::System.Array)array(c), serviceKey)");
         }
         else
         {
-            await Assert.That(generatedSource).DoesNotContain("__ImportModuleResolvers");
+            await Assert.That(generatedSource).DoesNotContain("__MergeFallbackServices");
         }
 
         await Verify(generatedSource).UseParameters(integrateServiceProvider);
