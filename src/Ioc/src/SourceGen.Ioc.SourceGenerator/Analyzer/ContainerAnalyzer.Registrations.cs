@@ -137,7 +137,7 @@ partial class ContainerAnalyzer
                 switch(argument.NameEquals?.Name.Identifier.Text)
                 {
                     case "Factory" when GetNameofArgument(argument.Expression) is { } factoryExpression:
-                        factory = RoslynExtensions.ResolveMethodSymbol(factoryExpression, GetSemanticModel(syntax.SyntaxTree));
+                        factory = RoslynExtensions.ResolveFactoryMethod(factoryExpression, argumentList, GetSemanticModel(syntax.SyntaxTree));
                         break;
 
                     case "InjectMembers":

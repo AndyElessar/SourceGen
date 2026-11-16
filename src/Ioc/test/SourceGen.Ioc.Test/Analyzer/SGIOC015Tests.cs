@@ -252,6 +252,40 @@ public class SGIOC015Tests
     }
 
     [Test]
+    [Arguments("GuidFirst", "public static Guid ServiceKey() => Guid.Empty; public static int ServiceKey(int x) => x;")]
+    [Arguments("IntFirst", "public static int ServiceKey(int x) => x; public static Guid ServiceKey() => Guid.Empty;")]
+    public async Task SGIOC015_KVP_CsharpKeyType_NameofOfOverloadedMethod_KeyTypeUnknown_NoDiagnostic(string scenario, string methods)
+    {
+        // nameof() of a method group cannot choose an overload, so the key type is unknown (treated as compatible) rather
+        // than the return type of whichever overload comes first
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Key = nameof(ServiceKey), KeyType = KeyType.Csharp)]
+            public class ServiceA : IService
+            {
+                {{methods}}
+            }
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<int, IService> kvp)
+            {
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015");
+
+        await Assert.That(sgioc015).Count().IsEqualTo(0).Because(scenario);
+    }
+
+    [Test]
     public async Task SGIOC015_ReadOnlyDictionary_CsharpKeyType_Nameof_MatchingGuid_NoDiagnostic()
     {
         const string source = """

@@ -2092,6 +2092,43 @@ public class SGIOC018Tests
     }
 
     [Test]
+    // More than one usable overload: none is resolved (SGIOC044), so the factory's parameters are unknown and not checked
+    [Arguments("SeveralUsableOverloads", "public static IMyService Create(IMissingA a) => null!; public static IMyService Create(IMissingB b) => null!;", 0)]
+    // The only usable overload is checked, whichever candidate comes first
+    [Arguments("OneUsableOverload", "public IMyService Create(IMissingB b) => null!; public static IMyService Create(IMissingA a) => null!;", 1)]
+    public async Task SGIOC018_FactoryOverloadedMethodGroup_ChecksOnlyTheSingleUsableOverload(string scenario, string methods, int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMissingA { }
+            public interface IMissingB { }
+            public interface IMyService { }
+
+            [IocRegister<IMyService>(ServiceLifetime.Singleton, Factory = nameof(MyServiceFactory.Create))]
+            public class MyService : IMyService { }
+
+            public class MyServiceFactory
+            {
+                {{methods}}
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected).Because(scenario);
+        if(expected > 0)
+            await Assert.That(sgioc018[0].GetMessage()).Contains("IMissingA").Because(scenario);
+    }
+
+    [Test]
     public async Task SGIOC018_RegisterDefaultsFactory_ConstructorNotChecked_NoDiagnostic()
     {
         const string source = """

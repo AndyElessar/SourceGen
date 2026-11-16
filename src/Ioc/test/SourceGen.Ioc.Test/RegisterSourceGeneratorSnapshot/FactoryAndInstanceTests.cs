@@ -2221,9 +2221,104 @@ public class FactoryAndInstanceTests
             }
             """;
 
+        // Both overloads are usable, so nameof() is ambiguous (SGIOC044): the factory is called by its path with the service
+        // provider only, like a Factory that does not resolve to a method
         var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
         await result.VerifyCompilableAsync();
         var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Verify(generatedSource);
+    }
+
+    private static string CreateOverloadedFactorySource(string registration, string firstOverload, string secondOverload) => $$"""
+        using System;
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        {{registration}}
+
+        namespace TestNamespace;
+
+        public interface IDependency { }
+        public interface IMyService { }
+
+        [IocRegister<IDependency>]
+        public class Dependency : IDependency { }
+
+        public class MyService : IMyService { }
+
+        public class MyServiceFactory
+        {
+            {{firstOverload}}
+            {{secondOverload}}
+        }
+        """;
+
+    /// <summary>
+    /// Generates the Register output with the two overloads in both orders, which MUST be the same: the overload is never
+    /// chosen by the order of the candidates.
+    /// </summary>
+    private static async Task<string?> GenerateWithOverloadsInBothOrdersAsync(string registration, string firstOverload, string secondOverload)
+    {
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(CreateOverloadedFactorySource(registration, firstOverload, secondOverload));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        var reversed = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(CreateOverloadedFactorySource(registration, secondOverload, firstOverload));
+        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(reversed, "ServiceRegistration")).IsEqualTo(generatedSource);
+
+        return generatedSource;
+    }
+
+    private const string RegisterForMyServiceWithFactory =
+        "[assembly: IocRegisterFor<TestNamespace.MyService>(ServiceTypes = [typeof(TestNamespace.IMyService)], Factory = nameof(TestNamespace.MyServiceFactory.Create))]";
+
+    [Test]
+    public async Task Factory_WithOverloads_OneUsable_CallsTheUsableOverload()
+    {
+        // The instance overload cannot be a factory, so the static one is called with its own parameters
+        var generatedSource = await GenerateWithOverloadsInBothOrdersAsync(
+            RegisterForMyServiceWithFactory,
+            "public IMyService Create(IServiceProvider sp) => new MyService();",
+            "public static IMyService Create(IDependency dependency, [ServiceKey] string key) => new MyService();");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithOverloads_UnmappedGenericOverload_CallsTheNonGenericOverload()
+    {
+        // A generic overload without [IocGenericFactory] or GenericFactoryTypeMapping cannot be called as a factory
+        var generatedSource = await GenerateWithOverloadsInBothOrdersAsync(
+            RegisterForMyServiceWithFactory,
+            "public static IMyService Create<T>(T value) => new MyService();",
+            "public static IMyService Create(IDependency dependency) => new MyService();");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_WithOverloads_SeveralUsable_CallsPathWithServiceProvider()
+    {
+        // Ambiguous (SGIOC044): no overload is chosen, the factory is called by its path with the service provider only
+        var generatedSource = await GenerateWithOverloadsInBothOrdersAsync(
+            RegisterForMyServiceWithFactory,
+            "public static IMyService Create(IDependency dependency, [ServiceKey] string key) => new MyService();",
+            "public static IMyService Create(IServiceProvider sp) => new MyService();");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task Factory_DefaultSettingsWithOverloads_SeveralUsable_CallsPathWithServiceProvider()
+    {
+        var generatedSource = await GenerateWithOverloadsInBothOrdersAsync(
+            """
+            [assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), ServiceLifetime.Singleton, Factory = nameof(TestNamespace.MyServiceFactory.Create))]
+            [assembly: IocRegisterFor<TestNamespace.MyService>(ServiceTypes = [typeof(TestNamespace.IMyService)])]
+            """,
+            "public static IMyService Create(IDependency dependency) => new MyService();",
+            "public static IMyService Create(IServiceProvider sp) => new MyService();");
 
         await Verify(generatedSource);
     }
