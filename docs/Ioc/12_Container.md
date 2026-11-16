@@ -105,7 +105,7 @@ The generated container can implement the following interfaces (depending on opt
 |`IServiceScopeFactory`|Creates child scopes.|
 |`IServiceScope`|Container instance is also a scope.|
 |`IServiceProviderFactory<IServiceCollection>`|Implemented by the nested `AppContainer.ServiceProviderFactory` type, not by the container. Generated only when `IntegrateServiceProvider = true` and `MS.E.DI` package support is available; integrates the generated container with `IServiceCollection` (`CreateBuilder` / `CreateServiceProvider`).|
-|`IDisposable` / `IAsyncDisposable`|Disposes tracked services and scope resources: scoped services (a scope's own, or those resolved directly from the root), then singletons in the root. Transient services are **not** tracked or disposed; dispose them yourself. Synchronous `Dispose` throws `InvalidOperationException` when a tracked service only implements `IAsyncDisposable` — use `DisposeAsync` in that case.|
+|`IDisposable` / `IAsyncDisposable`|Disposes tracked services and scope resources: scoped services (a scope's own, or those resolved directly from the root), then singletons in the root. Transient services are **not** tracked or disposed; dispose them yourself (analyzer `SGIOC045` warns about disposable transient services). Synchronous `Dispose` throws `InvalidOperationException` when a tracked service only implements `IAsyncDisposable` — use `DisposeAsync` in that case.|
 
 ## Container Options
 
@@ -933,6 +933,7 @@ partial class TestContainer
 |SGIOC027|Error|Partial accessor returns `T` directly, but the service is async-init (its implementation or a decorator has async inject methods). Return `Task<T>` instead.|
 |SGIOC029|Error|Partial accessor targets an async-init service with a return type other than `Task<T>` (for example `ValueTask<T>` or `Lazy<Task<T>>`).|
 |SGIOC031|Warning|Container is not generated because `Container` is not enabled in `SourceGenIocFeatures`.|
+|SGIOC045|Warning|Container creates a transient service that implements `IDisposable` or `IAsyncDisposable` (its implementation type, or the return type of its `Factory`) but never disposes it. Dispose it in the caller, or register it as `Scoped` or `Singleton`.|
 
 ---
 
