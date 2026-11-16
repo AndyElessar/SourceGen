@@ -170,7 +170,7 @@ All under `Models/` unless noted; all immutable with value equality.
 
 | Topic | Rule |
 |---|---|
-| **Settings merge order** | explicit attribute → matching defaults → MSBuild `SourceGenIocDefaultLifetime` → `Transient` |
+| **Settings merge order** | explicit attribute → matching defaults → MSBuild `SourceGenIocDefaultLifetime` → `Transient`; the lifetime of an `Instance` registration without explicit `Lifetime` is `Singleton` (see [Instance Lifetime](Register.Factory.spec.md#instance-lifetime)) |
 | **Defaults match priority** | (1) implementation type itself, (2) closest base class, (3) first interface in `AllInterfaces` |
 | **`ImplementationTypes` service derivation** | open generic → `TargetServiceType` + configured `ServiceTypes`; closed/non-generic → matched closed types from `AllInterfaces`/`AllBaseClasses`, falling back to `TargetServiceType` if no match (e.g. when framework metadata is invisible) |
 | **Key interpretation** | `KeyType=Value` → literal; `KeyType=Csharp` → C# expression (`MyClass.Field`, `nameof(...)`) |
