@@ -82,7 +82,7 @@ partial class AppContainer
 
         if(!_isRootScope)
         {
-            DisposeService(_fallbackScope);
+            DisposeService(global::System.Threading.Interlocked.Exchange(ref _fallbackScope, null));
             return;
         }
 

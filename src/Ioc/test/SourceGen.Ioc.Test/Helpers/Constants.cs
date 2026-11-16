@@ -70,4 +70,6 @@ internal static class Constants
     public const string SGIOC040 = "SGIOC040";
     public const string SGIOC041 = "SGIOC041";
     public const string SGIOC042 = "SGIOC042";
+    public const string SGIOC043 = "SGIOC043";
+    public const string SGIOC044 = "SGIOC044";
 }

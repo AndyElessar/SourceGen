@@ -22,7 +22,7 @@ Both are `[DiagnosticAnalyzer(LanguageNames.CSharp)]` with lifecycle: `Initializ
 
 | Analyzer | Diagnostics |
 | :------- | :---------- |
-| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038, 039, 040, 041 |
+| RegisterAnalyzer | SGIOC001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016, 017, 022, 023, 024, 026, 028, 030, 032, 033, 034, 035, 036, 037, 038, 039, 040, 041, 042, 043, 044 |
 | ContainerAnalyzer | SGIOC018, 019, 020, 021, 025, 027, 029, 031 |
 
 ### CompilationEnd Diagnostics
@@ -47,9 +47,9 @@ Format: ID - Level - Category - Description
 | :--- | :---------- |
 | [Registration](Diagnostics.Registration.spec.md) | SGIOC001, SGIOC009, SGIOC010, SGIOC011, SGIOC012, SGIOC032, SGIOC038, SGIOC040, SGIOC041 |
 | [Dependency](Diagnostics.Dependencies.spec.md) | SGIOC002, SGIOC003, SGIOC004, SGIOC005, SGIOC033 |
-| [Injection](Diagnostics.Injection.spec.md) | SGIOC006, SGIOC007, SGIOC022, SGIOC023, SGIOC024, SGIOC028 |
+| [Injection](Diagnostics.Injection.spec.md) | SGIOC006, SGIOC007, SGIOC022, SGIOC023, SGIOC024, SGIOC028, SGIOC043 |
 | [Key](Diagnostics.Keys.spec.md) | SGIOC013, SGIOC014, SGIOC015 |
-| [Factory](Diagnostics.Factory.spec.md) | SGIOC008, SGIOC016, SGIOC017, SGIOC039, SGIOC042 |
+| [Factory](Diagnostics.Factory.spec.md) | SGIOC008, SGIOC016, SGIOC017, SGIOC039, SGIOC042, SGIOC044 |
 | [Container](Diagnostics.Container.spec.md) | SGIOC018, SGIOC019, SGIOC020, SGIOC021, SGIOC025, SGIOC031 |
 | [Async-init](Diagnostics.AsyncInit.spec.md) | SGIOC026, SGIOC027, SGIOC029, SGIOC030 |
 | [Decorator](Diagnostics.Decorators.spec.md) | SGIOC034, SGIOC035 |

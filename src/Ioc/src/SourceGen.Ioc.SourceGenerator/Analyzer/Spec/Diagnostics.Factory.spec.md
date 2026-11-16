@@ -16,6 +16,7 @@ Report when `IoCRegisterAttribute`/`IoCRegisterForAttribute`/`IoCRegisterDefault
   - Member is not static.
   - Member is private or protected.
   - Member's containing type is private.
+- A `Factory` that names a method group with several overloads is resolved like the generator (see `SGIOC044`): the single usable overload is checked by `SGIOC008`, `SGIOC014` and `SGIOC016`, and the other overloads are not reported. When none of its overloads is usable, `SGIOC008` reports it once, with the reason `an overloaded method none of whose overloads can be the factory (...)`.
 
 ---
 
@@ -99,6 +100,25 @@ Warning, like `SGIOC040`, which reports the same consequence for a `Key`: it is 
 **Message format:** `The closed types of '{Implementation}' are created by the factory '{Factory}', so an open generic registration of it is not registered and a closed type that is only requested at runtime cannot be resolved; only the closed types discovered at compile time are registered`
 
 **Fix:** Use the closed types in dependencies, register them, or discover them with `[IocDiscover]`. Suppress the warning when every closed type is discovered at compile time.
+
+---
+
+## SGIOC044 - Error - Usage - Factory names a method with several usable overloads
+
+Report when the `Factory` of `[IocRegister]`, `[IocRegisterFor]` or `[IocRegisterDefaults]` (type or assembly level) is given with `nameof()` of a method group with more than one usable overload. `nameof()` cannot choose an overload, so the generator resolves none of them (see [Factory](../../Spec/Register.Factory.spec.md#instance-and-factory-precedence)) rather than one chosen by the order of the candidates.
+
+**Analysis:**
+
+- Resolves the `nameof()` expression like the generator (`RoslynExtensions.ResolveExpressionSymbols`): a method group with more than one candidate. `nameof(Derived.Create)` names the overloads declared on `Derived` and on its base classes.
+- Counts the usable overloads with the generator's `RoslynExtensions.GetFactoryMethod`: an ordinary method returning a value that `SGIOC008` accepts (static, not private or protected, not in a private type), and, when generic, with `[IocGenericFactory]` or a `GenericFactoryTypeMapping` argument on the attribute (whether that mapping is valid is reported by `SGIOC016` on the chosen overload).
+- Reports when more than one overload is usable; `SGIOC008`, `SGIOC014` and `SGIOC016` are not reported for the method group. When exactly one is usable, it is checked like a single factory method and nothing is reported for the others. When none is usable, `SGIOC008` reports it.
+- A single method, usable or not, is not affected.
+- Reported at the `nameof()` expression, from the attribute syntax node action, so the descriptor is not tagged `CompilationEnd`.
+- `ContainerAnalyzer` (`SGIOC018`) and the compilation-end analyses of `RegisterAnalyzer` (`SGIOC036`, `SGIOC037`, `SGIOC039`, `SGIOC042`) resolve the factory with the same `RoslynExtensions.ResolveFactoryMethod`, so an ambiguous factory is treated like a `Factory` given as a string: no known parameters, not generic.
+
+**Message format:** `Factory method '{MethodName}' specified via nameof() has more than one overload that can be used as the factory, so none of them is chosen; give the factory method a unique name`
+
+**Fix:** Give the factory method a unique name, or make the other overloads unusable as a factory (for example, not static).
 
 ---
 

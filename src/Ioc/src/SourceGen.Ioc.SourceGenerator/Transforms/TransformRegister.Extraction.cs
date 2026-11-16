@@ -610,6 +610,7 @@ partial class IocSourceGenerator
     /// Resolves the member named by <c>nameof()</c> as a member of <paramref name="typeSymbol"/>: <c>nameof(Node&lt;int&gt;.Repo)</c>
     /// names <c>Node&lt;int&gt;.Repo</c>, while the registration of <c>Node&lt;T&gt;</c> injects <c>Node&lt;T&gt;.Repo</c>.
     /// A member hidden on <paramref name="typeSymbol"/> is not resolved, as the generated code would bind the hiding member.
+    /// A method group with more than one injectable overload is not resolved either (SGIOC043).
     /// </summary>
     private static ISymbol? ResolveInjectMemberSymbolFromNameof(ExpressionSyntax nameofExpr, INamedTypeSymbol typeSymbol, SemanticModel semanticModel)
     {
@@ -617,8 +618,45 @@ partial class IocSourceGenerator
             return null;
         var inner = invocation.ArgumentList.Arguments[0].Expression;
         var info = semanticModel.GetSymbolInfo(inner);
-        var member = (info.Symbol ?? info.CandidateSymbols.FirstOrDefault())?.AsMemberOf(typeSymbol);
-        return member is not null && member.GetHidingMember(typeSymbol, semanticModel.Compilation.Assembly) is null ? member : null;
+        ImmutableArray<ISymbol> candidates = info.Symbol is { } symbol ? [symbol] : info.CandidateSymbols;
+        return GetInjectableMember(candidates, typeSymbol, semanticModel.Compilation.Assembly, out var member) == 1 ? member : null;
+    }
+
+    /// <summary>
+    /// Gets the injectable member of <paramref name="typeSymbol"/> among the members a <c>nameof()</c> of <c>InjectMembers</c>
+    /// names: its symbol, or the candidates of a method group with several overloads, which <c>nameof()</c> cannot choose
+    /// between. A candidate is injectable when <paramref name="typeSymbol"/> has it (<c>AsMemberOf</c>), does not hide it
+    /// and it passes <see cref="IsInjectableMember"/>. Only a single injectable member is injected, never one chosen by the
+    /// order of the candidates; more than one is reported by the analyzer (SGIOC043).
+    /// </summary>
+    /// <param name="candidates">The symbol named by <c>nameof()</c>, or the candidates of its method group.</param>
+    /// <param name="typeSymbol">The registered type.</param>
+    /// <param name="assembly">The assembly the generated code is compiled into.</param>
+    /// <param name="member">The injectable member as a member of <paramref name="typeSymbol"/>, when it is the only one.</param>
+    /// <returns>The number of injectable members: 0, 1, or 2 for more than one.</returns>
+    internal static int GetInjectableMember(ImmutableArray<ISymbol> candidates, INamedTypeSymbol typeSymbol, IAssemblySymbol assembly, out ISymbol? member)
+    {
+        member = null;
+        foreach(var candidate in candidates)
+        {
+            if(candidate.AsMemberOf(typeSymbol) is not { } candidateMember
+                || candidateMember.GetHidingMember(typeSymbol, assembly) is not null
+                || !IsInjectableMember(candidateMember)
+                || SymbolEqualityComparer.Default.Equals(candidateMember, member))
+            {
+                continue;
+            }
+
+            if(member is not null)
+            {
+                member = null;
+                return 2;
+            }
+
+            member = candidateMember;
+        }
+
+        return member is null ? 0 : 1;
     }
 
     /// <summary>

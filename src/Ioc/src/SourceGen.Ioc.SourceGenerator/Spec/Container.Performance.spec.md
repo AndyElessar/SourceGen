@@ -67,7 +67,7 @@ partial class AppContainer : IDisposable, IAsyncDisposable
         // A scope disposes its scoped services, then its fallback scope
         if(!_isRootScope)
         {
-            DisposeService(_fallbackScope);
+            DisposeService(global::System.Threading.Interlocked.Exchange(ref _fallbackScope, null));
             return;
         }
 
@@ -83,7 +83,7 @@ partial class AppContainer : IDisposable, IAsyncDisposable
 
         if(!_isRootScope)
         {
-            await DisposeServiceAsync(_fallbackScope).ConfigureAwait(false);
+            await DisposeServiceAsync(global::System.Threading.Interlocked.Exchange(ref _fallbackScope, null)).ConfigureAwait(false);
             return;
         }
 

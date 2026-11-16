@@ -9,7 +9,7 @@ partial class IocSourceGenerator
     /// </summary>
     /// <param name="registration">The registration data to process.</param>
     /// <returns>The processed registration result.</returns>
-    private static BasicRegistrationResult ProcessSingleRegistrationFromDefaults(RegistrationData registration, CancellationToken ct)
+    internal static BasicRegistrationResult ProcessSingleRegistrationFromDefaults(RegistrationData registration, CancellationToken ct)
     {
         // Use the explicit settings from the registration (already set from defaults attribute)
         return ProcessRegistrationCore(
