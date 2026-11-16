@@ -487,9 +487,22 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         description: "Microsoft.Extensions.DependencyInjection constructs the implementation type of an open generic registration, such as services.AddSingleton(typeof(INode<>), typeof(Node<>)), without calling the factory. The open generic registration of a registration whose closed types call its Factory (its own or that of its default settings) is therefore not registered, so the factory is never bypassed: the closed types discovered at compile time call it, and a closed type that is only requested at runtime is not registered. Use the closed types in dependencies, register them, or discover them with [IocDiscover].",
         customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    /// <summary>
+    /// SGIOC043: A nameof() in InjectMembers names a method group with more than one injectable overload, so none is injected.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InjectMembersAmbiguousMethodGroup = new(
+        id: "SGIOC043",
+        title: "InjectMembers names a method with several injectable overloads",
+        messageFormat: "Method '{0}' specified in InjectMembers has more than one injectable overload on '{1}', so none of them is injected; mark the overload to inject with [IocInject] instead, or give it a unique name",
+        category: Constants.Category_Usage,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "nameof() of a method names its method group and cannot choose an overload. When more than one overload of the method can be injected into the registered type, including overloads inherited from base classes, the element is ambiguous and nothing is injected for it. Mark the overload to inject with [IocInject], which takes precedence over the InjectMembers element, or rename it.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
         FactoryOpenGenericNotRegisteredOpen,
+        InjectMembersAmbiguousMethodGroup,
         KeyUsesImplementationTypeParameters,
         NameofOfUnboundGenericType,
         OpenTypeNestedInGenericType,

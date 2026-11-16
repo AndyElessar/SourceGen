@@ -114,7 +114,7 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
 - Reports when the member is:
   - not a member of the registered type (declared on a type it neither is, inherits, nor implements, or a default interface implementation): `it is not a member of 'Node<T>'`
   - an explicit interface implementation, whose name cannot be assigned or called on the registered type
-  - hidden on the registered type by a member declared with `new` (see [Injection](../../Spec/Register.Injection.spec.md#injectmembers)), which the generated code would assign or call instead: `it is hidden by 'Derived.X'`. Not reported when the registered type has an `[IocInject]` member with the same name, which takes precedence over the element (the generator injects the `[IocInject]` member).
+  - hidden on the registered type by a member declared with `new` (see [Injection](../../Spec/Register.Injection.spec.md#injectmembers)), which the generated code would assign or call instead: `it is hidden by 'Derived.X'`
   - static
   - not `public`, `internal`, or `protected internal` (private, protected, or private protected members are rejected because generated registration code runs in a public static context)
   - property without setter or with private setter
@@ -123,6 +123,8 @@ Report when a member resolved from `nameof()` in `InjectMembers` cannot be injec
   - generic method
   - method that is not an ordinary method (i.e., constructors, operators, and other special methods are rejected)
 - This validation reuses the same logic as SGIOC007 but specifically for members specified via `InjectMembers`.
+- Not reported for an element when the registered type has an `[IocInject]` member (as enumerated by `GetInjectedMembers`) with the same name as the member the `nameof()` names, whatever that member is (hidden, static, `Task` without `AsyncMethodInject`, a member of another type, or a method group without an injectable overload): the generator's `MergeInjectionMembers` drops the element by name and injects the `[IocInject]` member. `SGIOC043` is not reported for it either.
+- A `nameof()` of a method group with several overloads (see `SGIOC043`) reports when none of its overloads is injectable on the registered type: `none of its overloads can be injected`, or `it is not a member of 'Derived'` when the registered type has none of them. It does not report the reason of a single overload, which would depend on the order of the candidates.
 
 ---
 
@@ -137,3 +139,20 @@ Report when an `[IocInject]`/`[Inject]` method is declared as `async void`.
 - `SGIOC028` SHOULD be the user-facing diagnostic for this case; `SGIOC007` SHOULD NOT add a duplicate return-type diagnostic for the same method.
 
 **Message format:** `[IocInject] method '{MethodName}' is 'async void' which cannot be awaited. Change return type to 'Task'.`
+
+---
+
+## SGIOC043 - Error - Usage - InjectMembers names a method with several injectable overloads
+
+Report when a `nameof()` in `InjectMembers` names a method group with more than one injectable overload on the registered type. `nameof()` cannot choose an overload, so the generator injects none of them (see [Injection](../../Spec/Register.Injection.spec.md#injectmembers)) rather than one chosen by the order of the candidates.
+
+**Analysis:**
+
+- Checks `nameof()` elements of `InjectMembers`, keyed or not, that resolve to a method group: `GetSymbolInfo` returns no symbol and more than one candidate. `nameof(Derived.Init)` names the overloads declared on `Derived` and on its base classes.
+- Counts the injectable overloads with the generator's `GetInjectableMember`: resolved on the registered type (`AsMemberOf`), not hidden there (`GetHidingMember`), and injectable (`IsInjectableMember`: an instance, ordinary, non-generic method returning `void` or non-generic `Task`, `public`, `internal`, or `protected internal`). A `Task` overload counts as a candidate for this check whether or not `AsyncMethodInject` is enabled, like the generator; injecting it still requires `AsyncMethodInject` (see below).
+- Reports when more than one overload is injectable. Not reported when the registered type has an `[IocInject]` member with the same name, which takes precedence over the element (the generator injects the `[IocInject]` member).
+- When exactly one overload is injectable, it is checked like a single member: nothing is reported, except `SGIOC024` for a `Task` overload when `AsyncMethodInject` is not enabled (`method does not return void`), which the generator does not inject. When none is injectable, `SGIOC024` reports it.
+- Reported at the `nameof()` expression, from the attribute syntax node action, so the descriptor is not tagged `CompilationEnd`.
+- `ContainerAnalyzer` resolves the overloads the same way, so the dependencies of an ambiguous method group are not checked (`SGIOC018`).
+
+**Message format:** `Method '{MethodName}' specified in InjectMembers has more than one injectable overload on '{RegisteredType}', so none of them is injected; mark the overload to inject with [IocInject] instead, or give it a unique name`

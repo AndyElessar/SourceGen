@@ -1223,6 +1223,43 @@ public class SGIOC018Tests
     }
 
     [Test]
+    // More than one injectable overload: none is injected (SGIOC043), so their unregistered dependencies are not reported
+    [Arguments("SeveralInjectableOverloads", "public void Init(IMissingA a) { } public void Init(IMissingB b) { }", 0)]
+    [Arguments("SeveralInjectableOverloadsReversed", "public void Init(IMissingB b) { } public void Init(IMissingA a) { }", 0)]
+    // The only injectable overload is injected
+    [Arguments("OneInjectableOverload", "public static void Init(IMissingB b) { } public void Init(IMissingA a) { }", 1)]
+    public async Task SGIOC018_InjectMembersOverloadedMethodGroup_ChecksOnlyTheSingleInjectableOverload(string scenario, string methods, int expected)
+    {
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Consumer), ServiceLifetime.Singleton, InjectMembers = [nameof(Consumer.Init)])]
+
+            namespace TestNamespace;
+
+            public interface IMissingA { }
+            public interface IMissingB { }
+
+            public class Consumer
+            {
+                {{methods}}
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(source);
+        var sgioc018 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC018").ToList();
+
+        await Assert.That(sgioc018).Count().IsEqualTo(expected).Because(scenario);
+        if(expected > 0)
+            await Assert.That(sgioc018[0].GetMessage()).Contains("IMissingA").Because(scenario);
+    }
+
+    [Test]
     [Arguments("[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepository<>)])]", "IRepository<User> repository")]
     [Arguments("[IocRegister(ServiceLifetime.Singleton, RegisterAllInterfaces = true)]", "IRepository<User> repository")]
     [Arguments("[IocRegister(ServiceLifetime.Singleton)]", "Repository<User> repository")]

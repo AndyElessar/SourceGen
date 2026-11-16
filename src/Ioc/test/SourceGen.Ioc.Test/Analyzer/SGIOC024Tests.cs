@@ -213,6 +213,51 @@ public class SGIOC024Tests
     }
 
     [Test]
+    [Arguments("StaticMethod", "nameof(Base.Init)", """
+        public class Base { public static void Init(int value) { } }
+        public sealed class Derived : Base { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    [Arguments("TaskMethodWithoutAsyncMethodInject", "nameof(Base.Init)", """
+        public class Base { public Task Init(int value) => Task.CompletedTask; }
+        public sealed class Derived : Base { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    [Arguments("MemberOfOtherType", "nameof(Other.Init)", """
+        public sealed class Other { public void Init(int value) { } }
+        public sealed class Derived { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    [Arguments("OverloadsWithoutInjectableOverload", "nameof(Base.Init)", """
+        public class Base { public static void Init(int value) { } public static void Init(string value) { } }
+        public sealed class Derived : Base { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    [Arguments("KeyedOverloadsWithoutInjectableOverload", "new object[] { nameof(Base.Init), \"key\" }", """
+        public class Base { public static void Init(int value) { } public static void Init(string value) { } }
+        public sealed class Derived : Base { [IocInject] public void Init(IFoo foo) { } }
+        """)]
+    public async Task SGIOC024_IocInjectMemberWithSameName_NoDiagnostic(string scenario, string injectMember, string declarations)
+    {
+        // The generator drops an InjectMembers element named like an [IocInject] member of the registered type
+        // (MergeInjectionMembers), whatever member the element names, so it is never reported
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+            using TestNamespace;
+
+            [assembly: IocRegisterFor(typeof(Derived), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            {{declarations}}
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC024)).IsEmpty().Because(scenario);
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC043)).IsEmpty().Because(scenario);
+    }
+
+    [Test]
     [Arguments("InternalHidingMemberOfReferencedAssembly", "", 0)]
     [Arguments("InternalHidingMemberVisibleThroughInternalsVisibleTo", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestAssembly\")]", 1)]
     public async Task SGIOC024_InternalHidingMemberOfReferencedAssembly_ReportsOnlyWhenAccessible(string scenario, string externalAttribute, int expectedCount)
