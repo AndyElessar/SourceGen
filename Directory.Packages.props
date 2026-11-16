@@ -29,6 +29,8 @@
     <PackageVersion Include="ConsoleAppFramework" Version="5.8.1" />
     <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.8.1" />
     <PackageVersion Include="ZLogger" Version="2.6.2" />
+    <!-- Blazor component activator runtime tests (SourceGen.Ioc.TestAot) -->
+    <PackageVersion Include="Microsoft.AspNetCore.Components" Version="10.0.15" />
     <!-- Samples -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.15" />
   </ItemGroup>
@@ -39,6 +41,7 @@
   <ItemGroup Condition="'$(TargetFramework)' != '' and $([MSBuild]::VersionGreaterThanOrEquals($([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')), '11.0'))">
     <PackageVersion Update="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
     <PackageVersion Update="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0" />
+    <PackageVersion Update="Microsoft.AspNetCore.Components" Version="11.0.0" />
     <PackageVersion Update="Microsoft.AspNetCore.Components.Web" Version="11.0.0" />
     <!-- Transitive from ZLogger in the CLI, which targets net11.0 only -->
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="11.0.0" />
