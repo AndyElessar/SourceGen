@@ -198,7 +198,8 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider()?.GetService(serviceType);
+        // IEnumerable<T> without collection resolver, then the fallback provider (see Container.Collections)
+        return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
     }
 
     private IServiceProvider? GetFallbackServiceProvider()
@@ -254,7 +255,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null);
     }
 
     public object GetRequiredKeyedService(Type serviceType, object? serviceKey)

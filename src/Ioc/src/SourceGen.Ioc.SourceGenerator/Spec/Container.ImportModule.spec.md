@@ -72,8 +72,9 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
     ];
 
     private static readonly FrozenDictionary<ServiceIdentifier, Func<global::AppContainer, object>> _serviceResolvers =
-        global::SharedModule1.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule1)))
-        .Concat(global::SharedModule2.Resolvers.Select(static kvp => new KeyValuePair<ServiceIdentifier, Func<global::AppContainer, object>>(kvp.Key, c => kvp.Value(c._sharedModule2))))
+        // Without IntegrateServiceProvider: Resolvers.Select(static kvp => new KeyValuePair<…>(kvp.Key, c => kvp.Value(c._sharedModule1)))
+        __ImportModuleResolvers(global::SharedModule1.Resolvers, static c => c._sharedModule1) // see Collections of Imported Modules
+        .Concat(__ImportModuleResolvers(global::SharedModule2.Resolvers, static c => c._sharedModule2))
         .Concat(_localResolvers)
         .ToFrozenDictionary();
     // WARNING: _localResolvers MUST be declared before _serviceResolvers because C# static field initializers execute in textual (declaration) order. This initializer references imported module Resolvers and _localResolvers; if reversed, _localResolvers would be null when _serviceResolvers initializes.
@@ -93,7 +94,8 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, KeyedService.AnyKey), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider()?.GetService(serviceType);
+        // IEnumerable<T> without collection resolver, then the fallback provider (see Container.Collections)
+        return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
     }
 
     #endregion
@@ -107,7 +109,7 @@ partial class AppContainer : IIocContainer<global::AppContainer>, IServiceProvid
         if(_serviceResolvers.TryGetValue(new ServiceIdentifier(serviceType, key), out var resolver))
             return resolver(this);
 
-        return GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+        return __ResolveCollection(serviceType, serviceKey) ?? (GetFallbackServiceProvider() is IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null);
     }
 
     #endregion

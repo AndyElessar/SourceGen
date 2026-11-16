@@ -82,7 +82,8 @@ partial class AppContainer :
     public object? GetService(Type serviceType)
     {
         // local resolver lookup generated here
-        return GetFallbackServiceProvider()?.GetService(serviceType);
+        // then an IEnumerable<T> built from a single registration, then the fallback provider
+        return __ResolveCollection(serviceType, null) ?? GetFallbackServiceProvider()?.GetService(serviceType);
     }
 }
 ```
