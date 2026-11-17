@@ -11,7 +11,7 @@ Report when `ServiceKeyAttribute` is mark on parameter, but the key type is not 
 **Analysis:**
 
 - Collects each service registration's Key type (from generic parameter or `KeyType` property of `[IoCRegister]` or `[IoCRegisterFor]`).
-- Checks constructor and `[Inject]` method parameters marked with `[ServiceKey]`.
+- Checks constructor and `[Inject]` method parameters marked with `[ServiceKey]`. The constructor of a `Factory` or `Instance` registration and the `[Inject]` methods of an `Instance` registration are not checked, since the container does not call them (see [Analyzed Registrations](Diagnostics.Dependencies.spec.md#analyzed-registrations)).
 - Reports when the parameter type is not compatible with the registered Key type.
 - Exception: Skips type checking when `KeyType` is `Csharp`.
 
@@ -24,7 +24,7 @@ Report when `ServiceKeyAttribute` is mark on parameter, but there is no specifie
 **Analysis:**
 
 - Checks whether the service registration has a `Key` specified.
-- Checks constructor and `[Inject]` method parameters marked with `[ServiceKey]`.
+- Checks constructor and `[Inject]` method parameters marked with `[ServiceKey]`. The constructor of a `Factory` or `Instance` registration and the `[Inject]` methods of an `Instance` registration are not checked, since the container does not call them (see [Analyzed Registrations](Diagnostics.Dependencies.spec.md#analyzed-registrations)).
 - Checks the parameters marked with `[ServiceKey]` of the registration's own `Factory` method (the generator passes `default` for them). The `Factory` of `IocRegisterDefaultsAttribute` is not checked, because it is shared by keyed and non-keyed registrations; the diagnostic is reported on the `Factory` argument.
 - Reports when `[ServiceKey]` is used but the registration has no Key specified.
 

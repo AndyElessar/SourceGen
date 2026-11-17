@@ -4,13 +4,39 @@ Diagnostics for the dependency graph of registered services: circular dependenci
 
 Format: ID - Level - Category - Description
 
+## Analyzed Registrations
+
+The container constructs a registration only when it has neither `Instance` nor `Factory`. SGIOC002-005 and SGIOC033 therefore analyze the selected constructor of these constructor-activated registrations only:
+
+| Registration | Constructor parameters | `[IocInject]`/`[Inject]` members |
+| --- | --- | --- |
+| Constructor-activated | Analyzed | Analyzed (SGIOC033) |
+| `Factory` | Not analyzed: the factory method creates the instance | Analyzed (SGIOC033): the generator calls the inject methods of an async-init factory result |
+| `Instance` | Not analyzed: the instance already exists | Not analyzed: the instance is not injected |
+
+An implementation type with several registrations is analyzed as constructor-activated when any of them is, and its members as injected when any of them has no `Instance`. An `Instance` or `Factory` registration is still a dependency of the services that depend on it, with its own lifetime. For example, `List<T>` registered with `Instance` and the service type `IEnumerable<T>` is not a circular dependency, although its `List(IEnumerable<T>)` constructor resolves to the registration itself:
+
+```csharp
+public static class Collections
+{
+    public static readonly List<Lazy<IHandler>> Lazies = [];
+}
+
+// No SGIOC002: the List(IEnumerable<Lazy<IHandler>>) constructor is never called
+[IocRegisterFor<List<Lazy<IHandler>>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Lazy<IHandler>>)], Instance = "Collections.Lazies")]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class Container;
+```
+
+A `Factory` inherited from default settings (`[IocRegisterDefaults]`) is not considered: such a registration's constructor is still analyzed.
+
 ## SGIOC002 - Error - Design - Circular Dependency Detected
 
 Report when circular dependencies are detected among registered services.
 
 **Analysis:**
 
-- Collects all registered services and their constructor parameter dependencies.
+- Collects all registered services and the constructor parameter dependencies of the constructor-activated ones (see [Analyzed Registrations](#analyzed-registrations)).
 - Builds a service type index (interface/base class → implementation type) for fast dependency lookup.
 - Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to extract the inner service type for dependency resolution.
 - Uses depth-first search to traverse the dependency graph.
@@ -25,7 +51,7 @@ Report when there are singleton service depending on scoped service.
 **Analysis:**
 
 - Collects all registered services with their lifetimes (Singleton/Scoped/Transient).
-- Analyzes each service's constructor parameters and queries the dependency's lifetime.
+- Analyzes each constructor-activated service's constructor parameters (see [Analyzed Registrations](#analyzed-registrations)) and queries the dependency's lifetime.
 - Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to detect captive dependencies through wrappers. A `Func` is reported too, because a Singleton resolves the Scoped service from the root scope.
 - Reports when a Singleton service depends on a Scoped service.
 
@@ -61,7 +87,7 @@ Report when a registered service depends on `Func<T1, ..., TReturn>` with at lea
 
 **Analysis:**
 
-- Checks constructor parameters, and the types of `[IocInject]`/`[Inject]` properties, fields and method parameters.
+- Checks constructor parameters, and the types of `[IocInject]`/`[Inject]` properties, fields and method parameters, as listed in [Analyzed Registrations](#analyzed-registrations).
 - Looks up `TReturn` like the lifetime checks (SGIOC003-005): directly, through the service type index, and through the open generic definition. The service key of `[FromKeyedServices]` is not considered.
 - Does not report the parameterless `Func<T>` or `Lazy<T>`, which follow the lifetime, or a `TReturn` that is not registered.
 - Reports one diagnostic per dependency at the consumer's registration.

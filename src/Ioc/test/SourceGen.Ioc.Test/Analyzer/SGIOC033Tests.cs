@@ -140,4 +140,37 @@ public class SGIOC033Tests
         await Assert.That(sgioc033).Count().IsEqualTo(1);
         await Assert.That(sgioc033[0].GetMessage()).Contains("registered as Singleton");
     }
+
+    [Test]
+    [Arguments("Instance = nameof(Default)")]
+    [Arguments("Factory = nameof(Create)")]
+    public async Task SGIOC033_FuncWithArguments_InConstructorOfInstanceOrFactory_NoDiagnostic(string activation)
+    {
+        // Instance and Factory registrations are not constructed by the container, so their constructor parameters are not resolved
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            public class Service(string name) : IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, {{activation}})]
+            public class Consumer(Func<string, IService> dependency)
+            {
+                public static readonly Consumer Default = new(static name => new Service(name));
+
+                public static Consumer Create() => Default;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC033);
+
+        await Assert.That(sgioc033).Count().IsEqualTo(0);
+    }
 }

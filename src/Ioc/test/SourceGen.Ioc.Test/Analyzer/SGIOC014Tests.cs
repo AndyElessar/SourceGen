@@ -424,4 +424,34 @@ public class SGIOC014Tests
 
         await Assert.That(sgioc014).Count().IsEqualTo(0);
     }
+
+    [Test]
+    [Arguments("Instance = nameof(Default)")]
+    [Arguments("Factory = nameof(Create)")]
+    public async Task SGIOC014_InstanceOrFactoryConstructorServiceKeyParameter_NoKey_NoDiagnostic(string activation)
+    {
+        // Instance and Factory registrations are not constructed by the container, so the constructor's [ServiceKey]
+        // parameter receives no key
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister({{activation}})]
+            public class MyService
+            {
+                public static readonly MyService Default = new("default");
+
+                public MyService([ServiceKey] string key) { }
+
+                public static MyService Create() => Default;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(0);
+    }
 }

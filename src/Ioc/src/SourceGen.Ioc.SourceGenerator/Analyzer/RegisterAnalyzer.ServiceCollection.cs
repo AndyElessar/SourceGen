@@ -632,6 +632,7 @@ public sealed partial class RegisterAnalyzer
         if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
         {
             existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
+            existingInfo.AddActivation(hasFactory, hasInstance, analyzerContext.Assembly);
             return;
         }
 
@@ -640,7 +641,9 @@ public sealed partial class RegisterAnalyzer
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
         {
             // Another registration of the type was added concurrently
-            analyzerContext.RegisteredServices[targetType].AddRegistrations(registrations, asyncDecoratedRegistrations);
+            existingInfo = analyzerContext.RegisteredServices[targetType];
+            existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
+            existingInfo.AddActivation(hasFactory, hasInstance, analyzerContext.Assembly);
             return;
         }
 
@@ -1080,14 +1083,22 @@ public sealed partial class RegisterAnalyzer
         private ImmutableArray<ServiceSymbolKey> _asyncDecoratedRegistrations;
 
         /// <summary>
-        /// Cached constructor to avoid repeated GetSelectedConstructor lookups.
+        /// Cached constructor to avoid repeated GetSelectedConstructor lookups; null unless a registration of this
+        /// implementation type has neither Instance nor Factory, since the container constructs only such a registration.
         /// </summary>
-        public IMethodSymbol? Constructor { get; }
+        public IMethodSymbol? Constructor => Volatile.Read(ref _constructor);
+
+        private IMethodSymbol? _constructor;
+        private int _hasConstructorActivation;
 
         /// <summary>
-        /// Cached list of members with [IocInject] or [Inject] attribute to avoid repeated GetMembers() and attribute lookups.
+        /// Cached list of members with [IocInject] or [Inject] attribute to avoid repeated GetMembers() and attribute lookups;
+        /// empty unless a registration of this implementation type has no Instance, since the container does not inject an Instance.
         /// </summary>
-        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers { get; }
+        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers => _injectedMembers;
+
+        private ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> _injectedMembers = [];
+        private int _hasInjection;
 
         public ServiceInfo(
             INamedTypeSymbol type,
@@ -1113,11 +1124,23 @@ public sealed partial class RegisterAnalyzer
             HasFactory = hasFactory;
             HasInstance = hasInstance;
 
-            // Cache constructor lookup
-            Constructor = type.GetSelectedConstructor(assembly);
+            AddActivation(hasFactory, hasInstance, assembly);
+        }
 
-            // Cache injected members
-            InjectedMembers = [.. type.GetInjectedMembers()];
+        /// <summary>
+        /// Records how another registration of this implementation type is activated, so <see cref="Constructor"/> and
+        /// <see cref="InjectedMembers"/> cover every registration of the type, not only the first one.
+        /// </summary>
+        public void AddActivation(bool hasFactory, bool hasInstance, IAssemblySymbol assembly)
+        {
+            // Like the generator, an Instance or Factory registration is not constructed, so its constructor has no dependencies
+            if(!hasInstance && !hasFactory && Interlocked.Exchange(ref _hasConstructorActivation, 1) == 0)
+                Volatile.Write(ref _constructor, Type.GetSelectedConstructor(assembly));
+
+            // An Instance is not injected; a Factory's result keeps its injected members, since the generator calls the inject
+            // methods of an async-init factory result
+            if(!hasInstance && Interlocked.Exchange(ref _hasInjection, 1) == 0)
+                ImmutableInterlocked.InterlockedExchange(ref _injectedMembers, [.. Type.GetInjectedMembers()]);
         }
 
         /// <summary>

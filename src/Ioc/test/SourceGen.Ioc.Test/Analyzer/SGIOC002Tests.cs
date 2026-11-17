@@ -212,4 +212,100 @@ public class SGIOC002Tests
 
         await Assert.That(sgioc002).Count().IsGreaterThanOrEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC002_InstanceOfCollectionTypes_NoDiagnostic()
+    {
+        // An Instance registration is never constructed, so the List(IEnumerable<T>) / Dictionary(IDictionary<TKey, TValue>, ...)
+        // constructors that resolve to the registrations themselves are not dependencies. The constructor selected among those
+        // with the most parameters depends on metadata order: reference assemblies select them, the runtime assemblies that
+        // these tests compile against may not, so SGIOC002_InstanceWithSelfReferencingConstructor_NoDiagnostic covers it too.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler;
+
+            public static class Collections
+            {
+                public static readonly List<Lazy<IHandler>> Lazies = [];
+                public static readonly Dictionary<string, IHandler> Dictionary = [];
+            }
+
+            [IocRegisterFor<List<Lazy<IHandler>>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Lazy<IHandler>>)], Instance = "Collections.Lazies")]
+            [IocRegisterFor<Dictionary<string, IHandler>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IDictionary<string, IHandler>)], Instance = "Collections.Dictionary")]
+            [IocContainer(ExplicitOnly = true)]
+            public sealed partial class Container;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC002_FactoryWithSelfReferencingConstructor_NoDiagnostic()
+    {
+        // A Factory registration is created by its factory method, so its constructor parameters are not dependencies
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService;
+
+            [IocRegister(ServiceTypes = [typeof(IService)], Factory = nameof(Create))]
+            public class Service : IService
+            {
+                public Service(IService inner) { }
+
+                public static Service Create() => new(null!);
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC002_InstanceWithSelfReferencingConstructor_NoDiagnostic()
+    {
+        // Like List<T>, whose List(IEnumerable<T>) constructor resolves to the registration itself
+        const string source = """
+            using System.Collections;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler;
+
+            public sealed class HandlerCollection(IEnumerable<IHandler> handlers) : IEnumerable<IHandler>
+            {
+                public static readonly HandlerCollection Empty = new([]);
+
+                public IEnumerator<IHandler> GetEnumerator() => handlers.GetEnumerator();
+
+                IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            }
+
+            [IocRegisterFor<HandlerCollection>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<IHandler>)], Instance = "HandlerCollection.Empty")]
+            [IocContainer(ExplicitOnly = true)]
+            public sealed partial class Container;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsEqualTo(0);
+    }
 }
